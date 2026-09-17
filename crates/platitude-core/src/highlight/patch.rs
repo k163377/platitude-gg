@@ -22,11 +22,11 @@ use super::{DiffColors, LexCache, LineColors, PatchColors};
 /// plain, which is what every file the set does not know looks like
 /// anyway.
 ///
-/// One budget per patch, not per hunk: what it bounds is the whole cost
-/// of colouring one file, whatever shape its hunks take — unbounded, a
-/// whole-file rewrite reads an order of magnitude past that. It bounds each
-/// *reading*, not how deep colours can ever reach: a walk resumed from a
-/// [`LexCache`] checkpoint starts its budget from there.
+/// One budget per patch: what it bounds is the whole cost of
+/// colouring one file, whatever shape its hunks take — unbounded, a
+/// whole-file rewrite reads an order of magnitude past that. It bounds
+/// each *reading*: a walk resumed from a [`LexCache`] checkpoint
+/// starts its budget from there.
 const LEX_LINE_BUDGET: usize = 5_000;
 
 /// How many lines apart a [`LexCache`]'s checkpoints stand. The price of
@@ -90,10 +90,10 @@ pub fn colors_quick(patches: &[FilePatch]) -> DiffColors {
 /// Reads every text line of `patches` and answers what colour each run of
 /// it is. Best effort throughout: a language that is not in the set, a
 /// binary patch, a regex that will not run — each of those is a diff that
-/// comes out the colour it always was, never an error and never a gap.
+/// comes out the colour it always was — a full answer either way.
 ///
 /// This is CPU work with no waiting in it. Callers on an async runtime
-/// should hand it to a blocking thread rather than hold a worker.
+/// should hand it to a blocking thread.
 /// `source` is the whole of the side the diff's line numbers count in
 /// ([`crate::preview::source_text`]); without it every hunk starts cold
 /// (see the module note).
@@ -147,7 +147,7 @@ pub fn colors_cached(
 /// holds the decision). That one hashes the bytes of a `git diff`, goes out
 /// to the pane as hex and comes back attached to a hunk selection, so a
 /// wrong "unchanged" there lets a partial write land on bytes that moved.
-/// This one hashes the file's text, never leaves the struct
+/// This one hashes the file's text, stays inside the struct
 /// (`LexCache::source` is private and the type is neither `Clone` nor
 /// serialisable), and both sides of every comparison are made by the same
 /// binary in the same run — so a wrong answer costs a repaint, and
@@ -226,9 +226,9 @@ fn unified_colors(
     let lines: Vec<&str> = source.map(|s| s.lines().collect()).unwrap_or_default();
     // The file itself, stepped to wherever the next hunk starts, then
     // through the hunk's own rows — this side's rows are the file, so
-    // one walk serves both. The other side's rows are never fed into it:
-    // they are what this file does not say, and they read through a fork
-    // instead ([`read_hunk`]).
+    // one walk serves both. The other side's rows read through a
+    // fork: they are what this file does not say, so that walk is
+    // its own ([`read_hunk`]).
     let mut file = Walk::new(assets, &highlighter, Some(syntax));
     let mut at = 0usize;
     let mut out = Vec::with_capacity(patch.hunks.len());
@@ -341,9 +341,9 @@ fn read_hunk(
 }
 
 /// Colours for the combined diff git prints for a path it stopped on:
-/// every row is read, the sides of each conflict region are stood beside
-/// each other rather than after one another, and the fences are read as
-/// structure ([`Walk`]).
+/// every row is read, the sides of each conflict region are stood
+/// beside each other, and the fences are read as structure
+/// ([`Walk`]).
 fn combined_colors(
     assets: &Assets,
     patch: &FilePatch,

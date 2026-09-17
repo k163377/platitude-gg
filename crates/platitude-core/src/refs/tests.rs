@@ -121,8 +121,8 @@ fn branch_with_slash_in_name_keeps_full_short_name() {
 ///
 /// **git leaves out the leg that counts zero** — `[ahead 2]`, never
 /// `[ahead 2, behind 0]` — so the halves are read one at a time. A gone
-/// upstream and a level one both count nothing, which is why the two are
-/// told apart by the upstream itself and not by these.
+/// upstream and a level one both count nothing, which is why the
+/// upstream itself is what tells the two apart.
 #[test]
 fn a_branch_reads_how_far_it_stands_from_its_upstream() {
     let fixture = |short: &str, track: &str| {
@@ -363,8 +363,8 @@ fn a_remote_ref_splits_at_the_remote_name_not_the_first_slash() {
         split_remote_ref("origin/feature/x", names),
         Some(("origin", "feature/x"))
     );
-    // The longest configured name wins: `my/fork/main` lives on
-    // `my/fork`, not on `my` with a branch called `fork/main`.
+    // The longest configured name wins: `my/fork/main` lives on the
+    // remote `my/fork`, whose name carries the slash.
     assert_eq!(
         split_remote_ref("my/fork/main", names),
         Some(("my/fork", "main"))

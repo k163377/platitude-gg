@@ -52,11 +52,11 @@ pub enum RebaseOutcome {
 
 /// `git rebase <upstream>`.
 ///
-/// `--autostash` is not passed, here or anywhere: it restores with a
-/// plain `stash apply`, so everything that was staged comes back
-/// unstaged, and no flag turns that off. A dirty tree is answered rather
-/// than failed, and the caller carries the work across itself
-/// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
+/// A dirty tree is answered, and the caller carries the work across
+/// itself (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
+/// `--autostash` restores with a plain `stash apply`, so everything
+/// that was staged comes back unstaged, and no flag turns that
+/// off.
 pub async fn rebase(
     executor: &GitExecutor,
     workdir: &Path,
@@ -64,9 +64,9 @@ pub async fn rebase(
     options: &RebaseOptions,
     cancel: &CancellationToken,
 ) -> Result<RebaseOutcome, GitError> {
-    // Exit 1 is this command answering rather than failing. Only 0 and 1
-    // are answers, so the 128 a name git does not know exits with still
-    // reads as the failure it is (規約 §終了コードで答える問い合わせ).
+    // Exit 1 is this command answering. Only 0 and 1 are answers, so
+    // the 128 a name git does not know exits with still reads as the
+    // failure it is (規約 §終了コードで答える問い合わせ).
     let cmd = rebase_command(workdir, upstream, options, None).answers_by_code(1);
     let result = executor.run(cmd, cancel).await.map(drop);
     landed(executor, workdir, result, cancel).await
@@ -106,11 +106,11 @@ pub(crate) async fn landed(
 ) -> Result<RebaseOutcome, GitError> {
     let Err(error) = result else {
         // The probe's own failure travels, asymmetrically from the exit-1
-        // branch below: there git's words are the answer and a failed read
-        // must not replace them, while here "Done" has consequences of its
+        // branch below: there git's words are the answer and stand
+        // over a failed read, while here "Done" has consequences of its
         // own — the caller sweeps the reword message files a standing
-        // rebase's todo still reads — so a stop must never be missed
-        // quietly. A loud error costs a red line; the next status poll
+        // rebase's todo still reads — so a stop is always loud.
+        // A loud error costs a red line; the next status poll
         // still finds the standing rebase and raises the exit card.
         return match opstate::detect(executor, workdir, cancel).await {
             Ok(state) if state.rebasing => Ok(RebaseOutcome::Stopped),
@@ -165,7 +165,7 @@ pub(crate) async fn landed(
 /// nothing is stashed for them.
 ///
 /// Anything unrecognised is `false` and travels on as an ordinary error:
-/// a reworded message costs the retry, never correctness.
+/// a reworded message costs the retry only.
 fn work_is_in_the_way(text: &str) -> bool {
     let text = text.to_ascii_lowercase();
     text.contains("cannot rebase:")
@@ -188,8 +188,8 @@ pub struct RebaseStop {
     /// contents, which is what git wrote HEAD as when it stopped
     /// (`intend_to_amend`). Empty where the file could not be read.
     ///
-    /// **Not `rebase-merge/stopped-sha`**, which names the *todo's* commit
-    /// — the id the row had before the replay. They are the same commit
+    /// **`rebase-merge/stopped-sha` names the *todo's* commit** — the id
+    /// the row had before the replay. They are the same commit
     /// only when everything ahead of the `edit` step fast-forwarded: put a
     /// reword, a squash or a reorder in front of it and the stop sits on a
     /// commit with a new id, while `stopped-sha` still names one that is no
@@ -316,9 +316,9 @@ pub(crate) fn rebase_command(
         // picks. **The editor keeps the lines git put in** — that is what
         // makes `--update-refs` work at all (`sequencer::merge_todo`) —
         // so those labels would now travel into the plan and replay a
-        // shape nobody composed. The plan on screen is what git has to be
-        // asked for rather than what it works out to. The driven form
-        // only: a plain rebase has no plan to keep, so the config is the
+        // shape nobody composed. The plan on screen is what git has to
+        // be asked for. The driven form only: a plain rebase has no
+        // plan to keep, so the config is the
         // person's own (measurements and the rest of the decision in
         // rules-refs/core.md).
         cmd = cmd

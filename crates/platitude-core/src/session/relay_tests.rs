@@ -67,8 +67,8 @@ fn standing(pending: Option<Vec<Oid>>, carried: Vec<Carried>) -> Standing {
 
 /// The row the status asks for is put there by the laying, and the
 /// commits under it sit exactly where the walk left them — which is what
-/// makes laying out again safe to do at the moment of publishing rather
-/// than only at the start of a walk.
+/// makes laying out again safe to do at the moment of
+/// publishing.
 #[test]
 fn the_uncommitted_row_can_be_put_on_a_graph_that_was_walked_without_it() {
     let walked_rows = history();
@@ -110,9 +110,9 @@ fn the_uncommitted_row_can_be_taken_off_a_graph_that_was_walked_with_it() {
     assert_eq!(where_they_sit(&without), before, "the history moved");
 }
 
-/// Laying it again is the answer to the reading in hand, not to the one
-/// before it: a copy that has moved to another commit draws above the
-/// commit it is on now.
+/// Laying it again is the answer to the reading in hand: a copy that
+/// has moved to another commit draws above the commit it is on
+/// now.
 #[test]
 fn a_copy_is_laid_where_its_reading_puts_it_now() {
     let copy = |head: u8| Carried {
@@ -167,8 +167,8 @@ fn the_row_stands_alone_where_there_is_no_commit_to_leash_to() {
 /// The listing names every copy's HEAD for the price of one short
 /// process, and the readings cost a `status` each on a slower tick — so
 /// a copy that has committed is known to have moved long before what it
-/// is carrying is. Its reading draws nothing until the next one lands,
-/// rather than standing the row on the commit that copy left.
+/// is carrying is. Its reading draws nothing until the next one
+/// lands.
 #[test]
 fn a_reading_the_listing_has_moved_past_draws_nothing() {
     let reading = |path: &str, head: u8| Carried {

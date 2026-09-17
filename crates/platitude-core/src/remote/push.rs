@@ -45,8 +45,8 @@ pub struct PushSpec {
 
 /// Works out where the branch that is checked out should be pushed.
 ///
-/// **Where a push goes is not where a branch fetches from.** git decides it
-/// in this order (git-config(5)): the branch's own `pushRemote`, then the
+/// **Where a push goes is its own question.** git decides it in this
+/// order (git-config(5)): the branch's own `pushRemote`, then the
 /// repository's `remote.pushDefault`, then whatever the branch tracks —
 /// and only if none of those is set does `fallback_remote` come into it.
 /// Reading just the last of the three sends a fork workflow's pushes to the
@@ -58,11 +58,11 @@ pub struct PushSpec {
 /// nothing about any other (measured: the refspec git builds for a triangular
 /// push is `<branch>:<branch>`).
 ///
-/// A detached HEAD has no branch to push, and says so rather than guessing.
+/// A detached HEAD has no branch to push, and says so.
 ///
-/// The upstream is read from configuration rather than parsed out of
-/// `origin/main`: a remote may be named `my/fork`, and a branch name may
-/// contain slashes, so splitting that string cannot be done reliably.
+/// The upstream is read from configuration: a remote may be named
+/// `my/fork`, and a branch name may contain slashes, so splitting
+/// `origin/main` cannot be done reliably.
 pub async fn plan_current_push(
     executor: &GitExecutor,
     workdir: &Path,
@@ -80,9 +80,9 @@ pub async fn plan_current_push(
     .await?;
     let merge = config_value(executor, workdir, &format!("branch.{branch}.merge"), cancel).await?;
 
-    // Read here rather than handed in: a push must go where git would send
-    // it now, and the marks can be moved from a terminal between two of
-    // this application's reads. One short local `git config` in front of a
+    // Read here: a push must go where git would send it now, and the
+    // marks can be moved from a terminal between two of this
+    // application's reads. One short local `git config` in front of a
     // command that reaches the network — the same read the status tick
     // makes, so the two cannot drift apart.
     let marks = push_marks(executor, workdir, &branch, cancel).await?;
@@ -127,13 +127,13 @@ pub async fn plan_current_push(
 }
 
 /// Where the branch that is checked out should go when the user has just
-/// said so, rather than when configuration already knows.
+/// said so.
 ///
 /// `expect` is the commit the question showed as being over there. Empty
 /// sends the push fast-forward only; a commit turns it into the same
 /// leased overwrite the toolbar offers a diverged branch — and the lease
 /// is pinned to what was on screen, so a remote that moved since is
-/// refused rather than flattened (§相手の履歴を置き換える).
+/// refused (§相手の履歴を置き換える).
 pub async fn plan_publish(
     executor: &GitExecutor,
     workdir: &Path,
@@ -161,8 +161,8 @@ pub async fn plan_publish(
 /// `git push` for one branch.
 ///
 /// A refusal that a fetch would answer comes back as
-/// [`ReportKind::Outdated`] rather than a plain failure, so the caller can
-/// go and find out what the remote actually holds.
+/// [`ReportKind::Outdated`], so the caller can go and find out what the
+/// remote actually holds.
 pub async fn push(
     executor: &GitExecutor,
     workdir: &Path,

@@ -4,13 +4,13 @@ use super::*;
 
 /// What a [`set_identity`] left behind.
 ///
-/// Read back from git rather than echoed, for two reasons. An identity is
-/// two `git config` calls and the lock on the configuration file is taken
-/// and released per call, so the second one can fail on its own and leave
-/// half of an identity — which reads as a whole one to everything
-/// downstream, because both halves are set. And a repository-local
-/// setting can sit over a global write, so even two calls that both
-/// succeeded do not say what a commit will carry.
+/// Read back from git, for two reasons. An identity is two `git config`
+/// calls and the lock on the configuration file is taken and released
+/// per call, so the second one can fail on its own and leave half of
+/// an identity — which reads as a whole one to everything downstream,
+/// because both halves are set. And a repository-local setting can sit
+/// over a global write, so even two calls that both succeeded do not
+/// say what a commit will carry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IdentityWrite {
     /// What git reports now, at the level the write was aimed at: the
@@ -30,7 +30,7 @@ pub struct IdentityWrite {
 
 impl IdentityWrite {
     /// Both halves are what was asked for. Anything less is a half-written
-    /// identity and must not be shown as a finished one.
+    /// identity, and shows as one.
     pub fn is_saved(&self) -> bool {
         self.name_saved && self.email_saved
     }

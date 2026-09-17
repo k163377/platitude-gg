@@ -172,9 +172,9 @@ async fn a_quiet_tick_reports_nothing_of_head() {
     session.close();
 }
 
-/// A plan opens with the count of what a remote already has of its range
-/// — read beside its rows, not asked for afterwards — and the same count
-/// answers again on request, echoing the range it is about.
+/// A plan opens with the count of what a remote already has of its
+/// range — read beside its rows — and the same count answers again on
+/// request, echoing the range it is about.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_plan_opens_with_the_count_a_remote_already_has() {
     let (_bare, mut work) = origin_and_clone();

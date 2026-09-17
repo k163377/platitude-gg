@@ -44,19 +44,19 @@ impl RepoSession {
     /// merged into its reference point it deletes quietly, unmerged git
     /// refuses. Asked when a menu opens over a branch the drawn rows
     /// could not answer for (`GraphModel.branchDeleteMerged`), so its
-    /// delete row can wear `-D` from the start instead of only after a
-    /// refused try. The reference point is read off the snapshot, which
+    /// delete row can wear `-D` from the start.
+    /// The reference point is read off the snapshot, which
     /// already holds git's own rule for it (`BranchItem::upstream_oid`:
     /// the upstream where the listing resolves it, HEAD otherwise — a
     /// configured name that resolves to nothing is not the measure), and
-    /// the reachability is `merge-base`'s. A read, not a write, so it
+    /// the reachability is `merge-base`'s. A read, so it
     /// skips the queue the way the other checks do.
     ///
     /// **Every ask is answered**, a failed read included
     /// ([`SessionEvent::BranchDeleteChecked::merged`]): the row draws the
     /// same either way, and what the answer buys is that a run where the
-    /// reads fell over says so on a line instead of going quiet under a
-    /// harness waiting for the echo.
+    /// reads fell over says so on a line, for the harness waiting
+    /// for the echo.
     pub fn check_branch_delete(self: &Arc<Self>, branch: String) {
         let Some(workdir) = self.workdir() else {
             self.sink.event(SessionEvent::BranchDeleteChecked {
@@ -116,7 +116,7 @@ impl RepoSession {
         )
     }
 
-    /// Puts a tag on a commit. Lightweight, and never forced: an existing
+    /// Puts a tag on a commit. Lightweight and unforced: an existing
     /// name is git's to refuse (see [`crate::tag::create`]).
     pub fn create_tag(self: &Arc<Self>, name: String, commit: String) -> Option<OperationId> {
         self.write(

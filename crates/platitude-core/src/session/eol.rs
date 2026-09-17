@@ -38,8 +38,8 @@ impl RepoSession {
             Ok(eol::Ruling::Open) => {
                 EndingContext::Open(self.eol_baseline(workdir, path, cancel).await)
             }
-            // Not knowing is silence, not a failure worth a pane of its own:
-            // the diff beside it is the thing that was asked for.
+            // Not knowing is silence: the diff beside it is the thing
+            // that was asked for.
             Err(e) => {
                 if !e.is_cancelled() {
                     tracing::debug!(error = %e, "line-ending ruling failed");
@@ -51,11 +51,11 @@ impl RepoSession {
 
     /// Whether git normalises line endings on its own here, read once.
     ///
-    /// A property of the repository's configuration rather than of any
-    /// path, and it was being read again for every diff opened — a whole
-    /// process on the way to showing a file. Dropped by the same event
-    /// that drops the sampled baselines, because a write or a moved ref is
-    /// also what can bring a different `.gitattributes` along with it.
+    /// A property of the repository's configuration, and it was being
+    /// read again for every diff opened — a whole process on the way to
+    /// showing a file. Dropped by the same event that drops the sampled
+    /// baselines, because a write or a moved ref is also what can bring
+    /// a different `.gitattributes` along with it.
     async fn normalising(
         &self,
         workdir: &Path,
@@ -72,7 +72,7 @@ impl RepoSession {
     /// `git config` to ask — a process per poll tick for a list that only
     /// a write moves. A config file that has been written since is looked
     /// for first, so a remote added in a terminal is seen by the poll
-    /// (below) rather than waiting for a write or a ref move.
+    /// (below).
     pub(super) async fn remotes(
         &self,
         workdir: &Path,
@@ -89,17 +89,17 @@ impl RepoSession {
     /// `core.autocrlf`. `git remote add` in a terminal moves no ref and
     /// lands no write, and neither does the settings screen writing the
     /// line-ending setting for this repository (`models::line_endings`
-    /// spawns against a path rather than through a session), so nothing
-    /// else here would notice either of them.
+    /// spawns against a path), so nothing else here would notice either
+    /// of them.
     ///
-    /// A stat rather than a `git config`: this runs on every poll tick,
-    /// and the reason those answers are kept at all is that a process per
-    /// tick was too much to pay for them. What it watches is the
-    /// repository's own config (a linked worktree shares the common one,
-    /// which is what `--git-path config` answers) — a value written into
-    /// the user's global config is still only seen on the next write or
-    /// ref move. The push mark is the exception: the status tick reads it
-    /// in every scope and hands it to [`RepoSession::note_push_default`].
+    /// A stat, on every poll tick: the reason those answers are kept at
+    /// all is that a process per tick was too much to pay for them. What
+    /// it watches is the repository's own config (a linked worktree
+    /// shares the common one, which is what `--git-path config` answers)
+    /// — a value written into the user's global config is still only
+    /// seen on the next write or ref move. The push mark is the
+    /// exception: the status tick reads it in every scope and hands it
+    /// to [`RepoSession::note_push_default`].
     pub(super) fn forget_what_the_config_decides(&self) {
         let Some(path) = self.config_path() else {
             return;
@@ -109,7 +109,7 @@ impl RepoSession {
         if seen.as_ref() == Some(&stamp) {
             return;
         }
-        // Not on the first look: there is no answer being kept yet, and
+        // Only past the first look: no answer is being kept yet, and
         // the read below is about to take the current one anyway.
         if seen.is_some() {
             self.remotes.forget();
@@ -194,12 +194,12 @@ impl RepoSession {
 
     /// Which pending files have something to say about their line endings.
     ///
-    /// Three reads for the whole tree rather than one per file: the two
-    /// pending diffs, whose size is the size of the change, and one
-    /// `ls-files --eol` for the files git has never seen — a new file's
-    /// whole question is "what endings does it have", which that column
-    /// answers without a patch. Only a new file that arrives already mixed
-    /// needs its patch, because the count in that sentence is in the lines.
+    /// Three reads for the whole tree: the two pending diffs, whose size
+    /// is the size of the change, and one `ls-files --eol` for the files
+    /// git has never seen — a new file's whole question is "what endings
+    /// does it have", which that column answers without a patch. Only a
+    /// new file that arrives already mixed needs its patch, because the
+    /// count in that sentence is in the lines.
     pub(super) async fn settle_eol_marks(
         &self,
         workdir: &Path,
@@ -245,10 +245,10 @@ impl RepoSession {
                 readings.insert(seen.path, (seen.reading, true));
             }
         }
-        // Only files status actually reports: a path spelled differently by
-        // the patch header (git C-quotes the awkward ones) has no row to
-        // put a mark on, and guessing which row it meant is worse than
-        // leaving it unmarked.
+        // Only files status actually reports: a path spelled
+        // differently by the patch header (git C-quotes the awkward
+        // ones) has no row to put a mark on, and is left
+        // unmarked.
         let pending: std::collections::HashSet<&str> =
             status.items.iter().map(|i| i.path()).collect();
         readings.retain(|path, _| pending.contains(path.as_str()));
@@ -257,9 +257,9 @@ impl RepoSession {
             if !pending.contains(path.as_str()) {
                 continue;
             }
-            // Untracked means nothing of it is in the index yet, so
-            // whatever it says is about the next `git add`, not this
-            // commit.
+            // Untracked means nothing of it is in the index
+            // yet, so whatever it says is about the next
+            // `git add`.
             match shape {
                 eol::Shape::Uniform(eol) => {
                     readings.insert(path, (eol::Reading::NewFile { eol }, false));
@@ -283,7 +283,7 @@ impl RepoSession {
         }
 
         // git's word on which of these are text at all, in one spawn for
-        // the lot rather than one per file.
+        // the lot.
         let paths: Vec<String> = readings.keys().cloned().collect();
         let converting = self.normalising(workdir, cancel).await.unwrap_or(false);
         let rulings = eol::rulings_given(&self.executor, workdir, &paths, converting, cancel)

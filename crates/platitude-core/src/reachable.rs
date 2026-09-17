@@ -34,8 +34,8 @@ use crate::refs::{HeadState, RefEntry};
 /// commit HEAD points at.
 ///
 /// Reads the listing the refs refresh already has, so it costs no process.
-/// Annotated tags count peeled: what matters is the commit, not the tag
-/// object.
+/// Annotated tags count peeled, because the commit is what the answer is
+/// about.
 pub fn a_ref_sits_on_head(refs: &[RefEntry], head: &HeadState) -> bool {
     let Some(oid) = head.oid else {
         return false;
@@ -66,17 +66,17 @@ pub async fn reached_without_branch(
 /// The walk behind [`reached_without_branch`], split out to be read in a
 /// test without a repository.
 ///
-/// The exclusion pattern for `--branches` is given **without** the
-/// `refs/heads/` prefix: git matches it against the part after the
-/// namespace, so `--exclude=refs/heads/main` silently excludes nothing and
-/// the walk then answers "held" for every branch there is (measured).
+/// The exclusion pattern for `--branches` is the **short name**: git
+/// matches it against the part after the namespace, so
+/// `--exclude=refs/heads/main` silently excludes nothing and the walk
+/// then answers "held" for every branch there is (measured).
 ///
-/// `--glob=refs/stash*` rather than `refs/stash`: a `--glob` pattern only
-/// matches a hierarchy, so the exact refname alone matches nothing
-/// (measured). Naming `refs/stash` as a plain rev would need
-/// `--ignore-missing` for the repositories that never stashed, and that
-/// flag would also swallow a bad `tip` — which would come back as "held",
-/// the wrong way to fail.
+/// `--glob=refs/stash*` keeps its `*`: a `--glob` pattern only matches
+/// a hierarchy, so the exact refname alone matches nothing (measured).
+/// Naming `refs/stash` as a plain rev would need `--ignore-missing`
+/// for the repositories that never stashed, and that flag would also
+/// swallow a bad `tip` — which would come back as "held", the wrong
+/// way to fail.
 fn command(workdir: &Path, tip: &str, branch: &str) -> GitCommand {
     let mut cmd = GitCommand::new()
         .cwd(workdir)

@@ -1,10 +1,10 @@
 //! Which of the walked commits a remote already has.
 //!
 //! The answer every "this rewrites published history" warning rests on,
-//! taken off the walk that is already drawing those commits rather than
-//! asked of git a second time. A menu opened on a row reads it from the
-//! row (デザイン規約 §メニュー wants the answer in hand as the card opens, and a
-//! `git rev-list` is a whole process away).
+//! taken off the walk that is already drawing those commits. A menu
+//! opened on a row reads it from the row (デザイン規約 §メニュー wants the
+//! answer in hand as the card opens, and a `git rev-list` is a whole
+//! process away).
 //!
 //! "Published" is what `--not --remotes` means in [`crate::publish`]:
 //! reachable from some remote-tracking *branch*. Tags are not in
@@ -22,9 +22,9 @@ use crate::oid::Oid;
 
 /// The commits remote-tracking branches point at, sorted for lookup.
 ///
-/// Built once per pass and searched once per row, rather than asked of
-/// the label index per row while it is locked: the walk runs across
-/// awaits and cannot hold that lock (CLAUDE.md 性能予算 — refs は 5 万本
+/// Built once per pass and searched once per row: the walk runs across
+/// awaits and cannot hold the label index's lock
+/// (CLAUDE.md 性能予算 — refs は 5 万本
 /// ありうるので索引を 1 本作ってから回す).
 #[derive(Debug, Default, Clone)]
 pub(super) struct RemoteTips {
@@ -62,9 +62,9 @@ impl crate::mem::Footprint for RemoteTips {
 /// Carries "a remote has this" down the walk, from the rows a remote
 /// branch stands on to the commits behind them.
 ///
-/// **This is exact for every row the walk emits, not an approximation of
-/// the window.** The walk is `--date-order`, which never emits a parent
-/// before all of its children (the stash sifting in `rows.rs` already
+/// **This is exact for every row the walk emits.** The walk is
+/// `--date-order`, which never emits a parent before all of its
+/// children (the stash sifting in `rows.rs` already
 /// rests on the same guarantee), so the rows are a topological prefix: if
 /// an emitted row is an ancestor of a remote tip, that tip is a
 /// descendant and was emitted earlier — inside the window too. A row can
@@ -74,8 +74,8 @@ impl crate::mem::Footprint for RemoteTips {
 pub(super) struct PublishMarks {
     tips: RemoteTips,
     /// Parents of commits a remote has, waiting for the walk to reach
-    /// them. Bounded by the open lanes, not by the window: an id goes in
-    /// when its child is emitted and comes out when it is.
+    /// them. Bounded by the open lanes: an id goes in when its child is
+    /// emitted and comes out when it is.
     pending: HashSet<Oid>,
 }
 
@@ -117,12 +117,12 @@ impl RepoSession {
     /// Where the remote-tracking branches stand, for the pass about to
     /// walk.
     ///
-    /// **Off the refs snapshot, not the chips.** `LabelIndex` is the
-    /// drawing index and folds a remote branch into its local
-    /// counterpart's chip (`build_label_map` — `joins.folded`), so a
-    /// remote read from there goes missing exactly when the two names
-    /// agree. What is wanted here is where the refs are, which is the
-    /// snapshot's half.
+    /// **Off the refs snapshot.** `LabelIndex` is the drawing index
+    /// and folds a remote branch into its local counterpart's chip
+    /// (`build_label_map` — `joins.folded`), so a remote read from
+    /// there goes missing exactly when the two names agree. What is
+    /// wanted here is where the refs are, which is the snapshot's
+    /// half.
     ///
     /// **Asked of git when no snapshot has landed yet.** The refs read and
     /// the graph walk are independent, and at open the walk can be first
@@ -139,9 +139,9 @@ impl RepoSession {
         if let Some(snapshot) = relock(&self.last_snapshot).clone() {
             return RemoteTips::new(snapshot.remotes.iter().map(|b| b.oid).collect());
         }
-        // A listing that failed leaves the marks empty rather than the
-        // pass: no warning is the same answer this gave before anything
-        // was read, and the next pass asks again.
+        // A listing that failed leaves the marks empty and the
+        // pass running: no warning is the same answer this gave
+        // before anything was read, and the next pass asks again.
         match crate::refs::remote_tips(&self.executor, workdir, cancel).await {
             Ok(oids) => RemoteTips::new(oids),
             Err(e) => {

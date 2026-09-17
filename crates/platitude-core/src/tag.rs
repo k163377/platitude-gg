@@ -18,8 +18,8 @@ use crate::process::{GitCommand, GitExecutor};
 
 /// Points `to` at whatever `from` names, then deletes `from`.
 ///
-/// Never forced: git refuses when `to` already exists, and overwriting a
-/// tag silently is how a release mark ends up somewhere else.
+/// Left to git to refuse when `to` already exists: overwriting a tag
+/// silently is how a release mark ends up somewhere else.
 ///
 /// The first step is the one that can fail on its own (bad name, name
 /// taken); if it does, the old tag is still there and nothing was lost.
@@ -30,8 +30,8 @@ use crate::process::{GitCommand, GitExecutor};
 /// free and writes a loose ref whose *file* collides with the old name;
 /// the delete step then removes both, and every command involved exits 0
 /// (measured, `tag V1.0 v1.0` + `tag -d v1.0` on packed refs
-/// leaves no tag at all). Refused everywhere, not just where it breaks:
-/// the same repository may be opened from either kind of filesystem.
+/// leaves no tag at all). Refused everywhere, since the same repository
+/// may be opened from either kind of filesystem.
 pub async fn rename(
     executor: &GitExecutor,
     workdir: &Path,
@@ -64,10 +64,10 @@ pub async fn rename(
     delete(executor, workdir, from, cancel)
         .await
         .map_err(|error| {
-            // **A session closing is not a half-finished rename.** Cancellation
-            // is how a write is stopped on the way out, and it is told apart
-            // from a failure one layer up (`session::write`); dressed as a
-            // report it would raise a bar over a window that is going away.
+            // **A session closing is a cancellation.** That is how a write
+            // is stopped on the way out, and it is told apart from a
+            // failure one layer up (`session::write`); dressed as a report
+            // it would raise a bar over a window that is going away.
             if error.is_cancelled() || error.report().is_some() {
                 return error;
             }
@@ -78,9 +78,9 @@ pub async fn rename(
 /// Puts `name` on `commit` — a lightweight tag, which is what `git tag`
 /// makes when nothing asks for more.
 ///
-/// Never forced, for the reason [`rename`] is not: git refuses when the
-/// name is taken, and a release mark that moves without anybody saying so
-/// is the accident that refusal exists to stop.
+/// Plain, for [`rename`]'s reason: git refuses when the name is taken,
+/// and a release mark that moves without anybody saying so is the
+/// accident that refusal exists to stop.
 ///
 /// `commit` is anything git resolves — the row's oid is what the menus
 /// hand over — and an empty one leaves the tag on HEAD, which is what git
@@ -118,9 +118,9 @@ pub async fn delete(
 /// Whether a name is one git will take for a branch or a tag.
 ///
 /// The rules are `git check-ref-format`'s, applied to `refs/heads/<name>`
-/// (which is also what `refs/tags/<name>` allows). Checked here rather
-/// than by running git per keystroke: this is the answer an input box
-/// needs on every character, and it is a pure function of the string.
+/// (which is also what `refs/tags/<name>` allows). Checked here as a
+/// pure function of the string: this is the answer an input box needs
+/// on every character it is given.
 /// `tests/it/rename_integration.rs` holds it to what real git says.
 pub fn is_valid_name(name: &str) -> bool {
     if name.is_empty() {

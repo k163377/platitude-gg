@@ -115,9 +115,9 @@ async fn a_plan_run_under_a_standing_merge_is_refused_before_anything_is_spawned
         refusal.contains("merge") && refusal.contains("nothing was rewritten"),
         "the refusal names what is standing: {refusal}"
     );
-    // **And it reaches the reader, not just the log.** Nothing ran, so
-    // there is no row in the command log for the panel to raise over —
-    // the report is what puts the sentence on the notice bar
+    // **And it reaches the reader.** Nothing ran, so there is no row
+    // in the command log for the panel to raise over — the report is
+    // what puts the sentence on the notice bar
     // (デザイン規約 §答えの要らない報せ).
     assert_eq!(
         report_kind(&sink, OperationKind::Rebase).await,
@@ -191,8 +191,8 @@ async fn a_squash_under_a_standing_merge_stops_at_the_carry() {
 }
 
 /// The same guard on the plain `rebase <upstream>` route, and under a
-/// cherry-pick rather than a merge — the trap is the operation, not which
-/// menu row was clicked.
+/// cherry-pick this time — the trap is the operation, whichever menu
+/// row was clicked.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_rebase_onto_under_a_standing_cherry_pick_stops_at_the_carry() {
     let mut repo = diverged();
@@ -229,10 +229,10 @@ async fn a_rebase_onto_under_a_standing_cherry_pick_stops_at_the_carry() {
     session.close();
 }
 
-/// And a bisect does **not** stand in the way: a stash leaves it running
-/// (measured), so the work carries across as it does anywhere else. The
-/// guard reads the four operations a stash puts down, not everything the
-/// badge names.
+/// And a bisect **stands aside**: a stash leaves it running
+/// (measured), so the work carries across as it does anywhere else.
+/// The guard reads the four operations a stash puts down, and those
+/// alone.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_dirty_tree_under_a_bisect_still_carries() {
     let mut repo = TestRepo::init();

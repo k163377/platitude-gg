@@ -81,7 +81,7 @@ fn describe_quotes_what_a_shell_would_split_or_read() {
 
 #[test]
 fn the_full_form_spells_out_what_is_always_applied() {
-    // Named, not resolved: `new()` may spell the program as a path
+    // The program is named here: `new()` may spell it as a path
     // (`program`), and this is about the shape around it.
     let executor = GitExecutor::with_program("git");
     let full = executor.describe_full(&GitCommand::new().args(["status", "--porcelain=v2"]));

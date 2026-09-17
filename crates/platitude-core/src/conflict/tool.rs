@@ -28,25 +28,25 @@ const MERGETOOL_ARGS: [&str; 2] = ["-c", "mergetool.writeToTemp=true"];
 /// Launches the configured merge tool for `paths`, one at a time, and
 /// stages each file the tool resolves (git does the `add` itself).
 ///
-/// The tool is resolved here rather than passed in, so the name that is
-/// launched is the one configured at this moment — a caller showing the
-/// name in a menu cannot launch a stale one. With none configured this
-/// refuses instead of running: git would otherwise guess a tool, and a
-/// guessed tool makes it prompt on a stdin that is closed.
+/// The tool is resolved here, so the name that is launched is the one
+/// configured at this moment — a caller showing the name in a menu
+/// cannot launch a stale one. With none configured this refuses: git
+/// would otherwise guess a tool, and a guessed tool makes it prompt
+/// on a stdin that is closed.
 ///
-/// `paths` is never allowed to be empty. Bare `git mergetool` walks every
+/// `paths` holds at least one path. Bare `git mergetool` walks every
 /// conflicted file in turn, and since the whole run holds the session's
 /// write queue, that turns one launch into a queue blocked for as many
 /// tool sessions as there are conflicts.
 ///
-/// No time limit: the tool runs for as long as the person takes, and
-/// cancelling the session is what stops it.
+/// The tool runs for as long as the person takes, and cancelling
+/// the session is what stops it.
 ///
-/// What a tool has to be is not "graphical" but "does not need the console
-/// it was not given": on Windows the subprocess gets none
-/// (CREATE_NO_WINDOW), which rules out anything that draws in a terminal
-/// (vimdiff and its kind) and nothing else. A windowed tool works, and so
-/// does a plain script that writes `$MERGED` — the merge tool contract is
+/// What a tool has to be is console-free: on Windows the
+/// subprocess gets none (CREATE_NO_WINDOW), which rules out
+/// anything that draws in a terminal (vimdiff and its kind)
+/// and nothing else. A windowed tool works, and so does a plain
+/// script that writes `$MERGED` — the merge tool contract is
 /// the whole requirement.
 pub async fn mergetool(
     executor: &GitExecutor,
@@ -80,7 +80,7 @@ pub async fn mergetool(
         .args(paths.iter().map(|p| literal_pathspec(p)))
         .no_timeout()
         // Paced by the person in the tool, so the slot it sits in for
-        // as long as they take is never the click's (`process::Pace`).
+        // as long as they take is an elsewhere slot (`process::Pace`).
         .paced_elsewhere();
     executor.run(cmd, cancel).await.map(drop)
 }
@@ -119,18 +119,18 @@ static INSTALLED: tokio::sync::OnceCell<Vec<String>> = tokio::sync::OnceCell::co
 
 /// Merge tools git found installed and this app can actually launch.
 ///
-/// **Slow on Windows** — seconds, not milliseconds
+/// **Slow on Windows** — seconds
 /// (ci/baseline/code-costs-windows-x64.md). `--tool-help` sources every
 /// one of git's tool definitions twice and probes each one's
 /// availability, which on Windows means walking the registry and Program
-/// Files. Never put this on the write queue, and never let anything wait
+/// Files. Keep it off the write queue, with nothing waiting
 /// on it.
 ///
-/// Only the first group is read (what is installed); the second group
-/// lists tools git knows of but cannot find, which is not an offer worth
-/// making. User-defined tools are skipped here — [`user_defined_tools`]
-/// names them from config without the eight seconds, and reads them from
-/// a key rather than out of prose.
+/// Only the first group is read (what is installed); the second
+/// group lists tools git knows of but cannot find. User-defined
+/// tools are [`user_defined_tools`]'s — it names them from config
+/// in a moment, reading a key where this one reads eight seconds
+/// of prose.
 ///
 /// **Tools that draw in a terminal are dropped.** The subprocess gets no
 /// console, so vimdiff and its kind cannot run, and offering them is
@@ -191,10 +191,10 @@ pub(crate) fn parse_tool_help(text: &str) -> Vec<String> {
 
 /// Merge tools defined in config (`mergetool.<name>.cmd`).
 ///
-/// Cheap where [`available_tools`] is not, and read from a key rather than
-/// from prose. **Not filtered**: someone who wrote a `cmd` chose it, and a
-/// script that writes `$MERGED` satisfies the whole contract without
-/// needing a window or a console.
+/// Cheap — a key read, where [`available_tools`] takes seconds.
+/// **Everything found is offered**: someone who wrote a `cmd` chose
+/// it, and a script that writes `$MERGED` satisfies the whole contract
+/// without needing a window or a console.
 pub async fn user_defined_tools(
     executor: &GitExecutor,
     workdir: &Path,
@@ -228,20 +228,20 @@ pub async fn user_defined_tools(
 /// Records which merge tool to launch, or clears the choice when `tool`
 /// is empty.
 ///
-/// Written to `merge.guitool`, not `merge.tool`, for two reasons that
-/// point the same way. It is the key that takes effect: launches pass
-/// `--gui`, under which git reads `guitool` first, so writing `tool`
-/// would silently do nothing for anyone who already set `guitool`. And it
-/// is the key that belongs to this app: `merge.tool` is what their
-/// terminal `git mergetool` uses, and choosing a windowed tool here has
-/// no business changing that — a terminal tool cannot run under this app
+/// Written to `merge.guitool`, for two reasons that point the same
+/// way. It is the key that takes effect: launches pass `--gui`, under
+/// which git reads `guitool` first, so writing `tool` would silently
+/// do nothing for anyone who already set `guitool`. And it is the key
+/// that belongs to this app: `merge.tool` is what their terminal
+/// `git mergetool` uses, and choosing a windowed tool here has no
+/// business changing that — a terminal tool cannot run under this app
 /// at all (no console), while `merge.tool` may well name one.
 ///
-/// Always global. Which editor someone reaches for is a property of their
-/// desk, not of one repository.
+/// Always global. Which editor someone reaches for is a property of
+/// their desk.
 ///
-/// Clearing does not necessarily leave nothing configured: `merge.tool`
-/// may still be set, and [`configured_tool`] will then report it. That is
+/// Clearing can still leave something configured: `merge.tool` may
+/// still be set, and [`configured_tool`] will then report it. That is
 /// the honest answer, since it is what git would launch.
 pub async fn set_merge_tool(
     executor: &GitExecutor,
@@ -254,7 +254,7 @@ pub async fn set_merge_tool(
         let cmd = GitCommand::new()
             .cwd(workdir)
             // "nothing was set" comes back as code 5, which is the same
-            // outcome as clearing rather than a failure to report.
+            // outcome as clearing, so code 5 is an answer here.
             .answers_by_code(5)
             .args(["config", "--global", "--unset", "merge.guitool"]);
         let out = executor.run_unchecked(cmd, cancel).await?;

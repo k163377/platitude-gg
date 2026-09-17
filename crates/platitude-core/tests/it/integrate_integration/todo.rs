@@ -188,7 +188,7 @@ async fn the_helper_is_found_beside_the_other_binaries() {
 /// the replaced todo makes the outcome the same either way today. First,
 /// the flag has to work on the minimum git, which the run in that
 /// container measures (`cargo xtask linux test -p platitude-core`).
-/// Second, git must not refuse the config and the flag standing
+/// Second, git has to take the config and the flag standing
 /// together — the manual says the flag countermands the config, and this
 /// is that sentence run.
 #[tokio::test]
@@ -239,7 +239,7 @@ async fn a_plan_runs_whole_with_rebase_merges_set_in_the_config() {
     assert!(!repo.path.join("b.txt").exists());
 }
 
-/// **`--update-refs` works because git's own todo is kept, not replaced.**
+/// **`--update-refs` works because git's own todo is kept.**
 ///
 /// git writes an `update-ref` line after the commit each local branch
 /// inside the range stands on, and decides that set itself: no line for a

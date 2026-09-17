@@ -7,12 +7,12 @@ use super::*;
 /// or those and the reads the session makes on its own.
 ///
 /// Where a session starts is settled when it is created
-/// ([`RepoSession::open_recording`]) rather than switched on once it has
-/// been handed back. Opening spawns its own reads — refs, status, the
-/// walk, the author, an open fetch — as soon as the path is accepted, so
-/// a caller flipping this afterwards catches whichever of them the
-/// scheduler had not reached yet, and how much of an opening a command
-/// log holds becomes a scheduling accident.
+/// ([`RepoSession::open_recording`]). Opening spawns its own reads —
+/// refs, status, the walk, the author, an open fetch — as soon as the
+/// path is accepted, so a caller flipping this afterwards catches
+/// whichever of them the scheduler had not reached yet, and how much
+/// of an opening a command log holds becomes a scheduling
+/// accident.
 ///
 /// Moving it later ([`RepoSession::set_recording`]) is still how the log
 /// panel's switch works, and is exact for everything the session is asked
@@ -53,7 +53,7 @@ pub(super) struct CommandFeed {
 
 /// What a held invocation needs to become a row after the fact. The line
 /// cannot be rebuilt at the end — the command it describes is gone by
-/// then — and the clock is the spawn's, not the failure's.
+/// then — and the clock is the spawn's.
 struct Held {
     display: String,
     full: String,

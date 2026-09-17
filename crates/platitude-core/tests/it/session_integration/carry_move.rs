@@ -115,9 +115,9 @@ async fn a_move_git_refuses_goes_round_through_a_stash() {
     session.close();
 }
 
-/// Going round through the stash is what keeps the staged/unstaged split
-/// — the reason the move is not `switch --merge`, which refuses outright
-/// while anything is staged.
+/// Going round through the stash is what keeps the staged/unstaged
+/// split: `switch --merge` refuses outright while anything is
+/// staged.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_move_that_goes_round_keeps_what_was_staged_staged() {
     let mut repo = TestRepo::init();
@@ -150,7 +150,7 @@ async fn a_move_that_goes_round_keeps_what_was_staged_staged() {
 }
 
 /// The same move when the sides cannot be combined: git leaves the markers
-/// and keeps the stash, and neither is a failure to report — the work is
+/// and keeps the stash, and both are the answer asked for — the work is
 /// across, waiting to be settled, and still recoverable from the stash.
 /// This is the display a person typing the three commands would land on.
 #[tokio::test(flavor = "multi_thread")]
@@ -247,8 +247,8 @@ async fn a_carry_that_cannot_restore_reports_gits_message() {
 }
 
 /// A pop whose restore conflicts lands exactly where an apply would have:
-/// git keeps the entry, and the conflict is the outcome that was asked
-/// for, not a failure to report (デザイン規約 §変更を退避する).
+/// git keeps the entry, and the conflict is the outcome that was
+/// asked for (デザイン規約 §変更を退避する).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_conflicting_pop_keeps_the_entry_and_is_not_a_failure() {
     let mut repo = colliding_branches();
@@ -278,7 +278,7 @@ async fn a_conflicting_pop_keeps_the_entry_and_is_not_a_failure() {
     session.close();
 }
 
-/// The same reading must not swallow a pop that did nothing. git refuses
+/// The same reading still catches a pop that did nothing. git refuses
 /// to restore onto an index that already has unmerged paths, and the
 /// conflicts standing there afterwards are the old ones — so the tree
 /// alone cannot judge it, and what it was before decides.
@@ -344,10 +344,10 @@ async fn a_conflicting_apply_is_not_a_failure_either() {
 /// Moving out of a stopped cherry-pick: the operation is put down, the
 /// tree it left goes into a stash, and the move lands — one write.
 ///
-/// **Nothing is undone.** `--quit` keeps every commit an earlier step of
-/// the sequence already made, and the conflicted paths travel in the
-/// stash rather than being thrown away, which is what tells this apart
-/// from the `--abort` a reader can still choose on the exit card
+/// **Nothing is undone.** `--quit` keeps every commit an earlier step
+/// of the sequence already made, and the conflicted paths travel in
+/// the stash, which is what tells this apart from the `--abort` a
+/// reader can still choose on the exit card
 /// (デザイン規約 §進行中の操作から出る).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_move_out_of_a_stopped_pick_puts_it_in_a_stash() {
@@ -445,9 +445,9 @@ async fn a_move_out_of_unmerged_files_stashes_them_with_no_operation_to_put_down
     session.close();
 }
 
-/// And a clean tree with nothing standing over it is nobody's business:
-/// a move that reaches this by any other road must not stash a tree the
-/// reader was only carrying across.
+/// And a clean tree with nothing standing over it is nobody's
+/// business: a move that reaches this by any other road leaves the
+/// tree the reader carried across where it is.
 #[tokio::test(flavor = "multi_thread")]
 async fn nothing_in_the_way_means_nothing_is_put_aside() {
     let mut repo = colliding_branches();
@@ -499,9 +499,9 @@ async fn an_ordinary_move_still_refuses_while_a_pick_is_standing() {
     session.close();
 }
 
-/// The agreement is spent after the question about the move, not before
-/// it: a move that has to ask leaves the operation standing, so walking
-/// away from `Move here?` costs the cherry-pick nothing.
+/// The agreement is spent after the question about the move: a move
+/// that has to ask leaves the operation standing, so walking away
+/// from `Move here?` costs the cherry-pick nothing.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_move_that_has_to_ask_leaves_the_operation_standing() {
     let mut repo = colliding_branches();
@@ -527,14 +527,14 @@ async fn a_move_that_has_to_ask_leaves_the_operation_standing() {
     session.close();
 }
 
-/// **A carry whose session closes half-way finishes anyway**, so the work
-/// it emptied the tree of is put back rather than left in the stash.
+/// **A carry whose session closes half-way finishes anyway**, so the
+/// work it emptied the tree of is put back.
 ///
 /// The close cancels the reads and gives up the tree's place in the
 /// order, but a local write is not on the token it cancels
-/// (`session::write`: `Lane::Local` is run under one of its own) and the
-/// loop drains its queue after the cancellation rather than dropping it.
-/// The tab that closes mid-write is the reachable way in, and the quit
+/// (`session::write`: `Lane::Local` is run under one of its own) and
+/// the loop drains its queue after the cancellation. The tab that
+/// closes mid-write is the reachable way in, and the quit
 /// gate is the other end of the same rule (rules-refs/core.md §書き込み
 /// レーン) — this is that guarantee read from the repository, which is the
 /// only place it can be read from once nobody is watching the events.

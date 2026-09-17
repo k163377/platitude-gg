@@ -4,7 +4,7 @@
 //! **Three boundaries, one id.** A request is *accepted* the moment
 //! [`RepoSession::write`] hands its [`OperationId`] back — synchronously,
 //! so the queue order is the order the UI asked in; a closed session
-//! hands back nothing, rather than an id nothing would answer. git's own
+//! hands back nothing. git's own
 //! answer is [`SessionEvent::WriteFinished`], sent the moment the command
 //! ends and before anything it invalidated has been read again. The reads
 //! that follow — the tree, the refs, the graph where either moved, the
@@ -34,9 +34,9 @@
 //!   ([`RepoSession::tree_write`]), and are taken again the moment that
 //!   write lands ([`RepoSession::tell_the_tree`]) — as a read the
 //!   session owes, so one asked for while it was already reading, or
-//!   while a write of its own was out, is served when that read or that
-//!   write ends rather than dropped;
-//! * **the reads an opening makes are not held back** — a tab has to
+//!   while a write of its own was out, is served when that read or
+//!   that write ends;
+//! * **the reads an opening makes go straight out** — a tab has to
 //!   paint, and holding them would leave it on "loading" for as long as
 //!   somebody else's rebase takes. They can therefore read a tree
 //!   mid-write; what makes that safe is the line above, since the new
@@ -88,12 +88,12 @@ impl RepoSession {
         // holding a place behind a request in its own queue — waiting on
         // the write it is itself the only one that can run, for good. Two
         // callers asking at once is all that would take. The id is taken
-        // here for the same reason and not a weaker one: numbered outside,
-        // two requests racing can be numbered the other way round from the
-        // order the queue took them, and a log read across two sessions on
-        // one tree would say the wrong one went first. **It is not a
-        // licence to compare ids** — they answer to equality and nothing
-        // else ([`OperationId`]), and every reader here matches its own.
+        // here for the same reason: numbered outside, two requests
+        // racing can be numbered the other way round from the order the
+        // queue took them, and a log read across two sessions on one
+        // tree would say the wrong one went first. **Ids answer to
+        // equality alone** ([`OperationId`]), and every reader here
+        // matches its own.
         let (operation, local, sent) = {
             let _accepting = relock(&self.accepting);
             let operation = Operation::new(kind, after);
@@ -160,14 +160,14 @@ impl RepoSession {
     /// have been keeping out of the tree for as long as that write held
     /// the front ([`Self::tree_write`]).
     ///
-    /// Called once the place is back, never before — a session told to
-    /// look while the tree still says it is being written skips the tick
-    /// it was woken for.
+    /// Called once the place is back — a session told to look while the
+    /// tree still says it is being written skips the tick it was woken
+    /// for.
     ///
     /// What is asked for is a read the session **owes**
-    /// ([`RepoSession::read_again`]), not a tick it may drop: the read
-    /// it is already making began before this write, so a refusal that
-    /// went nowhere would leave it showing a repository that is gone.
+    /// ([`RepoSession::read_again`]): the read it is already making
+    /// began before this write, so a refusal that went nowhere would
+    /// leave it showing a repository that is gone.
     fn tell_the_tree(self: &Arc<Self>) {
         let Some(order) = self.write_order() else {
             return;
@@ -179,7 +179,7 @@ impl RepoSession {
 
     /// Runs queued writes one at a time, in submission order.
     ///
-    /// A close reaches this loop between requests, never inside one: the
+    /// A close reaches this loop between requests: the
     /// write already running is waited out to its end where its lane says
     /// so (its token is not the session's), and the requests already
     /// queued behind it still run — the queue's promise is that the asked
@@ -263,10 +263,9 @@ impl RepoSession {
         let Some(info) = self.repo_info() else {
             // The id went out at acceptance, so the boundaries are owed:
             // a caller holding it waits for them, and nothing else would
-            // ever come. Reported as the refusal it is rather than
-            // dropped quietly — the entry points all sit behind an open
-            // repository today, so this says something has gone wrong
-            // rather than something ordinary.
+            // ever come. Reported as the refusal it is — the entry points
+            // all sit behind an open repository today, so this says
+            // something has gone wrong.
             tracing::debug!(?operation, "write refused: no repository is open");
             let fence = self.standing.fence();
             self.sink.event(SessionEvent::WriteStarted { id, kind });
@@ -307,13 +306,13 @@ impl RepoSession {
         // Every command the task spawns names the write it runs under, so
         // a compound write is several rows under one id in the log.
         let result = run(exec.under(id), info, cancel).await;
-        // The write has ended, and nothing that looked at the repository
-        // before this moment may speak for it after: the reads below are
-        // the ones that answer for what the write left, and a poll that
-        // began under it lands stale (`Standing::fence`). The number the
-        // fence answers travels with the write's answer, so a consumer
-        // landing on "the repository as the write left it" arms on the
-        // report the write is owed by name rather than by counting.
+        // The write has ended, and what speaks for the repository from
+        // here is a read begun after it: the reads below are the ones
+        // that answer for what the write left, and a poll that began
+        // under it lands stale (`Standing::fence`). The number the fence
+        // answers travels with the write's answer, so a consumer landing
+        // on "the repository as the write left it" arms on the report
+        // the write is owed by name.
         let fence = self.standing.fence();
         let rebuild_graph = match result {
             Ok(()) => {
@@ -415,8 +414,8 @@ impl RepoSession {
         // other way round, in series: the refs first, and the tree only
         // where they moved, because that move is the only thing a status
         // could report differently afterwards (`AfterWrite::Refs`). The
-        // series is the point — a join would run the read it is trying not
-        // to spend.
+        // series is the point — a join would run the read the series
+        // saves.
         let mut failed = Vec::new();
         let tree_only = after == AfterWrite::Tree;
         let (tree, refs) = match after {
@@ -445,9 +444,9 @@ impl RepoSession {
             // Off-screen rebuild: the pane keeps showing the old graph
             // until the finished one swaps in (or nothing changed and
             // nothing repaints — the auto-fetch common case). The write
-            // queue does not advance until this answer lands: otherwise a
-            // later write or test barrier can overtake and cancel the very
-            // refresh it is meant to follow.
+            // queue waits for this answer: otherwise a later write or
+            // test barrier can overtake and cancel the very refresh it
+            // is meant to follow.
             if !self.settle_graph().await.landed() {
                 note_failed(&mut failed, FollowUp::Graph);
             }

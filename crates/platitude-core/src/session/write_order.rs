@@ -48,8 +48,8 @@ static ORDERS: Mutex<BTreeMap<PathBuf, std::sync::Weak<WriteOrder>>> = Mutex::ne
 
 /// The order for `git_dir`, made if no session is on that tree yet.
 ///
-/// The dead entries are swept here rather than on a timer: the map is
-/// walked by every session that opens, which is the only moment a new one
+/// The dead entries are swept here: the map is walked by every session
+/// that opens, which is the only moment a new one
 /// is added.
 pub(super) fn of(git_dir: &Path) -> Arc<WriteOrder> {
     let mut orders = relock(&ORDERS);
@@ -79,7 +79,7 @@ struct Held {
     waiting: VecDeque<u64>,
     /// Places handed out so far, which is where the next number comes
     /// from. Never reused: a number is a position in one process's
-    /// history of this tree, not a slot.
+    /// history of this tree.
     handed_out: u64,
     /// What git is running for this tree, as the write holding the front
     /// named itself — `None` between writes. Read by every session on
@@ -131,9 +131,9 @@ impl WriteOrder {
         held.members.push(Arc::downgrade(session));
     }
 
-    /// Takes it off again. By pointer rather than by upgrading: a close
-    /// runs inside the session, where there is no `Arc` to compare with,
-    /// and a `Weak` answers for the address either way.
+    /// Takes it off again. By pointer: a close runs inside the session,
+    /// where there is no `Arc` to compare with, and a `Weak` answers for
+    /// the address either way.
     pub(super) fn leave(&self, session: &RepoSession) {
         let gone = std::ptr::from_ref(session);
         let mut held = relock(&self.held);
@@ -144,10 +144,10 @@ impl WriteOrder {
     /// Every session on this tree but `writer` — who to tell that the
     /// tree has been written by somebody else.
     ///
-    /// Answers with the sessions rather than telling them here: the
-    /// caller is inside a write loop, and holding this lock across a call
-    /// back into a session would take the two locks in the order nothing
-    /// else takes them in.
+    /// Answers with the sessions: the caller is inside a write loop,
+    /// and holding this lock across a call back into a session would
+    /// take the two locks in the order nothing else takes them
+    /// in.
     pub(super) fn others(&self, writer: &RepoSession) -> Vec<Arc<RepoSession>> {
         let writer = std::ptr::from_ref(writer);
         relock(&self.held)
@@ -209,7 +209,7 @@ impl Place {
         while !self.order.is_front(self.place) {
             // The bell belongs to the order this holds an `Arc` to, so
             // the sender outlives the wait; a closed channel would still
-            // leave the loop rather than spin on a dead wake-up.
+            // leave the loop.
             if moved.changed().await.is_err() {
                 break;
             }
@@ -263,8 +263,8 @@ mod tests {
         running.granted(an_operation()).await;
 
         // The shape of a write the queue turned away after its place was
-        // taken: it never reaches the front, and the one behind it must
-        // not wait for a turn that will never come.
+        // taken: it never reaches the front, and the one behind it goes
+        // on to its own turn.
         drop(refused);
         drop(running);
         behind.granted(an_operation()).await;

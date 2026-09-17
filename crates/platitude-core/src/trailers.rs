@@ -80,7 +80,7 @@ fn is_trailer_line(line: &str) -> bool {
 /// The shape git hands over is whatever the message wrote after the
 /// colon. `Name <address>` is the convention every tool that reads these
 /// follows, so the address is taken from the last angle-bracketed run;
-/// anything else stays a name in full rather than being guessed at.
+/// anything else stays a name in full.
 pub fn parse_co_authors(field: &str) -> Vec<CoAuthor> {
     field
         .split(TRAILER_SEP)
@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn co_author_without_an_address_keeps_its_whole_name() {
         // Nothing in git requires the angle-bracket form, so a trailer
-        // that has none is a name, not a name with a broken address.
+        // that has none is a name in full.
         let got = parse_co_authors("Nameless");
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].name, "Nameless");
@@ -224,8 +224,8 @@ mod tests {
 
     #[test]
     fn a_paragraph_with_prose_in_it_credits_nobody() {
-        // git's own rule, and the reason this is not a search for the
-        // word: a body that talks *about* the trailer has no trailers.
+        // git's own rule, and the reason the paragraph is read whole: a
+        // body that talks *about* the trailer has no trailers.
         assert!(
             co_authors_in("I dropped the Co-authored-by: Claude line by mistake.").is_empty(),
             "prose in the last paragraph is prose"

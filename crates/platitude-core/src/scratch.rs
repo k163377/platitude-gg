@@ -1,10 +1,10 @@
 //! Short-lived files handed to git by path (patches, commit messages).
 //!
-//! They live under `<git_dir>/platitude/` rather than the system temp
-//! directory: same filesystem as the repository, owner-private like the
-//! rest of the git dir, and self-evident when one is ever left behind.
-//! Nothing is passed to git on stdin — the process layer keeps stdin closed
-//! so a misbehaving command can never wait on it.
+//! They live under `<git_dir>/platitude/`: same filesystem as the
+//! repository, owner-private like the rest of the git dir, and
+//! self-evident when one is ever left behind. Everything reaches git by
+//! path — the process layer keeps stdin closed so a misbehaving command
+//! can never wait on it.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};

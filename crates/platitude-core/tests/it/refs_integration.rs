@@ -85,8 +85,8 @@ async fn lists_branches_tags_and_remotes() {
     // feature/x was pushed without one and so has a same-named branch on
     // origin that is not its own, and local-only was deleted on origin.
     //
-    // **git is asked the same question here rather than quoted**, because
-    // agreeing with it is the whole reason a matching name is not enough
+    // **git is asked the same question here**, because agreeing with it
+    // is the whole reason a matching name is not enough
     // (`RemoteBranches::spoken_for`): it reads `branch.<name>.merge` and
     // has no answer for feature/x, though `origin/feature/x` is right
     // there in the listing above.
@@ -154,10 +154,10 @@ async fn empty_repository_has_unborn_head() {
     assert!(refs_list.is_empty());
 }
 
-/// The counts a sidebar row draws, taken from real git rather than from
-/// the shape of the format string: a placeholder spelled wrong reads as
-/// an empty leg, and every branch would then look level with its
-/// upstream while the parser still passed.
+/// The counts a sidebar row draws, taken from real git: a placeholder
+/// spelled wrong reads as an empty leg, and every branch would
+/// then look level with its upstream while the parser still
+/// passed.
 #[tokio::test]
 async fn a_branch_counts_how_far_it_stands_from_its_upstream() {
     let mut repo = TestRepo::init();

@@ -4,8 +4,8 @@
 //!
 //! The pass is driven onto the queue while a slot the test holds keeps
 //! it there, so the turning-off lands on a pass that has begun and has
-//! not read — asked for at the exact point it could happen rather than
-//! left to a scheduler (core.md §非同期・並行テスト).
+//! not read — asked for at the exact point it could happen
+//! (core.md §非同期・並行テスト).
 
 use std::sync::Arc;
 

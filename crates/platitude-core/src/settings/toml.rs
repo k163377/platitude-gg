@@ -159,9 +159,9 @@ pub(super) fn minutes(table: &Table, key: &str) -> Option<u32> {
         .get(key)
         .and_then(Value::as_integer)
         .filter(|v| *v >= 0)
-        // Saturating, not failing: a number past `u32` is still "past the
-        // ceiling", and falling back to the default here would answer the
-        // most aggressive interval to the value that asked for the least.
+        // Saturating: a number past `u32` is still "past the ceiling",
+        // and falling back to the default here would answer the most
+        // aggressive interval to the value that asked for the least.
         .map(|v| u32::try_from(v).unwrap_or(u32::MAX))
         .map(crate::session::auto_fetch_minutes)
 }
@@ -182,20 +182,20 @@ pub(super) fn initial_commits(table: &Table, key: &str) -> Option<Option<u32>> {
         .map(|v| match u32::try_from(v) {
             Ok(0) => None,
             Ok(count) => Some(crate::session::log_limit(count)),
-            // Saturating past `u32` rather than failing, like `minutes`:
-            // a number that large is still a count of commits, and the
-            // largest one there is is nearer to what it asked for than
-            // the default is.
+            // Saturating past `u32`, like `minutes`: a number that
+            // large is still a count of commits, and the largest one
+            // there is is nearer to what it asked for than the default
+            // is.
             Err(_) => Some(u32::MAX),
         })
 }
 
 /// A written-down path, with the air around it taken off.
 ///
-/// **An empty string is an answer, not a missing key.** It is how the
-/// settings screen says "whatever `PATH` resolves", so it has to survive
-/// the read — a fallback here would put a value back that the reader had
-/// just cleared. Only a key that is not a string at all falls back
+/// **An empty string is an answer.** It is how the settings screen says
+/// "whatever `PATH` resolves", so it has to survive the read — a
+/// fallback here would put a value back that the reader had just
+/// cleared. Only a key that is not a string at all falls back
 /// (rules-refs/core.md §読みは `toml::Table` からキーごとに取る).
 pub(super) fn text(table: &Table, key: &str) -> Option<String> {
     table

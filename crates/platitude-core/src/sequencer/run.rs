@@ -96,9 +96,9 @@ pub async fn rebase_interactive(
         if step.action != TodoAction::Reword {
             continue;
         }
-        // No report of its own: the box a message is typed into will not
-        // save an empty one (`DetailsPane.canSave`), so nothing on screen
-        // can reach here to be told about. A backstop for a plan built by
+        // The log alone: the box a message is typed into will not save
+        // an empty one (`DetailsPane.canSave`), so nothing on screen can
+        // reach here to be told about. A backstop for a plan built by
         // hand, and the log is where a backstop belongs.
         let Some(message) = step.message.as_deref().filter(|m| !m.trim().is_empty()) else {
             return Err(GitError::Rejected {
@@ -123,12 +123,12 @@ pub async fn rebase_interactive(
     let plan = ScratchFile::create(&repo.git_dir, "rebase-todo", render_todo(&lines).as_bytes())
         .map_err(io_error)?;
     let editor = sequence_editor_command(helper, plan.path());
-    // Exit 1 is this command answering rather than failing, and both
-    // answers have a landing of their own on screen: "your work is in the
-    // way" sends the caller round through a stash, and a replay that
-    // stopped part-way raises the badge and the exit card. Only 0 and 1
-    // are answers, so the 128 a name git does not know exits with still
-    // reads as the failure it is (規約 §終了コードで答える問い合わせ).
+    // Exit 1 is this command answering, and both answers have a landing
+    // of their own on screen: "your work is in the way" sends the caller
+    // round through a stash, and a replay that stopped part-way raises
+    // the badge and the exit card. Only 0 and 1 are answers, so the 128
+    // a name git does not know exits with still reads as the failure it
+    // is (規約 §終了コードで答える問い合わせ).
     let cmd = rebase_command(&repo.workdir, upstream, options, Some(&editor)).answers_by_code(1);
     let result = executor.run(cmd, cancel).await;
     // The todo is installed (or refused) by now; only the message files

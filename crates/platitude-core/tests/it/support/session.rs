@@ -110,8 +110,8 @@ impl CaptureSink {
     /// test run to green).
     ///
     /// The sink records before it runs the hook, so a wait phrased over
-    /// recorded events sees the event that parked. The hook itself must
-    /// not await anything: it runs inside a sink call, on a thread the
+    /// recorded events sees the event that parked. The hook itself is
+    /// synchronous: it runs inside a sink call, on a thread the
     /// runtime has been told to forget.
     pub fn hook_once(
         &self,
@@ -120,9 +120,9 @@ impl CaptureSink {
     ) {
         // `block_in_place` refuses a current-thread runtime, and a hook
         // that parks needs a second thread to carry the session anyway:
-        // asserted where the hook is armed, so the failure has a name
-        // rather than a silent livelock. The default worker count is the
-        // machine's — a test may declare its own (`worker_threads = 2`).
+        // asserted where the hook is armed, so the failure has a name.
+        // The default worker count is the machine's — a test may
+        // declare its own (`worker_threads = 2`).
         let workers = tokio::runtime::Handle::current().metrics().num_workers();
         assert!(
             workers >= 2,
@@ -178,11 +178,11 @@ impl CaptureSink {
             ),
             "the opening graph was available: {outcome:?}"
         );
-        // The ask above took the stream over, and taking it over cancels
-        // the pass that had it rather than ending it: the opening's
-        // tag-inclusive pass stops when it next looks. A baseline read
-        // before that is one the opening is still adding to — a walk it
-        // spawns afterwards lands past the count and reads as work the
+        // The ask above took the stream over, and taking it over
+        // cancels the pass that had it: the opening's tag-inclusive
+        // pass stops when it next looks. A baseline read before that
+        // is one the opening is still adding to — a walk it spawns
+        // afterwards lands past the count and reads as work the
         // test's own subject asked for.
         crate::support::wait::bounded(
             "the graph passes the baseline displaced",
@@ -283,8 +283,8 @@ impl SessionSink for CaptureSink {
         self.events.lock().unwrap().push(event);
         self.changed
             .send_modify(|generation| *generation = generation.wrapping_add(1));
-        // Outside both locks: a parked hook must not hold the recording
-        // shut, or the events it is waiting on could never be written.
+        // Outside both locks: the recording stays open while a hook
+        // parks, or the events it is waiting on could never be written.
         // And under `block_in_place`, so the worker this thread was gives
         // its core to another thread instead of taking the I/O driver's
         // attendance down with it (`hook_once`).
@@ -425,8 +425,8 @@ impl PassHooks for PassDoors {
     }
 }
 
-/// Whether the session said this write came to rest on a stop rather
-/// than on a commit ([`SessionEvent::WriteStopped`]).
+/// Whether the session said this write came to rest on a stop
+/// ([`SessionEvent::WriteStopped`]).
 ///
 /// Read after [`write_result`], which is what does the waiting: the stop
 /// is published between the write's start and its answer, so by the time
@@ -487,12 +487,12 @@ pub async fn write_settled(sink: &CaptureSink, id: OperationId) -> Vec<FollowUp>
 /// running executable, which for a test is the test binary's own directory.
 /// Packaging carries the same obligation for the application.
 ///
-/// Once per process, and the file is published by `rename` rather than
-/// written where it stands. Both halves are about the same thing: on Linux
-/// a file somebody holds open for writing cannot be executed at all
-/// (`ETXTBSY`), and all five replaying tests call this and then hand the
-/// path to git. Copying straight onto it put one test's write fd under
-/// another's exec — `pgg-todo-editor: Text file busy`, reported by the `sh`
+/// Once per process, and the file is published by `rename`. Both
+/// halves are about the same thing: on Linux a file somebody holds
+/// open for writing cannot be executed at all (`ETXTBSY`), and all
+/// five replaying tests call this and then hand the path to git.
+/// Copying straight onto it put one test's write fd under another's
+/// exec — `pgg-todo-editor: Text file busy`, reported by the `sh`
 /// git runs `GIT_SEQUENCE_EDITOR` through, on 6 runs out of 8 with a thread
 /// per core (measured, 24 cores; 規約 §テストが差し込む実行ファイルは rename で置く).
 pub fn install_todo_editor() {

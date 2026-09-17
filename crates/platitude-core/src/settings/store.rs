@@ -28,8 +28,8 @@ impl Store {
         let store = Self::locate(platform, env, build);
         if build.is_dev() {
             let shipped = Self::locate(platform, env, Build::SHIPPED);
-            // Not when a directory was named: `locate` hands every build
-            // the same one, and a store cannot be seeded from itself.
+            // Only where the two differ: `locate` hands a named directory
+            // to every build, and a store cannot seed itself.
             if shipped != store {
                 store.seed_from(&shipped);
             }
@@ -43,10 +43,10 @@ impl Store {
     /// would write its window geometry into the developer's real settings,
     /// and the next run would start from it.
     ///
-    /// The build says so ([`Build::driven`]) rather than the environment
-    /// being read here: only a binary carrying a verification harness can
-    /// be driven at all, and what ships must not lose somebody their
-    /// settings to a `PGG_*` variable left in their shell.
+    /// The build says so ([`Build::driven`]): only a binary carrying a
+    /// verification harness can be driven at all, and what ships keeps
+    /// somebody's settings whatever `PGG_*` variable is left in their
+    /// shell.
     ///
     /// A named directory is a named directory, whichever build is asking:
     /// two runs sharing one `--config-dir` are how the saved layout is
@@ -104,8 +104,8 @@ impl Store {
     }
 
     /// Starts a development build off as a copy of the real files, so that
-    /// the first run of one opens on the tabs and the layout the person was
-    /// already in rather than on an empty window.
+    /// the first run of one opens on the tabs and the layout the person
+    /// was already in.
     ///
     /// Once only, and only into a store that holds neither file: after that
     /// the copy is its own, and the two go their separate ways. Nothing
@@ -238,8 +238,8 @@ mod tests {
         assert_eq!(store.load_state(), state);
     }
 
-    /// The files are meant to be opened and edited, so what they look like
-    /// is part of the interface, not an implementation detail.
+    /// The files are meant to be opened and edited, so what they look
+    /// like is part of the interface.
     #[test]
     fn the_files_read_the_way_a_person_would_write_them() {
         let settings = Settings {

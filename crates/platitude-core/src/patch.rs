@@ -1,9 +1,9 @@
 //! Partial-patch construction for hunk- and line-level staging.
 //!
-//! Operates on the **raw bytes** of a `git diff` run, never on the parsed
-//! model: rebuilding a patch from [`crate::parse::diff`] would lose bytes
-//! `git apply` cares about (a CRLF file's `\r`, trailing whitespace, the
-//! exact index header). Selections address hunks and lines positionally and
+//! Operates on the **raw bytes** of a `git diff` run: rebuilding a
+//! patch from [`crate::parse::diff`] would lose bytes `git apply`
+//! cares about (a CRLF file's `\r`, trailing whitespace, the exact
+//! index header). Selections address hunks and lines positionally and
 //! those positions match what the parser produces for the same bytes, so the
 //! UI can select on the parsed model while the patch is rebuilt from source.
 //!
@@ -102,11 +102,11 @@ pub fn hunk_count(raw: &[u8]) -> usize {
 /// rebuilt patch to sit on, and `git apply` refuses the whole shape. The
 /// UI already withholds the pieces on a conflicted file
 /// ([`crate::parse::diff`]), and this is the check underneath that — a
-/// selection that reached here anyway must be refused rather than turned
-/// into a patch git will reject with its own wording.
+/// selection that reached here anyway is refused here, ahead of git's
+/// own wording.
 ///
-/// Read off the bytes rather than the parsed model because that is what
-/// the staging path has in hand ([`build_partial`] never parses).
+/// Read off the bytes because that is what the staging path has in
+/// hand ([`build_partial`] never parses).
 pub fn is_combined(raw: &[u8]) -> bool {
     lines(raw).any(|line| {
         line.starts_with(b"@@@")

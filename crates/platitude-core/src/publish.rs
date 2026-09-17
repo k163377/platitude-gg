@@ -2,7 +2,7 @@
 //!
 //! Rewriting published history is legal and sometimes right, so this only
 //! answers the question — the warning and the decision belong to the UI
-//! (デザイン規約「push 済みの範囲は尋ねずに言う」).
+//! (デザイン規約「push 済みの範囲は言うだけ」).
 //!
 //! "Published" means reachable from some remote-tracking ref, which is only
 //! as fresh as the last fetch. A repository with no remotes has nothing
@@ -60,7 +60,7 @@ pub struct WalkedRow<'a> {
 
 /// Whether `onto..head` holds a commit some remote already has — the
 /// `rewrites pushed commits` note on a `rebase` row, answered off rows
-/// already on screen instead of two `git rev-list` runs.
+/// already on screen.
 ///
 /// `rows` is the walk's own order, **children before every parent**
 /// (`--date-order`). That is what makes one pass enough: by the time a
@@ -68,11 +68,11 @@ pub struct WalkedRow<'a> {
 /// down to it has been through here, so its two answers are final and
 /// the first hit can return.
 ///
-/// **A row's own mark cannot answer this.** `published` is closed under
+/// **The whole range is walked.** `published` is closed under
 /// ancestors, so for a range with no merge in it the answer is the
 /// oldest row's mark — but a merge brings in a side whose mark says
-/// nothing about the first parent's, and the range is then a set rather
-/// than a stretch.
+/// nothing about the first parent's, and the range is then a set of
+/// commits.
 ///
 /// **The window is the answer**, the same stance the row marks take
 /// (`session::published`) — and the two ends fall out of it differently.
@@ -88,8 +88,8 @@ pub fn range_rewrites_published<'a>(
     onto: Oid,
 ) -> bool {
     // Ids waiting for the walk to reach them, one set per side —
-    // bounded by the open lanes rather than by the window, the way the
-    // walk's own marking is (`session::published::PublishMarks`).
+    // bounded by the open lanes, the way the walk's own marking is
+    // (`session::published::PublishMarks`).
     let mut from_head: HashSet<Oid> = HashSet::from([head]);
     let mut from_onto: HashSet<Oid> = HashSet::from([onto]);
     for row in rows {
@@ -114,7 +114,7 @@ pub fn range_rewrites_published<'a>(
 /// Which commit `branch --delete` measures a branch's tip against —
 /// git's `branch_merged`: the branch's upstream where that resolves, and
 /// HEAD otherwise (measured: `upstream_integration`). `None` where
-/// neither is known, which is no answer rather than "merged".
+/// neither is known, which leaves the question unanswered.
 pub fn delete_reference(upstream: Option<Oid>, head: Option<Oid>) -> Option<Oid> {
     upstream.or(head)
 }
@@ -124,7 +124,7 @@ pub fn delete_reference(upstream: Option<Oid>, head: Option<Oid>) -> Option<Oid>
 /// [`range_rewrites_published`] answers its range. What `branch --delete`
 /// asks of its reference point ([`delete_reference`];
 /// `merge-base --is-ancestor <branch> <reference>`), read here so the
-/// delete row can wear `-D` as the menu opens instead of a process later
+/// delete row can wear `-D` in the frame the menu opens in
 /// ([`crate::branch::is_merged_into`] is the same question asked the slow
 /// way).
 ///
@@ -433,7 +433,7 @@ mod tests {
     }
 
     /// A commit the window does not draw cannot be answered for either
-    /// way: the answer is git's to give, not a guess.
+    /// way: the answer is git's to give.
     #[test]
     fn a_commit_off_the_window_leaves_the_question_open() {
         let stretch = a_local_stretch();

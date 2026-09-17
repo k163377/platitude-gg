@@ -65,8 +65,8 @@ pub async fn sequence_pending(
 /// sides.
 ///
 /// `None` when the file offered nothing to read: gone, unreadable, or
-/// holding no id this could parse. **Not the same answer as "the merge is
-/// over"**, which is what an empty list would say — the read that failed
+/// holding no id this could parse. **A silence of its own**, where an
+/// empty list would say "the merge is over" — the read that failed
 /// once would drop the graph's dotted edges, and the next one put them
 /// back, walking the whole history twice over a file that never changed.
 /// A caller that cannot tell keeps what it had.

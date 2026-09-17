@@ -31,15 +31,15 @@ async fn dropping_a_commit_keeps_the_ones_after_it() {
     // The commit's own file goes with it; the later one stays.
     assert!(!repo.path.join("b.txt").exists());
     assert!(repo.path.join("c.txt").exists());
-    // The plan starts at the dropped commit's parent, and that parent is
-    // the upstream rather than a step in it: nothing below the gap is
-    // replayed, so it keeps the object name it had.
+    // The plan starts at the dropped commit's parent, and that parent
+    // is the upstream: nothing below the gap is replayed, so it keeps
+    // the object name it had.
     assert_eq!(repo.git(&["rev-parse", "HEAD~1"]), kept);
 }
 
-/// The two edges of the same operation, measured rather than assumed:
-/// the newest commit (nothing after it to replay) and the very first one
-/// (no parent to start the plan from).
+/// The two edges of the same operation, measured: the newest commit
+/// (nothing after it to replay) and the very first one (no parent to
+/// start the plan from).
 #[tokio::test]
 async fn dropping_at_either_end_of_the_history() {
     let (exec, cancel) = env();
@@ -69,9 +69,9 @@ async fn dropping_at_either_end_of_the_history() {
 }
 
 /// Planning against the first commit asks for a parent that is not
-/// there, and that "no" is an answer rather than a failed command. Left
-/// unmarked it counts as a failure, and the command log throws its panel
-/// open over a perfectly good drop (規約 §終了コードで答える問い合わせ).
+/// there, and that "no" is an answer. Left unmarked it counts as a
+/// failure, and the command log throws its panel open over a perfectly
+/// good drop (規約 §終了コードで答える問い合わせ).
 #[tokio::test]
 async fn reaching_past_the_first_commit_is_an_answer_not_a_failure() {
     use crate::support::Ends;
@@ -111,8 +111,8 @@ async fn reaching_past_the_first_commit_is_an_answer_not_a_failure() {
 /// **Every one-commit edit pins the tip it was composed against**,
 /// whichever verb asked for it: the ids the todo is written from end at
 /// HEAD, and that last one is what the replay checks the branch against
-/// before it spawns (`Replay::tip_still_stands`). Held for the three here
-/// rather than through three replays — the refusal itself is one road, and
+/// before it spawns (`Replay::tip_still_stands`). Held for the three
+/// here — the refusal itself is one road, and
 /// `session_integration::carry_rewrite` walks it at both boundaries.
 #[tokio::test]
 async fn every_one_commit_edit_pins_the_tip_it_was_composed_against() {
@@ -138,7 +138,7 @@ async fn every_one_commit_edit_pins_the_tip_it_was_composed_against() {
 
 /// The refusal sits before the edit is even looked at (`plan_edit` checks
 /// the range first), so a drop and a reword hit the same wall: a plain
-/// interactive rebase would flatten the merge rather than replay it.
+/// interactive rebase would flatten the merge.
 #[tokio::test]
 async fn a_range_holding_a_merge_is_refused_rather_than_flattened() {
     let mut repo = TestRepo::init();
@@ -171,10 +171,10 @@ async fn a_range_holding_a_merge_is_refused_rather_than_flattened() {
     assert_eq!(repo.git(&["rev-parse", "HEAD"]), before, "nothing ran");
 }
 
-/// A merge *below* the commit is not in the way: the replay stands on it
-/// rather than repeating it, so it keeps both its parents. Dropping the
-/// newest commit is the edge here: a plan that reaches one commit too
-/// far refuses over a merge it was never going to touch.
+/// A merge *below* the commit is not in the way: the replay stands on
+/// it, so it keeps both its parents. Dropping the newest commit is the
+/// edge here: a plan that reaches one commit too far refuses over a
+/// merge it was never going to touch.
 #[tokio::test]
 async fn a_merge_under_the_dropped_commit_is_left_alone() {
     let mut repo = TestRepo::init();

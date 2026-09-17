@@ -7,10 +7,10 @@ use platitude_core::integrate::{self, Continuation, InProgress, Landing};
 use platitude_core::opstate;
 use platitude_core::process::Kept;
 
-/// Nothing of the operation is left on disk: not the marker a badge
-/// reads, and not the sequence a `--skip` steps. The two come apart —
-/// a revert that records nothing leaves the sequence without the
-/// marker, so `current_op` on its own calls a half-walked sequence
+/// Both halves are gone from disk: the marker a badge reads, and the
+/// sequence a `--skip` steps. The two come apart — a revert that
+/// records nothing leaves the sequence without the marker, so
+/// `current_op` on its own calls a half-walked sequence
 /// clean.
 async fn nothing_in_progress(repo: &TestRepo) {
     assert_eq!(current_op(repo).await, None, "no operation for a badge");
@@ -50,10 +50,10 @@ async fn cherry_pick_and_revert() {
 }
 
 /// A commit whose changes the branch already has records nothing, and
-/// git stops there rather than dropping it — exit 1 with the sequencer
-/// state left standing, which is a badge on the toolbar and a panel over
-/// the log for something nobody has to do anything about. The branch is
-/// left exactly as it was, with no operation in progress
+/// git stops there — exit 1 with the sequencer state left standing,
+/// which is a badge on the toolbar and a panel over the log for
+/// something nobody has to do anything about. The branch is left
+/// exactly as it was, with no operation in progress
 /// (デザイン規約 §履歴を合流させる).
 #[tokio::test]
 async fn a_cherry_pick_the_branch_already_has_leaves_nothing_behind() {
@@ -127,7 +127,7 @@ async fn a_commit_that_was_always_empty_is_picked_as_it_stands() {
 }
 
 /// The commits either side of an empty one still land: `--skip` moves
-/// the sequence on rather than ending it.
+/// the sequence on.
 #[tokio::test]
 async fn the_commits_around_an_empty_pick_still_land() {
     let mut repo = TestRepo::init();
@@ -150,9 +150,9 @@ async fn the_commits_around_an_empty_pick_still_land() {
     nothing_in_progress(&repo).await;
 }
 
-/// A revert with nothing left to undo never reaches the sequencer at
-/// all: git refuses the commit it was about to write and the operation
-/// is over where it stands, so there is nothing to skip. The wording is
+/// A revert with nothing left to undo stops before the sequencer: git
+/// refuses the commit it was about to write and the operation is over
+/// where it stands, so there is nothing to skip. The wording is
 /// `git commit`'s own, on stdout with stderr empty (measured, 2.55).
 #[tokio::test]
 async fn a_revert_with_nothing_left_to_undo_lands_as_nothing() {
@@ -210,9 +210,9 @@ async fn a_conflicting_cherry_pick_is_routed_to_the_right_command() {
     let (repo, picked) = conflicting_sides();
     let (exec, cancel) = env();
 
-    // Not an error: git stopped and left the cherry-pick standing, which
-    // is a landing of its own — copying a commit onto a branch that has
-    // moved on ends here as ordinarily as a merge does
+    // A landing of its own: git stopped and left the cherry-pick
+    // standing — copying a commit onto a branch that has moved on
+    // ends here as ordinarily as a merge does
     // (デザイン規約 §進行中の操作から出る).
     assert_eq!(
         integrate::cherry_pick(&exec, &repo.path, &[picked], &cancel)
@@ -308,7 +308,7 @@ async fn a_second_pick_over_one_already_standing_is_still_a_failure() {
         Landing::Stopped
     );
     // Resolved and staged, so what refuses the second one is the
-    // operation standing rather than the conflict or the tree.
+    // operation standing.
     std::fs::write(repo.path.join("f.txt"), "resolved\n").expect("resolve");
     repo.git(&["add", "--", "f.txt"]);
 

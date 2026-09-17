@@ -31,7 +31,7 @@ fn context_lines_are_taken_apart() {
 #[test]
 fn changed_lines_are_taken_apart_too() {
     // Both sides wear the theme (デザイン規約 §シンタックスハイライト): what names a
-    // changed line is its background and weight, not a missing colour.
+    // changed line is its background and weight.
     let colors = colors(&patches(RUST), None);
     assert!(colors.line(0, 0, 1).spans.len() > 1, "deleted line");
     assert!(colors.line(0, 0, 2).spans.len() > 1, "added line");
@@ -273,7 +273,7 @@ diff --git a/src/a.groovy b/src/a.groovy
     let commented = "/* an old idea:\ndef x = 1\ndef y = 3\n*/\ndef main() {}\n";
     // States remembered down the commented-out text…
     let (_, stale) = colors_cached(&parsed, Some(commented), None);
-    // …must not colour a reading over text that says otherwise.
+    // …are dropped where the text says otherwise.
     let other = "def zero() {}\ndef x = 1\ndef y = 3\ndef b() {}\n";
     let (fresh, _) = colors_cached(&parsed, Some(other), None);
     let (with_stale, _) = colors_cached(&parsed, Some(other), stale);

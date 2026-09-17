@@ -45,27 +45,27 @@ pub enum SessionEvent {
     /// replaced and did not, so no row is missing and every one of them
     /// is out of date (`RepoSession::run_swap_pass`).
     ///
-    /// **Sent on the turn only**, which is why it carries a flag rather
-    /// than being two events or none: the common answer a rebuild gives
-    /// is [`RefreshOutcome::Unchanged`], which sends nothing at all so
-    /// that a quiet auto-fetch tick does not wake the consumer. A mark
-    /// that could only be *put on* would then stand for the rest of the
-    /// session, and one sent on every pass would cost exactly the wakeup
-    /// the silence is there to save.
+    /// **Sent on the turn only**, which is why it carries a flag: the
+    /// common answer a rebuild gives is [`RefreshOutcome::Unchanged`],
+    /// which sends nothing at all so that a quiet auto-fetch tick does
+    /// not wake the consumer. A mark that could only be *put on* would
+    /// then stand for the rest of the session, and one sent on every
+    /// pass would cost exactly the wakeup the silence is there to
+    /// save.
     ///
-    /// **No words.** Whatever git said about the rebuild went out as
-    /// [`SessionEvent::OpFailed`] like every other read's, so it is
-    /// already in the error surface and the command log; the graph is
-    /// told the state and nothing else. A pass that fell over silently
-    /// has none to give anyway (`session::pass_watch`).
+    /// **The state alone.** Whatever git said about the rebuild went
+    /// out as [`SessionEvent::OpFailed`] like every other read's, so it
+    /// is already in the error surface and the command log; the graph
+    /// is told the state and nothing else. A pass that fell over
+    /// silently has none anyway (`session::pass_watch`).
     LogStale {
         stale: bool,
     },
     /// A background rebuild finished and replaces the whole graph in one
-    /// step. Deliberately one event rather than Started/Chunk/Finished:
-    /// those travel as separate queued messages, and a consumer that
-    /// drains between them paints an empty model for a frame — visible
-    /// as a white flash whenever a background refresh finds changes.
+    /// step. Deliberately one event: separate queued messages let a
+    /// consumer that drains between them paint an empty model for a
+    /// frame — visible as a white flash whenever a background refresh
+    /// finds changes.
     LogReplaced {
         generation: u64,
         rows: Vec<LogRow>,
@@ -76,8 +76,8 @@ pub enum SessionEvent {
     },
     /// Labels of already-delivered rows changed (refs arrived/refreshed).
     /// `generation` names the graph the row numbers were read from, so a
-    /// consumer showing another one drops them instead of putting chips
-    /// on whatever commit now sits at those numbers.
+    /// consumer showing another one drops them: the numbers point at
+    /// whatever commit now sits there.
     LabelsChanged {
         generation: u64,
         rows: Vec<(u32, Vec<RefLabel>)>,
@@ -107,39 +107,39 @@ pub enum SessionEvent {
         oid: Option<Oid>,
         published: bool,
     },
-    /// Shared rather than owned: every sidebar section is handed the whole
-    /// snapshot and reads its own part of it, and a deep copy per section
-    /// is tens of thousands of strings duplicated for nobody
+    /// Shared: every sidebar section is handed the whole snapshot and
+    /// reads its own part of it, and a deep copy per section is tens of
+    /// thousands of strings duplicated for nobody
     /// (`JetBrains/kotlin`: 45,782 tags).
     RefsLoaded {
         snapshot: Arc<RefsSnapshot>,
         /// When the pass that sent this looked at the repository
-        /// (`Standing::stamp`, taken before git is spawned) — **not when
-        /// it arrived**. What a consumer holding rows off the screen for
-        /// a write measures against that write's
-        /// [`reads_from`](Self::WriteFinished): at or above it, this
-        /// listing saw what the write left; below it, the listing was
-        /// already in flight and says nothing about the write.
+        /// (`Standing::stamp`, taken before git is spawned). What a
+        /// consumer holding rows off the screen for a write measures
+        /// against that write's [`reads_from`](Self::WriteFinished): at
+        /// or above it, this listing saw what the write left; below it,
+        /// the listing was already in flight and says nothing about the
+        /// write.
         ///
         /// The snapshot beside it may be the pointer an earlier pass
         /// published (an unmoved repository rebuilds nothing), and this
         /// still names this pass — the question it answers is when the
-        /// repository was looked at, not when these rows were built.
+        /// repository was looked at.
         looked: u64,
     },
     /// What another working copy is holding, read because somebody is
     /// looking at its row (`RepoSession::read_carried_status`).
     ///
-    /// **Its own event and not [`SessionEvent::StatusLoaded`].** That one
-    /// is this window's tree — the commit box, the band, the graph's own
-    /// row and the counts a write is settled against all hang off it, and
-    /// a copy's status arriving there would move every one of them.
+    /// **Its own event.** [`SessionEvent::StatusLoaded`] is this
+    /// window's tree — the commit box, the band, the graph's own row and
+    /// the counts a write is settled against all hang off it, and a
+    /// copy's status arriving there would move every one of them.
     CarriedStatusLoaded {
         /// The copy this is about; the pane reads it back to know whose
         /// changes it is showing, and a read that lands after the reader
         /// moved on is dropped by it.
         path: String,
-        /// The name the header says — the copy's own, not this tree's.
+        /// The name the header says — the copy's own.
         name: String,
         status: WorkTreeStatus,
     },
@@ -171,19 +171,19 @@ pub enum SessionEvent {
         /// where the branch does not mark one (and where there is no
         /// branch at all).
         ///
-        /// Rides the status rather than the refs so it cannot be read
-        /// against a different branch than the one it was asked for: it
-        /// is per-branch configuration, and the branch, its upstream and
-        /// its counts arrive here together. The same read carries the
-        /// repository's own mark, which flows through the refs snapshot
-        /// instead (`RepoSession::note_push_default`). Display and
-        /// standing only — [`crate::remote::plan_current_push`] reads
-        /// the keys again before a send, so a stale name here cannot
-        /// misdirect one.
+        /// Rides the status so it cannot be read against a different
+        /// branch than the one it was asked for: it is per-branch
+        /// configuration, and the branch, its upstream and its counts
+        /// arrive here together. The same read carries the repository's
+        /// own mark, which flows through the refs snapshot instead
+        /// (`RepoSession::note_push_default`). Display and standing
+        /// only — [`crate::remote::plan_current_push`] reads the keys
+        /// again before a send, so a stale name here cannot misdirect
+        /// one.
         push_remote: String,
         /// Pending paths whose change has something to say about line
-        /// endings. Shared rather than copied: most status reads repeat the
-        /// previous answer unchanged, and every open tab does it.
+        /// endings. Shared: most status reads repeat the previous answer
+        /// unchanged, and every open tab does it.
         eol_marks: Arc<Vec<EolMark>>,
         /// Why a standing rebase is standing — the `edit` stop looks like
         /// the empty stop from the tree alone, and the exit card's words
@@ -194,13 +194,13 @@ pub enum SessionEvent {
     /// What operation is standing and how far it has got — the badge's
     /// two halves and nothing else ([`RepoSession::refresh_op_progress`]).
     ///
-    /// Its own event rather than a status snapshot because it is asked
-    /// several times a second: the count moves about every eleven
-    /// milliseconds and the screen is there to count it out, while the
-    /// snapshot around it costs a `git status` of the whole work tree
+    /// Its own event, because it is asked several times a second: the
+    /// count moves about every eleven milliseconds and the screen is
+    /// there to count it out, while the status snapshot around it costs
+    /// a `git status` of the whole work tree
     /// (`ci/baseline/poll-cost-windows-x64.md`). Both halves come from
-    /// files under the git directory, so the whole event costs no process
-    /// at all.
+    /// files under the git directory, so the whole event costs no
+    /// process at all.
     ///
     /// **The state rides with the count** because the badge needs both:
     /// the count alone would arrive at a badge that is not on screen, a
@@ -224,17 +224,17 @@ pub enum SessionEvent {
         settled: bool,
     },
     /// Answer to [`RepoSession::check_remote_branch`]: whether the remote
-    /// already carries that exact name, as of this moment rather than as of
-    /// the last fetch. The question is echoed back because the box that
-    /// asked it may have moved on to another name by the time this lands.
+    /// already carries that exact name, as of this moment. The question
+    /// is echoed back because the box that asked it may have moved on to
+    /// another name by the time this lands.
     RemoteBranchChecked {
         remote: String,
         branch: String,
         /// What a push under that name would meet: taken or not, and where
         /// taken, whether git would carry it or turn it down. Silence from
-        /// the remote is one of the answers rather than a missing one —
-        /// reading it as "nothing is there" would send on the assumption
-        /// that git refuses what it does not.
+        /// the remote is one of the answers — reading it as "nothing is
+        /// there" would send on the assumption that git refuses what it
+        /// does not.
         state: remote::RemoteBranchState,
         /// The commit the remote advertised, hex, empty where it named
         /// none. What an overwrite would have to lease against, so the
@@ -253,8 +253,8 @@ pub enum SessionEvent {
     /// the time this lands.
     BranchDeleteChecked {
         branch: String,
-        /// `None` where the reads could not say. **Not the same as
-        /// merged**, though the row draws them alike: neither wears `-D`,
+        /// `None` where the reads could not say. **A third state**,
+        /// though the row draws it like merged: neither wears `-D`,
         /// because a delete that has not been shown to be refused is
         /// offered in its plain form and git gives the real answer to
         /// the press. What the third state is for is the reader looking
@@ -364,13 +364,13 @@ pub enum SessionEvent {
         /// that drifted under the selection (`stage::apply_partial`).
         fingerprint: u64,
         /// What the same bytes said about line endings, if anything. Rides
-        /// with the diff rather than following it: a notice that appears
-        /// after the reader has started is worse than none.
+        /// with the diff: a notice that appears after the reader has
+        /// started is worse than none.
         endings: Option<crate::eol::Notice>,
-        /// What changed inside each row (`intraline`). With the rows, not
-        /// behind them like the colours: it is read off the rows alone,
-        /// costs milliseconds, and where a change is is the first thing a
-        /// reader looks for.
+        /// What changed inside each row (`intraline`). With the rows:
+        /// it is read off the rows alone, costs milliseconds, and
+        /// where a change is is the first thing a reader looks
+        /// for.
         marks: Arc<crate::intraline::IntraMarks>,
         /// For the one row that has no patch at all — a repository of its
         /// own inside the working copy — the commit a stage of it would
@@ -379,16 +379,16 @@ pub enum SessionEvent {
     },
     /// Syntax colours for the lines of a diff that has already been sent.
     ///
-    /// Behind the rows rather than with them. Colouring is the one part of
-    /// reading a diff that computes rather than waits, and it is not
-    /// small: a few thousand lines of a language the set knows costs two
-    /// orders of magnitude more than the same text under a name nothing
-    /// can be said about, and lands on the wrong side of the 100ms an
-    /// interaction is allowed (ci/baseline/code-costs-windows-x64.md
-    /// §着色). So the rows go out the moment git answers
-    /// and the colours follow — a large file reads black and white for a
-    /// beat and then takes its colour, rather than showing nothing at all
-    /// for as long as the colouring takes.
+    /// Behind the rows. Colouring is the one part of reading a
+    /// diff that computes, and it is dear: a few thousand lines
+    /// of a language the set knows costs two orders of
+    /// magnitude more than the same text under a name nothing
+    /// can be said about, and lands on the wrong side of the
+    /// 100ms an interaction is allowed
+    /// (ci/baseline/code-costs-windows-x64.md §着色). So the rows
+    /// go out the moment git answers and the colours follow — a
+    /// large file reads black and white for a beat and then
+    /// takes its colour.
     ///
     /// A diff nobody is on any more never raises this: the reader has
     /// moved, and the cost of colouring what they left would be paid out
@@ -423,12 +423,12 @@ pub enum SessionEvent {
         id: OperationId,
         kind: OperationKind,
     },
-    /// A write did what it was asked and git stopped part-way through it,
-    /// leaving the operation standing for someone to finish. Not a
-    /// failure: the [`WriteFinished`](SessionEvent::WriteFinished) that
-    /// follows carries no error, and this says the one thing that answer
-    /// cannot — that the screen should go to the conflicts rather than to
-    /// a commit that was never made.
+    /// A write did what it was asked and git stopped part-way through
+    /// it, leaving the operation standing for someone to finish. The
+    /// [`WriteFinished`](SessionEvent::WriteFinished) that follows
+    /// carries no error, and this says the one thing that answer
+    /// cannot — that the screen should go to the conflicts the write
+    /// left standing.
     WriteStopped {
         id: OperationId,
         kind: OperationKind,
@@ -437,19 +437,19 @@ pub enum SessionEvent {
     /// boundaries, between its acceptance and
     /// [`WriteSettled`](SessionEvent::WriteSettled). `error` carries
     /// git's own message. The reads the write invalidated have not been
-    /// made yet, so this is deliberately not a boundary for them.
+    /// made yet, so their boundary is the one after this.
     ///
     /// `report` is the failure with something else to be made of it: the
     /// write did not happen, something outside this application said so,
-    /// and what it said is a report rather than an error
-    /// ([`crate::report::WriteReport`]). It rides beside `error`, which
-    /// goes on carrying git's whole message for the log.
+    /// and what it said is a report ([`crate::report::WriteReport`]). It
+    /// rides beside `error`, which goes on carrying git's whole message
+    /// for the log.
     ///
     /// `head_seq` is the smallest number the first report of HEAD after
     /// this write can carry (`Standing::fence`): a consumer landing on
     /// what the write left arms on it, and is answered by the report
     /// numbered at or above it — whichever of the two reaches it first.
-    /// Its own number, not the write's id: reads nobody asked for move it
+    /// A number of its own: reads nobody asked for move it
     /// too.
     ///
     /// `reads_from` is the same fence for the consumers that wait on a
@@ -485,7 +485,7 @@ pub enum SessionEvent {
     /// failure also went out as [`OpFailed`](SessionEvent::OpFailed)
     /// under the same label, but that event carries no id; this is what
     /// ties it to the write. A graph rebuild a newer request took over
-    /// is not a failure: that request's pass answers for the repository.
+    /// is left out: that request's pass answers for the repository.
     ///
     /// Sent after a cancelled write too, with nothing read and nothing
     /// failed: the session is closing, and the boundaries still balance.
@@ -497,7 +497,7 @@ pub enum SessionEvent {
     /// A git subprocess was spawned (command log). Only what the user
     /// asked for, unless background reads were switched on — plus the
     /// fetches nobody asked for that git said no to, which arrive when
-    /// they end rather than when they start (`process::Kept`).
+    /// they end (`process::Kept`).
     CommandStarted {
         id: u64,
         /// The command as a log line shows it.

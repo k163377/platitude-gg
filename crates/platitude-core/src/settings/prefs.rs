@@ -12,12 +12,12 @@ use super::toml::{
 /// read from and written back to the `[defaults]` table this is named
 /// after.
 ///
-/// **One set, for every repository.** How often this computer reaches the
-/// network, how long it waits when it does, and how much history a graph
-/// opens with are answers about the machine and the person at it rather
-/// than about whichever repository is in front. A person who wants to be
-/// left alone turns the interval off, and that is the whole of the
-/// vocabulary — there is no way to say it about one repository and not
+/// **One set, for every repository.** How often this computer
+/// reaches the network, how long it waits when it does, and how
+/// much history a graph opens with are answers about the machine
+/// and the person at it. A person who wants to be left alone turns
+/// the interval off, and that is the whole of the vocabulary —
+/// there is no way to say it about one repository and not
 /// another.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Defaults {
@@ -33,8 +33,8 @@ pub struct Defaults {
     /// beside the distribution's, a portable one on a stick — is the
     /// whole reason it is here.
     ///
-    /// **A path, not a name**: what is written here is handed to the
-    /// process spawner as the program, so a bare word would be resolved
+    /// **A path**: what is written here is handed to the process
+    /// spawner as the program, so a bare word would be resolved
     /// through `PATH` again and say nothing the empty string does not.
     /// Nothing checks it on the way in — [`crate::version::probe`] is
     /// what asks the binary itself, and a value that answers nothing is
@@ -71,15 +71,15 @@ impl Default for Defaults {
 /// Nothing in here is kept per repository. What git already remembers per
 /// repository — the identity on a commit, the merge tool — stays in that
 /// repository's own config, where git put it and where every other tool
-/// can see it; and what is left over is about this computer rather than
-/// about one repository ([`Defaults`]).
+/// can see it; and what is left over is about this computer
+/// ([`Defaults`]).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Settings {
     pub defaults: Defaults,
-    /// Pictures put against authors. Kept here rather than in a third file
-    /// because the split between the two is a write-rate one: an avatar is
-    /// assigned about as often as an interval is changed, and neither
-    /// happens while a pane is being dragged.
+    /// Pictures put against authors. Kept in this file because the split
+    /// between the two is a write-rate one: an avatar is assigned about
+    /// as often as an interval is changed, and neither happens while a
+    /// pane is being dragged.
     pub avatars: crate::avatar::Avatars,
 }
 
@@ -269,8 +269,8 @@ network_timeout_secs = 9
         );
     }
 
-    /// And past `u32` is the largest count there is rather than the
-    /// default: the reader asked for as much history as could be had.
+    /// And past `u32` is the largest count there is: the reader asked
+    /// for as much history as could be had.
     #[test]
     fn a_count_past_u32_is_the_largest_there_is() {
         let text = format!("[defaults]\ninitial_commits = {}\n", i64::MAX);

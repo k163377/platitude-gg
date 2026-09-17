@@ -2,8 +2,8 @@
 //! the move a chip's letter and the local branch add up to, whether one
 //! can run at all, and what leaving a stopped operation undoes.
 //!
-//! Beside the menus rather than in with them: the two share nothing but
-//! the repository state they read (structure.md §分割).
+//! Beside the menus: the two share nothing but the repository
+//! state they read (structure.md §分割).
 
 use crate::integrate::InProgress;
 use crate::opstate::OpState;
@@ -105,8 +105,8 @@ pub fn move_landed(landing: &str, current_branch: &str, landing_oid: &str) -> bo
 /// — clean tree, conflicted tree and resolved-and-staged tree all get
 /// the same `cannot switch branch while …` — and it refuses one over an
 /// unmerged index too, which is what `--quit` leaves behind (measured, 2.55).
-/// So the way out is a question raised before anything is sent, never a
-/// refusal read back off the log (デザイン規約 §進行中の操作から出る). Bisect rides
+/// So the way out is a question raised before anything is sent
+/// (デザイン規約 §進行中の操作から出る). Bisect rides
 /// the same gate: it is an operation standing, whatever git would say.
 pub fn moves_blocked(ops: &OpState, counts: &Counts) -> bool {
     ops.any() || counts.conflicted > 0

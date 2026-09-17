@@ -18,10 +18,10 @@ pub struct LogOptions {
     /// What one press of the graph's tail adds to `limit`
     /// (`RepoSession::grow_log_window`).
     ///
-    /// **Held rather than derived from `limit`**, which grows with every
-    /// press: the step is a quarter of the window the graph *opened*
+    /// **Held**: the step is a quarter of the window the graph *opened*
     /// with, so it stays the same size however deep the reader has gone
-    /// (`session::log_window_step`).
+    /// (`session::log_window_step`), while `limit` grows with every
+    /// press.
     pub step: u32,
 }
 
@@ -48,10 +48,10 @@ pub enum LabelKind {
     /// (`RefLabel::held_elsewhere`), so no commit ever carries both about
     /// one copy.
     ///
-    /// **Before `Tag` and not after it.** The tags of a commit are the
-    /// tail of its run, which is what lets the TAGS eye cut them off with
-    /// a shorter slice ([`LabelIndex::cut`]); a kind sorted past `Tag`
-    /// would go out with them.
+    /// **Before `Tag`.** The tags of a commit are the tail of its run,
+    /// which is what lets the TAGS eye cut them off with a shorter
+    /// slice ([`LabelIndex::cut`]); a kind sorted past `Tag` would go
+    /// out with them.
     Worktree,
     Tag,
 }
@@ -89,9 +89,9 @@ pub struct RefLabel {
 
 /// The chips every commit carries, as one sorted run.
 ///
-/// **Not a map of vectors.** A repository's refs are almost all singletons
-/// — one name on one commit — and `HashMap<Oid, Vec<RefLabel>>` charges
-/// twice for that shape: the table's power-of-two buckets, and a separate
+/// **A flat run.** A repository's refs are almost all singletons — one
+/// name on one commit — and `HashMap<Oid, Vec<RefLabel>>` charges twice
+/// for that shape: the table's power-of-two buckets, and a separate
 /// four-slot `Vec` for every commit, because a `Vec` grown by one `push`
 /// asks for four. On a repository with tens of thousands of labelled
 /// commits the table and its vectors together come to several times what
@@ -142,7 +142,7 @@ impl LabelIndex {
     /// `tags` is whether the graph is drawing tags at all — the TAGS
     /// band's eye. Off, a tag's chip goes with the rows the walk stopped
     /// covering, so a tag standing on a commit a branch also reaches
-    /// stops being drawn rather than staying behind on its own.
+    /// stops being drawn.
     pub(crate) fn labels_of(&self, oid: &Oid, tags: bool) -> &[RefLabel] {
         let Ok(at) = self.commits.binary_search_by(|(c, _, _)| c.cmp(oid)) else {
             return &[];
@@ -156,8 +156,8 @@ impl LabelIndex {
     /// Every commit carrying chips, in commit order, with them.
     ///
     /// A commit whose only chips were tags carries none once they are cut,
-    /// and it is left out rather than yielded empty: what reads this tells
-    /// "these chips" from "no chips" by whether the commit is in it.
+    /// and it is left out: what reads this tells "these chips" from "no
+    /// chips" by whether the commit is in it.
     pub(crate) fn commits(&self, tags: bool) -> impl Iterator<Item = (Oid, &[RefLabel])> {
         self.commits.iter().filter_map(move |(oid, first, count)| {
             let run = Self::cut(self.run(*first, *count), tags);
@@ -173,11 +173,11 @@ impl LabelIndex {
 
     /// One commit's chips with the tags taken off the end.
     ///
-    /// **A cut rather than a filter**, because `from_pairs` has already
-    /// left them there: it sorts by `kind` after the current branch, and
-    /// `Tag` is the last kind there is. So the tags of a commit are the
-    /// tail of its run, and dropping them is a shorter slice of the same
-    /// labels — no second index, and nothing allocated to hide a chip.
+    /// **A cut**, because `from_pairs` has already left them there: it
+    /// sorts by `kind` after the current branch, and `Tag` is the last
+    /// kind there is. So the tags of a commit are the tail of its run,
+    /// and dropping them is a shorter slice of the same labels — no
+    /// second index, and nothing allocated to hide a chip.
     fn cut(run: &[RefLabel], tags: bool) -> &[RefLabel] {
         if tags {
             return run;
@@ -238,29 +238,29 @@ pub struct LogRow {
     /// (`session::published`). False on the WIP and stash rows, which no
     /// remote has.
     ///
-    /// **On the row rather than asked per question.** The walk that drew
-    /// the row already knows it, so a menu opened on the row has the
-    /// answer the moment it opens instead of a `git rev-list` later
+    /// **On the row.** The walk that drew the row already knows it,
+    /// so the row carries a `bool` and a menu has the answer the
+    /// moment it opens — a `git rev-list` would land later
     /// (デザイン規約 §メニュー).
     pub published: bool,
     /// The commit's parents as the walk sifted them — a stash keeps only
     /// the base it was built on (`rows::sift_batch`). Empty on the WIP
-    /// row, whose edges are drawn leashes rather than parenthood.
+    /// row, whose edges are drawn leashes.
     ///
-    /// **Not drawn: the lanes already are** (`segments`). This is here so
-    /// the rows can be asked about a *range* rather than one commit —
-    /// which is the other half of what the warnings above read, and the
-    /// half no single row's mark can answer
+    /// **The lanes are what is drawn** (`segments`). This is here so the
+    /// rows can be asked about a *range* — which is the other half of
+    /// what the warnings above read, and the half no single row's mark
+    /// can answer
     /// ([`crate::publish::range_rewrites_published`]).
     pub parents: Box<[Oid]>,
     /// The other working copy this row is about, where it is not this
     /// window's own. `None` on every commit, on a stash, and on this
     /// window's own uncommitted row.
     ///
-    /// **This is the row's identity, not a flag.** Every uncommitted row
-    /// carries the all-zero id — git's own way of saying there is no
-    /// object here, which is true of all of them — so what tells two of
-    /// them apart is the copy each is about, and the one this window is
-    /// open on is the one with nothing here (`session::carried`).
+    /// **This is the row's identity.** Every uncommitted row carries the
+    /// all-zero id — git's own way of saying there is no object here,
+    /// which is true of all of them — so what tells two of them apart is
+    /// the copy each is about, and the one this window is open on is the
+    /// one with nothing here (`session::carried`).
     pub carried: Option<super::Carried>,
 }

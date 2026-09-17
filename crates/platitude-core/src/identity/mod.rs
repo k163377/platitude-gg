@@ -4,12 +4,12 @@
 //! can ask for an identity before the first commit fails, and can say
 //! whether signing is in play — it does not reimplement either.
 //!
-//! **The application never handles a signing passphrase.** git delegates to
+//! **A signing passphrase is the agent's to ask for.** git delegates to
 //! gpg-agent / ssh-agent, which prompt through their own pinentry. A pinentry
 //! configured for a terminal (`pinentry-tty`, `pinentry-curses`) cannot work
 //! here — the subprocess has no console — so a graphical pinentry is
-//! required; that is a configuration matter, not something to work around by
-//! asking the user ourselves.
+//! required; that is a configuration matter, settled in git's own
+//! configuration.
 
 use std::path::Path;
 
@@ -25,7 +25,7 @@ mod verify;
 mod write;
 
 // The word for "which of git's files" belongs to the module that owns
-// configuration, not to this one — but it is spelled `identity::ConfigScope`
+// configuration — but it is spelled `identity::ConfigScope`
 // everywhere that asks for an identity, so it keeps that door.
 pub use crate::config::ConfigScope;
 pub use local::{load_local, set_local_identity};

@@ -2,13 +2,13 @@
 //! readings have them now — this window's uncommitted row and every
 //! other working copy's.
 //!
-//! **No git, and nothing kept that the rows do not already carry.** What
-//! the lanes are made of is a commit's id and its parents', and a row
-//! that has been drawn holds both (`LogRow::parents`); a stash row says
-//! so itself (`stash_ref`), which is the only other thing the builder
-//! asks. So a pass that walked with one answer about the synthetic rows
-//! can be laid out again with another, for the price of a pass over the
-//! window (`GraphBuilder::push_ids`).
+//! **Off the rows alone.** What the lanes are made of is a commit's id
+//! and its parents', and a row that has been drawn holds both
+//! (`LogRow::parents`); a stash row says so itself (`stash_ref`), which
+//! is the only other thing the builder asks. So a pass that walked with
+//! one answer about the synthetic rows can be laid out again with
+//! another, for the price of a pass over the window
+//! (`GraphBuilder::push_ids`).
 //!
 //! **Why a pass's answer goes stale at all.** Whether the uncommitted
 //! row stands is the status's to say and the walk's to draw, and the two
@@ -26,10 +26,10 @@ use super::*;
 /// What the synthetic rows were laid from, kept so a pass can tell
 /// whether the answer moved under it.
 ///
-/// **Compared, not counted.** A reading that came back the same is not a
-/// reason to lay anything out again, and the readings are a handful of
-/// ids either way — where the uncommitted row stands and what each other
-/// copy is carrying.
+/// **Compared.** A reading that came back the same is no reason to lay
+/// anything out again, and the readings are a handful of ids either way
+/// — where the uncommitted row stands and what each other copy is
+/// carrying.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Standing {
     /// The sides this window's uncommitted row leashes, or `None` where
@@ -55,10 +55,10 @@ impl RepoSession {
     /// tallies half a minute old; left out, it is missing for as long as
     /// one `status` takes and comes back where it belongs.
     ///
-    /// **Not waited for.** The pass could hold for that read, and the
-    /// row would never be missing — but this window's own graph would
-    /// then be paced by somebody else's working tree, and the press that
-    /// is waiting for it is ours (デザイン規約 §未コミット行が名乗るもの).
+    /// **The pass goes on.** Holding for that read would keep the row
+    /// from ever being missing, but this window's own graph would then
+    /// be paced by somebody else's working tree, and the press that is
+    /// waiting for it is ours (デザイン規約 §未コミット行が名乗るもの).
     pub(super) fn standing_rows(self: &Arc<Self>) -> Standing {
         Standing {
             pending: self.pending_commit(),
@@ -69,7 +69,7 @@ impl RepoSession {
     /// Where the copies stood when a listing last named them, off any
     /// listing this session makes.
     ///
-    /// **Every listing writes it, not just the page's.** The pass over
+    /// **Every listing writes it.** The pass over
     /// the copies takes a listing of its own before it reads them
     /// (`carried::pass_over_copies`), so it can learn that a copy has
     /// committed before the page's tick does — and a reading newer than
@@ -100,17 +100,17 @@ impl RepoSession {
     pub(super) fn carried_current(self: &Arc<Self>) -> Arc<Vec<Carried>> {
         let listed = Arc::clone(&relock(&self.copy_heads));
         let readings = self.carried();
-        // Nothing listed yet is not the same as a copy that moved: before
-        // the first listing there is nothing to be behind, and the rows
-        // are the readings' own.
+        // Before the first listing there is nothing to be behind, and
+        // the rows are the readings' own — an empty listing is its own
+        // case.
         if listed.is_empty() {
             readings
         } else {
             let current = still_where_the_listing_says(&readings, &listed);
             if current.len() != readings.len() {
-                // Asked for rather than waited out: the pass over the
-                // copies drops a tick it finds one already running, so a
-                // second ask inside one costs nothing
+                // Asked for here: the pass over the copies drops a tick
+                // it finds one already running, so a second ask inside
+                // one costs nothing
                 // (`RepoSession::refresh_carried`).
                 drop(self.refresh_carried());
             }
@@ -118,8 +118,8 @@ impl RepoSession {
         }
     }
 
-    /// **What is published is laid from the answer standing now, not
-    /// from the one the walk began with.**
+    /// **What is published is laid from the answer standing
+    /// now.**
     ///
     /// The status that says whether the uncommitted row stands, and the
     /// readings that say what each other copy is carrying, are read by
@@ -193,15 +193,15 @@ pub(super) fn lay(
     let mut carried = CarriedRows::new(&standing.carried);
     for row in rows {
         if is_synthetic(&row) {
-            // Laid again from the reading below, not carried over: a row
-            // that says what a working copy holds is the reading rather
-            // than a part of the history.
+            // Laid again from the reading below: a row that says what
+            // a working copy holds is the reading itself, made fresh
+            // each time.
             continue;
         }
         let Ok(oid) = Oid::from_hex_str(&row.oid_hex) else {
-            // No id the builder can use. Kept where it is rather than
-            // dropped — losing a row would be a worse answer than leaving
-            // one un-laned — but it anchors nothing.
+            // No id the builder can use. Kept where it is and
+            // un-laned, since it anchors nothing and a lost row
+            // would be worse.
             out.push(row);
             continue;
         };
@@ -229,9 +229,9 @@ pub(super) fn lay(
     (out, builder)
 }
 
-/// Whether this row is one a reading put there rather than one the walk
-/// found: every working copy's uncommitted row carries git's all-zero id
-/// — "there is no object here" — which no commit can.
+/// Whether this row is one a reading put there: every working copy's
+/// uncommitted row carries git's all-zero id — "there is no object
+/// here" — which no commit can.
 fn is_synthetic(row: &LogRow) -> bool {
     crate::oid::Oid::hex_is_zero(&row.oid_hex)
 }

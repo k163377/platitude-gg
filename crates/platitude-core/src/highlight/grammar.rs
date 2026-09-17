@@ -70,9 +70,9 @@ struct Entry {
     cell: OnceLock<Option<Lang>>,
 }
 
-/// Builds one configuration, or `None` for a query the runtime refuses
-/// — that language then reads through the fallback lexer, never as an
-/// error.
+/// Builds one configuration, or `None` for a query the runtime
+/// refuses — that language then reads through the fallback
+/// lexer.
 fn configured(
     language: Language,
     name: &'static str,
@@ -257,13 +257,13 @@ mod tests {
         ("xml", "<!-- note -->\n<a b=\"c\"/>"),
     ];
 
-    /// The guard above says a query was accepted, which is not the same
-    /// as a query that paints: several upstream crates ship their
+    /// The guard above says a query was accepted; painting is
+    /// another matter: several upstream crates ship their
     /// highlights as a *delta* over another language's — colourless on
     /// their own (observed: qmljs, typescript, tsx, cpp and objc all
     /// did, and a QML diff came out plain end to end). Every entry
     /// answers for its own sample here, so a language added without its
-    /// bases fails in this crate rather than on screen.
+    /// bases fails in this crate.
     #[test]
     fn every_grammar_colours_a_sample_of_its_language() {
         for entry in &ENTRIES {
@@ -273,9 +273,9 @@ mod tests {
                 .unwrap_or_else(|| panic!("grammar {} has no sample to answer for", entry.name));
             let lang = lang_of(entry).expect("the guard above builds every configuration");
             let mut highlighter = Highlighter::new();
-            // The callback through a closure, not by name: as a fn item
-            // it answers `&'static`, which would lend the highlighter
-            // itself for `'static` (`tree::line_spans` does the same).
+            // The callback through a closure: as a fn item it answers
+            // `&'static`, which would lend the highlighter itself for
+            // `'static` (`tree::line_spans` does the same).
             let events = highlighter
                 .highlight(&lang.config, sample.as_bytes(), None, None, |name| {
                     injection(name)

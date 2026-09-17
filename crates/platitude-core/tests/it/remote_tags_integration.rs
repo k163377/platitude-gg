@@ -45,7 +45,7 @@ const NET: Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 /// the commit under it is never downloaded here: that is what stops the
 /// fetch's tag auto-following from quietly turning it into a local tag.
 /// `v-both` is annotated, so the same scenario also holds the peel rule:
-/// both sides must read it at the commit, never the tag object.
+/// both sides must read it at the commit.
 ///
 /// Returns the bare origin, the working repository, and (root, head).
 fn tag_scenario() -> (TestRepo, TestRepo, String, String) {
@@ -205,7 +205,7 @@ async fn a_qualified_delete_takes_the_tag_and_leaves_the_branch_of_the_same_name
     );
 }
 
-/// **git does not refuse a name the remote has not got, in this
+/// **git takes a name the remote has not got, in this
 /// spelling.** The qualified form needs no resolution over there, so the
 /// answer is `warning: deleting a non-existent ref` and exit 0 (measured) —
 /// where a bare name would have failed. Whether there is anything to
@@ -221,9 +221,9 @@ async fn deleting_a_tag_the_remote_has_not_got_is_not_an_error() {
         .expect("git answers with a warning, not a refusal");
 }
 
-/// The lease is what makes the hold safe to offer without a dialog: it is
-/// pinned to the commit the reader was being shown, so a remote that has
-/// moved since is refused rather than flattened.
+/// The lease is what makes the hold safe to offer without a dialog: it
+/// is pinned to the commit the reader was being shown, so a remote that
+/// has moved since is refused.
 #[tokio::test]
 async fn a_lease_pinned_to_a_commit_the_remote_has_left_is_refused() {
     let (_bare, mut work, root, _head) = tag_scenario();
@@ -231,9 +231,9 @@ async fn a_lease_pinned_to_a_commit_the_remote_has_left_is_refused() {
     let cancel = CancellationToken::new();
     let path = work.path.clone();
 
-    // Somebody else moves it while the menu stands, and to a third commit
-    // — not to where this repository has it, which would leave the push
-    // with nothing to send and exit 0 on those grounds instead.
+    // Somebody else moves it while the menu stands, and to a third
+    // commit: a move to where this repository has it would leave the
+    // push with nothing to send and exit 0 on those grounds instead.
     let third = work.commit_file_id("c.txt", "three\n", "third");
     work.git(&[
         "push",
@@ -258,7 +258,7 @@ async fn a_lease_pinned_to_a_commit_the_remote_has_left_is_refused() {
 /// publishes one too, and that one predates any answer from the
 /// remote — waiting for it instead would test the empty index.
 ///
-/// **A fetch that failed ends the wait rather than starting a silence.**
+/// **A fetch that failed ends the wait.**
 /// Nothing else here publishes the snapshot this is about, so a broken
 /// environment would otherwise spend the whole patience budget and come
 /// back as a timeout that names the wait instead of the failure inside it.
@@ -288,11 +288,11 @@ async fn snapshot_after_the_fetch(sink: &CaptureSink) -> RefsSnapshot {
 /// come after.
 async fn opened_recording(work: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession>) {
     let sink = CaptureSink::new();
-    // Recording is part of how this session is created, not something
-    // switched on once it exists: graph baselines here count the opening's
-    // own walks, and the opening spawns them the moment the path is
-    // accepted — a flag set from this thread afterwards would keep however
-    // many of them the scheduler had not reached yet.
+    // Recording is part of how this session is created: graph
+    // baselines here count the opening's own walks, and the opening
+    // spawns them the moment the path is accepted — a flag set from
+    // this thread afterwards would keep however many of them the
+    // scheduler had not reached yet.
     let session = RepoSession::open_recording(
         crate::support::exec::isolated(),
         tokio::runtime::Handle::current(),
@@ -429,8 +429,8 @@ fn some_tag_has_a_remote(tags: &[TagItem]) -> bool {
     tags.iter().any(|t| t.has_remote)
 }
 
-/// A remote that would not answer is said, and not left as the silence a
-/// read that found nothing new leaves.
+/// A remote that would not answer is said by name, so a caller has
+/// something to fail on.
 ///
 /// **The two are the same downstream** — no event, no snapshot, no badge
 /// — so a caller waiting for the badge to change has nothing to fail on
@@ -474,8 +474,8 @@ async fn an_interval_that_is_on_is_permission_to_look_without_being_asked() {
     );
 }
 
-/// Learning what the remotes carry repaints chips. It does not rebuild
-/// the graph.
+/// Learning what the remotes carry repaints chips and leaves the
+/// graph standing.
 ///
 /// No ref moved — the commits and where they sit are exactly what they
 /// were — so the rows on screen are still the right rows and only their
@@ -513,8 +513,8 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
     // Which rests on the opening's own reads being recorded (`opened`
     // asks for that when it creates the session): a walk nobody wrote down
     // is one the wait reads as silence, and the baseline goes back to
-    // being taken mid-opening. A zero here is that regression, said out
-    // loud rather than left to come back as a flake.
+    // being taken mid-opening. A zero here is that regression, said
+    // out loud.
     assert!(
         settled_walks > 0,
         "the opening walks, so the baseline has to have one to show for it"
@@ -538,7 +538,7 @@ async fn learning_what_the_remotes_carry_repaints_chips_without_swapping_the_gra
             .then_some(())
     })
     .await;
-    // …and nothing may have replaced the graph to deliver them.
+    // …and the graph they arrive on is the one already there.
     assert_eq!(
         swaps(&sink),
         settled_swaps,
@@ -617,8 +617,8 @@ async fn a_remote_tag_completion_returns_its_single_flight_slot() {
 
     // `Opened` is delivered before its eager catch-up is started, so that
     // untracked read is allowed to own the slot first. This test's own
-    // flight is the first ask past it. The assertion below deliberately
-    // does *not* ask past a `Busy`: it is the ack whose ownership
+    // flight is the first ask past it. The assertion below takes
+    // whatever comes back: it is the ack whose ownership
     // boundary is under test.
     let completed = asked_past_busy(&session).await;
     assert!(
@@ -679,9 +679,9 @@ async fn a_drifted_tag_puts_its_name_on_both_rows() {
 }
 
 /// The same disagreement, in the form the menu reads it: which remote,
-/// and the commit the lease has to be pinned to. Off its own run rather
-/// than off the rows — the sidebar lists a name that is here once, so a
-/// drift leaves no row of its own to read it from.
+/// and the commit the lease has to be pinned to. Off its own run — the
+/// sidebar lists a name that is here once, so a drift leaves no row of
+/// its own to read it from.
 #[tokio::test]
 async fn a_drift_is_listed_by_remote_with_the_commit_a_lease_would_name() {
     let (_bare, work, root, _head) = tag_scenario();

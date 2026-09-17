@@ -11,7 +11,7 @@ pub struct RepoSession {
     /// walk behind a chip, the remote tags — on the handle the slots
     /// serve last and keep out of the click's reserve
     /// (`process::Priority::Background`). Off the log like `executor`.
-    /// **Not the poll's own reads**: what the front page shows is what
+    /// **The poll's reads stay on `executor`**: the front page is what
     /// somebody is looking at, and those reads are single-flight already
     /// (`ReadFlight`), so a slot is all they need.
     pub(super) exec_background: GitExecutor,
@@ -57,8 +57,8 @@ pub struct RepoSession {
     /// a rebuild that would have replaced it did not land, so every row
     /// standing there is real and none of them is current.
     ///
-    /// Held rather than derived because the consumer is told on the turn
-    /// only ([`SessionEvent::LogStale`]) — the pass that finds nothing
+    /// Held, because the consumer is told on the turn only
+    /// ([`SessionEvent::LogStale`]) — the pass that finds nothing
     /// changed is the quiet one, and it has to be able to say "current
     /// again" without every quiet pass saying anything.
     pub(super) graph_stale: std::sync::atomic::AtomicBool,
@@ -68,11 +68,11 @@ pub struct RepoSession {
     /// list starts a read per row, and two reads of one file overlap
     /// wherever a write answers and the status behind it lands.
     ///
-    /// **A read another has passed hands over nothing** — not its
-    /// colours, which cost enough (see [`SessionEvent::DiffColoured`])
-    /// that the ones nobody is waiting for are worth not doing at all,
-    /// and not its rows either: those are cheap, but the fingerprint that
-    /// rides with them is what the next partial stage is refused against
+    /// **A read another has passed hands over nothing.** Its colours
+    /// cost enough (see [`SessionEvent::DiffColoured`]) that the ones
+    /// nobody is waiting for are worth skipping, and its rows are cheap
+    /// — but the fingerprint that rides with them is what the next
+    /// partial stage is refused against
     /// (`stage::refusal::verify_fingerprint`), so an older read landing
     /// last leaves the pane unable to stage anything (`publish_diff`).
     pub(super) diff_epoch: AtomicU64,
@@ -90,15 +90,15 @@ pub struct RepoSession {
     /// of this tree would match a fingerprint taken from somebody else's
     /// bytes and call the file unmoved.
     ///
-    /// Written where the event goes out rather than where the bytes are
-    /// read: recording a fingerprint the pane never received would leave
-    /// it stale for as long as the file stayed that way.
+    /// Written where the event goes out: recording a fingerprint the
+    /// pane never received would leave it stale for as long as the file
+    /// stayed that way.
     pub(super) last_diff: Mutex<Option<(PathBuf, DiffTarget, u64)>>,
     /// Lexer states remembered down the file the last diff's colours
     /// were read against (`highlight::LexCache`) — what lets the re-read
-    /// after every partial stage start near its hunks instead of at
-    /// line 1. Self-invalidating: the cache carries the source text's
-    /// hash and is dropped by the reader when the text has changed.
+    /// after every partial stage start near its hunks. Self-invalidating:
+    /// the cache carries the source text's hash and is dropped by the
+    /// reader when the text has changed.
     pub(super) lex_cache: Mutex<Option<crate::highlight::LexCache>>,
     /// The files a picture's blob sides are written to so the pane can
     /// name them by URL (`preview::PreviewFiles`). Numbered by the diff
@@ -117,7 +117,7 @@ pub struct RepoSession {
     /// Set by [`RepoSession::ask_merge_tool`] to have the next status read
     /// name the merge tool even with nothing conflicted. Cleared by that
     /// read: two `git config` spawns on every poll of every open tab is
-    /// not a price the common case should pay for a settings field.
+    /// too much for the common case to pay for a settings field.
     pub(super) merge_tool_wanted: std::sync::atomic::AtomicBool,
     /// One signature verification at a time: a selection that moves on
     /// cancels the gpg or ssh-keygen run the last one started, which is
@@ -181,15 +181,15 @@ pub struct RepoSession {
     /// moving means only that the snapshot and the chips are rebuilt.
     pub(super) join_key: Mutex<Option<u64>>,
     /// The snapshot last published. A read that finds nothing moved hands
-    /// this one out again rather than an equal copy, so the sidebar can
-    /// tell "the same" from "equal" by pointer — a repository with tens of
-    /// thousands of tags must not rebuild every section, on the Qt thread,
-    /// to discover that a poll tick changed nothing.
+    /// this one out again, so the sidebar can tell "the same" from
+    /// "equal" by pointer — a repository with tens of thousands of tags
+    /// is spared rebuilding every section, on the Qt thread, to discover
+    /// that a poll tick changed nothing.
     pub(super) last_snapshot: Mutex<Option<Arc<RefsSnapshot>>>,
     /// Local writes handed to the queue and not yet done with — the ones
-    /// a close waits out rather than kills ([`Lane::Local`]; the other
-    /// lanes die with the session). What the application's quit gate
-    /// reads: zero on every open session is the moment the window may
+    /// a close waits out ([`Lane::Local`]; the other lanes die with the
+    /// session). What the application's quit gate reads: zero on every
+    /// open session is the moment the window may
     /// go.
     pub(super) local_writes: std::sync::atomic::AtomicUsize,
     /// The write loop's own task. Handed to the application on the way
@@ -198,14 +198,14 @@ pub struct RepoSession {
     /// shutdown joins this first.
     pub(super) write_join: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// One permit, held by a running poll: a tick that arrives while the
-    /// previous one is still reading is dropped rather than queued.
+    /// previous one is still reading is dropped.
     pub(super) poll_slot: Arc<tokio::sync::Semaphore>,
     /// A read this session owes the working tree: a write landed in it
     /// while this session was already reading, so the read holding the
     /// slot began before that write and cannot answer for it
-    /// ([`RepoSession::read_again`]). Remembered rather than dropped,
-    /// because a clock tick that is refused comes round again and a
-    /// write's news does not.
+    /// ([`RepoSession::read_again`]). Remembered, because a clock
+    /// tick that is refused comes round again and a write's news does
+    /// not.
     pub(super) read_owed: std::sync::atomic::AtomicBool,
     /// The same as the poll's permit for the other copies' own tick, which
     /// is slower and carries a `status` per copy — on a big tree a pass
@@ -213,10 +213,10 @@ pub struct RepoSession {
     /// there to prevent.
     pub(super) carried_slot: Arc<tokio::sync::Semaphore>,
     /// Whether the other copies are read at all (`set_copies_read` —
-    /// the settings' "never", which has to hold for the reads an opening
-    /// and a focus fire, not only for the page's tick), what the last
-    /// pass left — a row each, drawn where their HEAD lands — and the
-    /// pass in flight, under one lock (`carried::Copies`).
+    /// the settings' "never", which holds for the page's tick, an
+    /// opening and a focus fire alike), what the last pass left — a row
+    /// each, drawn where their HEAD lands — and the pass in flight,
+    /// under one lock (`carried::Copies`).
     pub(super) copies: super::carried::Copies,
     /// One in flight per snapshot, for the reads a repository can be asked
     /// for from more than one place at once (see [`ReadFlight`]). Each
@@ -241,7 +241,7 @@ pub struct RepoSession {
     pub(super) accepting: Mutex<()>,
     /// Set by the close, before it gives anything back
     /// ([`RepoSession::keeps_what_it_reads`]). Reads already in flight
-    /// answer after it, and what they answer with must not be kept.
+    /// answer after it, and what they answer with is dropped.
     pub(super) released: std::sync::atomic::AtomicBool,
     /// Time budget for fetch / push. Persisted as the settings key
     /// `network_timeout_secs`; only the settings dialog's input field is
@@ -279,10 +279,10 @@ pub struct RepoSession {
     /// drawn from the older reading would stand on a commit that copy
     /// has left (`relay::Standing`).
     ///
-    /// **Kept apart from [`Self::worktree_holders`] on purpose**: that
-    /// set decides whether the refs are read and the graph walked again,
-    /// and a commit in a neighbouring copy moves no row of ours — folded
-    /// in there, every one of them would spend a listing of tens of
+    /// **A field of its own**: [`Self::worktree_holders`] decides
+    /// whether the refs are read and the graph walked again, and a
+    /// commit in a neighbouring copy moves no row of ours — folded in
+    /// there, every one of them would spend a listing of tens of
     /// thousands of refs to say nothing (`joins::note_worktree_holders`).
     pub(super) copy_heads: Mutex<Arc<std::collections::HashMap<String, Oid>>>,
     /// Bumped when that set became a different one. **Nothing else in the
@@ -295,12 +295,12 @@ pub struct RepoSession {
     /// the word that it was let go, for the asks that call stacked
     /// nothing for (`auto_fetch::RemoteTagSlot`).
     pub(super) remote_tags_slot: super::auto_fetch::RemoteTagSlot,
-    /// One permit: the walk is the only part of a refresh that scales with
-    /// the history rather than the refs, and a tick arriving mid-walk is
-    /// dropped rather than stacked.
+    /// One permit: the walk is the only part of a refresh that scales
+    /// with the history, and a tick arriving mid-walk is
+    /// dropped.
     pub(super) head_reach_slot: Arc<tokio::sync::Semaphore>,
     /// One merge-tool candidate read at a time. Opening settings twice in
-    /// a row must not start a second eight-second walk of the registry.
+    /// a row starts one eight-second walk of the registry.
     pub(super) merge_tools_slot: Arc<tokio::sync::Semaphore>,
     /// The running auto-fetch timer, if any.
     pub(super) auto_fetch: Mutex<Option<AutoFetch>>,
@@ -308,8 +308,8 @@ pub struct RepoSession {
     /// suspended so there is something to put back.
     pub(super) auto_fetch_interval: Mutex<Option<std::time::Duration>>,
     /// One permit: an auto fetch that is still queued or running holds it,
-    /// so a tick that arrives meanwhile is skipped instead of stacking up.
-    /// A permit moved into a dropped request is released with it.
+    /// so a tick that arrives meanwhile is skipped. A permit moved into a
+    /// dropped request is released with it.
     pub(super) auto_fetch_slot: Arc<tokio::sync::Semaphore>,
     /// Where the opening's own fetch stands (see [`OpenFetchState`]).
     pub(super) open_fetch: Mutex<OpenFetchState>,
@@ -323,7 +323,7 @@ impl RepoSession {
 
     /// Config file of the opened repository (None until `Opened`).
     ///
-    /// Its own path rather than the whole of [`RepoInfo`]: this is read on
+    /// Its own path: this is read on
     /// every poll tick.
     pub(super) fn config_path(&self) -> Option<PathBuf> {
         self.lock_info().as_ref().map(|i| i.config_path.clone())
@@ -360,9 +360,9 @@ impl RepoSession {
     /// Moves what the command log keeps — whether the reads this session
     /// makes on its own (polling, refreshes, details) are in it too.
     ///
-    /// Applies to commands spawned from here on, not retroactively, and
-    /// not to an opening already under way: where a session *starts* is
-    /// [`RepoSession::open_recording`]'s to say (see [`Recording`]).
+    /// Applies to commands spawned from here on: where a session
+    /// *starts* is [`RepoSession::open_recording`]'s to say (see
+    /// [`Recording`]).
     pub fn set_recording(&self, recording: Recording) {
         self.commands.set_recording(recording);
     }
@@ -376,8 +376,8 @@ impl RepoSession {
     /// sent after the close is accepted — and the network-paced requests
     /// in the tail, which die on this cancel as always. Idempotent.
     ///
-    /// **The places those writes hold in the working tree's order are
-    /// not given up** (`session::write_order`): they are what a session
+    /// **Those writes keep their places in the working tree's order**
+    /// (`session::write_order`): they are what a session
     /// opened over this one queues behind, and giving them back here
     /// would be the overtaking this close is not allowed to cause. What
     /// is given up is the reading half — this session is off the list of
@@ -410,7 +410,7 @@ impl RepoSession {
 
     /// Lets go of what this session read for a page that is gone.
     ///
-    /// A close is not the end of the session: a local write let run on
+    /// A close leaves the session alive: a local write let run on
     /// holds it alive to the last (`Hub::park_writes_of`), and on a
     /// repository the size of the budget's these are the largest things
     /// in the process — the drawn graph, and the refs snapshot and remote
@@ -440,8 +440,8 @@ impl RepoSession {
         self.keeps_what_it_reads().then_some(shared)
     }
 
-    /// Replaced rather than emptied, every one of them: `clear()` keeps a
-    /// collection's buckets, which is most of what a full one costs.
+    /// Replaced, every one of them: `clear()` keeps a collection's
+    /// buckets, which is most of what a full one costs.
     fn forget_the_screens_copy(&self) {
         // Before anything is given back, so no store can read an open
         // door and land after the release ([`Self::keeps_what_it_reads`]).
@@ -461,9 +461,9 @@ impl RepoSession {
     }
 
     /// How many local writes are queued or running — the ones
-    /// [`RepoSession::close`] waits out rather than kills (network
-    /// writes die with the session instead). Zero is the moment nothing
-    /// here would outlast a shutdown.
+    /// [`RepoSession::close`] waits out (network writes die with the
+    /// session). Zero is the moment nothing here would outlast a
+    /// shutdown.
     pub fn local_writes_pending(&self) -> usize {
         self.local_writes.load(Ordering::SeqCst)
     }
@@ -484,10 +484,10 @@ impl RepoSession {
     /// The shape every such read has: nothing to do before the repository
     /// is open, one git command against the workdir under the session's
     /// cancellation, and exactly one of an event or a failure. Reads that
-    /// answer differently — a missing HEAD that is a state rather than a
-    /// failure, a refusal that *is* the answer, a read that claims an
-    /// epoch before it starts — do not go through here, because folding
-    /// them in would change what they report.
+    /// answer differently — a missing HEAD that is a state, a refusal
+    /// that *is* the answer, a read that claims an epoch before it
+    /// starts — do not go through here, because folding them in would
+    /// change what they report.
     pub(super) fn spawn_read<F, Fut>(self: &Arc<Self>, op: &'static str, read: F)
     where
         F: FnOnce(Arc<Self>, PathBuf, CancellationToken) -> Fut + Send + 'static,

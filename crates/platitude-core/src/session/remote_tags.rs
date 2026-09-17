@@ -11,7 +11,7 @@ use super::*;
 /// screen exactly like a tag that drifted from the one here — the name
 /// standing on more than one row.
 ///
-/// **One sorted run rather than a map of maps.** A tag standing on two
+/// **One sorted run.** A tag standing on two
 /// commits is rare, so nearly every name has exactly one reading — and a
 /// `BTreeMap` per name allocates a whole eleven-slot node to hold that one
 /// — a node per name, which on a repository with tens of thousands of
@@ -42,13 +42,13 @@ pub(crate) struct RemoteTagEntry {
 
 /// One remote's reading of one tag.
 ///
-/// **What that remote advertised, kept per remote rather than folded into
-/// the entry.** Two remotes can carry the same name on the same commit
-/// with one of them holding a tag object and the other pointing straight
-/// at the commit, and a single flag for the pair could only be the two
-/// OR-ed together. That is lossy in exactly the direction this index has
-/// to survive: readings are taken out of it again when a remote is fetched
-/// on its own or stops being configured, and a fold cannot be undone.
+/// **What that remote advertised, kept per remote.** Two remotes can
+/// carry the same name on the same commit with one of them holding a tag
+/// object and the other pointing straight at the commit, and a single
+/// flag for the pair could only be the two OR-ed together. That is lossy
+/// in exactly the direction this index has to survive: readings are taken
+/// out of it again when a remote is fetched on its own or stops being
+/// configured, and a fold cannot be undone.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct Carrier {
     pub(crate) remote: crate::Name,
@@ -123,11 +123,11 @@ impl RemoteTagIndex {
     /// the commit it is on here (デザイン規約 §ref の種別). A drift stands
     /// the name on two rows, and neither of them wears the badge.
     ///
-    /// **One search, not [`Self::carries`] and a drift question asked
-    /// separately.** This is answered for every tag on every refs read,
-    /// and `JetBrains/kotlin` brings 45,901 of them (`RefJoins`) — a second
-    /// walk of the same run costs the whole of that again for an answer
-    /// this one already has.
+    /// **One search.** This is answered for every tag on every refs
+    /// read, and `JetBrains/kotlin` brings 45,901 of them
+    /// (`RefJoins`) — a second walk of the same run costs the whole
+    /// of that again for an answer this one already
+    /// has.
     pub(crate) fn agrees_at(&self, name: &str, here: Oid) -> bool {
         let start = self.entries.partition_point(|e| e.name.as_str() < name);
         let mut carried = false;

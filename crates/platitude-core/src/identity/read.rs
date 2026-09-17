@@ -123,9 +123,9 @@ pub(super) fn non_empty(value: &str) -> Option<String> {
 
 /// git's boolean vocabulary (measured, 2.55): a valueless key
 /// (`[commit] gpgsign`, reaching a `-z` read with no value at all) is
-/// true, an empty value (`gpgsign =`) is false, and a number reads by
-/// its zeroness — so the two shapes must be told apart, not defaulted
-/// into each other.
+/// true, an empty value (`gpgsign =`) is false, and a number reads
+/// by its zeroness — so the two shapes are told
+/// apart.
 fn parse_bool(value: Option<&str>) -> bool {
     let Some(value) = value else {
         return true;

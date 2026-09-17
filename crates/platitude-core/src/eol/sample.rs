@@ -79,7 +79,7 @@ async fn sample(
     }
 
     // Reading a file is the expensive part, so the ones that cannot be read
-    // usefully are dropped before git is asked, not after. The group travels
+    // usefully are dropped before git is asked. The group travels
     // with the path so dropping one cannot shift what the rest claim.
     picked.retain(|(p, _)| readable(workdir, p));
     if picked.len() < SAMPLES {
@@ -149,9 +149,9 @@ async fn list(
         .collect())
 }
 
-/// Takes up to `want` entries spread across the list rather than the first
-/// `want`: index order is alphabetical, so the head is all one directory.
-/// The stride keeps the pick deterministic.
+/// Takes up to `want` entries spread across the list: index order is
+/// alphabetical, so the head is all one directory. The stride keeps
+/// the pick deterministic.
 fn take_spread(from: &[String], want: usize, group: Group, into: &mut Vec<(String, Group)>) {
     if want == 0 || from.is_empty() {
         return;
@@ -189,7 +189,7 @@ fn parent_of(path: &str) -> &str {
 }
 
 /// The extension of the file name, without the dot. A leading dot is a
-/// name, not an extension: `.gitignore` has none.
+/// name: `.gitignore` has none.
 fn extension_of(path: &str) -> &str {
     let name = match path.rfind('/') {
         Some(i) => &path[i + 1..],

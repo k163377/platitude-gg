@@ -66,9 +66,9 @@ fn index_of(remote: &str, tags: Vec<RemoteTag>) -> RemoteTagIndex {
 }
 
 /// The row carries whether the reading it speaks for is standing where
-/// the branch is. A pair that has drifted is two rows on the graph rather
-/// than one folded chip, and the menu's rows that reach the remote read
-/// this to say why instead of running (デザイン規約 §左メニューの所作
+/// the branch is. A pair that has drifted is two rows on the graph, and
+/// the menu's rows that reach the remote read this to say why
+/// (デザイン規約 §左メニューの所作
 /// の削除の表).
 #[test]
 fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
@@ -110,8 +110,8 @@ fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
 /// Drifted, the remote keeps a row of its own and neither row wears one —
 /// the two rows are the whole of the signal. The sidebar keeps the wider
 /// reading of the drift: the branch does have a remote, wherever it is.
-/// What neither of them reads is a name — an upstream is the only thing
-/// that makes a remote branch this branch's.
+/// An upstream is the only thing that makes a remote branch this
+/// branch's.
 #[test]
 fn the_graph_cloud_on_a_branch_follows_the_fold() {
     let tracking = |remote: &str, commit: Oid| RefEntry {

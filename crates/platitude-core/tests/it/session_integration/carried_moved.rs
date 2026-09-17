@@ -25,10 +25,10 @@ fn a_copy_beside(repo: &mut TestRepo) -> std::path::PathBuf {
 /// The rows a pass sent, and the commit the copy's row says that copy is
 /// standing on.
 ///
-/// **Read off the row's own reading rather than off the row under it**:
-/// a copy is handed out at whichever of its commit and a stash taken on
-/// that commit the walk reaches first, so the neighbour below is not
-/// always the anchor (`session::rows::CarriedRows`).
+/// **Read off the row's own reading**: a copy is handed out at
+/// whichever of its commit and a stash taken on that commit the walk
+/// reaches first, so the neighbour below is not always the anchor
+/// (`session::rows::CarriedRows`).
 fn copy_row_anchor(event: &SessionEvent) -> Option<(u64, Option<String>)> {
     let (generation, rows) = match event {
         SessionEvent::LogChunk { generation, rows }
@@ -52,12 +52,12 @@ fn drew_a_copy(events: &[SessionEvent]) -> Option<u64> {
         .find_map(|(generation, anchor)| anchor.is_some().then_some(generation))
 }
 
-/// The other order, which is the one a record written only by the page's
-/// tick gets wrong: the pass over the copies takes a listing of its own
-/// before it reads them, so it can learn that a copy has committed
-/// before that tick does. Its reading is then the fresher of the two,
-/// and the row must be drawn from it rather than dropped as one left
-/// behind.
+/// The other order, which is the one a record written only by the
+/// page's tick gets wrong: the pass over the copies takes a listing
+/// of its own before it reads them, so it can learn that a copy has
+/// committed before that tick does. Its reading is then the fresher
+/// of the two, and the row is drawn from it, on the commit that
+/// reading names.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_reading_fresher_than_the_page_s_listing_keeps_its_row() {
     let (mut repo, _head) = scenario();
@@ -103,9 +103,9 @@ async fn a_reading_fresher_than_the_page_s_listing_keeps_its_row() {
 }
 
 /// The copy commits, and the cheap listing says so before the expensive
-/// reading does. The graph drawn in between leaves that copy's row out
-/// rather than standing it on the commit the copy left — and the reading
-/// the window asks for on the spot puts it back.
+/// reading does. The graph drawn in between leaves that copy's row
+/// out — and the reading the window asks for on the spot puts it
+/// back.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_copy_that_has_committed_draws_no_row_until_its_reading_catches_up() {
     let (mut repo, _head) = scenario();
@@ -173,12 +173,12 @@ async fn a_copy_that_has_committed_draws_no_row_until_its_reading_catches_up() {
         "the row came back on the commit the copy had already left"
     );
 
-    // **The whole of it, over every pass rather than over one.** Which
-    // of the two a reader sees in between is the scheduler's — the
-    // reading can beat the walk, and on a repository this size it
-    // usually does, in which case the row never leaves at all. What may
-    // not happen either way is the row being drawn where the copy is
-    // not, and that is what every pass after the move is held to.
+    // **The whole of it, over every pass.** Which of the two a reader
+    // sees in between is the scheduler's — the reading can beat the
+    // walk, and on a repository this size it usually does, in which
+    // case the row never leaves at all. What holds either way is that
+    // the row is drawn where the copy is, and that is what every pass
+    // after the move is held to.
     {
         let events = sink.events.lock().unwrap();
         let drawn_behind = events

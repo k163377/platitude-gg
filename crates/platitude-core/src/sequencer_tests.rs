@@ -124,11 +124,11 @@ fn full(short: &str) -> String {
     format!("{short}{}", "0".repeat(40 - short.len()))
 }
 
-/// **What decides which refs follow a rewrite is git's**, and the plan is
-/// written over its todo rather than in place of it: the `update-ref`
-/// lines it put there travel with the commit they came after. Written
-/// whole the way this used to be, the flag was passed and nothing
-/// followed (P3-確認事項 §A).
+/// **What decides which refs follow a rewrite is git's**, and the plan
+/// is merged into its todo: the `update-ref` lines it put there
+/// travel with the commit they came after. Written whole the way this
+/// used to be, the flag was passed and nothing followed
+/// (P3-確認事項 §A).
 #[test]
 fn the_plan_carries_over_the_ref_lines_git_wrote() {
     let plan = format!(
@@ -180,10 +180,10 @@ fn a_ref_line_travels_with_the_commit_it_was_written_after() {
     assert_eq!(lines.len(), 6, "and nothing else was added: {lines:?}");
 }
 
-/// A line git wrote for a commit the plan says nothing about is left out
-/// and named, rather than carried to wherever the walk happened to end:
-/// the range moved between the plan and the spawn, and a ref put at the
-/// tip is one nobody asked to move.
+/// A line git wrote for a commit the plan says nothing about is
+/// left out and named on stderr: the range moved between the plan
+/// and the spawn, and a ref put at the tip is one nobody asked to
+/// move.
 #[test]
 fn a_ref_line_with_no_commit_left_is_reported_rather_than_moved() {
     let plan = format!("pick {} c2\npick {} c5\n", full("987d296"), full("3c37418"));

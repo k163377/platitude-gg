@@ -17,8 +17,8 @@ use crate::process::{GitCommand, GitExecutor};
 /// behind, so its badge survives going offline; a fetched tag lands in
 /// `refs/tags/` next to the ones made here and the two become
 /// indistinguishable. Asking the remote is the only way to tell them apart,
-/// which is why this is on the fetch path rather than the poll: it is the
-/// one place the user has already agreed to pay for the network.
+/// which is why this is on the fetch path: it is the one place the user
+/// has already agreed to pay for the network.
 ///
 /// An annotated tag is advertised twice — the tag object, then the commit
 /// it peels to under a `^{}` suffix — and it is the commit that has to line
@@ -150,9 +150,9 @@ pub struct RemoteTag {
 /// Parses `git ls-remote --tags`: `<oid>\t<refname>` lines, sorted by name.
 ///
 /// The `From <url>` banner goes to stderr, so stdout is only ref lines.
-/// Anything outside `refs/tags/` and any unreadable oid is skipped rather
-/// than failing the listing — one odd advertisement must not cost every
-/// other tag its badge.
+/// Anything outside `refs/tags/` and any unreadable oid is skipped, so
+/// one odd advertisement leaves every other tag with its badge and the
+/// listing stands.
 pub fn parse_ls_remote_tags(bytes: &[u8]) -> Vec<RemoteTag> {
     let mut out: Vec<RemoteTag> = Vec::new();
     // Pairing by scanning `out` would square the listing (the baseline

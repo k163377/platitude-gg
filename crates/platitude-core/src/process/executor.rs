@@ -31,9 +31,9 @@ mod tests;
 /// completion, because killing git mid-write loses what it was writing
 /// and a local git is only ever slow in proportion to the work.
 ///
-/// **Counted from the spawn, not from the ask**: the time a command
-/// spends waiting for a slot is the application's, and a budget that
-/// counted it would kill a healthy git for the queue in front of it.
+/// **Counted from the spawn**: the time a command spends waiting
+/// for a slot is the application's, and a budget that counted it
+/// would kill a healthy git for the queue in front of it.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[cfg(windows)]
@@ -54,17 +54,17 @@ const FIXED_ARGS: [&str; 9] = [
     // `git status` asks that flag before it locks, `git diff` never asks
     // (measured — a stat-dirty index is rewritten by a diff carrying the
     // flag, and left alone by one carrying this). What it takes to do so
-    // is `.git/index.lock`, the same lock a write dies on rather than
-    // waits for, so a poll's diff landing on a commit's own lock kills
-    // the commit (`fatal: Unable to create ... index.lock: File exists`).
+    // is `.git/index.lock`, the same lock a write dies on, so a
+    // poll's diff landing on a commit's own lock kills the commit
+    // (`fatal: Unable to create ... index.lock: File exists`).
     // No answer changes: the refresh is git's own cache of "this stat
     // matched", and a file whose stat alone moved is compared by content
     // either way — the patch, `--name-only` and `--quiet` all say the
     // same with it off (measured). What it costs is that cache going
     // unmaintained, since nothing this end refreshes the index any more:
     // a work tree whose stats all moved without its contents changing is
-    // re-hashed by every read rather than by the one after the first —
-    // which on such a tree is most of what a `status` costs
+    // re-hashed by every read — which on such a tree is most of what
+    // a `status` costs
     // (ci/baseline/code-costs-windows-x64.md). Ordinary editing leaves a
     // handful of such entries; a tree copied in from outside git leaves
     // all of them.
@@ -76,13 +76,13 @@ const FIXED_ARGS: [&str; 9] = [
 /// Environment applied to every invocation.
 ///
 /// - `LC_ALL=C`: stable, locale-independent messages and sorting
-/// - `GIT_TERMINAL_PROMPT=0`: never hang on a credential prompt (auth is
-///   delegated to credential helpers)
+/// - `GIT_TERMINAL_PROMPT=0`: a credential prompt fails at once (auth
+///   is delegated to credential helpers)
 /// - `GIT_OPTIONAL_LOCKS=0`: belt-and-suspenders with `--no-optional-locks`
 ///   — and, like it, only over the commands that ask (`diff` does not, so
 ///   the index lock it would take is turned off by the argument above)
 /// - `GIT_EDITOR=true`: an accidentally editor-spawning command exits
-///   immediately instead of hanging. Interactive rebase leaves it in
+///   immediately. Interactive rebase leaves it in
 ///   place and adds `GIT_SEQUENCE_EDITOR` on top — rewords rely on the
 ///   `true` (sequencer.rs)
 ///
@@ -113,9 +113,9 @@ pub struct GitExecutor {
     env: Arc<Vec<(OsString, OsString)>>,
     observer: Option<Arc<dyn CommandObserver>>,
     /// What the command log makes of the invocations run through this
-    /// handle. Carried here rather than on the command so the callers
-    /// stay unaware of it: the session hands out a different handle for
-    /// each answer.
+    /// handle. Carried here so the callers stay unaware of it: the
+    /// session hands out a different handle for each
+    /// answer.
     kept: Kept,
     /// The write the commands run through this handle belong to, for the
     /// log to say so ([`CommandObserver::started`]). Set by the write
@@ -124,7 +124,7 @@ pub struct GitExecutor {
     operation: Option<OperationId>,
     /// What [`TimeBudget::Stock`] resolves to. `None` lifts the stock
     /// budget entirely — the test harness's setting, where wall time is
-    /// load-dependent and must not decide correctness
+    /// load-dependent and correctness lives elsewhere
     /// ([`GitExecutor::without_stock_timeouts`]); commands that named
     /// their own budget keep it either way.
     stock_timeout: Option<Duration>,
@@ -190,13 +190,13 @@ impl GitExecutor {
     /// Lifts the stock time budget from every command that did not set
     /// one of its own: those commands are then bounded by cancellation
     /// alone. Two callers. The session's write queue puts its local lane
-    /// on this — a local write is waited out, never killed
+    /// on this — a local write is waited out
     /// (`operation::Lane::Local`). And test harnesses lift the
     /// budget from their whole executor — under a loaded suite a git
     /// round trip inflates by more than an order of magnitude
     /// (ci/baseline/code-costs-windows-x64.md §テストとハーネス), and a
-    /// wall-clock cap that generous decides by load, not correctness; the
-    /// harness arms its own failure-detection backstops instead
+    /// wall-clock cap that generous decides by load; the
+    /// harness arms its own failure-detection backstops
     /// (.claude/rules/core.md). The application's reads keep the stock
     /// budget.
     pub fn without_stock_timeouts(mut self) -> Self {
@@ -206,8 +206,8 @@ impl GitExecutor {
 
     /// Replaces the stock time budget for every command that did not set
     /// one of its own. The test harness raises it to its overall failure
-    /// backstop rather than lifting it: a wedged git then fails the
-    /// awaiting test by name instead of hanging the binary to the CI
+    /// backstop: a wedged git then fails the awaiting test by
+    /// name, ahead of the CI
     /// kill.
     pub fn with_stock_timeout(mut self, budget: Duration) -> Self {
         self.stock_timeout = Some(budget);

@@ -50,8 +50,8 @@ pub struct WorkTreeStatus {
     pub upstream: Option<String>,
     /// Whether git could compare against the upstream at all. False when the
     /// branch names one that has no remote-tracking ref yet (never fetched,
-    /// or the remote branch is gone): `ahead` / `behind` then say nothing
-    /// rather than zero, and the branch still has somewhere to be published.
+    /// or the remote branch is gone): `ahead` / `behind` then say nothing,
+    /// and the branch still has somewhere to be published.
     pub upstream_tracked: bool,
     pub ahead: i32,
     pub behind: i32,
@@ -154,11 +154,11 @@ impl Counts {
     /// path the index or the working tree has changed, **counted once**
     /// however many sides it changed on, plus the unmerged ones.
     ///
-    /// **Untracked files are not in it.** A hard reset writes the paths
-    /// the index names, and a file git was never told about is not one of
-    /// them (measured). A path *staged* as an addition is — it is in the
+    /// **Only what the index names.** A hard reset writes those paths,
+    /// and a file git was never told about is not one of them
+    /// (measured). A path *staged* as an addition is — it is in the
     /// index, so the reset removes it — which is why this counts the
-    /// index side rather than only what differs from HEAD on disk.
+    /// index side as well as what differs from HEAD on disk.
     pub fn hard_reset_takes(&self) -> usize {
         (self.staged + self.unstaged).saturating_sub(self.partially_staged) + self.conflicted
     }
@@ -209,7 +209,7 @@ impl Kinds {
     }
 
     /// The same six counted **once per path**, for a list that shows one
-    /// row per path rather than one per side.
+    /// row per path.
     ///
     /// **A tally counts what its own list shows.** The pane this feeds is
     /// another working copy's, where the split into sides is the index's
@@ -317,8 +317,8 @@ pub fn parse_status(bytes: &[u8]) -> Result<WorkTreeStatus, StatusParseError> {
                 path: rest.to_string(),
             }),
             // Only `--ignored` produces `!` lines and nothing here passes
-            // it; skipped rather than fatal so a caller that ever does is
-            // not broken by them.
+            // it; they are skipped, so a caller that ever does still
+            // gets its listing.
             "!" => {}
             _ => return Err(StatusParseError(token.clone())),
         }

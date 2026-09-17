@@ -64,7 +64,7 @@ impl RefEntry {
 }
 
 /// Non-fatal parse problem: malformed entries are skipped with a warning
-/// (a single broken ref must not blank the whole sidebar).
+/// (the sidebar keeps every other ref).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("malformed for-each-ref line: {0}")]
 pub struct RefsParseError(pub String);
@@ -144,7 +144,7 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
 /// Reads `%(upstream:track)`: `[ahead 2]`, `[behind 1]`,
 /// `[ahead 1, behind 1]`, `[gone]`, or empty where the branch is level
 /// with its upstream or has none. **git omits the leg that counts zero**,
-/// so a missing half is a zero and not a silence.
+/// so a missing half is a zero.
 ///
 /// **The words are safe to read because `for-each-ref` is plumbing**: it
 /// leaves ref-filter's messages at their untranslated literals, and only
@@ -191,7 +191,7 @@ impl<'a> RemoteBranches<'a> {
     }
 
     /// The remote branch a local one speaks for, wherever the two stand:
-    /// **its configured upstream, and nothing else**.
+    /// **its configured upstream**.
     ///
     /// A remote branch that happens to carry the same name is a different
     /// branch (デザイン規約 §ref の種別). git answers this question the
@@ -295,11 +295,11 @@ pub async fn load(
 
 /// Just the commits the remote-tracking branches stand on.
 ///
-/// A listing of its own rather than a read of [`load`]'s: this is asked by
-/// the graph pass, which runs before the refs read has landed and must not
-/// wait for one — and it is the narrow half, so it stays cheap where the
-/// whole listing is not (`JetBrains/kotlin`: 7,823 remote branches out of
-/// 54,286 refs).
+/// A listing of its own: this is asked by the graph pass, which runs
+/// before the refs read has landed and answers on its own — and it
+/// is the narrow half, so it stays cheap where the whole listing is
+/// not (`JetBrains/kotlin`: 7,823 remote branches out of 54,286
+/// refs).
 pub async fn remote_tips(
     executor: &GitExecutor,
     workdir: &Path,
@@ -323,10 +323,10 @@ pub async fn head_state(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<HeadState, GitError> {
-    // The full name, cut here rather than by `--short`: that shortens to
-    // whatever reads back unambiguously, so a tag of the same name would
-    // spell the branch `heads/x` while the status spells it `x`, and the
-    // one record would take the two for two HEADs.
+    // The full name, cut here: `--short` shortens to whatever reads back
+    // unambiguously, so a tag of the same name would spell the branch
+    // `heads/x` while the status spells it `x`, and the one record would
+    // take the two for two HEADs.
     let sym = executor
         .run_unchecked(
             GitCommand::new()
@@ -373,7 +373,7 @@ pub async fn head_state(
 /// Splits a remote-tracking display name (`origin/main`) into the remote
 /// and the branch on it, against the configured remote names. A remote's
 /// own name may contain `/`, so the cut is the longest configured name
-/// the ref starts with — never the first slash.
+/// the ref starts with.
 pub fn split_remote_ref<'a>(
     full: &'a str,
     remotes: impl IntoIterator<Item = &'a str>,

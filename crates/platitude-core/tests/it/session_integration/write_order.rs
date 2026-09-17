@@ -2,12 +2,12 @@
 //! their writes run in, what each may read while the other is writing,
 //! and what a session closed mid-write lets go of.
 //!
-//! **Every step is held open by a barrier rather than timed** — a write
-//! by a hook git waits in, a stage by a clean filter, a read by a parked
-//! sink delivery — so "this had provably not happened yet" is arranged
-//! rather than raced. Where the barrier *is* the arrangement, it is read
-//! back as well: a filter that silently does not hold makes a test green
-//! for the wrong reason.
+//! **Every step is held open by a barrier** — a write by a hook git
+//! waits in, a stage by a clean filter, a read by a parked sink
+//! delivery — so "this had provably not happened yet" is arranged.
+//! Where the barrier *is* the arrangement, it is read back as well: a
+//! filter that silently does not hold makes a test green for the
+//! wrong reason.
 
 use std::sync::Arc;
 
@@ -27,7 +27,7 @@ fn held_at_the_first_commit() -> (TestRepo, std::path::PathBuf) {
     (repo, release)
 }
 
-/// The order a reopened tab joins is the tree's, not its own.
+/// The order a reopened tab joins is the tree's.
 ///
 /// The closed session's commit is still inside git when the new session
 /// is opened and asks for a branch, so both writes are outstanding at
@@ -58,7 +58,7 @@ async fn a_reopened_tab_writes_behind_the_close_it_found_running() {
         })
         .await;
 
-    // The tab goes; the commit does not.
+    // The tab goes; the commit stays.
     closing.close();
 
     // And comes back: a second session on the same index, with a queue of
@@ -110,9 +110,9 @@ async fn a_reopened_tab_writes_behind_the_close_it_found_running() {
     }
 }
 
-/// The reopened tab reads the tree only when nobody is writing it — and
-/// does not have to wait for a tick of its own clock to read it once the
-/// write it was keeping out of lands.
+/// The reopened tab reads the tree only when nobody is writing it —
+/// and is told to look again the moment the write it was keeping out
+/// of lands.
 ///
 /// Without the first half a status read taken between a write's steps is
 /// published as where the repository stands, which is how a freshly
@@ -183,15 +183,15 @@ async fn a_reopened_tab_keeps_out_of_the_tree_and_is_told_when_it_is_free() {
     reopened.close();
 }
 
-/// What the page drew is given back by the close, not by the write the
-/// close let run on.
+/// What the page drew is given back by the close, while the write
+/// carries on.
 ///
 /// A tab released mid-write keeps its session alive to the end of that
 /// write (`Hub::park_writes_of`), and on a repository the size of the
 /// budget's the drawn graph and the refs snapshot are the largest things
 /// in the process — held for as long as git takes, they would make a
-/// release cost memory rather than give it back. The measurement is the
-/// session's own report, which is what the memory budget is read off.
+/// release cost memory. The measurement is the session's own report,
+/// which is what the memory budget is read off.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_close_lets_go_of_the_screens_copy_while_its_write_runs() {
     let (mut repo, _head) = crate::support::session::scenario();
@@ -229,7 +229,7 @@ async fn a_close_lets_go_of_the_screens_copy_while_its_write_runs() {
 
     session.close();
     // Read with git still inside the hook, so this is the session the
-    // close kept alive rather than one that has already finished.
+    // close kept alive.
     let left = session.heap_report();
     assert_eq!(
         drawn_bytes(&session),
@@ -260,9 +260,9 @@ async fn a_close_lets_go_of_the_screens_copy_while_its_write_runs() {
 /// Whether a part of the memory report holds the page's copy of the
 /// repository — what [`RepoSession::close`] gives back.
 ///
-/// Named one by one rather than taken as the whole report: the parts a
-/// close deliberately keeps (the pending line-ending marks) would
-/// otherwise make this pass or fail on them too.
+/// Named one by one: the parts a close deliberately keeps (the
+/// pending line-ending marks) would otherwise make this pass or fail
+/// on them too.
 ///
 /// **The tag index is counted but not weighed.** Empty, it still costs
 /// the `Arc` and the struct behind it, so its bytes never reach zero and
@@ -298,7 +298,7 @@ fn drawn_bytes(session: &Arc<RepoSession>) -> usize {
 /// whenever that session is mid-read, and the read holding the slot began
 /// before the write — so dropping the refused tick leaves the session
 /// showing a repository that no longer exists until something else
-/// happens to ask. What is asked for by a write is owed, not offered.
+/// happens to ask. What is asked for by a write is owed.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_write_landing_inside_a_read_is_read_again_when_that_read_ends() {
     let (_origin, repo) = crate::support::remote::origin_and_clone();
@@ -369,8 +369,8 @@ async fn a_write_landing_inside_a_read_is_read_again_when_that_read_ends() {
     writer.close();
 }
 
-/// A read this session owes is taken when **its own** write ends too, not
-/// only when a poll does.
+/// A read this session owes is taken when **its own** write ends
+/// too.
 ///
 /// The tail of a poll is one place a refused read can be served, and on
 /// its own it is not enough. A session reading when the news arrives is
@@ -381,8 +381,8 @@ async fn a_write_landing_inside_a_read_is_read_again_when_that_read_ends() {
 /// ([`AfterWrite::Tree`]). The branch the other session made would stand
 /// missing until something else happened to ask.
 ///
-/// Every step is held open by a barrier rather than timed — the poll by a
-/// parked delivery, the stage by a clean filter — and the poll's whole
+/// Every step is held open by a barrier — the poll by a parked
+/// delivery, the stage by a clean filter — and the poll's whole
 /// task is waited out through the graph pass it holds, so the second
 /// refusal has provably happened before the stage is let go.
 #[tokio::test(flavor = "multi_thread")]
@@ -476,7 +476,7 @@ async fn a_read_owed_is_taken_when_this_session_s_own_write_ends() {
 
     // (5) Only the reader's own write is left to take it. The stage is
     // still inside git at this point — the premise of everything above,
-    // so it is read rather than assumed.
+    // so it is read.
     assert_eq!(
         reader_sink.count(|e| matches!(e, SessionEvent::WriteFinished { id, .. } if *id == staged)),
         0,
@@ -555,9 +555,9 @@ async fn a_read_in_flight_at_the_close_does_not_refill_what_it_gave_back() {
     // nothing proves nothing here.
     repo.git(&["branch", "moved-outside"]);
     session.refresh_refs();
-    // The read's own completion, not its event: the sink records an event
-    // before it runs the hook, so waiting on the event would judge the
-    // report before the close inside it has even happened.
+    // The read's own completion: the sink records an event before it
+    // runs the hook, so waiting on the event would judge the report
+    // before the close inside it has even happened.
     crate::support::wait::bounded(
         "the refs pass that carries the close",
         session.wait_for_snapshot_reads(),
@@ -606,7 +606,7 @@ async fn a_read_in_flight_at_the_close_does_not_refill_what_it_gave_back() {
 ///
 /// The composite deletes are supervised as remote writes — a budget, and
 /// a token the close cancels — but they delete a ref in this copy before
-/// they reach for the other end, and that half must not overtake a
+/// they reach for the other end, and that half queues behind a
 /// rename accepted before it. **The witness is which of the two git
 /// refused**: run in the order they were asked, the rename finds its
 /// branch and the delete does not.
@@ -634,8 +634,8 @@ async fn a_composite_delete_takes_its_turn_for_the_half_that_is_here() {
                 .then_some(())
         })
         .await;
-    // Queued behind the held commit, and the whole of what the close is
-    // not allowed to lose.
+    // Queued behind the held commit, and the whole of what the close
+    // has to keep.
     let rename = closing
         .rename_branch("victim".into(), "survivor".into(), false)
         .expect("the rename was accepted");

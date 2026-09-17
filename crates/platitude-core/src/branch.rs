@@ -1,8 +1,8 @@
 //! Checkout and local branch management.
 //!
-//! Uses `switch` rather than `checkout` throughout. `checkout` doubles as a
-//! file-restoring command, so a branch whose name collides with a path is
-//! ambiguous; `switch` only ever moves HEAD and says so in its errors. The
+//! Uses `switch` throughout. `checkout` doubles as a file-restoring
+//! command, so a branch whose name collides with a path is ambiguous;
+//! `switch` only ever moves HEAD and says so in its errors. The
 //! same split is why unstaging uses `restore` (see [`crate::stage`]).
 
 use std::path::Path;
@@ -59,7 +59,7 @@ pub enum CheckoutOutcome {
 /// `LC_ALL=C`, so the C-locale wording is what arrives.
 ///
 /// Anything unrecognised is `false` and travels on as an ordinary error: a
-/// reworded message costs the retry, never correctness.
+/// reworded message costs the retry only.
 fn work_is_in_the_way(text: &str) -> bool {
     let text = text.to_ascii_lowercase();
     // "The following untracked working tree files would be overwritten by
@@ -74,12 +74,12 @@ fn work_is_in_the_way(text: &str) -> bool {
 /// Moves HEAD to `target`, taking uncommitted work along where git will
 /// have it.
 ///
-/// Deliberately never `--merge`: that flag would three-way merge the
-/// changes in, but it reports a conflicted result as a *success* with no
-/// merge left to abort, and refuses to run at all while anything is
-/// staged. Carrying changes over a collision is done by stashing across
-/// the move instead (`RepoSession::checkout`), which keeps both the
-/// staged/unstaged split and a way back.
+/// Carrying changes over a collision is done by stashing across the move
+/// (`RepoSession::checkout`), which keeps both the staged/unstaged split
+/// and a way back. `--merge` would three-way merge the changes in, but
+/// it reports a conflicted result as a *success* with no merge left to
+/// abort, and refuses to run at all while anything is
+/// staged.
 pub async fn checkout(
     executor: &GitExecutor,
     workdir: &Path,
@@ -87,9 +87,9 @@ pub async fn checkout(
     cancel: &CancellationToken,
 ) -> Result<CheckoutOutcome, GitError> {
     // Exit 1 is this command answering "not while that work is there",
-    // which the caller acts on rather than reports (it goes round through
-    // a stash). Only 0 and 1 count as answers, so the 128 a name git does
-    // not know exits with still reads as the failure it is.
+    // which the caller acts on (it goes round through a stash). Only 0
+    // and 1 count as answers, so the 128 a name git does not know exits
+    // with still reads as the failure it is.
     let cmd = GitCommand::new()
         .cwd(workdir)
         .answers_by_code(1)
@@ -141,9 +141,9 @@ impl ResetMode {
 
 /// Moves the ref HEAD is on (the current branch) to `rev`.
 ///
-/// `rev` is a commit, never a path, so it goes *before* any `--`: to
-/// `git reset` a `--` opens the pathspec form, which takes no mode flag
-/// at all. It carries no `--end-of-options` either, and that one is not
+/// `rev` is a commit, so it goes *before* any `--`: to `git reset` a
+/// `--` opens the pathspec form, which takes no mode flag at all. It
+/// carries no `--end-of-options` either, and that one is not
 /// an oversight: the minimum git refuses the option here in *every*
 /// position ("must come before non-option arguments", exit 128), alone
 /// among the verbs this crate issues — branch, switch, tag, remote,
@@ -216,10 +216,10 @@ pub async fn delete(
 
 /// Renames a local branch. `force` allows overwriting an existing name.
 ///
-/// **A refusal here is a report, not an error** (デザイン規約 §答えの要らない報せ):
+/// **A refusal here is a report** (デザイン規約 §答えの要らない報せ):
 /// nothing moved, git said why, and the box the name was typed into is
-/// still open — so the answer belongs in it rather than in a log the
-/// reader has to go and open ([`crate::report::ReportKind::RenameRefused`]).
+/// still open — so the answer belongs in it
+/// ([`crate::report::ReportKind::RenameRefused`]).
 /// The common one is a name that is already taken.
 pub async fn rename(
     executor: &GitExecutor,
@@ -247,14 +247,14 @@ pub async fn rename(
 /// **`upstream` has to be the full refname** (`refs/remotes/origin/main`).
 /// The shorthand git prints and takes elsewhere is a rev-parse spelling,
 /// and a local branch literally named `origin/main` makes it *ambiguous*
-/// — git refuses the whole command rather than choosing (measured). The full
-/// form names one ref and cannot be read two ways; what it writes into
-/// the config is identical either way.
+/// — git refuses the whole command (measured). The full form names one
+/// ref and cannot be read two ways; what it writes into the config is
+/// identical either way.
 ///
 /// Nothing about the working tree stands in its way: this is
-/// configuration about a branch, not a move onto it, so **a branch another
-/// working copy has checked out takes it** (measured) — unlike the delete,
-/// which git refuses there.
+/// configuration about a branch, so **a branch another working copy has
+/// checked out takes it** (measured) — unlike the delete, which git
+/// refuses there.
 pub async fn set_upstream(
     executor: &GitExecutor,
     workdir: &Path,

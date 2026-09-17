@@ -3,10 +3,10 @@
 //! A text diff says nothing useful about a binary file, and an image is
 //! better shown than described. This module finds the actual old/new
 //! content of a diff target so the UI can render images and report
-//! binary sizes — as **files**, never as bytes handed up: the working
-//! tree's side is the file already there, and a blob's side is written
-//! out of `git cat-file` into a file of this run's own ([`PreviewFiles`])
-//! that a `file:` URL can name. Everything is best-effort: a side that
+//! binary sizes — as **files**: the working tree's side is the file
+//! already there, and a blob's side is written out of `git cat-file`
+//! into a file of this run's own ([`PreviewFiles`]) that a `file:` URL
+//! can name. Everything is best-effort: a side that
 //! cannot be read is simply absent, which is also what "added" and
 //! "deleted" look like.
 
@@ -40,7 +40,7 @@ const IMAGE_TYPES: [(&str, &str); 11] = [
 
 /// MIME type for paths the preview treats as images. Formats the runtime
 /// lacks a decoder for degrade in the UI (`Image.status === Error`), so
-/// listing a type here never breaks anything.
+/// listing a type here is safe.
 pub fn image_mime(path: &str) -> Option<&'static str> {
     let ext = Path::new(path).extension()?.to_str()?;
     IMAGE_TYPES
@@ -346,9 +346,9 @@ pub const SOURCE_BYTE_CAP: u64 = 4 * 1024 * 1024;
 /// UTF-8, or is over [`SOURCE_BYTE_CAP`] — the colours then start each
 /// hunk clean.
 ///
-/// The blob side is one read, not two: a `cat-file -s` probe would spawn
-/// a whole process to save the rare oversized read. The working-tree side
-/// asks the metadata first — that one is free.
+/// The blob side is one read: a `cat-file -s` probe would spawn a
+/// whole process to save the rare oversized read. The working-tree
+/// side asks the metadata first — that one is free.
 pub async fn source_text(
     executor: &GitExecutor,
     workdir: &Path,
@@ -466,11 +466,11 @@ fn side_sources(workdir: &Path, target: &DiffTarget) -> (SideSource, SideSource)
 /// added, `HEAD:` before there is a HEAD, `:0:` for a staged deletion —
 /// and `cat-file` answers by failing (`fatal: Not a valid object name`,
 /// exit 128). 128 is outside the 0/1 a [`GitCommand::answers_by_code`]
-/// command may answer with, and must stay so: a `cat-file` exiting 128
+/// command may answer with, and stays there: a `cat-file` exiting 128
 /// because the repository is gone has failed. `rev-parse --verify -q`
-/// asks the same question and says no with exit 1, which the command log
-/// keeps as an answer instead of raising itself over
-/// (規約 core.md §終了コードで答える問い合わせはコマンドログの失敗にしない).
+/// asks the same question and says no with exit 1, which the command
+/// log keeps as an answer
+/// (規約 core.md §終了コードで答える問い合わせはコマンドログでも答え).
 ///
 /// A read that never ran and a spec that resolved to nothing are the same
 /// answer here: both mean this side has no content to show.
@@ -508,11 +508,11 @@ async fn load_side(
 }
 
 /// Reads one side out of the object database, once [`blob_is_there`] has
-/// said there is one to read. Having no side is data, not an error — it
-/// is what added, deleted and unborn HEAD all look like from here.
+/// said there is one to read. Having no side is data — it is what
+/// added, deleted and unborn HEAD all look like from here.
 ///
 /// An image side is written to `into` as it streams out of `cat-file`,
-/// and its size is what arrived; the bytes are never held whole. A side
+/// and its size is what arrived; the bytes stream through. A side
 /// that could not be written is reported by size, the way a non-image
 /// binary is, and carries what stopped it
 /// ([`PreviewSide::unwritten`]) — the size on its own reads exactly like

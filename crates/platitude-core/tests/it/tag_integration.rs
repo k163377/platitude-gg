@@ -1,10 +1,10 @@
 //! Making a tag, against real git.
 //!
-//! What it must not do is as much of the point as what it does: `git tag`
-//! refuses a name that is taken, and this never passes `--force` — a
-//! release mark that moves without anybody saying so is exactly what that
-//! refusal is there to stop (`tag::create`). Sending one to a remote is
-//! `remote_tags_integration`, where the readings it has to agree with are.
+//! The refusal is half the point: `git tag` refuses a name that is taken,
+//! and `--force` stays off — a release mark that moves without anybody
+//! saying so is exactly what that refusal is there to stop (`tag::create`).
+//! Sending one to a remote is `remote_tags_integration`, where the
+//! readings it has to agree with are.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -54,9 +54,9 @@ async fn no_commit_is_head() {
     assert_eq!(repo.git(&["rev-parse", "here"]), head);
 }
 
-/// **Never forced.** git is the one that refuses, and the refusal has to
-/// come back as a refusal — a create that quietly moved somebody's release
-/// mark would be indistinguishable from one that did nothing.
+/// **Made, or refused.** The refusal is git's, and it has to come back as
+/// a refusal — a create that quietly moved somebody's release mark would
+/// be indistinguishable from one that did nothing.
 #[tokio::test]
 async fn a_name_already_taken_is_refused_and_nothing_moves() {
     let mut repo = TestRepo::init();
@@ -80,9 +80,9 @@ async fn a_name_already_taken_is_refused_and_nothing_moves() {
     );
 }
 
-/// A name git will not take as a ref comes back as a refusal rather than
-/// as a tag under some corrected spelling. `tag::is_valid_name` is what
-/// keeps the box from getting this far; this is the backstop under it.
+/// A name git will not take as a ref comes back as a refusal.
+/// `tag::is_valid_name` is what keeps the box from getting this far; this
+/// is the backstop under it.
 #[tokio::test]
 async fn a_name_git_refuses_makes_no_tag() {
     let mut repo = TestRepo::init();
@@ -95,14 +95,14 @@ async fn a_name_git_refuses_makes_no_tag() {
     assert_eq!(repo.git(&["tag", "--list"]), "");
 }
 
-/// A name that starts with a dash reaches git as a name rather than as a
-/// flag (`--end-of-options`), and git turns it down on its own terms:
+/// A name that starts with a dash reaches git as a name
+/// (`--end-of-options`), and git turns it down on its own terms:
 /// `fatal: '-dashed' is not a valid tag name.` (measured, git 2.55) —
 /// **`check-ref-format` takes it, `git tag` does not**, so this is one
 /// place where [`tag::is_valid_name`] says yes and the command still
-/// refuses. Left to git rather than added to the box's rules: what a
-/// terminal can make, the box may offer to make (デザイン規約 §左メニューの
-/// 所作「独自の禁止を足さない」), and the refusal is git's own words.
+/// refuses. Left to git: what a terminal can make, the box may offer
+/// to make (デザイン規約 §左メニューの所作「規則は git のもの」),
+/// and the refusal is git's own words.
 #[tokio::test]
 async fn a_leading_dash_reaches_git_as_a_name_and_git_refuses_it() {
     let mut repo = TestRepo::init();

@@ -33,14 +33,14 @@ impl RepoSession {
     /// `git add` over every path git reports as unmerged: the whole
     /// conflicted bucket marked resolved in one command.
     ///
-    /// The set is read here rather than handed in, because it is read
-    /// under the write lock — the same place the command runs. A list
-    /// gathered in the UI would have been made before whatever writes are
-    /// queued ahead of this one, and a path that stopped being conflicted
-    /// in between is a path `git add` would stage for real.
+    /// The set is read here, because it is read under the write lock —
+    /// the same place the command runs. A list gathered in the UI would
+    /// have been made before whatever writes are queued ahead of this
+    /// one, and a path that stopped being conflicted in between is a
+    /// path `git add` would stage for real.
     ///
-    /// Deliberately not `git add --all`: the unstaged bucket beside this
-    /// one is not part of what was asked for.
+    /// Only the unmerged paths: the unstaged bucket beside this one is
+    /// outside what was asked for.
     pub fn stage_conflicted(self: &Arc<Self>) -> Option<OperationId> {
         self.write(
             OperationKind::Stage,
@@ -204,10 +204,10 @@ impl RepoSession {
     /// The check is a read, so a refusal here has nothing to undo.
     ///
     /// `leaving` is [`checkout_leaving_operation`](Self::checkout_leaving_operation)'s
-    /// agreement, and it is spent **after** the check rather than before
-    /// it: a move that has to ask leaves the operation standing for the
-    /// answer to that second question to undo, so a reader who walks away
-    /// from `Move here?` still has their cherry-pick.
+    /// agreement, and it is spent **after** the check: a move that has to
+    /// ask leaves the operation standing for the answer to that second
+    /// question to undo, so a reader who walks away from `Move here?`
+    /// still has their cherry-pick.
     pub fn checkout_moving_branch(
         self: &Arc<Self>,
         local: String,

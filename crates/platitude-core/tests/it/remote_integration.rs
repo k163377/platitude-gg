@@ -191,7 +191,7 @@ async fn deleting_a_remote_branch_prunes_on_the_next_fetch() {
 }
 
 /// The rename git has no command for: the name moves, what the branch
-/// pointed at does not, and the local branch that tracked it comes along.
+/// pointed at stays, and the local branch that tracked it comes along.
 #[tokio::test]
 async fn renaming_a_remote_branch_moves_the_name_and_the_tracking() {
     let (mut bare, mut work) = origin_and_clone();
@@ -458,9 +458,9 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
         "and their branch is where it was"
     );
 
-    // The only thing that can land here, and the lease is what makes it
-    // offerable: pinned to a commit that is not there any more, git says no
-    // rather than flattening a branch nobody looked at.
+    // The only thing that can land here, and the lease is what makes
+    // it offerable: pinned to a commit that is not there any more, git
+    // says no and the branch nobody looked at stands.
     let stale = remote::plan_publish(
         &exec,
         &work.path,
@@ -492,9 +492,9 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
     );
 }
 
-/// Adding a remote is bookkeeping, not a connection: a URL that goes
-/// nowhere is accepted, which is why a failed push leaves the remote in
-/// place and `set-url` is the way back.
+/// Adding a remote is bookkeeping: a URL that goes nowhere is
+/// accepted, which is why a failed push leaves the remote in place and
+/// `set-url` is the way back.
 #[tokio::test]
 async fn adding_a_remote_records_the_url_without_reaching_it() {
     let (bare, mut work) = origin_and_clone();
@@ -517,7 +517,7 @@ async fn adding_a_remote_records_the_url_without_reaching_it() {
     assert_eq!(work.git(&["remote", "get-url", "fork"]), bare.file_url());
 
     // And the corrected remote is usable, which is the whole point of
-    // keeping it rather than undoing the add.
+    // keeping it.
     let spec = remote::plan_publish(&exec, &work.path, "fork", "main", "", &cancel)
         .await
         .expect("plan publish");
@@ -552,8 +552,8 @@ async fn a_push_to_a_remote_that_goes_nowhere_leaves_the_remote_behind() {
         "the remote is still here to be corrected"
     );
     assert_eq!(
-        // `--default` so an unset key is an empty answer rather than an
-        // exit code the harness reads as a broken command.
+        // `--default` so an unset key is an empty answer; the exit
+        // code would read to the harness as a broken command.
         work.git(&["config", "--default", "", "--get", "branch.main.remote"]),
         "",
         "and a push that never landed recorded no upstream"
@@ -702,18 +702,18 @@ async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
 /// far side's words under a loaded run.
 ///
 /// **A hook git cannot execute is still a refusal, and a silent one.**
-/// `receive-pack` writes its own `cannot exec` to the stderr it inherited
-/// rather than over the sideband, so nothing reaches this end under
-/// `remote:` and the ref line alone is left to speak — which is git's
-/// generic `(pre-receive hook declined)` and not the words the hook was
-/// written to say (measured). The report is right about a push the far
-/// side turned down and wrong about why, and no amount of reading the
-/// answer harder recovers it: the install is what has to wait
+/// `receive-pack` writes its own `cannot exec` to the stderr it
+/// inherited, away from the sideband, so nothing reaches this end
+/// under `remote:` and the ref line alone is left to speak — which is
+/// git's generic `(pre-receive hook declined)` (measured). The report
+/// is right about a push the far side turned down and wrong about
+/// why, and no amount of reading the answer harder recovers it: the
+/// install is what has to wait
 /// (`TestRepo::write_hook`).
 ///
-/// Linux rather than every unix, because POSIX only says `execve` *may*
-/// refuse a file open for writing — this leans on it doing so, which is a
-/// promise Linux makes and the container is the machine that keeps it.
+/// Linux only, because POSIX only says `execve` *may* refuse a file
+/// open for writing — this leans on it doing so, which is a promise
+/// Linux makes and the container is the machine that keeps it.
 #[tokio::test]
 #[cfg(target_os = "linux")]
 async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
@@ -725,8 +725,8 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
         .expect("the tag goes over while nothing is standing over it");
     decline_every_push(&bare, "Tag protection rules prevent this.");
 
-    // Opened, not truncated: the hook stays the hook throughout, and the
-    // install below rewrites this same inode.
+    // Opened: the hook stays the hook throughout, and the install
+    // below rewrites this same inode.
     let hook = bare.path.join(".git").join("hooks").join("pre-receive");
     let handle = std::fs::OpenOptions::new()
         .write(true)

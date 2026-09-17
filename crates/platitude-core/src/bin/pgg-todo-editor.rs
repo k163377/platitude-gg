@@ -2,9 +2,9 @@
 //!
 //! git invokes an editor to let a human write the todo list; there is no
 //! human here, so this stands in for one. It is a separate executable
-//! rather than a mode of the GUI binary because git runs it through a
-//! shell, expects it to exit promptly, and reads its exit code — none of
-//! which sits well with a windowed application.
+//! because git runs it through a shell, expects it to exit promptly, and
+//! reads its exit code — none of which sits well with a windowed
+//! application.
 //!
 //! Usage: `pgg-todo-editor --todo-editor <plan> <todo>`
 //! (the application supplies everything up to `<plan>`; git appends
@@ -50,7 +50,7 @@ fn say(message: &str) {
 }
 
 /// Reports on stderr, where git shows editor failures, and fails the
-/// rebase rather than letting it run git's own todo list.
+/// rebase: a zero exit would run git's own todo list.
 fn fail(message: &str) -> ExitCode {
     // Nothing left to report with if the write fails; the exit code still
     // stops the rebase.

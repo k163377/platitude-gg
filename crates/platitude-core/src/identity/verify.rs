@@ -58,7 +58,7 @@ impl SignatureStatus {
     }
 
     /// True when the signature verifies against a trusted key. Anything
-    /// else — including "cannot check" — must not be shown as verified.
+    /// else — including "cannot check" — is false here.
     pub fn is_trusted(self) -> bool {
         self == SignatureStatus::Good
     }
@@ -85,10 +85,10 @@ pub struct Signature {
 /// same code as an unsigned one, and measured on git 2.55 so does every
 /// other placeholder git has for the question (`%GS` `%GK` `%GG` `%GF`
 /// `%GP` are all empty for both, `%GT` is `undefined` for both). So the
-/// header is what says whether a signature exists at all, and asking for
-/// it first means a commit that carries none costs one process rather than
-/// two — and never starts gpg or ssh-keygen to be told there was nothing
-/// to check.
+/// header is what says whether a signature exists at all, and asking
+/// for it first means a commit that carries none costs one process,
+/// leaving gpg and ssh-keygen out where there is nothing to
+/// check.
 ///
 /// With a header present, `N` no longer reads as "unsigned": it means git
 /// could not judge what is there, which is its own answer.
@@ -105,8 +105,8 @@ pub async fn verify_commit(
             key: String::new(),
         });
     }
-    // Paced by gpg or ssh-keygen and whatever agent they reach for, not
-    // by this machine: the slot it sits in is never the click's
+    // Paced by gpg or ssh-keygen and whatever agent they reach for:
+    // the slot it sits in is an elsewhere slot
     // (`process::Pace`).
     let cmd = GitCommand::new()
         .cwd(workdir)
@@ -198,7 +198,7 @@ gpgsig -----BEGIN SSH SIGNATURE-----\n -----END SSH SIGNATURE-----\n\nsubject\n"
         let unsigned = b"tree abc\nauthor A <a@x> 1 +0000\n\nsubject\n";
         assert!(!header_has_signature(unsigned));
 
-        // A body that talks about signing must not count as one.
+        // A body that talks about signing is still unsigned.
         let liar = b"tree abc\nauthor A <a@x> 1 +0000\n\ngpgsig is not here\n";
         assert!(!header_has_signature(liar));
     }

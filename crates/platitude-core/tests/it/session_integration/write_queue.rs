@@ -11,7 +11,7 @@ use platitude_core::session::SessionEvent;
 /// must all land. Without the lock they race on `.git/index.lock` and some
 /// silently fail.
 ///
-/// Six, not more: two would already race the lock, and each write runs a
+/// Six is enough: two would already race the lock, and each write runs a
 /// status read behind it, so the count is what this test costs under a
 /// loaded suite — the longest test of the binary is this one, linearly.
 #[tokio::test(flavor = "multi_thread")]
@@ -84,8 +84,8 @@ async fn a_failed_write_reports_and_refreshes() {
 /// The full local round trip through the session: stage, commit, branch.
 ///
 /// Order is the point: committing before staging, or branching before
-/// committing, would produce a different repository. Serialization alone
-/// does not give this — the queue does.
+/// committing, would produce a different repository. The queue is
+/// what gives this.
 #[tokio::test(flavor = "multi_thread")]
 async fn stage_commit_and_branch_through_the_session() {
     let mut repo = TestRepo::init();
@@ -187,10 +187,10 @@ async fn a_conflicting_rebase_reports_progress_and_aborts_through_the_session() 
             })
         })
         .await;
-    // Not a failure: git stopped and left the rebase standing, which is a
-    // landing of its own. The event that says so
-    // has already been published — it goes out between the write's start
-    // and the answer just waited for.
+    // A landing of its own: git stopped and left the rebase
+    // standing. The event that says so has already been published —
+    // it goes out between the write's start and the answer just
+    // waited for.
     assert_eq!(error, None, "a stop is not a failed write");
     assert!(
         crate::support::session::write_stopped(&sink, OperationKind::Rebase),
@@ -320,8 +320,8 @@ async fn marking_the_conflicts_resolved_leaves_the_rest_of_the_tree_alone() {
 /// A close loses nothing the queue was already asked for. The running
 /// commit outlives it — the token handed to git is the write's own and no
 /// stock budget binds the local lane (`operation::Lane::Local`), so
-/// a tab going down, or the whole application, waits it out instead of
-/// killing it mid-write: killed, the commit is simply gone (measured with
+/// a tab going down, or the whole application, waits it out: killed
+/// mid-write, the commit is simply gone (measured with
 /// a short stock budget before the lane was split; a cancel lost it the
 /// same way). And the branch queued behind it still lands: the asked
 /// order is the queue's promise, and a close only stops intake — the
@@ -355,8 +355,8 @@ async fn a_close_waits_out_the_running_write_and_the_queue() {
             .then_some(())
     })
     .await;
-    // Queued while the commit is still held by the hook: the close below
-    // must not cost the user this branch — they asked for it.
+    // Queued while the commit is still held by the hook: the close
+    // below keeps this branch — they asked for it.
     session.create_branch("queued-behind".into(), None, false);
 
     session.close();
@@ -410,17 +410,17 @@ async fn a_close_waits_out_the_running_write_and_the_queue() {
 /// for one would be reading whatever the *next* caller put there, since
 /// nothing holds still between two asks.
 ///
-/// **Nor is the number a place in a queue.** `OperationId::next()` and the
-/// lock the queue is entered under would be two moments if the number were
-/// taken outside it, and a request that stalled in between would be
-/// numbered ahead of one that went in first. Taken under that lock, the
-/// numbering and the order agree — and **readers still match rather than
-/// compare** ([`OperationId`] answers to equality alone), so nothing
-/// depends on the agreement.
+/// **It is an identity.** `OperationId::next()` and the lock the queue
+/// is entered under would be two moments if the number were taken
+/// outside it, and a request that stalled in between would be numbered
+/// ahead of one that went in first. Taken under that lock, the
+/// numbering and the order agree — and **readers match**
+/// ([`OperationId`] answers to equality alone), so nothing depends on
+/// the agreement.
 ///
-/// Two asks are outstanding at once here, the first held inside git by its
-/// hook, which is what makes "which id is mine" a real question rather
-/// than the only answer available.
+/// Two asks are outstanding at once here, the first held inside git by
+/// its hook, which is what makes "which id is mine" a real
+/// question.
 #[tokio::test(flavor = "multi_thread")]
 async fn each_ask_is_answered_under_the_id_it_was_given() {
     let mut repo = TestRepo::init();

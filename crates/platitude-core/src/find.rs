@@ -4,23 +4,23 @@
 //! holds, so the answer arrives inside a keystroke and the walk is left
 //! alone. What that buys, and what it costs, is written down where the
 //! walk is (`session::DEFAULT_LOG_LIMIT`): nothing outside the loaded
-//! window can be found here, and the bar says so rather than pretending.
+//! window can be found here, and the bar says so.
 //!
-//! **One line, taken literally.** Not split into terms, not a pattern:
-//! `fix the parser` looks for exactly that run of characters. Splitting on
-//! spaces would have to decide whether the parts are ANDed across fields
-//! ("this author AND that word"), and the answer differs per pair; naming
-//! the field is what the advanced search is for.
+//! **One line, taken literally.** `fix the parser` looks for exactly
+//! that run of characters. Splitting on spaces would have to decide
+//! whether the parts are ANDed across fields ("this author AND that
+//! word"), and the answer differs per pair; naming the field is what
+//! the advanced search is for.
 //!
-//! **The rule is per field, not per query.** A single blank cannot be a
-//! refname or an address because neither can hold one, and four hex
-//! characters are read as the start of an object name rather than as
-//! prose that happens to be hex. Each field below says which shape of
-//! query it can answer, so a query that answers none of them lights
-//! nothing instead of lighting everything.
+//! **The rule is per field.** A single blank cannot be a
+//! refname or an address because neither can hold one, and
+//! four hex characters are read as the start of an object
+//! name. Each field below says which shape of query it can
+//! answer, so a query that answers none of them lights
+//! nothing.
 //!
-//! **What is searched is what the row is, not everything it has.** Two
-//! things are deliberately out:
+//! **What is searched is what the row is.** Two things are
+//! deliberately out:
 //!
 //! - **The description** (everything after the subject). Searching it
 //!   multiplies the hits several-fold for ordinary words (measured), and
@@ -29,10 +29,10 @@
 //!   reason — are the same field.
 //! - **The domain half of an address.** Everybody in one repository tends
 //!   to share it, so any part of it lights every row. Addresses match
-//!   from the start instead, which is how somebody pastes one.
+//!   from the start, which is how somebody pastes one.
 //!
 //! Both come back by name in the advanced search (P3-確認事項), where
-//! asking for them is the point rather than the accident.
+//! asking for them is the point.
 
 /// One typed line, ready to be asked of a row.
 ///
@@ -159,9 +159,9 @@ const MIN_OID_PREFIX: usize = 4;
 
 /// Case-folded substring test over bytes.
 ///
-/// Bytes rather than characters: a needle in valid UTF-8 can never start
-/// at a continuation byte (those are 0x80..=0xBF and no leading byte is),
-/// so a byte-level hit is always a real substring hit.
+/// Bytes: a needle in valid UTF-8 can never start at a continuation
+/// byte (those are 0x80..=0xBF and no leading byte is), so a
+/// byte-level hit is always a real substring hit.
 fn contains_folded(hay: &str, needle_folded: &str) -> bool {
     let (h, n) = (hay.as_bytes(), needle_folded.as_bytes());
     if n.is_empty() {
@@ -223,8 +223,8 @@ mod tests {
 
     #[test]
     fn the_description_is_not_searched() {
-        // The omission is the decision, not an oversight (module note);
-        // the words below are what such a description holds.
+        // The omission is the decision (module note); the words
+        // below are what such a description holds.
         let r = plain("fix: harden the parser");
         assert!(!hits("the writer too", &r));
     }
@@ -321,7 +321,7 @@ mod tests {
     #[test]
     fn a_word_that_happens_to_be_hex_still_searches_the_message() {
         // "added" is all hex digits. Reading it as an object name as well
-        // can only add rows, never take one away.
+        // can only add rows.
         let r = plain("feat: added the thing");
         assert!(hits("added", &r));
     }

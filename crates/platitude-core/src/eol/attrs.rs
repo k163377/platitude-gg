@@ -42,7 +42,7 @@ pub async fn ruling(
 }
 
 /// [`ruling`] for many paths: one `config` read for the repository and one
-/// `check-attr` per batch, rather than two spawns per path.
+/// `check-attr` per batch.
 pub async fn rulings(
     executor: &GitExecutor,
     workdir: &Path,
@@ -55,9 +55,9 @@ pub async fn rulings(
 
 /// [`rulings`] for a caller that already knows whether git normalises.
 ///
-/// Whether it does is a property of the repository's configuration, not of
-/// the path, so a session that has read it once can hand the answer down
-/// and every diff after the first opens with one fewer process
+/// Whether it does is a property of the repository's configuration,
+/// so a session that has read it once can hand the answer down and
+/// every diff after the first opens with one fewer process
 /// (`RepoSession::normalising`).
 pub async fn rulings_given(
     executor: &GitExecutor,
@@ -71,7 +71,7 @@ pub async fn rulings_given(
     }
     let mut out = Vec::with_capacity(paths.len());
     // A batch of hundreds costs less than twice what a single path's own
-    // spawn does — the process is most of the price, not the paths
+    // spawn does — the process is most of the price
     // (ci/baseline/code-costs-windows-x64.md). Chunking also keeps a long
     // list under the command-line length limit.
     for batch in paths.chunks(ATTR_BATCH) {
@@ -108,8 +108,8 @@ async fn attributes(
     let out = executor.run(cmd, cancel).await?;
     // `-z` prints one `path\0attr\0value\0` triple per attribute asked for,
     // so a path answering for two attributes takes two triples. Keyed by
-    // path rather than by position: nothing promises the order, and a path
-    // git dropped would otherwise shift every answer after it.
+    // path: nothing promises the order, and a path git dropped would
+    // otherwise shift every answer after it.
     let mut found: HashMap<String, Attributes> = HashMap::new();
     let fields: Vec<&[u8]> = out.stdout.split(|b| *b == 0).collect();
     for triple in fields.chunks(3) {
@@ -149,9 +149,9 @@ async fn attributes(
 /// the settings screen ask about one key, and two readings of it would be
 /// two answers to "does git decide the endings here".
 ///
-/// `core.eol` is deliberately not consulted: it only takes effect where a
-/// path is already text by attribute or by `autocrlf`, both of which have
-/// answered by then, so on its own it never decides anything.
+/// The attribute and `autocrlf` settle it: `core.eol` only takes
+/// effect where a path is already text by one of them, both of which
+/// have answered by then.
 pub async fn normalises(
     executor: &GitExecutor,
     workdir: &Path,

@@ -1,18 +1,18 @@
 //! What the other working copies are carrying: one `status` each, on a
 //! tick of their own.
 //!
-//! **The cost is the read, not the row.** One `status -uall` is most of a
-//! second on a reference-sized tree and it is the page's own tick's
-//! dominant term already (ci/baseline/poll-cost-windows-x64.md), so this
-//! may not ride that tick — and a window kept open beside another copy
-//! is what these rows are for, so it may not wait for somebody to click
-//! the window either. Hence a slower tick of its own
-//! (`settings::Defaults::copies_interval_secs`), a pass that drops the
-//! next tick rather than stacking ([`RepoSession::refresh_carried`]),
-//! and a cap on how many run at once that is not this module's: the
-//! reads go out on the session's background handle, and the slots
-//! serve them after anything somebody is waiting on and keep them out
-//! of the click's reserve (`process::Slots`,
+//! **The cost is the read.** One `status -uall` is most of a
+//! second on a reference-sized tree and it is the page's own
+//! tick's dominant term already
+//! (ci/baseline/poll-cost-windows-x64.md), and a window kept
+//! open beside another copy is what these rows are for. Hence
+//! a slower tick of its own
+//! (`settings::Defaults::copies_interval_secs`), a pass that
+//! drops the next tick ([`RepoSession::refresh_carried`]), and
+//! a cap on how many run at once that the slots hold: the
+//! reads go out on the session's background handle, and the
+//! slots serve them after anything somebody is waiting on and
+//! keep them out of the click's reserve (`process::Slots`,
 //! ci/baseline/git-slots-windows-x64.md).
 //! The listing that says which copies there are is the cheap half and
 //! rides the page's tick; this is the expensive one (CLAUDE.md §性能予算).
@@ -41,9 +41,9 @@ pub struct Carried {
     /// drawn where that commit lands, so a copy whose HEAD the walk never
     /// reached draws nothing at all.
     pub head: Oid,
-    /// The six tallies the row names. **Off the row, not off the view** —
-    /// the numbers belong to the copy the row is about, and the window
-    /// has one set of its own beside them.
+    /// The six tallies the row names. **Off the row** — the numbers
+    /// belong to the copy the row is about, and the window has one set
+    /// of its own beside them.
     pub kinds: Kinds,
 }
 
@@ -77,15 +77,15 @@ pub fn copies_interval_secs(asked: u32) -> u32 {
 /// Reads every other working copy's status and keeps the ones with
 /// something to show.
 ///
-/// **How many run at once is the slots' to say**, not this function's:
-/// every read is asked for at once on the background handle, and the
-/// slots admit as many as the half outside the click's reserve allows,
-/// after whatever this window's reader is waiting on (`process::Slots`).
-/// Ordering them
-/// behind this window's own reads by waiting on those instead is what
-/// may not be done — that made a ring, and the opening pass sat on the
-/// graph's loading spinner (observed); the cap keeps the machine for the
-/// reader without a wait.
+/// **How many run at once is the slots' to say**: every read
+/// is asked for at once on the background handle, and the
+/// slots admit as many as the half outside the click's
+/// reserve allows, after whatever this window's reader is
+/// waiting on (`process::Slots`). Ordering them behind this
+/// window's own reads by waiting on those made a ring, and
+/// the opening pass sat on the graph's loading spinner
+/// (observed); the cap keeps the machine for the reader
+/// without a wait.
 ///
 /// **What makes this safe to point at somebody else's tree is already
 /// standing**: every invocation carries `--no-optional-locks` and
@@ -106,8 +106,8 @@ pub(super) async fn read_all(
     cancel: &CancellationToken,
 ) -> Vec<Carried> {
     // Spelled once: git prints its own separators and case, so telling
-    // this window's copy from the rest is a comparison of keys rather
-    // than of paths (`joins::same_path_key`).
+    // this window's copy from the rest is a comparison of keys
+    // (`joins::same_path_key`).
     let here = crate::session::joins::same_path_key(&here.to_string_lossy());
     let mine: Vec<&WorktreeEntry> = worktrees
         .iter()
@@ -149,7 +149,7 @@ pub(super) async fn read_all(
     }
     let mut found: Vec<(usize, Carried)> = Vec::new();
     while let Some(joined) = set.join_next().await {
-        // A read that panicked is one row missing, not a session lost.
+        // A read that panicked is one row missing.
         if let Ok(Some(wip)) = joined {
             found.push(wip);
         }
@@ -164,11 +164,11 @@ pub(super) async fn read_all(
         slots = ?executor.slots().report(),
         "carried pass"
     );
-    // **In the listing's order, not the order they answered.** What the
-    // rows are compared against to decide whether the graph is walked
-    // again is this list, and a set that merely came back shuffled would
-    // spend a whole `git log` saying nothing (`note_worktree_holders`
-    // sorts its own for the same reason).
+    // **In the listing's order.** What the rows are compared against to
+    // decide whether the graph is walked again is this list, and a set
+    // that merely came back shuffled would spend a whole `git log`
+    // saying nothing (`note_worktree_holders` sorts its own for the
+    // same reason).
     found.sort_by_key(|(at, _)| *at);
     found.into_iter().map(|(_, wip)| wip).collect()
 }
@@ -326,22 +326,22 @@ impl super::RepoSession {
     /// apart from the listing that rides the page's tick: the listing is
     /// one process and nothing else, while this is a whole `status` per
     /// copy. A window kept open beside another copy is what these rows
-    /// are for, so they may not wait for somebody to click it — and they
-    /// may not ride a ten-second tick either
+    /// are for, so the clock is what brings them, and the ten-second
+    /// tick is too dear for them
     /// (ci/baseline/poll-cost-windows-x64.md).
     ///
-    /// **Off the worktree pass as well.** What waits on that pass is the
-    /// write queue's settling, and a commit here may not be called done
-    /// on the strength of somebody else's `status` — a write over here
-    /// does not move what they are carrying.
+    /// **On a pass of its own, as well.** What waits on the worktree
+    /// pass is the write queue's settling, and a commit here is called
+    /// done on this window's own reads — a write over here does not
+    /// move what they are carrying.
     ///
     /// **One at a time**: on a big tree with several copies a pass can
-    /// outlast the interval, and the next tick is dropped rather than
-    /// queued, the way the page's own poll drops its own. **Nobody is
-    /// waiting on any of it**, so the whole pass goes out on the
-    /// background handle: served after the reader's own commands, kept
-    /// out of the click's reserve, and taken back out of the queue with
-    /// the session if it closes first (`process::Slots`).
+    /// outlast the interval, and the next tick is dropped, the way the
+    /// page's own poll drops its own. **Nobody is waiting on any of
+    /// it**, so the whole pass goes out on the background handle:
+    /// served after the reader's own commands, kept out of the click's
+    /// reserve, and taken back out of the queue with the session if it
+    /// closes first (`process::Slots`).
     pub fn refresh_carried(self: &std::sync::Arc<Self>) -> Option<CarriedPass> {
         let workdir = self.workdir()?;
         let Ok(permit) = std::sync::Arc::clone(&self.carried_slot).try_acquire_owned() else {
@@ -369,23 +369,23 @@ impl super::RepoSession {
         workdir: &Path,
         ticket: &PassTicket,
     ) -> CarriedOutcome {
-        // The listing again rather than the one the worktree pass read:
-        // one process, against keeping a second copy of the listing in
-        // step with that pass.
+        // The listing again, read here: one process, against
+        // keeping a second copy of the listing in step with the
+        // worktree pass.
         let Ok(worktrees) =
             crate::worktrees::load(&self.exec_background, workdir, &ticket.cancel).await
         else {
             return CarriedOutcome::Dropped;
         };
         // Where the listing above found each copy, into the record the
-        // rows are drawn against. **Before the reads rather than after**:
-        // it describes the same moment they were started from, and a
-        // reading is only ever behind a listing taken after it
+        // rows are drawn against. **Before the reads**: it describes the
+        // same moment they were started from, and a reading is only ever
+        // behind a listing taken after it
         // (`RepoSession::note_copy_heads`).
         self.note_copy_heads(&worktrees, workdir);
         let carried = read_all(&self.exec_background, &worktrees, workdir, &ticket.cancel).await;
-        // Reads stopped part-way are not a reading: what they left out
-        // would come down as copies with nothing to show.
+        // Reads stopped part-way are dropped: what they left out would
+        // come down as copies with nothing to show.
         if ticket.cancel.is_cancelled() {
             return CarriedOutcome::Dropped;
         }
@@ -401,9 +401,9 @@ impl super::RepoSession {
         }
     }
 
-    /// Waits until no pass over the other copies is in flight — the
-    /// boundary a test closes on before it counts their reads or turns
-    /// them off, the way `wait_for_snapshot_reads` closes the opening's.
+    /// Waits for any pass over the other copies to end — the boundary a
+    /// test closes on before it counts their reads or turns them off,
+    /// the way `wait_for_snapshot_reads` closes the opening's.
     pub async fn wait_for_carried_pass(&self) {
         if let Ok(permit) = self.carried_slot.acquire().await {
             drop(permit);
@@ -416,17 +416,17 @@ impl super::RepoSession {
     /// **A read of its own, aimed at the copy somebody is looking at.**
     /// The tick above keeps the rows' tallies current for every copy;
     /// this is the file list behind one row, asked for when that row is
-    /// selected — so a pane opened on a copy shows what it holds now
-    /// rather than what it held at the last tick.
+    /// selected — so a pane opened on a copy shows what it holds
+    /// now.
     ///
     /// Nothing here can write: the pane it feeds has every write control
     /// down while it is showing another copy, and the only door into that
     /// copy's own writes is its own tab.
     ///
     /// **One at a time, and the last ask wins** (`carried_read`): these
-    /// are reads of different trees, so two of them are not a race the
-    /// clock settles fairly — the answer about the row the reader has
-    /// stepped off must not be the one left on screen.
+    /// are reads of different trees, so what is left on screen is the
+    /// answer about the row the reader is standing on, whichever of the
+    /// two came back first.
     ///
     /// **One read more than the tick's**, so a copy whose pane is open
     /// pays twice: once for its row's tallies and once for the pane's
@@ -470,9 +470,9 @@ impl super::RepoSession {
 
     /// The set as the last pass left it, for the walk that draws it.
     ///
-    /// **A row stands or falls on the whole record, not on the dirt
-    /// alone**: the tallies are drawn on the row, so a copy that only
-    /// staged another file has moved a row the walk has to rebuild.
+    /// **A row stands or falls on the whole record**: the tallies are
+    /// drawn on the row, so a copy that only staged another file has
+    /// moved a row the walk has to rebuild.
     pub(super) fn carried(&self) -> std::sync::Arc<Vec<Carried>> {
         self.copies.rows()
     }

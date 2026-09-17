@@ -37,10 +37,10 @@ fn resolve_and_stage(repo: &mut TestRepo) {
 /// instead — `Blocked` is the classifier's own verdict, so reaching it
 /// *is* the observation.
 ///
-/// The `stderr` field alone, never the rendered error: that puts the
-/// command line in front of git's message, and the flags this crate
-/// passes are not what is being read here (`--no-rebase-merges` carries
-/// the word `merge` through every one of them).
+/// The `stderr` field alone: the rendered error puts the command line
+/// in front of git's message, and the flags this crate passes are not
+/// what is being read here (`--no-rebase-merges` carries the word
+/// `merge` through every one of them).
 async fn blocked_stderr(repo: &TestRepo, interactive: bool) -> String {
     let (exec, cancel) = env();
     let outcome = if interactive {
@@ -84,7 +84,7 @@ async fn blocked_stderr(repo: &TestRepo, interactive: bool) -> String {
 /// it never names the operation, and both the plain and the interactive
 /// rebase word it identically. The classifier therefore calls it work in
 /// the way and the carry would go round through a stash — which is why
-/// the session guards on the operation itself rather than on the wording
+/// the session guards on the operation itself
 /// (`session::build::carry_across_rewrite`).
 #[tokio::test]
 async fn a_rebase_under_a_standing_operation_is_refused_as_a_dirty_tree() {
@@ -113,8 +113,8 @@ async fn a_rebase_under_a_standing_operation_is_refused_as_a_dirty_tree() {
 
 /// Still conflicted, the same refusal arrives with the unstaged half
 /// named as well — the stash that would follow is the only reason this
-/// case has never lost anything, and it is an accident of the index being
-/// unmerged rather than a guard.
+/// case has never lost anything, and it is an accident of the index
+/// being unmerged.
 #[tokio::test]
 async fn an_unsettled_conflict_earns_the_same_refusal() {
     let mut repo = diverged();
@@ -148,8 +148,8 @@ fn a_stash_takes_a_standing_operation_down_with_it() {
 }
 
 /// A bisect is the one thing `OpState::any` counts that a stash leaves
-/// alone, which is why the carry's guard reads `InProgress::from_state`
-/// rather than `any` — a dirty tree under a bisect still carries.
+/// alone, which is why the carry's guard reads `InProgress::from_state` —
+/// a dirty tree under a bisect still carries.
 #[test]
 fn a_bisect_survives_a_stash() {
     let mut repo = diverged();

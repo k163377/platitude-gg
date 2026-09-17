@@ -53,8 +53,8 @@ pub const LOCK_FILE: &str = "lock";
 const DEV_DIR: &str = "dev";
 
 /// Written at the top of both files. Every reader is per-key tolerant, so
-/// this is not a gate — it is there so a later renaming of a key can tell
-/// an old file from a new one instead of guessing.
+/// this is a marker: a later renaming of a key can tell an old file
+/// from a new one by it.
 pub const SCHEMA_VERSION: i64 = 1;
 
 /// Points both files at one directory. Empty means "read nothing, write
@@ -65,9 +65,9 @@ pub const CONFIG_DIR_ENV: &str = "PGG_CONFIG_DIR";
 const AUTOMATION_PREFIX: &str = "PGG_";
 
 /// `PGG_*` variables that say nothing about who is driving. Turning the
-/// logging up is something somebody does at their own window, and it must
-/// not cost them their settings. `PGG_ALLOW_GUI` is the same shape from
-/// the other end: it is how somebody says "I asked for a window" to the
+/// logging up is something somebody does at their own window, and their
+/// settings survive it. `PGG_ALLOW_GUI` is the same shape from the other
+/// end: it is how somebody says "I asked for a window" to the
 /// pre-shell guard (CLAUDE.md ビルド・テスト), so it rides on the launch
 /// that most needs the person's own tabs to come back.
 const NOT_AUTOMATION: [&str; 3] = [CONFIG_DIR_ENV, "PGG_LOG", "PGG_ALLOW_GUI"];

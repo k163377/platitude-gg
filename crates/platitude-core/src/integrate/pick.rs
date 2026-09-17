@@ -11,12 +11,12 @@ use crate::process::{GitCommand, GitExecutor};
 /// `git cherry-pick <revs>`.
 ///
 /// `--allow-empty` is about commits that were empty when they were made:
-/// such a commit is exactly what was asked for, so it lands as it stands
-/// instead of stopping to ask. Without the flag git stops on those too,
+/// such a commit is exactly what was asked for, so it lands as it
+/// stands. Without the flag git stops on those too,
 /// in the same words it uses for the commit that turns out to add
 /// nothing — and those two are not the same answer (measured, 2.55).
 ///
-/// A conflict is [`Landing::Stopped`], not a failure: copying a commit
+/// A conflict is [`Landing::Stopped`]: copying a commit
 /// onto a branch that has moved on ends there as ordinarily as merging
 /// one does (デザイン規約 §進行中の操作から出る).
 pub async fn cherry_pick(
@@ -79,12 +79,12 @@ pub async fn revert(
 /// `--skip` for every commit that leaves nothing to record.
 ///
 /// A commit whose changes the branch already has writes no commit, and
-/// both commands stop there rather than dropping it: exit 1, the
-/// sequencer state left standing, and a message naming `--skip`. **That
-/// stop asks nothing of the person who pressed the row** — no conflict
-/// to resolve, the tree untouched, the branch already holding what was
-/// to be copied — so it is answered here instead of arriving on screen
-/// as a failed operation with a badge behind it
+/// both commands stop there: exit 1, the sequencer
+/// state left standing, and a message naming `--skip`.
+/// **That stop asks nothing of the person who pressed
+/// the row** — no conflict to resolve, the tree untouched,
+/// the branch already holding what was to be copied — so
+/// it is answered here
 /// (デザイン規約 §履歴を合流させる). A `rebase` needs none of this: it
 /// drops such commits by itself, and the `--empty=drop` that would say
 /// so in one word only reached these two commands in git 2.45, past the
@@ -156,8 +156,8 @@ async fn landed(
     }
     // The operation standing has to be *this* one: a rebase stopped on a
     // conflicting pick owns `CHERRY_PICK_HEAD` too, and a cherry-pick
-    // asked for over a stopped merge is refused by git rather than
-    // stopped — the marker on disk then belongs to the merge (measured, 2.55).
+    // asked for over a stopped merge is refused by git — the marker
+    // on disk then belongs to the merge (measured, 2.55).
     let standing = opstate::detect(executor, workdir, cancel)
         .await
         .ok()
@@ -204,8 +204,8 @@ async fn still_stepping(
 /// `integrate_integration`).
 ///
 /// Anything unrecognised is `false` and travels on as the failure it
-/// looks like: a reworded message costs the walk past, never
-/// correctness.
+/// looks like: a reworded message costs only the walk
+/// past.
 fn left_nothing_to_record(op: InProgress, error: &GitError) -> bool {
     let GitError::Failed { stderr, .. } = error else {
         return false;

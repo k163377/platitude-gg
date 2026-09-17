@@ -22,8 +22,8 @@ pub struct EditPlan {
     /// The tip `steps` was read against — what the replay checks HEAD
     /// against before it spawns ([`crate::session`]'s `Replay`).
     ///
-    /// **Taken out of the rows, not asked for.** The range always ends at
-    /// HEAD (`range_arg`) and `read_rows` reverses git's own order, so the
+    /// **Taken out of the rows.** The range always ends at HEAD
+    /// (`range_arg`) and `read_rows` reverses git's own order, so the
     /// last step *is* the tip this plan was composed against: pinning it
     /// costs no process at all, which is what kept it unpinned while the
     /// pin was thought to need one on the response path of the three edits
@@ -58,7 +58,7 @@ impl Edit {
     /// `squash` folds into the line above it, so the parent must be in the
     /// plan as well; a reword and a drop only need the commit itself.
     ///
-    /// Reaching one further than that is not free: whatever sits below the
+    /// Reaching one further than that costs: whatever sits below the
     /// commit joins the range, and a merge down there is enough to refuse
     /// the whole edit even though the replay would never have touched it
     /// (measured — `a_merge_under_the_dropped_commit_is_left_alone`).
@@ -123,7 +123,7 @@ pub async fn plan_edit(
     // The last step is the tip: the range ends at HEAD either way
     // (`range_arg`) and `read_rows` hands git's newest-first order back
     // reversed. The position above says the list is not empty, and an
-    // empty tip would refuse rather than run unpinned
+    // empty tip would refuse the replay
     // (`Replay::tip_still_stands`).
     let tip = steps
         .last()
@@ -173,7 +173,7 @@ pub(crate) enum Base {
 /// Reads what sits under `bottom`, the oldest commit a plan takes in.
 ///
 /// The extra reads go out only where git says there is nothing under it —
-/// the rarest answer, and the one that must not be guessed. Whatever the
+/// the rarest answer, and the one worth asking about. Whatever the
 /// walk costs from there dwarfs them.
 pub(crate) async fn base_of(
     executor: &GitExecutor,
@@ -208,8 +208,8 @@ async fn resolve(
         .cwd(workdir)
         .args(["rev-parse", "--verify", "--quiet", "--end-of-options"])
         .arg(format!("{rev}^{{commit}}"))
-        // "there is no such commit" is the answer, not a failure: a plan
-        // that reaches the very first commit asks for its parent and is
+        // "there is no such commit" is the answer here: a plan that
+        // reaches the very first commit asks for its parent and is
         // told there is none. Left unmarked it counts as a failed command
         // and the command log throws its panel open over a perfectly good
         // squash or drop near the root (.claude/rules/core.md).

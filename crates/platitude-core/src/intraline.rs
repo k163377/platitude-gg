@@ -10,15 +10,15 @@
 //! removal) gets no emphasis, because a wash with nothing quiet in it
 //! says nothing.
 //!
-//! This is presentation, not git: `git diff --word-diff` answers a
-//! similar question, but its output replaces the line-based form the
-//! pane is built on rather than annotating it, so the ranges are worked
-//! out here, over text the diff already carries.
+//! This is presentation: `git diff --word-diff` answers a similar
+//! question, but its output replaces the line-based form the pane is
+//! built on, so the ranges are worked out here, over text the diff
+//! already carries.
 
 use crate::parse::diff::{DiffHunk, DiffLineKind, FilePatch};
 
-/// Byte ranges into one row's text — `(start, len)`, ascending, never
-/// touching.
+/// Byte ranges into one row's text — `(start, len)`, ascending and
+/// disjoint.
 type Ranges = Vec<(usize, usize)>;
 
 /// What changed inside every row of a diff, addressed the way its rows
@@ -49,7 +49,7 @@ const KINSHIP_FLOOR_PER_MILLE: usize = 500;
 
 /// A shared run shorter than this, between two emphasised stretches, is
 /// swallowed by them: `1` surviving inside `let x = 1;` → `let y = 12;`
-/// reads as noise, not as common ground.
+/// reads as noise.
 const KEEP_RUN_CHARS: usize = 3;
 
 /// The refinement pass ([`refined`]) is quadratic in the unshared
@@ -64,7 +64,7 @@ const REFINE_CELL_BUDGET: usize = 2_000_000;
 /// Reads every hunk of `patches` and answers what to emphasise on each
 /// row. Linear in the text, plus a bounded refinement
 /// ([`REFINE_CELL_BUDGET`]); cheap enough to ride with the rows
-/// themselves rather than behind them.
+/// themselves.
 pub fn marks(patches: &[FilePatch]) -> IntraMarks {
     let mut budget = REFINE_CELL_BUDGET;
     IntraMarks {
@@ -105,7 +105,7 @@ fn hunk_marks(hunk: &DiffHunk, budget: &mut usize) -> Vec<Ranges> {
         }
         let dels_end = i;
         // `\ No newline at end of file` can stand between the two runs;
-        // it is git talking, not a row of either side.
+        // it is git talking.
         let mut j = i;
         while j < lines.len() && lines[j].kind == DiffLineKind::NoNewline {
             j += 1;

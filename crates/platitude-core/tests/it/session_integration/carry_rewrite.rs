@@ -32,11 +32,11 @@ async fn squash_and_reword_run_through_the_write_queue() {
     session.close();
 }
 
-/// The commands a rewrite issued, named coarsely enough to read as the
-/// route it took rather than as an argument list.
+/// The commands a rewrite issued, named coarsely enough to read as
+/// the route it took.
 ///
-/// Matched from the front of the command, not anywhere inside it: the
-/// status refresh that follows a stopped rebase reads its progress with
+/// Matched from the front of the command: the status refresh that
+/// follows a stopped rebase reads its progress with
 /// `rev-parse --git-path rebase-merge/msgnum`, which a plain `contains`
 /// counts as a fourth rebase (measured).
 fn rewrite_route(sink: &CaptureSink) -> Vec<&'static str> {
@@ -67,7 +67,7 @@ fn stopped_part_way(repo: &TestRepo) -> bool {
     repo.path.join(".git").join("rebase-merge").exists()
 }
 
-/// A squash fired over a dirty tree neither stops nor asks: git refuses to
+/// A squash fired over a dirty tree lands on its own: git refuses to
 /// replay while the work is in the tree, so the session goes round the way
 /// a person typing the three commands would (デザイン規約
 /// §未コミット変更がある状態で履歴を書き換える). What lands is what `stash` →
@@ -259,8 +259,8 @@ async fn untracked_files_alone_are_replayed_straight_over() {
 /// The replay goes through and the *restore* is what collides. The
 /// landing is the one a move already has (規約 §未コミット変更がある状態
 /// での移動): markers in the files, and the stash entry kept so the work
-/// still exists somewhere other than a marked-up file. Not a failed
-/// write — nothing failed.
+/// still exists somewhere other than a marked-up file. Nothing
+/// failed.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_restore_that_collides_lands_in_the_files_and_keeps_the_entry() {
     install_todo_editor();
@@ -303,7 +303,7 @@ async fn a_restore_that_collides_lands_in_the_files_and_keeps_the_entry() {
     session.close();
 }
 
-/// The replay stops part-way, and then the restore is not attempted: git
+/// The replay stops part-way, and the restore is held back: git
 /// will not write into an index that already holds unmerged paths, so a
 /// pop there does nothing while reporting the collision it walked into
 /// (measured `could not write index` / `needs merge` — 規約 §`stash pop` の
@@ -353,7 +353,7 @@ fn reached_the_stash(event: &SessionEvent) -> bool {
         if display.starts_with("git stash push"))
 }
 
-/// **A commit that lands inside the carry is refused, not replayed over.**
+/// **A commit that lands inside the carry is refused.**
 ///
 /// The plan a screen composes is a fixed list of ids, and the carry spawns
 /// the replay twice: refused over the dirty tree, then again once a
@@ -364,9 +364,9 @@ fn reached_the_stash(event: &SessionEvent) -> bool {
 /// sit in front of every spawn, this ran through: `terminal.txt` gone, the
 /// history replayed without it, and the write reported as a success.
 ///
-/// The window is entered on purpose rather than waited for: the session is
-/// held inside the sink delivery that announces the stash, and the commit
-/// is made from the test's own thread while it is parked there
+/// The window is entered on purpose: the session is held inside the
+/// sink delivery that announces the stash, and the commit is made
+/// from the test's own thread while it is parked there
 /// ([`crate::support::session::CaptureSink::hook_once`]).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_commit_landing_inside_the_carry_is_refused_rather_than_dropped() {
@@ -500,8 +500,8 @@ async fn a_commit_landing_after_a_one_commit_edits_todo_is_refused() {
         refusal.contains("tip moved") && refusal.contains("nothing was rewritten"),
         "the refusal says the plan's premise went: {refusal}"
     );
-    // The reader is told, rather than left with a log panel of commands
-    // that all succeeded: nothing ran that a row could explain
+    // The reader is told, since nothing ran that a row in the log
+    // panel could explain
     // (デザイン規約 §答えの要らない報せ).
     let report = write_report(&sink, OperationKind::Drop)
         .await

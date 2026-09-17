@@ -19,8 +19,8 @@ use super::tags::split_ls_remote_line;
 /// Asked before a first push, because git answers two different ways to a
 /// name that is already over there: it fast-forwards one that our history
 /// contains — silently advancing somebody else's branch — and refuses one
-/// it does not (measured, both). The commit is returned rather than a yes, so
-/// the caller can tell those two apart before anything is sent.
+/// it does not (measured, both). The commit is returned, so the caller
+/// can tell those two apart before anything is sent.
 ///
 /// **The pattern has to be the full `refs/heads/<name>`.** `ls-remote`
 /// matches a bare name against the *tail* of a ref, so asking for `topic`
@@ -41,7 +41,7 @@ pub async fn branch_tip(
         .paced_elsewhere();
     let out = executor.run(cmd, cancel).await?;
     // A remote that has nothing to say answers with an empty stdout and
-    // exit 0, so the absence is in the output rather than in the code.
+    // exit 0, so the absence is in the output.
     Ok(out
         .stdout
         .split(|b| *b == b'\n')
@@ -71,8 +71,8 @@ pub enum RemoteBranchState {
 }
 
 impl RemoteBranchState {
-    /// The wire name the UI reads. Spelled out rather than derived so the
-    /// two ends cannot drift apart on a rename.
+    /// The wire name the UI reads. Spelled out so the two ends cannot
+    /// drift apart on a rename.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Free => "free",
@@ -90,8 +90,8 @@ impl RemoteBranchState {
 /// Read the same way an ordinary push is (`--porcelain`, then
 /// [`super::refusal::refusal`]): the far side is the only thing standing between a
 /// branch and its deletion, and a name it keeps for a rule of its own —
-/// a protected branch, a hook — is a report to pass on rather than a
-/// failure of ours (デザイン規約 §リモートブランチを消す).
+/// a protected branch, a hook — is a report to pass on (デザイン規約
+/// §リモートブランチを消す).
 pub async fn delete_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,
@@ -115,18 +115,18 @@ pub async fn delete_remote_branch(
 
 /// Renames a branch on a remote: the composition git has no command for.
 ///
-/// The new name is pushed **from the remote-tracking ref**, not from a
-/// local branch of the same name: the question asked was about a name, and
-/// a local branch that has moved on since would publish its commits as
-/// well. Then the old name goes, and any local branch that tracked it is
-/// pointed at the new one — `push --delete` prunes the tracking ref an
-/// upstream setting names, and a stale one sends the next push straight
-/// back to the name just deleted.
+/// The new name is pushed **from the remote-tracking ref**: the question
+/// asked was about a name, and a local branch of the same name that has
+/// moved on since would publish its commits as well. Then the old name
+/// goes, and any local branch that tracked it is pointed at the new one
+/// — `push --delete` prunes the tracking ref an upstream setting names,
+/// and a stale one sends the next push straight back to the name just
+/// deleted.
 ///
-/// This is not the rename a forge offers: the far side sees a branch
-/// created and a branch deleted, so whatever hung off the old name — an
-/// open pull request, a protected-branch rule — does not follow it. The UI
-/// warns about this before it runs.
+/// The far side sees a branch created and a branch deleted, so whatever
+/// hung off the old name — an open pull request, a protected-branch rule
+/// — stays behind on the name that went. The UI warns about this before
+/// it runs.
 pub async fn rename_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,
@@ -154,9 +154,9 @@ pub async fn rename_remote_branch(
 
 /// Local branches configured to track `<remote>/<branch>`.
 ///
-/// One read of the whole `branch.` section rather than a lookup per branch:
-/// which local branches point at a remote one is not something git answers
-/// directly, and the section is small.
+/// One read of the whole `branch.` section: which local branches point
+/// at a remote one is not something git answers directly, and the
+/// section is small.
 async fn tracking_branches(
     executor: &GitExecutor,
     workdir: &Path,

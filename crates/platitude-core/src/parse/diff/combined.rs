@@ -237,7 +237,7 @@ index 3e0f775,b81406d..0000000
     #[test]
     fn a_combined_heading_survives_the_extra_at_signs() {
         // The heading git prints keeps its trailing space, and the closing
-        // run is three `@` rather than two.
+        // run is three `@`.
         let patch = "\
 diff --cc code.rs
 --- a/code.rs
@@ -270,8 +270,8 @@ Binary files differ
     #[test]
     fn an_unmerged_path_with_no_patch_is_still_a_file() {
         // Deleted on one side: there is no second blob to compare, so git
-        // says only this. It arrives among ordinary patches and must not
-        // swallow the one that follows.
+        // says only this. It arrives among ordinary patches and the
+        // one that follows survives it.
         let patch = "\
 diff --cc add.txt
 --- a/add.txt
@@ -305,8 +305,8 @@ diff --git a/plain.txt b/plain.txt
         // `--cc` prints only the hunks that differ from *every* parent, so
         // resolving by taking one side wholesale empties the patch while
         // the path stays unmerged. The file entry still has to exist —
-        // dropping it would read as "no such file" rather than "nothing
-        // left to decide".
+        // it is what says there is nothing left to
+        // decide.
         let patch = "\
 diff --cc code.rs
 index 211b973,f7fe72f..0000000
@@ -322,7 +322,7 @@ index 211b973,f7fe72f..0000000
     #[test]
     fn a_unified_patch_carries_no_markers() {
         // The field is what tells the two forms apart downstream, so the
-        // ordinary case has to leave it empty rather than fill it in.
+        // ordinary case has to leave it empty.
         let files = parse_patch(PATCH.as_bytes());
         assert!(!files[0].is_combined);
         assert!(files[0].hunks[0].extra_old.is_empty());

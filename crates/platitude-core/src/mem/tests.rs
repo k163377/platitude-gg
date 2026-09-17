@@ -34,7 +34,7 @@ fn an_empty_container_owns_nothing() {
 fn a_map_counts_its_table_and_its_entries() {
     let mut map: HashMap<u32, String> = HashMap::new();
     map.insert(1, "x".repeat(10));
-    // The table is sized off capacity, not length, and the value's
+    // The table is sized off capacity, and the value's
     // buffer is on top of it.
     assert!(map.heap_bytes() >= table_bytes::<(u32, String)>(map.capacity()) + 10);
 }
@@ -77,8 +77,8 @@ fn a_one_entry_btree_still_costs_a_whole_node() {
     let node = 2 * size_of::<usize>() + 11 * 16;
     assert_eq!(one.heap_bytes(), node);
     // Eleven entries still fit in that one node, so the two agree —
-    // which is what makes a fleet of small maps visible as the cost
-    // it is rather than as eleven times less.
+    // which is what makes a fleet of small maps visible as the
+    // cost it is.
     let full: BTreeMap<u64, u64> = (0..11).map(|i| (i, i)).collect();
     assert_eq!(full.heap_bytes(), 2 * node);
 }

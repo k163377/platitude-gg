@@ -8,11 +8,11 @@ use super::scan::{Scan, text_after};
 pub struct Sighting {
     /// The path as the patch header spelled it, prefix stripped.
     ///
-    /// Not unquoted: git C-quotes headers for paths holding quotes, control
+    /// Left C-quoted: git C-quotes headers for paths with quotes, control
     /// characters or backslashes, and `parse::diff` leaves those alone too.
     /// A caller matching these against a known set of paths simply misses
-    /// such a file, which costs a mark rather than putting one on the wrong
-    /// row.
+    /// such a file, which costs a mark and keeps every mark it puts
+    /// right.
     pub path: String,
     pub reading: Reading,
 }

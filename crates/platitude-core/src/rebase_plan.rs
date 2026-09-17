@@ -52,9 +52,9 @@ pub struct PlanPreview {
     pub range: String,
     /// How many commits of that range a remote already has, as of this
     /// read — the `already pushed` count the run button wears. Read with
-    /// the rows rather than asked for afterwards, so the screen opens
-    /// with its warning on; the refs moving under an open plan is what
-    /// asks again ([`crate::session::RepoSession::check_plan_published`]).
+    /// the rows, so the screen opens with its warning on; the refs
+    /// moving under an open plan is what asks again
+    /// ([`crate::session::RepoSession::check_plan_published`]).
     pub published: u32,
     pub rows: Vec<PlanRow>,
     /// The commit the rows land on, for the screen's own `onto` row.
@@ -100,7 +100,7 @@ pub enum PlanAnswer {
 
 /// Reads what a plan from `from` (a full commit id) would be made of.
 ///
-/// Two serial process latencies, not seven: the range read carries the
+/// Two serial process latencies in all: the range read carries the
 /// merge answer in its own `%P` field, and the onto row, its branch name
 /// and the count a remote already has of the range — all about the
 /// already-resolved range — run side by side. Serial spawns are what a
@@ -162,8 +162,8 @@ pub async fn preview(
         // The name is the decoration; the base itself is the answer. The
         // screen already writes the short id where no branch stands there
         // (デザイン規約 §フル interactive rebase: 指すブランチが無ければ sha),
-        // so a `for-each-ref` that failed takes the same road rather than
-        // the whole preview down with it.
+        // so a `for-each-ref` that failed takes the same road and the
+        // preview stands.
         let named = named.unwrap_or_else(|error| {
             tracing::debug!(%error, "no branch name for the plan's base; its id stands in");
             String::new()
@@ -197,8 +197,8 @@ pub async fn preview(
 /// (`session::model::LabelIndex::from_pairs`). Only the last of the three
 /// can decide anything here — the query is local branches alone, and the
 /// current branch cannot stand on the base, which the range `upstream..HEAD`
-/// has already been shown to sit above. Sorting is named rather than left
-/// to git's default, which happens to agree (measured 2.55).
+/// has already been shown to sit above. Sorting is named here, and git's
+/// default happens to agree (measured 2.55).
 async fn branch_at(
     executor: &GitExecutor,
     workdir: &Path,

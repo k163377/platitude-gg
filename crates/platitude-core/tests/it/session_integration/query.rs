@@ -1,4 +1,4 @@
-//! Reads that reuse what a read already landed, rather than asking git again.
+//! Reads that reuse what a read already landed.
 
 use std::sync::Arc;
 
@@ -10,12 +10,12 @@ use platitude_core::patch::HunkSelect;
 use platitude_core::session::{DiffReadOutcome, Recording, RefreshOutcome, SessionEvent};
 use platitude_core::stage;
 
-/// Opening a repository asks for a read, and so does the window becoming
-/// active a moment later; on a large repository that pair would be two
-/// `for-each-ref` and two `status -uall` for one answer. The second
-/// caller books a repeat instead of starting its own — and the point
-/// of booking rather than dropping is that the repeat still sees what
-/// happened in between.
+/// Opening a repository asks for a read, and so does the window
+/// becoming active a moment later; on a large repository that pair
+/// would be two `for-each-ref` and two `status -uall` for one
+/// answer. The second caller books a repeat — and the point of
+/// booking is that the repeat still sees what happened in
+/// between.
 // `worker_threads = 2` is the test's own premise: the hook below parks a
 // worker on a blocking `recv`, and a pool inherited from the host can be
 // one thread on a small runner — the parked hook then owns it all.
@@ -159,8 +159,8 @@ async fn the_ways_in_to_a_status_read_never_run_two_at_once() {
     session.close();
 }
 
-/// The same pair under the one write the poll is **not** turned away
-/// from. A replay stands for as long as its range is deep, and skipping
+/// The same pair under the one write the poll is **let through**. A
+/// replay stands for as long as its range is deep, and skipping
 /// the tick through all of it would leave the window with no badge, no
 /// progress and no graph for the whole of a rewrite somebody asked for
 /// (`RepoSession::refresh_poll`) — so the tick and the read the write
@@ -168,10 +168,10 @@ async fn the_ways_in_to_a_status_read_never_run_two_at_once() {
 ///
 /// **`stage_paths` cannot make this pair.** A write that does not replay
 /// turns the tick away before it reads anything, so the test above has
-/// the two asking from either side of the write rather than from inside
-/// it, and the way in that only a replay opens went unwalked.
+/// the two asking from either side of the write, and the way in that
+/// only a replay opens went unwalked.
 ///
-/// The window is held open rather than raced for: the flags the tick
+/// The window is held open: the flags the tick
 /// reads are set around the whole request, refreshes included
 /// (`session::write::serve`), and git's answer to the write arrives
 /// before those refreshes — so a tick asked for on that answer is asked
@@ -196,8 +196,8 @@ async fn a_poll_let_through_by_a_replay_does_not_read_beside_it() {
     session.set_recording(Recording::WithBackground);
 
     // Park a read where its process is about to be spawned. It holds the
-    // status flight from here on, so everything asked below queues rather
-    // than reading — the replay's own settling included, which is what
+    // status flight from here on, so everything asked below queues —
+    // the replay's own settling included, which is what
     // keeps the write inside its request while the tick is asked for.
     let (release, held) = std::sync::mpsc::channel::<()>();
     sink.hook_once(is_status_spawn, move || {
@@ -250,7 +250,7 @@ fn commands_of(sink: &CaptureSink) -> Vec<String> {
 }
 
 /// The refs listing already marks the branch HEAD is on, so a refs read
-/// does not ask a second and third process where HEAD is.
+/// takes HEAD out of it.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_refs_read_takes_head_out_of_the_listing_it_already_has() {
     let mut repo = TestRepo::init();
@@ -261,8 +261,8 @@ async fn a_refs_read_takes_head_out_of_the_listing_it_already_has() {
     // path.
     sink.opened_graph(&session, 1).await;
     session.set_recording(Recording::WithBackground);
-    // A baseline index, not an erasure: the history stays for the failure
-    // message, and the wait below reads only past it.
+    // A baseline index: the history stays for the failure message,
+    // and the wait below reads only past it.
     let from = sink.events.lock().unwrap().len();
 
     session.refresh_refs();
@@ -310,7 +310,7 @@ async fn a_detached_head_is_still_read_correctly() {
 }
 
 /// A read that finds nothing moved publishes the snapshot it published
-/// last — the same one, by pointer — instead of building an equal one.
+/// last — the same one, by pointer.
 ///
 /// Sorting every ref into a snapshot and a label map on every tick just
 /// to compare the result equal spends tens of milliseconds of a core on
@@ -428,8 +428,8 @@ async fn the_remotes_are_read_once_until_something_could_have_changed_them() {
             .filter(|c| c.contains("remote\\..*\\.(url|pushurl)"))
             .count()
     };
-    // Counted in snapshots delivered, not in elapsed time: a read that is
-    // merely slow must not read as a read that did not happen.
+    // Counted in snapshots delivered: a read that is merely slow
+    // still counts as a read that happened.
     let snapshots =
         |sink: &CaptureSink| sink.count(|e| matches!(e, SessionEvent::RefsLoaded { .. })) as u32;
     let settle = async |want: u32| {
@@ -520,9 +520,9 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
     })
     .await;
 
-    // The move re-read the remotes once, not once per tick: the next poll
-    // reads the same marks, finds the held answer equal, and asks git for
-    // no listing of its own.
+    // The move re-read the remotes once: the next poll reads the same
+    // marks, finds the held answer equal, and asks git for no listing
+    // of its own.
     //
     // **One, and the two ways it could be more.** The opening boundary
     // above leaves no remotes read in flight and the answer held, so the
@@ -565,10 +565,10 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
 /// The line-ending setting written into this repository's own file
 /// reaches the notices by the poll.
 ///
-/// The settings screen writes it against a work tree path rather than
-/// through a session (`models::line_endings`, so that it can name a
-/// repository nobody is looking at), which moves no ref and lands no write
-/// in here — exactly like `git config core.autocrlf` typed in a terminal.
+/// The settings screen writes it against a work tree path
+/// (`models::line_endings`, so that it can name a repository nobody
+/// is looking at), which moves no ref and lands no write in here —
+/// exactly like `git config core.autocrlf` typed in a terminal.
 /// So the stat the remotes cache already makes on every tick has to notice
 /// it (`RepoSession::forget_what_the_config_decides`). Without that, a
 /// repository told to convert its line endings keeps warning about the
@@ -578,12 +578,12 @@ async fn the_line_ending_setting_written_beside_the_session_reaches_the_notices(
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "one\ntwo\n", "root");
     // Every line's ending flips, which is the one reading the patch bytes
-    // settle on their own — and it is silenced by the setting rather than
-    // by the bytes, which is what this is about.
+    // settle on their own — and it is silenced by the setting, which
+    // is what this is about.
     std::fs::write(repo.path.join("f.txt"), "one\r\ntwo\r\n").expect("rewrite with CRLF");
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
-    // **The last status read, not any of them.** Waiting on "some status
+    // **The last status read.** Waiting on "some status
     // said nothing" would be answered by the one the session sends before
     // it has settled any marks at all, which is the same shape as the
     // answer this is looking for.
@@ -642,11 +642,11 @@ async fn concurrent_diffs_share_the_line_ending_setting_read() {
         orig_path: None,
     };
 
-    // The first read is held where it asks for the setting, so the second
-    // meets it in flight rather than probably meeting it
+    // The first read is held where it asks for the setting, so the
+    // second meets it in flight
     // (core.md §非同期・並行テスト). Reading is what shares the query, and
-    // both of these read: the row the reader has left is dropped after
-    // the setting has been asked for, not before
+    // both of these read: the row the reader has left is dropped
+    // after the setting has been asked for
     // (`RepoSession::diff_epoch`).
     let mut first = Box::pin(session.read_diff(file("a.txt")));
     assert!(
@@ -816,7 +816,7 @@ async fn a_plans_published_count_answers_through_the_session() {
 /// included — that one as "cannot say", which the row draws the way it
 /// draws a merged branch.
 ///
-/// **The two are not told apart by the picture**, so the answer is where
+/// **The picture is the same for both**, so the answer is where
 /// they are told apart at all: a menu opened over a name git will not
 /// resolve leaves its delete row plain, exactly as a menu over a merged
 /// branch does, and a reader looking at the run afterwards has only this
@@ -866,9 +866,9 @@ async fn branch_delete_answer(sink: &CaptureSink, branch: &str) -> Option<bool> 
 /// what the session has published, in order — what a re-read either adds
 /// to or leaves alone.
 ///
-/// Over the events rather than over the sink, because `wait_for` runs its
-/// predicate holding that lock: a helper that took it again would wedge
-/// the test rather than fail it.
+/// Over the events, because `wait_for` runs its predicate holding
+/// that lock: a helper that took it again would wedge the
+/// test.
 fn diffs_in(events: &[SessionEvent], path: &str) -> Vec<u64> {
     events
         .iter()
@@ -1015,7 +1015,7 @@ async fn the_older_of_two_reads_of_one_file_publishes_nothing() {
 
     // The first of the pair, held inside its own git: polled to where it
     // waits and left there, so the stage happens while it is still in
-    // flight rather than probably still in flight
+    // flight
     // (core.md §非同期・並行テスト).
     let mut older = Box::pin(session.read_diff(target.clone()));
     assert!(
@@ -1132,8 +1132,8 @@ async fn a_copys_file_is_not_the_same_file_as_ours_of_that_name() {
 }
 
 /// The copies are different trees, so their reads take different times —
-/// and the pane shows one copy. A reader stepping from one row to the next
-/// must not be left holding the copy they stepped off.
+/// and the pane shows one copy. A reader stepping from one row to the
+/// next is handed the copy they stepped onto.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_copy_asked_about_last_is_the_one_the_pane_is_handed() {
     let mut repo = TestRepo::init();
@@ -1166,9 +1166,9 @@ async fn the_copy_asked_about_last_is_the_one_the_pane_is_handed() {
         carried, "second-copy",
         "the read the reader stepped off was left on screen"
     );
-    // And it is passed before it starts, rather than racing to arrive
-    // first: the second ask takes the slot on the caller's own thread, so
-    // the copy stepped off spends no `status` at all (`session::latest`).
+    // And it is passed before it starts: the second ask takes the slot
+    // on the caller's own thread, so the copy stepped off spends no
+    // `status` at all (`session::latest`).
     let names: Vec<String> = sink
         .events
         .lock()

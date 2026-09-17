@@ -6,9 +6,9 @@ use super::{
     AUTOMATION_PREFIX, DEV_DIR, DIR_NAME, NOT_AUTOMATION, SETTINGS_FILE, STATE_FILE, Store,
 };
 
-/// Which platform's placement rules to apply. A parameter rather than a
-/// `cfg!` so all three can be tested from any machine — the 3-OS CI that
-/// would otherwise reach them stays unrun until Phase 5 (CLAUDE.md).
+/// Which platform's placement rules to apply. A parameter, so all three
+/// can be tested from any machine — the 3-OS CI that would otherwise
+/// reach them stays unrun until Phase 5 (CLAUDE.md).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Platform {
     Windows,
@@ -93,11 +93,11 @@ pub struct Build<'a> {
     pub tree: &'a str,
     /// Built with debug assertions on.
     pub debug: bool,
-    /// Something rather than somebody is driving this run, so it gets no
-    /// files at all — otherwise a screenshot run would write its window
-    /// geometry into a person's real settings and the next run would open
-    /// on it. [`Env::automated`] is how a caller works it out, but only a
-    /// build carrying a verification harness ever asks: what ships passes
+    /// A machine is driving this run, so it gets no files at all —
+    /// otherwise a screenshot run would write its window geometry into a
+    /// person's real settings and the next run would open on it.
+    /// [`Env::automated`] is how a caller works it out, but only a build
+    /// carrying a verification harness ever asks: what ships passes
     /// `false` without reading the environment.
     pub driven: bool,
 }
@@ -131,13 +131,13 @@ impl Build<'_> {
 
 impl Store {
     /// Windows separates the two by roaming: settings follow a person to
-    /// another machine, a window position must not. Linux has the same
+    /// another machine, a window position stays. Linux has the same
     /// split spelled out in the XDG spec. macOS has no such convention, so
     /// both sit in Application Support.
     ///
-    /// A base directory that is not in the environment is not guessed at —
-    /// the store simply has no files rather than inventing a path to write
-    /// into.
+    /// A base directory the environment does not name leaves the store
+    /// with no files at all — every path comes from the environment
+    /// itself.
     pub(super) fn platform_paths(platform: Platform, env: &Env, build: Build) -> Self {
         let (settings_base, state_base) = match platform {
             Platform::Windows => (
@@ -242,7 +242,7 @@ mod tests {
         // separator — and the assertion could only ever hold on one of the
         // three operating systems. Windows reads both separators, so this is
         // the spelling every host agrees on, and what is under test is which
-        // base directory each file lands in, not how a path is punctuated.
+        // base directory each file lands in.
         let windows = Store::locate(
             Platform::Windows,
             &Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("LOCALAPPDATA", "C:/Local")]),

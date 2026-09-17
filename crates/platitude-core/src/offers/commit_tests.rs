@@ -1,7 +1,7 @@
 //! The rules a commit row answers to: the rows its own menu offers.
 //!
-//! Beside [`super::tests`] rather than in it: the ref menu's rows and
-//! these share nothing but the module they are declared from
+//! Beside [`super::tests`]: the ref menu's rows and these share
+//! nothing but the module they are declared from
 //! (structure.md §分割).
 
 use super::*;

@@ -22,8 +22,8 @@ async fn tag_only_commits_follow_the_include_tags_option() {
     let (sink, session) = open_unawaited(&repo);
 
     // Tags are walked by default, so the settled opening has two rows —
-    // the tag-only commit included. The chips ride the refs snapshot, not
-    // the walk: a pass that beats the opening refs read lands its rows
+    // the tag-only commit included. The chips ride the refs snapshot:
+    // a pass that beats the opening refs read lands its rows
     // bare, and the chips catch up as a `LabelsChanged` diff onto the
     // same generation. So what "is drawn" is the union of the two
     // (`drawn_at`), read off the settled opening, where the refs are in
@@ -130,8 +130,8 @@ fn drawn_at(events: &[SessionEvent], generation: u64) -> Vec<LabelKind> {
 ///
 /// The opening runs this same exchange with the scheduler picking the
 /// order, and the losing order — a pass landing before the opening refs
-/// read — turned up as a full-suite flake (a bare 2-row swap read as "no
-/// tags drawn"), not as a test. Here the order is held by construction:
+/// read — turned up as a full-suite flake (a bare 2-row swap read as
+/// "no tags drawn"). Here the order is held by construction:
 /// the ref arrives while nothing is in flight, and each half lands
 /// behind its own completion boundary.
 #[tokio::test(flavor = "multi_thread")]
@@ -187,12 +187,12 @@ async fn chips_catch_up_when_the_refs_read_lands_last() {
     );
 
     // The catch-up also patched the delivered-rows record: the next
-    // rebuild finds the picture it would draw already on screen, instead
-    // of seeing a phantom difference and swapping an identical graph.
-    // The flight boundary first: the refs reader asks for a rebuild of its
-    // own right after the diff — from inside its pass, so that this
-    // boundary covers the ask — and the tracked one below must supersede
-    // it, not be superseded by it.
+    // rebuild finds the picture it would draw already on screen, and
+    // has an identical graph to leave alone.
+    // The flight boundary first: the refs reader asks for a rebuild of
+    // its own right after the diff — from inside its pass, so that this
+    // boundary covers the ask — and the tracked one below is the one
+    // that supersedes.
     crate::support::wait::bounded("the refs read flight", session.wait_for_snapshot_reads()).await;
     let outcome = crate::support::wait::bounded(
         "the rebuild after the catch-up",
@@ -234,7 +234,7 @@ async fn log_limit_truncates_the_window() {
 
 /// A stash's synthetic index parent is walked but sifted out of the
 /// shown rows, so the shown count sits below the window limit even when
-/// the walk was cut — truncation must follow the walk, not the rows.
+/// the walk was cut — truncation must follow the walk.
 #[tokio::test(flavor = "multi_thread")]
 async fn truncation_follows_the_walk_not_the_shown_rows() {
     let mut repo = TestRepo::init();
@@ -263,12 +263,12 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
     session.close();
 }
 
-/// The synthetic WIP row is shown but never walked: a window that holds
-/// the whole history must not report truncation just because the WIP row
-/// pushes the shown count up to the limit.
+/// The synthetic WIP row is shown but never walked: a window that
+/// holds the whole history says so, whatever the WIP row does to the
+/// shown count.
 ///
-/// Reached by widening a window that really was cut, rather than by
-/// opening the wide one straight away. Both say the same thing about the
+/// Reached by widening a window that really was cut. Both that and
+/// opening the wide one straight away say the same thing about the
 /// WIP row, but only the widening changes the graph — and a change is
 /// what makes the answer arrive at all. Going straight to the wide window
 /// leaves the rows *and the footer* exactly as the opening pass left them
@@ -317,8 +317,8 @@ async fn the_wip_row_does_not_trigger_truncation() {
 ///
 /// Held in the swap that adds the WIP row, the interleaving is exact: the
 /// stream cannot reach its cancel check until the rebuild behind it has
-/// taken its place. Left to the scheduler it is rare — it turned up as a
-/// flake on a machine running three other builds, not as a test.
+/// taken its place. Left to the scheduler it is rare — it turned up
+/// as a flake on a machine running three other builds.
 // `worker_threads = 2` is the test's own premise: the hook below parks a
 // worker on a blocking `recv`, and a pool inherited from the host can be
 // one thread on a small runner — the parked hook then owns it all.
@@ -383,7 +383,7 @@ async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
 /// that can say the history is no longer cut — and a comparison that only
 /// looks at rows finds nothing to do, leaving the notice claiming history
 /// the user just asked to see.
-// `worker_threads = 2`: the parked hook must not own the only worker
+// `worker_threads = 2`: the parked hook needs a worker to spare
 // (see the sibling above).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_window_change_only_the_footer_notices_still_lands() {
@@ -438,11 +438,11 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
     session.close();
 }
 
-/// Growing the window is what the graph's tail offers, and it must land
-/// **without starting the stream over**: the press is made at the bottom
-/// of a graph somebody is reading, and a restart clears the rows and
-/// sends them back to the top (`run_direct_pass`). So the wider walk
-/// arrives as a replacement, spliced in under what is already drawn.
+/// Growing the window is what the graph's tail offers, and it lands
+/// **as a replacement**: the press is made at the bottom of a graph
+/// somebody is reading, and a restart clears the rows and sends them
+/// back to the top (`run_direct_pass`). So the wider walk is spliced
+/// in under what is already drawn.
 #[tokio::test(flavor = "multi_thread")]
 async fn growing_the_window_walks_further_without_starting_over() {
     let mut repo = TestRepo::init();
@@ -476,9 +476,9 @@ async fn growing_the_window_walks_further_without_starting_over() {
     session.close();
 }
 
-/// The step is measured from the window the graph *opened* with, not
-/// from the one it has grown to: a reader who has pressed four times
-/// gets the same amount on the fifth press as on the first.
+/// The step is measured from the window the graph *opened* with: a
+/// reader who has pressed four times gets the same amount on the
+/// fifth press as on the first.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_step_stays_a_quarter_of_the_window_the_graph_opened_with() {
     let mut repo = TestRepo::init();
@@ -495,9 +495,9 @@ async fn the_step_stays_a_quarter_of_the_window_the_graph_opened_with() {
 
     // The door the setting for the initial count comes through
     // (`settings::Defaults::initial_commits`). Under the floor the
-    // settings screen offers, because the floor is applied on the way in
-    // rather than here — what this pins is that the step follows whatever
-    // number arrives.
+    // settings screen offers, because the floor is applied on the way
+    // in — what this pins is that the step follows whatever number
+    // arrives.
     session.set_log_limit(Some(400));
     assert_eq!(session.log_window_step(), 100);
 

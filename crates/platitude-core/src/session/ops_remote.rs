@@ -11,8 +11,8 @@ impl RepoSession {
     /// nearer the working tree than that ([`AfterWrite::Refs`]).
     ///
     /// **What the press gives up**: with nothing brought down it no
-    /// longer doubles as a status poll, so a tree made dirty outside this
-    /// window lands on the following tick rather than on the button.
+    /// longer doubles as a status poll, so a tree made dirty outside
+    /// this window lands on the following tick.
     pub fn fetch(self: &Arc<Self>, remote: Option<String>) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
@@ -47,11 +47,11 @@ impl RepoSession {
     ///
     /// It is the one refusal with an answer: the fetch is what shows which
     /// commits the remote actually holds — the graph then draws both sides,
-    /// so what an overwrite would remove can be seen rather than described —
+    /// so what an overwrite would remove can be seen —
     /// and it is also what re-arms the lease, which is pinned to a commit
     /// the remote has left and would be turned down again as it stands.
     ///
-    /// Queued rather than run here, so it reports and refreshes like any
+    /// Queued, so it reports and refreshes like any
     /// other fetch — under an id of its own, which nobody holds: the
     /// push's answer is the push's. The push still fails: nothing is
     /// retried, and the next move is whoever is looking at it to make.
@@ -65,9 +65,9 @@ impl RepoSession {
 
     /// Pushes the branch that is checked out to wherever it belongs.
     ///
-    /// Resolving the target is part of the job rather than something the
-    /// UI works out: which remote a branch tracks lives in configuration,
-    /// and a name like `origin/main` cannot be split back apart reliably.
+    /// Resolving the target is part of the job: which remote a branch
+    /// tracks lives in configuration, and a name like `origin/main`
+    /// cannot be split back apart reliably.
     pub fn push_current(
         self: &Arc<Self>,
         fallback_remote: String,
@@ -147,12 +147,12 @@ impl RepoSession {
     /// Marks where a push goes when no branch says otherwise, or clears the
     /// mark (`remote.pushDefault`).
     ///
-    /// An empty name clears it. **That reaches the repository's own config
-    /// only** — a value set globally stays, and git has no local spelling
-    /// for "not set" that would shadow it (measured: an empty local value is
-    /// "no destination", not "unset"). Moving the mark to another remote is
-    /// what a repository has against a global one, and that is a set rather
-    /// than a clear.
+    /// An empty name clears it. **That reaches the repository's own
+    /// config only** — a value set globally stays, and git has no local
+    /// spelling for "not set" that would shadow it (measured: an empty
+    /// local value means "no destination"). Moving the mark to another
+    /// remote is what a repository has against a global one, and that
+    /// is a set.
     ///
     /// Goes through the write queue for the refresh behind it: the mark is
     /// in the refs snapshot, and the sidebar reads it from there.
@@ -183,14 +183,14 @@ impl RepoSession {
 
     /// Asks whether a remote already carries a branch name, so a first push
     /// can tell "this creates a branch" from "this advances one somebody
-    /// else made". A read, not a write — but one that reaches the network,
-    /// which is why it is only asked while that question is on screen.
+    /// else made". A read that reaches the network, which is why it is
+    /// only asked while that question is on screen.
     ///
-    /// One at a time: the name is asked about as it is typed, and a new
-    /// ask cancels the round trip the last one started rather than
-    /// letting two race for the far side (`session::latest`). A cancelled
-    /// ask answers nothing — the one that displaced it is the one the
-    /// question is waiting on.
+    /// One at a time: the name is asked about as it is typed, and a
+    /// new ask cancels the round trip the last one started
+    /// (`session::latest`). A cancelled ask answers nothing — the
+    /// one that displaced it is the one the question is waiting
+    /// on.
     pub fn check_remote_branch(self: &Arc<Self>, remote_name: String, branch: String) {
         let Some(workdir) = self.workdir() else {
             return;
@@ -228,7 +228,7 @@ impl RepoSession {
                         // has to say what it takes off — the commit is in
                         // this repository (that is how the comparison was
                         // answered at all), so the walk can count them. A
-                        // walk that failed anyway must not answer "nothing":
+                        // walk that failed leaves `Unknown`, since
                         // `theirs` is only trusted under `Refused`.
                         Ok(false) => {
                             match commit::count_beyond_head(
@@ -252,10 +252,10 @@ impl RepoSession {
                 // A newer ask took the question over: nothing to answer.
                 Err(e) if e.is_cancelled() => return,
                 // A remote that cannot be reached answers too, and the
-                // failure is not raised as one: the question is standing
-                // and about to say so itself, so opening the command log
-                // over it would say the same thing twice (the command is
-                // recorded either way).
+                // failure stays off the error surface: the question is
+                // standing and about to say so itself, so opening the
+                // command log would say the same thing twice
+                // (the command is recorded either way).
                 Err(_) => remote::RemoteBranchState::Unreachable,
             };
             if cancel.is_cancelled() {
@@ -332,7 +332,7 @@ impl RepoSession {
 
     /// Renames a branch on a remote, which git does as a push and a delete
     /// (see [`remote::rename_remote_branch`]). The UI asks first: the old
-    /// name is destroyed, not moved.
+    /// name is destroyed.
     pub fn rename_remote_branch(
         self: &Arc<Self>,
         remote_name: String,

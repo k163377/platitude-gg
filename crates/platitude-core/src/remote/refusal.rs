@@ -84,9 +84,9 @@ pub(super) fn refused(
 /// holds, and every one of those has a next move here. A host that could
 /// not be reached prints no ref lines at all, so silence answers `None`.
 ///
-/// The explanation is the far side's, never ours: its `remote:` lines
-/// where it wrote any, and git's own parenthetical where it wrote none
-/// (a bare `receive-pack` refusing a deletion says nothing else).
+/// The explanation is the far side's: its `remote:` lines where it wrote
+/// any, and git's own parenthetical where it wrote none (a bare
+/// `receive-pack` refusing a deletion says nothing else).
 fn refused_reason(porcelain: &str, stderr: &str) -> Option<String> {
     let mut summary = None;
     for line in porcelain.lines() {
@@ -148,7 +148,7 @@ fn remote_words(stderr: &str) -> String {
 ///
 /// The same shape as [`remote_words`] and for the same reason: nobody
 /// over there said anything, so what goes under the heading is the
-/// explanation git wrote, quoted rather than rewritten.
+/// explanation git wrote, quoted as it stands.
 ///
 /// **Advice can be switched off** (`advice.pushNonFastForward=false`, and
 /// a git that words its hints differently from one release to the next),
@@ -250,9 +250,9 @@ mod tests {
     }
 
     /// A refusal the remote decided on its own terms. Fetching tells us
-    /// nothing about it, so it must not be dressed up as something to
-    /// retry — and neither must a host that never answered, which prints
-    /// no ref lines at all.
+    /// nothing about it, so it stays a plain refusal with no next move —
+    /// and so does a host that never answered, which prints no ref lines
+    /// at all.
     #[test]
     fn refusals_a_fetch_cannot_help_with_are_left_alone() {
         assert!(!is_outdated(REFUSED_BY_THE_FAR_SIDE));

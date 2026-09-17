@@ -38,10 +38,10 @@ pub struct StashEntry {
 }
 
 /// What the working tree lets a stash do. Every refusal here is git's
-/// own, measured rather than guessed (rules-refs/app-ui.md §stash):
-/// before the first commit git turns the write down flat however dirty
-/// the folder is; with a file unmerged it refuses the whole write, not
-/// the unmerged path.
+/// own, measured (rules-refs/app-ui.md §stash): before the first
+/// commit git turns the write down flat however dirty the folder is;
+/// with a file unmerged it refuses the whole write, not the unmerged
+/// path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StashStanding {
     /// No commit yet ("You do not have the initial commit yet").
@@ -208,10 +208,10 @@ pub async fn push(
 /// `git stash pop <selector>`: restores and removes the entry.
 ///
 /// Answers by code for the same reason [`pop_with_index`] does: exit 1
-/// covers both a restore that landed conflicted and one that did nothing,
-/// so it is data for the caller to weigh against the working tree, not a
-/// failure to report on sight. Whether it turns out to be one is said by
-/// the write it belongs to.
+/// covers both a restore that landed conflicted and one that did
+/// nothing, so it is data for the caller to weigh against the working
+/// tree. Whether it turns out to be a failure is said by the write it
+/// belongs to.
 pub async fn pop(
     executor: &GitExecutor,
     workdir: &Path,
@@ -228,11 +228,11 @@ pub async fn pop(
 /// `git stash pop --index`: restores the entry *and* the split between
 /// what was staged in it and what was not.
 ///
-/// Non-zero exit does not mean nothing happened. When the restore
+/// Exit 1 covers a conflict and a no-op alike. When the restore
 /// conflicts git gives up on the index part ("Index was not unstashed"),
-/// leaves the markers in the files and **keeps the entry** — which is what
-/// leaves a way back. Callers decide what that is worth by looking at the
-/// working tree afterwards, not at the exit code.
+/// leaves the markers in the files and **keeps the entry** — which is
+/// what leaves a way back. Callers decide what that is worth by looking
+/// at the working tree afterwards.
 pub async fn pop_with_index(
     executor: &GitExecutor,
     workdir: &Path,
@@ -248,10 +248,10 @@ pub async fn pop_with_index(
 
 /// `git stash apply <selector>`: restores and keeps the entry.
 ///
-/// Answers by code for the same reason [`pop`] does: exit 1 covers both a
-/// restore that landed conflicted and one that did nothing, so it is data
-/// for the caller to weigh against the working tree, not a failure to
-/// report on sight.
+/// Answers by code for the same reason [`pop`] does: exit 1 covers both
+/// a restore that landed conflicted and one that did nothing, so it is
+/// data for the caller to weigh against the working tree as it stands
+/// afterwards.
 pub async fn apply(
     executor: &GitExecutor,
     workdir: &Path,
@@ -267,9 +267,9 @@ pub async fn apply(
 
 /// Whether a string can be a stash's label.
 ///
-/// Not a ref name — a stash is named by its reflog subject, which is free
-/// text — so the only rules are the reflog's own: one line, and something
-/// on it.
+/// A stash is named by its reflog subject, which is free text, so the
+/// only rules are the reflog's own: one line of it, and something
+/// on that line.
 pub fn is_valid_message(message: &str) -> bool {
     !message.trim().is_empty() && !message.chars().any(|c| c.is_control())
 }
@@ -282,8 +282,8 @@ pub fn is_valid_message(message: &str) -> bool {
 ///   with no message. That names the commit the work was standing on, not
 ///   the work, so nobody gave this one a label and it answers empty.
 /// - `On <branch>: <label>` — an entry pushed with `--message`. The prefix
-///   is cut at the first `": "` and not at the first space: a detached
-///   HEAD puts `(no branch)` in that slot.
+///   is cut at the first `": "`, since a detached HEAD puts
+///   `(no branch)` in that slot.
 /// - `<label>` — an entry put on the reflog by `stash store`, which is
 ///   what [`rename`] is built out of; there is no branch for it to name.
 ///
@@ -291,7 +291,7 @@ pub fn is_valid_message(message: &str) -> bool {
 /// git cannot tell a label that opens like one of its own from the prefix
 /// it writes, and neither can this: `On second thought: …` loses its first
 /// words, and a label opening `WIP on ` answers empty. Both are recorded
-/// rather than fixed — the caller reads an empty answer as "nobody named
+/// as they stand — the caller reads an empty answer as "nobody named
 /// this one", which is what an entry pushed without a message is.
 #[must_use]
 pub fn label_in(message: &str) -> &str {

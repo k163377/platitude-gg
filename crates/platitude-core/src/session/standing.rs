@@ -5,16 +5,16 @@
 //! their reports land: HEAD, whether anything else holds its tip, whether
 //! a remote already has the commit it is on, and what the last status saw
 //! of the standing operation. Everything that wants one of those answers
-//! reads it from here rather than asking git again, and everything that
-//! reports one goes through here rather than keeping a copy
+//! reads it from here, and everything that reports one goes through
+//! here
 //! (CLAUDE.md 性能予算; デザイン規約 §行が読む答えはどこから来るか).
 //!
 //! **Newer wins, and a write is a clock.** Two reads can land in the
 //! wrong order — a poll's status that began before a commit and landed
-//! after the commit's own read — and the stale one must not overwrite what
-//! the fresh one saw. Every read takes a stamp before it spawns git and
-//! offers its report under that stamp; a write takes a stamp on its way
-//! out ([`Standing::fence`]), and a report stamped before that is refused.
+//! after the commit's own read — and what the fresh one saw is what
+//! stands. Every read takes a stamp before it spawns git and offers its
+//! report under that stamp; a write takes a stamp on its way out
+//! ([`Standing::fence`]), and a report stamped before that is refused.
 //! So HEAD here never moves backwards past a write, whichever read lands
 //! first, and no consumer has to order the reads for itself.
 //!
@@ -109,8 +109,8 @@ struct Inner {
     /// actions.
     head: Option<HeadState>,
     /// The stamp of the last write's end. A read that looked before it
-    /// may not speak for the repository after it — not its HEAD, and not
-    /// its listing either.
+    /// is refused for the repository after it — its HEAD and its
+    /// listing alike.
     fence: u64,
     /// The stamp of the report `head` came from. A report stamped
     /// earlier is older news about HEAD alone: the listing or the status
@@ -172,14 +172,14 @@ impl Default for Standing {
 
 impl Standing {
     /// A stamp for a read about to start: taken **before** git is
-    /// spawned, so what it orders is when the repository was looked at,
-    /// not when the answer came back.
+    /// spawned, so what it orders is when the repository was looked
+    /// at.
     pub(super) fn stamp(&self) -> u64 {
         self.stamps.fetch_add(1, Ordering::SeqCst) + 1
     }
 
-    /// A write has ended. Nothing observed before this moment may stand
-    /// for the repository after it, and the next read that reports is the
+    /// A write has ended. From here on the repository is spoken for by
+    /// reads begun after it, and the next read that reports is the
     /// one a consumer waiting on this write is owed ([`HeadOffer::Settled`]).
     ///
     /// Answers both numbers a consumer can wait on it by ([`Fence`]).
@@ -442,11 +442,11 @@ mod tests {
     }
 
     /// The other half of the same fence, for the consumers that wait on a
-    /// **listing** rather than on a report of HEAD: the stamp says when a
-    /// read looked, so one already in flight when the write ended is below
-    /// the fence and one begun after it is at or above — which is the only
-    /// thing that tells the two apart once they are travelling separate
-    /// feeds and arriving in no fixed order.
+    /// **listing**: the stamp says when a read looked, so one already in
+    /// flight when the write ended is below the fence and one begun after
+    /// it is at or above — which is the only thing that tells the two
+    /// apart once they are travelling separate feeds and arriving in no
+    /// fixed order.
     #[test]
     fn a_listing_that_looked_before_the_write_ended_is_below_the_fence() {
         let standing = Standing::default();
@@ -480,7 +480,7 @@ mod tests {
     /// The numbers run across records: a report of one is never numbered
     /// below a fence of another, so a landing armed by a session that has
     /// since closed is answered by the first report of the one that
-    /// replaced it rather than left waiting.
+    /// replaced it.
     #[test]
     fn the_numbers_run_across_records() {
         let one = Standing::default();

@@ -2,8 +2,8 @@
 //! code, pinned the way config_reads.rs pins the config ones: unmarked,
 //! each of these logged a failed row over an ordinary answer — the HEAD
 //! reads on every refresh and both graph passes of a detached or unborn
-//! repository (規約 core.md §終了コードで答える問い合わせはコマンドログの
-//! 失敗にしない).
+//! repository (規約 core.md §終了コードで答える問い合わせはコマンドログ
+//! でも答え).
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -93,7 +93,7 @@ async fn diffing_an_untracked_file_answers_by_code() {
 /// file this commit added, `HEAD:` before there is a HEAD, `:0:` for a
 /// staged deletion. `cat-file` says so by failing (exit 128, outside the
 /// 0/1 an answer is allowed), so the side is probed by a read that
-/// answers and `cat-file` never runs against nothing (`preview::blob_side`).
+/// answers and `cat-file` only runs on a real side (`preview::blob_side`).
 #[tokio::test]
 async fn previewing_a_side_that_is_not_there_answers_by_code() {
     let mut repo = TestRepo::init();
@@ -167,7 +167,7 @@ async fn colouring_a_deleted_file_answers_by_code() {
 
 /// Renaming a stash probes the shifted entry before dropping the old one;
 /// 0 is "where the store pushed it" and 1 is the refusing arm — either way
-/// an answer, not a failure.
+/// an answer.
 #[tokio::test]
 async fn renaming_a_stash_probes_by_code() {
     let mut repo = TestRepo::init();

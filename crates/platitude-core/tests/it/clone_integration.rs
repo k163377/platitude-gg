@@ -57,7 +57,7 @@ async fn the_folders_above_the_destination_are_made() {
     assert!(into.join("a.txt").is_file());
 }
 
-/// Nothing here checks the destination first: git refuses one that holds
+/// The destination is git's to judge: git refuses one that holds
 /// anything, and its answer is what the dialog shows
 /// (デザイン規約 §リポジトリを取り寄せる).
 #[tokio::test]

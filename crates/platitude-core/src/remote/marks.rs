@@ -1,6 +1,6 @@
-//! The push marks: where a push goes when configuration, rather than the
-//! command line, decides it — reading them, setting the repository's, and
-//! clearing it.
+//! The push marks: where a plain `git push` goes when configuration
+//! decides it — reading them, setting the repository's, and clearing
+//! it.
 
 use std::path::Path;
 
@@ -22,8 +22,8 @@ pub struct PushDefault {
     /// Whether this repository's own config is what says so.
     ///
     /// A value set anywhere else cannot be cleared from here. git has no
-    /// local spelling for "not set" — an empty local value is not "unset"
-    /// but "no destination at all", and a plain `git push` then fails with
+    /// local spelling for "not set" — an empty local value means "no
+    /// destination at all", and a plain `git push` then fails with
     /// `No configured push destination.` (measured). Marking another remote is
     /// the only move a repository has against a global value.
     pub local: bool,
@@ -47,7 +47,7 @@ pub async fn push_default(
 ) -> Result<Option<PushDefault>, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        // Unset is the usual state and it is an answer, not a failure.
+        // Unset is the usual state and it is an answer.
         .answers_by_code(1)
         .args([
             "config",
@@ -181,9 +181,9 @@ fn parse_push_marks(branch: &str, bytes: &[u8]) -> PushMarks {
 /// `git config remote.pushDefault <name>` — marks where pushes go.
 ///
 /// The old spelling on purpose (規約 git最低バージョン整合: `git config
-/// set` is 2.46). No `--end-of-options`: git stops looking for options
-/// after the key, so a remote actually named `-x` — which `remote add`
-/// will make — is taken as the value (measured, 2.55).
+/// set` is 2.46). The key ends the options: git stops looking for them
+/// after it, so a remote actually named `-x` — which `remote add` will
+/// make — is taken as the value (measured, 2.55).
 pub async fn set_push_default(
     executor: &GitExecutor,
     workdir: &Path,
@@ -200,7 +200,7 @@ pub async fn set_push_default(
 /// `git config --unset remote.pushDefault`.
 ///
 /// The key not being set is the state the caller asked for, and git says so
-/// with exit 5 (measured) rather than a failure.
+/// with exit 5 (measured).
 pub async fn clear_push_default(
     executor: &GitExecutor,
     workdir: &Path,
@@ -293,8 +293,8 @@ mod tests {
 
     /// The two spellings of "nothing here": an empty local value (the
     /// "no destination at all" state) and a key written bare, which
-    /// arrives as a record with no newline in it (measured, 2.55). Both must
-    /// override a level below rather than fall back to it.
+    /// arrives as a record with no newline in it (measured, 2.55). Both
+    /// override a level below.
     #[test]
     fn an_empty_or_bare_key_names_nothing_and_still_overrides() {
         let empty = parse_push_marks(
@@ -323,7 +323,7 @@ mod tests {
     }
 
     /// A branch name holding regex metacharacters is compared literally —
-    /// the escaping lives in the pattern, the parse must not re-interpret.
+    /// the escaping lives in the pattern, and the parse compares as text.
     #[test]
     fn a_metacharacter_branch_name_is_matched_literally() {
         let bytes: &[u8] = b"local\0branch.wip.v2+x.pushremote\nfork\0";

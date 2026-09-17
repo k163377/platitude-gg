@@ -84,8 +84,8 @@ impl GraphBuilder {
     }
 
     /// Like [`GraphBuilder::push`], but the first-parent edge leaving the
-    /// node draws dashed (stash rows: not part of committed history
-    /// proper).
+    /// node draws dashed (stash rows, which sit beside committed
+    /// history).
     pub fn push_with_edge_style(&mut self, commit: &CommitMeta, dashed_edge: bool) -> GraphRow {
         self.push_ids(&commit.oid, &commit.parents, dashed_edge)
     }
@@ -147,7 +147,7 @@ impl GraphBuilder {
         if let Some(p0) = parents.next() {
             if self.already_emitted(p0, oid) {
                 // Out-of-order stream: the edge cannot be drawn; leave the
-                // lane free rather than leaking it forever.
+                // lane free — occupying it leaks the lane.
             } else {
                 self.occupy(node_lane, *p0, node_color, dashed_edge);
                 segments.push(Segment {
@@ -323,12 +323,12 @@ impl GraphBuilder {
     /// Lane a fork edge to `parent` merges into: the lane already waiting
     /// for it that sits nearest to `near` (ties prefer the left side).
     ///
-    /// A leash lane is not one of them. Real history sharing it would draw
-    /// solid over the leash's whole run down to the shared parent, leaving
-    /// the stash (or WIP) hanging from a line that reads as committed —
-    /// which is what happens whenever the stash's base is also a merge's
-    /// second parent. The real edge opens its own lane instead, and both
-    /// arrive at the parent as separate curves.
+    /// A real edge passing a leash lane opens its own, and both arrive at
+    /// the parent as separate curves. Sharing the leash lane would draw
+    /// solid over its whole run down to the shared parent, leaving the
+    /// stash (or WIP) hanging from a line that reads as committed — which
+    /// is what happens whenever the stash's base is also a merge's second
+    /// parent.
     fn waiting_lane(&self, parent: &Oid, near: u16) -> Option<u16> {
         self.expects
             .get(parent)?
@@ -338,20 +338,20 @@ impl GraphBuilder {
             .copied()
     }
 
-    /// Whether a lane carries a synthetic leash rather than real history.
+    /// Whether a lane carries a synthetic leash.
     /// The colour the commit a row lands on will come out in, where a
     /// lane is already waiting for that commit.
     ///
     /// A commit takes the lowest lane that was waiting for it
     /// ([`Self::push_with_edge_style`]), so that lane's colour is the one
-    /// it will be drawn in — and a leash that borrows it is drawn beside
-    /// its own chain rather than beside a colour nothing else uses.
+    /// it will be drawn in — and a leash that borrows it is drawn
+    /// beside its own chain.
     fn color_waiting_for(&self, parent: &Oid) -> Option<u8> {
         let lane = self.expects.get(parent)?.iter().min()?;
         Some(self.lane_color(*lane))
     }
 
-    /// Whether a lane carries a synthetic leash rather than real history.
+    /// Whether a lane carries a synthetic leash.
     fn is_leash(&self, lane: u16) -> bool {
         self.lanes
             .get(lane as usize)

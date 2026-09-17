@@ -25,7 +25,7 @@ pub type Name = compact_str::CompactString;
 /// Interning pool for strings that repeat heavily (author names).
 ///
 /// Keeps per-commit metadata compact for very large repositories: commits
-/// store a `u32` id instead of an owned string.
+/// store a `u32` id.
 #[derive(Debug, Default)]
 pub struct StrPool {
     map: HashMap<Arc<str>, u32>,

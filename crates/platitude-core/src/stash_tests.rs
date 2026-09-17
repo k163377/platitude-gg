@@ -46,7 +46,7 @@ fn wrong_arity_is_an_error() {
 }
 
 /// Raw `stash list -z` bytes out of real git, committed under
-/// tests/fixtures/ and regenerated (never hand-edited) with:
+/// tests/fixtures/ and regenerated only with:
 /// `cargo test -p platitude-core --test it -- --ignored capture`
 #[test]
 fn committed_stash_fixture_parses() {
@@ -105,7 +105,7 @@ fn a_label_is_read_out_of_the_prefix_git_put_on_it() {
         label_in("On its own with no colon"),
         "On its own with no colon"
     );
-    // The two ambiguities, recorded rather than fixed: a label that
+    // The two ambiguities, recorded as they stand: a label that
     // opens the way one of git's prefixes does is read as one.
     assert_eq!(label_in("On second thought: revert it"), "revert it");
     assert_eq!(label_in("WIP on the parser"), "");

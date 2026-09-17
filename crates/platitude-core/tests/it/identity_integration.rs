@@ -1,8 +1,8 @@
 //! Author identity and commit signing on real repositories.
 //!
-//! Signing is exercised with SSH keys rather than OpenPGP: `ssh-keygen`
-//! ships with git on every supported platform, and a passphrase-less test
-//! key needs no agent. What is proven here is that the application's fixed
+//! Signing is exercised with SSH keys: `ssh-keygen` ships with git on
+//! every supported platform, and a passphrase-less test key needs no
+//! agent. What is proven here is that the application's fixed
 //! environment does not get in git's way — the passphrase path itself is
 //! gpg-agent's / ssh-agent's business and never touches this process.
 
@@ -19,8 +19,8 @@ use platitude_core::identity::{self, ConfigScope, SignatureFormat, SignatureStat
 use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor, Kept};
 use tokio_util::sync::CancellationToken;
 
-/// Records what was spawned, so a test can count processes rather than
-/// take the answer's word for how it was reached.
+/// Records what was spawned, so a test can count the processes a
+/// reading actually spends.
 #[derive(Default)]
 struct Spawns(Mutex<Vec<String>>);
 
@@ -60,8 +60,8 @@ impl CommandObserver for Spawns {
 
 fn counted() -> (GitExecutor, Arc<Spawns>, CancellationToken) {
     let spawns = Arc::new(Spawns::default());
-    // `false`: these are the reads a session makes on its own, and what the
-    // test counts is that they are spawned, not that they reach the log.
+    // `false`: these are the reads a session makes on its own, and
+    // what the test counts is that they are spawned.
     let (exec, cancel) = observed_env(spawns.clone(), Kept::Unasked);
     (exec, spawns, cancel)
 }
@@ -205,7 +205,7 @@ async fn writes_the_identity_and_leaves_sanitizing_to_git() {
 /// An identity is two `git config` calls, and the second one can fail on
 /// its own — the lock on the configuration file is taken and released per
 /// call, so another process can hold it for the second and not the first.
-/// The half that landed must not read as a finished identity: both halves
+/// The half that landed has to say which half it was: both halves
 /// are set, so `is_complete()` says yes while the address belongs to the
 /// identity the user was replacing.
 ///
@@ -237,8 +237,8 @@ async fn a_write_that_only_half_lands_says_which_half() {
     assert!(!written.email_saved, "the second one did not");
     assert!(!written.message.is_empty(), "git's own message comes back");
 
-    // What is reported is what git now holds, not what was asked for: the
-    // name moved, the address did not.
+    // What is reported is what git now holds: the name moved, the
+    // address stayed.
     assert_eq!(written.identity.name.as_deref(), Some("Work Name"));
     assert_ne!(
         written.identity.email.as_deref(),
@@ -252,8 +252,8 @@ async fn a_write_that_only_half_lands_says_which_half() {
 }
 
 /// A configuration file already locked by somebody else takes neither
-/// half. Nothing changes, and the answer says nothing changed rather than
-/// leaving the screen to guess.
+/// half. Nothing changes, and the answer says nothing changed, which
+/// is what the screen reads.
 #[tokio::test]
 async fn a_locked_configuration_takes_neither_half() {
     let mut repo = TestRepo::init();
@@ -280,8 +280,8 @@ async fn a_locked_configuration_takes_neither_half() {
     assert_eq!(written.identity.email.as_deref(), Some("test@example.com"));
 }
 
-/// A value starting with a dash must be stored as the value, not read as
-/// an option. `git config <key> -- <value>` stores "--", so no separator.
+/// A value starting with a dash is stored as the value.
+/// `git config <key> -- <value>` stores "--", so no separator.
 #[tokio::test]
 async fn a_dash_leading_identity_is_stored_verbatim() {
     let mut repo = TestRepo::init();
@@ -359,8 +359,8 @@ async fn commits_are_signed_and_verify_against_a_trusted_key() {
         &config_path(&key.with_extension("pub")),
     ]);
     repo.git(&["config", "commit.gpgsign", "true"]);
-    // The key file must not be world-readable for ssh-keygen to use it;
-    // that is the platform's business and holds by default here.
+    // ssh-keygen wants the key file readable by its owner alone; that
+    // is the platform's business and holds by default here.
 
     let (exec, cancel) = env();
     let repo_info = info(&repo).await;
@@ -378,8 +378,8 @@ async fn commits_are_signed_and_verify_against_a_trusted_key() {
 
     // Without an allowed-signers file git reports `%G?` as `N` — the same
     // code as an unsigned commit. Reading the object itself keeps a signed
-    // commit from being shown as unsigned, and "cannot check" must never
-    // read as verified.
+    // commit from being shown as unsigned; "cannot check" reads as
+    // signed but untrusted.
     let signature = identity::verify_commit(&exec, &repo.path, "HEAD", &cancel)
         .await
         .expect("verify");
@@ -407,7 +407,7 @@ async fn commits_are_signed_and_verify_against_a_trusted_key() {
     assert!(signature.status.is_trusted());
     assert_eq!(signature.signer, "test@example.com");
 
-    // An unsigned commit is reported as such, not as a failure.
+    // An unsigned commit is reported as such.
     repo.git(&["config", "commit.gpgsign", "false"]);
     repo.write_file("c.txt", "three\n");
     repo.git(&["add", "--", "c.txt"]);
@@ -485,9 +485,9 @@ async fn a_signed_commit_still_costs_the_verification() {
 //
 // The screen these answer for offers a repository from the tab strip and
 // two boxes standing empty for "not written here", so what has to hold is
-// that the two levels are told apart at all: an inherited value must not
-// arrive looking like an override, and an emptied box must take the key
-// out of one file without reaching the other.
+// that the two levels are told apart at all: an inherited value has to
+// arrive as inherited, and an emptied box must take the key out of one
+// file without reaching the other.
 
 /// A repository that writes nothing of its own inherits — and the two
 /// reads say so differently, which is the whole reason there are two.
@@ -601,7 +601,7 @@ async fn an_emptied_box_takes_the_override_out_and_leaves_the_global_alone() {
 }
 
 /// A save that asks for what the file already says spawns no write at
-/// all. Not thrift: `git config --unset` fails when there was nothing to
+/// all. The reason: `git config --unset` fails when there was nothing to
 /// unset, and it fails with the same exit code as its refusal to touch a
 /// key written twice (measured, git 2.55: both are 5), so reading first is what
 /// keeps a real failure from passing for a harmless one.

@@ -8,11 +8,11 @@ use crate::support::{Ends, TestRepo};
 use platitude_core::process::Kept;
 use platitude_core::stage::{self, DiscardSide};
 
-/// An empty selection is not "every path": every command here reads a
-/// missing pathspec as the whole work tree, and `git clean -f -d --` on
-/// its own would delete every untracked file. So nothing runs — not even
-/// the read of HEAD that two of them need before they can choose a
-/// command.
+/// An empty selection runs nothing, down to the read of HEAD that two
+/// of the commands need before they can choose one: every command here
+/// reads a missing pathspec as the whole work tree, and
+/// `git clean -f -d --` on its own would delete every untracked
+/// file.
 #[tokio::test]
 async fn an_empty_selection_runs_nothing() {
     let mut repo = TestRepo::init();
@@ -51,8 +51,8 @@ async fn an_empty_selection_runs_nothing() {
     assert_eq!(unstaged, vec!["a.txt"], "the edit is still there");
     assert_eq!(untracked, vec!["new.txt"], "and so is the untracked file");
 
-    // The same observer does hear a call that has something to do, so the
-    // silence above was the guard and not the watching.
+    // The same observer does hear a call that has something to do, so
+    // the silence above was the guard.
     stage::stage_paths(&exec, &repo.path, &["a.txt".to_string()], &cancel)
         .await
         .expect("stage a.txt");
@@ -270,7 +270,7 @@ async fn discard_chosen_pulls_a_staged_renames_old_name_from_status() {
 }
 
 /// A staged copy carries `orig_path` exactly like a rename, and its
-/// source must NOT ride along: the source is a live file with rows and
+/// source is left alone: the source is a live file with rows and
 /// choices of its own, and pulling it in would reset work the user
 /// never chose (measured: `status.renames=copies` + a copied-from-modified
 /// file reports `2 C.` with the source as `orig_path`).
@@ -308,8 +308,8 @@ async fn discard_chosen_leaves_a_staged_copys_source_alone() {
 }
 
 /// A file changed on both sides has a row in each bucket, and the side
-/// rides with the chosen row rather than being looked up again: the
-/// unstaged row's discard must not grow into the staged row's.
+/// rides with the chosen row: the unstaged row's discard stays the
+/// unstaged row's.
 #[tokio::test]
 async fn discard_chosen_on_the_unstaged_row_keeps_what_is_staged() {
     let mut repo = TestRepo::init();

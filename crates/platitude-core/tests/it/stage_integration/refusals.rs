@@ -35,7 +35,7 @@ async fn staging_a_commit_diff_is_rejected() {
 }
 
 /// A fresh `git init` has no HEAD and an empty index; emptying that index
-/// is a no-op, not a fatal (measured, without --ignore-unmatch,
+/// is a no-op (measured, without --ignore-unmatch,
 /// `git rm --cached -r -- .` exits 128 on "did not match any files").
 #[tokio::test]
 async fn unstage_all_on_an_unborn_empty_index_succeeds() {
@@ -47,9 +47,9 @@ async fn unstage_all_on_an_unborn_empty_index_succeeds() {
 }
 
 /// A selection that indexes a diff the file no longer produces is a
-/// refusal, not a write that quietly did nothing: the graph refresh
-/// after a "successful" no-op would show the user nothing happened,
-/// with no words saying why.
+/// refusal: the graph refresh after a "successful" no-op would show
+/// the user nothing happened, with no words saying
+/// why.
 #[tokio::test]
 async fn a_vanished_selection_is_an_error_not_a_silent_success() {
     let mut repo = TestRepo::init();
@@ -86,9 +86,9 @@ async fn a_vanished_selection_is_an_error_not_a_silent_success() {
     assert!(err.report().is_some(), "{err}");
 }
 
-/// A failed partial stage of an untracked file must not leave the
-/// intent-to-add mark behind — the file would silently change buckets
-/// (and with it, which discard the row offers).
+/// A failed partial stage of an untracked file takes the intent-to-add
+/// mark back off — one left behind changes the file's bucket (and
+/// with it, which discard the row offers).
 #[tokio::test]
 async fn a_failed_untracked_partial_stage_leaves_the_file_untracked() {
     let mut repo = TestRepo::init();
@@ -247,8 +247,8 @@ async fn a_stale_untracked_selection_is_refused_before_the_mark() {
 /// A conflicted file's diff is the combined form, which has no single old
 /// side for a rebuilt patch to sit on — `git apply` refuses the shape
 /// outright. The pane withholds the pieces there, so nothing should ask;
-/// this is the floor under that, and it must say so in this app's words
-/// rather than let git complain about a fragment nobody wrote.
+/// this is the floor under that, and it says so in this app's own
+/// words.
 #[tokio::test]
 async fn no_part_of_a_conflicted_file_can_be_taken_or_thrown_away() {
     let mut repo = TestRepo::init();
@@ -300,7 +300,7 @@ async fn no_part_of_a_conflicted_file_can_be_taken_or_thrown_away() {
         "{err}"
     );
 
-    // Refused, not half-done: the path is still exactly as git left it.
+    // Refused: the path is still exactly as git left it.
     let s = status::load(&exec, &repo.path, &cancel)
         .await
         .expect("status");

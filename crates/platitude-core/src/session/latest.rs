@@ -20,7 +20,7 @@ pub(super) struct Latest {
 impl Latest {
     /// A token for the ask about to go out, with whatever ask held the
     /// slot before it cancelled. Called before the task is spawned, so the
-    /// order is the order the asks were made rather than the order they
+    /// order is the order the asks were made, whichever turn they
     /// are scheduled in.
     pub(super) fn begin(&self, parent: &CancellationToken) -> CancellationToken {
         let cancel = parent.child_token();
@@ -31,8 +31,8 @@ impl Latest {
     }
 
     /// [`Self::begin`] with a number for the ask off `counter`, taken
-    /// under the same lock as the slot: two asks racing here must not have
-    /// the larger number cancelled by the smaller, or the consumer picking
+    /// under the same lock as the slot: of two asks racing here, the
+    /// larger number outlives the smaller, else the consumer picking
     /// by number waits on an answer that was cancelled.
     pub(super) fn begin_numbered(
         &self,

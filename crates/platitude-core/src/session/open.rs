@@ -33,9 +33,9 @@ impl RepoSession {
     }
 
     /// [`RepoSession::open`], with what the command log keeps decided
-    /// before the first git command is spawned rather than after the
-    /// handle comes back — which is the only way to be sure of how much
-    /// of an opening it holds (see [`Recording`]).
+    /// before the first git command is spawned — which is the only way
+    /// to be sure of how much of an opening it holds (see
+    /// [`Recording`]).
     pub fn open_recording(
         executor: GitExecutor,
         runtime: tokio::runtime::Handle,
@@ -118,9 +118,9 @@ impl RepoSession {
             auto_fetch_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             open_fetch: Mutex::new(OpenFetchState::Unasked),
         });
-        // The handle is kept, not dropped: the application's shutdown
-        // joins the loop so a local write in flight ends before the
-        // runtime does (`RepoSession::take_write_join`).
+        // The handle is kept: the application's shutdown joins the loop
+        // so a local write in flight ends before the runtime does
+        // (`RepoSession::take_write_join`).
         let write_loop = runtime.spawn(Arc::clone(&session).write_loop(write_rx));
         *relock(&session.write_join) = Some(write_loop);
 
@@ -138,13 +138,13 @@ impl RepoSession {
                     // (`session::write_order`).
                     s.join_write_order(&info);
                     s.sink.event(SessionEvent::Opened { info });
-                    // The network before the reads: a round trip is the
-                    // longest thing an opening starts, and starting it
-                    // first is what lets the reads below run inside it
-                    // rather than in front of it. It holds nothing up —
-                    // the reads do not wait on the write queue, and what
-                    // the fetch brings down is published by its own
-                    // refresh rather than read a second time
+                    // The network before the reads: a round trip is
+                    // the longest thing an opening starts, and
+                    // starting it first is what lets the reads below
+                    // run inside it. It holds nothing up — the reads
+                    // do not wait on the write queue, and what the
+                    // fetch brings down is published by its own
+                    // refresh
                     // (`AfterWrite::Graph`).
                     let fetching = s.take_open_fetch(&workdir).await;
                     // Before anything else: a missing identity turns the
@@ -155,12 +155,12 @@ impl RepoSession {
                     s.refresh_quick();
                     // A fetch reads what the remotes carry under
                     // `refs/tags/` on its way out, so only an opening
-                    // without one has anything left to ask. Not from
+                    // without one has anything to ask. Asked here:
                     // `set_auto_fetch`, which the application calls the
-                    // instant this session is handed over — there is no
-                    // workdir to read from until the lines above, and the
-                    // interval it installs is what grants permission to
-                    // look at all.
+                    // instant this session is handed over, has no
+                    // workdir to read from until the lines above, and
+                    // the interval it installs is what grants
+                    // permission to look at all.
                     if !fetching {
                         s.catch_up_remote_tags();
                     }

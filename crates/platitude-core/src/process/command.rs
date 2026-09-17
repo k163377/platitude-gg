@@ -8,12 +8,12 @@ use std::time::Duration;
 use super::slots::Pace;
 use crate::operation::OperationId;
 
-/// Wraps a path from git's own output so git reads it back as that exact
-/// path, never as pathspec magic (a file really named `:(glob)x` has to
+/// Wraps a path from git's own output so git reads it back as that
+/// exact path (a file really named `:(glob)x` has to
 /// round-trip).
 ///
-/// Only for arguments git parses as pathspecs. `git diff --no-index` takes
-/// filenames, not pathspecs, and must not be given a prefix.
+/// Only for arguments git parses as pathspecs. `git diff --no-index`
+/// takes filenames, which go in bare.
 pub fn literal_pathspec(path: &str) -> String {
     format!(":(literal){path}")
 }
@@ -37,15 +37,15 @@ pub enum CommandEnd {
     /// The process ran and returned this code (`-1` = killed by a signal).
     Exited(i32),
     /// The process ran and its code is one of the answers the command
-    /// named, not a failure (`merge-base --is-ancestor` says "no" with 1;
-    /// a marked command's 0 lands here too, so the log can tell an
-    /// answer-shaped read from a plain success). The log keeps the row
-    /// and its code; it just does not raise itself.
+    /// named (`merge-base --is-ancestor` says "no" with 1; a marked
+    /// command's 0 lands here too, so the log can tell an answer-shaped
+    /// read from a plain success). The log keeps the row and its
+    /// code, quietly.
     Answered(i32),
     TimedOut,
     Cancelled,
     /// git never started, or the pipes died under it. The reported message
-    /// is the reason rather than git's own output.
+    /// is the reason.
     Failed,
 }
 
@@ -69,8 +69,8 @@ pub enum Kept {
 
 /// Watches every git invocation, for the command log.
 ///
-/// Called from tokio worker threads, on the hot path of every command:
-/// implementations must not block.
+/// Called from tokio worker threads, on every command's hot path:
+/// implementations return at once.
 pub trait CommandObserver: Send + Sync + 'static {
     /// Whether this handle's invocations are being kept at all. Asked
     /// before the strings are built, so the reads a repository page makes
@@ -138,8 +138,8 @@ impl GitCommand {
 
     /// Marks a command paced by something other than this machine — the
     /// far end of a network connection, a credential helper's prompt, a
-    /// person in another program — so the slot it sits in is never one
-    /// of the click's reserve ([`super::slots::Pace`]). Set
+    /// person in another program — so the slot it sits in is outside
+    /// the click's reserve ([`super::slots::Pace`]). Set
     /// by the builders that know: the fetches, pushes and `ls-remote`s,
     /// the clone, the merge tool, the signature check that runs gpg.
     pub fn paced_elsewhere(mut self) -> Self {
@@ -147,8 +147,8 @@ impl GitCommand {
         self
     }
 
-    /// Marks the exit code this command answers with rather than fails on,
-    /// so the command log keeps the row without raising itself over it
+    /// Marks the exit code this command answers with, so the command
+    /// log keeps the row without raising itself over it
     /// (デザイン規約 §git が言ったことを読む場所). Named per command: a code
     /// means what the command that returned it says it means.
     pub fn answers_by_code(mut self, code: i32) -> Self {

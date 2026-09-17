@@ -2,9 +2,9 @@
 //! of one of git's own files and written back into it.
 //!
 //! **This is the settings screen's, and only the settings screen's.** The
-//! warning that reads the same key (`attrs::normalises`) has no way in here
-//! and is never getting one — a notice that offers to fix itself is where
-//! every other GUI's line-ending accident starts (デザイン規約 §改行コード
+//! warning that reads the same key (`attrs::normalises`) only reads it —
+//! a notice that offers to fix itself is where every other GUI's
+//! line-ending accident starts (デザイン規約 §改行コード
 //! の警告). What a reader changes here they came here to change.
 //!
 //! Nothing here converts a file. git does that, or does not, according to
@@ -34,10 +34,10 @@ const READ_NAMED: &str = "git config --get-regexp core.autocrlf";
 
 /// The three answers git takes for `core.autocrlf`.
 ///
-/// Not a `bool` with a third state bolted on: `input` is neither of the
-/// other two — it converts on the way into the index and leaves the
-/// working tree alone — and a caller that only wants to know whether git
-/// converts asks [`AutoCrlf::normalises`] rather than reading the variant.
+/// Three values of its own: `input` is neither of the other two — it
+/// converts on the way into the index and leaves the working tree
+/// alone — and a caller that only wants to know whether git converts
+/// asks [`AutoCrlf::normalises`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AutoCrlf {
     /// Store LF, check out CRLF.
@@ -125,8 +125,8 @@ impl AutoCrlf {
 
     /// The effective value of a `-z` read that may hold a record per level.
     ///
-    /// **The last record wins**, which is the whole reason the read is
-    /// never deduplicated (`config::parse_z_records`).
+    /// **The last record wins**, which is the whole reason the read
+    /// keeps every record (`config::parse_z_records`).
     fn of_records(out: &[u8]) -> Option<Self> {
         let mut held = None;
         for record in config::parse_z_records(out) {
@@ -158,10 +158,10 @@ pub async fn held(
 /// What git would use in `workdir`, whichever of its files that came out
 /// of — including the one the reader cannot write from here.
 ///
-/// On Windows that last part is the common case rather than an edge: the
-/// Git for Windows installer writes `core.autocrlf=true` into the system
-/// configuration, so a global level that sets nothing still converts
-/// (measured, and the trap `attrs::normalises` documents).
+/// On Windows that last part is the common case: the Git for Windows
+/// installer writes `core.autocrlf=true` into the system configuration,
+/// so a global level that sets nothing still converts (measured, and
+/// the trap `attrs::normalises` documents).
 pub async fn effective(
     executor: &GitExecutor,
     workdir: &Path,
@@ -173,9 +173,9 @@ pub async fn effective(
 
 /// What a [`set`] left behind.
 ///
-/// Read back from git rather than echoed, for the reason the identity's
-/// write reads itself back: the answer on screen has to be the file's, not
-/// the screen's own idea of what it asked for.
+/// Read back from git, for the reason the identity's
+/// write reads itself back: the answer on screen has to
+/// be the file's.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AutoCrlfWrite {
     /// What that file holds now.
@@ -186,12 +186,12 @@ pub struct AutoCrlfWrite {
     pub message: String,
 }
 
-/// Records `core.autocrlf` in one of git's files, where **`None` asks for
-/// the key to be taken out** rather than set to nothing.
+/// Records `core.autocrlf` in one of git's files, where **`None` asks
+/// for the key to be taken out**.
 ///
-/// What comes back is what that file holds afterwards ([`held`]), not what
-/// git would use: the question the screen asked was what this level sets,
-/// and the answer to that cannot be read at the effective level.
+/// What comes back is what that file holds afterwards ([`held`]): the
+/// question the screen asked was what this level sets, and the answer
+/// to that cannot be read at the effective level.
 ///
 /// **What the file already says is read first**, and a file that already
 /// says it is left alone. Not an optimisation: `git config --unset` fails
@@ -278,8 +278,8 @@ mod tests {
         }
     }
 
-    /// A word git will not run on reads as nothing rather than as a fourth
-    /// value: the picker can only offer what git accepts.
+    /// A word git will not run on reads as nothing: the picker can
+    /// only offer what git accepts.
     #[test]
     fn a_word_git_refuses_is_no_answer() {
         assert_eq!(read(Some("banana")), None);

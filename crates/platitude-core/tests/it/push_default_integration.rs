@@ -1,5 +1,5 @@
-//! Where a push goes when the repository, rather than the branch, decides
-//! it (`remote.pushDefault`) — against real git, with `file://` remotes so
+//! Where a push goes when the repository decides it
+//! (`remote.pushDefault`) — against real git, with `file://` remotes so
 //! nothing leaves the machine (実装計画 §11.3).
 //!
 //! Every expectation here was recorded from git itself before it was
@@ -98,8 +98,8 @@ async fn a_branchs_own_push_remote_beats_the_mark() {
     assert_eq!(plan.remote, "origin");
 }
 
-/// A branch nobody has pushed yet goes to the mark rather than to the
-/// fallback the caller offered, and records the upstream as a first push
+/// A branch nobody has pushed yet goes to the mark, over the fallback
+/// the caller offered, and records the upstream as a first push
 /// always has.
 #[tokio::test]
 async fn a_branch_with_no_upstream_goes_to_the_mark() {
@@ -207,8 +207,8 @@ async fn the_label_names_the_remote_the_send_uses() {
         ("origin", "fork"),
         ("origin", ""),
     ] {
-        // Exit 5 where the key was never there, which is the state asked
-        // for rather than a failure (measured).
+        // Exit 5 where the key was never there, which is the state
+        // asked for (measured).
         repo.git_ok(&["config", "--unset", "branch.main.pushRemote"]);
         remote::clear_push_default(&exec, &repo.path, &cancel)
             .await
@@ -244,8 +244,8 @@ async fn the_label_names_the_remote_the_send_uses() {
 
 /// The fork arrangement the label used to get wrong: the branch marks its
 /// own destination, the repository marks none, and the counts on screen
-/// are about the remote the branch tracks rather than the one it is going
-/// to.
+/// are about the remote the branch tracks while the push goes
+/// elsewhere.
 #[tokio::test]
 async fn a_branch_marked_at_a_fork_says_so() {
     let (_origin, _fork, mut repo) = origin_fork_and_clone();

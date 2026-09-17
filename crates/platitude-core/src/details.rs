@@ -24,14 +24,14 @@ use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 /// Author and committer are the mailmap spellings, for the same reason the
 /// graph log asks for them (`parse::log`) — and because these two have to
 /// agree: a person whose picture is drawn on their row in the graph would
-/// otherwise lose it the moment the row was clicked. **The trailers are
-/// not**: git applies no mailmap to them, and they are message text rather
-/// than a person field, so a co-author who also authors commits can appear
-/// under two spellings.
+/// otherwise lose it the moment the row was clicked. **The trailers
+/// are raw**: git applies no mailmap to them, and they are message
+/// text, so a co-author who also authors commits can appear under two
+/// spellings.
 ///
-/// The trailer field is git's own answer, not a scan of the message: the
-/// rules for what counts as a trailer (last paragraph, key: value shape,
-/// folded continuations) belong to git and are not worth reimplementing.
+/// The trailer field is git's own answer: the rules for what counts
+/// as a trailer (last paragraph, key: value shape, folded
+/// continuations) belong to git.
 /// `key=` matches case-insensitively, so the `Co-Authored-By` the tooling
 /// writes and the `Co-authored-by` the convention documents both land
 /// here. Values are joined with U+001F, which no address or name can
@@ -77,7 +77,7 @@ pub struct CommitDetails {
 
 /// Loads commit metadata and its changed-file list.
 ///
-/// **One invocation, not two.** `show` prints the file list after the
+/// **One invocation.** `show` prints the file list after the
 /// format expansion, so asking for both together spares the details pane
 /// a second process — and on Windows the process is the expensive part
 /// of a 100ms interaction budget: git's own work in this call is a
@@ -119,10 +119,10 @@ pub async fn commit_details(
 /// Splits the combined output into the `--format` record and the
 /// `--name-status` bytes behind it.
 ///
-/// The cut is counted in NULs — the record is exactly [`DETAILS_FIELDS`] of
-/// them — rather than found by looking for something that reads like a
-/// status line. A commit message is free to contain a line spelled
-/// `M\tsrc/main.rs`, and a scan would file it under changed files.
+/// The cut is counted in NULs — the record is exactly
+/// [`DETAILS_FIELDS`] of them. A commit message is free to contain a
+/// line spelled `M\tsrc/main.rs`, and a scan would file it under
+/// changed files.
 /// `show` writes one newline between the record and the list.
 fn split_record(bytes: &[u8]) -> Option<(&[u8], &[u8])> {
     let mut end = 0;
@@ -181,15 +181,15 @@ const UNION_MARK: u8 = 0x01;
 /// How many commit ids go on one command line. The ids **are** the
 /// arguments and Windows caps a command line at 32k, while one Shift
 /// click can sweep a choice over more rows than that
-/// (`GraphModel::oids_between`) — so the reading is chunked rather than
-/// capped, and every choice a person would actually make is still one
+/// (`GraphModel::oids_between`) — so the reading is chunked, and
+/// every choice a person would actually make is still one
 /// invocation.
 const UNION_CHUNK: usize = 200;
 
 /// The files a set of commits changed, each against its own first
 /// parent, merged into one list.
 ///
-/// **Not a range.** A graph's rows are a walk over every branch, so two
+/// **Per commit.** A graph's rows are a walk over every branch, so two
 /// rows next to each other need not be parent and child and "the commits
 /// between" is no git range at all; what is well defined is what each of
 /// these commits did (デザイン規約 §複数のコミットを選ぶ). A path several of
@@ -228,7 +228,7 @@ async fn union_chunk(
             // The order asked for is the order the graph stands in.
             // Plain `--no-walk` re-sorts by date, which would put the
             // status of a path onto whichever commit git thinks is
-            // newest rather than whichever the reader is looking at.
+            // newest, away from the row the reader is looking at.
             "--no-walk=unsorted",
             "-z",
             "-r",
@@ -324,7 +324,7 @@ pub enum DiffTarget {
     /// after another in walk order — what a choice of three or more reads
     /// (デザイン規約 §複数のコミットを選ぶ).
     ///
-    /// **Not one diff of two states.** The file list above it is what
+    /// **Each commit's own patch.** The file list above it is what
     /// these commits did, so the patches behind a row of it are theirs
     /// too: a comparison across the span would carry whatever unchosen
     /// commits stand in between, and this is the reading a cherry-pick of
@@ -377,7 +377,7 @@ pub async fn file_diff_with_fingerprint(
     Ok((parse_patch(&raw), fingerprint(&raw)))
 }
 
-/// Stable fingerprint of a raw diff. Drift detection, not cryptography:
+/// Stable fingerprint of a raw diff. Drift detection only:
 /// two runs of the same command over an unchanged file produce the same
 /// bytes, and any edit in between changes them.
 ///
@@ -387,8 +387,8 @@ pub async fn file_diff_with_fingerprint(
 /// comparing across processes, needs a digest that promises more — and
 /// that change stops at this function. The crate's other staleness hashes
 /// stay their own on purpose, the nearest being
-/// [`crate::highlight::LexCache`]'s source hash, which can never be asked
-/// to outlive the run it was made in (rules-refs/core.md).
+/// [`crate::highlight::LexCache`]'s source hash, which lives only for
+/// the run it was made in (rules-refs/core.md).
 pub fn fingerprint(raw: &[u8]) -> u64 {
     use std::hash::{DefaultHasher, Hash, Hasher};
     let mut hasher = DefaultHasher::new();
@@ -501,7 +501,7 @@ pub async fn file_diff_raw(
         DiffTarget::Untracked { path } => {
             // `--no-index` renders file content as an all-additions patch;
             // it exits 1 when the sides differ, which is the normal case.
-            // Its arguments are filenames, not pathspecs — no magic prefix.
+            // Its arguments are filenames — no magic prefix.
             let out = executor
                 .run_unchecked(
                     base.answers_by_code(1)
@@ -539,9 +539,9 @@ pub enum Embedded {
 /// What the one entry git answers with for a repository inside the
 /// working copy (`vendor/nest/`) is standing on.
 ///
-/// A `git add` of that path writes a **gitlink**: one index entry of mode
-/// 160000 naming the commit that repository's HEAD is on, and never the
-/// files under it, which belong to that repository (measured). So the
+/// A `git add` of that path writes a **gitlink**: one index entry of
+/// mode 160000 naming the commit that repository's HEAD is on
+/// (measured). The files under it belong to that repository, so the
 /// commit is the whole of what this repository would keep of it.
 ///
 /// **The answer counts only when it came from that directory.**
@@ -549,13 +549,13 @@ pub enum Embedded {
 /// repository of its own it answers with the repository above — whose
 /// HEAD has nothing to do with the row (measured: a plain directory
 /// answered with the outer repository's HEAD). `--show-prefix` rides
-/// along and says which happened, in git's own terms rather than by
-/// comparing two spellings of a path: empty is the root of the work tree
-/// the answer came from, and anything else is the way down to the
-/// directory asked about from a repository further up. `None` is what a
-/// caller gets for every path this cannot be said about.
+/// along and says which happened, in git's own terms: empty is the
+/// root of the work tree the answer came from, and anything else is
+/// the way down to the directory asked about from a repository
+/// further up. `None` is what a caller gets for every path this
+/// cannot be said about.
 ///
-/// The exit code is the answer, not a failure: 128 is what an unborn
+/// The exit code is the answer: 128 is what an unborn
 /// HEAD comes back as, and it is nothing for the command log to raise
 /// itself over — this is only ever asked about a path git itself
 /// declined to open. Both lines are printed either way (measured).

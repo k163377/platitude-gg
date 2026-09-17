@@ -111,7 +111,7 @@ fn fixture_dir() -> std::path::PathBuf {
 
 /// Regenerates the committed fixture bytes from real git output. Run with:
 /// `cargo test -p platitude-core --test it -- --ignored capture`
-/// then review the diff (never hand-edit the .bin files).
+/// then review the diff (the .bin files come from here).
 #[tokio::test]
 #[ignore = "regenerates committed fixtures; run explicitly and review the diff"]
 async fn capture_fixtures() {

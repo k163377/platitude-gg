@@ -1,18 +1,18 @@
 //! What a write that did not happen has to say for itself.
 //!
-//! **A report is not an error of this application's.** Something outside
-//! it said no under a rule of its own — a protected branch, a repository
-//! rule, a `pre-receive` hook over there, a `pre-commit` hook here, a
-//! signing key that would not sign — or git worked out from what this end
-//! holds that the write could not stand. Nothing was half done and there
-//! is nothing here to put right, so the screen states it rather than
-//! raising git's words as a failure (デザイン規約 §答えの要らない報せ).
+//! **A report is somebody else's no.** Something outside it said no under
+//! a rule of its own — a protected branch, a repository rule, a
+//! `pre-receive` hook over there, a `pre-commit` hook here, a signing key
+//! that would not sign — or git worked out from what this end holds that
+//! the write could not stand. Nothing was half done and there is nothing
+//! here to put right, so the screen states it as a report
+//! (デザイン規約 §答えの要らない報せ).
 //!
 //! Every failure that has one of these carries it beside git's whole
 //! message, which goes on being what the command log holds.
 
 /// Which report this is — what the screen says in its own words is chosen
-/// from this, and never from git's wording (`Words.writeReported`).
+/// from this alone (`Words.writeReported`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReportKind {
     /// The far side would not take a ref away.
@@ -56,7 +56,7 @@ pub enum ReportKind {
     ConflictedPart,
     /// A rename git would not make — most often because the new name is
     /// already taken. **Nothing moved and the box is still open**, so the
-    /// reader is in the middle of the gesture rather than past it
+    /// reader is still in the middle of the gesture
     /// (デザイン規約 §答えの要らない報せ の色の軸).
     RenameRefused,
     /// A rename that stopped between its two halves: the new name was
@@ -109,7 +109,7 @@ pub enum ReportKind {
     /// A merge, cherry-pick, revert, rebase or bisect was standing when
     /// the rewrite reached git — started from a terminal, most often,
     /// since the screen holds its own doors shut while one stands. The
-    /// operation is named on the band rather than in the sentence.
+    /// operation is named on the band.
     RewriteWhileStanding,
 }
 
@@ -128,9 +128,9 @@ pub struct WriteReport {
     /// **Whoever said no, in their own words**, with the framing git puts
     /// in front of them taken off (`remote:`, `hint:`). Written by
     /// somebody else — a forge, a hook, git itself — so it is carried
-    /// across rather than interpreted: the screen quotes it under a
-    /// sentence of its own, and never rewrites it
-    /// (デザイン規約 §長さ「詳しい事情は git の出力に出ているので UI 文言で代弁しない」).
+    /// across word for word: the screen quotes it under a sentence of
+    /// its own
+    /// (デザイン規約 §長さ「詳しい事情は git の出力(コマンドログ)が言う」).
     ///
     /// Empty where nothing was said, which is a report of one line —
     /// **and that is how the screen tells the two apart**: this end's own
@@ -147,9 +147,9 @@ pub const HINT_PREFIX: &str = "hint:";
 
 /// A rename git would not make, said in git's own words.
 ///
-/// Written here rather than in each caller because both of them — a
-/// branch and a tag — read exactly the same way: the name is the one the
-/// row still carries, since nothing moved.
+/// Written in one place because both callers — a branch and a tag —
+/// read exactly the same way: the name is the one the row still
+/// carries, since nothing moved.
 ///
 /// **git ran**, so the command is named and the log keeps its row under a
 /// red edge the way it does for any other refusal — what changes is only
@@ -173,8 +173,8 @@ pub fn rename_refused(
 ///
 /// **Nothing here ran a command of its own** — what failed is one step of
 /// several, and its own error is what the log already holds — so the
-/// message carried for the log names the step rather than pretending to a
-/// command line ([`GitError::Reported`]'s display).
+/// message carried for the log names the step ([`GitError::Reported`]'s
+/// display).
 #[must_use]
 pub fn half_renamed(name: &str, from: crate::error::GitError) -> crate::error::GitError {
     crate::error::GitError::Reported {
@@ -255,10 +255,10 @@ pub fn drop_all_commits() -> crate::error::GitError {
 
 /// A replay whose branch moved after the plan was worked out.
 ///
-/// **A report rather than a bare refusal, because a reader can be
-/// standing right in front of it**: nothing here was pressed wrongly, and
-/// nothing ran that the command log could show a row for — the bar is the
-/// only surface that can say what happened (デザイン規約 §答えの要らない報せ).
+/// **A report, because a reader can be standing right in front of it**:
+/// nothing here was pressed wrongly, and nothing ran that the command log
+/// could show a row for — the bar is the only surface that can say what
+/// happened (デザイン規約 §答えの要らない報せ).
 #[must_use]
 pub fn rewrite_tip_moved() -> crate::error::GitError {
     withheld(

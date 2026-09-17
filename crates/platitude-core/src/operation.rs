@@ -17,7 +17,7 @@
 //! the same label, and the one behind answers the moment the one in front
 //! does.
 //!
-//! **Not the generation numbers around it.** The graph's generation, the
+//! **An ordering of its own.** The graph's generation, the
 //! details read's, and the numbered reports of HEAD (`head_seq`) each
 //! order something else — reads nobody asked for move them — and none of
 //! them is this id. A write's answer still names the `head_seq` a landing
@@ -25,8 +25,8 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Numbers every write this process accepts. Process-wide rather than per
-/// session for the reason the reports of HEAD are (`session::standing`):
+/// Numbers every write this process accepts. Process-wide for the
+/// reason the reports of HEAD are (`session::standing`):
 /// a feed outlives the session that filled it, and a count starting again
 /// at 1 would let a closed session's id be answered by the next session's
 /// write.
@@ -35,14 +35,14 @@ static NEXT_OPERATION: AtomicU64 = AtomicU64::new(1);
 /// Names one write from the moment the queue accepted it.
 ///
 /// Compared by equality and nothing else. The queue runs writes in the
-/// order it accepted them, but a reader that needs its own answer asks
-/// for it by this id rather than by counting: what answered in between
-/// is somebody else's.
+/// order it accepted them, but a reader that needs its own answer
+/// asks for it by this id: what answered in between is somebody
+/// else's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OperationId(u64);
 
 impl OperationId {
-    /// The next id, taken at acceptance. Never zero, so a bridge that
+    /// The next id, taken at acceptance. Always positive, so a bridge
     /// carries integers can use zero for "nothing was accepted".
     pub(crate) fn next() -> Self {
         Self(NEXT_OPERATION.fetch_add(1, Ordering::Relaxed))
@@ -65,7 +65,7 @@ impl OperationId {
 ///
 /// The kinds are as coarse as the application reads them ([`Self::label`]):
 /// every stash operation is `Stash`, every branch write `Branch`. Which
-/// press an answer belongs to is the id's to say, not the kind's. The
+/// press an answer belongs to is the id's to say. The
 /// two compound deletes are their own kinds because the lane cannot be
 /// read off the label they answer under.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -104,7 +104,7 @@ pub enum OperationKind {
     /// The fetch an opening fires. Told apart from the interval's because
     /// the application answers it differently: the button turns for both,
     /// and only this one leaves the command log where it was — a tab
-    /// opened on a machine that is offline must not throw the panel up
+    /// opened on a machine that is offline opens quietly
     /// (デザイン規約 §リモートから取り込む).
     OpenFetch,
 }
@@ -149,10 +149,10 @@ impl OperationKind {
     /// the fetches this application makes on its own — the interval's and
     /// the one an opening fires.
     ///
-    /// **Read off the lane rather than listed again**: the lane already
-    /// names that set ([`Lane::UnaskedFetch`]), and a second spelling
-    /// would let the two disagree about which writes have somebody
-    /// waiting on them.
+    /// **Read off the lane**: the lane already names that set
+    /// ([`Lane::UnaskedFetch`]), and a second spelling would let the
+    /// two disagree about which writes have somebody waiting on
+    /// them.
     #[must_use]
     pub fn asked_for(self) -> bool {
         self.lane() != Lane::UnaskedFetch
@@ -209,7 +209,7 @@ impl OperationKind {
     /// turn (`session::write_order`). The composite deletes are where
     /// the two part company — their far half is paced by the network, so
     /// they are supervised as remote writes, and their near half deletes
-    /// a ref here, so they must not overtake a rename accepted before
+    /// a ref here, so they stay behind a rename accepted before
     /// them.
     ///
     /// `false` only where the whole effect is at the other end and on
@@ -249,8 +249,8 @@ impl OperationKind {
         }
     }
 
-    /// Whether a write of this kind replays history a commit at a time,
-    /// rather than touching the index once and coming back.
+    /// Whether a write of this kind replays history a commit at
+    /// a time.
     ///
     /// These are the writes that can stand for tens of seconds — a replay
     /// pays per commit (ci/baseline/code-costs-windows-x64.md), so a

@@ -25,9 +25,9 @@ pub(super) const PLAIN_RGB: super::Rgb = super::Rgb::of(PLAIN);
 // grammar claims still reads through syntect when it is conflicted
 // (`patch::patch_colors` takes the combined branch first).
 
-/// Context, not content — the colour the app gives every secondary
-/// word. Emphatically not `textMuted`: dimming text is how this app
-/// says "disabled" (規約 §無効), and a comment is not disabled.
+/// Context — the colour the app gives every secondary word. A
+/// colour of its own: dimming text is how this app says
+/// "disabled" (規約 §無効), and a comment is not disabled.
 pub(super) const COMMENT: u32 = 0x94A3B8;
 
 /// The words that make it a language.
@@ -48,8 +48,8 @@ pub(super) const CONSTANT: u32 = 0xF0ABFC;
 /// What is said *about* the code — annotations, attributes, macros.
 pub(super) const ANNOTATION: u32 = 0xFDA4AF;
 
-/// Scope → one of the colours above, in the app's palette rather than a
-/// theme's. The mapping is what this array owns; デザイン規約's table
+/// Scope → one of the colours above, in the app's palette. The
+/// mapping is what this array owns; デザイン規約's table
 /// owns the values (same rule as `Theme.qml`).
 ///
 /// syntect scores selectors and takes the best match, so a broad name
@@ -85,7 +85,7 @@ pub(super) fn knows(path: &str) -> bool {
     syntax_for(&assets().syntaxes, path).is_some()
 }
 
-/// Whether the set has a syntax of its own for this path — not the
+/// Whether the set has a syntax of its own for this path, past the
 /// plain-text one every `.txt` resolves to, which colours nothing.
 /// What decides if a file that outgrew its grammar is worth handing to
 /// the lexer at all (`patch::patch_colors`).
@@ -100,9 +100,9 @@ pub(super) struct Assets {
     pub(super) theme: Theme,
 }
 
-/// Loaded once, on the first diff that asks — never at startup. A window
-/// that is opened and closed without a file being read pays none of it,
-/// and the load is inside the same background hop as the diff itself.
+/// Loaded once, on the first diff that asks. A window that is opened
+/// and closed without a file being read pays none of it, and the load
+/// is inside the same background hop as the diff itself.
 pub(super) fn assets() -> &'static Assets {
     static ASSETS: OnceLock<Assets> = OnceLock::new();
     ASSETS.get_or_init(|| Assets {
@@ -112,9 +112,9 @@ pub(super) fn assets() -> &'static Assets {
 }
 
 /// The app's palette as something syntect can highlight against. Built
-/// rather than loaded: every published theme is drawn for its own ground
-/// and its own idea of how loud code should be, and next to this window's
-/// words all of them read as though the code were the caption
+/// here: every published theme is drawn for its own ground and its own
+/// idea of how loud code should be, and next to this window's words all
+/// of them read as though the code were the caption
 /// (measured — base16-ocean, Catppuccin Mocha, Dracula, Monokai
 /// were all tried against the real thing).
 fn palette() -> Theme {

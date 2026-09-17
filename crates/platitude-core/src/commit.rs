@@ -1,12 +1,12 @@
 //! Creating and amending commits.
 //!
-//! Messages travel in a scratch file (`-F`), never on the command line:
-//! argument length is bounded on Windows and a message is arbitrary user
-//! text. `--cleanup=whitespace` is pinned so a repository's `commit.cleanup`
-//! cannot silently rewrite what the editor showed — in particular, a line
-//! the user typed starting with `#` stays in the message.
+//! Messages travel in a scratch file (`-F`): argument length is bounded
+//! on Windows and a message is arbitrary user text. `--cleanup=whitespace`
+//! is pinned so a repository's `commit.cleanup` cannot silently rewrite
+//! what the editor showed — in particular, a line the user typed
+//! starting with `#` stays in the message.
 //!
-//! Hooks are git's business and run normally: `--no-verify` is never passed.
+//! Hooks are git's business and always run: `--no-verify` is never passed.
 
 use std::path::Path;
 
@@ -21,7 +21,7 @@ use crate::scratch::ScratchFile;
 /// Knobs of one commit invocation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CommitOptions {
-    /// Replace the current HEAD commit instead of adding one.
+    /// Replace the current HEAD commit.
     pub amend: bool,
     /// Permit a commit that changes nothing (`--allow-empty`).
     pub allow_empty: bool,
@@ -31,9 +31,9 @@ pub struct CommitOptions {
 
 /// Joins the two fields of a message editor into one commit message.
 ///
-/// The convention lives here rather than in the UI: a summary line, a
-/// blank line, then the description — the shape every git tool expects,
-/// and the shape [`split_message`] reads back.
+/// The convention lives here: a summary line, a blank line, then the
+/// description — the shape every git tool expects, and the shape
+/// [`split_message`] reads back.
 pub fn join_message(subject: &str, body: &str) -> String {
     let subject = subject.trim();
     let body = body.trim();
@@ -122,8 +122,8 @@ pub async fn commit(
     Ok(())
 }
 
-/// A commit that was not made, as something to report rather than a
-/// failure of the application's (デザイン規約 §答えの要らない報せ).
+/// A commit that was not made, as something to report
+/// (デザイン規約 §答えの要らない報せ).
 ///
 /// **Every refusal this end could answer has already been taken away**
 /// before the button can be pressed: an identity is asked for at the gate,
@@ -132,13 +132,13 @@ pub async fn commit(
 /// application saying no — a `pre-commit` or `commit-msg` hook, a signing
 /// key that would not sign, another git holding the index — and none of
 /// them leaves half a commit behind: git writes the object or it does not.
-/// There is no next move here either, since `--no-verify` is never passed
-/// (this module's own rule).
+/// There is no next move here either: hooks always run (this
+/// module's own rule).
 ///
-/// **So the kind is not worked out from what git said.** A hook writes
-/// whatever its author wrote and git prints nothing of its own for one, so
-/// there is no machine-readable line to tell the reasons apart — and none
-/// of them would be shown differently if there were.
+/// **So the kind is fixed here, whatever git said.** A hook writes
+/// whatever its author wrote and git prints nothing of its own for one,
+/// so there is no machine-readable line to tell the reasons apart — and
+/// none of them would be shown differently if there were.
 ///
 /// The words under the heading are **both streams**: git writes its own
 /// refusals to stderr, and a hook writes to whichever it likes (a linter
@@ -179,7 +179,7 @@ pub struct HeadCommit {
 }
 
 /// Reads HEAD's message and author, for prefilling an amend editor.
-/// `None` on an unborn branch: nothing to amend is a state, not a failure.
+/// `None` on an unborn branch: nothing to amend is a state.
 ///
 /// One command for both fields, NUL-separated: a message spans lines, so
 /// it has to come last and no printable separator would be safe in front
@@ -254,7 +254,7 @@ pub async fn head_oid(
 /// What history a rewrite may touch: only this line of commits can be
 /// amended or replayed from where the working tree stands. `--is-ancestor`
 /// answers by exit code — 0 and 1 are the two answers; anything else
-/// (an unreadable repository, a vanished object) is a failure, not a "no".
+/// (an unreadable repository, a vanished object) is a failure.
 pub async fn is_in_head_history(
     executor: &GitExecutor,
     workdir: &Path,

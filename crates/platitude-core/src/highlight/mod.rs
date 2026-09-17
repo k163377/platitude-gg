@@ -25,9 +25,9 @@
 //! (ci/baseline/code-costs-windows-x64.md §着色).
 //!
 //! Without the file (it could not be read, it is too big, the language is
-//! unknown) each hunk starts clean instead. That is not merely less
-//! context: the top-of-file rules are *different* rules, so the hunk's
-//! first line comes out coloured in a way the file itself never would
+//! unknown) each hunk starts clean instead. The top-of-file rules are
+//! *different* rules, so the hunk's first line comes out coloured in a
+//! way the file itself never would
 //! (measured, QML's `readonly property` reads as storage keywords
 //! at file scope and as plain identifiers inside an `Item {}`, so the
 //! first line of every hunk disagreed with the rest of it).
@@ -35,7 +35,7 @@
 //! # Conflicts
 //!
 //! The working tree of a conflicted file has git's markers in it, and the
-//! two sides between them are **alternatives rather than a sequence**:
+//! two sides between them are **alternatives**:
 //! read one straight after the other, a lexer carries whatever `ours`
 //! left open — a `/*`, a `"""` — into `theirs`, and everything below is
 //! painted as the inside of something that is not there. So the markers
@@ -62,12 +62,12 @@ mod testkit;
 pub use patch::{colors, colors_cached, colors_quick, deep, knows};
 
 /// Lexer states remembered at intervals down one file, so the next
-/// reading of the same text starts near its hunks instead of at line 1.
+/// reading of the same text starts near its hunks.
 ///
 /// Handed back by [`colors_cached`], and worth keeping wherever the same
-/// file will be read again — which is every partial stage: staging moves
-/// the index, not the worktree file the colours are read against, so the
-/// re-read that follows every hunk staged walks text this cache has
+/// file will be read again — which is every partial stage: staging
+/// moves the index; the worktree file the colours come from stays
+/// put, so the re-read after every hunk staged walks text this cache has
 /// already walked. It is honest about staleness on its own: the source
 /// text's hash rides inside, and a cache built over different text is
 /// simply not used.
@@ -78,10 +78,10 @@ pub struct LexCache {
     /// is not enough of a key: a `ParseState` is only valid for its own
     /// grammar, and the same bytes can stand under two names — a rename
     /// git did not pair, a file vendored twice — so a cache whose
-    /// syntax disagrees is cleared rather than resumed.
+    /// syntax disagrees is cleared.
     syntax: String,
     /// `(line index, the lexer's place before reading that line)`, in
-    /// ascending order. Grown, never rewritten: entries past what this
+    /// ascending order. Grown only: entries past what this
     /// reading walks stay for the deeper hunk a later reading may have.
     states: Vec<(usize, walk::LineState)>,
 }
@@ -179,9 +179,9 @@ pub struct DiffColors {
 }
 
 impl DiffColors {
-    /// What was read off one line — nothing, where nothing was. Borrowed
-    /// rather than handed over: the caller asks once per row of a diff
-    /// that can be tens of thousands of rows long.
+    /// What was read off one line — nothing, where nothing was. Borrowed:
+    /// the caller asks once per row of a diff that can be tens of
+    /// thousands of rows long.
     pub fn line(&self, patch: usize, hunk: usize, line: usize) -> &LineColors {
         static NOTHING: LineColors = LineColors {
             spans: Vec::new(),

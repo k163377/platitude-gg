@@ -237,8 +237,8 @@ async fn every_command_of_a_compound_write_carries_its_id() {
 /// copy taken in a terminal, standing on no branch, reaches the graph
 /// only through the walk the worktree listing asks for — and the write
 /// whose listing found it is not settled until that walk has answered.
-/// The walk is parked from inside (`PassDoors`), so "not settled yet" is
-/// read off a pass provably still out, not off a quiet moment.
+/// The walk is parked from inside (`PassDoors`), so "not settled yet"
+/// is read off a pass provably still out.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_write_is_not_settled_until_the_reads_its_listings_asked_for_have_landed() {
     let mut repo = TestRepo::init();
@@ -363,8 +363,8 @@ async fn staged_with_doors() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, A
 
 /// Leaves a hook on the next graph pass to reach `at` that takes the
 /// stream over from inside it — which is what makes the handover an
-/// ordering rather than a race: the hook runs on that pass's own task,
-/// so the pass it displaces is exactly the one that was running.
+/// ordering: the hook runs on that pass's own task, so the pass it
+/// displaces is exactly the one that was running.
 ///
 /// `take_over` is what asks for the newer graph, and whatever it leaves
 /// at the doors is left before the ask.
@@ -393,10 +393,10 @@ fn taken_over_from_inside(
 /// **The one that took over is parked, and the test is what lets it
 /// go** — so the picture it publishes cannot exist before the release,
 /// and a settling recorded ahead of that picture is one that did not
-/// wait for it. Read off the order the two were recorded in rather than
-/// off a look taken while the pass is parked: when such a look lands is
-/// a race with the reads a settling makes either way
-/// (core.md §「もう起きない」を sleep / quiet window で証明しない).
+/// wait for it. Read off the order the two were recorded in: when a
+/// look taken while the pass is parked lands is a race with the reads
+/// a settling makes either way
+/// (core.md §「もう起きない」は完了後の件数・状態で証明する).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_write_waits_for_the_rebuild_that_took_its_own_over() {
     let (_repo, sink, session, doors) = staged_with_doors().await;
@@ -433,8 +433,8 @@ async fn a_write_waits_for_the_rebuild_that_took_its_own_over() {
 
     release.send(()).expect("the replacement is waiting");
     // Both halves are waited for before either is read, so what the
-    // order below says is the order they happened in rather than which
-    // of them the test looked for first.
+    // order below says is the order they happened in, whichever the
+    // test looked for first.
     sink.wait_for("the graph the replacement walked", |evs| {
         let answered = evs
             .iter()
@@ -507,7 +507,7 @@ async fn the_queue_holds_the_next_write_until_the_replacement_has_landed() {
         .commit("record it".into(), CommitOptions::default())
         .expect("the session is open");
     // Queued behind the commit, before anything of the commit's has
-    // settled: what the queue may not start early.
+    // settled: what the queue has to hold.
     let behind = session.stage_all().expect("the session is open");
     assert_eq!(
         write_answer(&sink, id).await,
@@ -552,8 +552,8 @@ async fn the_queue_holds_the_next_write_until_the_replacement_has_landed() {
 }
 
 /// A replacement that failed is the write's own news: the graph never
-/// caught up with the commit, and the settling says so under the write's
-/// id rather than letting the handover pass for a landing.
+/// caught up with the commit, and the settling says so under the
+/// write's id.
 ///
 /// The one that takes over restarts the stream, so the fault it walks
 /// into is one the write's own pass cannot read: a rebuild asks for a
@@ -582,9 +582,9 @@ async fn a_write_whose_replacement_failed_says_the_graph_did_not_land() {
     session.close();
 }
 
-/// The acceptance boundary refuses rather than lies: once the session is
-/// closed and its write loop has ended, a request gets no id, because
-/// nothing would ever answer one.
+/// The acceptance boundary refuses: once the session is closed and
+/// its write loop has ended, a request gets no id, because nothing
+/// would ever answer one.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_closed_session_accepts_nothing() {
     let repo = holding_one_stash();

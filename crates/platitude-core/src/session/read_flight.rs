@@ -19,8 +19,8 @@ use super::*;
 /// no window in which an older answer can overtake a newer one and
 /// nothing downstream needs a generation of its own to throw one away.
 ///
-/// A caller that arrives while a pass is running neither starts its own
-/// nor loses its request. It waits for the gate, and then either
+/// A caller that arrives while a pass is running waits for the gate,
+/// and then either
 ///
 /// * a pass **that started after it asked** has landed, so that pass
 ///   looked at the repository the caller is asking about and its answer
@@ -28,29 +28,29 @@ use super::*;
 /// * it runs the next pass itself, and everyone who asked before that
 ///   pass began reads the answer it lands.
 ///
-/// So a burst collapses to one repeat rather than one read each, and no
-/// caller is ever answered by a read that looked before its reason
-/// existed. That second half is the one that cannot be traded away: a
-/// write settled by a pass older than itself would have the graph
-/// rebuilt from the repository as it was *before* the write, with the
-/// correction waiting on the next poll tick.
+/// So a burst collapses to one repeat, and no caller is ever answered by
+/// a read that looked before its reason existed. That second half is the
+/// one that cannot be traded away: a write settled by a pass older than
+/// itself would have the graph rebuilt from the repository as it was
+/// *before* the write, with the correction waiting on the next poll
+/// tick.
 ///
 /// `A` is what a pass answers its callers with — what they act on, which
 /// each snapshot spells for itself (`Reread`, `WorktreeRead`); the
 /// listings that answer nothing but "published" use a `bool`.
 pub(super) struct ReadFlight<A = bool> {
-    /// One pass at a time. An async mutex because what it guards is a git
-    /// subprocess rather than CPU work; tokio hands it on in the order it
-    /// was asked for, which is what keeps a caller from being passed over
-    /// while others read. Which pass may answer whom is decided by the
-    /// stamps below and not by that order.
+    /// One pass at a time. An async mutex because what it guards is a
+    /// git subprocess; tokio hands it on in the order it was asked
+    /// for, which is what keeps a caller from being passed over while
+    /// others read. Which pass may answer whom is decided by the
+    /// stamps below.
     gate: tokio::sync::Mutex<()>,
     passes: Mutex<Passes<A>>,
     /// Callers that have taken a stamp and not yet left, the waiting ones
     /// included, so a boundary can close the work already in flight.
     live: std::sync::atomic::AtomicUsize,
     /// Bumped on both edges of `live`, so a waiter on either count is
-    /// woken rather than left to look again.
+    /// woken at once.
     changed: tokio::sync::watch::Sender<u64>,
 }
 
@@ -81,10 +81,10 @@ impl<A: Default> Default for ReadFlight<A> {
 /// the pass numbered above it is the one that started after the caller
 /// had its reason, and answers it. Taken apart from the run for the
 /// caller that asks **from inside a pass** — a read that found itself
-/// fenced (`Standing::current`) asks again while it still holds the gate,
-/// so its stamp is older than any pass the fence's own read starts, and
-/// that read answers it too instead of a third listing being spent.
-/// Counted as a caller from here until it is run.
+/// fenced (`Standing::current`) asks again while it still holds the
+/// gate, so its stamp is older than any pass the fence's own read
+/// starts, and that read answers it too. Counted as a caller from here
+/// until it is run.
 #[must_use = "a stamp is a caller until it is run"]
 pub(super) struct Stamp {
     /// Passes that had started when this caller asked.
@@ -149,10 +149,10 @@ impl<A> ReadFlight<A> {
         };
         let answer = read().await;
         // Recorded while the gate is still held, so the caller it goes to
-        // reads this pass rather than the one before it. A pass that never
-        // reaches here — its task dropped with the runtime, or it unwound
-        // — leaves `started` ahead of `landed`, which costs the next
-        // caller a read of its own and never an answer.
+        // reads this pass. A pass that never reaches here — its task
+        // dropped with the runtime, or it unwound — leaves `started`
+        // ahead of `landed`, which costs the next caller a read of its
+        // own and never an answer.
         let mut passes = relock(&self.passes);
         passes.landed = mine;
         passes.answer = answer;
@@ -161,7 +161,7 @@ impl<A> ReadFlight<A> {
 
     /// Waits until the callers that had taken a stamp when this was
     /// called have left. A later one may arrive; this closes the work
-    /// already in flight rather than reserving silence.
+    /// already in flight.
     pub(super) async fn wait_idle(&self) {
         self.wait_for_live(|live| live == 0).await;
     }
@@ -187,8 +187,8 @@ impl<A> ReadFlight<A> {
 /// counts it out.
 ///
 /// Dropped by the caller itself, so one that unwound or went down with
-/// the runtime still reports that it has left rather than holding the
-/// boundary open forever.
+/// the runtime still reports that it has left, and the boundary can
+/// close.
 struct Live<'a, A> {
     flight: &'a ReadFlight<A>,
     /// Passes that had started when this caller asked.
@@ -208,9 +208,9 @@ mod tests {
 
     impl<A> ReadFlight<A> {
         /// Callers that have taken a stamp and not yet left. A test waits
-        /// on this rather than on a moment: a caller counted here has
-        /// chosen the pass that must answer it, so releasing the read in
-        /// flight can no longer be mistaken for the repeat.
+        /// on this: a caller counted here has chosen the pass that must
+        /// answer it, so releasing the read in flight can no longer be
+        /// mistaken for the repeat.
         async fn wait_for_askers(&self, asking: usize) {
             self.wait_for_live(move |live| live >= asking).await;
         }
@@ -264,10 +264,10 @@ mod tests {
     /// The reason the gate is here at all: however many callers pile up,
     /// two reads of the same snapshot never run at once.
     ///
-    /// The second caller is driven by hand onto the gate while the first
-    /// read stands open ([`crate::wait::poll_once`]), so the overlap is
-    /// asked for at the exact point it could happen — not left to a
-    /// scheduler that may never have put the two side by side.
+    /// The second caller is driven by hand onto the gate while the
+    /// first read stands open ([`crate::wait::poll_once`]), so the
+    /// overlap is asked for at the exact point it could
+    /// happen.
     #[tokio::test]
     async fn passes_of_one_flight_never_overlap() {
         let flight = ReadFlight::default();

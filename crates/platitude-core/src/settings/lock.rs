@@ -21,8 +21,8 @@ impl Store {
     ///
     /// The answer separates "somebody else has it" from "the question
     /// could not be asked": a redirected profile or a network share can
-    /// leave file locking unanswered, and a lock nobody can take must
-    /// never become the reason a window will not open.
+    /// leave file locking unanswered, and the window opens anyway when
+    /// the lock cannot be taken.
     pub fn claim(&self) -> Claim {
         let Some(path) = self.lock_path() else {
             // A store with no files has nothing for a second process to
@@ -69,13 +69,13 @@ pub struct Lock {
 }
 
 impl Drop for Lock {
-    /// Unlocked rather than merely closed. A `flock` goes with the open
-    /// file description, and a fork copies every description a process
+    /// Unlocked before the close. A `flock` goes with the open file
+    /// description, and a fork copies every description a process
     /// has, so a lock let go of by closing the handle stands until the
     /// last child forked over that instant reaches its `execve` — and
-    /// the next asker, told the store is taken, would be told it by a
-    /// child of its own rather than by a second application. `LOCK_UN`
-    /// reaches the description itself, whoever holds a copy of it.
+    /// the next asker would be told the store is taken by a child of
+    /// its own. `LOCK_UN` reaches the description itself, whoever
+    /// holds a copy of it.
     fn drop(&mut self) {
         if let Some(file) = &self.file {
             // A lock that will not come off is one the close after this
@@ -126,10 +126,10 @@ mod tests {
     /// purpose. A child handed the claim's lock description outright
     /// stands in for one a fork hands over: the claim lets the lock go
     /// while that description is still held by somebody that is not a
-    /// second application. The unlock reaches the description rather
-    /// than this process's handle on it, so the next asker has the store
-    /// at once — a close would have had it refused by the child until
-    /// the child was gone.
+    /// second application. The unlock reaches the description itself,
+    /// whoever holds a copy, so the next asker has the store at once —
+    /// a close would have had it refused by the child until the child
+    /// was gone.
     ///
     /// Linux, where `flock(2)` promises the inheritance and where a
     /// carried lock is seen at all; the same release is netted on the

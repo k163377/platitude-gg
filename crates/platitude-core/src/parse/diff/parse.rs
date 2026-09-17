@@ -10,9 +10,9 @@ use super::{DiffHunk, FilePatch};
 /// What one pass over a patch is building: the files closed so far, the one
 /// being read, and where each side of its open hunk has got to.
 ///
-/// A record rather than six locals because the walk below has four phases and
-/// each touches a different three or four of them — as locals, every phase
-/// reads as if it could touch all six.
+/// A record, because the walk below has four phases and each touches
+/// a different three or four of them — as locals, every phase reads
+/// as if it could touch all six.
 #[derive(Default)]
 struct Reading {
     files: Vec<FilePatch>,
@@ -59,8 +59,8 @@ impl Reading {
             return true;
         }
 
-        // A combined header names one path, not a pair: there is no single
-        // old side to name. `---`/`+++` follow and carry the prefixes.
+        // A combined header names one path: there is no single old
+        // side to name. `---`/`+++` follow and carry the prefixes.
         if let Some(rest) = line
             .strip_prefix("diff --cc ")
             .or_else(|| line.strip_prefix("diff --combined "))
@@ -149,7 +149,7 @@ impl Reading {
 
     /// A content line of the open hunk. Header noise outside one — index,
     /// mode, similarity — reaches here and is dropped, which is what makes
-    /// this the walk's last resort rather than a case of its own.
+    /// this the walk's last resort.
     fn reads_body(&mut self, line: &str) {
         let Some(h) = self.hunk.as_mut() else {
             return;
@@ -169,8 +169,8 @@ impl Reading {
 
 /// Parses `git diff` / `git diff-tree -p` output into per-file patches.
 ///
-/// Unknown lines are skipped (with a trace log) rather than failing: a diff
-/// that renders slightly incomplete beats an empty error pane.
+/// Unknown lines are skipped (with a trace log): a diff that renders
+/// slightly incomplete beats an empty error pane.
 pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
     let text = String::from_utf8_lossy(bytes);
     let mut reading = Reading::default();

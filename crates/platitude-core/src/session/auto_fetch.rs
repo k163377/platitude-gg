@@ -64,9 +64,9 @@ impl AutoFetchClock for IntervalClock {
 /// does the stop.
 ///
 /// Biased towards the stop: one that arrives while ticks are already
-/// overdue (a starved timer catches up in a burst) wins over them instead
-/// of being picked at random. A hand-stepped tick is answered only once
-/// it has been acted on, and never by a timer that has been stopped.
+/// overdue (a starved timer catches up in a burst) wins over them. An
+/// unbiased `select!` picks at random. A hand-stepped tick is answered
+/// only once a running timer has acted on it.
 pub(super) async fn drive_auto_fetch(
     mut clock: impl AutoFetchClock,
     stop: CancellationToken,
@@ -97,11 +97,11 @@ pub(super) async fn drive_auto_fetch(
 /// The one remote-tag read at a time, and the word that it has let go.
 ///
 /// A second ask while a read is in flight is dropped
-/// ([`RemoteTagRefreshOutcome::Busy`]), and what its ack waits for is
-/// the word — never the slot itself. A waiter that took the permit to
-/// learn of the release would hold it for an instant, and an ask arriving
-/// in that instant would be told the slot was taken when nothing was
-/// reading at all.
+/// ([`RemoteTagRefreshOutcome::Busy`]), and what its ack waits
+/// for is the word. A waiter that took the permit to learn of
+/// the release would hold it for an instant, and an ask arriving
+/// in that instant would be told the slot was taken when nothing
+/// was reading at all.
 pub(super) struct RemoteTagSlot {
     permits: Arc<tokio::sync::Semaphore>,
     freed: tokio::sync::watch::Sender<u64>,
@@ -117,10 +117,10 @@ impl Default for RemoteTagSlot {
 }
 
 impl RemoteTagSlot {
-    /// Takes the slot, or hands back what to wait on for the read that
-    /// holds it to let it go. Subscribed before the slot is asked for, so
-    /// a release landing between the two is seen rather than waited for
-    /// a second time.
+    /// Takes the slot, or hands back what to wait on for the read
+    /// that holds it to let it go. Subscribed before the slot is
+    /// asked for, so a release landing between the two is already
+    /// seen.
     pub(super) fn take(&self) -> Result<SlotHeld, tokio::sync::watch::Receiver<u64>> {
         let freed = self.freed.subscribe();
         match Arc::clone(&self.permits).try_acquire_owned() {
@@ -157,10 +157,10 @@ impl RepoSession {
     /// returned (a fetch already in the write queue still runs). Only one
     /// fetch is ever outstanding: on a slow link or a repository whose
     /// credential helper is taking its time, a tick that finds the previous
-    /// fetch unfinished is skipped rather than queued behind it.
+    /// fetch unfinished is skipped.
     ///
-    /// The clock is not the only way in: [`Self::auto_fetch_ticker`] steps
-    /// the timer this starts.
+    /// A second way in: [`Self::auto_fetch_ticker`] steps the timer this
+    /// starts.
     pub fn set_auto_fetch(self: &Arc<Self>, interval: Option<std::time::Duration>) {
         let wanted = interval.filter(|i| !i.is_zero());
         *self.lock_auto_fetch_interval() = wanted;
@@ -207,8 +207,8 @@ impl RepoSession {
     /// lost to a slow `git rev-parse` or a main thread that was held up.
     ///
     /// Carries an op name of its own: nobody asked for this one, so it
-    /// stays out of the command log, and a machine that opens a tab
-    /// offline is not to have the panel thrown up at it
+    /// stays out of the command log, and the panel stays shut on a
+    /// machine that opens a tab offline
     /// (デザイン規約 §リモートから取り込む).
     pub fn fetch_on_open(self: &Arc<Self>) -> OpenFetch {
         let open = self.workdir().is_some();
@@ -290,8 +290,8 @@ impl RepoSession {
     ///
     /// Read off the list the refs listing already keeps, so this asks git
     /// nothing — and the same list is what greys the fetch button out, so
-    /// the two cannot disagree. An answer that is not in yet is not a
-    /// "no": it fetches, which is the way round that can only cost a
+    /// the two cannot disagree. An answer that is not in yet
+    /// fetches, which is the way round that can only cost a
     /// process.
     fn known_to_have_no_remote(&self) -> bool {
         self.remotes
@@ -327,9 +327,9 @@ impl RepoSession {
 
         let s = Arc::clone(self);
         let acting = cancel.clone();
-        // The clock is built on the runtime, not here: an interval takes
-        // its time driver from the runtime it is created in, and this is
-        // the thread that set the interval — the UI's, in the app.
+        // The clock is built on the runtime: an interval takes its time
+        // driver from the runtime it is created in, and this is the
+        // thread that set the interval — the UI's, in the app.
         self.runtime.spawn(async move {
             drive_auto_fetch(IntervalClock::every(interval), cancel, by_hand, move || {
                 s.auto_fetch_tick(&acting)
@@ -349,12 +349,12 @@ impl RepoSession {
     /// tags out of the walk the chips that carry this reading are not on
     /// screen, and the timer will fill it in within the interval anyway.
     ///
-    /// Deliberately **not** on the write queue. A request there holds the
-    /// poll out and puts every later write behind this one
-    /// (`RepoSession::running_write`) — far too much to spend on a badge.
-    /// It runs as a
-    /// plain background read instead, on the handle that keeps it out of
-    /// the command log, and only republishes if the answer moved.
+    /// A plain background read by design, on the handle that keeps it
+    /// out of the command log, and it only republishes if the answer
+    /// moved. A request on the write queue holds the poll out and
+    /// puts every later write behind this one
+    /// (`RepoSession::running_write`) — far too much to spend on a
+    /// badge.
     ///
     /// Entered twice: from an opening that fired no fetch of its own
     /// ([`Self::fetch_on_open`] — one that did has read the remotes on
@@ -381,13 +381,13 @@ impl RepoSession {
         if !self.log_options().include_tags {
             return RemoteTagRefreshTask::ready(RemoteTagRefreshOutcome::Hidden);
         }
-        // Dropped, not booked behind the read in flight: that read is
-        // asking the same remotes the same question, and no repeat would
-        // carry anything it cannot already see
-        // ([`RemoteTagRefreshOutcome::Busy`]). What a second `ls-remote`
-        // per collision would buy on the reference repository — 45,000
-        // tags — is one badge round trip earlier, on the path whose whole
-        // budget is a badge.
+        // Dropped: the read in flight is asking the same remotes the
+        // same question, and no repeat would carry anything it
+        // cannot already see ([`RemoteTagRefreshOutcome::Busy`]).
+        // What a second `ls-remote` per collision would buy on the
+        // reference repository — 45,000 tags — is one badge round
+        // trip earlier, on the path whose whole budget is a
+        // badge.
         let held = match self.remote_tags_slot.take() {
             Ok(held) => held,
             Err(freed) => {
@@ -430,8 +430,8 @@ impl RepoSession {
                     RemoteTagRefreshOutcome::Unanswered
                 }
             };
-            // `outcome()` closes ownership as well as the read: an immediate
-            // following request must not race the old permit's destructor.
+            // `outcome()` closes ownership as well as the read: the old
+            // permit is gone before an immediate following request runs.
             drop(held);
             if finished.send(outcome).is_err() {
                 tracing::trace!("remote-tag refresh completion was not observed");
@@ -443,9 +443,9 @@ impl RepoSession {
     /// The ack of an ask the slot turned away, booked behind the read
     /// that holds it ([`RemoteTagRefreshOutcome::Busy`]): sent once that
     /// read has let the slot go, with nothing read and nothing taken on
-    /// the way — the word of the release is waited for, never the slot,
-    /// so the ask that comes next finds it free. The app drops the task,
-    /// and what the booking costs it is a spawn per collision — one a
+    /// the way — the word of the release is waited for, so the ask
+    /// that comes next finds it free. The app drops the task, and
+    /// what the booking costs it is a spawn per collision — one a
     /// session at most, the opening's catch-up against the interval's.
     fn busy_once_the_slot_is_free(
         &self,
@@ -475,8 +475,8 @@ impl RepoSession {
 
     /// Queues one automatic fetch, unless the previous one is still going.
     ///
-    /// Reported under its own op name: a laptop that is simply offline must
-    /// not put a fresh error banner on screen every interval.
+    /// Reported under its own op name, which keeps the repeated failures
+    /// of a simply offline laptop out of the error banner.
     ///
     /// Answers whether the timer is still running. Its token is read under
     /// the lock a stop cancels it under, so the two cannot interleave: a
@@ -517,12 +517,12 @@ impl RepoSession {
 mod tests {
     use super::*;
 
-    /// The refusal of a stopped timer must not wait for its task to be
-    /// polled: nothing schedules a cancelled task on any deadline, and
-    /// under load one sat unpolled for a test suite's whole overall
-    /// budget while the caller of `tick` hung with it. Modelled
-    /// as a timer whose task never runs at all — the channel stays open,
-    /// nobody will answer, and the stop token is the only word there is.
+    /// The refusal of a stopped timer comes off the stop token alone:
+    /// nothing schedules a cancelled task on any deadline, and under
+    /// load one sat unpolled for a test suite's whole overall budget
+    /// while the caller of `tick` hung with it. Modelled as a timer
+    /// whose task never runs at all — the channel stays open, nobody
+    /// will answer, and the stop token is the only word there is.
     #[tokio::test]
     async fn a_stopped_timer_refuses_the_tick_without_being_scheduled() {
         let stopped = CancellationToken::new();
@@ -537,8 +537,8 @@ mod tests {
         drop(keep_open);
     }
 
-    /// A clock stepped by hand: due when the test says so, and never on
-    /// its own. Once the test has dropped its end, never again.
+    /// A clock stepped by hand: due only when the test says so, and
+    /// pending forever once the test has dropped its end.
     struct HandClock(tokio::sync::mpsc::UnboundedReceiver<()>);
 
     impl AutoFetchClock for HandClock {
@@ -669,8 +669,8 @@ mod tests {
         assert!(slot.take().is_ok(), "free the instant it was let go");
     }
 
-    /// The product's clock owes its first due a whole interval out — not
-    /// the tick tokio fires at once — and one to every interval after it.
+    /// The product's clock owes its first due a whole interval out, and
+    /// one to every interval after it.
     ///
     /// On a paused clock, which is what lets both edges of the interval
     /// be judged: the due is still owed one instant before the interval

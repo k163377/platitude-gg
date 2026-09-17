@@ -35,8 +35,8 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
             integrate_from: true,
             delete: true,
             delete_remote: true,
-            // A branch goes out through the toolbar, not this menu, and
-            // the tag rows name nothing on it.
+            // A branch goes out through the toolbar, and the tag rows
+            // name nothing on it.
             push_tag: false,
             delete_remote_tag: false,
             delete_tag_everywhere: false,
@@ -394,8 +394,8 @@ fn each_delete_row_needs_the_side_it_names() {
 /// A remote carrying the name on **another commit** is a reading this
 /// row cannot answer for: both rows that reach it are out. What stays is
 /// the local delete and the push — which is the leased overwrite there,
-/// and the one row that is about the tag on this commit rather than the
-/// one over there (デザイン規約 §相手の履歴を置き換える).
+/// and the one row that is about the tag on this commit
+/// (デザイン規約 §相手の履歴を置き換える).
 #[test]
 fn a_tag_the_remote_has_elsewhere_loses_both_rows_that_reach_it() {
     let drifted = ref_menu(
@@ -422,8 +422,8 @@ fn a_tag_the_remote_has_elsewhere_loses_both_rows_that_reach_it() {
 
 /// A section that has not answered yet reads as an ordinary local tag:
 /// the everyday delete stays, and the rows that need a remote reading
-/// wait for one rather than being offered on a guess — the qualified
-/// `--delete` git needs does not fail on a name the remote has not got
+/// wait for one — the qualified `--delete` git needs does not fail
+/// on a name the remote has not got
 /// (measured — `remote::delete_remote_tag`).
 #[test]
 fn an_unread_tag_keeps_its_local_delete_and_offers_no_remote_one() {

@@ -17,12 +17,12 @@ fn run_published_helper(
     crate::support::busy::run_once_it_is_not_busy(&mut std::process::Command::new(path), on_busy)
 }
 
-/// The install must replace the helper's directory entry, never write
-/// through it: a replay running the old one has it open for execution, and
-/// on Linux that makes it unwritable (`ETXTBSY`) in one direction and
-/// unexecutable in the other. A new inode under the same name settles both
-/// — whoever is mid-exec keeps the file they started, and the next replay
-/// gets the fresh one.
+/// The install must replace the helper's directory entry: a replay
+/// running the old one has it open for execution, and on Linux that
+/// makes it unwritable (`ETXTBSY`) in one direction and unexecutable
+/// in the other. A new inode under the same name settles both —
+/// whoever is mid-exec keeps the file they started, and the next
+/// replay gets the fresh one.
 #[test]
 #[cfg(unix)]
 fn the_helper_is_replaced_rather_than_written_over() {
@@ -55,13 +55,13 @@ fn the_helper_is_replaced_rather_than_written_over() {
 /// open on the inode it publishes. Under load the suite hits that as a
 /// forked git holding the copy's fd until its own `execve` — a window of
 /// somebody else's making, too short to catch on purpose. Held open here
-/// on purpose instead, since what the runner has to survive is the error,
-/// not the fork: one attempt is refused outright, and the run that keeps
+/// on purpose instead, since what the runner has to survive is the
+/// error: one attempt is refused outright, and the run that keeps
 /// asking gets its answer as soon as the handle goes.
 ///
-/// Linux rather than every unix, because POSIX only says `execve` *may*
-/// refuse a file open for writing — this asserts that it does, which is
-/// a promise Linux makes and the container is the machine that keeps it.
+/// Linux only, because POSIX only says `execve` *may* refuse a file
+/// open for writing — this asserts that it does, which is a promise
+/// Linux makes and the container is the machine that keeps it.
 #[test]
 #[cfg(target_os = "linux")]
 fn a_helper_held_open_for_writing_is_run_once_the_handle_goes() {
@@ -69,7 +69,7 @@ fn a_helper_held_open_for_writing_is_run_once_the_handle_goes() {
     let dir = tempfile::tempdir().expect("tempdir");
     let published = publish_helper(&built, dir.path()).expect("install");
 
-    // Opened, not truncated: the file stays the helper throughout.
+    // Opened: the file stays the helper throughout.
     let handle = std::fs::OpenOptions::new()
         .write(true)
         .open(&published)

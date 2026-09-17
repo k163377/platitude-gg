@@ -59,8 +59,8 @@ async fn probing_a_path_with_nothing_at_it_answers_missing() {
 }
 
 /// Something that runs and is not git is a failure carrying its own
-/// words, not a missing binary: the reader pointed at a real file and
-/// has to be told what it said.
+/// words: the reader pointed at a real file and has to be told what
+/// it said.
 #[tokio::test]
 async fn probing_something_that_is_not_git_carries_its_own_words() {
     let repo_dir = TestRepo::init();
@@ -226,8 +226,8 @@ async fn pre_cancelled_token_short_circuits() {
 
 /// `answers_by_code` marks 0 and 1 as answers for the command log; any
 /// other exit from the same command (a fatal 128) is still a failure and
-/// must be reported as a plain exit — a broken repository must not show
-/// up as an answered, ok-looking row.
+/// must be reported as a plain exit — which keeps a broken repository
+/// off an answered, ok-looking row.
 #[tokio::test]
 async fn answers_by_code_reports_only_zero_and_one_as_answers() {
     use crate::support::Ends;
@@ -271,14 +271,14 @@ async fn answers_by_code_reports_only_zero_and_one_as_answers() {
 }
 
 /// **A read leaves `.git/index.lock` alone.** The lock a write takes is
-/// fatal rather than patient — `hold_locked_index` dies where it cannot
-/// create it — so a read that takes the same lock kills a write running
-/// beside it, and the reads run beside the writes: the queue orders the
-/// writes against each other, not against a poll already out
-/// (`session::write`). A `git diff` against the work tree refreshes the
-/// index, and locks it to do so, unless the fixed arguments say
-/// otherwise; `--no-optional-locks` is not that say-so, since `status`
-/// asks the flag before it locks and `diff` never asks.
+/// fatal — `hold_locked_index` dies where it cannot create it — so a
+/// read that takes the same lock kills a write running beside it, and
+/// the reads run beside the writes: the queue orders the writes against
+/// each other (`session::write`). A `git diff` against the work tree
+/// refreshes the index, and locks it to do so, unless the fixed
+/// arguments say otherwise; `--no-optional-locks` is not that say-so,
+/// since `status` asks the flag before it locks and `diff` never
+/// asks.
 ///
 /// The index a reader leaves behind is the whole of the evidence, so the
 /// stat has to be one a refresh would want to fix: over an index that
@@ -296,9 +296,9 @@ async fn a_work_tree_read_leaves_the_index_untouched() {
         .write(true)
         .open(repo_dir.path.join("a.txt"))
         .expect("open the tracked file");
-    // The epoch rather than a time worked out from this one: what the
-    // stat has to be is *not the recorded one*, and a fixed date says so
-    // without reading a clock.
+    // The epoch: the stat only has to differ from the one the index
+    // recorded, and a fixed date says so without reading a
+    // clock.
     file.set_times(std::fs::FileTimes::new().set_modified(std::time::SystemTime::UNIX_EPOCH))
         .expect("give it a stat the index has not seen");
     drop(file);

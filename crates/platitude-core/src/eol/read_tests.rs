@@ -1,10 +1,10 @@
-//! Every case here drives `read`, so they sit together rather than
-//! beside a state machine none of them names.
+//! Every case here drives `read`, so they sit together in
+//! one file.
 
 use super::*;
 
-/// Builds patch bytes from lines, so a `\r` in a test is visible where
-/// it matters instead of hidden in a raw string literal.
+/// Builds patch bytes from lines, so a `\r` in a test is visible
+/// where it matters.
 fn patch(lines: &[&str]) -> Vec<u8> {
     let mut out = Vec::new();
     for l in lines {
@@ -168,8 +168,8 @@ fn a_file_with_no_ending_at_all_reports_its_first() {
 
 #[test]
 fn losing_the_final_newline_is_not_an_ending_change() {
-    // The new side's last line has no terminator, so it must not be
-    // tallied as LF and turn into a flip or a mixture.
+    // The new side's last line has no terminator, so the tally
+    // passes it over: an LF tally would read as a flip.
     let raw = with_head(&[
         "@@ -1,2 +1,2 @@",
         " one",

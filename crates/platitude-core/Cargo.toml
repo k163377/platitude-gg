@@ -16,8 +16,8 @@ tracing.workspace = true
 # the three-OS build and the offline job stay as they are. What would
 # pull one in sits a level down, in flate2: the backends under its
 # `any_c_zlib` (`zlib`, `zlib-ng`, `cloudflare_zlib`) link a C zlib
-# through libz-sys or libz-ng-sys. png's `zlib-rs` feature is not one of
-# them — it picks flate2's Rust port.
+# through libz-sys or libz-ng-sys. png's `zlib-rs` feature picks
+# flate2's Rust port.
 png = "0.18"
 zune-jpeg = "0.5"
 zune-core = "0.5"
@@ -73,9 +73,9 @@ tree-sitter-xml = "0.7"
 tree-sitter-yaml = "0.7"
 tree-sitter-zig = "1.1"
 # The regex-based fallback (`highlight` outside `grammar`), for
-# languages with no grammar crate above. fancy-regex rather than
-# syntect's default Oniguruma — onig's Regex is not Send, so it could
-# not leave the UI's runtime at all.
+# languages with no grammar crate above. fancy-regex: syntect's default
+# Oniguruma has a Regex that is not Send, so it could not leave the
+# UI's runtime at all.
 syntect = { version = "5.3", default-features = false, features = [
     "parsing",
     "regex-fancy",

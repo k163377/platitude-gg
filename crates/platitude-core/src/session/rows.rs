@@ -35,7 +35,7 @@ pub(super) fn wip_root_row(builder: &mut GraphBuilder) -> LogRow {
         stash_ref: String::new(),
         published,
         carried: None,
-        // The edges this row draws are leashes, not parenthood.
+        // The edges this row draws are leashes.
         parents: Box::default(),
     }
 }
@@ -64,7 +64,7 @@ pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) 
         published,
         carried: None,
         // As above: the dashed edges to HEAD and to each incoming side
-        // are drawn, not walked.
+        // are drawn and no more.
         parents: Box::default(),
     }
 }
@@ -245,13 +245,13 @@ fn make_row(
 /// **A row stands above every synthetic row landing on the same commit**
 /// — uncommitted work is what is about to become a commit and a stash is
 /// not, so it is asked for at whichever arrives first: the
-/// commit itself, or a stash built on it. Not "directly above the
-/// commit": a stash on the same commit sorts above it by date, and the
-/// row would come out under it.
+/// commit itself, or a stash built on it. A stash on the same
+/// commit sorts above it by date, so the commit alone is the
+/// wrong anchor.
 ///
 /// **A copy whose commit the walk never reaches draws nothing.** The rows
-/// are handed out by the walk rather than laid over it afterwards, so a
-/// HEAD outside the window is a row that simply never comes.
+/// are handed out by the walk, so a HEAD outside the window is a row that
+/// simply never comes.
 pub(super) struct CarriedRows(Vec<crate::session::Carried>);
 
 impl CarriedRows {
@@ -278,14 +278,14 @@ impl CarriedRows {
     }
 
     /// The same, for a caller that has worked the anchor out itself — a
-    /// graph being laid out again has the rows rather than the walk's
-    /// entries, and the anchor is the same commit either way
+    /// graph being laid out again has the rows, and the anchor is the
+    /// same commit either way
     /// (`session::relay`).
     pub(super) fn take_at(&mut self, anchor: &Oid, builder: &mut GraphBuilder) -> Vec<LogRow> {
         let anchor = *anchor;
         let mut out = Vec::new();
-        // `retain` rather than a filter: a copy handed out here is gone
-        // from the set, so a stash and its base cannot both draw it.
+        // `retain`: a copy handed out here is gone from the set, so a
+        // stash and its base cannot both draw it.
         self.0.retain(|wip| {
             if wip.head != anchor {
                 return true;

@@ -54,7 +54,7 @@ pub enum DiffLineKind {
 impl DiffLineKind {
     /// Whether a line of this kind is on the side `new_side` names —
     /// the side whose line numbers a reading counts in. `NoNewline` is
-    /// on neither: it is git talking, not the file.
+    /// on neither: it is git talking.
     pub fn on_side(self, new_side: bool) -> bool {
         match self {
             DiffLineKind::Context => true,

@@ -6,9 +6,9 @@
 //!
 //! **The one setting this app writes lives here too** ([`setting`]), and it
 //! belongs to the settings screen alone — a reader who goes there went to
-//! change it. The notices have no way in and are never getting one: an
-//! offer to fix itself, attached to a warning, is where every other GUI's
-//! line-ending accident starts (デザイン規約 §改行コードの警告).
+//! change it. The notices only report: an offer to fix itself,
+//! attached to a warning, is where every other GUI's line-ending
+//! accident starts (デザイン規約 §改行コードの警告).
 //!
 //! Four cases produce a notice (デザイン規約 §改行コードの警告):
 //!
@@ -77,7 +77,7 @@ pub enum Eol {
 }
 
 impl Eol {
-    /// Display spelling. **Not a code chip** — chips are lowercase
+    /// Display spelling. **Plain text** — chips are lowercase
     /// monospace, which an all-caps abbreviation does not fit
     /// (デザイン規約 §git 用語のコード表記).
     pub fn as_str(self) -> &'static str {

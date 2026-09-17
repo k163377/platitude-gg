@@ -7,7 +7,7 @@
 //! session, every settings screen and every dialog clones that handle,
 //! so what they run is one population and the caps here are the whole
 //! process's. A bare executor is unbounded, which is what a test wants
-//! of one: the cap is the application's, not the library's.
+//! of one: the cap is the application's.
 //!
 //! **A slot is a child process and nothing else.** It is taken just
 //! before the spawn and given back when the child has been reaped,
@@ -56,10 +56,10 @@
 //! them, and nobody spawns a process for a question nobody is asking.
 //!
 //! **Identical background reads share one process** — the second one
-//! waits for the first one's answer rather than spawning the same
-//! command over the same tree, and only while the first is still
-//! queued: one that has started may have looked before the second
-//! asked, and an answer older than its question is not an answer
+//! waits for the first one's answer, and only while the first
+//! is still queued: one that has started may have looked
+//! before the second asked, and an answer older than its
+//! question is not an answer
 //! (`session::ReadFlight` draws the same line). What is shared is the
 //! run's outcome ([`Group`]); a leader that leaves without one hands
 //! its followers back to the queue to lead for themselves.
@@ -76,8 +76,8 @@ use crate::error::GitError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Priority {
     /// Somebody: the row they clicked, the diff they opened, the write
-    /// they pressed, the page that has to paint. Never kept out by the
-    /// reads below, and served before them.
+    /// they pressed, the page that has to paint. Served before the
+    /// reads below.
     Interactive,
     /// Nobody: the reads a session makes on a timer of its own — the
     /// other working copies' status, the walk behind a chip, the
@@ -94,8 +94,8 @@ pub enum Pace {
     Here,
     /// Something outside it: the far end of a network connection, a
     /// credential helper's prompt, a person in another program. Kept out
-    /// of the click's reserve, so a stalled one never holds a slot a
-    /// click needs.
+    /// of the click's reserve, so a stalled one leaves the click's
+    /// slots free.
     Elsewhere,
 }
 
@@ -103,7 +103,7 @@ pub enum Pace {
 /// before it is served next whatever is waiting beside it. Four is a
 /// burst — a click opening a diff spends three commands and a poll
 /// tick two — so a stream of them still lets a background read through
-/// about once a burst, and a single click never waits behind one.
+/// about once a burst, and a single click goes straight through.
 pub const OVERTAKEN_LIMIT: u32 = 4;
 
 /// Most git processes the application runs at once, whatever the
@@ -132,10 +132,10 @@ pub const DEFAULT_CONCURRENCY_FLOOR: u32 = 4;
 /// eight.
 ///
 /// **The floor is four, because that is where the click's three fit.**
-/// Two slots is the one setting where the median suffers rather than
-/// the tail: opening a diff spends three commands at once, so with a
-/// pool of two the head of its serial chain queues for a slot on every
-/// open, on a machine with nothing else running at all — a whole
+/// Two slots is the one setting where the median suffers: opening
+/// a diff spends three commands at once, so with a pool of two the
+/// head of its serial chain queues for a slot on every open, on a
+/// machine with nothing else running at all — a whole
 /// process's worth of wait added to the one point a person waits at
 /// (same record, §枠の床). A laptop's eight threads therefore come to
 /// four, where the three fit and one background read runs beside them.
@@ -177,8 +177,8 @@ pub struct Limits {
 
 impl Limits {
     /// The limits one number from the settings stands for: that many
-    /// processes all told, a quarter of them at most (never fewer than
-    /// one, or no background read would ever run) for the reads nobody
+    /// processes all told, a quarter of them at most (at least one,
+    /// or no background read would ever run) for the reads nobody
     /// is waiting on and the commands paced elsewhere together — the
     /// rest is the click's.
     ///
@@ -187,7 +187,7 @@ impl Limits {
     /// `rev-parse` → `cat-file` chain in parallel, so a reserve under
     /// three puts one of them behind whatever the session is reading for
     /// itself — and the one that queues is the head of the chain, so the
-    /// wait lands on the critical path rather than beside it. At a half
+    /// wait lands on the critical path. At a half
     /// the reserve only reaches three at eight slots, which no machine
     /// under eighteen threads defaults to; at a quarter it is three from
     /// four slots up. What it costs is background width, which the pass
@@ -235,9 +235,9 @@ pub struct Report {
     pub queued_background: usize,
     /// Commands given a slot so far.
     pub admitted: u64,
-    /// Commands that left the queue on their token rather than in a slot.
+    /// Commands that left the queue on their token.
     pub left_waiting: u64,
-    /// Commands answered by another's run rather than by a process.
+    /// Commands answered by another's run.
     pub shared: u64,
     /// What every admitted command spent waiting, summed, and the most
     /// any one of them waited — and the same for the interactive ones
@@ -420,7 +420,7 @@ impl Slots {
 
     /// Puts new limits in force. Wider ones admit what is waiting at
     /// once; narrower ones admit nothing more until the running fall
-    /// below them — a child already running is never touched.
+    /// below them — a child already running runs on.
     pub fn set_limits(self: &Arc<Self>, limits: Limits) {
         let mut state = lock(&self.state);
         state.limits = limits;
@@ -458,8 +458,8 @@ impl Slots {
     /// it — which is what a cancelled `select!` does — leaves the queue
     /// as if it had never asked, and gives back a slot granted in the
     /// same instant. `None` only where the queue let go of the entry
-    /// without a grant, which nothing here does; it is typed rather than
-    /// unwrapped because a wait must not be a panic.
+    /// without a grant, which nothing here does; it is typed so the
+    /// wait comes back as a value.
     pub async fn acquire(self: &Arc<Self>, priority: Priority, pace: Pace) -> Option<Slot> {
         let (grant, granted) = tokio::sync::oneshot::channel();
         let ticket = {
@@ -643,8 +643,8 @@ pub(super) struct Shared {
 }
 
 impl Shared {
-    /// What a run ended in, for the followers. `None` for an ending they
-    /// must not inherit: the leader's token fired, and theirs did not.
+    /// What a run ended in, for the followers. `None` for an ending
+    /// that stays the leader's: its token fired, and theirs did not.
     pub(super) fn of(outcome: &Result<super::command::GitOutput, GitError>) -> Option<Self> {
         match outcome {
             Ok(output) => Some(Self {
@@ -712,9 +712,9 @@ impl SharedFailure {
                 timeout: *timeout,
             },
             GitError::Cancelled { .. } => return None,
-            // A raw run ends in none of these; said as an I/O failure
-            // rather than dropped, so a follower is never left with no
-            // answer at all.
+            // A raw run ends in none of these; said as an I/O
+            // failure, so every follower gets an
+            // answer.
             other => Self::Io {
                 command: String::new(),
                 kind: std::io::ErrorKind::Other,

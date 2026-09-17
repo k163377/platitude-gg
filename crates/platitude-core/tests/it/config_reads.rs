@@ -6,13 +6,13 @@
 //! unmarked it is logged as a failure and the command panel opens itself
 //! over it — for the remotes read, on every repository that has no remote,
 //! every time the sidebar refreshes (規約 core.md §終了コードで答える問い
-//! 合わせはコマンドログの失敗にしない).
+//! 合わせはコマンドログでも答え).
 //!
 //! The flag shows in how the log ends the row — `Answered` for a marked
 //! command, `Exited` for an unmarked one, whatever code it exited with —
-//! so these tests read the ends rather than the answers. The reads that
-//! cannot be made to exit 1 from a test repository (every one of them has
-//! an identity, and `core.autocrlf` is set) still pin the flag that way.
+//! so these tests read the ends. The reads that cannot be made to exit 1
+//! from a test repository (every one of them has an identity, and
+//! `core.autocrlf` is set) still pin the flag that way.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -133,8 +133,8 @@ async fn planning_a_push_answers_by_code() {
         config_reads(&log),
         // `branch.<name>.remote`, `branch.<name>.merge`, and the marks
         // read (`branch.<name>.pushRemote` and `remote.pushDefault` in
-        // one process) — every key unset, and every read an answer
-        // rather than a failure the command log would raise itself over.
+        // one process) — every key unset, and every read an answer the
+        // command log lets through.
         vec![
             CommandEnd::Answered(1),
             CommandEnd::Answered(1),

@@ -22,10 +22,9 @@ pub struct RefsSnapshot {
     /// list the eye reads newest-first. Four bytes a tag.
     pub tags_by_name: Vec<u32>,
     /// Tags this repository holds that a remote carries on some other
-    /// commit. A run of its own rather than a field on every
-    /// [`TagItem`]: a name standing on two commits is rare, and 45,901
-    /// tags would each pay for the field (CLAUDE.md 性能予算 — refs の
-    /// 本数に比例させない).
+    /// commit. A run of its own: a name standing on two commits is rare,
+    /// and 45,901 tags would each pay for the field (CLAUDE.md 性能予算 — refs
+    /// の本数から独立).
     pub tag_drifts: Vec<TagDrift>,
     pub head: Option<HeadState>,
     /// Names of the configured remotes, sorted. A branch with no upstream
@@ -117,16 +116,16 @@ pub struct BranchItem {
     /// (`publish::reaches`) with exactly git's two halves.
     pub upstream_oid: Option<Oid>,
     /// That reading stands on **another commit**. The pair is then two
-    /// rows on the graph rather than one folded chip
+    /// rows on the graph
     /// ([`crate::refs::RemoteBranches::folded_into_local`]), and the
-    /// menu's rows that reach the remote say why instead of running
+    /// menu's rows that reach the remote say why
     /// (デザイン規約 §左メニューの所作 の削除の表). False where there is
     /// no reading to have drifted.
     pub upstream_drifted: bool,
     /// Another working copy has this branch checked out, so git refuses
     /// both `switch` and `branch --delete` for it (measured) —
     /// whether or not that copy is **locked**, which stops a different
-    /// set of commands. A `bool` and not the folder: this rides one per
+    /// set of commands. A `bool`: this rides one per
     /// branch, and the reference repository has fifty thousand refs.
     ///
     /// Local branches only. A remote row lands on the local branch of
@@ -139,7 +138,7 @@ pub struct BranchItem {
     /// level or there is no upstream to measure against.
     ///
     /// Local branches only. A remote-tracking ref is the far side of
-    /// somebody's measurement, never a side that has one of its own.
+    /// somebody's measurement.
     pub ahead: u32,
     pub behind: u32,
 }

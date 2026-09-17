@@ -101,8 +101,8 @@ impl RepoSession {
             .await
             {
                 Ok(reached) => s.publish_head_reach(reached),
-                // A failed walk must not claim the tip is held: the mark
-                // is the safe answer, and the next refresh asks again.
+                // A failed walk answers with the mark: it is the safe
+                // answer, and the next refresh asks again.
                 Err(e) => {
                     tracing::warn!(error = %e, "could not tell whether the branch tip is held");
                     s.publish_head_reach(false);
@@ -130,8 +130,8 @@ impl RepoSession {
     /// so its row is in the window unless more than a window's worth of
     /// commits is newer than it — a detached HEAD parked on an old commit.
     /// Only that pass spends a read, and one at a time
-    /// (`head_published_read`): the answer is a state of the repository,
-    /// not of the pass that asked.
+    /// (`head_published_read`): the answer is a state of the
+    /// repository.
     pub(super) fn settle_head_published(self: &Arc<Self>, head: Option<Oid>, walked: Option<bool>) {
         // A pass answers for the HEAD it walked from. Once the record has
         // moved past it, that answer is about a commit nobody is asking

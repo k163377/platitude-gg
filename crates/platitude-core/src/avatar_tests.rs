@@ -205,7 +205,7 @@ fn a_round_trip_through_the_table_keeps_every_assignment() {
 
     let back = Avatars::from_values(&avatars.to_values());
     assert_eq!(back, avatars);
-    // Sorted by address, so the file a person opens reads in a fixed
-    // order rather than in the order they happened to assign.
+    // Sorted by address, so the file a person opens always reads in
+    // the same order.
     assert_eq!(back.list()[0].email, "ada@example.com");
 }

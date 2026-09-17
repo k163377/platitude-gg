@@ -25,21 +25,21 @@ use std::path::{Path, PathBuf};
 /// somewhere in it — what a screen showing "the git this app runs" has to
 /// put in front of a reader.
 ///
-/// **Read out, never run.** [`default_program`] is what is spawned; this
-/// answers the same question one step further along, resolving the bare
-/// name it may return against the same directories in the same order. A
-/// reading of what the OS would do rather than a promise: either platform
-/// can have the file replaced between this and the next spawn, and it
-/// costs a wrong path on screen and nothing else. Falls back to the bare
+/// **For reading out.** [`default_program`] is what is spawned; this
+/// answers the same question one step further along, resolving the
+/// bare name it may return against the same directories in the same
+/// order. A reading of what the OS would do: either platform can have
+/// the file replaced between this and the next spawn, and it costs a
+/// wrong path on screen and nothing else. Falls back to the bare
 /// name where nothing along the search answers.
 pub fn default_program_path() -> OsString {
     let named = default_program();
     if Path::new(&named).components().count() > 1 {
         return named;
     }
-    // The file name, not the program name: the bare `git` above is what is
-    // *spawned*, and what a spawn looks for on Windows carries the
-    // extension the same way `behind_launcher` writes it.
+    // The file name: the bare `git` above is what is *spawned*, and
+    // what a spawn looks for on Windows carries the extension the
+    // same way `behind_launcher` writes it.
     let file = if cfg!(windows) { "git.exe" } else { "git" };
     search_dirs()
         .into_iter()
@@ -50,10 +50,10 @@ pub fn default_program_path() -> OsString {
         .map_or(named, PathBuf::into_os_string)
 }
 
-/// Whether two paths name the same program — the same binary, not the
-/// same spelling. One of these comes from a settings file and the other
-/// from a chooser, and a reader who picked the git already running must
-/// not be told they picked a different one.
+/// Whether two paths name the same program — the same binary. One
+/// of these comes from a settings file and the other from a chooser,
+/// and a reader who picked the git already running is told
+/// so.
 ///
 /// Each side is read as what would be spawned for it ([`spawnable`]: the
 /// `.exe` a spawn adds, and the git behind the launcher) and then as the
@@ -105,8 +105,8 @@ fn as_spawned(path: &Path, exists: impl Fn(&Path) -> bool) -> PathBuf {
 /// a path taken as given would put the launcher's second process back on
 /// every command.
 ///
-/// **The launcher is looked for under the name a spawn opens**, not the
-/// one typed: `cmd\git` with no extension is the launcher as much as
+/// **The launcher is looked for under the name a spawn opens**:
+/// `cmd\git` with no extension is the launcher as much as
 /// `cmd\git.exe` is, and taken as typed it would be spawned as itself.
 pub fn spawnable(named: &Path) -> PathBuf {
     spawnable_among(named, Path::is_file)
@@ -202,7 +202,7 @@ mod tests {
 
     /// Two spellings of one program are one program: the settings file and
     /// a chooser write paths differently, and a reader who picked the git
-    /// already running must not be told they picked another one. Paths
+    /// already running is told so. Paths
     /// that name no file — none of these exist — are compared as written.
     #[test]
     fn separators_and_windows_case_do_not_make_two_programs() {
@@ -404,8 +404,8 @@ mod tests {
     }
 
     /// On this host, whatever it is: the walk over the real directories
-    /// answers what the search says it should, and never a file that is
-    /// not there.
+    /// answers what the search says it should, and a file that is
+    /// there.
     #[test]
     fn the_default_is_git_itself_or_the_binary_the_walk_found() {
         let expected = cfg!(windows)

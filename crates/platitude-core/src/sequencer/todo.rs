@@ -155,7 +155,7 @@ pub fn merge_todo(plan: &str, generated: &str) -> MergedTodo {
     }
 
     let mut text = String::new();
-    // Held rather than written at once: a reword's own `exec` follows its
+    // Held to the next command line: a reword's own `exec` follows its
     // `pick` in the plan, and it is that exec which leaves HEAD where the
     // ref should land.
     let mut pending: Vec<String> = Vec::new();

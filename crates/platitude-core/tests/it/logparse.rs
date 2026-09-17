@@ -118,18 +118,18 @@ async fn parse_log(
 }
 
 /// What `.mailmap` is for, and the reason the format asks for `%aN` /
-/// `%aE` rather than the raw pair: one person with two addresses comes
-/// back as one person, and the answer is git's rather than a second one
-/// of our own. The second address is spelled loudly so the map has to
-/// match it the way git matches — without regard to case.
+/// `%aE`: one person with two addresses comes back as one person, and
+/// the answer is git's. The second address is spelled loudly so
+/// the map has to match it the way git matches — without regard
+/// to case.
 #[tokio::test]
 async fn the_log_reads_the_authors_through_mailmap() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "before");
-    // `--author`, not `-c user.email`: the harness pins GIT_AUTHOR_EMAIL
-    // for reproducible ids, and that beats configuration — a commit made
-    // the other way would quietly carry the harness's address and leave
-    // this test agreeing with itself.
+    // `--author`: the harness pins GIT_AUTHOR_EMAIL for reproducible
+    // ids, and that beats configuration — a commit made through
+    // `-c user.email` would quietly carry the harness's address and
+    // leave this test agreeing with itself.
     repo.git(&[
         "commit",
         "--allow-empty",

@@ -1,5 +1,5 @@
-//! What the suite waits on a session with: budgets that diagnose a stuck
-//! causal wait rather than establish correctness by elapsed time.
+//! What the suite waits on a session with: budgets that diagnose a
+//! stuck causal wait.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -9,8 +9,8 @@ use std::time::{Duration, Instant};
 
 use platitude_core::session::SessionEvent;
 
-/// How long a wait puts up with the session saying nothing. Every event
-/// renews it, so what spends it is silence — not the wait taking a while.
+/// How long a wait puts up with the session saying nothing. Every
+/// event renews it, so what spends it is silence.
 pub const QUIET_BUDGET: Duration = Duration::from_secs(120);
 
 /// The whole of a wait, as a backstop under [`QUIET_BUDGET`]: a session
@@ -24,7 +24,7 @@ pub const OVERALL_BUDGET: Duration = Duration::from_secs(900);
 /// is never cancelled, so an await on the executor itself — or on a
 /// session boundary like `wait_for_snapshot_reads` — has nothing under it:
 /// a wedged git would hang the binary until the CI kill, with no failing
-/// test named. This is that backstop. [`OVERALL_BUDGET`], not a verdict:
+/// test named. This is that backstop. [`OVERALL_BUDGET`], a diagnosis:
 /// nothing correct takes this long, and a run that does is reported as
 /// the failure it is, under the caller's name for it.
 pub async fn bounded<T>(what: &str, wait: impl Future<Output = T>) -> T {
@@ -63,7 +63,7 @@ pub fn poll_once<F: Future + Unpin>(future: &mut F) -> Poll<F::Output> {
 ///
 /// Progress is what tells the two apart, so that is what the budget is
 /// counted against: every event renews it, and only a session gone quiet
-/// spends it. Same reading as 規約 §「もう起きない」を sleep で確かめない —
+/// spends it. Same reading as 規約 §「もう起きない」は完了後の件数 —
 /// a stretch of clock is not a state. A hang still needs the same
 /// [`QUIET_BUDGET`] of nothing to be called one; it is only the waits that
 /// are demonstrably being answered that no longer pay for it.
@@ -97,17 +97,17 @@ impl Patience {
         self.quiet_since.elapsed()
     }
 
-    /// Time until the next diagnostic backstop. Correctness never depends
-    /// on spending this duration; it only wakes an event-driven waiter when
-    /// the event source has stopped altogether.
+    /// Time until the next diagnostic backstop. It only wakes an
+    /// event-driven waiter when the event source has stopped
+    /// altogether.
     pub fn remaining(&self) -> Duration {
         let quiet = QUIET_BUDGET.saturating_sub(self.quiet_since.elapsed());
         let whole = OVERALL_BUDGET.saturating_sub(self.started.elapsed());
         quiet.min(whole)
     }
 
-    /// Fails the test once the budget is spent. Call it with no lock held
-    /// — the dump it prints takes one.
+    /// Fails the test once the budget is spent. Call it outside any
+    /// lock — the dump it prints takes one.
     pub fn check(&self, what: &str, events: &Mutex<Vec<SessionEvent>>) {
         let (quiet, whole) = (self.quiet_since.elapsed(), self.started.elapsed());
         assert!(

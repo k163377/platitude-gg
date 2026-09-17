@@ -28,11 +28,11 @@ pub struct TestRepo {
     tick: u64,
 }
 
-/// Written into `.git/config` right after init — one file write instead of
-/// five `git config` spawns per repo (process spawns dominate suite time on
-/// Windows). Must stay repo-local: the code under test does not see
-/// `global_config`, only this file. `{autocrlf}` is filled by
-/// [`TestRepo::init`] / [`TestRepo::init_autocrlf`].
+/// Written into `.git/config` right after init — one file write doing
+/// five `git config` spawns' work per repo (process spawns dominate
+/// suite time on Windows). Must stay repo-local: the code under test
+/// sees no `global_config`, only this file. `{autocrlf}` is filled
+/// by [`TestRepo::init`] / [`TestRepo::init_autocrlf`].
 const REPO_CONFIG: &str = "\
 [user]
 \tname = Test User
@@ -111,12 +111,12 @@ impl TestRepo {
     /// not on, and a copy that forgot it passes everywhere but the
     /// container.
     ///
-    /// **Runnable is waited for, not assumed.** The write above leaves the
-    /// hook exec-able by nobody for as long as a neighbouring fork holds
+    /// **Runnable is waited for.** The write above leaves the hook
+    /// exec-able by nobody for as long as a neighbouring fork holds
     /// the descriptor it was written through (`ETXTBSY` —
     /// `support::busy`), and git meeting that window declines the push
     /// *silently*: `receive-pack` writes its own `cannot exec` to the
-    /// stderr it inherited rather than over the sideband, so the ref line's
+    /// stderr it inherited, away from the sideband, so the ref line's
     /// generic `(pre-receive hook declined)` is all that reaches this end
     /// and the report carries git's parenthetical where the hook's own
     /// words belong (measured). Nothing downstream can tell that from a
@@ -154,9 +154,9 @@ impl TestRepo {
             let ran = super::busy::run_once_it_is_not_busy(&mut probe, on_busy)
                 .expect("the hook never became runnable");
             // The guard is the hook's first statement, so a probe that
-            // reaches the interpreter at all leaves 0. Anything else is an
-            // install nobody can run — said here, rather than as a refusal
-            // with no words downstream.
+            // reaches the interpreter at all leaves 0. Anything else
+            // is an install nobody can run, and this is where it is
+            // said.
             assert!(
                 ran.status.success(),
                 "the hook as installed does not run: {ran:?}"
@@ -226,9 +226,9 @@ impl TestRepo {
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("XDG_CONFIG_HOME", &self.xdg_config)
             .env("GIT_TERMINAL_PROMPT", "0")
-            // Nothing a fixture runs may open an editor: a continue that
-            // wants a message must take the recorded one (`true` exits 0
-            // without writing — the same pin the executor under test uses).
+            // The editor is pinned: a continue that wants a message
+            // takes the recorded one (`true` exits 0 without writing —
+            // the same pin the executor under test uses).
             .env("GIT_EDITOR", "true")
             .env("LC_ALL", "C")
             // Deterministic identities and times.
@@ -253,7 +253,7 @@ impl TestRepo {
 
     /// Writes + stages + commits a file. Two spawns; the suite makes some
     /// four hundred of these, so the commit id is a separate ask
-    /// ([`Self::commit_file_id`]) rather than a third spawn nobody reads.
+    /// ([`Self::commit_file_id`]).
     pub fn commit_file(&mut self, rel: &str, content: &str, message: &str) {
         self.write_file(rel, content);
         self.git(&["add", "--", rel]);
@@ -301,9 +301,9 @@ pub fn barrier_hook(release: &std::path::Path) -> String {
 /// raw bytes for and exits 0 from, which is a barrier that silently
 /// is not one.
 ///
-/// **It spins rather than sleeps**: the shell git runs a filter in has no
-/// `sleep` on the PATH the suite hands it, and a loop that calls one
-/// leaves through its cap at once instead of waiting.
+/// **It spins**: the shell git runs a filter in has no `sleep` on the
+/// PATH the suite hands it, and a loop that calls one leaves through
+/// its cap at once instead of waiting.
 pub fn barrier_filter(release: &std::path::Path) -> String {
     let release = release.to_string_lossy().replace('\\', "/");
     format!(
@@ -312,7 +312,7 @@ pub fn barrier_filter(release: &std::path::Path) -> String {
 }
 
 /// The opened [`platitude_core::repo::RepoInfo`] of a test repository —
-/// what every write API takes instead of a bare path.
+/// what every write API takes.
 pub async fn info(repo: &TestRepo) -> platitude_core::repo::RepoInfo {
     let (exec, cancel) = super::exec::env();
     platitude_core::repo::open(&exec, &repo.path, &cancel)

@@ -11,11 +11,11 @@ impl RepoSession {
     /// Whether the graph is drawing tags — the TAGS band's eye, and what
     /// every row's chips are cut against (`LabelIndex::labels_of`).
     ///
-    /// Read from the session and **not from the pass's own `LogOptions`**:
-    /// the first of a restart's two passes runs with the tags taken out of
-    /// the walk to get a picture up (see `restart_log`), and a chip cut to
-    /// match that would take every tag off the screen for the length of
-    /// that pass and then put it back.
+    /// Read from the session: the first of a restart's two passes runs
+    /// with the tags taken out of the walk to get a picture up (see
+    /// `restart_log`), and a chip cut to match the pass's own
+    /// `LogOptions` would take every tag off the screen for the length
+    /// of that pass and then put it back.
     pub(super) fn tags_shown(&self) -> bool {
         self.lock_log_options().include_tags
     }
@@ -58,13 +58,13 @@ impl RepoSession {
 
     /// Widens the graph window by one step and rebuilds it **in place**.
     ///
-    /// **The swap pass, never `restart_log`.** A restart's direct pass
-    /// clears the graph before it streams (see `run_direct_pass`), and
-    /// this is asked for at the bottom of the window by somebody reading
-    /// it: blanking the rows and sending them back to the top is the one
-    /// answer a press down there must not give. The swap pass builds the
-    /// wider walk off-screen and splices it in, so what is on screen
-    /// stays where it is and the tail grows under it.
+    /// **The swap pass.** A restart's direct pass clears the graph
+    /// before it streams (see `run_direct_pass`), and this is asked for
+    /// at the bottom of the window by somebody reading it: blanking the
+    /// rows and sending them back to the top is no answer to a press
+    /// down there. The swap pass builds the wider walk off-screen and
+    /// splices it in, so what is on screen stays where it is and the
+    /// tail grows under it.
     ///
     /// Nothing to do on a window that is already the whole history: there
     /// is no step past the end of it.
@@ -95,10 +95,10 @@ impl RepoSession {
             //
             // the wider walk died, so nothing on screen moved and nothing
             // told the window that the press it is waiting on is over — a
-            // swap pass reports a failed walk to the tab, not to the
-            // graph (`run_swap_pass` -> `fail`). Put the window back to
-            // the one that is drawn and take the ordinary route, which
-            // does answer the graph.
+            // swap pass reports a failed walk to the tab
+            // (`run_swap_pass` -> `fail`). Put the window back to the one
+            // that is drawn and take the ordinary route, which does
+            // answer the graph.
             let outcome = s.run_swap_pass(&workdir, options, &run_cancel).await;
             run.answer(outcome);
             if outcome == RefreshOutcome::Failed {
@@ -183,9 +183,9 @@ impl RepoSession {
     /// is numbered after it and the pass's caller can wait for this one
     /// instead ([`RepoSession::graph_answer`]).
     ///
-    /// **Called on the caller's thread, before the pass is spawned**,
-    /// never from inside the spawned task: call order is what decides
-    /// which pass owns the graph, and spawn order does not follow it
+    /// **Called on the caller's thread, before the pass is spawned**:
+    /// call order is what decides which pass owns the graph, and spawn
+    /// order does not follow it
     /// (core.md).
     ///
     /// **The number and the handover are taken together**, under the
@@ -254,14 +254,14 @@ impl RepoSession {
             shared.applied.clear();
             shared.sent_rows.clear();
             // Nothing has answered for this graph yet — not even this
-            // pass, which only learns its footer when the walk ends. A
-            // rebuild landing in between must not read the last graph's
-            // answer as this one's.
+            // pass, which only learns its footer when the walk ends, so
+            // a rebuild landing in between finds no answer to read as
+            // this one's.
             shared.sent_footer = None;
             self.sink.event(SessionEvent::LogStarted { generation });
             // Nothing old is standing any more: the column this stream is
-            // about to fill is empty. Said here rather than at the end,
-            // because the graph that had fallen behind has already gone.
+            // about to fill is empty. Said here, because the graph that
+            // had fallen behind has already gone.
             self.tell_graph_stale(false);
             // From here the column is empty and turning on this stream.
             watch.announced(generation);
@@ -297,8 +297,8 @@ impl RepoSession {
                 };
                 // Recorded and sent under one lock, like every other
                 // message describing what is in `shared`: a rebuild taking
-                // the lock next compares against this footer, and must not
-                // find it before the consumer has been told.
+                // the lock next compares against this footer, and finds
+                // it only after the consumer has been told.
                 let Some(mut shared) = self.store_shared() else {
                     return RefreshOutcome::Cancelled;
                 };
@@ -368,8 +368,8 @@ impl RepoSession {
         self.run_pass_step(PassStep::Swapping);
         let started = Instant::now();
         let mut builder = GraphBuilder::new();
-        // Taken before the walk rather than asked per row: the walk runs
-        // across awaits and cannot hold this lock (`published::RemoteTips`).
+        // Taken before the walk: the walk runs across awaits and cannot
+        // hold this lock (`published::RemoteTips`).
         let mut marks = PublishMarks::new(self.remote_tips(workdir, cancel).await);
         let mut rows: Vec<LogRow> = Vec::new();
         // What the synthetic rows are about to be laid from, so the
@@ -423,11 +423,11 @@ impl RepoSession {
             let Some(mut shared) = self.store_shared() else {
                 return RefreshOutcome::Cancelled;
             };
-            // Superseded: someone asked for a graph after this pass was
-            // started, and that ask cancelled this token. Read here
-            // rather than the generation counter — that one is stamped
-            // when a pass begins running, which is not the order the
-            // asks came in.
+            // Superseded: someone asked for a graph after this pass
+            // was started, and that ask cancelled this token. Read off
+            // the token — the generation counter is stamped when a
+            // pass begins running, which is not the order the asks
+            // came in.
             if cancel.is_cancelled() {
                 watch.answered();
                 return RefreshOutcome::Cancelled;
@@ -445,8 +445,8 @@ impl RepoSession {
             }
             let footer = Footer {
                 walked,
-                // See run_direct_pass: the walk decides truncation, not
-                // the shown row count.
+                // See run_direct_pass: the walk is what decides
+                // truncation.
                 truncated: options.limit.is_some_and(|n| walked >= n),
             };
             // Both halves of what the last pass delivered. Rows alone
@@ -500,7 +500,7 @@ impl RepoSession {
             shared.generation = generation;
             // Still under the lock (see run_direct_pass): a refs read that
             // takes it next diffs chips against this graph, and its event
-            // must not overtake the rows it numbers.
+            // follows the rows it numbers.
             self.sink.event(SessionEvent::LogReplaced {
                 generation,
                 rows,
@@ -525,7 +525,7 @@ impl RepoSession {
         self.refresh_stashes();
         self.refresh_worktrees();
         // The window coming back is the moment the other copies are most
-        // likely to have moved, so their own tick is not waited out.
+        // likely to have moved, so their pass is asked for here.
         self.refresh_carried();
     }
 }

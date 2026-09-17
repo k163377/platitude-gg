@@ -100,8 +100,8 @@ async fn a_name_git_will_not_merge_is_still_a_failure() {
 
 /// `--squash` conflicts are the one stop that reads as a failure: git
 /// writes `SQUASH_MSG` and no `MERGE_HEAD` (measured, 2.55), so there is no
-/// operation standing to be continued. Recorded rather than worked
-/// around — nothing on screen asks for a squashed merge.
+/// operation standing to be continued. Recorded only — nothing on
+/// screen asks for a squashed merge.
 #[tokio::test]
 async fn a_squashed_merge_leaves_nothing_standing_to_continue() {
     let repo = conflicting_branches();
@@ -138,8 +138,8 @@ async fn a_second_merge_over_one_already_standing_is_still_a_failure() {
             .expect("the first one stops"),
         Landing::Stopped
     );
-    // Resolved and staged, so what refuses the second one is the merge
-    // standing rather than the unmerged paths.
+    // Resolved and staged, so what refuses the second one is the
+    // merge standing.
     std::fs::write(repo.path.join("f.txt"), "resolved\n").expect("resolve");
     repo.git(&["add", "--", "f.txt"]);
 
@@ -158,8 +158,8 @@ async fn a_conflicting_merge_is_reported_then_aborted() {
     let repo = conflicting_branches();
     let (exec, cancel) = env();
 
-    // Not an error: git stopped and left the merge standing, which is a
-    // landing of its own (observed — it read as a failure).
+    // A landing of its own: git stopped and left the merge standing
+    // (observed — it read as a failure).
     assert_eq!(
         integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
             .await
@@ -196,8 +196,8 @@ async fn a_conflicting_merge_is_reported_then_aborted() {
 /// application can put it in the box before the press
 /// (デザイン規約 §進行中の操作から出る).
 ///
-/// The two runs are two repositories, so the ids differ; everything the
-/// two commits are made of does not.
+/// The two runs are two repositories, so the ids differ; everything
+/// the two commits are made of matches.
 #[tokio::test]
 async fn a_stopped_merge_finished_by_committing_records_what_continue_would() {
     let (exec, cancel) = env();
@@ -316,11 +316,11 @@ async fn resolving_a_conflict_by_taking_one_side_lets_the_merge_continue() {
     );
 }
 
-/// The sides come back as `Some` only when they were really read. Nothing
-/// there is `None` rather than an empty list, so a caller cannot mistake a
-/// read that told it nothing for a merge that ended — every way of
-/// answering "no sides" other than `None` is one that a failed read would
-/// answer too.
+/// The sides come back as `Some` only when they were really read.
+/// Nothing there is `None`, so a caller cannot mistake a read that told
+/// it nothing for a merge that ended — every way of answering "no
+/// sides" other than `None` is one that a failed read would answer
+/// too.
 #[tokio::test]
 async fn merge_heads_says_nothing_read_rather_than_no_sides() {
     let repo = conflicting_branches();

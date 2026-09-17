@@ -9,9 +9,9 @@
 /// What the details pane does with the message boxes: take typing, or
 /// refuse it and say why.
 ///
-/// One answer rather than a pair, because "may this be edited" and "why
-/// not" are the same question asked twice — a pane that asks them apart
-/// can draw a live box with a refusal in its tooltip.
+/// One answer, because "may this be edited" and "why not" are the
+/// same question asked twice — a pane that asks them apart can draw
+/// a live box with a refusal in its tooltip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageEdit {
     /// No commit on screen, or the tab is not open: the boxes hold no
@@ -47,18 +47,18 @@ impl MessageEdit {
 /// do not.
 ///
 /// `oid_hex` is the commit on screen, `head_oid` the one HEAD is on
-/// (**not** the current branch's tip — detached, there is no branch to
+/// (detached, there is no branch to
 /// ask), `stash_ref` the reflog selector when that row is a stash (`""`
 /// otherwise), and `op_text` the standing operation's own word — `""`
 /// exactly when nothing stands, which is the test the rest of the UI
 /// asks (`WorkTreeModel.op_text`).
 ///
-/// **Only HEAD's own commit.** Any older one is replayed rather than
-/// amended, and a replay hands every commit after it a new id; the boxes
-/// are not a place to put that behind an accident, because they take a
-/// caret from any click that lands in them and the first keystroke is
-/// already the rewrite's first keystroke. GitKraken draws the same line
-/// — the most recent commit is the one its panel lets a click edit
+/// **Only HEAD's own commit.** Any older one is replayed, and a
+/// replay hands every commit after it a new id; the boxes take
+/// a caret from any click that lands in them and the first
+/// keystroke is already the rewrite's first keystroke.
+/// GitKraken draws the same line — the most recent commit is the
+/// one its panel lets a click edit
 /// (help.gitkraken.com/gitkraken-desktop/commits, observed) — and the
 /// rewrites that are asked for by name keep their rows in the commit
 /// menu ([`super::commit_menu`]'s `edit_history`).
@@ -86,9 +86,9 @@ impl MessageEdit {
 /// stands, HEAD's own commit takes typing (デザイン規約 §フル interactive
 /// rebase).
 ///
-/// **Detached is not a reason.** `git commit --amend` on a detached HEAD
-/// amends as usual (measured, 2.55) — unlike the menu's rewrite rows, which
-/// need a branch to carry the result.
+/// **Detached still takes typing.** `git commit --amend` on a
+/// detached HEAD amends as usual (measured, 2.55) — unlike the menu's
+/// rewrite rows, which need a branch to carry it.
 pub fn message_edit(
     open: bool,
     oid_hex: &str,

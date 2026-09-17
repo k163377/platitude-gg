@@ -96,8 +96,8 @@ async fn a_write_rebuilds_the_graph_once() {
 
 /// Opens `scenario()` and takes a baseline only after the opening graph
 /// and snapshot reads have answered. The operation under test supplies
-/// its own completion boundary; this helper never infers completion from
-/// a quiet interval.
+/// its own completion boundary, and that is what this helper waits
+/// on.
 async fn settled_graph() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, usize) {
     let (repo, _) = scenario();
     let (sink, session) = open_unawaited(&repo);
@@ -221,11 +221,11 @@ async fn an_external_ref_move_rebuilds_the_graph() {
 /// so the next read has nothing to say and the next rebuild nothing to
 /// swap.
 ///
-/// The hook makes the interleaving exact rather than hoped for: it holds
-/// the read at the sink call that publishes its snapshot while the test
-/// rebuilds the graph under it.
-// `worker_threads = 2` is the test's own premise, not tuning: the hook
-// below parks a worker on a blocking `recv`, and a pool inherited from
+/// The hook makes the interleaving exact: it holds the read at the
+/// sink call that publishes its snapshot while the test rebuilds the
+/// graph under it.
+// `worker_threads = 2` is the test's own premise: the hook below
+// parks a worker on a blocking `recv`, and a pool inherited from
 // `available_parallelism` can be a single thread on a small runner —
 // the parked hook then owns the only worker and nothing else runs.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -239,7 +239,7 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
     sink.opened_graph(&session, 3).await;
 
     // Something for the read to find, on the last row of the graph it
-    // reads it from: a chip that travels as a diff instead of with a walk.
+    // reads it from: a chip that travels as a diff.
     repo.git(&["tag", "v2", &root]);
 
     let (release, held) = std::sync::mpsc::channel::<()>();
@@ -308,16 +308,16 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
 }
 
 /// A pass that was superseded before it could start leaves the graph
-/// alone. Which pass is in charge is decided when somebody asks (both
-/// entry points cancel the running token before spawning), not by the
-/// order the tasks happen to reach the lock — so a reset that arrives
-/// late must not clear what is on screen, wiping the record a rebuild
-/// compares against and leaving every later chip diff numbered for a
-/// graph nobody was ever shown.
+/// alone. Which pass is in charge is decided when somebody asks —
+/// both entry points cancel the running token before spawning — so a
+/// reset that arrives late leaves the screen as it is. Clearing it
+/// would wipe the record a rebuild compares against and leave every
+/// later chip diff numbered for a graph nobody was ever
+/// shown.
 ///
 /// Held under the graph lock, the interleaving is exact: the losing pass
 /// cannot reach its reset before the cancel that supersedes it.
-// `worker_threads = 2`: the parked hook must not own the only worker
+// `worker_threads = 2`: the parked hook needs a worker to spare
 // (see the sibling above).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
@@ -453,9 +453,9 @@ async fn a_poll_rebuilds_the_graph_once() {
 /// `remote_tags_integration::learning_what_the_remotes_carry_…` fail
 /// under load and nowhere else.
 ///
-/// The single-threaded runtime is what makes the order a fact rather than
-/// a race: a spawned pass is not polled until this test awaits, so the
-/// second ask is known to arrive before the first has read anything.
+/// The single-threaded runtime is what makes the order a fact: a
+/// spawned pass is not polled until this test awaits, so the second
+/// ask is known to arrive before the first has read anything.
 #[tokio::test]
 async fn a_rebuild_taken_over_before_it_started_never_walks() {
     let (_repo, sink, session, _baseline) = settled_graph().await;
@@ -497,8 +497,8 @@ fn position_of(events: &[SessionEvent], kind: OperationKind) -> Option<usize> {
         .position(|e| matches!(e, SessionEvent::WriteFinished { kind: got, .. } if *got == kind))
 }
 
-/// What the session actually spawned, for a failure that is about the
-/// commands rather than about the graph they built.
+/// What the session actually spawned, for a failure that is about
+/// the commands themselves.
 fn commands(sink: &CaptureSink) -> Vec<String> {
     sink.events
         .lock()

@@ -101,10 +101,10 @@ pub fn parse_worktrees(bytes: &[u8]) -> Result<Vec<WorktreeEntry>, WorktreeParse
 
 /// A flag line that may carry words after it (`locked`, `prunable`):
 /// `Some("")` for the bare word, `Some(reason)` for the word and its
-/// reason, `None` for anything else. **Not `strip_prefix` on its own** —
-/// that would read a future `lockedsomething` as this flag, and git adds
-/// attributes to this listing (the parse ignores the ones it does not
-/// know precisely so that it can).
+/// reason, `None` for anything else. **The word has to end there** — a
+/// future `lockedsomething` is another attribute, and git adds them to
+/// this listing (the parse ignores the ones it does not know precisely
+/// so that it can).
 fn annotation<'a>(line: &'a str, word: &str) -> Option<&'a str> {
     if line == word {
         return Some("");
@@ -235,8 +235,8 @@ mod tests {
     }
 
     /// git adds attributes to this listing, so the parse ignores what it
-    /// does not know — and must not read one of them as a flag it does
-    /// know because the word starts the same way.
+    /// does not know — and a word that only starts like a flag it does
+    /// know stays one of those.
     #[test]
     fn an_attribute_that_only_starts_like_a_flag_is_ignored() {
         let bytes = z(&[

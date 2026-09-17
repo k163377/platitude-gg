@@ -24,15 +24,15 @@ use crate::process::{GitCommand, GitExecutor};
 /// Reads every key matching `pattern` from the configuration as git would
 /// resolve it here, for [`parse_z_records`].
 ///
-/// **Nothing matching is an answer, not a failure**: git exits 1 for it,
-/// every caller here asks about keys that are usually unset, and the empty
-/// output comes back as such. The command says so as well
+/// **Nothing matching is an answer**: git exits 1 for it, every caller
+/// here asks about keys that are usually unset, and the empty output
+/// comes back as such. The command says so as well
 /// (`GitCommand::answers_by_code`), or the command log raises itself over
 /// every one of those answers (規約 core.md §終了コードで答える問い合わせ).
 ///
 /// `named` is what the read is called if it does fail — that string is the
 /// one a UI error puts in front of the user, so each caller names the keys
-/// it was after rather than the regex it got there with.
+/// it was after.
 pub async fn get_regexp(
     executor: &GitExecutor,
     workdir: &Path,
@@ -45,12 +45,12 @@ pub async fn get_regexp(
 
 /// The same read, narrowed to one of git's configuration files.
 ///
-/// A door of its own rather than a flag on [`get_regexp`], because the two
-/// answer different questions and every caller knows which one it came
-/// for. [`get_regexp`] cannot answer this one at all: a key set in two
-/// places arrives twice with no word for which file either record came out
-/// of, so a value that is only inherited reads there exactly like one the
-/// named file wrote down.
+/// A door of its own, because the two answer different questions and
+/// every caller knows which one it came for. [`get_regexp`] cannot
+/// answer this one at all: a key set in two places arrives twice with
+/// no word for which file either record came out of, so a value that
+/// is only inherited reads there exactly like one the named file wrote
+/// down.
 pub async fn get_regexp_at(
     executor: &GitExecutor,
     workdir: &Path,
@@ -65,15 +65,15 @@ pub async fn get_regexp_at(
 /// Which of git's configuration files a value is written to, and which one
 /// a narrowed read is answered from.
 ///
-/// There is deliberately no `System` — nothing this app writes belongs to
-/// the machine rather than to the person, and a level nobody can write is
-/// a level the screen cannot offer to give back.
+/// `Local` and `Global` only — everything this app writes belongs to the
+/// person, and a level nobody can write is a level the screen cannot
+/// offer to give back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigScope {
     /// This repository only.
     Local,
     /// The user's global configuration — the right default for a first-run
-    /// prompt, since the answer is about the person, not the project.
+    /// prompt, since the answer is about the person.
     Global,
 }
 

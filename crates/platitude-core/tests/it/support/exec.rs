@@ -54,13 +54,13 @@ fn isolated_env() -> Vec<(OsString, OsString)> {
 /// Git executor for integration tests. The raw `GitExecutor::new()` remains
 /// available for tests that intentionally exercise the host configuration.
 ///
-/// The stock wall-clock budget is raised to the suite's overall backstop,
-/// not lifted: under a loaded suite one git round trip inflates by more
+/// The stock wall-clock budget is raised to the suite's overall
+/// backstop: under a loaded suite one git round trip inflates by more
 /// than an order of magnitude (`wait.rs`), so the everyday cap would
-/// decide by load — but
-/// a *wedged* git must still fail the awaiting test by name. Session
-/// waits have `Patience` under this; a test that awaits the executor
-/// directly has nothing else.
+/// decide by load — and a *wedged* git must still fail the awaiting
+/// test by name. Session waits have `Patience` under this; a test
+/// that awaits the executor directly has nothing
+/// else.
 pub fn isolated() -> GitExecutor {
     GitExecutor::new()
         .with_stock_timeout(super::wait::OVERALL_BUDGET)
@@ -219,8 +219,8 @@ impl CommandObserver for Ends {
 /// The same, keeping what git *said* with each end.
 ///
 /// The only way left to read the words of a stop that is an answer: it
-/// comes back as a landing rather than an error, so nothing carries git's
-/// message to the caller and the command log is where a person reads it
+/// comes back as a landing, so nothing carries git's message to the
+/// caller and the command log is where a person reads it
 /// (デザイン規約 §git が言ったことを読む場所).
 #[derive(Default)]
 pub struct Said(pub Mutex<Vec<(CommandEnd, String)>>);

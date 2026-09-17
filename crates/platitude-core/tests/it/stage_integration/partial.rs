@@ -95,7 +95,7 @@ async fn discard_a_single_hunk() {
     let mut repo = TestRepo::init();
     let base: String = (1..=20).map(|n| format!("line {n}\n")).collect();
     repo.commit_file("f.txt", &base, "root");
-    // Staged first, so the discard has an index side it must not touch.
+    // Staged first, so the discard has an index side to leave alone.
     repo.write_file("f.txt", &base.replace("line 10\n", "line 10 STAGED\n"));
     repo.git(&["add", "--", "f.txt"]);
     let staged_content = indexed(&mut repo, "f.txt");
@@ -208,9 +208,9 @@ async fn stage_only_a_deletion() {
     assert_eq!(indexed(&mut repo, "f.txt"), "a\nc");
 }
 
-/// Two adjacent lines replaced at once: a diff lists both deletions before
-/// both additions, so staging only the first must not float the untouched
-/// line above its own replacement.
+/// Two adjacent lines replaced at once: a diff lists both deletions
+/// before both additions, so staging only the first has to keep the
+/// untouched line under its own replacement.
 #[tokio::test]
 async fn stage_the_first_line_of_a_two_line_replacement() {
     let mut repo = TestRepo::init();
@@ -357,9 +357,9 @@ async fn unstage_a_single_line() {
 }
 
 /// Partially staging an untracked file goes through intent-to-add. The
-/// file sits in a brand-new directory on purpose: `status -uall` names it
-/// per file rather than folding the directory, which is what gives it a
-/// diff to select from.
+/// file sits in a brand-new directory on purpose: `status -uall` names
+/// it per file, which is what gives it a diff to select
+/// from.
 #[tokio::test]
 async fn stage_part_of_an_untracked_file() {
     let mut repo = TestRepo::init();
@@ -431,8 +431,8 @@ async fn stage_a_hunk_of_a_crlf_file() {
 /// A file without a trailing newline: staging the whole hunk must keep
 /// the missing newline. (Selecting only an addition after the unterminated
 /// line is the one shape a partial patch cannot express — the line before
-/// it would gain a newline — and no workaround quietly widens the
-/// selection: P3-確認事項 触らないと決めたもの.)
+/// it would gain a newline — and the selection stands as asked:
+/// P3-確認事項 触らないと決めたもの.)
 #[tokio::test]
 async fn stage_a_file_without_a_trailing_newline() {
     let mut repo = TestRepo::init();

@@ -181,7 +181,7 @@ async fn the_upstream_is_the_delete_reference_point() {
 /// name, which is the key the refs listing joins it on
 /// (`BranchItem::upstream_oid`), and git measures the delete against it
 /// just the same — a tip HEAD does not reach goes once that branch does
-/// (measured; what git prints about HEAD is a warning, not a refusal).
+/// (measured; what git prints about HEAD is a warning).
 #[tokio::test]
 async fn a_local_upstream_is_the_reference_point_too() {
     let mut repo = TestRepo::init();
@@ -214,8 +214,8 @@ async fn a_local_upstream_is_the_reference_point_too() {
 /// An upstream that names nothing — here one whose branch was deleted
 /// after being set — is still configured (`%(upstream)` prints the
 /// name), but it is not the measure: git falls back to HEAD (measured).
-/// The listing join answers the same way by looking the name up rather
-/// than trusting it, so the delete row reads HEAD there too.
+/// The listing join answers the same way by looking the name up, so
+/// the delete row reads HEAD there too.
 #[tokio::test]
 async fn an_upstream_that_names_nothing_leaves_head_as_the_reference_point() {
     let mut repo = TestRepo::init();
@@ -246,12 +246,12 @@ async fn an_upstream_that_names_nothing_leaves_head_as_the_reference_point() {
 }
 
 /// What `--set-upstream-to` is given has to be the full remote-tracking
-/// refname. The shorthand git prints is a rev-parse spelling, and a local
-/// branch of that exact name makes it **ambiguous** — git refuses the
-/// whole command rather than choosing (measured), which would leave the
-/// question answered on screen and nothing written. Pinned with the
-/// collision in place, since that is the only shape the two spellings
-/// disagree on.
+/// refname. The shorthand git prints is a rev-parse spelling, and a
+/// local branch of that exact name makes it **ambiguous** — git refuses
+/// the whole command (measured), which would leave the question
+/// answered on screen and nothing written. Pinned with the collision
+/// in place, since that is the only shape the two spellings disagree
+/// on.
 #[tokio::test]
 async fn the_upstream_is_named_by_the_one_spelling_that_reads_one_way() {
     let mut origin = TestRepo::init();
@@ -285,10 +285,10 @@ async fn the_upstream_is_named_by_the_one_spelling_that_reads_one_way() {
     clone.git_expect_failure(&["branch", "--set-upstream-to=origin/feature/x", "topic"]);
 }
 
-/// Configuration about a branch rather than a move onto one: **the branch
-/// another working copy has checked out takes it** (measured), where the same
-/// row's delete is refused outright. Which rows that leaves is
-/// `offers::ref_menu`'s answer; this is the half of it git owns.
+/// Configuration about a branch: **the branch another working copy has
+/// checked out takes it** (measured), where the same row's delete is
+/// refused outright. Which rows that leaves is `offers::ref_menu`'s
+/// answer; this is the half of it git owns.
 #[tokio::test]
 async fn a_branch_another_working_copy_holds_still_takes_an_upstream() {
     let mut origin = TestRepo::init();

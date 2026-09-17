@@ -179,8 +179,8 @@ impl Drop for PassWatch<'_> {
             return;
         }
         // The runtime is going away and taking its tasks with it. Nothing
-        // is left to read a report, and a window that is closing must not
-        // be told its history could not be read.
+        // is left to read a report, so a window that is closing hears
+        // nothing of its history.
         if self.session.root_cancel.is_cancelled() {
             return;
         }
@@ -188,16 +188,16 @@ impl Drop for PassWatch<'_> {
         // **Caught, because this runs inside the unwind it is reporting.**
         // A second panic crossing an unwinding frame is an abort, and the
         // way out of here reaches a feed and a QML invoker — nothing this
-        // side owns. Failing to report is what the state was before this
-        // guard existed; killing the window is not.
+        // side owns. The window keeps running; failing to report is what
+        // the state was before this guard existed.
         let told = &self.told;
         let session = self.session;
         let reported = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match told {
             Told::Stream(generation) => session.sink.event(SessionEvent::LogFailed {
                 generation: *generation,
-                // **No words**: nobody said anything, so what the screen
-                // shows is its own — the sentence behind the band's
-                // `STALE GRAPH` badge (`BandStateCard`,
+                // **The words are the screen's**: nobody said anything
+                // — the sentence behind the band's `STALE GRAPH` badge
+                // (`BandStateCard`,
                 // app-ui.md「Rust に文言を置かない」).
                 error: String::new(),
             }),

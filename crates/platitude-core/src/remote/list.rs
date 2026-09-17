@@ -46,8 +46,8 @@ pub async fn read(
 
 /// Lists configured remotes.
 ///
-/// Reads config keys rather than `git remote -v`, whose two-lines-per-remote
-/// shape is meant for humans.
+/// Reads config keys: `git remote -v` prints two lines per remote, a
+/// shape meant for humans.
 pub async fn list(
     executor: &GitExecutor,
     workdir: &Path,
@@ -113,7 +113,7 @@ fn parse_remote_config(bytes: &[u8]) -> Vec<Remote> {
 /// Nothing is contacted: git records the URL and reports success even for a
 /// host that does not exist, so a bad URL is only found out by the push that
 /// follows (measured). The remote survives that failure, which is why the UI
-/// offers a way to correct the URL rather than undoing the add.
+/// offers a way to correct the URL.
 ///
 /// Names are git's to judge — it refuses `bad name` (exit 128) and a name it
 /// already has (exit 3), and both refusals arrive as their own text.
@@ -155,8 +155,8 @@ pub(super) async fn current_branch(
 ) -> Result<String, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        // Exit 1 is the answer "detached" — reported to the caller as the
-        // error below, not raised again by the command log.
+        // Exit 1 is the answer "detached" — the error below reports it,
+        // and the command log lets it pass.
         .answers_by_code(1)
         .args(["symbolic-ref", "-q", "--short", "HEAD"]);
     let out = executor.run_unchecked(cmd, cancel).await?;
@@ -189,8 +189,8 @@ pub(super) async fn config_value(
             Ok((!value.is_empty()).then_some(value))
         }
         // 1 is git's "no such key" — a valid empty answer. Anything else
-        // (128 on an unreadable config) must not read as "unset": a push
-        // planned on that misreading rewrites upstreams (measured: a bad
+        // (128 on an unreadable config) is a failure: a push planned on
+        // the misreading "unset" rewrites upstreams (measured: a bad
         // config line makes `git config --get` exit 128, not 1).
         1 => Ok(None),
         code => Err(GitError::Failed {

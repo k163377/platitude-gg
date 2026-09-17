@@ -14,9 +14,9 @@ use super::*;
 /// graph's cost that grows with what somebody asks to see.
 ///
 /// **Two halves because the chips move on their own.** A refs read that
-/// finds new badges writes them into rows already delivered rather than
-/// replacing the graph (`apply_refs`), and it holds the new chips and
-/// nothing else — so the half it has to restate is the only half it can.
+/// finds new badges writes them into rows already delivered
+/// (`apply_refs`), and it holds the new chips and nothing else — so the
+/// half it has to restate is the only half it can.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct RowPrint {
     /// Everything except the chips.
@@ -41,7 +41,7 @@ impl RowPrint {
     /// **Destructured on purpose.** A field added to [`LogRow`] and not
     /// added here is a change the graph would stop noticing — the rebuild
     /// would call the new picture the old one and leave the screen as it
-    /// was. Naming every field makes that a build error instead.
+    /// was. Naming every field makes that a build error.
     fn rest_of(row: &LogRow) -> u64 {
         use std::hash::{Hash, Hasher};
         let LogRow {
@@ -135,11 +135,11 @@ mod tests {
 
     /// A row that differs anywhere prints differently.
     ///
-    /// This is the whole safety of keeping prints instead of rows: a field
-    /// the print forgets is a change the graph stops noticing, and what
-    /// that looks like is a screen that quietly keeps showing the old one.
-    /// Every field is moved here, one at a time, so forgetting one fails
-    /// rather than passing quietly.
+    /// This is the whole safety of keeping prints: a field the print
+    /// forgets is a change the graph stops noticing, and what that looks
+    /// like is a screen that quietly keeps showing the old one. Every
+    /// field is moved here, one at a time, so forgetting one
+    /// fails.
     #[test]
     fn a_row_that_differs_anywhere_prints_differently() {
         let base = LogRow {

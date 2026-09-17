@@ -17,11 +17,11 @@
 /// scheduling (measured — a child made to sleep 300ms between fork and
 /// `execve` refuses a neighbour's exec for exactly that long).
 ///
-/// Hence a retry on the error, not a wait for the window: every attempt
-/// is the real run, and the first answer that is not "busy" is the answer
-/// — a busy one at the end of the budget included, which reaches the
-/// caller as the failure it is. (cargo and rustup carry the same loop for
-/// the same reason, around the binaries they have just written.)
+/// Hence a retry on the error: every attempt is the real run, and the
+/// first answer that is not "busy" is the answer — a busy one at the
+/// end of the budget included, which reaches the caller as the failure
+/// it is. (cargo and rustup carry the same loop for the same reason,
+/// around the binaries they have just written.)
 ///
 /// `on_busy` is called once, the first time an attempt is refused, for
 /// the tests that hold a handle open on purpose and have to know the loop
@@ -32,10 +32,10 @@ pub fn run_once_it_is_not_busy(
     on_busy: impl FnOnce(),
 ) -> std::io::Result<std::process::Output> {
     // Paid only while it really is busy. The ceiling is the suite's
-    // failure-detection backstop (`QUIET_BUDGET`), not a guess at the
-    // window: the window belongs to another process's scheduling, and a
-    // fixed second of retries is a wall-clock verdict a loaded machine
-    // can outlast (.claude/rules/core.md: a ceiling is for detecting
+    // failure-detection backstop (`QUIET_BUDGET`): the window belongs
+    // to another process's scheduling, and a fixed second of retries
+    // is a wall-clock verdict a loaded machine can outlast
+    // (.claude/rules/core.md: a ceiling is for detecting
     // failure, never for deciding it).
     // waits(ceiling): the suite's quiet budget, spent only on a kernel that keeps calling the image busy
     let started = std::time::Instant::now();

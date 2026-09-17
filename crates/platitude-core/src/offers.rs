@@ -1,7 +1,7 @@
 //! Pure rules for what the standing repository state lets the UI offer:
 //! the ref and commit menus' rows, and — in [`moves`] — where a press on
 //! a ref lands and what leaving a stopped operation costs. Every refusal
-//! encoded here is git's own, measured rather than guessed (the doc on
+//! encoded here is git's own, measured (the doc on
 //! each item).
 //!
 //! Nothing here runs git — callers pass values already in hand, and the
@@ -91,7 +91,7 @@ pub struct RefMenuOffers {
     /// names a place to move to, and the branch the tree is on is not a
     /// move. **A branch another working copy holds keeps this offer** —
     /// everything that stands in the move's way is answered by the
-    /// question the press raises, not by greying the row.
+    /// question the press raises.
     pub switch_to: bool,
     /// That move raises a question before it moves: an operation or
     /// unmerged files to clear first, or the branch out in another
@@ -136,10 +136,10 @@ pub struct RefMenuOffers {
     /// Which remote branch this local one is measured against. Only a
     /// local branch has the setting at all — a remote-tracking ref is the
     /// far side of somebody's, and it has none of its own — and the
-    /// answer is a question rather than a lookup, so the row needs a
-    /// remote to ask about and nothing else. **The branch the tree is on
+    /// answer is a question, so the row needs a remote to ask about
+    /// and nothing else. **The branch the tree is on
     /// takes it, and so does one another working copy holds** (measured): this
-    /// writes configuration about a branch rather than moving onto it.
+    /// writes configuration about a branch.
     pub set_upstream: bool,
     /// The row is the branch HEAD is on — what the delete rows' refusal
     /// names first.
@@ -194,8 +194,8 @@ impl RefMenuOffers {
 /// The offers themselves, off values already in hand — no git runs.
 ///
 /// `full` is the row's whole display name as the chip wears it —
-/// `feat`, or `origin/feat` for a remote reading — not a `refs/…` path
-/// (the UI's vocabulary, not [`crate::refs::RefEntry::name`]'s).
+/// `feat`, or `origin/feat` for a remote reading: the UI's
+/// vocabulary, which [`crate::refs::RefEntry::name`] spells its own way.
 /// `open` is the tab-lifecycle gate and stays the caller's to answer
 /// (as [`crate::remote::push_standing`] holds it); `op_text` is the
 /// operation badge, empty exactly when nothing is standing — bisect
@@ -261,10 +261,9 @@ pub fn ref_menu(
             // name; the row below it is the one that reaches it.
             && tag_here,
         delete_remote: !busy && !remote_counterpart.is_empty() && !remote_drifted,
-        // Sending is not reaching for what is over there: the tag being
-        // pushed is the one on this row, and a remote holding the name
-        // elsewhere is what turns that row into the leased overwrite
-        // rather than what takes it away (デザイン規約 §相手の履歴を置き換える).
+        // Sending is about the tag on this row, and a remote holding the
+        // name elsewhere is what turns that row into the leased
+        // overwrite (デザイン規約 §相手の履歴を置き換える).
         push_tag: kind == RefKind::Tag && !busy && !default_remote.is_empty() && tag_here,
         delete_remote_tag: !busy && !default_remote.is_empty() && tag_on_remote && !remote_drifted,
         delete_tag_everywhere: !busy

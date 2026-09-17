@@ -2,8 +2,8 @@
 //! ([`Latest::begin_numbered`]).
 use super::*;
 
-// Feeds can outlive a closed/reopened session. An old sink must never carry
-// a larger identity than a new session's request into the same consumer.
+// Feeds can outlive a closed/reopened session. A new session's request
+// outranks whatever an old sink carries into the same consumer.
 static NEXT_REQUEST: AtomicU64 = AtomicU64::new(1);
 
 /// The task has finished, including delivery to its sink.

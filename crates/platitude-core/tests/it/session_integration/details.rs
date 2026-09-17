@@ -59,7 +59,7 @@ async fn details_and_diff_round_trip_through_the_session() {
     session.close();
 }
 
-/// Colours arrive behind the rows they belong to, not with them.
+/// Colours arrive behind the rows they belong to.
 ///
 /// The order is the whole of it: a diff that waits for its colours is a
 /// diff that shows nothing for as long as the colouring takes, which on
@@ -126,7 +126,7 @@ async fn a_read_the_reader_has_left_hands_over_nothing() {
     // The first click, held where the race is: polled once, so it runs to
     // the point where it waits on its own git and stops there. The second
     // click is then asked for while the first is demonstrably still in
-    // flight, rather than while it probably is
+    // flight
     // (core.md §非同期・並行テスト).
     let mut first = Box::pin(session.read_diff(DiffTarget::Unstaged {
         path: "src/a.rs".to_string(),

@@ -1,7 +1,7 @@
 //! Where the reading of one hunk of a combined diff has got to, and how
-//! a conflict's two sides are stood beside each other rather than after
-//! one another. An ordinary diff reads elsewhere (a grammar in
-//! [`super::tree`], or the fallback walk `super::patch` drives); only a
+//! a conflict's two sides are stood beside each other. An ordinary
+//! diff reads elsewhere (a grammar in [`super::tree`], or the
+//! fallback walk `super::patch` drives); only a
 //! combined one — the form git prints for a path it stopped on — has
 //! its markers read as structure, and only it comes here.
 
@@ -24,8 +24,8 @@ pub(super) struct Walk<'a> {
 }
 
 /// A lexer's place between two lines. Cloned to stand a conflict's sides
-/// beside each other rather than after one another, and remembered down
-/// a file so the next reading of the same text can start near its hunks
+/// beside each other, and remembered down a file so the next reading
+/// of the same text can start near its hunks
 /// ([`super::LexCache`]).
 #[derive(Clone)]
 pub(super) struct LineState {
@@ -113,7 +113,7 @@ impl<'a> Walk<'a> {
     }
 
     pub(super) fn read(&mut self, line: &crate::parse::diff::DiffLine) -> LineColors {
-        // `\ No newline at end of file` is git talking, not the file.
+        // `\ No newline at end of file` is git talking.
         if line.kind == DiffLineKind::NoNewline {
             return LineColors::nothing();
         }
@@ -265,7 +265,7 @@ diff --cc src/main.rs
         assert_eq!(conflict_marker("======="), Some(Marker::Split));
         assert_eq!(conflict_marker("||||||| merged common"), Some(Marker::Base));
         assert_eq!(conflict_marker(">>>>>>> other/branch"), Some(Marker::Close));
-        // Eight is a rule someone drew, not a marker git wrote.
+        // Eight is a rule someone drew.
         assert_eq!(conflict_marker("========"), None);
         assert_eq!(conflict_marker("<<<<<<<<"), None);
         // Six is not one either, and neither is a marker with something

@@ -3,10 +3,10 @@
 //! A person picks a file off their own disk and it is drawn at 20 and 40
 //! pixels. Nothing else about it is kept: it is decoded, cut to its
 //! centre square, averaged down and written back out as PNG. The store
-//! holds that, never the file that was picked.
+//! holds that alone.
 //!
-//! Doing it here rather than at the drawing end settles four things at
-//! once (measured: `ci/baseline/avatar-shrink-windows-x64.md`).
+//! Doing it here settles four things at once (measured:
+//! `ci/baseline/avatar-shrink-windows-x64.md`).
 //!
 //! **Memory.** The ceiling the store had was on bytes, and bytes say
 //! nothing about pixels: an ordinary telephone photograph is a fifth of
@@ -28,10 +28,10 @@
 //! the store can be drawn, and everything else was refused while a
 //! person was still standing there.
 //!
-//! Reading is deliberately narrow — PNG and JPEG, by content rather than
-//! by file name. Every tool that makes pictures writes one of the two,
-//! anything else is one export away, and each additional decoder is
-//! surface that runs on a file this application did not make.
+//! Reading is deliberately narrow — PNG and JPEG, by content.
+//! Every tool that makes pictures writes one of the two, anything
+//! else is one export away, and each additional decoder is surface
+//! that runs on a file this application did not make.
 
 use std::io::Cursor;
 
@@ -53,9 +53,9 @@ pub const MAX_PIXELS: u64 = 32_000_000;
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PictureError {
     /// Not a PNG or a JPEG, or one that will not come apart. The sentence
-    /// names the two formats rather than a category: every category word
-    /// for the file is a second name for the avatar, and the settings card
-    /// puts this line directly under the one word it uses
+    /// names the two formats: every category word for the file is a
+    /// second name for the avatar, and the settings card puts this line
+    /// directly under the one word it uses
     /// (デザイン規約 §アバターを与える).
     #[error("this file is not a PNG or a JPEG that can be read")]
     Unreadable,
@@ -98,8 +98,8 @@ enum Kind {
 }
 
 /// What a file is, by what is in it. The name it happens to carry is
-/// the file dialog's business (`avatar::EXTENSIONS`), not this one's —
-/// a picture saved under the wrong extension still draws.
+/// the file dialog's business (`avatar::EXTENSIONS`) — a picture
+/// saved under the wrong extension still draws.
 fn kind_of(bytes: &[u8]) -> Option<Kind> {
     if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
         Some(Kind::Png)
@@ -187,8 +187,8 @@ fn widen(src: &[u8], stride: usize, to_rgba: impl Fn(&[u8]) -> [u8; 4]) -> Vec<u
 /// exactly once, so nothing shimmers when the result is drawn smaller
 /// still.
 ///
-/// A picture already smaller than [`SIDE`] is only squared, never
-/// stretched up.
+/// A picture already smaller than [`SIDE`] is only
+/// squared.
 fn shrink(img: &Raw) -> Raw {
     let edge = img.width.min(img.height);
     let side = SIDE.min(edge).max(1);
@@ -244,7 +244,7 @@ fn encode(img: &Raw) -> Option<Vec<u8>> {
     Some(out)
 }
 
-/// A picture built rather than read, so that nothing in this crate needs
+/// A picture built here, so that nothing in this crate needs
 /// a binary fixture in the tree to have a real one to work on.
 #[cfg(test)]
 pub(crate) fn png_of(width: u32, height: u32, colour: impl Fn(u32, u32) -> [u8; 4]) -> Vec<u8> {
@@ -271,8 +271,8 @@ mod tests {
     }
 
     /// 24x16, three colours across, quality 92 — emitted once from a
-    /// throwaway encoder rather than kept as a file, since a real JPEG
-    /// is the only way to prove the JPEG half comes apart at all.
+    /// throwaway encoder, since a real JPEG is the only way to prove
+    /// the JPEG half comes apart at all.
     const WIDE_JPEG_HEX: &str = concat!(
         "ffd8ffe000104a46494600010200000100010000ffc000110800100018030111",
         "00021101031101ffdb0043000302020202020302020203030303040604040404",
@@ -344,7 +344,7 @@ mod tests {
             "squared, not stretched"
         );
         // The middle band is green, and lossy coding moves the numbers
-        // around, so the claim is which channel won rather than its value.
+        // around, so the claim is which channel won.
         let [r, g, b, a] = pixel(&back, 8, 8);
         assert!(g > r && g > b, "the centre band survived: {r},{g},{b}");
         assert_eq!(a, 255);

@@ -2,10 +2,10 @@
 //!
 //! The mark exists so a menu opening on a row has the answer in the same
 //! frame (`session::published`). What makes it usable is that it agrees
-//! with `git rev-list --not --remotes` — the same question asked the slow
-//! way, and the one [`platitude_core::publish`] asks everywhere else. So
-//! every row here is checked against git rather than against a list
-//! written out by hand.
+//! with `git rev-list --not --remotes` — the same question asked the
+//! slow way, and the one [`platitude_core::publish`] asks everywhere
+//! else. So every row here is checked against what git
+//! answers.
 
 use crate::support::remote::origin_and_clone;
 use crate::support::session::{CaptureSink, open_unawaited};
@@ -124,7 +124,7 @@ async fn a_push_from_outside_publishes_the_rows_it_reached() {
         "nobody has it yet"
     );
 
-    // Somebody's terminal, not this session's write queue.
+    // Somebody's terminal, outside the write queue.
     work.git(&["push", "origin", "main"]);
     assert!(git_says_published(&mut work, &mine), "git agrees it is out");
     session.refresh_refs();
@@ -142,7 +142,7 @@ async fn a_push_from_outside_publishes_the_rows_it_reached() {
 }
 
 /// A commit no branch is on any more, but a remote-tracking branch still
-/// reaches: the mark has to follow reachability, not the chips.
+/// reaches: the mark has to follow reachability.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_commit_behind_the_remote_tip_is_marked_without_carrying_a_chip() {
     let (_bare, mut work) = origin_and_clone();
@@ -158,8 +158,8 @@ async fn a_commit_behind_the_remote_tip_is_marked_without_carrying_a_chip() {
     .await;
     let rows = rows_of(&sink, 3).await;
 
-    // Only the tip carries `origin/main`; the rows under it are published
-    // because the walk carried the mark down, not because they are named.
+    // Only the tip carries `origin/main`; the rows under it are
+    // published because the walk carried the mark down.
     let middle_row = rows.iter().find(|r| r.oid_hex == middle).expect("middle");
     assert!(middle_row.published, "reached from the remote tip");
     assert!(

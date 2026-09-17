@@ -101,9 +101,9 @@ fn octopus_merge_forks_three_ways() {
 fn second_parent_merges_into_existing_edge() {
     // 6 -> [5, 1] opens lane 1 waiting for 1. Later 4 -> [3, 1]: its
     // second parent is already awaited by lane 1, so the edge joins
-    // lane 1 immediately instead of opening lane 2. First parents, by
-    // contrast, keep their own lane until the parent row (gitk-style),
-    // which is why 3 -> [1] still flows down lane 0.
+    // lane 1 immediately. First parents, by contrast, keep their
+    // own lane until the parent row (gitk-style), which is why
+    // 3 -> [1] still flows down lane 0.
     let mut pool = StrPool::new();
     let commits = vec![
         commit(&mut pool, 6, &[5, 1]),
@@ -204,7 +204,7 @@ fn out_of_order_parent_does_not_leak_a_lane() {
         commit(&mut pool, 3, &[2]),
     ];
     let (rows, b) = build(&commits);
-    // The dangling edge is dropped instead of waiting forever.
+    // The dangling edge is dropped.
     assert_eq!(rows[2].segments.len(), 0);
     assert_eq!(b.max_width(), 1);
 }

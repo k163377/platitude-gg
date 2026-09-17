@@ -228,8 +228,8 @@ async fn amending_keeps_the_author_until_reset_author_is_asked_for() {
     repo.commit_file("a.txt", "one\n", "root");
     repo.write_file("a.txt", "theirs\n");
     repo.git(&["add", "--", "a.txt"]);
-    // `--author` rather than `-c user.name`: the harness pins the author
-    // through the environment, which config cannot outrank.
+    // `--author`: the harness pins the author through the environment,
+    // which config cannot outrank.
     repo.git(&[
         "commit",
         "--author=Other Person <other@example.com>",
@@ -281,9 +281,9 @@ async fn amending_keeps_the_author_until_reset_author_is_asked_for() {
     assert_eq!(head.author_email, "test@example.com");
 }
 
-/// A hook that says no is not a failure of this application's: nothing was
-/// half written, and `--no-verify` is never passed, so there is no next
-/// move here either (デザイン規約 §答えの要らない報せ).
+/// A hook that says no comes back as a report: nothing was half written,
+/// and `--no-verify` stays off, so there is no next move here either
+/// (デザイン規約 §答えの要らない報せ).
 ///
 /// **The hook's own words are what goes under the heading, from both
 /// streams.** A linter wrapped in a hook writes its complaint to stdout
@@ -373,10 +373,10 @@ async fn a_commit_git_itself_refuses_reads_the_same_way() {
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "root");
 }
 
-/// A name git will not take is a report, not an error: nothing moved, and
-/// the box the name was typed into is still open to take the answer
-/// (デザイン規約 §答えの要らない報せ). The name it carries is the one the row still
-/// has, since the rename is exactly what did not happen.
+/// A name git will not take is a report: nothing moved, and the box the
+/// name was typed into is still open to take the answer
+/// (デザイン規約 §答えの要らない報せ). The name it carries is the one the row
+/// still has, since the rename is exactly what did not happen.
 #[tokio::test]
 async fn a_rename_to_a_name_that_is_taken_is_reported_under_the_old_name() {
     let mut repo = TestRepo::init();

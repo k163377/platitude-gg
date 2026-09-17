@@ -10,8 +10,8 @@ use platitude_core::process::Kept;
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 use platitude_core::{opstate, status};
 
-/// A rebase that stopped part-way is a landing of its own, not a failure
-/// — git left the replay standing, and the badge, the exit card and the
+/// A rebase that stopped part-way is a landing of its own — git left
+/// the replay standing, and the badge, the exit card and the
 /// conflicted rows are the whole of what happened
 /// (by design. デザイン規約 §進行中の操作から出る).
 fn stopped(outcome: Result<integrate::RebaseOutcome, platitude_core::error::GitError>) {
@@ -66,9 +66,9 @@ fn behind_main() -> TestRepo {
 
 /// git's clean-tree refusal for a *plain* rebase, in git's own words.
 ///
-/// A refusal is an answer, not a failure: it arrives as `Blocked`, and
-/// the caller goes round through a stash. The interactive path words the
-/// same two refusals identically — that is what lets one carry serve both
+/// A refusal is an answer: it arrives as `Blocked`, and the caller goes
+/// round through a stash. The interactive path words the same two
+/// refusals identically — that is what lets one carry serve both
 /// (規約 §未コミット変更がある状態で履歴を書き換える) — and both halves
 /// are exercised here because git words the staged one differently from
 /// the unstaged one.
@@ -239,7 +239,7 @@ async fn a_conflicting_rebase_can_be_skipped() {
     assert!(subjects.contains("keeper"));
 }
 
-/// What reaches a person as "skip or not?" is never the easy case: a
+/// What reaches a person as "skip or not?" is always the hard one: a
 /// commit whose change is already upstream *to the letter* is dropped by
 /// git without stopping, so it never gets as far as the UI.
 #[tokio::test]
@@ -274,7 +274,7 @@ async fn a_commit_already_upstream_verbatim_never_stops_the_rebase() {
     assert!(subjects.contains("keeper"));
 }
 
-/// And skipping is not free: the commit left out takes its own work with
+/// And skipping has a price: the commit left out takes its own work with
 /// it, wherever else that work does or does not exist. Only the reflog
 /// holds it afterwards — the same standing a hard reset leaves behind,
 /// which is the one this app already asks to be held for.
@@ -428,8 +428,8 @@ async fn an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip() {
     );
     // Two flags are set at once here — the stopped pick leaves
     // CHERRY_PICK_HEAD behind — and only one of them is the operation.
-    // Anything naming what is in progress has to ask `from_state`, not
-    // list the flags: a badge that lists them reads
+    // Anything naming what is in progress has to ask `from_state`: a
+    // badge that lists the flags reads
     // `REBASING · CHERRY-PICKING` for one rebase.
     let (exec2, cancel2) = env();
     let state = opstate::detect(&exec2, &repo.path, &cancel2)

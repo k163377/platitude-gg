@@ -254,9 +254,9 @@ async fn a_commit_only_a_detached_copy_holds_is_a_row_with_its_own_chip() {
     let only_theirs = repo.git_in(&spike, &["rev-parse", "HEAD"]);
 
     let (sink, session) = open_unawaited(&repo);
-    // **The opening walk is not where this lands.** The first worktree
-    // read comes in behind the first walk, so what is being waited for is
-    // the walk that read asked for.
+    // **The worktree read's walk is where this lands.** That read
+    // comes in behind the first walk, so what is being waited for is
+    // the walk it asked for.
     let seen = sink
         .wait_for("the row the copy is standing on", |evs| {
             let rows = crate::support::replay_graph(evs);
@@ -397,8 +397,8 @@ async fn a_merge_resolved_as_ours_keeps_the_row_a_clean_tree_would_not() {
 /// The same clean tree, with the side reachable by nothing but
 /// `MERGE_HEAD`. The walk starts there for one reason — the row above it
 /// has a dotted edge to land — so the two are one decision: whatever
-/// reaches the graph this way arrives leashed, never as a commit no tip
-/// names and no edge touches, blinking in and out with the merge.
+/// reaches the graph this way arrives leashed, with an edge from the
+/// row above it.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_side_only_merge_head_names_is_never_on_screen_unleashed() {
     let mut repo = crate::support::integrate::conflicting_branches();

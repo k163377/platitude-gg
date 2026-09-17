@@ -126,8 +126,8 @@ async fn available_tools_never_offers_one_that_needs_a_terminal() {
     );
 }
 
-/// Closing the editor without saving comes back as a failed file rather
-/// than as a hang, and the markers are put back.
+/// Closing the editor without saving comes back as a failed file, and
+/// the markers are put back.
 ///
 /// git touches a backup before running an untrusted tool and compares
 /// mtimes afterwards; a file that did not move makes it ask on stdin
@@ -181,11 +181,11 @@ async fn setting_the_tool_writes_the_gui_key_and_an_empty_one_clears_it() {
     );
 }
 
-/// Clearing a tool nothing had set is the outcome that was asked for
-/// rather than a failure: `git config --unset` says "there was nothing to
-/// unset" with exit 5. Unmarked, that code is a failed row and the command
-/// panel opens itself over it — which is what closing the settings card
-/// did on a machine with no merge tool configured.
+/// Clearing a tool nothing had set is the outcome that was asked for:
+/// `git config --unset` says "there was nothing to unset" with exit 5.
+/// Unmarked, that code is a failed row and the command panel opens
+/// itself over it — which is what closing the settings card did on a
+/// machine with no merge tool configured.
 #[tokio::test]
 async fn clearing_a_tool_that_was_never_set_answers_by_code() {
     let repo = TestRepo::init();

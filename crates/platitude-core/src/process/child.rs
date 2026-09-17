@@ -8,7 +8,7 @@ use tokio::process::Child;
 use tokio_util::sync::CancellationToken;
 
 /// Keep at most this much stderr; git error messages are short, and a
-/// runaway process must not grow memory unboundedly.
+/// runaway process is capped here.
 const STDERR_CAP: usize = 256 * 1024;
 
 const STDOUT_CHUNK: usize = 64 * 1024;

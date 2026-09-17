@@ -3,18 +3,18 @@
 
 // `state` reads its `Arc` / `AtomicU64` / `Ordering` off the session's
 // shared prelude the same way (rules-refs/structure.md §分割の各論), so the
-// tests take both globs rather than naming them a second time.
+// tests take both globs.
 use super::state::*;
 use super::*;
 
 /// Two callers miss at once: the second parks on the single-flight gate
-/// and is answered by the first's read, not by one of its own.
+/// and is answered by the first's read.
 ///
 /// The second caller is driven by hand to the point where it has to
 /// wait ([`crate::wait::poll_once`]) — past the fast-path miss and onto
-/// the gate the first holds — so the race is set up at the one point it
-/// can happen, rather than left to a turn of the scheduler that may or
-/// may not have carried it there.
+/// the gate the first holds — so the race is set up at the one point
+/// it can happen, whatever turn of the scheduler would otherwise
+/// have carried it there.
 #[tokio::test]
 async fn concurrent_callers_share_one_derived_read() {
     let derived = Arc::new(Derived::<u32>::default());
@@ -113,7 +113,7 @@ async fn invalidation_during_a_derived_read_retries_before_publishing() {
 }
 
 /// An answer invalidated on *every* read still comes back: the chase
-/// after a lost generation is one read long, not open-ended — a write
+/// after a lost generation is one read long — a write
 /// lands an invalidation on its way out, so a chase held open until no
 /// write interferes spins git processes for as long as writes keep
 /// coming, with every waiter parked behind the single-flight gate.

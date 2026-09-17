@@ -202,7 +202,7 @@ impl LogParser {
             _ => {
                 let subject = String::from_utf8_lossy(token).into_owned().into_boxed_str();
                 // Field 0 always ran before we get here, so cur_oid is set;
-                // fall back to a parse error instead of unwrapping.
+                // fall back to a parse error.
                 let oid = self
                     .cur_oid
                     .take()

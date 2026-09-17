@@ -52,9 +52,9 @@ pub fn replay_rows(events: &[SessionEvent]) -> BTreeMap<u32, LogRow> {
 /// the remote turned out to have reaches the graph as `LabelsChanged`
 /// against rows already on screen. Reading only the walk would miss it.
 ///
-/// The generation rules are part of the model and are kept here: a message
-/// about a graph that has been replaced is dropped rather than applied to
-/// whatever now sits at those row numbers.
+/// The generation rules are part of the model and are kept here: a
+/// message about a graph that has been replaced is dropped on
+/// arrival.
 pub fn replay_graph(events: &[SessionEvent]) -> BTreeMap<u32, SeenRow> {
     fn take(batch: &[LogRow], into: &mut BTreeMap<u32, SeenRow>) {
         for r in batch {

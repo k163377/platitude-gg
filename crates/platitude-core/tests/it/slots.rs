@@ -4,8 +4,8 @@
 //!
 //! The competitors are driven by hand onto the queue
 //! (`support::wait::poll_once`) while a slot the test holds keeps them
-//! there, so every race below is asked for at the exact point it could
-//! happen rather than left to a scheduler (core.md §非同期・並行テスト).
+//! there, so every race below is asked for at the exact point it
+//! could happen (core.md §非同期・並行テスト).
 
 use std::sync::Arc;
 
@@ -169,9 +169,9 @@ async fn a_session_opens_whole_through_two_slots_and_gives_them_back() {
 /// waiting for spawns nothing on its behalf.
 ///
 /// The session watches its own commands (`CommandFeed`), so what the
-/// queued read did is read off the sink rather than off a log of the
-/// test's — with the background reads switched on, since a details read
-/// is one the session makes on its own.
+/// queued read did is read off the sink — with the background reads
+/// switched on, since a details read is one the session makes on
+/// its own.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_closed_session_takes_its_queued_reads_with_it() {
     let (repo, head) = scenario();

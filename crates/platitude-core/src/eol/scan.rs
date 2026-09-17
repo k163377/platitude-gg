@@ -202,7 +202,7 @@ impl Scan {
         }
         // Nothing was added, so nothing this change did can have made the
         // endings worse. Deleting the odd lines out of a mixed file is a
-        // repair, not a warning.
+        // repair.
         if self.plus.is_empty() {
             return Reading::Quiet;
         }

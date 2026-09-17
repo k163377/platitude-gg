@@ -12,8 +12,8 @@ use crate::report::{ReportKind, WriteReport};
 /// the band's state card — and nothing on the way renders markup, so a
 /// command wrapped in backticks arrives with the backticks in it
 /// (デザイン規約 §git 用語のコード表記: the code chip is a menu row's form,
-/// and it is a chip rather than punctuation). Punctuate them the way a
-/// sentence is punctuated, and leave the marking up to whoever draws them.
+/// and it is a chip). Punctuate them the way a sentence is
+/// punctuated, and leave the marking up to whoever draws them.
 #[derive(Debug, thiserror::Error)]
 pub enum GitError {
     /// The git executable could not be found on PATH.
@@ -52,13 +52,13 @@ pub enum GitError {
     /// the far side turned it down under a rule of its own, a hook here
     /// did, or git worked out from what this end holds that it could not
     /// stand. Nothing was half done and there is nothing here to put
-    /// right, so the screen reports it rather than raising git's own
-    /// words as a failure (デザイン規約 §答えの要らない報せ).
+    /// right, so the screen reports it
+    /// (デザイン規約 §答えの要らない報せ).
     ///
-    /// Reads the same as [`GitError::Failed`] wherever it is only being
-    /// logged: `report` is the part the screen is made out of, and which
-    /// of them this is lives in [`ReportKind`] rather than in git's
-    /// wording.
+    /// Reads the same as [`GitError::Failed`] wherever it is only
+    /// being logged: `report` is the part the screen is made out
+    /// of, and which of them this is lives in
+    /// [`ReportKind`].
     ///
     /// Boxed because every `Result<_, GitError>` in the crate carries the
     /// widest variant, and four more strings here would put that cost on
@@ -84,7 +84,7 @@ pub enum GitError {
     /// `bare` separates the one folder that *is* a repository and still
     /// cannot be opened: a bare one has no work tree to show. The screen
     /// says something different for it, and this is how it knows — git's
-    /// wording is for people, not for branching on.
+    /// wording is for people.
     #[error("not a git repository: {}", path.display())]
     NotARepository {
         path: PathBuf,
@@ -96,14 +96,14 @@ pub enum GitError {
     #[error("unexpected output from {command}: {message}")]
     UnexpectedOutput { command: String, message: String },
 
-    /// A message written here rather than passed through from git: a value
-    /// the application refused to hand over, or a write git raised nothing
-    /// against that did not take effect all the same. Shown as is.
+    /// A message written here: a value the application refused to hand
+    /// over, or a write git raised nothing against that did not take
+    /// effect all the same. Shown as is.
     #[error("{message}")]
     Rejected { message: String },
 
-    /// A write this end worked out could not stand, and never asked git
-    /// for — carrying the [`WriteReport`] the screen states it from.
+    /// A write this end worked out could not stand, and stopped before
+    /// git — carrying the [`WriteReport`] the screen states it from.
     ///
     /// The same pair as [`GitError::Failed`] and [`GitError::Reported`],
     /// one step earlier: those two are git's answer with and without
@@ -119,7 +119,7 @@ pub enum GitError {
 }
 
 impl GitError {
-    /// True when the error is a cooperative cancellation, not a failure.
+    /// True when the error is a cooperative cancellation.
     pub fn is_cancelled(&self) -> bool {
         matches!(self, GitError::Cancelled { .. })
     }

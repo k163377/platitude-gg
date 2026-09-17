@@ -3,9 +3,9 @@
 //! one of them wholesale.
 //!
 //! Handing the merge itself over to an editor is the other half, and it
-//! is about reaching that tool rather than about the conflict
-//! ([`tool`]). **Not `mergetool`** — [`mergetool`] is the launch itself,
-//! and a module of that name would shadow it.
+//! is about reaching that tool ([`tool`]). **The module is `tool`** —
+//! [`mergetool`] is the launch itself, and a module of that name would
+//! shadow it.
 
 pub(crate) mod tool;
 
@@ -57,7 +57,7 @@ impl ConflictKind {
 
     /// True when a merge tool has three usable sides to work with. The
     /// delete/delete and add/add-with-no-base cases are decided by picking
-    /// a side, not by editing.
+    /// a side.
     pub fn is_content_conflict(self) -> bool {
         matches!(self, ConflictKind::BothModified | ConflictKind::BothAdded)
     }
@@ -119,8 +119,8 @@ pub struct Sides {
 ///
 /// `branch` is the current branch as the status that asks read it —
 /// `None` detached, which names no side and is left to the caller's own
-/// wording. Handed in rather than asked of git again: the status runs
-/// every tick for the life of a stop, and HEAD is what it already read.
+/// wording. Handed in: the status runs every tick for the life of a
+/// stop, and HEAD is what it already read.
 pub async fn sides(
     executor: &GitExecutor,
     workdir: &Path,
@@ -133,7 +133,7 @@ pub async fn sides(
         // directory; the merge backend is the default and the only one
         // this app starts, but a rebase begun at the command line may be
         // the other. One `rev-parse` resolves all four paths (the shape
-        // `opstate::detect` uses) instead of a process per file.
+        // `opstate::detect` uses) in one process.
         let mut cmd = GitCommand::new().cwd(workdir).arg("rev-parse");
         for rel in [
             "rebase-merge/head-name",
@@ -172,8 +172,8 @@ pub async fn sides(
         InProgress::Merge => "MERGE_HEAD",
         InProgress::CherryPick => "CHERRY_PICK_HEAD",
         InProgress::Revert => "REVERT_HEAD",
-        // Answered above. Named here rather than left to a panic: the
-        // match stays exhaustive, and an empty rev names nothing.
+        // Answered above. Named here: the match stays exhaustive, and
+        // an empty rev names nothing.
         InProgress::Rebase => "",
     };
     Ok(Sides {
@@ -183,8 +183,8 @@ pub async fn sides(
 }
 
 /// Reads a file in the git directory, empty when it is not there. The
-/// path is asked for rather than assumed: a worktree's git directory is
-/// not `<workdir>/.git`.
+/// path is asked for: a worktree's git directory is not
+/// `<workdir>/.git`.
 pub(crate) async fn git_file(
     executor: &GitExecutor,
     workdir: &Path,

@@ -2,8 +2,8 @@
 //! selection was made on.
 //!
 //! Every one of these carries the fingerprint of those bytes, and every
-//! one of them refuses rather than quietly doing nothing where the file
-//! has moved on ([`super::refusal`]).
+//! one of them refuses outright where the file has moved on
+//! ([`super::refusal`]).
 
 use std::path::Path;
 
@@ -22,13 +22,13 @@ use super::whole::unstage_paths;
 
 /// Stages or unstages part of one file's diff.
 ///
-/// The diff is re-run here rather than taken from the caller so the bytes
-/// the selection indexes into are exactly the bytes being rebuilt. A
-/// concurrent edit changes what the indices mean, so `seen` — the
-/// fingerprint of the diff the selection was made on
-/// ([`details::file_diff_with_fingerprint`]) — is checked against the
-/// re-run bytes, and any drift is a refusal. (`git apply` cannot be the
-/// net here: a patch rebuilt from the drifted bytes always fits them.)
+/// The diff is re-run here, so the bytes the selection indexes into are
+/// exactly the bytes being rebuilt. A concurrent edit changes what the
+/// indices mean, so `seen` — the fingerprint of the diff the selection
+/// was made on ([`details::file_diff_with_fingerprint`]) — is checked
+/// against the re-run bytes, and any drift is a refusal. (`git apply`
+/// cannot be the net here: a patch rebuilt from the drifted bytes
+/// always fits them.)
 ///
 /// [`DiffTarget::Untracked`] is staged with intent-to-add first (git's own
 /// requirement for partially staging a new file), then treated as unstaged.
@@ -77,9 +77,9 @@ pub async fn apply_partial(
     let result = apply_prepared(executor, repo, &target, selects, side, verify, cancel).await;
     if result.is_err() {
         // The intent-to-add mark has already moved the file out of the
-        // untracked bucket; a failure must not leave it half-staged with
-        // nothing actually staged. Best-effort — the failure itself is
-        // what the caller surfaces.
+        // untracked bucket, so a failure puts it back where it was.
+        // Best-effort — the failure itself is what the caller
+        // surfaces.
         if let Some(path) = intent_path
             && let Err(undo) = unstage_paths(executor, workdir, &[path], cancel).await
         {
@@ -113,8 +113,8 @@ async fn apply_prepared(
     refuse_combined(&raw)?;
     let Some(built) = patch::build_partial(&raw, selects, side) else {
         // The selection indexes a diff that no longer holds it — the file
-        // changed under the open diff. Doing nothing must not read as the
-        // write having landed.
+        // changed under the open diff, so this comes back as a refusal
+        // the reader can see.
         return Err(stale(taking(side)));
     };
 
@@ -128,7 +128,7 @@ async fn apply_prepared(
     let mut cmd = GitCommand::new()
         .cwd(workdir)
         // `--whitespace=nowarn` pins behavior against `apply.whitespace`:
-        // the patch must land byte-for-byte, never "fixed".
+        // the patch lands byte-for-byte.
         .args(["apply", "--cached", "--whitespace=nowarn"]);
     if side == PatchSide::Reverse {
         cmd = cmd.arg("--reverse");
@@ -173,8 +173,8 @@ pub async fn discard_partial(
     verify_fingerprint(&raw, seen, ReportKind::StaleDiscard)?;
     refuse_combined(&raw)?;
     let Some(built) = patch::build_partial(&raw, selects, PatchSide::Reverse) else {
-        // As in apply_partial: a vanished selection is a refusal, not a
-        // discard that quietly did nothing.
+        // As in apply_partial: a vanished selection comes back as a
+        // refusal the reader can see.
         return Err(stale(ReportKind::StaleDiscard));
     };
 

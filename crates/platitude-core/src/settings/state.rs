@@ -6,8 +6,8 @@ use super::SCHEMA_VERSION;
 use super::toml::{coord, flag, int_in, repo_key, sub_table, width_or_auto};
 
 /// Where the window was left. Position is optional because "never saved"
-/// has to stay distinguishable from "saved at 0,0" — the first should let
-/// the window manager place the window, the second should not.
+/// has to stay distinguishable from "saved at 0,0" — the first lets the
+/// window manager place the window, the second names the corner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WindowState {
     pub x: Option<i32>,
@@ -51,9 +51,9 @@ impl Default for Sections {
     }
 }
 
-/// One set for the whole application, not one per tab. Persisting per tab
-/// would make the layout jump on every tab switch and then keep doing it
-/// across restarts; what is worth remembering is the layout that was last
+/// One set for the whole application. Persisting per tab would make the
+/// layout jump on every tab switch and then keep doing it across
+/// restarts; what is worth remembering is the layout that was last
 /// settled on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LayoutState {
@@ -66,9 +66,9 @@ pub struct LayoutState {
     /// following the pane's default even when that default changes.
     pub graph_labels_width: i32,
     pub graph_lanes_width: i32,
-    /// How tall the log stands, never whether it was standing: the log is
-    /// where a command's answer is read, so a session that left it up has
-    /// no claim on the next one's screen.
+    /// How tall the log stands: the log is where a command's answer is
+    /// read, so a session that left it up has no claim on the next
+    /// one's screen.
     pub commands_height: i32,
     pub tags_shown: bool,
     pub wip_tree: bool,

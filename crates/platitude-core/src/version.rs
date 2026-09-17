@@ -1,9 +1,9 @@
 //! Detection of the installed git version, and how it stands against the
 //! supported minimum.
 //!
-//! Below that minimum is a fact reported, not a door closed: what the app
-//! does about it is the app's to decide, and it keeps working while saying
-//! so (規約 §ウィンドウの縁 の 4 つ目のバッジ).
+//! Below that minimum is a fact reported: what the app does about it is
+//! the app's to decide, and it keeps working while saying so
+//! (規約 §ウィンドウの縁 の 4 つ目のバッジ).
 
 use std::time::Duration;
 
@@ -61,8 +61,8 @@ fn leading_number(part: &str) -> Option<u32> {
 
 /// What one candidate git answered when it was asked its version.
 ///
-/// **Four answers rather than a `Result`**, because two of them are not
-/// failures: a git below the minimum runs the app all the same (§git が
+/// **Four answers**, because two of them are not failures: a git below the
+/// minimum runs the app all the same (§git が
 /// 無い時・古い時), and the difference between "nothing to run there" and
 /// "it ran and said something else" is the whole of what a reader needs
 /// to fix a path they typed. The words are the caller's — this says which
@@ -95,8 +95,8 @@ impl Probe {
     }
 }
 
-/// Asks one git binary for its version, without disturbing the one the
-/// application is already running on.
+/// Asks one git binary for its version, on an executor of its own,
+/// leaving the running one alone.
 ///
 /// `program` is a path, or empty for whichever git `PATH` resolves — the
 /// same vocabulary [`crate::settings::Defaults::git_path`] holds, because

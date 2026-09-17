@@ -65,8 +65,8 @@ async fn details_read_co_authors_whatever_case_the_trailer_used() {
     let mut repo = TestRepo::init();
     // The spelling tools actually write is `Co-Authored-By`; the one the
     // convention documents is `Co-authored-by`. git's `key=` matches
-    // either, and both have to land here. The one in the prose must not:
-    // a trailer is a property of the final block, git is what decides
+    // either, and both have to land here. The one in the prose stays
+    // out: a trailer is a property of the final block, git decides
     // that, and the count below is what would go wrong if the message
     // were ever scanned by hand instead.
     let sha = repo.commit_file_id(
@@ -394,10 +394,10 @@ async fn a_stopped_merge_reads_back_all_four_conflict_kinds() {
         vec![Some(1), None, Some(2), None, None, None, Some(3)]
     );
 
-    // AA — both added it: combined too, and above all not read as a new
-    // file (both sides invented the path, so neither is "the old side" —
-    // being read as new would take the pane's pieces away for the wrong
-    // reason).
+    // AA — both added it: combined too, and it keeps both sides'
+    // paths (both sides invented the path, so neither is "the old
+    // side" — being read as new would take the pane's pieces away for
+    // the wrong reason).
     let patches = details::file_diff(
         &executor,
         &repo.path,
@@ -440,8 +440,8 @@ async fn a_stopped_merge_reads_back_all_four_conflict_kinds() {
 
 #[tokio::test]
 async fn a_choice_lists_what_each_of_its_commits_changed() {
-    // The commit between the two chosen ones contributes nothing: what is
-    // listed is what the chosen commits did, not what lies between them.
+    // The commit between the two chosen ones contributes nothing: what
+    // is listed is what the chosen commits did.
     let mut repo = TestRepo::init();
     let older = repo.commit_file_id("a.txt", "a\n", "older chosen");
     repo.commit_file("between.txt", "b\n", "not chosen");
@@ -476,7 +476,7 @@ async fn a_path_two_of_the_chosen_touched_is_listed_once_as_the_newest_left_it()
         .unwrap();
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].path, "f.txt");
-    // The most recent thing to have happened to it, not the first.
+    // The most recent thing to have happened to it.
     assert_eq!(files[0].status, 'M');
 }
 
@@ -560,8 +560,8 @@ async fn a_choice_stacks_the_patch_of_each_commit_that_touched_the_file() {
             .collect()
     };
     assert_eq!(lines(0), vec![(DiffLineKind::Addition, "one".to_string())]);
-    // The unchosen commit's own line is not put on screen as something that
-    // arrived: it shows only where the chosen commit took it away.
+    // The unchosen commit's own line shows only where the chosen
+    // commit took it away.
     assert_eq!(
         lines(1),
         vec![

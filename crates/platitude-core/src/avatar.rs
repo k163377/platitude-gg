@@ -7,14 +7,14 @@
 //! service, this gets from a file dialog.
 //!
 //! The key is the **address**, lowercased and read through `.mailmap`
-//! (`parse::log`), never the name: names are what people change, what two
-//! people share, and what a repository spells three ways. The store keeps
-//! the name too, but only so a list of assignments can be read by a human —
-//! it is never matched on.
+//! (`parse::log`): names are what people change, what two people share,
+//! and what a repository spells three ways. The store keeps the name
+//! too, but only so a list of assignments can be read by a human — the
+//! address is what matching runs on.
 //!
 //! The index lives in `settings.toml` and the images in `avatars/` beside
-//! it, because both are what a person decided rather than what a session
-//! left behind (`settings` module). An image is named for a hash of its own
+//! it, because both are what a person decided (`settings` module). An
+//! image is named for a hash of its own
 //! bytes, which buys three things: replacing a picture changes the file
 //! name, so an image cache keyed by path cannot hand back the old one; the
 //! same picture assigned to two people is stored once; and no part of an
@@ -27,9 +27,9 @@ use std::path::{Path, PathBuf};
 pub const DIR_NAME: &str = "avatars";
 
 /// Extensions the picker offers. **What a file is gets decided by what
-/// is in it** (`picture`), not by this — a picture saved under the wrong
-/// name still works. This is only so that somebody browsing for their
-/// own picture is not shown every file they own.
+/// is in it** (`picture`) — a picture saved under the wrong name still
+/// works. This is only so that somebody browsing for their own picture
+/// sees only pictures.
 pub const EXTENSIONS: [&str; 3] = ["png", "jpg", "jpeg"];
 
 /// Largest file read. Nothing this size is ever *kept* — everything is
@@ -156,10 +156,10 @@ pub struct Avatars {
 }
 
 impl Avatars {
-    /// Reads assignments off a parsed `[[avatar]]` array. Entries missing
-    /// either half of the mapping are dropped rather than kept as a hole:
-    /// an assignment with no address matches nobody, and one with no file
-    /// draws nothing.
+    /// Reads assignments off a parsed `[[avatar]]` array. Entries
+    /// missing either half of the mapping are dropped: an assignment
+    /// with no address matches nobody, and one with no file draws
+    /// nothing.
     pub fn from_values(values: &[toml::Value]) -> Self {
         let mut entries: Vec<Assignment> = Vec::new();
         for value in values {
@@ -241,9 +241,9 @@ impl Avatars {
     /// Keeping a copy of our own is what makes this durable: the picture a
     /// person picked out of their downloads folder will be moved or
     /// deleted, and a store that only remembered the path would then draw
-    /// nothing with no way to say why. Rewriting rather than copying is
-    /// what keeps a photograph from costing tens of megabytes of memory
-    /// for as long as the application is up.
+    /// nothing with no way to say why. Rewriting is what keeps a
+    /// photograph from costing tens of megabytes of memory for as
+    /// long as the application is up.
     pub fn assign(
         &mut self,
         dir: &Path,
@@ -309,8 +309,8 @@ impl Avatars {
         true
     }
 
-    /// Deletes an image no assignment points at any more. Failing to is not
-    /// worth reporting: the assignment is already gone, which is what was
+    /// Deletes an image no assignment points at any more. Failure here
+    /// is silent: the assignment is already gone, which is what was
     /// asked for, and a file left behind costs a few kilobytes until the
     /// same picture is assigned again.
     fn sweep(&self, dir: &Path, file: &str) {

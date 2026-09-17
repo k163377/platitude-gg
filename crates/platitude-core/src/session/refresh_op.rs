@@ -29,16 +29,16 @@ impl RepoSession {
     /// **The whole of it is a handful of file reads** — no process, no
     /// lock, no snapshot ([`opstate::detect_at`] /
     /// [`integrate::rebase_progress`]) — which is what lets the screen
-    /// count the steps out rather than sample them: a replay moves the
-    /// number about every eleven milliseconds, and the periodic re-read
-    /// around it is ten seconds apart because it carries a whole `git
-    /// status` (`ci/baseline/poll-cost-windows-x64.md`). Asking that one
-    /// faster would have the reads competing with the replay they are
-    /// about; asking this one faster costs nothing measurable.
+    /// count the steps out: a replay moves the number about every eleven
+    /// milliseconds, and the periodic re-read around it is ten seconds
+    /// apart because it carries a whole `git status`
+    /// (`ci/baseline/poll-cost-windows-x64.md`). Asking that one faster
+    /// would have the reads competing with the replay they are about;
+    /// asking this one faster costs nothing measurable.
     ///
-    /// Not gated on anything: the caller ticks it while it knows a write
-    /// that replays is out, and a repository with nothing standing
-    /// answers exactly that.
+    /// Open to every caller: it is ticked while a write that replays is
+    /// out, and a repository with nothing standing answers exactly
+    /// that.
     pub fn refresh_op_progress(self: &Arc<Self>) {
         let Some(git_dir) = self.git_dir() else {
             return;
@@ -60,8 +60,8 @@ impl RepoSession {
     /// merge's sides and the merge tool do: the tick that answered
     /// `editing: false` in the middle of an `edit` stop would hand the
     /// exit card's `--skip` back its plain click, and that click is not
-    /// one the reader gets to take back (`Standing`). The counter is not
-    /// held the same way — a stale N/M would be read as progress that
+    /// one the reader gets to take back (`Standing`). The counter goes
+    /// with the read — a stale N/M would be read as progress that
     /// happened, and the badge losing it for one tick costs nothing.
     async fn rebase_standing_held(
         &self,
@@ -124,9 +124,9 @@ impl RepoSession {
         }
     }
 
-    /// Does not rebuild the graph itself: after a write the caller knows
-    /// whether it needs one anyway, and rebuilding on both counts would do
-    /// it twice. Answers whether the WIP row flipped — or that nothing was
+    /// The rebuild is the caller's: after a write it knows whether one is
+    /// needed anyway, and rebuilding on both counts would do it twice.
+    /// Answers whether the WIP row flipped — or that nothing was
     /// published at all.
     pub(super) async fn publish_status(self: &Arc<Self>) -> Reread {
         let Some(workdir) = self.workdir() else {
@@ -143,10 +143,10 @@ impl RepoSession {
             (Ok(status), Ok(op_state)) => {
                 // A read that looked before a write ended has nothing to
                 // say for the repository after it — and nothing more to
-                // spend on it either. Read again rather than lost: the
-                // write behind it re-reads the tree only where it moved
-                // the refs, so a status a fetch that brought nothing
-                // fenced would otherwise wait for the next tick.
+                // spend on it either. Read again: the write behind it
+                // re-reads the tree only where it moved the refs, so a
+                // status a fetch that brought nothing fenced would
+                // otherwise wait for the next tick.
                 if !self.standing.current(looked) {
                     self.read_status_from(self.status_read.stamp());
                     return Reread::Same;
@@ -167,7 +167,7 @@ impl RepoSession {
                 // The tool is only worth naming where there is
                 // something to open with it, so a clean tree pays nothing
                 // — unless the settings field asked, which it does once
-                // per opening rather than once per poll.
+                // per opening.
                 let asked = self.merge_tool_wanted.swap(false, Ordering::SeqCst);
                 let merge_tool = if asked || status.conflicted().next().is_some() {
                     let read = conflict::configured_tool(&self.executor, &workdir, &cancel)
@@ -178,25 +178,25 @@ impl RepoSession {
                     self.standing.set_merge_tool(read.clone());
                     read
                 } else {
-                    // Not read this time, so repeat the last answer rather
-                    // than replace it with nothing: a settings dialog left
-                    // open would otherwise watch its value evaporate on
-                    // the next tick, and a conflict resolved by the tool
-                    // takes the name out of the pane it was just used in.
+                    // Not read this time, so repeat the last answer: a
+                    // settings dialog left open would otherwise watch its
+                    // value evaporate on the next tick, and a conflict
+                    // resolved by the tool takes the name out of the pane
+                    // it was just used in.
                     self.standing.merge_tool()
                 };
                 // Where the marks send a push — the branch's own, with the
                 // repository's riding the same read. One short local `git
                 // config` per tick, and only where there is a branch to
                 // ask about — a detached HEAD marks nothing and has
-                // nothing to push. Not gated on anything else: the
-                // toolbar names its destination by these, so a mark moved
-                // from a terminal has to turn up on the following tick
-                // rather than at the next thing that happens to
-                // invalidate a cache. The branch's half rides this status
+                // nothing to push. The branch is the one gate: the toolbar
+                // names its destination by these, so a mark moved
+                // from a terminal turns up on the following tick.
+                // The branch's half rides this status
                 // event; the repository's is answered by the refs
-                // snapshot, so one that moved sends the refs out to say
-                // it again ([`RepoSession::note_push_default`]).
+                // snapshot, so one that moved sends the refs out to
+                // say it again
+                // ([`RepoSession::note_push_default`]).
                 let push_remote = match &status.branch_head {
                     Some(branch) => {
                         match remote::push_marks(&self.executor, &workdir, branch, &cancel).await {
@@ -238,14 +238,13 @@ impl RepoSession {
                     incoming.is_some_and(|sides| self.standing.set_merge_incoming(sides));
                 let flipped = dirt_flipped || merge_moved;
                 // Reading the pending diffs is the one part of this that
-                // scales with the change rather than with the tree, so it
-                // does not run on every tick — only where the answer can
-                // have moved. **What status reports is the test**, not
-                // whether the tree turned dirty: the index cannot change
-                // without status changing, including when it is another
-                // git outside this window that changes it, and the index
-                // is what a commit carries. A tick that reads the same
-                // status reads no diffs.
+                // scales with the change, so it does not run on every tick
+                // — only where the answer can have moved. **What status
+                // reports is the test**: the index cannot change without
+                // status changing, including when it is another git outside
+                // this window that changes it, and the index is what a
+                // commit carries. A tick that reads the same status reads
+                // no diffs.
                 let stale = self.eol_marks_stale.swap(false, Ordering::SeqCst);
                 let key = status_key(&status);
                 let moved = relock(&self.status_key).replace(key) != Some(key);

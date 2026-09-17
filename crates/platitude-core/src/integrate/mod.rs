@@ -2,7 +2,7 @@
 //! routing they share.
 //!
 //! All four can stop halfway and leave the repository mid-operation; that is
-//! normal, not an error. The caller reports git's message and re-reads
+//! normal. The caller reports git's message and re-reads
 //! [`crate::opstate`] to find out where things stand.
 //!
 //! `--no-edit` is passed wherever git accepts it. The process layer already

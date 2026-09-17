@@ -249,7 +249,7 @@ fn garbage_entry_is_fatal() {
 }
 
 /// Raw `--porcelain=v2 -z` bytes out of real git, committed under
-/// tests/fixtures/ and regenerated (never hand-edited) with:
+/// tests/fixtures/ and regenerated only with:
 /// `cargo test -p platitude-core --test it -- --ignored capture`
 #[test]
 fn committed_status_fixture_parses() {

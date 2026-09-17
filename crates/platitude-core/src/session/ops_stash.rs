@@ -47,7 +47,7 @@ impl RepoSession {
 
     /// `git stash pop <selector>` (drops the stash on success).
     ///
-    /// A restore that conflicts is not a failure: the work is across,
+    /// A restore that conflicts is a success: the work is across,
     /// waiting to be settled, and git keeps the entry in that case — so a
     /// conflicting pop lands exactly where an apply would have, and the
     /// way back is still in the list (デザイン規約 §変更を退避する).
@@ -57,7 +57,7 @@ impl RepoSession {
     /// Only when the tree was settled to begin with, though: git will not
     /// restore onto an index that already has unmerged paths — it refuses
     /// outright and changes nothing (measured) — and the conflicts still
-    /// standing there afterwards are the old ones, not proof of anything.
+    /// standing there afterwards are the old ones.
     pub fn stash_pop(self: &Arc<Self>, selector: String) -> Option<OperationId> {
         self.write(
             OperationKind::Stash,

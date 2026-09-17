@@ -87,8 +87,8 @@ impl InProgress {
 
 /// Continues, aborts or skips whatever is currently in progress.
 ///
-/// Returns `Ok(false)` when nothing is in progress, so a UI button can be a
-/// no-op instead of an error.
+/// Returns `Ok(false)` when nothing is in progress, so a UI button
+/// can be a no-op.
 pub async fn resolve_current(
     executor: &GitExecutor,
     workdir: &Path,

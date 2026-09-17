@@ -2,10 +2,10 @@
 //!
 //! This is the only place the application causes network traffic, and it
 //! causes it the same way a terminal would — by running git. Authentication
-//! is git's (`GIT_TERMINAL_PROMPT=0` keeps a missing credential helper from
-//! hanging the process instead of failing).
+//! is git's (`GIT_TERMINAL_PROMPT=0` makes a missing credential helper fail
+//! at once).
 //!
-//! Network commands take a timeout rather than running unbounded.
+//! Network commands take a timeout.
 //! Cancellation is the normal way to stop one early; the timeout is the
 //! backstop for a connection that neither finishes nor fails.
 

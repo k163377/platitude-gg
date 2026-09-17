@@ -24,9 +24,9 @@ pub struct RepoInfo {
     pub git_dir: PathBuf,
     /// Absolute path of the repository's own config file — the one
     /// `git remote add` writes. A linked worktree shares the common
-    /// repository's, which is why this is asked for rather than joined
-    /// onto `git_dir` (measured 2.55: `--git-path config` in a worktree
-    /// answers the common `.git/config`).
+    /// repository's, which is why this is asked for (measured 2.55:
+    /// `--git-path config` in a worktree answers the common
+    /// `.git/config`).
     pub config_path: PathBuf,
     pub object_format: ObjectFormat,
 }
@@ -113,16 +113,16 @@ pub async fn open(
 /// Whether `path` is a repository git will not give a work tree for.
 ///
 /// Only asked once [`open`] has already failed, so the extra process
-/// lands on the folder nobody could open rather than on every one that
-/// works. `false` for a folder that is no repository at all, and for a
-/// question git could not answer — the screen falls back to git's own
-/// wording either way.
+/// lands on the one folder nobody could open. `false` for a folder
+/// that is no repository at all, and for a question git could not
+/// answer — the screen falls back to git's own wording either
+/// way.
 async fn is_bare(executor: &GitExecutor, path: &Path, cancel: &CancellationToken) -> bool {
     let cmd = GitCommand::new()
         .cwd(path)
         .args(["rev-parse", "--is-bare-repository"])
         // Outside a repository this exits 128, which is the answer here
-        // and not a failure worth raising the command log over.
+        // and the command log lets it pass.
         .answers_by_code(1);
     match executor.run_unchecked(cmd, cancel).await {
         Ok(out) => out.code == 0 && out.stdout_utf8().trim() == "true",
@@ -144,8 +144,8 @@ async fn is_bare(executor: &GitExecutor, path: &Path, cancel: &CancellationToken
 /// Windows keeps but does not distinguish, the 8.3 short name, and links.
 ///
 /// A path the filesystem will not resolve — removed, or never there —
-/// falls back to `repo_key`, which keeps two absent paths apart rather
-/// than folding them into one answer.
+/// falls back to `repo_key`, which keeps two absent paths apart from
+/// each other.
 pub fn open_key(path: &str) -> PathBuf {
     let path = path.trim();
     std::fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(crate::settings::repo_key(path)))

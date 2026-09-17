@@ -15,11 +15,11 @@ pub enum PushStanding {
     /// No branch here to send: detached, or nothing checked out.
     Closed,
     /// No commits yet: git refuses the send itself (`error: src refspec
-    /// <branch> does not match any` — measured 2.55), so the button says so
-    /// rather than offering a push that cannot land.
+    /// <branch> does not match any` — measured 2.55), so the button says
+    /// so too.
     Unborn,
     /// Never sent, or the tracking ref is gone: where the branch goes is
-    /// a question rather than something to look up.
+    /// a question to ask.
     Publish,
     /// The push goes to the marked remote, which is not the one this
     /// branch tracks — the counts are about somewhere else and say
@@ -69,11 +69,11 @@ fn marked_remote<'a>(push_remote: &'a str, push_default: &'a str) -> &'a str {
 
 /// Whether `upstream` is a branch on `remote`.
 ///
-/// `remotes` are the configured remote names: the cut is the longest-name
-/// one ([`crate::refs::split_remote_ref`]), never the first slash, since a
-/// remote's own name may contain `/`. An upstream on a remote the list
-/// does not know (stale config) falls back to the exact prefix the mark
-/// itself gives.
+/// `remotes` are the configured remote names: the cut is the
+/// longest-name one ([`crate::refs::split_remote_ref`]), since a remote's
+/// own name may contain `/`. An upstream on a remote the list does not
+/// know (stale config) falls back to the exact prefix the mark itself
+/// gives.
 fn upstream_is_on<'a>(
     upstream: &'a str,
     remote: &str,
@@ -202,8 +202,8 @@ mod tests {
         );
     }
 
-    /// The same, with the branch's own mark set instead of the
-    /// repository's.
+    /// The same, with the branch's own mark set and the repository's
+    /// empty.
     fn standing_marked_on_branch(upstream: &str, push_remote: &str) -> PushStanding {
         push_standing(
             false,
@@ -401,7 +401,7 @@ mod tests {
     }
 
     /// Nothing to send, and nowhere to send it: both are said with an
-    /// empty string rather than a guess.
+    /// empty string.
     #[test]
     fn a_push_target_says_nothing_where_there_is_nothing_to_say() {
         assert_eq!(push_target("", "", "", "", "origin", REMOTES), "");

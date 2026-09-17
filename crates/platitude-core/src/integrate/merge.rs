@@ -74,7 +74,7 @@ pub async fn merge(
 /// resolution records nothing at all: git writes the empty merge commit
 /// either way (measured, 2.55). So the application can put this in the box
 /// the commit will be made from, and the person sees the message before
-/// it is written rather than after
+/// it is written
 /// (デザイン規約 §進行中の操作から出る).
 ///
 /// The comment lines go because the box shows what will be recorded: git
@@ -94,13 +94,13 @@ pub async fn stopped_message(
 }
 
 /// Whether a merge that exited non-zero left itself standing to be
-/// finished, rather than refusing before it began.
+/// finished.
 ///
 /// `--squash` is the one stop this does not see: it writes `SQUASH_MSG`
 /// and no `MERGE_HEAD` (measured, 2.55), so git leaves no operation to
 /// continue and its conflicts arrive as the failure they read as. Nothing
 /// in the application asks for one — the option is here for completeness
-/// of the command, not for a screen.
+/// of the command.
 ///
 /// A read that fails answers "no", so the merge's own words are what
 /// reaches the screen: this is a question *about* that failure, and

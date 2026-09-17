@@ -4,7 +4,7 @@
 //! words, but what gets them past it is the same three steps — empty the
 //! tree, do the thing, put the work back — and these are the steps
 //! ([`super::build`] is what puts them in order). They are one place
-//! rather than two because the hard parts are shared: which entry is ours
+//! because the hard parts are shared: which entry is ours
 //! to touch, and what a non-zero `pop` actually did.
 
 use super::*;
@@ -19,7 +19,7 @@ pub(super) const STASH_TOP: &str = "stash@{0}";
 /// A clean tree stashes nothing while exiting 0 — the refusal that raised
 /// the question can go stale when the tree is cleaned from a terminal in
 /// between. With no entry of ours, [`STASH_TOP`] names somebody else's
-/// work and must not be touched.
+/// work and is left alone.
 pub(super) async fn stash_everything(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -73,7 +73,7 @@ pub(super) async fn pop_back_split_first(
 }
 
 /// Best-effort restore after a move or a replay that failed outright (an
-/// `Err`, not a `Blocked` refusal — a refusal git words in a way the
+/// `Err` — a refusal git words in a way the
 /// classifiers do not know arrives here). It did nothing, so the stash
 /// was only the room it needed: put the work back before the caller
 /// surfaces git's own error. If even the pop fails, that is logged and

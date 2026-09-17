@@ -8,8 +8,8 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-/// `git clone <url> <into>`, where `into` is the working copy's own
-/// folder rather than the one it is made in.
+/// `git clone <url> <into>`, where `into` is the folder the working
+/// copy becomes.
 ///
 /// **The destination is always named.** Left to itself git works one out
 /// of the URL and prints it, and the caller would have to read that line
@@ -49,10 +49,10 @@ pub async fn clone(
 /// What to call the folder a clone of `url` would go into — the name the
 /// dialog offers before anybody types one.
 ///
-/// **A suggestion, not git's answer.** git has a rule of its own for the
+/// **A suggestion for the box.** git has a rule of its own for the
 /// destination it picks when none is given (`guess_dir_name`), and this
-/// is not a second implementation of it: the clone always names its
-/// destination ([`clone`]), so what this returns is only what stands in
+/// one stands apart from it: the clone always names its destination
+/// ([`clone`]), so what this returns is only what stands in
 /// the box until it is edited. The shapes it has to read are the ones
 /// people paste — `https://host/you/repo.git`, `git@host:you/repo.git`,
 /// `file:///srv/repo`, a plain path — and the answer is the last segment
@@ -71,7 +71,7 @@ pub fn folder_name_for(url: &str) -> String {
         .next()
         .unwrap_or(trimmed)
         .trim();
-    // One suffix, not every one: a repository really called `repo.git.git`
+    // One suffix only: a repository really called `repo.git.git`
     // is served from `repo.git.git.git`.
     last.strip_suffix(".git").unwrap_or(last).to_string()
 }
@@ -99,9 +99,9 @@ mod tests {
         }
     }
 
-    /// Nothing is invented in its place: an empty box is what refuses the
-    /// accept button, and a name guessed out of a URL that carries none
-    /// would be one somebody has to notice and delete.
+    /// The box stays empty: that is what refuses the accept button, and
+    /// a name guessed out of a URL that carries none would be one
+    /// somebody has to notice and delete.
     #[test]
     fn a_url_with_no_name_in_it_offers_none() {
         for url in ["", "   ", ".git", "/", "  /  "] {

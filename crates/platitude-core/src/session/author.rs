@@ -61,14 +61,14 @@ impl RepoSession {
 
     /// Reads HEAD's message and author so an amend can start from them.
     ///
-    /// On demand rather than with every refresh: only the amend path wants
+    /// On demand: only the amend path wants
     /// them, and a repository refresh already runs several commands.
     pub fn load_head_commit(self: &Arc<Self>) {
         self.spawn_read("head-commit", |s, workdir, cancel| async move {
             // An unborn branch has no HEAD to amend; the empty prefill is
-            // that state's answer. A read that failed outright must not
-            // look the same — an amend started from a blank it trusts
-            // would commit the blank — so it goes to the error surface.
+            // that state's answer. A read that failed outright goes to
+            // the error surface — an amend started from a blank it
+            // trusts would commit the blank.
             let head = commit::head_commit(&s.executor, &workdir, &cancel)
                 .await?
                 .unwrap_or_default();

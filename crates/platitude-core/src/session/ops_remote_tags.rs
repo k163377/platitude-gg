@@ -28,7 +28,7 @@ impl RepoSession {
     /// A fetched tag lands in `refs/tags/` beside the ones made here, so
     /// afterwards nothing local says which is which. Asking costs a second
     /// round trip, and this is where it belongs — the user has already
-    /// agreed to reach the network, and a poll never should.
+    /// agreed to reach the network.
     pub(super) async fn fetch_and_read_tags(
         self: &Arc<Self>,
         exec: &GitExecutor,
@@ -46,9 +46,9 @@ impl RepoSession {
     /// Records what each remote advertises under `refs/tags/`.
     ///
     /// **Fails nothing.** A badge is not worth failing a fetch that
-    /// worked, and a remote that could not be reached keeps the answer it
-    /// last gave instead of dropping every cloud it accounted for — which
-    /// is what `refs/remotes/` does for branches on its own.
+    /// worked, and a remote that could not be reached keeps the answer
+    /// it last gave — which is what `refs/remotes/` does for branches on
+    /// its own.
     ///
     /// **It does say what it could not read, all the same**
     /// ([`RemoteTagsRead::unread`]) — the two are told apart here, where
@@ -94,8 +94,8 @@ impl RepoSession {
                             .map(|t| (t.name, t.commit, t.annotated, remote.clone())),
                     );
                 }
-                // Cancellation is the session going away, not a remote
-                // that would not answer: nobody is left to be told.
+                // Cancellation is the session going away: nobody is
+                // left to be told.
                 Err(error) if error.is_cancelled() => return RemoteTagsRead::default(),
                 Err(error) => {
                     tracing::debug!(remote = %r.name, %error, "remote tags: unreadable");
@@ -123,9 +123,9 @@ impl RepoSession {
     ) -> bool {
         let current = self.remote_tag_index();
         let kept = current.readings().filter(|(_, _, _, remote)| {
-            // A remote that is no longer configured stops answering for
-            // names, and one that just answered is replaced rather than
-            // added to.
+            // A remote that is no longer configured stops answering
+            // for names, and one that just answered is replaced
+            // whole.
             configured.iter().any(|r| r.name == remote.as_str())
                 && !answered.iter().any(|a| a == remote)
         });
@@ -153,15 +153,15 @@ impl RepoSession {
     /// else would notice that this push changed it — the refresh that
     /// follows reads `refs/`, and this tag was already there. Inside the
     /// write for the same reason [`Self::fetch_and_read_tags`] is: the
-    /// press has already agreed to reach the network, which is what the
-    /// unasked catch-up may not do (core.md タグのリモート状態). Only the
+    /// press has already agreed to reach the network
+    /// (core.md タグのリモート状態). Only the
     /// remote that just moved is asked, and a push git refused moved
     /// nothing, so a failure leaves the last answer standing.
     ///
-    /// **Nothing is refreshed from in here.** `AfterWrite::Graph` reads
-    /// the refs once the closure returns, and a read asked for from
-    /// inside would be a second pass over every ref — the longest read
-    /// this application makes on a repository that has them.
+    /// **The refresh comes after the closure returns.**
+    /// `AfterWrite::Graph` reads the refs then, and a read asked for
+    /// from inside would be a second pass over every ref — the longest
+    /// read this application makes on a repository that has them.
     pub fn push_tag(
         self: &Arc<Self>,
         remote_name: String,

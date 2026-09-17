@@ -13,7 +13,7 @@ use super::{Body, HunkSelect, PatchSide, RawHunk, classify, push_line};
 
 /// A body line of the source hunk with the `\ No newline` marker that
 /// followed it. The marker describes the line above it, so it travels with
-/// that line rather than with a position in the output.
+/// that line.
 struct SourceLine<'a> {
     bytes: &'a [u8],
     kind: Body,

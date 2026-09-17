@@ -58,7 +58,7 @@ async fn what_a_stopped_operation_says_about_its_two_sides() {
         "the apply backend keeps the same name under its own directory"
     );
 
-    // ---- cherry-pick: the side coming in is a commit, not a branch ----
+    // ---- cherry-pick: the side coming in is a commit ----
     let mut repo = conflicting_branches();
     repo.git_expect_failure(&["cherry-pick", "side"]);
     let picked = repo.git(&["rev-parse", "CHERRY_PICK_HEAD"]);
@@ -71,7 +71,7 @@ async fn what_a_stopped_operation_says_about_its_two_sides() {
 }
 
 /// And what `sides` makes of all that — including the reversal, which is
-/// the whole reason the names are read rather than assumed.
+/// the whole reason the names are read.
 #[tokio::test]
 async fn sides_names_each_side_by_what_it_actually_is() {
     let (exec, cancel) = env();
@@ -101,7 +101,7 @@ async fn sides_names_each_side_by_what_it_actually_is() {
     .await
     .expect("a stop is an answer, not a failure");
     // Handed the branch being replayed, which is what a status reads of
-    // HEAD mid-rebase; the side is git's own file, not that.
+    // HEAD mid-rebase; the side is git's own file.
     let s = conflict::sides(&exec, &repo.path, InProgress::Rebase, Some("side"), &cancel)
         .await
         .expect("sides");
@@ -126,9 +126,9 @@ async fn sides_names_each_side_by_what_it_actually_is() {
     assert_eq!(s.theirs, "side");
 }
 
-/// Nothing to name a side by is answered with nothing, not with a guess
-/// or an error: a commit no branch reaches comes back empty and the UI
-/// falls back to its own wording.
+/// Nothing to name a side by is answered with nothing: a commit no
+/// branch reaches comes back empty and the UI falls back to its own
+/// wording.
 #[tokio::test]
 async fn a_side_no_branch_reaches_is_left_unnamed() {
     let mut repo = TestRepo::init();

@@ -8,9 +8,9 @@
 //! Attribution only. The ground truth for "how much Rust heap is live" is
 //! the counting allocator in the app crate; what this module produces is a
 //! breakdown of it, and whatever the named parts do not add up to is
-//! reported as a remainder rather than assumed to be zero. Getting a
-//! container's own overhead slightly wrong therefore shows up as a bigger
-//! remainder, never as a wrong total.
+//! reported as a remainder. Getting a container's own
+//! overhead slightly wrong therefore shows up only as a
+//! bigger remainder.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -71,8 +71,8 @@ impl Footprint for String {
 }
 
 /// Nothing at all while the text fits inline, which is the whole point of
-/// [`crate::Name`] — so this has to ask rather than read `capacity()`,
-/// which answers for the inline buffer too.
+/// [`crate::Name`] — so this has to ask: `capacity()` answers for
+/// the inline buffer too.
 impl Footprint for crate::Name {
     fn heap_bytes(&self) -> usize {
         if self.is_heap_allocated() {
@@ -179,12 +179,12 @@ impl<T: Footprint, S> Footprint for std::collections::HashSet<T, S> {
 
 /// A `BTreeMap`'s nodes.
 ///
-/// **Charged by the node, not by the entry.** A node holds room for eleven
-/// pairs whether or not eleven are in it, and it is allocated whole — so a
-/// map with one entry in it costs the same as a map with eleven. Charging
-/// entries instead reads a fleet of one-entry maps as almost free, which is
-/// the opposite of what it is (measured: `remote_tag_index`, one inner map
-/// per tag).
+/// **Charged by the node.** A node holds room for eleven pairs
+/// whether or not eleven are in it, and it is allocated whole — so a
+/// map with one entry in it costs the same as a map with eleven.
+/// Charging entries reads a fleet of one-entry maps as almost free,
+/// which is the opposite of what it is (measured: `remote_tag_index`,
+/// one inner map per tag).
 ///
 /// The node count is where this stays an estimate: a tree grown by
 /// insertion settles around six of the eleven slots used, and only the

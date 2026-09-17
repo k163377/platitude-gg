@@ -1,7 +1,7 @@
 //! The identity one repository sets for itself.
 //!
 //! git already keeps this per repository, so nothing here is a second
-//! copy of it (実装計画.md §リポジトリ毎の設定は持たない): a name or an
+//! copy of it (実装計画.md §設定はマシン単位で持つ): a name or an
 //! address written through this module goes into that repository's own
 //! configuration file and is read back out of the same one.
 //!
@@ -28,9 +28,9 @@ const LOCAL_PATTERN: &str = r"^user\.(name|email)$";
 ///
 /// A key written with an empty value reads as unset, the same as
 /// everywhere else the identity is parsed. git does not treat the two
-/// alike — an empty `user.email` puts `<>` on the author line rather than
-/// falling back — but nothing in this app can write that, and a box that
-/// showed it would be a box whose empty state meant two different things.
+/// alike — an empty `user.email` puts `<>` on the author line — but
+/// nothing in this app can write that, and a box that showed it would
+/// be a box whose empty state meant two different things.
 pub async fn load_local(
     executor: &GitExecutor,
     workdir: &Path,
@@ -49,8 +49,8 @@ pub async fn load_local(
 }
 
 /// Records `user.name` / `user.email` in this repository's own file,
-/// where **an empty value asks for the key to be taken out** rather than
-/// set to nothing.
+/// where **an empty value asks for the key to be taken
+/// out**.
 ///
 /// What comes back is what that file holds afterwards ([`load_local`]),
 /// not what git would use — the question the screen asked was which of

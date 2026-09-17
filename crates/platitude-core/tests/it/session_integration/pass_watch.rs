@@ -83,9 +83,9 @@ async fn a_stream_that_falls_over_answers_its_own_generation() {
 /// Nothing on screen is waiting on it and what is standing there is a
 /// real graph — only older than it should be — so the tab carries the
 /// failure and the rows are left alone. What the graph does hear is that
-/// it has fallen behind ([`SessionEvent::LogStale`]), which is the state
-/// and not a stream's answer: the band raises `STALE GRAPH` over the
-/// picture that is still standing.
+/// it has fallen behind ([`SessionEvent::LogStale`]), which is the
+/// state: the band raises `STALE GRAPH` over the picture that is
+/// still standing.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_offscreen_pass_that_falls_over_reports_the_operation() {
     let (_repo, sink, session, doors) = settled().await;
@@ -221,8 +221,8 @@ async fn the_fault_the_screen_is_driven_with_fails_the_walk() {
 /// The report exists for a graph left waiting on a pass, and a session
 /// whose runtime is going away has nobody left to read one — being told
 /// its history could not be read is the last thing a closing tab should
-/// paint. The pass still gets far enough to own the stream, so this is
-/// the silence of the guard and not of a pass that never announced.
+/// paint. The pass still gets far enough to own the stream, so this
+/// is the silence of the guard.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_closing_session_is_told_nothing() {
     let (_repo, sink, session, doors) = settled().await;

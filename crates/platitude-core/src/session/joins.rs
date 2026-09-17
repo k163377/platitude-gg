@@ -1,9 +1,9 @@
 //! The ref joins behind the sidebar snapshot and the row chips, and the
 //! per-listing lookups they share.
 //!
-//! Beside `build` rather than in it: the two halves answer different
-//! questions (one moves a working tree around a stash, this one reads a
-//! refs listing) and share nothing but the module they sat in
+//! Beside `build`: the two halves answer different questions (one
+//! moves a working tree around a stash, this one reads a refs
+//! listing) and share nothing but the module they sat in
 //! (structure.md §分割).
 
 use super::*;
@@ -28,11 +28,11 @@ pub(super) struct RefJoins<'a> {
     /// the remote index cannot answer, a branch here (`remote = .`).
     local_commit: HashMap<&'a str, Oid>,
     /// The branches other working copies have checked out. A third join
-    /// on the same listing, and the reason it is here rather than in the
-    /// app: **the sidebar row and the graph chip ask the same question**,
-    /// and answering it per row per copy is the shape the refs budget
-    /// rules out (CLAUDE.md §性能予算). The set is a handful of names, so
-    /// it is handed in rather than built from the listing.
+    /// on the same listing, and the reason it is here: **the sidebar row
+    /// and the graph chip ask the same question**, and answering it per
+    /// row per copy is the shape the refs budget rules out
+    /// (CLAUDE.md §性能予算). The set is a handful of names, so it is
+    /// handed in.
     held: &'a WorktreeHolders,
 }
 
@@ -244,7 +244,7 @@ pub(super) fn build_label_map(
 
 /// Fingerprint of what status reported: which paths, in which state.
 ///
-/// Deliberately not the branch headers — ahead/behind move when a fetch
+/// The paths and their states alone — ahead/behind move when a fetch
 /// lands and say nothing about anyone's line endings.
 pub(super) fn status_key(status: &WorkTreeStatus) -> u64 {
     use std::hash::{Hash, Hasher};
@@ -278,21 +278,21 @@ pub(super) fn refs_key(refs: &[RefEntry], head: &HeadState) -> u64 {
 
 /// Everything the two joins read, [`refs_key`] included.
 ///
-/// **A second key, and deliberately not the first one widened.** The two
-/// answer different questions and only one of them may reach the walk:
+/// **A second key.** The two answer different questions and only one of
+/// them reaches the walk:
 ///
 /// - `refs_key` moving means commits the graph has never seen, so the
 ///   history is walked again.
 /// - this moving means the snapshot and the chip map have to be rebuilt —
 ///   which what the remotes carry does on its own, because it decides the
-///   cloud badges and adds the tags only they have. **The rows do not
-///   change**, so the chip diff delivers it and the walk must not run: a
-///   walk that ends in "the same picture" pays for the whole walk to find
-///   that out.
+///   cloud badges and adds the tags only they have. **The rows stand**,
+///   so the chip diff delivers it and the walk stays put: a walk that
+///   ends in "the same picture" pays for the whole walk to find that
+///   out.
 ///
-/// Takes a counter the session bumps when the index became different
-/// readings rather than the index's 45,909 entries, so this stays O(1) on
-/// top of the key it wraps.
+/// Takes a counter the session bumps when the index became
+/// different readings, so this stays O(1) on top of the key it
+/// wraps.
 pub(super) fn join_key(
     refs: u64,
     remote_tags_gen: u64,
@@ -408,7 +408,7 @@ pub(super) fn build_snapshot(
             continue;
         }
         // Remotes that disagree about a name still name one tag, and the
-        // sidebar answers "does this name exist" rather than "where".
+        // sidebar answers "does this name exist".
         let Some(reading) = readings.first() else {
             continue;
         };
@@ -441,7 +441,7 @@ pub(super) fn build_snapshot(
     // The lookup's order over the tags, taken once they are in the eye's.
     snapshot.index_tags();
     // Looked up by name and remote when a menu opens over a tag, so it is
-    // sorted the once here rather than scanned every time.
+    // sorted the once here.
     snapshot
         .tag_drifts
         .sort_by(|a, b| a.name.cmp(&b.name).then(a.remote.cmp(&b.remote)));
@@ -456,18 +456,18 @@ impl RepoSession {
     /// Files away which branches the *other* working copies have out, and
     /// says so to the ref joins by bumping their generation.
     ///
-    /// **This copy is not one of them.** Moving onto the branch this
-    /// window already has out is a no-op, not a refusal, and marking it
-    /// would put the mark on the row every reader is standing on.
+    /// **The other copies only.** Moving onto the branch this window
+    /// already has out is a no-op, and marking it would put the mark on
+    /// the row every reader is standing on.
     ///
     /// Answers which reads have to be asked again for it — the caller's
-    /// cue. **Waiting for the next poll tick is not good enough**: until
-    /// the join runs again the rows offer a move git will refuse, and a
-    /// session's first worktree read lands *after* its first refs read,
-    /// so the window is exactly the moment somebody is looking at a
-    /// repository they have just opened (measured, a run photographed a
-    /// second in had no marks on it). The remote-tag index asks for the
-    /// same re-read on the same terms.
+    /// cue. **The re-read is asked for at once**: until the join runs
+    /// again the rows offer a move git will refuse, and a session's
+    /// first worktree read lands *after* its first refs read, so the
+    /// window is exactly the moment somebody is looking at a repository
+    /// they have just opened (measured, a run photographed a second in
+    /// had no marks on it). The remote-tag index asks for the same
+    /// re-read on the same terms.
     pub(super) fn note_worktree_holders(
         &self,
         worktrees: &[crate::worktrees::WorktreeEntry],
@@ -502,9 +502,9 @@ impl RepoSession {
                 }
             }
         }
-        // **In an order of their own, not git's.** What decides whether
-        // the graph is walked again is whether this list came out
-        // different (below), and the listing's order is the order of
+        // **In an order of their own.** What decides whether the graph
+        // is walked again is whether this list came out different
+        // (below), and the listing's order is the order of
         // `.git/worktrees/` — so a set that merely came back shuffled
         // would spend a whole `git log` over the history saying nothing
         // (CLAUDE.md §性能予算). It settles the walk's arguments and the
@@ -512,10 +512,10 @@ impl RepoSession {
         fresh
             .detached
             .sort_by(|a, b| a.oid.cmp(&b.oid).then_with(|| a.name.cmp(&b.name)));
-        // A poisoned lock is taken rather than given up on, the way the
-        // tag index's is: what is behind it is a snapshot, not a
-        // half-written structure, and dropping it would take every mark
-        // off the rows for the rest of the session.
+        // A poisoned lock is taken, the way the tag index's is: what
+        // is behind it is a snapshot, and dropping it would take
+        // every mark off the rows for the rest of the
+        // session.
         let mut held = relock(&self.worktree_holders);
         if **held == fresh {
             return WorktreeNews::default();
@@ -543,9 +543,9 @@ impl RepoSession {
 
 /// What a worktree read changed, and so which reads have to run again.
 ///
-/// Two answers rather than one because they cost differently: the joins
-/// are a pass over a listing already in hand, and the walk is a git
-/// process over the whole history.
+/// Two answers, because they cost differently: the joins are a pass
+/// over a listing already in hand, and the walk is a git process over
+/// the whole history.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(super) struct WorktreeNews {
     /// The marks and the chips: something a working copy holds moved.

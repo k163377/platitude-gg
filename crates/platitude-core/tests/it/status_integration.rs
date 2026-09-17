@@ -108,8 +108,8 @@ async fn a_directory_that_is_no_repository_of_its_own_says_nothing() {
         details::embedded(&executor, &repo.path, "plain/", &cancel).await,
         None
     );
-    // And the outer HEAD is what it would have said: the walk-up is real,
-    // not a shape this test invented.
+    // And the outer HEAD is what it would have said: the walk-up
+    // is real.
     let outer = repo.git(&["rev-parse", "HEAD"]);
     assert_eq!(
         repo.git_in(&repo.path.join("plain"), &["rev-parse", "HEAD"]),

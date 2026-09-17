@@ -87,7 +87,7 @@ fn one_commit_back() -> (TestRepo, String) {
     (repo, root)
 }
 
-/// The keeping-it-staged move: the branch goes back, the files do not,
+/// The keeping-it-staged move: the branch goes back, the files stay,
 /// and what the dropped commit wrote is ready to be committed again.
 #[tokio::test]
 async fn a_soft_reset_moves_the_branch_and_leaves_the_work_staged() {

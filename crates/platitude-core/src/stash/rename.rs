@@ -11,13 +11,13 @@ use super::*;
 
 /// Renames a stash entry: the label the list shows.
 ///
-/// git has no rename for one, so this is built from what it does have.
-/// The entry's commit is written again with the new message and nothing
-/// else changed (same tree, same parents, same identities and dates —
-/// `commit-tree` only replaces the text), `stash store` puts that on the
-/// reflog, and the old entry is dropped. Rewriting the commit rather than
-/// storing the original under a new reflog message is what keeps the two
-/// places a stash's message is read — the list and the commit itself —
+/// git has no rename for one, so this is built from what it does
+/// have. The entry's commit is written again with the new message
+/// and nothing else changed (same tree, same parents, same
+/// identities and dates — `commit-tree` only replaces the text),
+/// `stash store` puts that on the reflog, and the old entry is
+/// dropped. Rewriting the commit is what keeps the two places a
+/// stash's message is read — the list and the commit itself —
 /// saying the same thing.
 ///
 /// Two consequences to know about:
@@ -62,8 +62,8 @@ pub async fn rename(
             message: "git wrote no commit for the renamed stash".to_string(),
         });
     }
-    // No `--` here: `stash store` takes one commit and no pathspec, and
-    // the separator is not in its usage.
+    // The commit stands alone: `stash store` takes one commit and no
+    // pathspec; no separator in its usage.
     let store = GitCommand::new()
         .cwd(workdir)
         .args(["stash", "store", "-m", message, &stored]);
