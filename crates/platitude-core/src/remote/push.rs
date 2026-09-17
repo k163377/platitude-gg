@@ -13,7 +13,7 @@ use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
 use super::list::{config_value, current_branch};
-use super::marks::push_marks;
+use super::marks::{PushMarks, push_marks};
 use super::refusal::refusal;
 
 /// How hard a push may overwrite the remote.
@@ -86,6 +86,26 @@ pub async fn plan_current_push(
     // command that reaches the network — the same read the status tick
     // makes, so the two cannot drift apart.
     let marks = push_marks(executor, workdir, &branch, cancel).await?;
+
+    decide_push(&branch, tracks, merge, marks, fallback_remote, force)
+}
+
+/// What the four reads above come to, with nothing left to ask git: the
+/// destination, the name the branch goes under there, and whether this
+/// push is the one that records an upstream.
+///
+/// Pure, and asked of every arrangement of the three keys in this
+/// module's own tests — the order is the half of [`plan_current_push`]
+/// that has ever been wrong, and walking it through git costs a clone,
+/// two bare repositories and a `config` write per arrangement.
+fn decide_push(
+    branch: &str,
+    tracks: Option<String>,
+    merge: Option<String>,
+    marks: PushMarks,
+    fallback_remote: &str,
+    force: PushForce,
+) -> Result<PushSpec, GitError> {
     let pushes_to = marks
         .push_remote
         .or_else(|| marks.push_default.map(|marked| marked.remote));
@@ -106,7 +126,7 @@ pub async fn plan_current_push(
             .strip_prefix("refs/heads/")
             .unwrap_or(merge)
             .to_string(),
-        _ => branch.clone(),
+        _ => branch.to_string(),
     };
 
     // Recorded only where the branch tracks nothing at all, which is what
@@ -119,7 +139,7 @@ pub async fn plan_current_push(
 
     Ok(PushSpec {
         remote,
-        local: branch,
+        local: branch.to_string(),
         remote_branch,
         set_upstream,
         force,
@@ -204,4 +224,188 @@ pub async fn push(
         &spec.remote_branch,
         false,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::remote::marks::PushDefault;
+    use crate::remote::standing::push_target;
+
+    const REMOTES: [&str; 2] = ["fork", "origin"];
+
+    /// The four reads, spelled the way git answers them: what the branch
+    /// tracks, the ref it merges with, and the two marks. Empty stands
+    /// for a key that is not set.
+    fn decide(
+        branch: &str,
+        tracks: &str,
+        merge: &str,
+        push_remote: &str,
+        push_default: &str,
+    ) -> PushSpec {
+        plan(branch, tracks, merge, push_remote, push_default, "origin").expect("a plan")
+    }
+
+    fn plan(
+        branch: &str,
+        tracks: &str,
+        merge: &str,
+        push_remote: &str,
+        push_default: &str,
+        fallback: &str,
+    ) -> Result<PushSpec, GitError> {
+        let some = |value: &str| (!value.is_empty()).then(|| value.to_string());
+        decide_push(
+            branch,
+            some(tracks),
+            some(merge),
+            PushMarks {
+                push_remote: some(push_remote),
+                push_default: some(push_default).map(|remote| PushDefault {
+                    remote,
+                    local: true,
+                }),
+            },
+            fallback,
+            PushForce::None,
+        )
+    }
+
+    /// git's own order, every step of it: the branch's own `pushRemote`
+    /// beats the repository's `remote.pushDefault`, which beats whatever
+    /// the branch tracks, and only with none of the three set does the
+    /// caller's fallback come into it (git-config(5); measured 2.55).
+    /// **Reading just the last of them** is how a fork workflow's pushes
+    /// go to the repository it forked from.
+    #[test]
+    fn a_push_goes_where_git_would_send_it() {
+        assert_eq!(
+            decide("main", "origin", "refs/heads/main", "", "").remote,
+            "origin"
+        );
+        assert_eq!(
+            decide("main", "origin", "refs/heads/main", "", "fork").remote,
+            "fork",
+            "the repository's mark beats what the branch tracks"
+        );
+        assert_eq!(
+            decide("main", "origin", "refs/heads/main", "fork", "").remote,
+            "fork",
+            "so does the branch's own"
+        );
+        assert_eq!(
+            decide("main", "fork", "refs/heads/main", "origin", "fork").remote,
+            "origin",
+            "and the branch's own beats the repository's"
+        );
+        assert_eq!(
+            decide("topic", "", "", "", "").remote,
+            "origin",
+            "nothing set anywhere falls back to the caller's remote"
+        );
+    }
+
+    /// **The upstream names a branch on one remote and says nothing about
+    /// any other.** Going to the remote it tracks keeps that name; going
+    /// anywhere else it goes under the branch's own, which is the refspec
+    /// git builds for a triangular push (measured).
+    #[test]
+    fn a_branch_keeps_its_upstreams_name_only_on_its_upstreams_remote() {
+        let tracked = decide("topic", "origin", "refs/heads/elsewhere", "", "");
+        assert_eq!(
+            (tracked.remote.as_str(), tracked.remote_branch.as_str()),
+            ("origin", "elsewhere")
+        );
+
+        let marked = decide("topic", "origin", "refs/heads/elsewhere", "", "fork");
+        assert_eq!(
+            (marked.remote.as_str(), marked.remote_branch.as_str()),
+            ("fork", "topic"),
+            "not the upstream's name"
+        );
+        // A merge ref that is not under refs/heads/ is taken as written.
+        assert_eq!(
+            decide("topic", "origin", "trunk", "", "").remote_branch,
+            "trunk"
+        );
+    }
+
+    /// Recorded only where the branch tracks nothing at all — a branch
+    /// that already tracks something goes on tracking it, because
+    /// `--set-upstream` to another remote rewrites where the branch
+    /// *fetches* from (measured).
+    #[test]
+    fn only_a_branch_that_tracks_nothing_records_where_it_went() {
+        assert!(decide("topic", "", "", "", "fork").set_upstream);
+        assert!(
+            decide("topic", "origin", "", "", "").set_upstream,
+            "half a mark is no mark: the next push would have nothing to compare against"
+        );
+        assert!(!decide("main", "origin", "refs/heads/main", "", "").set_upstream);
+        assert!(
+            !decide("main", "origin", "refs/heads/main", "fork", "").set_upstream,
+            "a branch that tracks origin must go on tracking it"
+        );
+    }
+
+    /// A repository with no remote at all has nowhere to send anything,
+    /// and says so rather than building a refspec against an empty name.
+    #[test]
+    fn a_repository_with_no_remote_has_nowhere_to_send() {
+        let err = plan("main", "", "", "", "", "").expect_err("nowhere to push");
+        assert!(err.to_string().contains("no remote to push to"), "{err}");
+        assert!(
+            plan("main", "", "", "", "", "origin").is_ok(),
+            "a fallback is a destination"
+        );
+    }
+
+    /// **The label and the send must name the same remote.** The toolbar
+    /// says where a push is going from configuration the snapshot carries
+    /// ([`push_target`]); the send works it out again from the keys git
+    /// answers with. Two spellings of one order is how the first came to
+    /// read `remote.pushDefault` while the second read the branch's own
+    /// mark first — so this walks every arrangement of the three keys and
+    /// holds the two answers against each other.
+    #[test]
+    fn the_label_names_the_remote_the_send_uses() {
+        // (branch.main.pushRemote, remote.pushDefault, what the branch tracks)
+        for (push_remote, push_default, tracks) in [
+            ("", "", "origin"),
+            ("", "fork", "origin"),
+            ("fork", "", "origin"),
+            ("fork", "origin", "origin"),
+            ("origin", "fork", "origin"),
+            ("origin", "", "origin"),
+            ("", "", ""),
+            ("", "fork", ""),
+            ("fork", "", ""),
+        ] {
+            let merge = if tracks.is_empty() {
+                ""
+            } else {
+                "refs/heads/main"
+            };
+            let spec = decide("main", tracks, merge, push_remote, push_default);
+            let upstream = if tracks.is_empty() {
+                String::new()
+            } else {
+                format!("{tracks}/main")
+            };
+            assert_eq!(
+                push_target(
+                    "main",
+                    &upstream,
+                    push_remote,
+                    push_default,
+                    "origin",
+                    REMOTES
+                ),
+                format!("{}/{}", spec.remote, spec.remote_branch),
+                "pushRemote={push_remote:?} pushDefault={push_default:?} tracks={tracks:?}: \
+                 the label and the send disagree"
+            );
+        }
+    }
 }

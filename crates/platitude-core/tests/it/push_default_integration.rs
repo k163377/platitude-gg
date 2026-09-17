@@ -6,6 +6,15 @@
 //! written down: the order it resolves the three keys in, the name it
 //! pushes a branch under once the destination is not the one it tracks,
 //! and the exit codes its reads answer with.
+//!
+//! **What is left here is what only git can answer**: that the four
+//! reads come back with what git holds — at every scope, and for a
+//! branch whose name is a regex — and that a push built from them lands
+//! where it said it would without moving where the branch fetches from.
+//! The order those reads are weighed in is a switch over their values,
+//! and every arrangement of it is asked of `remote::push`'s own tests,
+//! where an arrangement costs nothing rather than a clone, two bare
+//! repositories and a `config` write.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -36,16 +45,35 @@ fn origin_fork_and_clone() -> (TestRepo, TestRepo, TestRepo) {
     (origin, fork, work)
 }
 
+/// **The upstream is under another name here, on purpose.** A branch
+/// spelled the same on both sides cannot say whether the plan read
+/// `branch.<name>.merge` at all: dropping that read entirely would answer
+/// with the branch's own name and come out identical. So this one is
+/// pushed as `main:elsewhere`, and what the plan has to carry across is a
+/// name nothing else in the repository holds.
 #[tokio::test]
 async fn nothing_marked_sends_a_branch_where_it_tracks() {
-    let (_origin, _fork, repo) = origin_fork_and_clone();
+    let (_origin, _fork, mut repo) = origin_fork_and_clone();
     let (exec, cancel) = env();
+
+    repo.git(&["push", "--set-upstream", "origin", "main:elsewhere"]);
+    // Asked of git rather than assumed: the test's own claim is that this
+    // value reaches the plan, so what it is has to come from outside the
+    // plan.
+    assert_eq!(
+        repo.git(&["config", "--get", "branch.main.merge"]).trim(),
+        "refs/heads/elsewhere",
+        "the push recorded the name on the far side"
+    );
 
     let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
         .await
         .expect("a plan");
     assert_eq!(plan.remote, "origin");
-    assert_eq!(plan.remote_branch, "main");
+    assert_eq!(
+        plan.remote_branch, "elsewhere",
+        "the upstream's own name, read out of branch.main.merge"
+    );
     assert!(!plan.set_upstream, "the branch already tracks something");
 }
 
@@ -78,74 +106,6 @@ async fn a_marked_remote_takes_the_push_from_the_upstream() {
         "origin",
         "where the branch fetches from is untouched"
     );
-}
-
-/// git's own order: the branch's own push remote wins over the
-/// repository's mark, which wins over what the branch tracks.
-#[tokio::test]
-async fn a_branchs_own_push_remote_beats_the_mark() {
-    let (_origin, _fork, mut repo) = origin_fork_and_clone();
-    let (exec, cancel) = env();
-
-    remote::set_push_default(&exec, &repo.path, "fork", &cancel)
-        .await
-        .expect("mark fork");
-    repo.git(&["config", "branch.main.pushRemote", "origin"]);
-
-    let plan = remote::plan_current_push(&exec, &repo.path, "fork", PushForce::None, &cancel)
-        .await
-        .expect("a plan");
-    assert_eq!(plan.remote, "origin");
-}
-
-/// A branch nobody has pushed yet goes to the mark, over the fallback
-/// the caller offered, and records the upstream as a first push
-/// always has.
-#[tokio::test]
-async fn a_branch_with_no_upstream_goes_to_the_mark() {
-    let (_origin, _fork, mut repo) = origin_fork_and_clone();
-    let (exec, cancel) = env();
-
-    remote::set_push_default(&exec, &repo.path, "fork", &cancel)
-        .await
-        .expect("mark fork");
-    repo.git(&["switch", "--create", "topic"]);
-
-    let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
-        .await
-        .expect("a plan");
-    assert_eq!(plan.remote, "fork");
-    assert_eq!(plan.remote_branch, "topic");
-    assert!(plan.set_upstream, "the first push records where it went");
-}
-
-/// The upstream names a branch on one remote and says nothing about any
-/// other: going to the remote it tracks keeps that name, going anywhere
-/// else uses the branch's own.
-#[tokio::test]
-async fn an_upstream_under_another_name_is_kept_only_on_its_own_remote() {
-    let (_origin, _fork, mut repo) = origin_fork_and_clone();
-    let (exec, cancel) = env();
-
-    repo.git(&["switch", "--create", "topic"]);
-    repo.git(&["push", "origin", "topic:elsewhere"]);
-    repo.git(&["config", "branch.topic.remote", "origin"]);
-    repo.git(&["config", "branch.topic.merge", "refs/heads/elsewhere"]);
-
-    let tracked = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
-        .await
-        .expect("a plan");
-    assert_eq!(tracked.remote, "origin");
-    assert_eq!(tracked.remote_branch, "elsewhere");
-
-    remote::set_push_default(&exec, &repo.path, "fork", &cancel)
-        .await
-        .expect("mark fork");
-    let marked = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
-        .await
-        .expect("a plan");
-    assert_eq!(marked.remote, "fork");
-    assert_eq!(marked.remote_branch, "topic", "not the upstream's name");
 }
 
 #[tokio::test]
@@ -183,63 +143,6 @@ async fn the_mark_reads_back_with_the_level_that_set_it() {
     remote::clear_push_default(&exec, &repo.path, &cancel)
         .await
         .expect("clearing a mark that is already gone is the state asked for");
-}
-
-/// **The label and the send must name the same remote.** The toolbar
-/// says where a push is going from configuration the snapshot carries
-/// (`remote::push_target`); the send works it out again from git
-/// (`remote::plan_current_push`). Two spellings of one order is how the
-/// first came to read `remote.pushDefault` while the second read the
-/// branch's own mark first — so this walks every arrangement of the
-/// three keys and holds the two answers against each other.
-#[tokio::test]
-async fn the_label_names_the_remote_the_send_uses() {
-    let (_origin, _fork, mut repo) = origin_fork_and_clone();
-    let (exec, cancel) = env();
-    let remotes = ["fork", "origin"];
-
-    // (branch.main.pushRemote, remote.pushDefault) — unset written as "".
-    for (push_remote, push_default) in [
-        ("", ""),
-        ("", "fork"),
-        ("fork", ""),
-        ("fork", "origin"),
-        ("origin", "fork"),
-        ("origin", ""),
-    ] {
-        // Exit 5 where the key was never there, which is the state
-        // asked for (measured).
-        repo.git_ok(&["config", "--unset", "branch.main.pushRemote"]);
-        remote::clear_push_default(&exec, &repo.path, &cancel)
-            .await
-            .expect("clear the mark");
-        if !push_remote.is_empty() {
-            repo.git(&["config", "branch.main.pushRemote", push_remote]);
-        }
-        if !push_default.is_empty() {
-            remote::set_push_default(&exec, &repo.path, push_default, &cancel)
-                .await
-                .expect("mark");
-        }
-
-        let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
-            .await
-            .expect("a plan");
-        let label = remote::push_target(
-            "main",
-            "origin/main",
-            push_remote,
-            push_default,
-            "origin",
-            remotes,
-        );
-        assert_eq!(
-            label,
-            format!("{}/{}", plan.remote, plan.remote_branch),
-            "pushRemote={push_remote:?} pushDefault={push_default:?}: \
-             the label and the send disagree"
-        );
-    }
 }
 
 /// The fork arrangement the label used to get wrong: the branch marks its
