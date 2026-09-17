@@ -4,7 +4,7 @@
 //! under every floor the layout has, a pane wider than the row inside
 //! it, a band too narrow to hold a path. The app writes only shapes it
 //! could take, so nothing inside it can produce these — the way in is
-//! the only place that can, and it does it here rather than by hand.
+//! the only place that can, and it does it here.
 
 use std::path::Path;
 
@@ -44,9 +44,9 @@ pub(super) fn config(
     // The verbs that need the configuration to say something before the
     // run starts: a window smaller than any floor the layout has. It is
     // what a file written before there was a floor looks like, and the
-    // way in is the only place that can put it right. Written here rather
-    // than by hand in the app, because the app never writes a shape it
-    // could not take — so nothing inside it could produce this state.
+    // way in is the only place that can put it right. Written here,
+    // because the app never writes a shape it could not take — so
+    // nothing inside it could produce this state.
     // `window-floor` is about the lift itself; the stepping verbs ride
     // the same seed for the height, since no demo repository has more
     // commits than the default window shows at once, and a graph with
@@ -70,13 +70,13 @@ pub(super) fn config(
     }
 
     // The one arrangement the window would destroy on its way in, and it
-    // belongs to the fixture rather than to whoever opens it: `outrun`
-    // **is** "the remote moved and this end has not looked", and opening
-    // a tab fetches once (デザイン規約 §リモートから取り込む). Turning the timer
-    // off turns that one off with it (`session::fetch_on_open` asks the
-    // interval for its permission), which is also what leaves the toolbar
-    // offering a plain `push` — an end that had fetched would know it was
-    // diverged and offer the overwrite instead.
+    // belongs to the fixture: `outrun` **is** "the remote moved and this
+    // end has not looked", and opening a tab fetches once
+    // (デザイン規約 §リモートから取り込む). Turning the timer off turns that
+    // one off with it (`session::fetch_on_open` asks the interval for its
+    // permission), which is also what leaves the toolbar offering a plain
+    // `push` — an end that had fetched would know it was diverged and
+    // offer the overwrite instead.
     //
     // `unpublished` is the same requirement from the other side: its
     // `outsider` is a name put there by another clone and **never
@@ -90,17 +90,17 @@ pub(super) fn config(
     // of 10 of `publish-taken outsider --preset unpublished` reported
     // `far=refused code=push -f theirs=1`).
     //
-    // **Keyed on the preset, not on a verb.** A run that fetches on the
-    // way in is not photographing `outrun` at all, it is photographing
-    // `demo::remote::diverged` — which is literally `behind`, a fetch,
-    // and the same commit on top. Named by verb, this reached the one
-    // that presses `push` and left every other run to picture the
-    // neighbouring preset under this preset's name (observed: `nav-tip
-    // branch:0 --preset outrun` framed an ahead 1 / behind 1 row and a
-    // `push -f`).
+    // **Keyed on the preset.** A run that fetches on the way
+    // in is photographing `demo::remote::diverged` — which is
+    // literally `behind`, a fetch, and the same commit on top.
+    // Named by verb, this reached the one that presses `push`
+    // and left every other run to picture the neighbouring
+    // preset under this preset's name (observed: `nav-tip
+    // branch:0 --preset outrun` framed an ahead 1 / behind 1
+    // row and a `push -f`).
     //
-    // `perf` is here for a reason of its own: a measurement is not to
-    // reach the network at all.
+    // `perf` is here for a reason of its own: a measurement is of this
+    // machine alone.
     if verb == "perf" || presets.iter().any(|p| p == "outrun" || p == "unpublished") {
         let settings = config_dir.join("settings.toml");
         std::fs::write(
@@ -153,47 +153,47 @@ mod tests {
             .expect("a config directory nobody else has")
     }
 
-    /// **The one seed that is the fixture's rather than the verb's.** A
-    /// run that opens `outrun` with the timer on fetches on its way in
-    /// and photographs `diverged` instead, so the settings have to follow
-    /// the preset through whatever verb asks for it — a verb nobody has
-    /// written yet included, since such a run PASSes on a picture of the
-    /// wrong fixture and says nothing about it.
+    /// **The one seed that is the fixture's.** A run that opens `outrun`
+    /// with the timer on fetches on its way in and photographs
+    /// `diverged` instead, so the settings have to follow the preset
+    /// through whatever verb asks for it — a verb nobody has written yet
+    /// included, since such a run PASSes on a picture of the wrong
+    /// fixture and says nothing about it.
     #[test]
     fn the_preset_that_must_not_fetch_is_seeded_under_any_verb() {
         let dir = config_dir("seed-outrun");
         super::config(&dir, "nav-tip", "", &["outrun".to_string()]).expect("the seed is written");
         let settings = std::fs::read_to_string(dir.join("settings.toml"))
-            .expect("a preset that must not fetch is given settings of its own");
+            .expect("a preset that opens quiet is given settings of its own");
         assert!(
             settings.contains("auto_fetch_minutes = 0"),
-            "the seeded settings turn the fetching off, not something else: {settings}"
+            "the seeded settings turn the fetching off: {settings}"
         );
     }
 
-    /// The second fixture with a name on the far side it must not have
-    /// read: `unpublished`'s `outsider` is the only shape a first push
-    /// has that neither answer fits, and an opening that fetches hands
-    /// the comparison the commit it was supposed to be missing — the run
-    /// then photographs a diverged name (measured: `refused`, ten times
-    /// out of ten) under this preset's name and PASSes doing it.
+    /// The second fixture with a name on the far side this end has yet
+    /// to read: `unpublished`'s `outsider` is the only shape a first
+    /// push has that neither answer fits, and an opening that fetches
+    /// hands the comparison the commit it was supposed to be missing —
+    /// the run then photographs a diverged name (measured: `refused`,
+    /// ten of ten) under this preset's name and PASSes doing it.
     #[test]
     fn the_preset_whose_third_shape_a_fetch_would_answer_is_seeded_too() {
         let dir = config_dir("seed-unpublished");
         super::config(&dir, "publish-taken", "", &["unpublished".to_string()])
             .expect("the seed is written");
         let settings = std::fs::read_to_string(dir.join("settings.toml"))
-            .expect("a preset that must not fetch is given settings of its own");
+            .expect("a preset that opens quiet is given settings of its own");
         assert!(
             settings.contains("auto_fetch_minutes = 0"),
-            "the seeded settings turn the fetching off, not something else: {settings}"
+            "the seeded settings turn the fetching off: {settings}"
         );
     }
 
-    /// And no other fixture is quieted. A preset with nothing to lose to
-    /// an opening's fetch runs on the settings the application ships,
-    /// which is the half that says this is a fixture's requirement rather
-    /// than a blanket for every headless run.
+    /// And no other fixture is quieted. A preset with nothing to lose
+    /// to an opening's fetch runs on the settings the application
+    /// ships, which is the half that says this is one fixture's
+    /// requirement.
     #[test]
     fn a_preset_with_nothing_to_lose_is_left_on_the_shipped_settings() {
         let dir = config_dir("seed-basic");

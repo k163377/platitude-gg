@@ -8,11 +8,11 @@
 //! which every coreutils has; this is the host's side of the same
 //! answer.
 //!
-//! In here rather than through a crate because a dependency is a
-//! human's decision (CLAUDE.md 絶対制約) and the task runner's are std
-//! only. Not a security claim — nothing here defends against a chosen
-//! collision; it is a fingerprint that a second machine can also
-//! produce, pinned to the published vectors below.
+//! In here, because a dependency is a human's decision (CLAUDE.md
+//! 絶対制約) and the task runner's are std only. It is a fingerprint
+//! a second machine can also produce, pinned to the published
+//! vectors below — a chosen collision is outside what it
+//! answers.
 
 /// FIPS 180-4 §4.2.2. Laid out as the standard prints it — eight rows
 /// of eight — so a reader can check it against the table it came from.

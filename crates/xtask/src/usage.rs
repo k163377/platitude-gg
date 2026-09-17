@@ -1,7 +1,7 @@
 //! What `cargo xtask` prints when it is given no command it knows.
 //!
 //! One page, in four pieces. The two that grow are the ones that grow with
-//! the app rather than with this runner: the demo presets, one line per
+//! the app: the demo presets, one line per
 //! shape a repository can be stopped in, and the verify-ui verbs, one
 //! paragraph per thing a headless run has to be told about itself. Both are
 //! written where they are added to, and neither can push the other over a
@@ -82,12 +82,12 @@ commands:
                       third of the logical CPUs, 1 to 8). The lanes are
                       the machine's: every gate on it shares that many
                       per side, so two gates at once run that many verbs
-                      between them, not twice that. A tree holds one gate
+                      between them. A tree holds one gate
                       at a time — a second one there is refused with the
                       first's pid (a dry run holds nothing)
-        --dir <tree>  gate that tree instead of this one
+        --dir <tree>  gate that tree
         --main <ref>  read the diff and the stamp against this ref
-                      instead of main (the tests' sandboxes)
+                      (the tests' sandboxes; default main)
       gate verdict <old> <new>   the hook's question (exit 0 = may move)
       gate install               copy .githooks/reference-transaction
                                  beside .git (pgg-gate/hooks/), note the
@@ -121,8 +121,8 @@ commands:
       Every await in tests/it that resolves through a channel no Patience
       watches — a tracked outcome(), a session boundary wait, a ticker
       step — must sit under support::wait::bounded or an explicit
-      timeout, so a silent hang fails by test name instead of sitting
-      until the CI kill. Second step of `check`; subsecond on its own.
+      timeout, so a silent hang fails by test name, ahead of the CI
+      kill. Second step of `check`; subsecond on its own.
 
   docs [--sync]
       The three ways an edit to internal-docs, .claude/rules,
@@ -170,11 +170,11 @@ commands:
   deny
       cargo-deny over deny.toml: the bans that keep networking crates and
       git implementations out of the closure (CLAUDE.md 絶対制約), the
-      registries, and the license allow list. Three checks, not four —
+      registries, and the license allow list. Three checks —
       advisories fetches the RustSec database from github.com, and stage
       2 stays offline; CI runs the full set. Needs cargo-deny installed
-      (`cargo install --locked cargo-deny`), and says so rather than
-      passing without it. `gate` runs this when deny.toml or a manifest
+      (`cargo install --locked cargo-deny`), and says so when it is
+      missing. `gate` runs this when deny.toml or a manifest
       moved, which is every way the closure can change.
 
 ";
@@ -202,7 +202,7 @@ const TAIL: &str = "  shipped [--no-build]
       still runs, and the run waits out its whole ceiling saying nothing.
       The two halves read the harness differently on purpose: the count
       is of dispatches, the failure is of every name it holds, since a
-      verb can be reached through a list rather than a comparison.
+      verb can be reached through a list too.
       Recording a missing verb is one `verify-ui <line>` without
       --no-census.
 
@@ -234,12 +234,12 @@ const TAIL: &str = "  shipped [--no-build]
       writes nothing to it, which is how the distance table in
       ci/baseline/perf-windows-x64.md is taken: both of its columns
       have to come from one implementation, or they are two
-      definitions rather than one comparison.
+      definitions.
       The six minutes is nine and a half million objects through
       fast-import, which reads one stream on one thread: the blobs go
       through four of them at once and the commits through one, and
       the build prints its phases so that stays visible.
-      It is generated rather than cloned because a clone of somebody's
+      It is generated because a clone of somebody's
       working repository is fetched behind the measurement's back, and a
       fetch changes the rows the graph draws, the ref tables the memory
       is mostly made of, and the commit whose diff is timed, all while
@@ -262,7 +262,7 @@ const TAIL: &str = "  shipped [--no-build]
       invocation minutes ago warmed the same exe and corpus, which the
       last one leaves a note of under target/perf.
       The machine is measured beside the process, and a run it spoiled is
-      taken again rather than published: the session locking, the window
+      taken again: the session locking, the window
       going down or moving screens, frames not arriving at the rate the
       screen could show, and the share of the machine that went to
       something else — the git the app runs counted as the app's own,
@@ -274,8 +274,8 @@ const TAIL: &str = "  shipped [--no-build]
       produced: live Rust heap, the models and the session parts holding
       it, and what none of them account for. Process memory minus Rust
       live bytes is not a measurement of Qt's live heap.
-      --at <rev> measures the rig's build of that commit instead of this
-      tree's own: the commit is checked out in .claude/worktrees/rig —
+      --at <rev> measures the rig's build of that commit: the commit is
+      checked out in .claude/worktrees/rig —
       the one worktree there that is no seat, entered and edited by
       nobody — built there with the feature set asked for, and the exe
       is shelved under the rig's target/ by commit and feature set, so
@@ -302,14 +302,14 @@ const TAIL: &str = "  shipped [--no-build]
                           size class (where the heap segments line up),
                           QueryWorkingSetEx for what is resident by file
                           (the fonts summed on one line — a CJK fallback
-                          font costs its resident pages, not its size),
+                          font costs its resident pages),
                           and the process heaps block by block, busy and
                           free by size class (RtlQueryProcessDebugInformation).
                           This is the side the Rust counter of --breakdown
                           cannot see: the C++ objects QML builds and
                           tree-sitter's trees. Needs --settle-ms; Windows only
         --no-scroll       leave the scroll benchmark out
-        --no-select       do not select a row or open a diff
+        --no-select       selection empty, diff closed
         --selection <s>   none, first (default), or head
         --select-oid <id>  select this full OID from the loaded graph
         --file <path>     open this changed file (default: first)
@@ -324,7 +324,7 @@ const TAIL: &str = "  shipped [--no-build]
         --no-diff         select and show details without opening a diff
         --output <path>   new directory for metadata and raw per-run logs
         --trace-frames    diagnostic app-clock frame series in app.log;
-                          flushed after scrolling, not a budget run
+                          flushed after scrolling, diagnostic only
         --no-open         start with no repository at all — the window and
                           nothing in it. Subtracting this from a run that
                           opened an empty repository leaves the cost of
@@ -334,7 +334,7 @@ const TAIL: &str = "  shipped [--no-build]
                           `shipped` build to the same path, so this
                           measures whichever of the two ran last — the
                           evidence names the feature set that was asked
-                          for, not the one on disk
+                          for, whatever is on disk
         --shipped         measure `cargo build --release` with no features
                           — the build a person installs. It answers no
                           knob and reports no frame, so what it gives is
@@ -388,7 +388,7 @@ const TAIL: &str = "  shipped [--no-build]
       this — one pool over both sides, every seat and every step, sized
       at one gate's widest moment (internal-docs/反映前テストの機械化.md
       §機械の予算と優先キュー) — so two gates at once share one gate's
-      worth rather than adding a second machine's. The order is what
+      worth. The order is what
       moves main, then a window somebody is waiting at (`launch`), then
       every test; while a unit of one rank is short of room, nothing
       below it is admitted into what it is waiting for. A ticket whose
@@ -416,14 +416,14 @@ const TAIL: &str = "  shipped [--no-build]
       `bare` builds the release workspace-wide and starts it on an Ubuntu
       carrying only what a package would declare, which is the only check
       that the thing runs somewhere it was not built; `bare --discover`
-      works that package list out again rather than reading the one that
-      stands. `offline` is CI's
+      works that package list out afresh, whatever the one that
+      stands says. `offline` is CI's
       offline-test job run here: it builds the app with the harness and
       the test binaries, then runs ci/offline-test.sh — the suite plus the
       offscreen smoke — in a container with no network at all, which is
       the property CI reaches with `unshare -n`. That script has no other
       caller until CI first runs, so this is what keeps it from drifting.
-      Both are worth a place in a pre-merge sweep, not in a daily one.
+      Both are worth a place in a pre-merge sweep.
       Which image it runs in follows what the command needs: core is
       Ubuntu and the toolchain, app adds Qt, a software GL stack and the
       fonts デザイン規約 names for Ubuntu. The build directory is a docker
@@ -480,7 +480,7 @@ const TAIL: &str = "  shipped [--no-build]
 
   seat [release]
       Hands this session a worktree seat, and takes no argument: the
-      letter is the answer, never the request (CLAUDE.md ビルド・テスト).
+      letter is the answer (CLAUDE.md ビルド・テスト).
       Letters are tried until `git worktree lock` takes one, so the seat
       comes back already claimed — the lock is the only step that ever
       decided which of two sessions got a seat, and a session that picks
@@ -529,11 +529,11 @@ const TAIL: &str = "  shipped [--no-build]
       One window, and it is `open` that hands it out: the page sits at a
       fixed path and is rewritten in place, so the window already showing
       the board is one F5 away from the run just taken. `open` says so
-      rather than opening a second, whichever seat or session asks, and
+      whichever seat or session asks, and
       `--again` is the reader's own word that they closed theirs. Six
       windows of one board are six answers to which one is current, so
-      the count is kept in the board rather than left to whoever
-      remembers (shots/window.rs).
+      the count is kept in the board itself
+      (shots/window.rs).
 
       `crop <png> --at <x>:<y>:<width>:<height> [--scale <n>]` cuts a
       region out and magnifies it a whole number of times (three by
@@ -545,8 +545,8 @@ const TAIL: &str = "  shipped [--no-build]
 
       A before/after goes on with `add --before <png> --after <png>`,
       which puts the two on one view side by side under one magnifier.
-      Never as two runs: read one after the other, the difference is
-      whatever the reader remembered rather than whatever changed.
+      As one run: read one after the other, the difference is
+      whatever the reader remembered.
 
       The board keeps itself to what is being looked at now, and the
       three rules that do it are in shots/sweep.rs: a picture retaken

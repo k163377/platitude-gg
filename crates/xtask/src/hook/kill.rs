@@ -21,7 +21,7 @@ pub(super) fn pre_kill(input: &str) -> Result<bool, String> {
          and the user's own window with it. The exe lock and the \
          second-instance gate both come from THIS tree's own stale run: \
          `{}` reaps exactly those (processes whose exe lives under this \
-         tree) and nothing else. If the user asked to kill the others in so \
+         tree). If the user asked to kill the others in so \
          many words, run the same command again with \
          {PROCESS_STOP_APPROVAL_FLAG}=1 in front of it.\"}}}}",
         crate::gui::KILL.line()
@@ -31,11 +31,11 @@ pub(super) fn pre_kill(input: &str) -> Result<bool, String> {
 
 /// Whether a shell line kills the app without pinning the kill to one
 /// tree's processes. A verb counts only as a bare token — quoted, it is
-/// somebody's search pattern, not an invocation (a kill smuggled whole
-/// into `powershell -Command "..."` slips this net; the guard teaches,
-/// it does not contain adversaries). `$_.Path`-filtered pipelines are
-/// the one hand-written shape that is scoped; taskkill cannot filter by
-/// path at all, so it is held regardless.
+/// somebody's search pattern (a kill smuggled whole into
+/// `powershell -Command "..."` slips this net; the guard teaches).
+/// `$_.Path`-filtered pipelines are the one hand-written shape that is
+/// scoped; taskkill cannot filter by path at all, so it is held
+/// regardless.
 fn broad_kill(command: &str) -> bool {
     let line = command.to_lowercase();
     if !line.contains("platitude") {

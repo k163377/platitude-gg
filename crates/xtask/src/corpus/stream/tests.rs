@@ -9,7 +9,7 @@ use crate::corpus::{shape, tree};
 /// A sink that counts the lines the tests ask about and holds none of
 /// them. **The stream is tens of gigabytes at this shape** — every
 /// revision of every file spelled out, because fast-import has no delta
-/// input — which is why it is written rather than built, and why a test
+/// input — which is why it is written as it goes, and why a test
 /// that collected it would take the process down.
 #[derive(Default)]
 struct Tally {
@@ -91,7 +91,7 @@ fn the_base_commit_places_the_whole_tree() {
     assert_eq!(tally.count("M 120000 inline "), 1, "no symlink");
 }
 
-/// **A history is not only modifications.** The reference repository's
+/// **A history adds and deletes.** The reference repository's
 /// first-parent history is 36% adds against 36% deletes; a corpus of
 /// pure `M` gives `--find-renames` nothing to score, never sets
 /// `FileChange.orig_path`, and never opens an added file's diff against
@@ -115,7 +115,7 @@ fn the_history_adds_and_deletes_as_well_as_changes() {
         placed > deletes * 3,
         "{placed} placements, {deletes} deletes"
     );
-    // And the tree does not drain: a delete takes a path out and an add
+    // And the tree stays full: a delete takes a path out and an add
     // puts one back, so what `git status` walks stays the size it was.
     let tracked = live.tracked.iter().filter(|held| **held).count() as u64;
     assert!(
@@ -150,9 +150,9 @@ fn the_first_file_of_the_newest_commit_is_an_ordinary_one() {
 ///
 /// **Nothing else holds this.** A `from` or a `merge` naming a mark the
 /// stream never wrote is a stream fast-import rejects — at the end,
-/// after ten minutes, naming a number rather than the arithmetic behind
-/// it. The counting sink cannot answer this, so this one reads the
-/// marks themselves out of the parts that mint and use them.
+/// after ten minutes, naming a number and nothing else. The counting
+/// sink cannot answer this, so this one reads the marks themselves out
+/// of the parts that mint and use them.
 #[test]
 fn every_mark_reached_for_was_minted_exactly_once() {
     let tree = tree::build();
@@ -238,7 +238,7 @@ impl Write for Marks {
 /// A row whose diff opens the tree's median file measures a sixteenth
 /// of what the same click costs against the reference repository, whose
 /// window opens 10,366 bytes at the median and 60,895 at the ninth
-/// decile. Held here rather than found in a ten-minute build.
+/// decile. Held here, ahead of a ten-minute build.
 #[test]
 fn a_side_branch_edits_the_kind_of_file_people_work_in() {
     let tree = tree::build();
@@ -272,7 +272,7 @@ fn a_side_branch_edits_the_kind_of_file_people_work_in() {
 /// build's import phase between this side and git's —
 /// `cargo test -p xtask time_the_generator_alone -- --ignored --nocapture`.
 #[test]
-#[ignore = "minutes: the whole stream, for attribution rather than assertion"]
+#[ignore = "minutes: the whole stream, for attribution only"]
 fn time_the_generator_alone() {
     struct Count(u64);
     impl Write for Count {
@@ -321,7 +321,7 @@ fn the_marks_the_commits_name_are_the_ones_the_blob_passes_mint() {
         + tally.count("M 100755 inline ")
         + tally.count("M 120000 inline ");
     // The same head, recorded. The ignore files are literals in the
-    // stream rather than placements.
+    // stream.
     let mut recorded = Recorded::default();
     let mut live = History::new(&tree);
     base(&mut std::io::sink(), &tree, &mut recorded).expect("a sink never refuses");
@@ -459,7 +459,7 @@ impl Write for MarkLines {
 
 /// What a blob stream mints and how large each body was, read the way
 /// fast-import reads it: `data <n>` is followed by exactly `n` bytes,
-/// which are skipped rather than scanned for lines.
+/// which are skipped whole.
 #[derive(Default)]
 struct BlobLines {
     marks: Vec<u64>,

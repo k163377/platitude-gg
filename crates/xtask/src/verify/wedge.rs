@@ -19,8 +19,8 @@
 //! the first — which is why a missing report says only that the write was
 //! never reached, and never where the process stood.
 //!
-//! **Read at a red that may be a process that stopped, and nowhere
-//! else** — the ceiling, and the one red that is not a ceiling at all
+//! **Read only at a red that may be a process that stopped** — the
+//! ceiling, and the one red that is not a ceiling at all
 //! ([`trail`], [`lanes_line`]). Every line below costs a directory
 //! listing and a probe of a handful of lock files, and a run that answers
 //! never reaches any of it.
@@ -30,8 +30,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// What a process its own deadline thread ended exits with, and the file
-/// it leaves beside the pictures. Spelled again rather than shared:
-/// xtask depends on std alone (CLAUDE.md 技術スタック), so the app's
+/// it leaves beside the pictures. Spelled again here: xtask depends on
+/// std alone (CLAUDE.md 技術スタック), so the app's
 /// `harness::deadline::WEDGED` and `REPORT_FILE` are the originals. A
 /// drift shows up as a run reporting a bare `exit 97` with no account
 /// beside it.
@@ -66,20 +66,20 @@ pub(super) fn clear_any_account(shot_dir: &Path) {
     }
 }
 
-/// Whether the run ended at a ceiling rather than at anything it did:
-/// reaped by the parent, or ended by the deadline thread the app carries
-/// for the case the parent's kill cannot explain.
+/// Whether the run ended at a ceiling: reaped by the parent, or ended
+/// by the deadline thread the app carries for the case the parent's
+/// kill cannot explain.
 ///
-/// The app's own watchdog is not one of these. It fires from the event
+/// The app's own watchdog is a red of its own. It fires from the event
 /// loop, so a run it ended has said what it was doing and left a report
 /// of its own (`super::outcome`).
 pub(super) fn at_a_ceiling(ran: &super::child::Ran) -> bool {
     ran.timed_out || ran.status.and_then(|s| s.code()) == Some(WEDGED_EXIT)
 }
 
-/// Whether the parent stopped waiting on something the app said rather
-/// than on the clock — a run whose reason is already known, and whose
-/// account is that reason rather than the ceiling's diagnostics.
+/// Whether the parent stopped waiting on something the app said — a
+/// run whose reason is already known, and whose account is that
+/// reason.
 pub(super) fn gave_up_early(ran: &super::child::Ran) -> Option<&str> {
     ran.gave_up.as_deref()
 }
@@ -158,8 +158,8 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
 ///
 /// The seconds are the app's own clock, started in `main`, and the run's
 /// are the parent's, started at the spawn; the two differ by however long
-/// the process took to get going. They cannot be subtracted to measure
-/// how long the last station lasted.
+/// the process took to get going. Each number stands on the clock it
+/// was read from.
 pub(super) fn trail(shot_dir: &Path) -> Vec<String> {
     let marks = match read_trail(shot_dir) {
         Ok(marks) => marks,
@@ -190,12 +190,12 @@ pub(super) fn trail(shot_dir: &Path) -> Vec<String> {
 }
 
 /// The last recorded step at a ceiling. A failed append can hide later
-/// progress, so this is a location in the record, not proof of a wedge.
+/// progress, so this is a location in the record.
 fn stopped_in(shot_dir: &Path) -> Option<String> {
     let (last_at, last) = read_trail(shot_dir).ok()?.pop()?;
     Some(format!(
         "  it got as far as `{last}` {last_at:.1}s into its own run; this is the last recorded \
-         station, not a measurement of time spent there"
+         station, at the moment it began"
     ))
 }
 
@@ -210,10 +210,10 @@ pub(super) fn last_station(shot_dir: &Path) -> Option<String> {
 /// The trail as pairs of seconds and station, in the order they were
 /// reached. Read errors are kept apart from an empty file.
 ///
-/// **A line that does not parse is dropped, never guessed at.** The file
-/// is appended to a line at a time by a process that can be stopped
-/// between the write and the newline, so the tail of it is the one place
-/// a torn record can appear.
+/// **A line that does not parse is dropped.** The file is appended to a
+/// line at a time by a process that can be stopped between the write and
+/// the newline, so the tail of it is the one place a torn record can
+/// appear.
 fn read_trail(shot_dir: &Path) -> std::io::Result<Vec<(f32, String)>> {
     let text = std::fs::read_to_string(shot_dir.join(TRAIL_FILE))?;
     Ok(text
@@ -235,8 +235,8 @@ fn self_account(shot_dir: &Path) -> Option<String> {
 }
 
 /// How long the app had been silent, and what it last said. **The last
-/// line, not the last report**: what a run says on its way past a wedge
-/// is as often a Qt warning as a report of its own.
+/// line**: what a run says on its way past a wedge is as often a Qt
+/// warning as a report of its own.
 ///
 /// **Counted to the account, wherever there is one to count to.** The
 /// app's account goes to stderr as well as to [`REPORT_FILE`], and Qt's
@@ -269,8 +269,8 @@ fn silence(ran: &super::child::Ran, own: Option<&str>) -> String {
 ///
 /// `None` where the account is not among the lines this run left — a
 /// report that never reached stderr, a run whose stderr the parent could
-/// not read, or a ceiling the app never reached at all — and the end of
-/// the run is what the silence is counted to instead.
+/// not read, or a ceiling the app never reached at all — and the silence
+/// is counted to the end of the run.
 fn quiet_before_the_account(ran: &super::child::Ran, said: &str) -> Option<(Duration, String)> {
     // The report is one line. A longer one is joined with ` / ` by
     // [`self_account`], which no line of the app's carries, so the piece
@@ -282,8 +282,8 @@ fn quiet_before_the_account(ran: &super::child::Ran, said: &str) -> Option<(Dura
         .rposition(|line| line.contains(written))?;
     let wrote_at = *ran.err_at.get(wrote)?;
     // Whichever stream spoke last before it. The app talks on stderr —
-    // tracing and Qt both — but nothing here may take the other half for
-    // empty.
+    // tracing and Qt both — and the other half is read for a line of
+    // its own.
     let before = ran
         .err_at
         .iter()
@@ -311,7 +311,7 @@ const KEEP: usize = 160;
 
 /// Cuts a line to [`KEEP`], on a character boundary. The mark is ASCII:
 /// a stream this could not spell reaches here as replacement characters
-/// already ([`crate::app_out`]), and the mark must not be one of them.
+/// already ([`crate::app_out`]), and this one reads as the cut.
 fn clipped(line: &str) -> String {
     match line.char_indices().nth(KEEP) {
         Some((at, _)) => format!("{}...", &line[..at]),
@@ -372,12 +372,12 @@ impl Counted {
         if self.landings > 0 {
             said.push(format!("{} landing(s) in line", self.landings));
         }
-        // Said rather than folded into the counts. A container's runner may
-        // have no road to the ledger at all — a seat's `.git` is a file
-        // naming a directory outside the mount, so the ticket files are
-        // not there to open — and a silent "nothing held" would read as
-        // an idle machine, which is the one answer this line must never
-        // give wrongly.
+        // Said on its own. A container's runner may have no road to
+        // the ledger at all — a seat's `.git` is a file naming a
+        // directory outside the mount, so the ticket files are not
+        // there to open — and a silent "nothing held" would read as
+        // an idle machine, which is the one answer this line has to
+        // get right.
         if self.unprobed > 0 {
             said.push(format!("{} could not be probed from here", self.unprobed));
         }
@@ -390,11 +390,11 @@ impl Counted {
 
 /// Counts the tickets somebody is holding, and what they say.
 ///
-/// **Takes nothing away.** A ticket that probes free here belongs to a
-/// process that is gone, and clearing it is the waiting side's business
-/// (`crate::budget`): doing it from a report would let a dead run's
-/// paperwork move a live one's queue. It is not counted either — a
-/// ticket nobody holds is holding nothing.
+/// **Leaves the ledger as it stands.** A ticket that probes free here
+/// belongs to a process that is gone, and clearing it is the waiting
+/// side's business (`crate::budget`): doing it from a report would let a
+/// dead run's paperwork move a live one's queue. A ticket nobody holds
+/// counts for nothing.
 fn held_in(ledger: &Path) -> Result<Counted, String> {
     let entries = match std::fs::read_dir(ledger) {
         Ok(entries) => entries,
@@ -418,7 +418,7 @@ fn held_in(ledger: &Path) -> Result<Counted, String> {
         }
         // The ticket beside the lock says what its holder is doing. One
         // that cannot be read is a unit on the machine all the same —
-        // said as unprobed rather than dropped.
+        // said as unprobed.
         let Some((weight, running, turn)) =
             crate::budget::probe(&ledger.join(stem)).or_else(|| {
                 counted.unprobed += 1;
@@ -440,8 +440,8 @@ fn held_in(ledger: &Path) -> Result<Counted, String> {
 }
 
 /// Whether somebody holds the lock at `path`, and `None` where the probe
-/// could not answer. **The two are not the same**: a file this cannot
-/// open is not a ticket nobody holds, and counting it as free would
+/// could not answer. **Two different answers**: a file this cannot open
+/// says nothing about its holder, and counting it as free would
 /// report a busy machine idle.
 fn is_held(path: &Path) -> Option<bool> {
     let file = File::options().read(true).write(true).open(path).ok()?;
@@ -476,11 +476,11 @@ mod tests {
     }
 
     /// A lock this test holds until it drops it — through [`Locked`], so
-    /// that letting go is an unlock rather than a close: a close leaves
-    /// the lock standing on every open file description a neighbouring
-    /// test's fork carried away, and a ticket nobody holds would then
-    /// probe as held (`crate::locks`). Seen on Linux, where `flock`
-    /// follows the description.
+    /// that letting go is an unlock: a close leaves the lock standing on
+    /// every open file description a neighbouring test's fork carried
+    /// away, and a ticket nobody holds would then probe as held
+    /// (`crate::locks`). Seen on Linux, where `flock` follows the
+    /// description.
     fn lock(dir: &std::path::Path, name: &str) -> crate::locks::Locked {
         let file = std::fs::File::options()
             .read(true)
@@ -569,7 +569,7 @@ mod tests {
     }
 
     /// A machine no gate has run on yet has no directory, and that is an
-    /// answer rather than a failure to read one.
+    /// answer.
     #[test]
     fn a_ledger_nobody_has_written_is_not_an_error() {
         let dir = lanes("untaken").join("never-made");
@@ -580,8 +580,8 @@ mod tests {
     /// A container's runner may have no road to the ledger — a seat's
     /// `.git` is a file naming a directory outside the mount — so its
     /// ticket files cannot be opened at all. **Silence there would read
-    /// as an idle machine** — the one answer this line must never give
-    /// wrongly.
+    /// as an idle machine** — the one answer this line has to get
+    /// right.
     #[test]
     fn tickets_that_could_not_be_probed_are_said_rather_than_called_free() {
         let counted = Counted {
@@ -633,7 +633,7 @@ mod tests {
 
     /// The station a held run is ended on the word of is read off the
     /// trail as it grows: nothing before there is one, the last that
-    /// parsed once there is, and never a torn tail.
+    /// parsed once there is, a torn tail dropped.
     #[test]
     fn the_last_station_is_read_off_the_trail_as_it_grows() {
         let dir = lanes("last-station");
@@ -668,11 +668,11 @@ mod tests {
     /// A run that ended itself out of time leaves an account that does
     /// not say whether the station was a slow step or a wedge that began
     /// late, so the silence the parent watched is carried through for
-    /// that ceiling too — **counted to the account and not past it**.
-    /// The account is a line on stderr as much as a file, and Qt writes
-    /// more on the way down, so the end of such a run is the pause
-    /// between two dying words rather than the silence that says where
-    /// it stood.
+    /// that ceiling too — **counted to the account**. The account is a
+    /// line on stderr as much as a file, and Qt writes more on the way
+    /// down, so the end of such a run is the pause between two dying
+    /// words, and the silence worth reading is the one before the
+    /// account.
     #[test]
     fn the_silence_of_a_run_that_ended_itself_is_counted_to_its_account() {
         let dir = lanes("own-silence");
@@ -699,7 +699,7 @@ mod tests {
         assert!(!said.contains("0.1s"), "{said}");
     }
 
-    /// The line is quoted, not carried. A run whose last word was the
+    /// The line is quoted at a width. A run whose last word was the
     /// census names two hundred components, and the four lines that
     /// answer the run have to stay readable under it.
     #[test]
@@ -772,8 +772,8 @@ mod tests {
     }
 
     /// A trail is appended to a line at a time, so the one place a torn
-    /// record can appear is its tail — dropped rather than read as a
-    /// station, which is the only reading that could name the wrong step.
+    /// record can appear is its tail — dropped, since reading it as a
+    /// station is what would name the wrong step.
     #[test]
     fn a_half_written_last_line_is_dropped_rather_than_guessed_at() {
         let dir = lanes("trail-torn");

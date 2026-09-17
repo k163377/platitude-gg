@@ -50,9 +50,9 @@ pub(crate) fn pasted(bytes: usize) -> String {
 
 /// The message a release actually gets written with: paragraphs, a list,
 /// and a note in Japanese. Long enough that no pane shows it whole —
-/// which is what the description box's grip is pulled for — but written
-/// rather than repeated, because a wall of the same sentence tells you
-/// nothing about how a real message wraps
+/// which is what the description box's grip is pulled for — and written
+/// out, because a wall of the same sentence tells you nothing about
+/// how a real message wraps
 /// (デザイン規約 §コミットメッセージの 2 つの枠).
 ///
 /// Some paragraphs are wrapped at 72 columns and some are one long line,
@@ -96,10 +96,10 @@ panes ask for a range has changed. Those are three separate arguments
 and this commit is already the wrong size for having any of them in it.
 ";
 
-/// Where the bulk of one commit lands, and how many files each place
-/// takes. Spread over real-looking directories rather than one flat
-/// heap: the file list is a tree first, and a tree of one folder is not
-/// a tree.
+/// Where the bulk of one commit lands, and how many files each
+/// place takes. Spread over real-looking directories: the file
+/// list is a tree first, and a tree of one folder is not a
+/// tree.
 const SPRAWL: [(&str, usize, &str); 6] = [
     ("src/core", 18, "rs"),
     ("src/ui", 14, "rs"),
@@ -122,7 +122,7 @@ const SPREAD_FILES: usize = 3;
 /// (デザイン規約 §複数のコミットを選ぶ: the commits it lists and the files
 /// they changed are two lists sharing a pane).
 ///
-/// **Neither of the other two scale presets answers it.** `deep` writes
+/// **Only this preset answers it.** `deep` writes
 /// the same blob every time, so a choice of a thousand of its commits
 /// changed nothing at all; `long` puts eighty files in a single commit,
 /// so the list of commits is four rows.
@@ -162,11 +162,11 @@ pub(super) fn long(repo: &mut DemoRepo) -> Result<(), String> {
         "feat: add a pane that reads it",
     )?;
 
-    // A remote, and the ordinary history sent to it before the wall goes
-    // on top: a repository with nothing to fetch from reads as a broken
-    // window rather than as a preset about something else, and leaving
-    // the wall unpushed is what makes sending 80 files something that
-    // can be tried here.
+    // A remote, and the ordinary history sent to it before the wall
+    // goes on top: a repository with nothing to fetch from reads as a
+    // broken window, and leaving the wall unpushed is what makes
+    // sending 80 files something that can be tried here, against a
+    // remote that answers.
     repo.add_origin()?;
     repo.git(&["push", "--set-upstream", "origin", "main"])?;
 
@@ -205,9 +205,9 @@ pub(super) fn long(repo: &mut DemoRepo) -> Result<(), String> {
 }
 
 /// Lines the file carries, and how far apart the changes in it sit. The
-/// spacing is what makes them twenty hunks rather than fewer: git carries
-/// three lines of context either side, so two changes fewer than eight
-/// lines apart come out as one hunk with a gap in it.
+/// spacing is what makes them twenty hunks: git carries three lines of
+/// context either side, so two changes fewer than eight lines apart
+/// come out as one hunk with a gap in it.
 const HUNK_LINES: usize = 320;
 const HUNK_STEP: usize = 16;
 
@@ -398,10 +398,10 @@ fn wide_run(word: &str) -> String {
 }
 
 /// How long the coloured file is and how often it changes. Long enough
-/// that the colours are a read behind the rows rather than in with them —
-/// that gap is the whole of what `colour-place` is about, both for the
-/// place being read and for the width it is read against — and that there
-/// is more diff than window for a place to be lost in.
+/// that the colours are a read behind the rows — that gap is the whole
+/// of what `colour-place` is about, both for the place being read and
+/// for the width it is read against — and that there is more diff than
+/// window for a place to be lost in.
 const COLOURED_LINES: usize = 1200;
 const COLOURED_STEP: usize = 20;
 
@@ -410,10 +410,10 @@ const COLOURED_STEP: usize = 20;
 /// (`DiffModel::repaint_rows`), which is what `colour-place` reads a
 /// place and a width across.
 ///
-/// A `.rs` file rather than a `.txt` one, and that is the whole point:
-/// text the set has no rules for is never repainted, so a run over it
-/// asks nothing. Every line carries a keyword, a string and a number, so
-/// the rows that come back are markup and not the same characters again.
+/// A `.rs` file, and that is the whole point: text the set has no rules
+/// for is never repainted, so a run over it asks nothing. Every line
+/// carries a keyword, a string and a number, so the rows that come back
+/// are markup and not the same characters again.
 pub(super) fn coloured(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -483,13 +483,13 @@ const LATE_STEP: usize = 8;
 /// `top.txt` is the same file read twice: one very wide line added at the
 /// head, where a partial write can reach it without a pointer
 /// (`DiffPane.firstChangedLine`), over lines wide enough that taking it
-/// away leaves somewhere to go rather than nowhere (`code-shrink`).
+/// away leaves somewhere to go (`code-shrink`).
 ///
 /// `plain.txt` is the file beside them in the list: narrower than either
 /// and still not narrow enough to fit, so a reader sent to the middle of
 /// one of the others and then over to this one is put back at its left
-/// edge because the place was dropped, and not because there was nowhere
-/// to be (`code-swap`).
+/// edge because the place was dropped, with somewhere still to be
+/// (`code-swap`).
 pub(super) fn widelate(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -539,17 +539,17 @@ fn late(word: &str) -> String {
 /// how long it is. The wide line is several times the rest so that taking
 /// it away is a change anything can see; the rest is wide enough that
 /// what is left still runs past the pane, which is what makes "the place
-/// was kept" a claim rather than a clamp to zero.
+/// was kept" a claim.
 const TOP_COLUMNS: usize = 600;
 const TOP_ADDED: usize = 1600;
 const TOP_LINES: usize = 60;
 const TOP_STEP: usize = 8;
 
 /// `top.txt`, with the added line at the head when it is the working
-/// tree's copy. Written as an insertion rather than a rewrite of the
-/// first line: a rewrite puts the removal ahead of the addition, and the
-/// row a partial write can be aimed at without a pointer is the first
-/// changed row of the first hunk, whichever kind it is.
+/// tree's copy. Written as an insertion: a rewrite puts the removal
+/// ahead of the addition, and the row a partial write can be aimed at
+/// without a pointer is the first changed row of the first hunk,
+/// whichever kind it is.
 fn top(changed: bool) -> String {
     let mut out = String::new();
     if changed {
@@ -679,12 +679,12 @@ pub(super) fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     // The wall-length tag drifts away from the long-named remote's copy:
     // push it, then move the local one.
     //
-    // Drift rather than remote-only, because a tag a fetch can reach is
-    // one auto-follow brings down: only a tag on a commit nobody here
-    // has stays away, and such a tag is on no row to hang a chip from
+    // A drift, because a tag a fetch can reach is one auto-follow
+    // brings down: only a tag on a commit nobody here has stays away,
+    // and such a tag is on no row to hang a chip from
     // (core.md, タグのリモート状態のデータ).
     //
-    // And no unreachable remote lives here: `fetch --prune --all` walks
+    // And every remote here answers: `fetch --prune --all` walks
     // every one of them, so a single absurd URL would turn every fetch
     // in this repository into a failure and every fetch verb into a
     // FAIL. The remote's name sits at the wall because a remote's name

@@ -1,15 +1,15 @@
 //! A PNG taken apart: the ones Qt saves a window as, and the ones
 //! `write` puts out.
 //!
-//! Eight bits a sample, no interlace, colour type 2 or 6 — that is
-//! `QImage::save` for a screenshot (RGB) and `write` for a fixture
-//! (RGBA), and nothing here is ever pointed at anything else. Every
-//! other shape is refused by name rather than half-read into pixels
-//! that look plausible.
+//! Eight bits a sample, no interlace, colour type 2
+//! or 6 — that is `QImage::save` for a screenshot
+//! (RGB) and `write` for a fixture (RGBA), and
+//! nothing here is ever pointed at anything else.
+//! Every other shape is refused by name.
 //!
-//! Both sums the file carries are worked out again. A crop is read to
-//! settle a question about single pixels, so a file that arrived
-//! damaged has to say so instead of answering it.
+//! Both sums the file carries are worked out again. A
+//! crop is read to settle a question about single pixels,
+//! so a file that arrived damaged has to say so.
 
 use super::{checksum::crc32, inflate};
 

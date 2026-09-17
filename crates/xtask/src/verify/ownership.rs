@@ -14,22 +14,22 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug)]
 pub(crate) struct ResourceClaim {
-    /// Never read: **holding the handle is the claim**. The lock under
-    /// it is the operating system's, unlocked when this is dropped
+    /// **Holding the handle is the claim.** The lock under it is the
+    /// operating system's, unlocked when this is dropped
     /// ([`crate::locks`]) — and let go anyway when the process ends
     /// without dropping anything, which is what a killed run does.
     _lock: crate::locks::Locked,
 }
 
-/// Atomically reserve an explicitly shared path for this process. Claims
-/// live outside the target so a repository does not become dirty merely
-/// because it is under test.
+/// Atomically reserve an explicitly shared path for this process.
+/// Claims live outside the target, so a repository under test
+/// stays clean.
 ///
-/// **The operating system holds the claim; the lock file's bytes hold
-/// nothing.** A run that is killed leaves its file standing with no lock
-/// on it, so there is no dead claim to tell from a live one, and no pid
-/// to be wrong about when the machine hands the number out again. What
-/// the file says is a note for a person ([`note`]), read by nothing.
+/// **The operating system holds the claim.** A run that is killed
+/// leaves its file standing with no lock on it, so there is no dead
+/// claim to tell from a live one, and no pid to be wrong about when the
+/// machine hands the number out again. What the file says is a note for
+/// a person ([`note`]), read by nothing.
 pub(crate) fn claim_resource(
     target: &Path,
     kind: &str,
@@ -45,8 +45,8 @@ pub(crate) fn claim_resource(
     std::fs::create_dir_all(&locks).map_err(|e| e.to_string())?;
 
     // `truncate(false)` is the claim's: a file is emptied at open, which
-    // is before the lock, and the standing owner's note is not this
-    // run's to erase. Emptying it is [`note`]'s, under the lock.
+    // is before the lock, and the standing owner's note stays its
+    // owner's. Emptying it is [`note`]'s, under the lock.
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -76,13 +76,13 @@ pub(crate) fn claim_resource(
     }))
 }
 
-/// Where the lock files live. **A claim never deletes the file it
-/// locked.** Unlinking a locked file is allowed on both platforms, and
-/// it hands one path to two runs: the next asker creates a fresh file
-/// under the name and locks that, while the first still holds the one
-/// that was unlinked. The sweep takes them instead, at a day old — which
-/// is longer than any claim lives, a run being minutes and its watchdog
-/// two — and a file still held is one whose note was written today.
+/// Where the lock files live. **A claim leaves its file standing.**
+/// Unlinking a locked file is allowed on both platforms, and it hands
+/// one path to two runs: the next asker creates a fresh file under the
+/// name and locks that, while the first still holds the one that was
+/// unlinked. The sweep takes them, at a day old — which is longer than
+/// any claim lives, a run being minutes and its watchdog two — and a
+/// file still held is one whose note was written today.
 const LOCKS: &str = "pgg-verify-locks";
 
 /// The file a claim on `canonical` is taken on, and the key by which a
@@ -101,7 +101,7 @@ fn lock_of(locks: &Path, canonical: &Path) -> (PathBuf, u64) {
 }
 
 /// What run made this file, for the person looking at a directory of
-/// them. **Nothing reads it back**, and a refusal cannot quote it:
+/// them. **A person's to read**, and a refusal cannot quote it:
 /// Windows refuses a read that overlaps a locked range, so what a claim
 /// says is legible only once the claim is let go — which is the moment
 /// it stops being about anybody.
@@ -138,15 +138,15 @@ const RUN_LITTER_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 /// The file that takes a directory out of every sweep, for good.
 const KEEP: &str = ".pgg-keep";
 
-/// Marks `root` as a tree a person asked for rather than one a run left,
-/// which is the whole of what the sweep goes by.
+/// Marks `root` as a tree a person asked for, which is the whole of
+/// what the sweep goes by.
 ///
-/// **Whether the tree is open cannot be asked instead.** A repository
-/// this application is showing is held by nothing — git is a subprocess
-/// per operation and no directory is watched — so a handle would answer
-/// "nobody's" for the tab that is on screen; a tree built to be looked at
-/// later is nobody's by definition; and under `pgg-linux` the only side
-/// that could hold one is across the mount.
+/// **The mark is what can be asked.** A repository this application is
+/// showing is held by nothing — git is a subprocess per operation and
+/// no directory is watched — so a handle would answer "nobody's" for
+/// the tab that is on screen; a tree built to be looked at later is
+/// nobody's by definition; and under `pgg-linux` the only side that
+/// could hold one is across the mount.
 ///
 /// A mark is forever: a floor of any length is a guess at how long a
 /// person keeps a tree, and nothing here can make that guess. Marked
@@ -164,10 +164,10 @@ pub(crate) fn keep(root: &Path) -> Result<(), String> {
 /// else ever does: every run claims a directory and leaves it, and the
 /// gate runs hundreds of them a day (measured: sixty thousand of them,
 /// six gigabytes, three days after the last sweep by hand). The gate
-/// calls this on its way in; the thread is not waited for — a plan is
+/// calls this on its way in; the thread is left to itself — a plan is
 /// half a second and the temp directory is seconds of reading — and a
 /// directory that will not go, or a sweep the process ends first, is the
-/// next sweep's. Nothing is said: a gate's verdict is not about litter.
+/// next sweep's. Nothing is said: a gate's verdict is about its tests.
 pub(crate) fn sweep_yesterdays_runs() {
     std::thread::spawn(|| {
         let temp = std::env::temp_dir();
@@ -181,8 +181,8 @@ pub(crate) fn sweep_yesterdays_runs() {
 /// Removes the entries of `base` last written `age` or longer before
 /// `now`, and answers how many went. An entry whose age cannot be read
 /// stays: a date nobody can read is no grounds for deleting. An entry
-/// carrying [`KEEP`] stays whatever its date: age is what makes a run's
-/// directory litter, and a tree somebody asked for is not one.
+/// carrying [`KEEP`] stays whatever its date: age makes a run's
+/// directory litter, and a marked tree is somebody's.
 fn sweep_older_than(base: &Path, now: SystemTime, age: Duration) -> usize {
     let Ok(entries) = std::fs::read_dir(base) else {
         return 0;
@@ -409,8 +409,8 @@ mod tests {
         let (lock, _) = super::lock_of(&std::env::temp_dir().join(super::LOCKS), &canonical);
         assert!(lock.is_file(), "{} went with its owner", lock.display());
 
-        // When the operating system lets the lock go is not this test's
-        // to assert: the claim is tried under the suite's budget, every
+        // When the operating system lets the lock go is the machine's
+        // own affair: the claim is tried under the suite's budget, every
         // try the real claim, and a lock never let go fails by name with
         // the last refusal in the message.
         let taken = crate::wait::until(

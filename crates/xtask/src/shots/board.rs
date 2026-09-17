@@ -16,10 +16,10 @@ const SEP: char = '\t';
 ///
 /// `--git-common-dir` answers the *shared* git directory, so all six
 /// seats and the primary checkout resolve to one board — which is what
-/// puts a seat's pictures next to its neighbours' instead of stranding
-/// each seat with a board only it can see. `--path-format=absolute`
-/// keeps the answer from being relative to whichever directory asked
-/// (measured: the primary checkout answers a bare `.git` without it).
+/// puts a seat's pictures next to its neighbours'.
+/// `--path-format=absolute` keeps the answer from being relative to
+/// whichever directory asked (measured: the primary checkout answers a
+/// bare `.git` without it).
 pub(super) fn board_dir() -> Result<PathBuf, String> {
     let cwd = std::env::current_dir().map_err(|e| format!("no working directory: {e}"))?;
     let cwd = cwd.to_string_lossy().replace('\\', "/");
@@ -46,10 +46,10 @@ pub(crate) fn shown(path: &Path) -> String {
 
 /// The tree this process is running in: a roster letter, or `main`.
 ///
-/// Taken from the working directory rather than asked for, because the
-/// one thing the board must never do is attribute a picture to the wrong
-/// seat — and a caller that has to remember to say which seat it is will
-/// eventually forget (CLAUDE.md ビルド・テスト: seats are the unit of work).
+/// Taken from the working directory, because the one thing the board
+/// has to get right is which seat a picture came from — and a caller
+/// that has to remember to say which seat it is will eventually forget
+/// (CLAUDE.md ビルド・テスト: seats are the unit of work).
 pub(super) fn seat_here() -> String {
     let Ok(cwd) = std::env::current_dir() else {
         return "?".to_string();
@@ -58,9 +58,9 @@ pub(super) fn seat_here() -> String {
     let Some(root) = worktree_root(&cwd) else {
         return "main".to_string();
     };
-    // Whatever the directory is called, roster letter or not. A tree
-    // outside the roster is worth naming truthfully rather than filing
-    // under one of the six it is not.
+    // Whatever the directory is called, roster letter
+    // or not. A tree outside the roster is worth
+    // naming truthfully.
     root.rsplit('/').next().unwrap_or("?").to_string()
 }
 
@@ -72,8 +72,8 @@ pub(super) fn seat_here() -> String {
 /// or the letter is handed to a fresh stretch of work (`sweep`). Both
 /// are things that happen to a *roster letter*, so a run taken anywhere
 /// else would stand for good with nothing left that could ever call it
-/// finished. Rather than collect those, the board declines to take
-/// them: asking for a picture is asking for a seat (CLAUDE.md
+/// finished. The board takes a run from a roster letter alone:
+/// asking for a picture is asking for a seat (CLAUDE.md
 /// ビルド・テスト).
 fn not_a_seat(seat: &str) -> Option<String> {
     if SEATS.contains(&seat) {
@@ -93,8 +93,8 @@ fn not_a_seat(seat: &str) -> Option<String> {
 }
 
 /// Puts one run on the board and rebuilds the page, answering where the
-/// page is. An empty label is refused here rather than at the command
-/// line, so the rule holds for `verify-ui`'s own calls too.
+/// page is. An empty label is refused here, so the rule holds for
+/// `verify-ui`'s own calls too.
 pub(crate) fn record(label: &str, verb: &str, pngs: &[PathBuf]) -> Result<PathBuf, String> {
     // No captions at all: a run read one picture at a time is named by
     // its label, and a word over every shot would only repeat it.
@@ -104,10 +104,10 @@ pub(crate) fn record(label: &str, verb: &str, pngs: &[PathBuf]) -> Result<PathBu
 /// Two pictures of the same thing under one name, read abreast: the one
 /// before the change on the left, the one after it on the right.
 ///
-/// Shown one at a time they are not a comparison at all — the reader
-/// holds the first in their head while looking at the second. One view,
-/// one magnifier, and the difference is on the screen instead of in the
-/// memory.
+/// Shown one at a time they are not a comparison at all — the
+/// reader holds the first in their head while looking at the
+/// second. One view, one magnifier, and the difference is on
+/// the screen.
 pub(crate) fn record_pair(
     label: &str,
     verb: &str,
@@ -206,10 +206,10 @@ fn record_with(
 
 /// Every picture in a directory, onto the board under one name.
 ///
-/// How a run that happened somewhere else reaches the board: a container
-/// leaves its pictures in a bridged host directory, and the seat they
-/// belong to is the one out here, not the working directory they were
-/// taken in.
+/// How a run that happened somewhere else reaches the
+/// board: a container leaves its pictures in a bridged
+/// host directory, and the seat they belong to is the
+/// one out here.
 pub(crate) fn record_dir(dir: &Path, label: &str, verb: &str) -> Result<PathBuf, String> {
     let mut shots: Vec<PathBuf> = std::fs::read_dir(dir)
         .map_err(|e| format!("could not read {}: {e}", dir.display()))?
@@ -222,8 +222,8 @@ pub(crate) fn record_dir(dir: &Path, label: &str, verb: &str) -> Result<PathBuf,
 }
 
 /// Every run on the board, in the order it was put up. A run file that
-/// cannot be read or parsed is skipped rather than fatal: one bad file
-/// must not cost the board every other picture on it.
+/// cannot be read or parsed is skipped: one bad file leaves every
+/// other picture on the board standing.
 ///
 /// Oldest first, because the order the runs went up *is* the order they
 /// are to be read in: the machine being worked on first, then the order
@@ -247,10 +247,10 @@ pub(super) fn load_runs(runs: &Path) -> Vec<Run> {
 
 /// Writes the run beside its neighbours under a name of its own.
 ///
-/// Seats add to the board concurrently, so there is no shared file to
-/// read-modify-write: each run is its own file, written to a temporary
-/// name and renamed into place, which keeps a reader from ever seeing
-/// half of one.
+/// Seats add to the board concurrently, so there is no
+/// shared file to read-modify-write: each run is its own
+/// file, written to a temporary name and renamed into
+/// place, which hands a reader a whole one.
 fn write_run(runs: &Path, stem: &str, run: &Run) -> Result<(), String> {
     let mut text = String::new();
     for (key, value) in [

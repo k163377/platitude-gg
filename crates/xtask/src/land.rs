@@ -17,7 +17,7 @@
 //! gated there — every step its diff owes, cached by what each step
 //! reads, so a run taken before the rebase is not paid twice — and only
 //! then is main fast-forwarded, which the reference-transaction hook
-//! allows onto a stamped commit and nothing else. History stays linear,
+//! allows onto a stamped commit only. History stays linear,
 //! and a landed seat already stands at main's tip.
 
 use crate::command::{self, Permission, Where};
@@ -100,7 +100,7 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
         // A seat sitting on main would receive the merge into its own
         // working tree — nobody expects a seat to be main's window.
         return Err(format!(
-            "main is checked out in {}, not in the primary checkout — \
+            "main is checked out in {} — \
              free it (switch that tree to another branch) and land again",
             tree.path
         ));
@@ -143,7 +143,7 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     }
     phases.mark("fast-forward (verdict included)");
     let after = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
-    // The permit this landing ran on is spent here and not at the hook:
+    // The permit this landing ran on is spent here:
     // a landing that stopped before this line moved nothing.
     crate::hook::permit::landed(&here, &Identity::current(None).session);
     // Again, now that main carries what it carries: git runs the copy
@@ -160,8 +160,8 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     Ok(())
 }
 
-/// What would land is what stands committed in the seat, so nothing else
-/// may stand there — except the census a gate or a verb run in the seat
+/// What would land is what stands committed in the seat, so the tree is
+/// clean — except for the census a gate or a verb run in the seat
 /// rewrote since its last commit, a generated file the landing commits
 /// as it commits its own gate's rewrite (`gate_in_the_seat`).
 fn settle_the_tree(seat: &str, branch: &str) -> Result<(), String> {
@@ -225,19 +225,19 @@ const DEPS: &str = "deps";
 /// its own.) Renaming one is allowed on both systems, so this process
 /// moves out of the name and runs on from the copy beside it.
 ///
-/// **Out of every name this image answers to, not just the one it was
-/// started from.** cargo writes the binary under `deps/` with a hash in
-/// its name and hard-links the slot to it, so the image the loader holds
-/// stands under two names and the linker's next `CREATE_ALWAYS` is
-/// refused at whichever of them is still there. Freeing the slot alone
-/// leaves the link step of the gate's first `cargo build -p xtask` to
-/// stop at the other (`LNK1104`), which is a landing that has already
-/// rebased and cannot go on ([`names_of_this_image`]).
+/// **Out of every name this image answers to.** cargo writes the binary
+/// under `deps/` with a hash in its name and hard-links the slot to it,
+/// so the image the loader holds stands under two names and the linker's
+/// next `CREATE_ALWAYS` is refused at whichever of them is still there.
+/// Freeing the slot alone leaves the link step of the gate's first
+/// `cargo build -p xtask` to stop at the other (`LNK1104`), which is a
+/// landing that has already rebased and cannot go on
+/// ([`names_of_this_image`]).
 ///
 /// What is left standing where it cannot be moved waits for the next
 /// landing's sweep. Silent when this binary is in nobody's way; a move
-/// that fails says so rather than leaving the cargo error it was meant to
-/// explain to arrive unannounced.
+/// that fails says so, ahead of the cargo error it was meant to
+/// explain.
 fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
     let exe = std::env::current_exe().ok()?;
     let mine = build_slot_tree(&exe)?;
@@ -273,7 +273,7 @@ fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
 /// binary under: the slot the run was started from, and the hashed names
 /// in `deps/` the slot is linked to.
 ///
-/// **Named rather than identified.** Asking the file system which entry
+/// **By name.** Asking the file system which entry
 /// is this very file wants an inode, and Windows only offers one through
 /// an unstable interface; the names are cargo's own and confined to one
 /// tree's build directory, which answers the same question. A hash that
@@ -294,7 +294,7 @@ fn names_of_this_image(exe: &std::path::Path, dir: &std::path::Path) -> Vec<std:
 
 /// Whether a name in `deps/` is one cargo writes this binary under:
 /// `xtask` or `xtask-<hash>`, carrying the platform's executable suffix
-/// and nothing else — the `.d` and `.pdb` beside it are not images, and
+/// alone — the `.d` and `.pdb` beside it are not images, and
 /// an aside an earlier landing left is already swept.
 fn cargo_writes_this_binary_at(name: &str) -> bool {
     let Some(stem) = name.strip_suffix(std::env::consts::EXE_SUFFIX) else {
@@ -351,8 +351,8 @@ fn build_slot_tree(exe: &std::path::Path) -> Option<String> {
 /// commit a stamp names. The rewrite is a generated file's, committed
 /// here where a session would commit it, and the gate is asked again —
 /// which finds every step cached, the census being no step's input.
-/// Twice is a census moving under the machine's timing rather than under
-/// the change, and that is reported rather than chased.
+/// Twice is a census moving under the machine's timing, and that is
+/// reported.
 fn gate_in_the_seat(seat: &std::path::Path, branch: &str) -> Result<(), String> {
     if crate::gate::for_landing(seat, "main")? == Gated::Stamped {
         return Ok(());
@@ -367,7 +367,7 @@ fn gate_in_the_seat(seat: &std::path::Path, branch: &str) -> Result<(), String> 
     }
     Err(format!(
         "the verbs rewrote {} again, on the run that was to stamp the commit holding the first \
-         rewrite — the census is moving under the machine's timing rather than under the change. \
+         rewrite — the census is moving under the machine's timing. \
          Read the two rewrites' diffs before landing.",
         crate::gate::CENSUS_FILE
     ))
@@ -383,10 +383,10 @@ fn census_alone(dirty: &str) -> bool {
     dirty.trim() == format!("M {}", crate::gate::CENSUS_FILE)
 }
 
-/// Commits the census the gate's verbs rewrote, and nothing beside it:
+/// Commits the census the gate's verbs rewrote, alone:
 /// the gate ran over a clean tree, so the rewrite is the whole of what
 /// can stand — and anything else standing there is refused, because a
-/// landing commits what the machine wrote and never what a person left.
+/// landing commits only what the machine wrote.
 fn commit_census(seat: &str) -> Result<(), String> {
     let census = crate::gate::CENSUS_FILE;
     let dirty = git_query(seat, &["status", "--porcelain"]).unwrap_or_default();
@@ -472,7 +472,7 @@ fn clear_the_board(listing: &str, branch: &str) {
 
 /// The claim's release point (CLAUDE.md ビルド・テスト): the landed
 /// branch is on main and the tree is at main's tip, so the letter goes
-/// back to the roster rather than waiting for somebody to say the words.
+/// back to the roster.
 /// Only the hooks' own kind of lock is lifted; a lock a person wrote
 /// stays.
 ///
@@ -530,8 +530,8 @@ fn release_already_landed(here: &str, branch: &str) -> Result<(), String> {
 }
 
 /// Whose a landed seat's claim is. Pure, so the line between a session
-/// that is gone and one that is merely elsewhere can be asserted rather
-/// than read out of a run.
+/// that is gone and one that is merely elsewhere can be
+/// asserted.
 enum Claim {
     /// Its session is gone: the letter goes back to the roster.
     Litter,
@@ -568,7 +568,7 @@ fn hand_back(here: &str, path: &str, why: &str) {
 }
 
 /// The tree whose checked-out branch just landed, when a session's claim
-/// (not a hand-written lock) holds it.
+/// holds it.
 fn landed_claim<'a>(trees: &'a [WorktreeBlock], branch: &str) -> Option<&'a WorktreeBlock> {
     trees
         .iter()
@@ -745,7 +745,7 @@ mod tests {
         );
         assert!(
             matches!(claim_on(&seat("claude-seat theirs"), &me), Claim::Another),
-            "a claim with no process to ask about is unjudgeable, not gone"
+            "a claim with no process to ask about is unjudgeable"
         );
         assert!(
             matches!(

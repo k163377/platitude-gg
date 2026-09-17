@@ -19,7 +19,7 @@
 //! nobody's ask and nobody's answer: they leave the permit as it stands.
 //!
 //! The word that asks is the user's own, 反映, net of the forms that
-//! describe or forbid rather than ask. land / merge / マージ are not read:
+//! describe or forbid. land / merge / マージ are not read:
 //! in a git client they name features far more often than the landing
 //! (the merge editor, マージン, tipLanded). What the word catches and
 //! misses is measured in internal-docs/反映前テストの機械化.md §land の許可.
@@ -100,7 +100,7 @@ pub(super) fn prompt_submit(input: &str, prompt: &str) {
     if permit.standing == Standing::Open {
         println!(
             "Before landing, complete and commit the requested work under CLAUDE.md §Git 運用. \
-             The permit authorizes one landing; it does not establish task completion. \
+             The permit authorizes one landing; completion is the session's to check. \
              Land runs the final gate."
         );
     }
@@ -209,8 +209,8 @@ fn refusal(what: &str, permit: Option<&Permit>) -> String {
         ),
         _ => format!(
             "{what} would move main, and main moves only on the user's own ask — 反映 \
-             (main 反映 / 反映して), read off the user's own message by the prompt hook, so \
-             nothing a session types stands in for it (CLAUDE.md Git 運用). No message in \
+             (main 反映 / 反映して), read off the user's own message by the prompt hook \
+             (CLAUDE.md Git 運用). No message in \
              this session has asked. {report}."
         ),
     }

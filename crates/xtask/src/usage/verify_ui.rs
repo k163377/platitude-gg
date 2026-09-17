@@ -49,8 +49,8 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           mac and Linux come up in, asked for from a
                           machine that folds the band into the title bar
         --watchdog-ms <n> the backstop under a run whose completion never
-                          arrives; never chooses the shot, and never an
-                          assertion that a verb is quick (default 600000).
+                          arrives, and only that — the shot is chosen by
+                          the completion itself (default 600000).
                           Lower it only to diagnose the wait itself
         --fault-hang <station>
                           hold the app at that station for good, by the
@@ -88,7 +88,7 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           run by default; name one to carry what a run
                           wrote into the next one.
         --restore         open the tabs the config directory remembers
-                          instead of a named repository
+                          as the run's repositories
         --allow-write-failure
                           a write git refused is what this verb shows, so
                           it does not sink the run (delete-branch-refused,
@@ -109,7 +109,7 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           with an upstream has no first push left to
                           publish). A replay that stops part-way is not
                           among them any more: git left it standing,
-                          which is a landing rather than a failed write.
+                          which is a landing.
         --old-git <ver>   run the app against a git that answers --version
                           with <ver> and passes everything else to the real
                           one, so an installation older than the supported
@@ -121,7 +121,7 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           is the one state the settings screen's git
                           chapter grows a button for and the one no path
                           names on both a desk and a container. Takes the
-                          place of --old-git rather than joining it, and
+                          place of --old-git, and
                           the runs about it (settings-git-leave,
                           settings-git-path other) imply one.
       The open-refused verbs (open-not-a-repo, open-bare, the -retry /
@@ -150,7 +150,7 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       stand-in that rides the edge that tab went out of, the second
       presses that stand-in and waits out the travel it starts. Their
       argument is which tab is in front (default 0, which puts the
-      stand-in on the left edge). Twelve rather than eight because the
+      stand-in on the left edge). Twelve because the
       run has to exist at all on both machines — eight tabs stand at
       whatever the run divides into and fill the wider Linux band
       exactly, leaving nothing to travel in.

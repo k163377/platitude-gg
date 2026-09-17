@@ -1,15 +1,15 @@
 //! Waiting, in this runner: the budget every wait is held to, the pace a
 //! look is taken at, and what a wait that ran out says.
 //!
-//! Nothing here establishes correctness by elapsed time
-//! (.claude/rules/core.md §非同期・並行テスト): a wait ends on what it was
-//! waiting for — a lock granted, a process gone, a line said — and the
-//! budget is the diagnostic under it, so that a thing that stopped is
-//! named instead of waited on until the harness kills the run. A budget
-//! that runs out is a failure, worded with what was waited for, at which
-//! stage, and what was last seen ([`Expired`]); it is never read as the
-//! answer. The one wait whose end *is* the answer is spelled out as such
-//! ([`stood`]).
+//! Nothing here establishes correctness by elapsed
+//! time (.claude/rules/core.md §非同期・並行テスト): a wait
+//! ends on what it was waiting for — a lock granted, a
+//! process gone, a line said — and the budget is the
+//! diagnostic under it, so that a thing that stopped is
+//! named. A budget that runs out is a failure, worded
+//! with what was waited for, at which stage, and what
+//! was last seen ([`Expired`]). The one wait whose end
+//! *is* the answer is spelled out as such ([`stood`]).
 //!
 //! **The suite's budget is one budget** ([`Budget::SUITE`]), as it is in
 //! the core crate's `support::wait`: a silence budget every sign of
@@ -286,13 +286,13 @@ fn clock(duration: Duration) -> String {
 /// of the clock, `pace` between looks, and answers how long it stood, or
 /// what a look said when it ended before then.
 ///
-/// **The one wait here whose end is not a failure**, and the shape says
-/// so: what is asked is not "did it finish" but "did it stay", and a
-/// thing still there at the end of the stretch has stood for at least
-/// that long — a lower bound on the product's own time, which no load
-/// can break (§非同期: 実時間で見るのは製品の clock の下限 1 本だけ). A wait
-/// for a completion never takes this shape; a stretch that passes says
-/// nothing about one.
+/// **The one wait here whose end is the answer**, and the shape
+/// says so: what is asked is "did it stay", and a thing still
+/// there at the end of the stretch has stood for at least that
+/// long — a lower bound on the product's own time, which no load
+/// can break (§非同期: 実時間で見るのは製品の clock の下限 1 本だけ).
+/// This shape is for staying alone; a stretch that passes says
+/// nothing about a completion.
 pub(crate) fn stood<T>(
     stretch: Duration,
     pace: Duration,
@@ -315,7 +315,7 @@ pub(crate) fn stood<T>(
 /// never came — the budget run out, or the other end gone. The channel
 /// waits in this runner's verbs are the Windows samplers' (`perf::sampler`
 /// reads its scripts on a thread of their own); elsewhere the tests'. The
-/// shape is not Windows', the callers are.
+/// cfg follows the callers.
 #[cfg(any(windows, test))]
 pub(crate) fn receive<T>(
     what: &str,

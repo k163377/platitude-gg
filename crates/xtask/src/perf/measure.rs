@@ -1,14 +1,14 @@
 //! One measured run of the app: the process it starts, the memory and the
 //! host conditions it samples off it while it runs, and the wait that ends
-//! on the app's own completion rather than on a clock.
+//! on the app's own completion.
 //!
 //! **A real window, deliberately.** `verify-ui` runs offscreen, and
 //! offscreen Qt builds no scene graph worth measuring.
 //!
-//! **On one named screen, deliberately.** The window's place is written
-//! into the run's own `state.toml` rather than left to the platform: a
-//! machine's screens need not run at one rate, and the screen a window
-//! lands on sets the rate its frames can possibly arrive at
+//! **On one named screen, deliberately.** The window's place is
+//! written into the run's own `state.toml`: a machine's screens need
+//! not run at one rate, and the screen a window lands on sets the
+//! rate its frames can possibly arrive at
 //! (`perf::display`).
 
 use std::process::{Command, Stdio};
@@ -19,10 +19,10 @@ use super::reading::{Reading, missing, read_app};
 use super::{Options, SAMPLE_MS, artifacts, attribution, sampler};
 use crate::wait::{Budget, Expired, Wait};
 
-/// How long the app is left alone after `perf_done` even when the run
-/// asked for no settling: enough for at least one more sample, so the
-/// final reading is one the sampler actually took rather than whatever
-/// it happened to hold when completion arrived.
+/// How long the app is left alone after `perf_done`
+/// even when the run asked for no settling: enough for
+/// at least one more sample, so the final reading is one
+/// the sampler actually took.
 const AFTER_DONE_MS: u64 = 250;
 
 /// How long the scroll bench is given past the twelve seconds it asks
@@ -238,8 +238,8 @@ pub(super) fn measure(
     let (sampler, started) = match armed.watch(child.id()) {
         Ok(watching) => watching,
         Err(said) => {
-            // Never resumed, so never running: ended here rather than
-            // left suspended for the outer kill guard.
+            // Never resumed, so never running: ended
+            // here.
             if let Err(error) = child.kill() {
                 println!("  note: could not end the app that never ran: {error}");
             }
@@ -256,14 +256,14 @@ pub(super) fn measure(
     );
     let stderr = child.stderr.take();
     let (done_rx, scroll, reader) = read_app(stderr, started, log, opts.harness);
-    // `perf_done`, not elapsed time, is the success edge. The deadline is
+    // `perf_done` is the success edge. The deadline is
     // only an outer diagnostic guard for an app that stopped answering.
     // **`--allow-noisy` opens this one too.** The ceiling is a rate in
     // disguise: twelve seconds of vsync-stepped animation take twelve
     // seconds only at the screen's full rate, and past this they have
     // not finished — so an absolute ceiling refuses everything below
     // about a quarter of that rate. That is a slow machine, which is
-    // the case `--allow-noisy` exists to publish rather than refuse.
+    // the case `--allow-noisy` exists to publish.
     let bounded = !opts.limits.quiet_percent.is_infinite();
     let mut bench: Option<Wait> = None;
     let mut scroll_generation = 0;
@@ -298,15 +298,15 @@ pub(super) fn measure(
         }
     };
     let done = matches!(ended, Ended::Done(true));
-    // Held idle first, so the last reading is taken of a process that has
-    // stopped working rather than one caught mid-frame. The one sampler is
-    // still running, which is what makes both the peak and the settled
-    // value readings of the same series rather than of two more processes
-    // started beside the one being measured.
+    // Held idle first, so the last reading is taken
+    // of a process that has stopped working. The one
+    // sampler is still running, which is what makes
+    // both the peak and the settled value readings
+    // of the same series.
     if done {
         // waits(measured): the settling stretch the last reading is taken after — the
         // run is done and nothing is waited for; the stretch is a condition of the
-        // reading (`settle_ms`), not a wait for one
+        // reading (`settle_ms`)
         std::thread::sleep(Duration::from_millis(opts.settle_ms.max(AFTER_DONE_MS)));
     }
     let held = sampler.read();
@@ -323,9 +323,9 @@ pub(super) fn measure(
     let _ = child.wait();
     let mut reading = reader.join().unwrap_or_default();
     let finished = sampler.finish()?;
-    // The walk is instrumentation, not the application: where one ran,
-    // the peak and the conditions are read off the series as it stood
-    // before it, and memory.csv keeps what the walk itself did.
+    // The walk is instrumentation: where one ran, the peak and the
+    // conditions are read off the series as it stood before it, and
+    // memory.csv keeps what the walk itself did.
     let series = if walked { &held } else { &finished };
     reading.attribution = attributed;
     reading.perf_done |= done;
@@ -609,9 +609,9 @@ mod tests {
         assert!(defaults().limits.quiet_percent.is_finite());
     }
 
-    /// The machine is named first: a run that died at its deadline with
-    /// the window minimised is a minimised window, not an application
-    /// that stopped answering.
+    /// The machine is named first: a run that died at
+    /// its deadline with the window minimised is a
+    /// minimised window.
     #[test]
     fn the_machine_is_named_before_the_application() {
         let reading = Reading {

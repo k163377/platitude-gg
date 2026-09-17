@@ -27,8 +27,8 @@ pub(crate) enum Answer {
     /// file it was given for stdout — nothing where it was given none.
     Ended { status: ExitStatus, stdout: String },
     /// It stood past its ceiling and was ended here, after this long —
-    /// or could not be, which is said rather than assumed, with the pid
-    /// that may then still be running.
+    /// or could not be, which is said, with the pid that may then still
+    /// be running.
     OutOfTime {
         pid: u32,
         after: Duration,
@@ -409,8 +409,8 @@ pub(crate) fn born_of(pid: u32) -> Option<String> {
 /// Whether the process a claim was written from is still the one at
 /// `pid`: `Some(false)` for a stranger handed the number after it, one
 /// installed as the same program included, and None where the machine
-/// would not say — which leaves the caller the older, weaker question
-/// rather than an answer this did not have.
+/// would not say — which leaves the caller the older, weaker
+/// question.
 pub(crate) fn born_still_at(pid: u32, recorded: &str) -> Option<bool> {
     if recorded.is_empty() {
         return None;
@@ -503,8 +503,8 @@ mod tests {
     /// A probe that was refused is not a process that is gone. Every
     /// claim on this machine is broken on the strength of this answer —
     /// a seat's, a run's, and the room a unit is holding on the
-    /// machine's budget — so a `tasklist` that could not answer must
-    /// come back as the third answer rather than as "nobody".
+    /// machine's budget — so a `tasklist` that could not answer comes
+    /// back as the third answer.
     #[test]
     #[cfg(windows)]
     fn a_refused_listing_is_not_a_process_that_is_gone() {

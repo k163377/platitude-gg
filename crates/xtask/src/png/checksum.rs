@@ -4,7 +4,7 @@
 
 /// The Adler sum a zlib stream ends with, over the bytes it holds.
 pub(super) fn adler32(bytes: &[u8]) -> u32 {
-    // Sums are reduced every so many bytes rather than at each one:
+    // Sums are reduced every so many bytes:
     // 5552 is the most bytes the sums can take before either overflows.
     const NMAX: usize = 5552;
     let (mut a, mut b) = (1u32, 0u32);

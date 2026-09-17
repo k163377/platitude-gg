@@ -365,8 +365,8 @@ fn a_second_gate_in_the_same_tree_is_refused_while_the_first_holds_it() {
     );
 }
 
-/// Why every lock here is let go of by unlocking it rather than by
-/// closing the file, told as the difference between the two. `flock`
+/// Why every lock here is let go of by unlocking it, told as the
+/// difference from closing the file. `flock`
 /// goes with the open file description, and a fork hands a neighbour's
 /// child a copy of every one until that child's `execve`; a child handed
 /// the description outright stands in for that window. Closed, the lock

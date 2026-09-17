@@ -2,15 +2,15 @@
 //! and what a holder that is gone gives back.
 //!
 //! Every wait here is driven by the thing it waits for — a ticket
-//! dropped, a look taken and said on a channel — and never by a clock
+//! dropped, a look taken and said on a channel
 //! (.claude/rules/core.md §非同期・並行テスト). The rule that decides the
 //! order is arithmetic and is tested as such in [`super::queue`]; what
 //! these watch is the ledger under it: the files, the locks, the sweep,
 //! and the loop that reads them.
 //!
-//! Between processes rather than threads — a holder killed outright, a
-//! landing's turn against another program's — is `tests/gate/budget.rs`,
-//! where the runner can be started as itself.
+//! Between processes — a holder killed outright, a landing's turn
+//! against another program's — is `tests/gate/budget.rs`, where the
+//! runner can be started as itself.
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
@@ -29,7 +29,7 @@ fn common(name: &str) -> PathBuf {
 }
 
 /// The waits under test say every look they take on a channel, so a look
-/// is proved by the word of it rather than by a clock.
+/// is proved by the word of it.
 fn polls() -> (Receiver<()>, impl Fn()) {
     let (said, looks) = std::sync::mpsc::channel();
     (looks, move || {
@@ -178,7 +178,7 @@ fn ordinary_work_is_not_admitted_into_room_a_waiting_landing_is_short_of() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// What is left over after the landing's units fit is not left idle.
+/// What is left over after the landing's units fit is handed on.
 #[test]
 fn room_a_landing_will_not_use_goes_on_down_the_queue() {
     let dir = common("leftover");
@@ -266,8 +266,8 @@ fn a_ticket_nobody_holds_the_lock_beside_gives_the_machine_back() {
 }
 
 /// A ticket a killed unit left, with the process it had started still
-/// on the machine: the room is not handed out, and the ledger says what
-/// it is being held for.
+/// on the machine: the room stays held, and the ledger says what it is
+/// being held for.
 #[test]
 fn a_killed_unit_s_room_is_held_while_what_it_started_runs() {
     let dir = common("left-behind");
@@ -288,11 +288,11 @@ fn a_killed_unit_s_room_is_held_while_what_it_started_runs() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// And it is held for the work, not for the number. A pid is handed out
-/// again the moment its process is gone, so the unit wrote down what it
-/// started beside where; a live number carrying somebody else's program
-/// is not the work, and the room goes back at once rather than at the
-/// ceiling.
+/// And it is held for the work itself. A pid is handed out again
+/// the moment its process is gone, so the unit wrote down what it
+/// started beside where; a live number carrying somebody else's
+/// program is not the work, and the room goes back at once, at the
+/// first look.
 #[test]
 fn a_leftover_lets_the_room_go_when_the_number_carries_a_stranger() {
     let dir = common("left-behind-stranger");
@@ -318,12 +318,12 @@ fn a_leftover_lets_the_room_go_when_the_number_carries_a_stranger() {
 }
 
 /// And a leftover that has run past the longest a step may run is
-/// **reported and not handed out**. The load behind it is on the machine
+/// **reported, its room held**. The load behind it is on the machine
 /// whether or not it is late, so letting the room go on elapsed time
 /// alone is the over-subscription this whole thing exists to stop —
-/// admitting four weight into a room whose occupant is still compiling,
-/// with nobody left to notice. Crossing the ceiling says only that
-/// nothing but a person will end it.
+/// admitting four weight into a room whose occupant is still
+/// compiling, with nobody left to notice. Crossing the ceiling says
+/// only that nothing but a person will end it.
 #[test]
 fn a_leftover_past_the_ceiling_is_reported_and_its_room_is_not_handed_out() {
     let dir = common("left-behind-ceiling");

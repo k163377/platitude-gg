@@ -17,11 +17,11 @@
 //! **The rig is claimed while it is switched and built**, the way a seat
 //! is claimed (`seats::take_seat`), so two invocations cannot check two
 //! commits out into one tree at once — and claimed by the measuring
-//! process, not by the session it runs in: a second `perf --at` from the
-//! same session is refused too, and a claim whose process is gone is
-//! cleared by the next one, from any terminal. The claim is released
-//! once the exe is on the shelf: the measurement runs off the copy and
-//! needs the tree for nothing.
+//! process: a second `perf --at` from the same session is refused
+//! too, and a claim whose process is gone is cleared by the next
+//! one, from any terminal. The claim is released once the exe is on
+//! the shelf: the measurement runs off the copy and needs the tree
+//! for nothing.
 //!
 //! **A dirty rig refuses.** Nothing here resets a tree — an edit in the
 //! rig is somebody's, however wrong it was to make it there — so the
@@ -70,7 +70,7 @@ impl Built {
 /// `caller` is the tree the command runs in: the rev is resolved there,
 /// which is what lets a seat name its own branch. `opts.build` false takes
 /// the shelf or nothing — a `--no-build` that would have to build is
-/// refused rather than quietly done.
+/// refused.
 ///
 /// Called under the measurement's own announcement (`perf::run`), so no
 /// measurement holds the machine while this switches, reaps and builds.
@@ -156,13 +156,13 @@ impl Claim {
     /// seat is (`seats::create_seat`): no moment between the tree
     /// existing and being claimed for a second invocation to arrive in.
     ///
-    /// The claim names this process, never the session: a session runs
-    /// one measurement at a time, and a claim left by a killed one is
-    /// litter its dead pid gives away (`seats::standing`), whichever
-    /// terminal meets it next. That is why this claim is read as
-    /// `Held::ByRunner` — a seat's number is a session's, and asking for
-    /// one where the other stands takes the rig out from under a
-    /// measurement that is still running.
+    /// The claim names this process: a session runs one measurement at
+    /// a time, and a claim left by a killed one is litter its dead pid
+    /// gives away (`seats::standing`), whichever terminal meets it
+    /// next. That is why this claim is read as `Held::ByRunner` — a
+    /// seat's number is a session's, and asking for one where the other
+    /// stands takes the rig out from under a measurement that is still
+    /// running.
     fn take(primary: &str, rig: &str, commit: &str, exists: bool) -> Result<Self, String> {
         // The session mark carries the pid too: a claim's reason is read
         // back as `<session> pid <pid>`, and an empty session leaves the
@@ -222,17 +222,17 @@ impl Drop for Claim {
     }
 }
 
-/// Puts the rig on `commit`. A dirty rig is refused rather than reset:
-/// the change is somebody's, and this is the one place it would go
-/// missing without a word.
+/// Puts the rig on `commit`. A dirty rig is refused: the change is
+/// somebody's, and this is the one place it would go missing without
+/// a word.
 fn switch(rig: &str, commit: &str) -> Result<(), String> {
     let dirty = git_query(rig, &["status", "--porcelain"])
         .ok_or_else(|| format!("the rig at {rig} would not answer git status"))?;
     if !dirty.is_empty() {
         return Err(format!(
             "the rig at {rig} has uncommitted changes, and nothing here resets a tree — it is \
-             built and measured, never edited. Clean it by hand and make the change in a seat \
-             instead:\n{dirty}"
+             built and measured only. Clean it by hand and make the change in a \
+             seat:\n{dirty}"
         ));
     }
     if git_query(rig, &["rev-parse", "HEAD"]).as_deref() == Some(commit) {

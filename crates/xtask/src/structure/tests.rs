@@ -107,7 +107,7 @@ fn matches_a_ledger_entry_only_at_a_path_boundary() {
 fn asks_nothing_of_a_ledgered_file_but_that_it_is_still_there() {
     let ledger = ledger_entries("- **`ui/Pane.qml` は割らない** — 理由\n");
     // However long it has become: the entry is the standing, and the
-    // reason on it is what a reader weighs, not a number beside it.
+    // reason on it is what a reader weighs.
     let failures = check_ledger(&ledger, &[counted("crates/a/src/ui/Pane.qml", 4_000)]);
     assert!(failures.is_empty(), "{failures:?}");
 }

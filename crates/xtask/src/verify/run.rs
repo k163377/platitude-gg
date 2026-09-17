@@ -13,9 +13,9 @@ use super::{child, outcome, repos, seed};
 /// Which gits a run is staged with: the version an old one answers, the
 /// PATH the app is handed, and where a second one stands.
 ///
-/// **A run asks for one of the two, never both** — the copy that stands in
-/// for git reads one pair of variables to know what it is, and two of them
-/// on one app would be the same copy told two things.
+/// **A run asks for one of the two** — the copy that stands in for git
+/// reads one pair of variables to know what it is, and two of them on
+/// one app would be the same copy told two things.
 fn gits_for<'a>(
     opts: &'a super::options::Options,
     shot_dir: &std::path::Path,
@@ -67,10 +67,10 @@ fn gits_for<'a>(
 /// release build, when it is the one that builds (`crate::budget`).
 ///
 /// Taken before the measurement is announced, which is the order the
-/// whole runner keeps, and taken here rather than only inside a gate: a
-/// verb a session runs beside another seat's gate is load like any
-/// other. A verb the gate started is under the gate's own ticket and
-/// takes none.
+/// whole runner keeps, and taken by a run of any kind: a verb a
+/// session runs beside another seat's gate is load like any other. A
+/// verb the gate started is under the gate's own ticket and takes
+/// none.
 fn room_for(opts: &super::options::Options) -> Result<crate::budget::Admitted, String> {
     crate::budget::standalone(
         &crate::tree::workspace_root(),
@@ -93,9 +93,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let path = crate::qt::path_with_qt()?;
     let repos = repos::for_run(&opts)?;
 
-    // Explicit resources are allowed to survive across sequential runs,
-    // but never to be owned by two verify-ui processes at once. That would
-    // mix Git writes, settings, or PNGs and can manufacture a false PASS.
+    // Explicit resources survive across sequential runs, and belong to
+    // one verify-ui process at a time. Two at once would mix Git
+    // writes, settings, or PNGs and can manufacture a false PASS.
     // Fresh preset repositories need no cross-process claim: their creator
     // already gave this run a private directory.
     let mut claimed = BTreeSet::new();
@@ -112,8 +112,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // is owned before it is added to.
     seed_merge_tool(&opts.verb, &repos, &path)?;
 
-    // The build's PATH, not the run's: the git shim below goes onto the
-    // child's PATH only, so the build never sees it.
+    // The build's PATH: the git shim below goes onto the child's PATH
+    // only, so the build never sees it.
     let exe = crate::tree::app_exe(&root, &path, opts.build, &[])?;
 
     // The claim below answers for this machine only, and inside a
@@ -178,7 +178,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     );
     let (shim_version, child_path, other_git) = gits_for(&opts, &shot_dir, &path)?;
 
-    // Which machine a run happens on must not reach the picture, and git
+    // The picture is the same whatever machine it was taken on, and git
     // takes its answer to "who is sitting here" from two places the run
     // would otherwise inherit: a configuration file, and the directory it
     // resolves one from. So every run is handed both of its own — a
@@ -192,9 +192,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // gets a say, and inside a container that tree's `.git` names a
     // Windows path git calls fatal rather than absent.
     //
-    // The identity verbs are the ones whose write would land here rather
-    // than in a demo repository; they bring their own seed and answer the
-    // screen it raises, and go through the same door as everyone else.
+    // The identity verbs are the ones whose write lands in this
+    // gitconfig; they bring their own seed and answer the screen it
+    // raises, and go through the same door as everyone else.
     let config = shot_dir.join("gitconfig");
     std::fs::write(&config, super::shim::global_seed(&opts.verb)).map_err(|e| e.to_string())?;
     println!("git config for this run: {}", config.display());

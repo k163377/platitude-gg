@@ -31,7 +31,7 @@ mod tests {
         assert_eq!(field(text, "pid "), Some("7"));
         assert_eq!(field(text, "what "), Some("cargo xtask perf"));
         assert_eq!(field(text, "where "), None);
-        // The key is matched at the start of a line, not anywhere in it.
+        // The key is matched at the start of a line.
         assert_eq!(field("what pid 9\n", "pid "), None);
     }
 

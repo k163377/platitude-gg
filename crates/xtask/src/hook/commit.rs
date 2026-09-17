@@ -7,9 +7,9 @@ use super::launch::resolve;
 use crate::seats::worktree_root;
 use crate::subprocess::common_git_dir;
 
-/// The primary checkout commits nothing of its own — implementation,
-/// documents, settings and the shared session rules alike ride worktree
-/// branches, because parallel sessions keep reaching for the same files
+/// Every commit of this repository rides a worktree branch —
+/// implementation, documents, settings and the shared session rules
+/// alike — because parallel sessions keep reaching for the same files
 /// and direct commits to main collide with theirs (CLAUDE.md Git 運用).
 /// What the commit carries no longer narrows this: where it would land is
 /// the whole question.
@@ -135,7 +135,7 @@ mod tests {
             commit_dir("cd C:/x/platitude-gg && git commit -am \"x\"", "C:/other"),
             Some("C:/x/platitude-gg")
         );
-        // A -C on a staging verb is that verb's, not the commit's.
+        // A -C on a staging verb is that verb's alone.
         assert_eq!(
             commit_dir("git -C ../.. add . && git commit -m \"x\"", CWD),
             Some(CWD)

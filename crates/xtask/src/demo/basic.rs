@@ -90,9 +90,9 @@ pub(super) fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["add", "--", "c.txt"])?;
     repo.write("c.txt", "c v1\nstaged\nand unstaged on top\n")?;
     repo.git(&["mv", "renamed-from.txt", "renamed-to.txt"])?;
-    // Long enough to be read as a file rather than as a line: the diff of
-    // something the repository has never seen is all additions under one
-    // heading, and one line of it cannot show what that looks like.
+    // Long enough to be read as a file: the diff of something the
+    // repository has never seen is all additions under one heading, and
+    // one line of it cannot show what that looks like.
     repo.write(
         "untracked.txt",
         "Notes for the next release\n\
@@ -135,8 +135,8 @@ pub(super) fn embedded(repo: &mut DemoRepo) -> Result<(), String> {
         if commit {
             repo.git_at(&dir, &["add", "--", "inside.txt"])?;
             // The identity is this one repository's, given on the command
-            // rather than configured: nothing here reads the other
-            // repository's settings, and one commit is all it is for.
+            // line: nothing here reads the other repository's settings,
+            // and one commit is all it is for.
             repo.git_at(
                 &dir,
                 &[
@@ -312,8 +312,8 @@ pub(super) fn one_commit(repo: &mut DemoRepo) -> Result<(), String> {
 /// **Depth 2 is what puts the refusal on the tip**: a fold takes the row
 /// above it in, so its range bottoms out at the oldest commit held, whose
 /// own parent is the one that is not here (実測). A drop of the same tip
-/// reaches only itself and plans onto that commit fine — the depth, not
-/// the row, is what decides.
+/// reaches only itself and plans onto that commit fine — the depth is
+/// what decides.
 pub(super) fn shallow(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.commit("src/one.txt", "one\n", "feat: the first step")?;

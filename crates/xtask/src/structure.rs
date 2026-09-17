@@ -6,7 +6,7 @@
 //! comments would pay a reader to delete them, and deleting them is not
 //! what a long file needs.
 //!
-//! One number covers every file, and it is a backstop rather than a target:
+//! One number covers every file, and it is a backstop:
 //! what a file past it needs is a look at its design, which is a person's
 //! call on the reason and not a machine's on the count. So the count only
 //! has to be loud once, and a file has one of three standings:
@@ -188,7 +188,7 @@ fn check_baseline(
         write_baseline(&baseline_path, &fresh)?;
         println!(
             "structure: {scanned} files counted; wrote {BASELINE} pinning the {} already \
-             over the backstop — from here they may shrink, not grow",
+             over the backstop — from here they may only shrink",
             fresh.len()
         );
         return Ok((fresh.len(), Vec::new()));
@@ -209,7 +209,7 @@ fn check_baseline(
             Some(&was) if file.code > was => {
                 failures.push(format!(
                     "{}: {}, {} more than the {was} it is pinned at and {} past the \
-                     {BACKSTOP}-line backstop — a pinned file may shrink, not grow \
+                     {BACKSTOP}-line backstop — a pinned file may only shrink \
                      ({RULES} §長さの閾値): split first, or record in {LEDGER} why it is \
                      not split",
                     file.path,
@@ -217,8 +217,8 @@ fn check_baseline(
                     file.code - was,
                     file.code - BACKSTOP,
                 ));
-                // Pinned where it was: a run that fails must not also raise
-                // the bar it just failed against.
+                // Pinned where it was: a run that fails leaves the bar it
+                // failed against where it stood.
                 next.insert(file.path.clone(), was);
             }
             Some(&was) => {
@@ -249,7 +249,7 @@ fn check_baseline(
 
 /// Every .rs and .qml under crates/, counted.
 ///
-/// All of them, not just the ones over the backstop: the run reports what
+/// All of them: the run reports what
 /// the tree costs in code and what it spends on comments, and a ledgered
 /// file still owes its entry the fact that it is there.
 ///
@@ -429,7 +429,7 @@ fn without_comments_and_strings(text: &str) -> String {
 /// Ledger entries name a file by however much of its tail tells it apart
 /// (`ui/AutoActDriver.qml`), so these match as path suffixes. Only the
 /// 分割しない判断 section counts — the sections above it name files as
-/// examples of a trap, not as permission to be long, and reading the whole
+/// examples of a trap, and reading the whole
 /// document would quietly excuse them.
 fn read_ledger(root: &Path) -> Result<Vec<String>, String> {
     let path = root.join(LEDGER);
@@ -463,7 +463,7 @@ fn ledger_entries(section: &str) -> Vec<String> {
 /// A bullet exempts the file it is *about*, and that is the one it opens
 /// with in bold: ``- **`path` は割らない** — …``. The same section also
 /// carries bullets about one long function inside a file, which name their
-/// file in passing and must not hand the whole file an exemption;
+/// file in passing and leave the file's standing as it is;
 /// leading on the file in bold is what tells the two apart. Losing the bold
 /// costs an exemption and turns the count red, which is the direction a
 /// formatting slip should fail in.

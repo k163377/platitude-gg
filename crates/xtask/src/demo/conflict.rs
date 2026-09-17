@@ -233,12 +233,12 @@ pub(super) fn rebase_staged(repo: &mut DemoRepo) -> Result<(), String> {
 /// `Otherwise, please use 'git rebase --skip'`. Nothing is conflicted or
 /// staged, which is what makes leaving this one out cost nothing.
 ///
-/// Reached with `--empty=ask` rather than through an interactive
-/// rebase: the state is the same one, and driving `-i` from here would
-/// need a sequence editor on the PATH of three operating systems.
-/// `ask` and not its rename `stop`: the rename is 2.45's, and the
-/// minimum git (2.43 — the Linux container) refuses a value it does not
-/// know, which reads exactly like the stop this expects (repo.rs).
+/// Reached with `--empty=ask`: the state is the same one, and driving
+/// `-i` from here would need a sequence editor on the PATH of three
+/// operating systems. `ask`, because the rename to `stop` is 2.45's
+/// and the minimum git (2.43 — the Linux container) refuses a value it
+/// does not know, which reads exactly like the stop this expects
+/// (repo.rs).
 pub(super) fn rebase_empty(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("f.txt", "a\n", "feat: root")?;
     repo.git(&["switch", "--create", "topic"])?;
@@ -271,7 +271,7 @@ pub(super) fn cherry_pick_conflict(repo: &mut DemoRepo) -> Result<(), String> {
 
 /// The same stopped cherry-pick, then let go of with `--quit`.
 ///
-/// **What git leaves behind is not a clean tree**: the operation is gone
+/// **What git leaves behind is the conflict**: the operation is gone
 /// — no `CHERRY_PICK_HEAD`, no sequencer, so no badge and no exit card —
 /// while every unmerged path stays exactly where it stood, and a move out
 /// of here is refused all over again in git's other wording

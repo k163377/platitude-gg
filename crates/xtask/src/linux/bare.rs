@@ -17,9 +17,9 @@ use crate::keepsakes::keepsake_dir;
 /// the library that broke it. Cheap enough to put in front of a merge:
 /// nothing is downloaded, and the answer is a start or a missing symbol.
 pub(super) fn bare(root: &Path, discover: bool) -> Result<(), String> {
-    // Workspace-wide, not `-p platitude-app`: pgg-todo-editor is a bin of
-    // platitude-core, and a release directory without it is one binary
-    // short of what interactive rebase needs.
+    // Workspace-wide: pgg-todo-editor is a bin of platitude-core,
+    // and a release directory without it is one binary short of what
+    // interactive rebase needs.
     let app = ensure_image(root, "app", false)?;
     println!("building the release, workspace-wide…");
     // With the harness, like everything else this runner builds

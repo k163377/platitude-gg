@@ -3,23 +3,23 @@
 //!
 //! The record in `ci/baseline/perf-windows-x64.md` is only worth anything
 //! if the run behind it can be repeated exactly, so the conditions live
-//! here rather than in whatever shell somebody typed that day: release
-//! build, a **real window** (offscreen reports neither memory nor fps
-//! honestly), **on one named screen**, warm cache, the `PGG_AUTO_*` hooks,
-//! WorkingSet sampled every 100ms for its maximum, causal `perf_done`,
-//! and an outer kill guard.
+//! here: release build, a **real window** (offscreen
+//! reports neither memory nor fps honestly), **on one
+//! named screen**, warm cache, the `PGG_AUTO_*` hooks,
+//! WorkingSet sampled every 100ms for its maximum,
+//! causal `perf_done`, and an outer kill guard.
 //!
-//! **Three of those conditions are the machine, not the application.** A
+//! **Three of those conditions belong to the machine.** A
 //! window somebody covered, a session somebody locked, a screen that went
 //! to sleep and a parallel build all answer with numbers that read
 //! exactly like a slower application, so the run measures them too and
-//! refuses rather than publishes (`perf::sampler::Conditions`). The
-//! benchmark repository is the fourth, and it is generated rather than
-//! cloned for that reason (`cargo xtask corpus`): a clone is fetched
-//! behind the measurement's back, and a fetch changes the rows, the ref
-//! tables and the commit the interaction opens while `HEAD` holds
-//! still. `perf::corpus` fingerprints whichever repository it is given
-//! and compares that fingerprint either side of the runs.
+//! refuses (`perf::sampler::Conditions`). The benchmark
+//! repository is the fourth, and it is generated for that reason
+//! (`cargo xtask corpus`): a clone is fetched behind the
+//! measurement's back, and a fetch changes the rows, the ref tables
+//! and the commit the interaction opens while `HEAD` holds still.
+//! `perf::corpus` fingerprints whichever repository it is given and
+//! compares that fingerprint either side of the runs.
 //!
 //! `--breakdown` adds `PGG_MEM_REPORT=1` and prints the largest `mem
 //! report` line the run produced, which is what says *where* the bytes
@@ -46,11 +46,11 @@
 //! before `perf_done`, idle either side. That is Qt populating its whole
 //! font database — tens of MB once per process, whichever glyph asked —
 //! and the record reads the budget line net of it, so it is weighed
-//! where the sampler can see it rather than in the middle of the scroll
-//! ([`fonts`]). The report says the walk, and the working set less it.
+//! where the sampler can see it ([`fonts`]). The report says the walk,
+//! and the working set less it.
 //!
-//! `--at <rev>` measures the rig's build of that commit rather than this
-//! tree's own ([`rig`]): the seat keeps its target/ and its edits, the
+//! `--at <rev>` measures the rig's build of that commit
+//! ([`rig`]): the seat keeps its target/ and its edits, the
 //! number is of a commit anybody can name again, and the other side of
 //! an A/B builds nothing the second time.
 //!
@@ -62,11 +62,11 @@
 //! through the backing store, which waits for no display. Nothing then
 //! holds the screen awake or pokes the input timer, the window is not
 //! raised over whatever a person has in front, and the display's state
-//! is sampled as evidence rather than as a condition. What that answers
-//! is the working set of a run that went the whole way — selection,
-//! diff, scroll, font walk — with a renderer of its own; what it cannot
-//! answer is anything about the display path, and the report says so
-//! beside every frame number ([`report`]).
+//! is sampled as evidence. What that answers is the working set of a
+//! run that went the whole way — selection, diff, scroll, font walk —
+//! with a renderer of its own; what it cannot answer is anything about
+//! the display path, and the report says so beside every frame number
+//! ([`report`]).
 
 mod artifacts;
 mod attribution;
@@ -92,8 +92,8 @@ use options::{Options, parse};
 use reading::Reading;
 use report::{mb, report};
 
-/// The escape is read here through [`window_allowed`], not by the hook
-/// alone: a run told to stay offscreen needs no window and no ask.
+/// The escape is read here through [`window_allowed`]: a run told to
+/// stay offscreen needs no window and no ask.
 pub(crate) static PERF: command::Command = command::Command {
     id: "perf.measure",
     call: "perf --repo <path>",
@@ -115,12 +115,12 @@ const SAMPLE_MS: u64 = 100;
 /// How long a run will wait for the machine to go quiet before giving up
 /// on it. Long enough to outlast a lunch break, since that is exactly the
 /// case: somebody walked away, the session locked, and the measurement
-/// should be taken when they are back rather than thrown away.
+/// should be taken when they are back.
 const QUIET_CEILING: Duration = Duration::from_secs(1_800);
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    // The samplers answer (0, 0) where they are not implemented, and a
-    // 0MB working set must never pass for a reading.
+    // The samplers answer (0, 0) where they are not implemented, so an
+    // OS without them is refused here.
     if !cfg!(any(windows, target_os = "linux")) {
         return Err("memory sampling is not implemented for this OS".into());
     }
@@ -136,11 +136,11 @@ fn run_options(opts: Options) -> Result<(), String> {
     let path = crate::qt::path_with_qt()?;
     guard_the_window(&root)?;
 
-    // Held for the whole invocation rather than per run, and taken
-    // before the build: the screen goes dark between runs as readily as
-    // during one, and a release build is minutes of exactly the idle
-    // that darkens it (`sampler::keep_awake`). A software run holds
-    // only the machine: its frames need no display.
+    // Held for the whole invocation, and taken before the build: the
+    // screen goes dark between runs as readily as during one, and a
+    // release build is minutes of exactly the idle that darkens it
+    // (`sampler::keep_awake`). A software run holds only the machine:
+    // its frames need no display.
     let _awake = sampler::keep_awake(!opts.software);
 
     // The build, announced as one: it waits for a measurement holding
@@ -329,10 +329,10 @@ fn scenario(opts: &Options) -> String {
 
 /// The calibration run, before the others: the repository opened and
 /// driven no further than a graph, then the font walk, idle either side
-/// (`fonts`). Not the discarded run's stand-in — it opens nothing a
+/// (`fonts`). The discarded run still stands — this opens nothing a
 /// `git show` reads, so the cold cache is still the first run's to pay
-/// (`warmth`) — and not kept: its one number is read beside the kept
-/// runs, not among them. `None` where the invocation declined it.
+/// (`warmth`) — and its one number is read beside the kept runs.
+/// `None` where the invocation declined it.
 fn calibrate(
     bench: &Bench<'_>,
     opts: &Options,
@@ -403,7 +403,7 @@ impl Bench<'_> {
     /// always take the focus off the shell that started it — and there
     /// is no API that answers "was it covered". The frames answer it.
     ///
-    /// **Too few frames, not none.** A bench that received nothing at
+    /// **Too few frames.** A bench that received nothing at
     /// all never finished, so it never reached here: it was killed at
     /// `measure::SCROLL_CEILING` and classified there. What is left for
     /// this to catch is a bench that ran to the end on so few frames
@@ -422,12 +422,12 @@ impl Bench<'_> {
     /// calibration run drives less than the kept ones
     /// (`fonts::calibration`).
     ///
-    /// A run spoiled by the host is not a slow application and must not
-    /// be published as one; it is also not a failure of the application,
-    /// so it is not fatal either. Between attempts the runner waits for
-    /// the machine rather than firing straight into the same noise —
-    /// which is what makes "somebody walked away and the session locked"
-    /// end in a measurement instead of in a wasted afternoon.
+    /// A run spoiled by the host is thrown away and taken again:
+    /// published, it would read as a slow application, and it is
+    /// no failure of one either, so it ends nothing. Between
+    /// attempts the runner waits for the machine — which is what
+    /// makes "somebody walked away and the session locked" end in
+    /// a measurement.
     fn take(&self, run: &str, opts: &Options, retries: &mut u32) -> Result<Reading, String> {
         let mut attempt = 0;
         let mut spent = [0u32; measure::Spoiled::CAUSES];
@@ -596,8 +596,8 @@ mod tests {
         }
     }
 
-    /// A floor under "was anything presented at all", not a performance
-    /// budget: half of what the screen it was on could have shown.
+    /// A floor under "was anything presented at all": half of what
+    /// the screen it was on could have shown.
     #[test]
     fn a_scroll_nobody_could_have_seen_is_refused() {
         let limits = Limits::default();

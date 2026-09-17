@@ -16,9 +16,9 @@
 //!
 //! That question was spelled out by hand in several readers and one of
 //! them was missed when the rule changed, which is the shape this exists
-//! to stop: **a row taken from a numbered position is never asked whether
-//! it is the working tree's.** A position is not a row anybody is on, so
-//! the answer is being read as "ours is there", and it is not.
+//! to stop: **the working tree's question is the graph's to answer,
+//! whatever position a row was read at.** A position is not a row
+//! anybody is on, so the answer reads as "ours is there", and it is not.
 //!
 //! **Asking it of a row somebody is on is untouched** — the row a click
 //! landed on, the row a selection stood at, the row a reword names. There
@@ -32,12 +32,12 @@
 //! whole body is on its line opens no scope at all, and its neighbour's
 //! parameter is then answered by a name from inside it.
 //!
-//! **It decides a spelling, not a program.** Two readings are refused:
+//! **It decides a spelling.** Two readings are refused:
 //! the question asked of a numbered row in one expression, and the
 //! question asked of a name whose innermost binding is given a numbered
 //! row anywhere — on any path, since a name given one on a branch still
 //! holds it there. **A name bound by anything this cannot read is
-//! uncertain, and an uncertain name is never refused**: parameters,
+//! uncertain, and an uncertain name passes**: parameters,
 //! arrows, loop variables and patterns all land there, and so does a word
 //! one scope declares twice. Which row such a name means needs the
 //! program, and what the landing does with it is what `wip-landing` and
@@ -65,11 +65,11 @@ const TREES: &[&str] = &[
 ];
 /// How a row is taken out of the graph at a numbered position.
 const BY_INDEX: &str = "oidAt";
-/// What must not be asked of it. **Only the working tree's question**: a
+/// What is refused of it. **Only the working tree's question**: a
 /// stash row carries a real object, so asking the id whether it names one
 /// (`stashRefOf`) is answered by the row itself and by nothing else.
 const OF_THE_ID: &[&str] = &["wipOid"];
-/// The words that introduce a name rather than write to one.
+/// The words that introduce a name.
 const DECLARES: &[&str] = &["const", "let", "var"];
 /// Where a failing line sends its reader.
 const RULE: &str = ".claude/rules-refs/app-ui.md §作業コピーの行";
@@ -119,8 +119,8 @@ struct Knows {
     /// there.
     numbered: bool,
     /// Something bound it that this cannot read: a parameter, an arrow's,
-    /// a loop's, or a second declaration in the same scope. Never
-    /// refused.
+    /// a loop's, or a second declaration in the same scope. Always
+    /// passes.
     uncertain: bool,
 }
 
@@ -239,7 +239,7 @@ impl<'a> Walk<'a> {
                     self.skip_past(close);
                 }
             }
-            // QML gives a property its value with `:`, not `=`.
+            // QML gives a property its value with `:`.
             "property" if !member => self.a_property(),
             _ => match asked {
                 Some(asked) => self.asked(asked),
@@ -554,9 +554,9 @@ struct Binders {
 }
 
 /// The names in a comma-separated binder list. **An entry this cannot
-/// read whole gives up every word in it** rather than nothing: a pattern
+/// read whole gives up every word in it**: a pattern
 /// binds one of them, and which one is what could not be read. Read per
-/// entry rather than per word, so `oid=fallback` and `oid = fallback`
+/// entry, so `oid=fallback` and `oid = fallback`
 /// answer the same.
 fn names_in(list: &str) -> Binders {
     let mut names = Vec::new();
@@ -906,10 +906,10 @@ mod tests {
     /// The rule is about which row a reader asks about, and no part of
     /// that is spelled by whitespace — yet every defect found in it so
     /// far was one of the two leaking into the answer (a list read per
-    /// word instead of per entry, a body that opened no scope because its
+    /// word, a body that opened no scope because its
     /// line ended where it began, a call whose bracket had to touch its
     /// name). So it is checked as a property over every shape above
-    /// rather than one example at a time, which is what reading the code
+    /// at once, which is what reading the code
     /// kept failing to catch.
     #[test]
     fn nothing_here_is_decided_by_a_space_or_a_line_break() {
@@ -980,7 +980,7 @@ mod tests {
     }
 
     /// What the two shapes above are read for: a word is a word however
-    /// it is written, and the transforms must not invent or swallow one.
+    /// it is written, and the transforms keep every one of them.
     #[test]
     fn the_shapes_this_is_read_in_keep_every_word() {
         for source in EVERY_SHAPE {

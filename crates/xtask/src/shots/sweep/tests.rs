@@ -17,7 +17,7 @@ fn run(seat: &str, label: &str, at: u128) -> Run {
     }
 }
 
-/// The one thing a sweep must never do: reach a seat nobody named.
+/// A sweep reaches exactly the seats it was named.
 /// The board is shared, so the default has to be the narrow answer
 /// and the whole board has to be asked for.
 #[test]
@@ -65,7 +65,7 @@ fn a_retake_replaces_the_same_view_and_nothing_else() {
     assert!(replaced(&run("a", "graph-head", 100), &fresh));
     assert!(
         !replaced(&run("a", "graph-head — linux", 100), &fresh),
-        "the other side of Done is another picture, not this one again"
+        "the other side of Done is another picture"
     );
     assert!(
         !replaced(&run("b", "graph-head", 100), &fresh),
@@ -106,7 +106,7 @@ fn a_reference_is_read_out_of_any_line_that_names_one() {
     assert!(pictures_named_in("label\tno pictures here\n").is_empty());
 }
 
-/// A runs directory that is not there is an empty set, not a panic:
+/// A runs directory that is not there is an empty set:
 /// `collect_orphans` runs on every rebuild, including the first.
 #[test]
 fn a_board_without_runs_references_nothing() {

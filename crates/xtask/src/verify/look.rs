@@ -6,10 +6,10 @@
 //! to say it.
 //!
 //! **A diagnostic is bounded, and its stdout is a file.** It is ended at
-//! its ceiling and waited for, so the app's reaping never runs beside a
-//! dumper still holding the process open; and what it wrote is read off
-//! the disk once it has exited, so a child it left behind — holding what
-//! would have been the pipe's write end — holds nothing here.
+//! its ceiling and waited for, so the app's reaping follows the dumper's
+//! end; and what it wrote is read off the disk once it has exited, so a
+//! child it left behind — holding what would have been the pipe's write
+//! end — holds nothing here.
 
 use std::path::Path;
 use std::process::Command;
@@ -30,7 +30,7 @@ const THREADS_FILE: &str = "threads.txt";
 /// start and one query, the dump writes the process's whole memory to
 /// disk. Both Windows-only — elsewhere the listing is a walk of `/proc`,
 /// which takes no process and so has nothing to bound. **Ceilings on the
-/// diagnostics, never on the run**: what they bound is a diagnostic that
+/// diagnostics**: what they bound is a diagnostic that
 /// stalls, and the answer to one is the line that says it did — the app
 /// is reaped and the run reported the same either way ([`bounded`]).
 #[cfg(windows)]
@@ -39,7 +39,7 @@ const LISTING_CEILING: Duration = Duration::from_secs(15);
 const DUMP_CEILING: Duration = Duration::from_secs(60);
 /// The ceiling a look ordered to stall is ended at (`--fault-stall-look`).
 /// The stand-in never answers, so any height ends it, and what the case
-/// reads back is the ending and the words — never the height. Kept apart
+/// reads back is the ending and the words. Kept apart
 /// from [`LISTING_CEILING`], which is set for a listing that does answer,
 /// on a loaded machine; this one is only wall clock the check would pay
 /// for nothing.
@@ -60,7 +60,7 @@ const STALLED_LOOK_CEILING: Duration = Duration::from_secs(1);
 /// orders that stall (`--fault-stall-look`): the listing is a process
 /// that never answers, ended at a ceiling of its own
 /// ([`STALLED_LOOK_CEILING`]), so what the parent says about a look that
-/// ran out of time can be checked rather than waited for
+/// ran out of time can be checked
 /// (`super::faults`).
 pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool) -> Vec<String> {
     let threads = if stalled {
@@ -375,10 +375,10 @@ foreach ($thread in $process.Threads) {
 }
 [PggThreads]::End()";
 
-/// Every thread of the process ([`LISTING_SCRIPT`]). Windows has no way
-/// to this in std, and the one it has is the same PowerShell the reaper
-/// reads its process tree from (`crate::reap`). The listing is written
-/// whole beside the pictures ([`THREADS_FILE`]) and read back from there.
+/// Every thread of the process ([`LISTING_SCRIPT`]). Windows answers
+/// this from PowerShell alone — the same one the reaper reads its
+/// process tree from (`crate::reap`). The listing is written whole
+/// beside the pictures ([`THREADS_FILE`]) and read back from there.
 #[cfg(windows)]
 fn threads_of(pid: u32, shot_dir: &Path) -> Result<Threads, String> {
     let script = LISTING_SCRIPT.replace("PGG_PID", &pid.to_string());
@@ -394,7 +394,7 @@ fn threads_of(pid: u32, shot_dir: &Path) -> Result<Threads, String> {
 
 /// The same off `/proc`: the thread's name is there as well, which says
 /// whose it is — a tokio worker, the deadline thread, a render thread.
-/// A walk, not a process: it leaves no file beside the pictures, and no
+/// A walk: it leaves no file beside the pictures, and no
 /// stacks (`/proc/<pid>/task/<tid>/stack` is root's).
 #[cfg(unix)]
 fn threads_of(pid: u32, _shot_dir: &Path) -> Result<Threads, String> {
@@ -434,10 +434,10 @@ fn threads_of(pid: u32, _shot_dir: &Path) -> Result<Threads, String> {
 /// a stopped exit is read off is the one thread's stack, `~*k` in
 /// WinDbg, and what it holds is in the memory behind it.
 ///
-/// **Not `rundll32 comsvcs.dll,MiniDump`**, the dumper every Windows
-/// has on hand. What it writes here is a file whose header claims the
-/// whole memory and holds none of it, under an ACL that names SYSTEM
-/// and Administrators alone — a dump its own taker cannot open
+/// `rundll32 comsvcs.dll,MiniDump`, the dumper every Windows has on
+/// hand, writes a file whose header claims the whole memory and holds
+/// none of it, under an ACL that names SYSTEM and Administrators alone
+/// — a dump its own taker cannot open
 /// (internal-docs/P3-確認事項.md §次の 1 回で何が読めるか). A file
 /// PowerShell creates is the owner's, like any other.
 ///
@@ -497,8 +497,8 @@ fn dump_of(pid: u32, shot_dir: &Path) -> String {
         Answer::Ended { status, .. } => {
             format!("  no dump: MiniDumpWriteDump exited {status}")
         }
-        // What a dumper ended half way left is not a dump, and a file by
-        // that name would be opened as one.
+        // What a dumper ended half way left is taken away: a file by
+        // that name would be opened as a dump.
         Answer::OutOfTime { pid, after, ended } => format!(
             "  no dump: the dumper ran out of time after {:.1}s and {}; {}",
             after.as_secs_f32(),
@@ -588,12 +588,12 @@ mod tests {
     }
 
     /// A diagnostic that stands past its ceiling is ended there and said
-    /// to have been. Whether it is gone is asked of the machine, not of
-    /// the answer.
+    /// to have been. Whether it is gone is asked of the machine
+    /// itself.
     #[test]
     fn a_diagnostic_that_stalls_is_ended_at_its_ceiling() {
         // The stand-in stalls on purpose and the ceiling is what ends it;
-        // the verdict is that it was ended, never how long that took.
+        // the verdict is that it was ended.
         let ceiling = Duration::from_millis(300);
 
         let answer = bounded("a stalled listing", stand_in(), ceiling, None);
@@ -672,7 +672,7 @@ mod tests {
 
     /// The dump is one a person can open: written by the call itself, so
     /// the memory is behind the header and the file is its owner's to
-    /// read — neither of which `comsvcs.dll,MiniDump` gives (`dump_of`).
+    /// read — the two things this test is here for (`dump_of`).
     /// Taken of the stand-in, which is small and stands still.
     #[cfg(windows)]
     #[test]
@@ -700,7 +700,7 @@ mod tests {
         let len = dump.metadata().expect("the dump's size").len();
         // Full memory is the images and the heap, which is orders past a
         // header with the stacks alone.
-        assert!(len > 1024 * 1024, "{len} bytes is a header, not a dump");
+        assert!(len > 1024 * 1024, "{len} bytes is a header alone");
         drop(dump);
         std::fs::remove_dir_all(&dir).expect("the dump is its owner's to remove");
     }
@@ -777,7 +777,7 @@ mod tests {
     /// diagnostic's own exit and what it had written by then; what it
     /// left behind holds nothing here. The child left behind writes
     /// `done.txt` as its last act, so whether the answer waited for it
-    /// is read off the disk and not off a clock.
+    /// is read off the disk.
     #[test]
     fn a_child_the_diagnostic_leaves_behind_does_not_hold_the_answer() {
         let dir = lanes("left-behind");
@@ -802,10 +802,10 @@ mod tests {
 
     /// A process that ends at once and leaves a child behind, holding
     /// the stdout it was given for twenty seconds and then writing
-    /// `done.txt` beside the script. The script is a file so that the
-    /// shell's own quoting never enters the picture, and is named by its
-    /// whole path: a machine with `NoDefaultCurrentDirectoryInExePath`
-    /// set has a `cmd` that does not look in the current directory.
+    /// `done.txt` beside the script. The script is a file, so the shell
+    /// is handed one path, and is named by its whole path: a machine
+    /// with `NoDefaultCurrentDirectoryInExePath` set has a `cmd` that
+    /// does not look in the current directory.
     #[cfg(windows)]
     fn leaves_a_child_behind(dir: &std::path::Path) -> std::process::Command {
         let script = dir.join("child.cmd");

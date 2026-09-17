@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// A repository under construction. Commits get ascending timestamps
-/// (past → now) so the graph looks like history, not like a fixture.
+/// (past → now) so the graph looks like history.
 pub(super) struct DemoRepo {
     pub(super) root: PathBuf,
     pub(super) work: PathBuf,
@@ -166,7 +166,7 @@ impl DemoRepo {
         self.write(rel, content)?;
         self.git(&["add", "--", rel])?;
         // Two commands from now is what the commit itself will carry;
-        // reading the base rather than the clock keeps it reproducible.
+        // reading the base keeps it reproducible.
         let written = self.base_epoch + (self.tick + 2) * TICK_SECS - earlier;
         let date = format!("--date={written} +0000");
         let mut args = vec!["commit", &date];
@@ -209,7 +209,7 @@ impl DemoRepo {
     }
 
     /// The bare repository `origin` points at, which lives beside the
-    /// work tree rather than inside it.
+    /// work tree.
     fn origin_bare(&self) -> PathBuf {
         self.root.join("origin.git")
     }

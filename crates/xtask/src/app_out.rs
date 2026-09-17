@@ -1,6 +1,6 @@
 //! What the app said, read off a pipe of its own.
 //!
-//! **Never `BufRead::lines()` on the app's output.** Qt's default message
+//! **Read as bytes, never `BufRead::lines()`.** Qt's default message
 //! handler converts every line it writes to stderr into the process's
 //! ANSI codepage first, and on a Japanese Windows that is CP932 — so a
 //! QML warning naming a branch, a path or a menu row with a character
@@ -13,13 +13,13 @@
 //! reports a screenshot that was never taken (2026-09-03, measured with
 //! `console.log("…")` under `verify-ui`).
 //!
-//! So: decode per line and lossily, and never stop early. The bytes are
+//! So: decode per line and lossily, to the stream's end. The bytes are
 //! the app's own choice of encoding and nothing here can undo it — a
 //! CP932 line reads as replacement characters — but a line nobody can
 //! spell is still a line that must be carried to the end of the stream,
 //! because what follows it is the run's verdict.
 //!
-//! Linux is not exempt by luck: there the same conversion is UTF-8, so
+//! Linux passes on luck alone: there the same conversion is UTF-8, so
 //! the strict reader happened never to trip.
 
 use std::io::{BufRead, BufReader, Read};
@@ -85,21 +85,21 @@ impl Said {
 /// full pipe while the parent waits for it to exit — and so the read end
 /// stays open for as long as the app has anything to say.
 ///
-/// The clock starts here rather than being passed in: this is within
-/// microseconds of the spawn, and a stream's own start is what the times
-/// off it are wanted against.
+/// The clock starts here: this is within microseconds of the
+/// spawn, and a stream's own start is what the times off it are
+/// wanted against.
 pub(crate) fn collect<R: Read + Send + 'static>(reader: R) -> std::thread::JoinHandle<Said> {
     collect_marking(reader, std::sync::Arc::default(), |_| false)
 }
 
 /// The same, raising `mark` the moment a line `when` recognises arrives.
 ///
-/// **A wait that can end on what the app said rather than on the clock.**
-/// The lines are read on this thread while the parent waits on another,
-/// so a run whose verdict is already decided — the QML that would not
-/// load, which leaves an app with no window sitting in its event loop
-/// until the ceiling — is ended when it is decided rather than paid for
-/// in full (`verify::child`).
+/// **A wait that can end on what the app said.** The lines are read on
+/// this thread while the parent waits on another, so a run whose
+/// verdict is already decided — the QML that would not load, which
+/// leaves an app with no window sitting in its event loop until the
+/// ceiling — is ended the moment it is decided
+/// (`verify::child`).
 pub(crate) fn collect_marking<R: Read + Send + 'static>(
     reader: R,
     mark: std::sync::Arc<std::sync::atomic::AtomicBool>,
@@ -107,7 +107,7 @@ pub(crate) fn collect_marking<R: Read + Send + 'static>(
 ) -> std::thread::JoinHandle<Said> {
     std::thread::spawn(move || {
         // waits(measured): the stream's own clock, which the time of every line is
-        // read off (`Said::at`) — worded into a verdict, never deciding one
+        // read off (`Said::at`) — worded into a verdict only
         let started = std::time::Instant::now();
         let mut said = Said {
             lines: Vec::new(),
@@ -159,9 +159,9 @@ mod tests {
         assert_eq!(read[2], "screenshot saved=true");
     }
 
-    /// The mark is raised as the line goes by, not once the stream ends:
-    /// what it is for is a wait that can end while the app is still
-    /// running (`verify::child`).
+    /// The mark is raised as the line goes by: what it is for is a wait
+    /// that can end while the app is still running
+    /// (`verify::child`).
     #[test]
     fn a_watched_line_raises_its_mark_and_the_rest_still_arrives() {
         let mark = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));

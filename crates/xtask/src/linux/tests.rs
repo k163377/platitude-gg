@@ -181,7 +181,7 @@ fn the_verbs_that_do_not_resolve_are_handed_over_as_typed() {
     );
 }
 
-/// Past `--` the words are the program's, not the line's.
+/// Past `--` the words are the program's.
 #[test]
 fn a_locked_beyond_the_separator_is_not_this_lines_own() {
     assert_eq!(
@@ -197,7 +197,7 @@ fn a_locked_beyond_the_separator_is_not_this_lines_own() {
 fn the_command_runs_bracketed_by_a_look_at_what_a_resolve_reads() {
     let line = watched_from_inside(&words("cargo xtask verify-ui commit"));
     assert_eq!(line[..2], words("sh -c")[..]);
-    // The command arrives as arguments, never as text to re-quote.
+    // The command arrives as arguments.
     assert_eq!(line[3], IMAGE);
     assert_eq!(line[4..], words("cargo xtask verify-ui commit")[..]);
     let script = &line[2];

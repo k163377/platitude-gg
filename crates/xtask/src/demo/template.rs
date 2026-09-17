@@ -1,4 +1,4 @@
-//! The built repository a run copies, rather than building its own.
+//! The built repository a run copies.
 //!
 //! A preset is a run of git subprocesses — twenty-nine for `basic`,
 //! thirty-three for `stack` — and a side of the gate builds one per verb,
@@ -12,20 +12,20 @@
 //! that kept them would push into the template and take the next run's
 //! worktrees with it, so a copy is rebound as it is made.
 //!
-//! **That path is not spelled one way.** What this process hands git
+//! **That path is spelled two ways.** What this process hands git
 //! comes out of `std::env::temp_dir()`, which on Windows is the profile's
 //! short name (`C:/Users/WRONGW~1/…`); git resolves a worktree's own
 //! paths and writes the long one (`C:/Users/wrongwrong/…`). One
 //! directory, two names, two files of one repository (measured). So the
-//! template stands beside the runs rather than in a directory of its own,
-//! and what gets rewritten is the single path segment they differ in: a
+//! template stands beside the runs, and what gets rewritten is the
+//! single path segment they differ in: a
 //! leaf that is ASCII, that neither git nor Windows respells, and that is
 //! the whole of the difference between the template and the copy.
 //!
 //! A preset that names its own path anywhere but git's metadata is
-//! refused rather than rebound — rewriting a tracked file would leave the
-//! copy dirty where the template was clean — and refused presets go on
-//! being built a run at a time.
+//! refused — rewriting a tracked file would leave the copy dirty where
+//! the template was clean — and refused presets go on being built a run
+//! at a time.
 
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -144,12 +144,12 @@ fn leaf(preset: &str, name: &str) -> String {
 /// What a template is good for: the task runner that built it, and the
 /// git it ran to do so.
 ///
-/// The runner's own bytes rather than the demo sources — this is the
-/// build that types the git commands, and it is one file to read instead
-/// of a list of them to keep in step with the directory. The git version
-/// is in it because the repository is that git's output: the runs that
-/// stand a copy in for git (`--old-git`) build their repositories with the
-/// real one, so what changes this is an upgrade rather than a verb.
+/// The runner's own bytes — this is the build that types the git
+/// commands, and it is one file to read, in step with the directory by
+/// itself. The git version is in it because the repository is that
+/// git's output: the runs that stand a copy in for git (`--old-git`)
+/// build their repositories with the real one, so what changes this is
+/// an upgrade.
 fn fingerprint() -> &'static str {
     static FINGERPRINT: OnceLock<String> = OnceLock::new();
     FINGERPRINT.get_or_init(|| {
@@ -185,15 +185,15 @@ fn git_version() -> String {
 /// writes absolute paths into its own files and reads them back; a file
 /// git *tracks* is content, and rewriting content would leave the copy
 /// dirty where the template was clean — so a preset that commits its own
-/// path is one this cannot copy, and says so rather than copying it
-/// wrongly.
+/// path is one this cannot copy, and says
+/// so.
 fn rebind(dir: &Path, from: &str, to: &str) -> Result<(), String> {
     walk(dir, &mut |path, kind| {
         match kind {
             Entry::Dir => return Ok(()),
             Entry::File => {}
-            // Refused rather than followed: a copy is made with `walk` as
-            // well, and what it cannot copy the template cannot promise.
+            // Refused: a copy is made with `walk` as well, and what it
+            // cannot copy the template cannot promise.
             Entry::Other => {
                 return Err(format!(
                     "{} is neither a file nor a directory",
@@ -224,7 +224,7 @@ fn rebind(dir: &Path, from: &str, to: &str) -> Result<(), String> {
 /// Copies a template's contents into `root`, rebound to it on the way.
 ///
 /// The markers stay behind: they say what the template is, and a run is
-/// handed a repository rather than a template.
+/// handed a repository.
 fn copy_in(template: &Path, leaf: &str, root: &Path) -> Result<(), String> {
     let into = root
         .file_name()
@@ -277,7 +277,7 @@ enum Entry {
 
 /// Hands every entry under `dir` to `visit`, directories before what is
 /// in them. Depth-first and iterative: a repository of linked worktrees
-/// is deep enough to be worth not spending stack on.
+/// is deep enough to keep off the stack.
 fn walk(
     dir: &Path,
     visit: &mut impl FnMut(&Path, Entry) -> Result<(), String>,
@@ -312,17 +312,16 @@ fn is_marker(rest: &Path) -> bool {
     rest == Path::new(READY) || rest == Path::new(REFUSED)
 }
 
-/// Whether `path` is one of git's own files rather than something git
-/// tracks: under the `.git` a work tree stands on, or under a bare
-/// repository — a preset's `origin.git`, and the clone that seeds it,
-/// name their paths in the files a work tree names them in, and git
-/// tracks nothing in either.
+/// Whether `path` is one of git's own files: under the `.git` a work
+/// tree stands on, or under a bare repository — a preset's
+/// `origin.git`, and the clone that seeds it, name their paths in the
+/// files a work tree names them in, and git tracks nothing in
+/// either.
 ///
-/// A bare repository is recognised by what is in it rather than by the
-/// `.git` its name happens to end with: a directory called `foo.git`
-/// that git does not keep is a directory a preset could commit, and
-/// rewriting what it holds would leave the copy dirty where the template
-/// was clean.
+/// A bare repository is recognised by what is in it: a directory
+/// called `foo.git` that git does not keep is a directory a preset
+/// could commit, and rewriting what it holds would leave the copy
+/// dirty where the template was clean.
 fn under_git_metadata(root: &Path, path: &Path) -> bool {
     let Ok(rest) = path.strip_prefix(root) else {
         return false;
@@ -340,9 +339,9 @@ fn under_git_metadata(root: &Path, path: &Path) -> bool {
     false
 }
 
-/// Whether `haystack` holds `needle`. Written out rather than reached for
-/// because xtask depends on std alone, and a repository's pack files go
-/// through here.
+/// Whether `haystack` holds `needle`. Written out because xtask
+/// depends on std alone, and a repository's pack files go through
+/// here.
 fn holds(haystack: &[u8], needle: &[u8]) -> bool {
     let Some((first, rest)) = needle.split_first() else {
         return false;
@@ -358,7 +357,7 @@ fn holds(haystack: &[u8], needle: &[u8]) -> bool {
 }
 
 /// Replaces a file's contents and leaves its mode as it was: a hook is a
-/// hook because it is executable, and rewriting one must not disarm it.
+/// hook because it is executable, and rewriting one leaves it runnable.
 fn write_keeping_mode(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let mode = std::fs::metadata(path).map(|meta| meta.permissions()).ok();
     std::fs::write(path, bytes).map_err(|e| format!("writing {}: {e}", path.display()))?;

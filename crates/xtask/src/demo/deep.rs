@@ -2,21 +2,21 @@
 //! the window's cut, the stand-in for a scrolled-off HEAD and a branch
 //! standing off the window altogether have to be looked at against — and,
 //! built the same way, the one deep enough that rewriting it stands for
-//! seconds rather than an instant.
+//! seconds.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::repo::DemoRepo;
 
 /// Commits `deep` puts down. Past `session::DEFAULT_LOG_LIMIT` (2000) by
-/// enough that the cut lands well inside the history rather than on its
-/// oldest row — a window that stopped one commit short of the end says
-/// the same thing as one that stopped in the middle, and only the second
-/// is what the footer is for.
+/// enough that the cut lands well inside the history — a window that
+/// stopped one commit short of the end says the same thing as one
+/// that stopped in the middle, and only the second is what the footer
+/// is for.
 const DEEP_COMMITS: u64 = 2100;
-/// How far apart they sit. Its own march rather than the shared
-/// half-hour tick: 2100 of those would land the newest commit two months
-/// from now.
+/// How far apart they sit. A march of its own: 2100 of the shared
+/// half-hour ticks would land the newest commit two months from
+/// now.
 const DEEP_STEP_SECS: u64 = 60;
 
 /// One commit in the stream: the ref it lands on, its own mark, the
@@ -49,9 +49,9 @@ fn deep_first(now: u64) -> u64 {
 /// More commits than the graph loads at once, so the pane has to say
 /// where it stopped (the window cut's lanes and its one line).
 ///
-/// Written as a single `fast-import` stream rather than a commit at a
-/// time: a process per commit puts a minute on every run that asks for
-/// this shape, and one process is a fraction of a second
+/// Written as a single `fast-import` stream: a process per commit puts
+/// a minute on every run that asks for this shape, and one process is a
+/// fraction of a second
 /// (ci/baseline/code-costs-windows-x64.md §コーパス生成). One blob serves
 /// every commit — what this preset is for is the *count*, and a tree that
 /// changed on every step would only make the import bigger.
@@ -98,7 +98,7 @@ fn deep_history(repo: &mut DemoRepo, side: SideLine) -> Result<(), String> {
         SideLine::Live => {
             // Marks well clear of main's (2..=DEEP_COMMITS + 1), and dated
             // against main's own march so the tip lands a little under the
-            // newest commits rather than at the far end of the window.
+            // newest commits.
             let fork = DEEP_COMMITS - DEEP_FORK_BACK;
             for n in 1..=DEEP_SIDE_COMMITS {
                 let from = if n == 1 {
@@ -120,7 +120,7 @@ fn deep_history(repo: &mut DemoRepo, side: SideLine) -> Result<(), String> {
         SideLine::Parked => {
             // The same fork point, and dated down there with it: half a
             // step past its parent, so it takes a place of its own in the
-            // date order rather than tying with a commit on main.
+            // date order.
             let fork = DEEP_COMMITS - DEEP_FORK_BACK;
             deep_commit(
                 &mut stream,
@@ -156,8 +156,8 @@ const DEEP_DETACH_BACK: u64 = 800;
 /// what [`deep_parked`] is for.
 const DEEP_FORK_BACK: u64 = 2080;
 
-/// Commits on that second line. Enough to be a line rather than a spur,
-/// few enough that its tip stays well below the newest commits.
+/// Commits on that second line. Enough to be a line, few enough that
+/// its tip stays well below the newest commits.
 const DEEP_SIDE_COMMITS: u64 = 6;
 
 /// Where the second line's fast-import marks start — clear of main's,
@@ -200,7 +200,7 @@ pub(super) fn deep_parked(repo: &mut DemoRepo) -> Result<(), String> {
 /// - the second line forks below the window's cut and its tip sits above
 ///   HEAD, so **both lanes are live at both ends**: the stand-in has a
 ///   neighbouring lane running past under it, which is what shows that
-///   it draws its own lanes rather than the ones it is covering
+///   it draws its own lanes
 pub(super) fn deep_detached(repo: &mut DemoRepo) -> Result<(), String> {
     deep_history(repo, SideLine::Live)?;
     repo.git(&["switch", "--detach", &format!("main~{DEEP_DETACH_BACK}")])?;
@@ -225,9 +225,9 @@ const REPLAY_BASE_MARK: u64 = 1_000;
 /// One commit that actually changes something: its own blob, at its own
 /// path. `deep` hands every commit the same blob because what that
 /// preset is for is the *count* — but a replay applies each commit's
-/// diff, and a commit whose diff is empty is one git drops rather than
-/// replays. Each at a path of its own, so three hundred of them collide
-/// over nothing.
+/// diff, and a commit whose diff is empty is one git drops. Each at a
+/// path of its own, so three hundred of them collide over
+/// nothing.
 fn replay_commit(
     stream: &mut String,
     on: &str,
@@ -260,10 +260,10 @@ fn replay_commit(
 
 /// A rewrite that can be watched happening: `main` carries
 /// [`REPLAY_COMMITS`] of its own and `base` one commit the fork never
-/// saw, so `rebase base` replays every one of them rather than fast
-/// forwarding.
+/// saw, so `rebase base` replays every one of them, step by
+/// step.
 ///
-/// **What it is for is the running state, not the result.** Every other
+/// **What it is for is the running state.** Every other
 /// rebase preset builds a replay that is already over — stopped, staged,
 /// finished — and the screen those photograph is a landing. This one is
 /// the only shape in which the badge is counting steps out, the left

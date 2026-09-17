@@ -1,12 +1,12 @@
 //! The line each verb has to be caught saying, for the verbs whose
 //! failure the camera cannot see (`Outcome::must_say`).
 //!
-//! A table rather than a branch in the run: a verb that fails invisibly
-//! is one row here, and the run stays about running.
+//! A table: a verb that fails invisibly is one row here, and the run
+//! stays about running.
 //!
-//! The rows are data rather than match arms so that the tables can be
-//! walked, and the two walks in `tests` are what let them be split by
-//! subject at all. `no_verb_is_claimed_twice` catches a verb written
+//! The rows are data, so the tables can be walked, and the two walks in
+//! `tests` are what let them be split by subject at all.
+//! `no_verb_is_claimed_twice` catches a verb written
 //! onto two of the files, which a chain of `match`es would hand to
 //! whichever was asked first without a word. And
 //! `every_verb_is_one_the_drivers_dispatch` catches the failure this
@@ -15,8 +15,8 @@
 //! picture that reads the same either way (rules-refs/app-ui.md).
 //!
 //! Which file a verb sits in carries nothing of its own: the tables are
-//! walked in the order [`TABLES`] lists them and no verb may stand on
-//! two, so a verb that moves house changes no answer. Grep the verb.
+//! walked in the order [`TABLES`] lists them and each verb stands on
+//! one, so a verb that moves house changes no answer. Grep the verb.
 
 mod diff;
 mod fetch;
@@ -58,10 +58,10 @@ impl Arg {
 
 /// One verb's line, and the arguments that want a different one.
 ///
-/// `plain` is a field rather than the last row because a verb that
-/// answered no argument at all would put `must_say` back to `None` —
-/// which is the one failure that passes. As a field, the compiler asks
-/// for it.
+/// `plain` is a field, and the compiler asks for it — a
+/// verb that answered no argument at all would put
+/// `must_say` back to `None`, which is the one failure that
+/// passes.
 pub(super) struct Verb {
     pub(super) name: &'static str,
     /// The arguments with a line of their own, narrowest first.
@@ -170,7 +170,7 @@ mod tests {
     }
 
     /// The narrow rows come first, and what no row claims falls to
-    /// `plain` rather than to silence.
+    /// `plain`.
     #[test]
     fn the_narrow_row_answers_before_the_plain_one() {
         assert_eq!(

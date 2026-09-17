@@ -8,10 +8,10 @@ use super::payload::string_field;
 use crate::subprocess::common_git_dir;
 use crate::subprocess::git_query;
 
-/// The words a note reaches for to say who asked, rather than what the
-/// code must hold to. Japanese in a .rs or .qml file is already against
-/// the language rule, so a bare match is evidence enough — nothing here
-/// has to tell a comment from code to be sure of what it found.
+/// The words a note reaches for to say who asked. Japanese in a .rs or
+/// .qml file is already against the language rule, so a bare match is
+/// evidence enough — nothing here has to tell a comment from code to be
+/// sure of what it found.
 const ATTRIBUTIONS: [&str; 6] = [
     "ユーザー判断",
     "ユーザー決定",
@@ -76,8 +76,8 @@ pub(super) fn pre_comment(input: &str) -> Result<bool, String> {
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
          \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
          \"This commit would add a dated attribution note: {listed}{rest}. \
-         A comment carries the present-tense constraint or the trap, and \
-         nothing else: who asked, when they asked and what was decided \
+         A comment carries the present-tense constraint or the trap: \
+         who asked, when they asked and what was decided \
          instead already live in the transcript and in git log, and the \
          note in the source goes stale the moment the code moves \
          (CLAUDE.md Rust 規約). Delete the attribution, keep whatever rule \
@@ -176,8 +176,8 @@ fn added_lines(diff: &str) -> Vec<String> {
 }
 
 /// Whether `path` is this module. It names every word it hunts, so its own
-/// lines are never evidence — the gate would otherwise refuse the commit
-/// that adds it. `file!()` keeps the exemption on the module however the
+/// lines are exempt — the gate would otherwise refuse the commit that
+/// adds it. `file!()` keeps the exemption on the module however the
 /// module is moved or renamed.
 fn hunts_itself(path: &str) -> bool {
     path.replace('\\', "/")
@@ -196,8 +196,8 @@ fn attribution_in(line: &str) -> Option<&'static str> {
 }
 
 /// Whether the text opens with a date: four digits and the month behind a
-/// dash. What follows the proposal is what says it was stamped with a day
-/// rather than written as a sentence.
+/// dash. What follows the proposal is what says it was stamped with a
+/// day.
 fn starts_with_date(text: &str) -> bool {
     let mut characters = text.trim_start().chars();
     (0..4).all(|_| characters.next().is_some_and(|c| c.is_ascii_digit()))
@@ -222,7 +222,7 @@ mod tests {
             attribution_in("// **fontMd, not a step down** (2026-08-30 ユーザー指示)."),
             Some("ユーザー指示")
         );
-        // A proposal that is a sentence, not a stamp, and code that only
+        // A proposal that is a sentence, and code that only
         // looks like a date.
         assert_eq!(attribution_in("// 提案 is a word, not a note"), None);
         assert_eq!(attribution_in("    let stamp = \"2026-08-30\";"), None);

@@ -6,8 +6,8 @@
 //! its own, so they run in parallel and read nobody's identity or hooks.
 //!
 //! Steps are faked (`PGG_GATE_FAKE_LOG`): what is under test is which
-//! steps a change owes and when they are asked again, not whether cargo
-//! passes. The repository is a miniature of this workspace's shape —
+//! steps a change owes and when they are asked again. The repository is
+//! a miniature of this workspace's shape —
 //! enough for the dependency graph to have edges to follow.
 
 mod support;
@@ -15,7 +15,7 @@ mod support;
 /// The runner's own wait module, read in by path: this crate cannot `use`
 /// a binary crate's modules, and what the suite waits with has to be the
 /// one budget the runner's own tests wait with (`wait::Budget::SUITE`).
-/// What the suite does not call is the runner's, not dead.
+/// What the suite does not call is still the runner's.
 #[expect(
     dead_code,
     reason = "the runner's module whole; the suite calls a part of it"

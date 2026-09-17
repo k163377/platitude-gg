@@ -5,7 +5,7 @@
 /// enough for paths (\\ \" \/). The payload is machine-produced JSON, so the
 /// first occurrence of a key like "file_path" is the tool input's.
 ///
-/// `\uXXXX` is deliberately not decoded: the harness writes non-ASCII as
+/// `\uXXXX` passes through as written: the harness writes non-ASCII as
 /// raw UTF-8, and a wrong four-byte guess would corrupt a path where
 /// passing the escape through merely fails a comparison loudly.
 pub(super) fn string_field(input: &str, key: &str) -> Option<String> {

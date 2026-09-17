@@ -38,7 +38,7 @@
 //! One thing does not survive the boundary: a worktree's `.git` is a file
 //! naming an absolute Windows path, which git inside reads as relative and
 //! cannot follow, so any git run with /work as its working directory calls
-//! it a broken repository rather than no repository. Nothing a run depends
+//! it a broken repository. Nothing a run depends
 //! on stands there — `verify-ui` starts the app outside every checkout,
 //! on a git configuration of its own (`verify::run`).
 
@@ -93,8 +93,8 @@ const TARGET_MOUNT: &str = "/work/target";
 const REGISTRY_MOUNT: &str = "/usr/local/cargo/registry";
 const OUT_MOUNT: &str = "/out";
 /// Where the demo repositories a run builds itself go, and — the reason
-/// it is a volume rather than the container's own `/tmp` — where the
-/// template each of them is copied from stands (`demo::template`).
+/// it is a volume — where the template each of them is copied from
+/// stands (`demo::template`).
 ///
 /// A container is one verb, so nothing built in it outlives it: without
 /// this, every run in here would build its template and then throw it
@@ -215,16 +215,16 @@ pub fn run(args: &[String]) -> Result<(), String> {
         crate::budget::Rank::Normal,
         &format!("linux {}", rest.join(" ")),
     )?;
-    // The one verb that is about a different machine rather than a
-    // different toolchain: it runs in the container even on Linux, because
-    // what it asks is whether a stock Ubuntu is enough.
+    // The one verb that is about a different machine: it runs in the
+    // container even on Linux, because what it asks is whether a stock
+    // Ubuntu is enough.
     if rest.first().is_some_and(|verb| verb == "bare") {
         let discover = rest.iter().any(|word| word == "--discover");
         return bare::bare(&root, discover);
     }
-    // The other verb that is about a machine rather than a toolchain, and
-    // the other one that stays in the container on Linux: what it asks is
-    // whether the suite passes with no network, which the host has.
+    // The other verb that is about a machine, and the other one that
+    // stays in the container on Linux: what it asks is whether the
+    // suite passes with no network, which the host has.
     if rest.first().is_some_and(|verb| verb == "offline") {
         if let Some(extra) = rest.get(1) {
             return Err(format!("offline takes no arguments (got {extra:?})"));
@@ -296,8 +296,8 @@ fn subcommand_at(rest: &[String]) -> Option<usize> {
 
 /// What to run inside: a cargo command, with `xtask` folded in when the
 /// subcommand is one of the task runner's own verbs, and `--locked`
-/// spelled on unless that subcommand is one that must not carry it
-/// ([`UNLOCKED_VERBS`]).
+/// spelled on unless that subcommand is one of
+/// [`UNLOCKED_VERBS`].
 ///
 /// A task-runner verb needs neither: `cargo xtask` is an alias that
 /// carries `--locked` already (.cargo/config.toml), and a second one
@@ -336,9 +336,9 @@ fn command_line(rest: &[String]) -> Vec<String> {
 /// Which image the command needs. Nothing here is a guess about Qt itself:
 /// either the command names only Qt-free packages, or it can reach the app.
 fn stage_for(rest: &[String]) -> &'static str {
-    // The subcommand rather than the first word, for the reason
-    // [`subcommand_at`] gives: `--offline test` is cargo's option and
-    // then the verb that reaches the app.
+    // The subcommand, for the reason [`subcommand_at`] gives:
+    // `--offline test` is cargo's option and then the verb that reaches
+    // the app.
     let Some(verb) = subcommand_at(rest).map(|at| rest[at].as_str()) else {
         // A bare `--shell`, or a line that is all options. The small
         // image opens now; --stage app asks for the other one.
@@ -369,8 +369,8 @@ fn stage_for(rest: &[String]) -> &'static str {
 /// toolchain pin or (for the app stage) the Qt version and the tag changes
 /// with it, so a stale image can never be the one that answers. Docker's
 /// layer cache keeps the rebuild cheap. FNV-1a over the files — a
-/// fingerprint, not a security claim, and the tree is LF everywhere
-/// (.gitattributes) so it comes out the same on all three systems.
+/// fingerprint, and the tree is LF everywhere (.gitattributes) so it
+/// comes out the same on all three systems.
 fn image_tag(root: &Path, stage: &str) -> Result<String, String> {
     let mut inputs = vec!["ci/linux/Dockerfile", "rust-toolchain.toml"];
     if stage != "core" {
@@ -452,9 +452,9 @@ fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
 /// Two things keep this from taking something out from under anybody.
 /// Docker refuses to remove an image a container is still running, so a
 /// run in progress next door is safe by construction; and what a rebuild
-/// costs after this is the layer cache, not the download, because the
-/// layers stay. Every removal is printed: a command that quietly frees
-/// gigabytes is one nobody can audit.
+/// costs after this is the layer cache, because the layers stay. Every
+/// removal is printed: a command that quietly frees gigabytes is one
+/// nobody can audit.
 fn forget_older_images(stage: &str, keep: &str) {
     let prefix = format!("{IMAGE}:{stage}-");
     let Ok(out) = Command::new("docker")
@@ -503,8 +503,8 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
         .arg("--workdir")
         .arg(WORK)
         // The checkout is mounted, so anything in here writes the host's
-        // own files. What is generated from a run rather than typed says
-        // which machine ran it, and the container is never that machine
+        // own files. What a run generates says which machine ran it,
+        // and the container is never that machine
         // (`verify::options::census_line`).
         .arg("--env")
         .arg(format!("{IN_CONTAINER}=1"));
@@ -533,7 +533,7 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
     let status =
         crate::budget::watched(&mut cmd).map_err(|e| format!("failed to run docker: {e}"))?;
     if status.success() {
-        // The line as typed, not the one `bridge` wrote: that one says
+        // The line as typed: the one `bridge` wrote says
         // `--no-board` whether or not the caller did.
         keepsakes::onto_the_board(keepsake.as_ref().map(|out| out.dir.as_path()), command);
         return Ok(());
@@ -546,9 +546,9 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
 
 /// The files whose bytes decide what a cargo in there resolves, as the
 /// mount hands them over: the three at the root and **every member's own
-/// manifest**, which a resolve reads too. A glob rather than a list, so
-/// a member added to the workspace is not a member this forgets — the
-/// host's side of the same evidence reads the same set off the tree
+/// manifest**, which a resolve reads too. A glob, so a member
+/// added to the workspace is one this reads — the host's side of
+/// the same evidence reads the same set off the tree
 /// (`gate::evidence::read_to_resolve`). All of them are the host's own
 /// files, read across the boundary between a Windows checkout and a
 /// Linux container, which is the one thing about /work that the machine
@@ -579,7 +579,7 @@ const READ_TO_RESOLVE: [&str; 4] = [
 fn watched_from_inside(inside: &[String]) -> Vec<String> {
     // Unquoted so the glob is the shell's to expand; a pattern that
     // matches nothing stays as it was typed, and the test below reports
-    // it absent under its own name rather than passing over it.
+    // it absent under its own name.
     let looks = READ_TO_RESOLVE
         .map(|file| format!("{WORK}/{file}"))
         .join(" ");
@@ -643,7 +643,7 @@ fn here(root: &Path, command: &[String]) -> Result<(), String> {
         return Ok(());
     }
     // The child's own code, the way the container path reports it — a
-    // runner must not flatten a child's exit into an anonymous failure.
+    // runner carries a child's exit through.
     Err(match status.code() {
         Some(code) => format!("the command exited {code}"),
         None => "the command was killed".into(),
@@ -661,10 +661,10 @@ fn mount_path(path: &Path) -> String {
 /// directory would put back exactly what worktrees exist to prevent: one
 /// lock, one incremental cache, two sessions.
 fn volume(root: &Path, kind: &str) -> String {
-    // The last segment after either separator, rather than
-    // `Path::file_name`: the path being named is a Windows one whenever the
-    // host is Windows, and everywhere else a backslash is an ordinary
-    // character in a name, so `file_name` would answer with the whole path.
+    // The last segment after either separator: the path being named is
+    // a Windows one whenever the host is Windows, and everywhere else a
+    // backslash is an ordinary character in a name, so `file_name` would
+    // answer with the whole path.
     // Only the host ever calls this, so the difference is invisible in a
     // run and visible in a test — which is where it was found.
     let text = root.display().to_string();

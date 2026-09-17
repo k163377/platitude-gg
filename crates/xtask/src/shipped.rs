@@ -17,9 +17,9 @@
 //! to have finished complaining, then kills. There is no watchdog inside
 //! a shipped build to do it — that is a harness knob, and this is the
 //! build without one. The stand is the one wait in this runner whose end
-//! is the answer rather than a failure (`wait::stood`): what is asked of
-//! the window is that it stays, and one still there at the end of the
-//! stretch stood for at least that long.
+//! is the answer (`wait::stood`): what is asked of the window is that
+//! it stays, and one still there at the end of the stretch stood for
+//! at least that long.
 
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};

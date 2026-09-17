@@ -93,9 +93,9 @@ pub(super) fn warm(root: &Path, wanted: &Warmed) -> Option<Duration> {
     (!crate::still::build_ended_since(root, note.at)).then_some(age)
 }
 
-/// Leaves the note for the next invocation, stamped now — the runs are
-/// what warmed the cache, and they ended now, not when the invocation
-/// began. A note that could not be written costs the next invocation one
+/// Leaves the note for the next invocation, stamped now — the
+/// runs are what warmed the cache, and they ended now. A note
+/// that could not be written costs the next invocation one
 /// discarded run, and says so.
 pub(super) fn note(root: &Path, warmed: &Warmed) {
     let path = note_path(root);

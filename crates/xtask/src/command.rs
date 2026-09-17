@@ -91,8 +91,8 @@ impl Where {
     }
 }
 
-/// Who decides whether this session may run the command — by reference,
-/// never by a second copy of the condition.
+/// Who decides whether this session may run the command — by reference
+/// to where the condition stands.
 pub(crate) enum Permission {
     /// Nothing beyond the pre-shell hook's ordinary reading of the line.
     Plain,

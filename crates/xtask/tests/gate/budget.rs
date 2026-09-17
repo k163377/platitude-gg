@@ -42,8 +42,8 @@ impl Holder {
     /// Waits until this holder is standing in the queue — the word it
     /// writes the instant its ticket is in the ledger.
     ///
-    /// **Said by the holder rather than read out of the ledger's
-    /// report.** A test that let a holder go while the next one had not
+    /// **Said by the holder.** A test that let a holder go while the
+    /// next one had not
     /// arrived would watch the room go to whoever *had* — and then wait
     /// out its own ceiling for the one it meant to admit, which is a
     /// deadlock the report cannot be read for: it says "0 landing(s) in
@@ -113,7 +113,7 @@ impl Drop for Holder {
 }
 
 /// A repository for the holders to share a budget beside. The sandbox's
-/// own, so the git configuration is the suite's rather than the user's.
+/// own, so the git configuration is the suite's.
 fn sandbox(name: &str) -> (Sandbox, PathBuf) {
     let sandbox = Sandbox::new(name);
     let repo = sandbox.repo.clone();
@@ -175,7 +175,7 @@ fn standing(sandbox: &Sandbox, repo: &Path) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-/// The budget is one machine's, not one process's: what the first holds,
+/// The budget is one machine's: what the first holds,
 /// the second waits for, across processes that never met.
 #[test]
 fn a_second_process_waits_for_the_room_the_first_is_holding() {

@@ -32,10 +32,10 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "merge_stopped wip=true conflicts=true error=false log=false msg=true cont=false",
     },
     // The same landing for the three that step. `cont=` flips over
-    // from `merge-stops`: their `--continue` is a step onward
-    // rather than the commit somebody is writing, so the row stays —
-    // and a card with a row missing frames exactly like one that has
-    // it.
+    // from `merge-stops`: their `--continue` is a step onward, where
+    // a merge's is a commit being written, so the row stays
+    // — and a card with a row missing frames exactly like one that
+    // has it.
     Verb {
         name: "cherry-pick-stops",
         when: &[],
@@ -56,7 +56,7 @@ pub(super) const TABLE: &[Verb] = &[
     // off the rows as the card opens and one arriving a frame later
     // photograph the same, and only the second moves the card's edge out
     // from under the hand (規約 §行が読む答えはどこから来るか). Two runs
-    // because one answer is not an answer — `v0.2` sits on `origin/main`
+    // because one answer proves nothing — `v0.2` sits on `origin/main`
     // so nothing above it is pushed, and `feature/topic-a` forks below
     // that tip so the range reaches back over it.
     Verb {
@@ -81,9 +81,9 @@ pub(super) const TABLE: &[Verb] = &[
     // The rewrites turned down before git is asked. **The picture is
     // half the claim** — a bar came down over the graph — and the line
     // is the other half: which of the five it was, and that the report
-    // reached the page at all rather than the log coming up in its place
-    // (デザイン規約 §答えの要らない報せ). `ref=/` because a rewrite is about no
-    // ref: the row it was pressed on is what it is about, and the row is
+    // reached the page at all (デザイン規約 §答えの要らない報せ).
+    // `ref=/` because a rewrite is about no ref: the row it was
+    // pressed on is what it is about, and the row is
     // in the picture.
     Verb {
         name: "fold-across-merge",
@@ -190,20 +190,20 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "plan_escape discards=true took=false held=true dirty=true",
     },
-    // The face the plan opens with, before its rows exist. Every half of
-    // it is invisible: an empty pane photographs the same whether a read
-    // is out, was refused, or was never asked for — and `standing=false`
-    // is what says the picture is of the wait rather than of a plan whose
-    // rows happen not to have been drawn yet.
+    // The face the plan opens with, before its rows exist. Every half
+    // of it is invisible: an empty pane photographs the same whether a
+    // read is out, was refused, or was never asked for — and
+    // `standing=false` is what says the picture is of the wait
+    // itself.
     Verb {
         name: "plan-loading",
         when: &[],
         plain: "plan_loading held=true shown=true standing=false rows=0 onto=false",
     },
     // The screen while git is still replaying. The picture holds the
-    // badge and the ring; what it cannot say is that either of them was
-    // caught from a real edge rather than left standing — `counted=true`
-    // is git's own step count read off `rebase-merge/msgnum`, and the
+    // badge and the ring; what it cannot say is that either of them
+    // was caught from a real edge — `counted=true` is git's own step
+    // count read off `rebase-merge/msgnum`, and the
     // numbers after it are whatever the replay had reached.
     Verb {
         name: "replay-running",
@@ -239,7 +239,7 @@ pub(super) const TABLE: &[Verb] = &[
     // The plan walked away with a reword half-written. The boxes are the
     // plain amend's again the moment it does, and the same two boxes are
     // drawn either way — so the whole claim is that what rests in them is
-    // this commit's own message and not the plan's.
+    // this commit's own message.
     Verb {
         name: "plan-reword-out",
         when: &[],
@@ -248,11 +248,11 @@ pub(super) const TABLE: &[Verb] = &[
     // The other text the same closing plan finds in the boxes: an amend the
     // reader had half written before any plan existed, on a row the plan
     // never asked to move off. `restored=` says the boxes rest on the
-    // commit's own message, so what stands in them is unsaved rather than
-    // written — and `kept=` says it is still the reader's sentence. Nobody
-    // can retype it from the screen, so losing it is not a redraw.
-    // `guard=false` is the other side of that: this text is not the plan's
-    // to take, so Cancel must not wear the hold that says the press costs
+    // commit's own message, so what stands in them is unsaved — and
+    // `kept=` says it is still the reader's sentence. Nobody can retype
+    // it from the screen, so losing it is not a redraw. `guard=false` is
+    // the other side of that: this text is the reader's, so Cancel stays
+    // a plain press, where the hold would say the press costs
     // something (`plan-fold-carry` photographs the side that does).
     Verb {
         name: "plan-amend-kept",
@@ -270,12 +270,12 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "plan_details_held row=1 oid=true outside=true diff=false centre=graph",
     },
-    // And the warning the standing plan was keeping off the boxes: whether
-    // a remote already has the commit rides beside HEAD rather than being
-    // asked on the edge of typing, so a plan that stood over the boxes
-    // cannot have spent it. Typing again after it closes has to find the
-    // boxes dirty on HEAD's own row — nothing in the picture says which
-    // commit the warning is about.
+    // And the warning the standing plan was keeping off the boxes:
+    // whether a remote already has the commit rides beside HEAD, so a
+    // plan that stood over the boxes cannot have spent it. Typing again
+    // after it closes has to find the boxes dirty on HEAD's own row —
+    // nothing in the picture says which commit the warning is
+    // about.
     Verb {
         name: "plan-reword-ask",
         when: &[],

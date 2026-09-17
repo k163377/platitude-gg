@@ -4,14 +4,14 @@
 //! Every lock in this runner is a `File` the process holds — `flock` on
 //! Linux, `LockFileEx` on Windows — and what differs between the two
 //! ways of releasing one is who else is still holding it afterwards.
-//! `flock` goes with the open file description rather than with the
-//! handle, and a fork copies every description a process has, so a lock
-//! released by *closing* the file stands until the last child forked
-//! over that instant has reached its `execve`: 200 releases in 200,000
-//! were carried that way against a neighbouring thread spawning
-//! throughout, where an explicit unlock was 0 in 200,000. `LOCK_UN`
-//! reaches the description itself, whoever holds a copy of it; a close
-//! only lets go of this process's own reference to it.
+//! `flock` goes with the open file description, and a fork copies
+//! every description a process has, so a lock released by *closing*
+//! the file stands until the last child forked over that instant has
+//! reached its `execve`: 200 releases in 200,000 were carried that
+//! way against a neighbouring thread spawning throughout, where an
+//! explicit unlock was 0 in 200,000. `LOCK_UN` reaches the
+//! description itself, whoever holds a copy of it; a close only lets
+//! go of this process's own reference to it.
 //!
 //! Windows carries nothing either way — the handles opened here are not
 //! inheritable, and `LockFileEx` does not follow one into a child — so

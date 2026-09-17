@@ -26,12 +26,12 @@ pub const ALWAYS: [&str; 5] = ["structure", "waits", "docs", "verbs", "fmt"];
 /// the child's `execve` closes the error pipe — but with a thread per
 /// core the suite is forking constantly and every neighbour sees it.
 ///
-/// Hence a retry on the error rather than a wait for the window: every
+/// Hence a retry on the error: every
 /// attempt is the real run, and the first answer that is not "busy" is
 /// the answer. The window belongs to another process's scheduling, so the
-/// retries run under the suite's budget rather than a second of their
-/// own, and an image still busy at the end of it reaches the caller as
-/// the failure it is — a defect, not slowness. (`run_published_helper` in
+/// retries run under the suite's budget, and an image still busy at
+/// the end of it reaches the caller as the failure it is — a defect.
+/// (`run_published_helper` in
 /// platitude-core's suite carries the same loop over the todo helper.)
 pub fn output_past_a_busy_image(
     command: &mut Command,
@@ -170,8 +170,8 @@ impl Sandbox {
 
     /// The same landing under a session's own mark, for the claim on the
     /// landed seat: whose it is decides whether it is handed back. The
-    /// marks are set rather than inherited — the run that started these
-    /// tests may be a session itself, and its id must not be the answer.
+    /// marks are set explicitly — the run that started these tests may
+    /// be a session itself, and its id would otherwise be the answer.
     pub fn land_as(&self, branch: &str, session: &str) -> (bool, String) {
         self.landing(Path::new(EXE), branch, Some(session))
     }
@@ -209,9 +209,9 @@ impl Sandbox {
         text.lines().map(str::to_string).collect()
     }
 
-    /// The steps that were told to reuse a release rather than build one
+    /// The steps that were told to reuse a release
     /// (`--no-build`), since the last look. Kept beside the fake log
-    /// rather than in it, because every other test reads that as a set
+    /// in its own file, because every other test reads that as a set
     /// of step ids.
     pub fn told_not_to_build(&self) -> BTreeSet<String> {
         let path = PathBuf::from(format!("{}.no-build", self.fake_log.display()));
@@ -398,7 +398,7 @@ impl Drop for Sandbox {
 }
 
 /// The hook as checked in, with one line changed: the verdict is this
-/// very binary's rather than `cargo run`'s, so the script's own
+/// very binary's, so the script's own
 /// structure — the state check, the ref match, the tree it moves to —
 /// is what runs in the sandbox.
 fn checked_in_hook() -> String {

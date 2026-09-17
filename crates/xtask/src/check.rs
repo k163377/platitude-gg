@@ -95,7 +95,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         xtask(&["waits"]),
         // And again: a torn markdown block compiles nothing and shows
         // nothing in the source, so it is worth a second before the ten
-        // minutes rather than after them.
+        // minutes.
         xtask(&["docs"]),
         // The QtTest files, which compile nothing of the app either: the
         // product's QML is staged into an import tree and handed to Qt's
@@ -205,7 +205,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// sides can speak at once without shredding each other's lines; the start
 /// and verdict lines carry the liveness.
 ///
-/// A file rather than a pipe, so this always comes back: reading a pipe to
+/// A file, so this always comes back: reading a pipe to
 /// EOF waits on every process that inherited its write end, and one
 /// straggler a killed or finished child left behind (a wedged git, an
 /// orphaned test binary) would hold the whole check open after every test
@@ -285,8 +285,8 @@ fn run_side(side: &str, ground: &Ground<'_>, steps: &[Vec<String>]) -> Vec<Strin
         let at = Instant::now();
         let outcome = run_step(root, step, &log, &room);
         drop(room);
-        // Lossy, never empty-on-error: one localized byte in a linker or
-        // Qt line must not blank a failure's whole log.
+        // Lossy: one localized byte in a linker or Qt line would
+        // otherwise blank a failure's whole log.
         let text = String::from_utf8_lossy(&std::fs::read(&log).unwrap_or_default()).into_owned();
         let secs = at.elapsed().as_secs();
         match outcome {
@@ -342,7 +342,7 @@ pub(crate) fn tail_of(text: &str) -> String {
 }
 
 /// One step against its log file: spawned with both streams on the file,
-/// watched rather than awaited. `Ok` is the step's own verdict; `Err` is a
+/// watched. `Ok` is the step's own verdict; `Err` is a
 /// ceiling or a spawn failure — the reasons a check used to sit forever.
 /// The gate runs its steps through here too.
 pub(crate) fn run_step(
@@ -367,7 +367,7 @@ pub(crate) fn run_step(
     // ticket of its own (`crate::budget`).
     crate::budget::under(&mut command);
     // So that a step ended at a ceiling takes its cargo's rustc with it,
-    // rather than leaving one holding this side's build lock (`reap`).
+    // and this side's build lock stays free (`reap`).
     crate::reap::own_group(&mut command);
     let mut child = command
         .stdin(Stdio::null())

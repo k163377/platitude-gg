@@ -1,6 +1,6 @@
-//! The screens this machine has, outside the timed app process. Never change a mode.
+//! The screens this machine has, outside the timed app process. Read only.
 //!
-//! Read for two things, not one. It is evidence — what the modes were on
+//! Read for two things. It is evidence — what the modes were on
 //! either side of a run — and it is also what the run is *placed* against:
 //! the window is pinned onto one named screen (`perf::screen`), and that
 //! screen's nominal Hz is the ceiling the delivered frames are read
@@ -25,7 +25,7 @@ pub(super) struct Screen {
 }
 
 /// What the screens are right now: the evidence text, and the same thing
-/// read. Never an error — a machine whose modes cannot be read still
+/// read. Always answers — a machine whose modes cannot be read still
 /// takes a measurement, it just cannot pin the window or name a refresh
 /// rate, and the note says so once.
 pub(super) fn survey() -> (String, Vec<Screen>) {
@@ -116,7 +116,7 @@ fn query() -> Result<String, String> {
 
 // DEVMODEW's Unicode layout is fixed in wingdi.h on both x86 and x64.
 // Only read fields owned by EnumDisplaySettingsW, with dmSize initialized.
-// The setting is an integer nominal Hz, not fractional timing or VRR scanout.
+// The setting is an integer nominal Hz.
 // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-enumdisplaysettingsw
 #[cfg(windows)]
 const WINDOWS_QUERY: &str = r#"
@@ -187,7 +187,7 @@ mod tests {
         );
         assert_eq!(screens[1].hz, 180);
         assert!(screens[1].primary);
-        // A mode table that owned no frequency answers 0, not a guess.
+        // A mode table that owned no frequency answers 0.
         assert_eq!(screens[2].hz, 0);
     }
 

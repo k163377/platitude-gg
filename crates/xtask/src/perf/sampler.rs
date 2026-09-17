@@ -11,8 +11,8 @@
 //! (spawning one per 100ms sample would perturb the very thing being
 //! measured, and cannot keep the period either); Linux reads `/proc`
 //! directly. The peak, the last reading and the host conditions are all
-//! kept in [`Series`], which the parent reads whenever it likes rather
-//! than starting a second sampler to ask.
+//! kept in [`Series`], which the parent reads whenever it
+//! likes.
 
 use std::io::Write;
 #[cfg(windows)]
@@ -43,13 +43,13 @@ pub(super) struct Sample {
     pub(super) os_peak_working_set: Option<u64>,
     pub(super) private: u64,
     /// The OS device name of the screen the window was on, empty while
-    /// there is no window yet. Never the friendly name Qt reports — those
-    /// two do not match (rules-refs/app-ui.md §性能計測の画面対応).
+    /// there is no window yet. Qt's friendly name is a different
+    /// string (rules-refs/app-ui.md §性能計測の画面対応).
     pub(super) display: String,
     /// Whether the window in front belonged to the measured process.
-    /// Evidence rather than a gate: a visible window that is not in front
-    /// is still composited and still presents frames, and the app does
-    /// not always take the focus off the shell that started it.
+    /// Evidence: a visible window that is not in front is still
+    /// composited and still presents frames, and the app does not
+    /// always take the focus off the shell that started it.
     pub(super) foreground: bool,
     /// Whether somebody could have been looking at the screen — false
     /// says the session is locked, and a locked session stops the
@@ -68,7 +68,7 @@ pub(super) struct Sample {
     /// secure desktop: a UAC prompt, Ctrl+Alt+Del, the credential
     /// provider, and the moments either side of a lock. That desktop
     /// owns the display, so the frames stop there too — which is why
-    /// this reads false rather than falling through to true.
+    /// this reads false.
     pub(super) interactive: bool,
     /// Whether the display was off at this tick — `Some(true)` off,
     /// `Some(false)` on or dimmed, `None` where the power broadcast had
@@ -141,20 +141,20 @@ pub(super) struct Conditions {
     /// secure desktop came up.
     pub(super) interactive: usize,
     /// The longest unbroken stretch of those, which is what the gate
-    /// reads rather than the count: a lock lasts orders of magnitude
-    /// longer than the blink a focus change or a consent prompt leaves,
-    /// and refusing on one tick costs a whole retake plus the wait
-    /// before it. The first of the two is the stretch in progress and
-    /// says nothing once the run is over.
+    /// reads: a lock lasts orders of magnitude longer than the blink a
+    /// focus change or a consent prompt leaves, and refusing on one
+    /// tick costs a whole retake plus the wait before it. The first of
+    /// the two is the stretch in progress and says nothing once the run
+    /// is over.
     pub(super) blind: usize,
     pub(super) longest_blind: usize,
     /// Ticks taken with the display off, and ticks taken with it on or
     /// dimmed; short of `samples` together means the broadcast had not
-    /// answered. What they mean is the renderer's: a run drawing with
-    /// D3D must never see a dark tick — nothing is composited to a dark
+    /// answered. What they mean is the renderer's: a dark tick refuses
+    /// a run drawing with D3D — nothing is composited to a dark
     /// display, and its frames stop — while a run drawing with the
-    /// software scene graph (`--software`) may see either, and they are
-    /// evidence of the conditions rather than a gate.
+    /// software scene graph (`--software`) may see either, and they
+    /// are evidence of the conditions.
     pub(super) dark: usize,
     pub(super) lit: usize,
     /// Every screen the window was seen on, in the order first seen.
@@ -226,9 +226,9 @@ impl Conditions {
         }
     }
 
-    /// The averages, taken over the whole span rather than over the
-    /// per-tick numbers: an uneven cadence must not weight a short tick
-    /// like a long one.
+    /// The averages, taken over the whole span, so each
+    /// tick weighs what it lasted and an uneven cadence
+    /// is read as it fell.
     fn close(&mut self, first: Option<&Sample>, last: Option<&Sample>) {
         let (Some(first), Some(last)) = (first, last) else {
             return;
@@ -258,12 +258,12 @@ impl Conditions {
 
     /// Why this run says nothing about the machine it ran on.
     ///
-    /// **Not a host condition — the run's own.** A machine nobody
-    /// sampled has not been shown to have done anything wrong, so
-    /// taking the run again would produce the same nothing; what went
+    /// **The run's own.** A machine nobody sampled has not
+    /// been shown to have done anything wrong, so taking the
+    /// run again would produce the same nothing; what went
     /// missing is the sampler, and that travels with the run
-    /// (`measure::Spoiled`). It is also not covered by `--allow-noisy`,
-    /// which opens the gates on evidence rather than manufacturing it.
+    /// (`measure::Spoiled`). `--allow-noisy` leaves it
+    /// standing: that flag opens the gates on evidence.
     pub(super) fn unwatched(&self) -> Option<String> {
         (!self.watched()).then(|| {
             format!(
@@ -275,8 +275,8 @@ impl Conditions {
 
     /// Why this run is not a reading of the application, or nothing.
     /// `software` says the run drew with the software scene graph, whose
-    /// frames reach no display: the screen's state is then evidence
-    /// rather than a condition, and no helper injected input for it.
+    /// frames reach no display: the screen's state is then evidence,
+    /// and no helper injected input for it.
     ///
     /// Deliberately not a warning: a run taken while the machine was
     /// doing something else is not a slower application, and publishing
@@ -392,16 +392,16 @@ impl Conditions {
 
 /// How quiet a machine has to be for its numbers to be the application's.
 ///
-/// The shipped values are what this machine measures at rest with the
-/// window up; they are a gate on the host, not a performance budget
-/// (CLAUDE.md §性能予算).
+/// The shipped values are what this machine measures at rest with
+/// the window up; they are a gate on the host (CLAUDE.md
+/// §性能予算).
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Limits {
     /// The share of the screen's own refresh the scroll bench has to
-    /// deliver. Not a performance budget — a floor under "was anything
-    /// being presented at all": an occluded window, a screen that went to
-    /// sleep and a locked session all stop the frames, and all of them
-    /// otherwise read as a slow application (`perf::frames_delivered`).
+    /// deliver. A floor under "was anything being presented at all":
+    /// an occluded window, a screen that went to sleep and a locked
+    /// session all stop the frames, and all of them otherwise read as
+    /// a slow application (`perf::frames_delivered`).
     pub(super) frame_share: f64,
     pub(super) foreign_percent: f64,
     pub(super) peak_foreign_percent: f64,
@@ -416,11 +416,11 @@ impl Default for Limits {
     fn default() -> Self {
         Self {
             frame_share: 0.5,
-            // Where something is competing for the machine, not where a
-            // desktop is merely in use: an editor, a browser and a
-            // container runtime sitting open cost a fraction of a
-            // many-threaded machine that a window drawing on one thread
-            // and a GPU does not notice, and a gate under that refuses
+            // Where something is competing for the machine: an
+            // editor, a browser and a container runtime sitting
+            // open cost a fraction of a many-threaded machine that
+            // a window drawing on one thread and a GPU does not
+            // notice, and a gate under that refuses
             // every run anybody could actually take. What genuinely
             // spoils a reading is measured directly instead — the
             // session locking, the window going down or moving, the
@@ -454,9 +454,9 @@ fn percent(part: u64, whole: u64) -> f64 {
     part as f64 * 100.0 / whole as f64
 }
 
-/// What the sampler has seen so far. Shared rather than returned, so the
-/// parent can read the settled value off the same series that produced
-/// the peak instead of starting a second sampler beside it.
+/// What the sampler has seen so far. Shared, so the
+/// parent can read the settled value off the same
+/// series that produced the peak.
 #[derive(Debug, Default)]
 pub(super) struct Series {
     pub(super) peak_working_set: u64,
@@ -941,7 +941,7 @@ const DISPLAY_CLASS: &str = "public class PerfDisplay : System.Windows.Forms.Nat
 /// The whole of the Windows sampler, as one script held for the run.
 ///
 /// Three things it does that a `Get-Process` loop does not, all of them
-/// about the host rather than the process:
+/// about the host:
 ///
 /// * **Keeps the screen on.** [`AWAKE`] for the length of the run,
 ///   released at the end. A blanked screen stops the compositor
@@ -1063,15 +1063,15 @@ using System.Runtime.InteropServices;\n\
 }
 
 /// Waits until the machine is quiet enough to measure on, or says why it
-/// gave up. Between runs, never during one: what it costs is a second
-/// PowerShell, and the point is to spend it while nothing is being timed.
+/// gave up. Between runs: what it costs is a second PowerShell, and the
+/// point is to spend it while nothing is being timed.
 ///
-/// This is the answer to a person walking away mid-measurement: a
-/// session somebody locked by hand, or a build somebody started, is
-/// waited out instead of being published as a slow application. The
-/// screen is held awake across this wait as across everything else —
-/// [`keep_awake`] is held for the whole invocation, which is what makes
-/// the gap between two runs no darker than a run.
+/// This is the answer to a person walking away
+/// mid-measurement: a session somebody locked by hand, or a
+/// build somebody started, is waited out. The screen is held
+/// awake across this wait as across everything else —
+/// [`keep_awake`] is held for the whole invocation, which is
+/// what makes the gap between two runs no darker than a run.
 pub(super) fn wait_for_quiet(limits: &Limits, ceiling: std::time::Duration) -> Result<(), String> {
     if limits.quiet_percent.is_infinite() {
         return Ok(());
@@ -1140,10 +1140,10 @@ pub(super) fn wait_for_quiet(limits: &Limits, ceiling: std::time::Duration) -> R
 /// (a build with the screen off and nobody typing is otherwise idle,
 /// and the sleep timer runs out on it) while leaving the display to
 /// whoever and whatever is driving it. It is held for the invocation for
-/// the same reason the other is: the machine must not sleep between the
-/// runs any more than during them.
+/// the same reason the other is: the machine stays awake between the
+/// runs as during them.
 ///
-/// **It has to die with its parent, and `Drop` is not enough.** A killed
+/// **It has to die with its parent, past any `Drop`.** A killed
 /// xtask never unwinds — `taskkill`, a stopped task, an abort — and a
 /// loop that only `Drop` stops would then hold the machine awake (and,
 /// lit, inject input) for the rest of the machine's uptime, with nothing
@@ -1151,7 +1151,7 @@ pub(super) fn wait_for_quiet(limits: &Limits, ceiling: std::time::Duration) -> R
 /// killing by image name is denied). So the loop asks whether its parent
 /// is still there on every pass: the leak is bounded by one interval.
 ///
-/// **The parent is identified by when it started, not by its number.**
+/// **The parent is identified by when it started.**
 /// A pid is reused, and a wake loop that only asked whether *something*
 /// holds that number would outlive its parent for as long as whatever
 /// took the number lives.
@@ -1238,10 +1238,10 @@ pub(super) fn keep_awake(_display: bool) -> Awake {
 /// The machine with no process attached: whether anybody could be looking
 /// at it, and the whole-machine processor counters.
 ///
-/// Its own type rather than an empty [`Sample`]: a `Sample` would have to
-/// carry a second spelling of the sampler's field list, and every key but
-/// two of those falls back to zero when it is missing — so a key renamed
-/// on one side and not the other would read as a perfectly idle machine.
+/// Its own type: a `Sample` would have to carry a second spelling of
+/// the sampler's field list, and every key but two of those falls back
+/// to zero when it is missing — so a key renamed on one side and not
+/// the other would read as a perfectly idle machine.
 #[derive(Debug, Clone, Copy, Default)]
 struct Host {
     /// False says nobody could be looking at this desktop. The same
@@ -1294,8 +1294,8 @@ public static class PerfIdle {\n\
 }
 
 /// Nothing here has a desktop to lock, so the wait is only ever about the
-/// processor. USER_HZ ticks rather than 100ns ones — the ratio is
-/// unit-free, so only the shape has to match.
+/// processor. USER_HZ ticks — the ratio is unit-free, so only the shape
+/// has to match.
 #[cfg(target_os = "linux")]
 fn host_sample() -> Result<Host, String> {
     let stat = std::fs::read_to_string("/proc/stat").map_err(|e| e.to_string())?;
@@ -1333,7 +1333,7 @@ fn parse_host(line: &str) -> Option<Host> {
 /// and for `window` past `started` at the most. The window's end is
 /// nobody's failure — `measure` ends the run at a deadline of its own
 /// inside it, and this only has to outlast that — so the sampling is a
-/// stand watched rather than a wait (`wait::stood`).
+/// stand watched (`wait::stood`).
 #[cfg(target_os = "linux")]
 fn linux_sampler(
     pid: u32,

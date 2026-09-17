@@ -26,8 +26,8 @@ fn is_automation(name: &str) -> bool {
 
 /// The parent-environment names [`clear_automation`] removes, from an
 /// iterator of raw names. A name that is not Unicode cannot be read by
-/// the app's `std::env::var` and is left alone — and it must not stop
-/// the walk (`std::env::vars` panics on one, which is why this takes
+/// the app's `std::env::var` and is left alone — the walk goes on past
+/// it (`std::env::vars` panics on one, which is why this takes
 /// `vars_os`-shaped input).
 fn names_to_clear(names: impl Iterator<Item = OsString>) -> Vec<OsString> {
     names

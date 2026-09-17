@@ -71,8 +71,8 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   never made: the only shape a fetch fails in offline, so
                   the only one a run of failed fetches can be had on
                   (fetch-fail, fetch-resume) — and the only one where a
-                  push is turned down by nothing being there rather than
-                  by what is (push)
+                  push is turned down by nothing being there at
+                  all (push)
         plan      a straight run of five commits, origin holding all but the
                   newest and a branch on the base: what the interactive-
                   rebase plan opens over (rebase-plan, rebase-plan-run,

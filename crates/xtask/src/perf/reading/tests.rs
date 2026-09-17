@@ -45,7 +45,7 @@ fn watchdog_is_the_outer_ceiling_and_quit_is_rejected() {
         .expect("watchdog should parse");
     assert_eq!(parsed.watchdog_ms, 9000);
     let err = match parse(&["--quit-ms".into(), "2500".into(), "--no-open".into()]) {
-        Ok(_) => panic!("quit must not be accepted as a correctness clock"),
+        Ok(_) => panic!("the correctness clock is `perf_done`"),
         Err(err) => err,
     };
     assert!(err.contains("--watchdog-ms"));
@@ -53,7 +53,7 @@ fn watchdog_is_the_outer_ceiling_and_quit_is_rejected() {
 
 /// The attribution is a number the run was asked to take, of either
 /// build, and a run that lost it is not a whole reading. Asked by the
-/// field rather than the flag, which `parse` refuses off Windows.
+/// field, because `parse` refuses the flag off Windows.
 #[test]
 fn an_attribution_that_was_asked_for_is_required() {
     let mut opts = parse(&["--no-open".into()]).expect("bare window options should parse");
@@ -121,7 +121,7 @@ fn none_rejects_the_old_implicit_head_selection() {
     absorb("details request round trip elapsed_ms=50", &mut reading);
     assert!(
         missing(&reading, &opts)
-            .expect_err("HEAD must not be read")
+            .expect_err("HEAD stays unread")
             .contains("unselected")
     );
 }
@@ -284,8 +284,8 @@ fn requesting_a_frame_trace_rejects_a_partially_preserved_series() {
 }
 
 /// A shipped build says no `perf_*` line at all, so what it owes is the
-/// two the application logs on its own — and nothing the harness would
-/// have added, which it cannot produce and must not be asked for.
+/// two the application logs on its own — the harness's lines are
+/// beyond what it can produce.
 #[test]
 fn a_shipped_run_owes_the_two_lines_a_build_without_the_harness_can_say() {
     let opts = options(&["--repo", ".", "--shipped"]);

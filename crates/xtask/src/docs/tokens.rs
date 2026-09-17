@@ -3,12 +3,12 @@
 //!
 //! `Theme.qml` and `Metrics.qml` are where a token's value lives, and the
 //! comment saying why it is that value lives beside it. The document says
-//! which token a place uses and why that one rather than its neighbour —
+//! which token a place uses and why that one —
 //! everything a reader needs the Japanese for — and it prints the values
 //! so that a § can be read without opening the source.
 //!
-//! Printing them is the one part of that no person should be doing by
-//! hand. A value written in two places drifts on the edit that only
+//! Printing them is the machine's part of that. A value written in
+//! two places drifts on the edit that only
 //! remembers one of them, and the drift reads as correct in both: the
 //! document states a number, the source states a number, and nothing
 //! about either says which one anything is drawn with. So the value cells
@@ -168,8 +168,8 @@ enum Names {
     /// values the same way.
     Cell(usize),
     /// Inside the value cell, after the number (`` 640(`textWidth`) ``).
-    /// The layout table is keyed by the measurement a screen opens at
-    /// rather than by a token, because most of what it lists is the
+    /// The layout table is keyed by the measurement a screen opens at,
+    /// because most of what it lists is the
     /// starting width of something a hand then drags; the rows that do
     /// name a token still quote it.
     AfterValue,

@@ -10,7 +10,7 @@
 //! tells apart — and the verdict itself stays here where it can be
 //! tested. The script is POSIX sh: git for Windows runs hooks in its own
 //! sh, and Linux and macOS have one, so a single file serves all three
-//! (CLAUDE.md ビルド・テスト: no .ps1 / .bat).
+//! (CLAUDE.md ビルド・テスト: sh only).
 //!
 //! The installed copy lives beside the repository's own `.git`
 //! (`pgg-gate/hooks/`), where no worktree edits it and no seat's reset or
@@ -26,15 +26,15 @@ use std::path::{Path, PathBuf};
 use super::stamp::Store;
 use crate::subprocess::git_query;
 
-/// The user's own way past the gate, by name. Sessions may not spell it:
-/// the pre-shell hook refuses a command that does.
+/// The user's own way past the gate, by name. The pre-shell hook
+/// refuses a session's command that spells it.
 pub(crate) const SKIP: &str = "PGG_GATE_SKIP";
 
 /// The mark Claude Code leaves in the environment of everything it runs,
 /// and so in every git a session starts. It is what tells the gate whose
-/// ref update it is being asked about, and sessions may not spell it
-/// either — unsetting it would be the same step around the tests as
-/// spelling [`SKIP`].
+/// ref update it is being asked about, and the hook refuses a session
+/// that unsets it — the same step around the tests as spelling
+/// [`SKIP`].
 pub(crate) const SESSION: &str = "CLAUDECODE";
 
 /// Where the hook is checked in, from a checkout's root.

@@ -4,8 +4,8 @@
 //! reaches for and what dispatches to every module, and a helper that
 //! lives there makes every module depend on every other through it. The
 //! gate's dependency graph (`gate::graph`) reads that as "any change
-//! touches everything", which is the one answer it must never give for
-//! nothing (.claude/rules/structure.md §クレート root).
+//! touches everything", which is the one answer that has to be earned
+//! (.claude/rules/structure.md §クレート root).
 
 use std::path::{Path, PathBuf};
 
@@ -32,8 +32,8 @@ pub(crate) const HARNESS_FEATURE: &str = "automation";
 ///
 /// Always with [`HARNESS_FEATURE`], including the window `launch` opens:
 /// it is inert without a `PGG_*` variable, and asking for it every time is
-/// what keeps one release binary between the two commands instead of a
-/// relink every time somebody moves from a window to a verify-ui run.
+/// what keeps one release binary between the two commands, however
+/// often somebody moves from a window to a verify-ui run.
 ///
 /// `extra` follows `build --release`: the package and any further features
 /// a caller needs, and every feature names itself in the building line.
@@ -84,7 +84,7 @@ pub(crate) fn app_exe(
 }
 
 /// The profile the shipped build lands in: the release settings, in a
-/// directory the harness builds never write (Cargo.toml).
+/// directory only this build writes (Cargo.toml).
 const SHIPPED_PROFILE: &str = "shipped";
 
 /// The release binary with **no** features on it: the build a person

@@ -35,9 +35,9 @@
 //! The one part of a product crate that is read is the app's harness,
 //! which is test code that happens to be compiled inside the window, and
 //! it has two halves. The QML driver `PGG_AUTO_ACT` runs the product
-//! through ([`HARNESS`]) runs on beats rather than on QtTest calls, so it
-//! is named by rules of its own ([`qml::Kind::Harness`]): every span of
-//! time it spells for itself, and every count of milliseconds it keeps.
+//! through ([`HARNESS`]) runs on beats, so it is named by rules of its
+//! own ([`qml::Kind::Harness`]): every span of time it spells for
+//! itself, and every count of milliseconds it keeps.
 //! The Rust it is driven and read through ([`HARNESS_RUST`]) is named by
 //! the same rules as this runner's own body — the shapes are the same and
 //! so is the reason. Neither ships: both are behind the `automation`
@@ -133,8 +133,8 @@ const HARNESS_RUST: &str = "harness";
 struct Read {
     rust_files: usize,
     qml_files: usize,
-    /// How many of the QML files were the app's harness rather than
-    /// QtTest files: the two are read by different rules, and a count of
+    /// How many of the QML files were the app's harness: the harness
+    /// and QtTest files are read by different rules, and a count of
     /// them together would hide either going to zero.
     harness_qml_files: usize,
     /// Rust statements read as test code.
@@ -344,8 +344,8 @@ fn report(findings: &[Finding], exceptions: &[Exception], read: &Read) -> Result
 
 /// Which scanner reads a file, or none: Rust under a crate's `src` or
 /// `tests`, QtTest files under `tests/qml`, the app's harness under a
-/// crate's `src/auto` ([`HARNESS`]), and never the budgets' own
-/// implementation or this scanner's fixtures.
+/// crate's `src/auto` ([`HARNESS`]). The budgets' own implementation
+/// and this scanner's fixtures are none.
 fn language_of(relative: &str) -> Option<source::Lang> {
     if BUDGETS.iter().any(|tail| relative.ends_with(tail)) || relative.contains(SELF) {
         return None;
@@ -365,9 +365,9 @@ fn language_of(relative: &str) -> Option<source::Lang> {
     if kind == "tests" && name.starts_with("tst_") {
         return Some(source::Lang::Qml);
     }
-    // Every file of the harness directory, not a name inside it: the
-    // driver is spread over a file per verb group, and a rule that read
-    // only some of them would say PASS over the rest.
+    // Every file of the harness directory: the driver is spread over
+    // a file per verb group, and a rule that read only some of them
+    // would say PASS over the rest.
     if kind == "src" && parts.next() == Some(HARNESS) {
         return Some(source::Lang::Qml);
     }
@@ -502,7 +502,7 @@ mod tests {
         assert_eq!(
             path("crates/x/src/process/executor.rs", "tests.rs"),
             ["crates/x/src/process/tests.rs".to_string()],
-            "beside the declaring file, not under a directory of its stem"
+            "beside the declaring file"
         );
         assert_eq!(
             path("crates/x/src/avatar.rs", "avatar_tests.rs"),

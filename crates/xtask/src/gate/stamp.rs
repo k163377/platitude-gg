@@ -2,7 +2,7 @@
 //! commit, beside the repository's own `.git` so every worktree reads the
 //! same ones and a rebase in one seat reuses a run taken in another.
 //!
-//! Plain files rather than notes or config: a stamp is looked at by a git
+//! Plain files: a stamp is looked at by a git
 //! hook that has to answer in the time a ref update takes, and a file
 //! that exists is the cheapest true thing there is.
 

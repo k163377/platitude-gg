@@ -128,12 +128,12 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
 
 /// The other half of that: a runner published into a slot by `fs::copy`
 /// is exactly the image a neighbour's fork can be holding open, and what
-/// this suite has to survive is the refusal, not the fork — a window too
-/// short to catch on purpose. Held open here on purpose instead: one
+/// this suite has to survive is the refusal (the fork is a window too
+/// short to catch on purpose). Held open here on purpose: one
 /// attempt is refused outright, and the run that keeps asking gets its
 /// answer as soon as the handle goes.
 ///
-/// Linux rather than every unix, because POSIX only says `execve` *may*
+/// Linux only, because POSIX only says `execve` *may*
 /// refuse a file open for writing — this asserts that it does, which is
 /// a promise Linux makes and the container is the machine that keeps it.
 #[test]
@@ -146,7 +146,7 @@ fn a_runner_held_open_for_writing_is_run_once_the_handle_goes() {
     let running = slot.join("xtask");
     std::fs::copy(EXE, &running).expect("the runner in the slot");
 
-    // Opened, not truncated: the file stays the runner throughout.
+    // Opened as it is: the file stays the runner throughout.
     let handle = std::fs::OpenOptions::new()
         .write(true)
         .open(&running)
@@ -212,7 +212,7 @@ fn land_refuses_a_dirty_seat_and_a_rebase_that_stops_is_walked_back() {
 }
 
 /// The landing commits the census its gate rewrote and gates again,
-/// rather than stopping to have a person commit a generated file.
+/// on its own.
 #[test]
 fn land_commits_the_census_its_gate_rewrote() {
     let sb = Sandbox::new("land-census");

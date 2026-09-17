@@ -2,11 +2,11 @@
 //!
 //! Failed runs keep their logs too.
 //!
-//! `settings.toml` and `state.toml` are written here rather than left to
-//! the app's defaults because three of the things that move a measurement
-//! are settings: whether it fetches while being timed, how many rows the
-//! window holds, and which screen the window lands on. A run that did not
-//! write them is measuring whatever the platform felt like.
+//! `settings.toml` and `state.toml` are written here because three of
+//! the things that move a measurement are settings: whether it fetches
+//! while being timed, how many rows the window holds, and which screen
+//! the window lands on. A run that did not write them is measuring
+//! whatever the platform felt like.
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -71,12 +71,12 @@ fn state_file(opts: &Options, screen: Option<&Screen>) -> String {
     text
 }
 
-/// A path as a TOML basic string. Not a literal (`'…'`): those cannot
-/// hold a quote of their own at all, and a single quote is a legal
-/// character in a path on every platform this runs on — a repository
-/// under `C:/it's mine/` would otherwise write a `state.toml` that does
-/// not parse, and the run would measure an empty window instead of
-/// saying so.
+/// A path as a TOML basic string: a literal (`'…'`)
+/// cannot hold a quote of its own at all, and a single
+/// quote is a legal character in a path on every platform
+/// this runs on — a repository under `C:/it's mine/` would
+/// otherwise write a `state.toml` that does not parse, and
+/// the run would measure an empty window.
 fn toml_string(path: &str) -> String {
     let mut quoted = String::with_capacity(path.len() + 2);
     quoted.push('"');
@@ -118,7 +118,7 @@ pub(super) fn prepare(
     if let Some(parent) = directory.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    // Never overwrite another run, even when an explicit output path is reused.
+    // A fresh directory each run, even when an explicit output path is reused.
     std::fs::create_dir(&directory)
         .map_err(|e| format!("cannot reserve {}: {e}", directory.display()))?;
     let mut manifest =
@@ -159,9 +159,9 @@ pub(super) fn prepare(
         .map_err(|e| e.to_string())?;
     std::fs::write(directory.join("display-chosen.txt"), modes).map_err(|e| e.to_string())?;
     capture(&directory, "git-version.txt", root, &["--version"])?;
-    // The commit the exe is of, from the build rather than from the tree:
-    // a shelf hit switches the rig nowhere, so its HEAD may be some other
-    // measurement's commit by now.
+    // The commit the exe is of, from the build: a shelf hit switches
+    // the rig nowhere, so its HEAD may be some other measurement's
+    // commit by now.
     std::fs::write(
         directory.join("source-head.txt"),
         format!("{}\n", built.commit),

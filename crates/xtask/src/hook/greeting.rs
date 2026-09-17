@@ -15,7 +15,7 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
     let cwd = string_field(input, "cwd").unwrap_or_default();
     // The hook that holds main to the gate's stamp goes in on every
     // session start, so no clone and no seat is ever without it. A
-    // failure is said, not fatal: the greeting still has to be given.
+    // failure is printed: the greeting still has to be given.
     match crate::gate::install(std::path::Path::new(&cwd)) {
         Ok(_) => {}
         Err(why) => println!("The gate's git hook could not be installed: {why}"),
@@ -29,7 +29,7 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
         println!(
             "The gate cannot tell this session's git from the user's: {} is not in this \
              environment, so refs/heads/main is open to any git this session runs. Say so \
-             rather than using it — the name the gate reads is in \
+             and leave main alone — the name the gate reads is in \
              crates/xtask/src/gate/hooks.rs, and it is the whole of what holds main to the \
              pre-merge tests.",
             crate::gate::SESSION
@@ -48,8 +48,8 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
              that now: the first edit that would land here is held, and \
              `cargo xtask seat` is what answers it — the roster claims a \
              free letter for this session and prints the path to enter. \
-             Never name a letter yourself, and do not survey for one; the \
-             claim is the only thing that ever decided who gets a seat. \
+             The claim is the only thing that decides who gets a seat; the \
+             letter comes from it. \
              Make the edit in the seat you are given, and report the branch \
              as ready to merge. {seats}"
         ),
@@ -79,7 +79,7 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
 
 /// A session that starts inside an unclaimed seat claims it, so the
 /// `claude --worktree <letter>` road is covered the same way EnterWorktree
-/// is. A seat somebody else holds gets told so, not fought over.
+/// is. A seat somebody else holds gets told so and stays theirs.
 fn claim_at_start(cwd: &str, session: &str) -> Option<String> {
     // The lock names the worktree by its top-level path (git resolves the
     // argument by exact real path); a session started in a subdirectory
@@ -94,7 +94,7 @@ fn claim_at_start(cwd: &str, session: &str) -> Option<String> {
         Standing::Foreign(reason) | Standing::Stale(reason) => Some(format!(
             "This seat is held by another claim. The lock says: {reason}. This \
              session is {}. {} Two sessions in one seat commit on top of one \
-             another, so move to a seat of your own rather than working here.",
+             another, so move to a seat of your own.",
             me.mark(),
             claim_liveness(&reason),
         )),
@@ -125,7 +125,7 @@ fn seat_stand(cwd: &str, seats: &str) -> Option<String> {
 }
 
 /// The seat roster in one line, read from the same survey `cargo xtask
-/// seats` prints, so the answer is the repository's and not a guess.
+/// seats` prints, so the answer is the repository's.
 fn seat_report(cwd: &str) -> Option<String> {
     let survey = seats::survey(cwd)?;
     let buckets = seat_buckets(&survey);

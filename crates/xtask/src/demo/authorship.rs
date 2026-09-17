@@ -10,7 +10,7 @@ use super::signing::{config_path, keygen};
 ///
 /// The spellings differ on purpose — `Co-Authored-By` is what the tooling
 /// writes, `Co-authored-by` is what the convention documents — because
-/// git's `key=` matches either and the reader must not care.
+/// git's `key=` matches either, and so does the reader.
 pub(super) fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
     const CROWD: &str = "feat: write this one with a crowd\n\n\
          The body sits above the trailers, the way it always does.\n\n\
@@ -18,8 +18,8 @@ pub(super) fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
          Co-authored-by: Claude Fable 5 <noreply@anthropic.com>\n\
          Co-authored-by: Claude Opus 4.8 <noreply@anthropic.com>";
     // The last address is deliberately long: an address has no length
-    // worth trusting, and a card that sizes itself to one has to elide
-    // rather than run off the window.
+    // worth trusting, and a card that sizes itself to one has to
+    // elide.
     const CROWD_SIGNED: &str = "feat: write this one with a crowd, signed\n\n\
          Co-authored-by: Claude Opus 5 <noreply@anthropic.com>\n\
          Co-authored-by: Claude Fable 5 <noreply@anthropic.com>\n\
@@ -40,7 +40,7 @@ pub(super) fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("src/crowd.txt", "written by four\n", CROWD)?;
 
     // A key this repository vouches for, so the commits signed with it
-    // verify rather than merely carrying a signature.
+    // verify.
     let trusted = keygen(repo, "trusted", "demo@example.com")?;
     let allowed = repo.root.join("allowed_signers");
     std::fs::write(&allowed, format!("demo@example.com {trusted}"))
@@ -74,7 +74,7 @@ pub(super) fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
 
     // Signed with a key nobody vouched for: git reads the signature and
     // cannot judge it. Every SSH signature falls into this state when no
-    // allowedSigners file is configured at all, so it is not a corner.
+    // allowedSigners file is configured at all, so it is ordinary.
     keygen(repo, "stranger", "stranger@example.com")?;
     let stranger_key = repo.root.join("stranger.pub");
     repo.git(&["config", "user.signingkey", &config_path(&stranger_key)])?;
@@ -155,10 +155,10 @@ pub(super) fn authorship(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Rewrites HEAD's commit object with a different tree, keeping every
-/// other header — including the signature, which is what makes the
-/// result read as broken rather than as unsigned (measured: `%G?` goes
-/// from `G` to `B`).
+/// Rewrites HEAD's commit object with a different tree, keeping
+/// every other header — including the signature, which is what
+/// makes the result read as broken (measured: `%G?` goes from `G`
+/// to `B`).
 fn retree_head(repo: &mut DemoRepo, tree: &str) -> Result<String, String> {
     let dir = repo.work.clone();
     let out =

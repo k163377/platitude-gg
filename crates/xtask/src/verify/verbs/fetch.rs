@@ -18,7 +18,7 @@ pub(super) const TABLE: &[Verb] = &[
     // The drag, left standing for the picture: the wash over the rows is
     // the deliverable, and a run whose drag reached nothing frames the
     // same way — an unwashed log and one nobody dragged over are one
-    // photograph. **Two halves, and neither can pass as the other**:
+    // photograph. **Two halves, each answering for itself**:
     // `holds=` is the selection the model kept, `worn=` is the rectangle
     // every row drew of it. A wash placed off the row's own layout can
     // come out empty with the runs perfectly right, and `holds=` alone
@@ -43,12 +43,12 @@ pub(super) const TABLE: &[Verb] = &[
     // The same drag started on the ground under the last row — every
     // place in the panel that nobody else takes is a start
     // (規約 §git が言ったことを読む場所). `reach=9/9` is from every
-    // corner of that ground rather than one point in it: a verb that
-    // pressed the middle alone goes green over a hand that only answers
-    // there, which is the fault the right pane's values shipped with
-    // (`details-sweep`). `ground=true` is the fixture's half — a log
-    // that fills its panel leaves no ground, and `reach=0/9` off one
-    // says nothing about the hand.
+    // corner of that ground: a verb that pressed the middle alone
+    // goes green over a hand that only answers there, which is the
+    // fault the right pane's values shipped with (`details-sweep`).
+    // `ground=true` is the fixture's half — a log that fills its
+    // panel leaves no ground, and `reach=0/9` off one says nothing
+    // about the hand.
     Verb {
         name: "commands-sweep",
         when: &[],
@@ -60,13 +60,13 @@ pub(super) const TABLE: &[Verb] = &[
     // but only a reader can see that, and this is the judgement: a run
     // whose refusal never landed ends on the same resting row, and one
     // that landed it and never pressed ends with the panel still up.
-    // The two halves are named so neither can pass as the other.
+    // The two halves are named so each answers for itself.
     Verb {
         name: "commands-fail-shut",
         when: &[],
         plain: "commands_shut wrong=true open=false",
     },
-    // The same panel taken down by the key instead, which is the door
+    // The same panel taken down by the key, which is the door
     // cut for exactly this panel: nothing else on screen said what git
     // said, so it raised itself, and until now only a press could put
     // it away (デザイン規約 §git が言ったことを読む場所). `took=true`
@@ -87,7 +87,7 @@ pub(super) const TABLE: &[Verb] = &[
     // line and no panel, and taking down nothing would pass as
     // recovery. `open=false` is the panel that failure raised going
     // down with it, which is the whole of what the reader asked for:
-    // a laptop that sleeps must not leave its news standing.
+    // a laptop that sleeps wakes with its news taken down.
     Verb {
         name: "fetch-recover",
         when: &[],
@@ -119,12 +119,12 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "fetch_fail stopped=true",
     },
     // A hand on each of the three live shapes. `tip=` is the words
-    // on screen rather than a string the button would hand over
-    // (`fetch-tip` judges that side), and `word=` beside `rest=` is
-    // the pair a picture cannot hold: the stopped shape is the one
-    // that steps its word back, so it is the one whose two halves
-    // have to differ. The counts ride after them unjudged for the
-    // reason `fetch-fail`'s do.
+    // on screen (`fetch-tip` judges the string the button hands
+    // over), and `word=` beside `rest=` is the pair a picture
+    // cannot hold: the stopped shape is the one that steps its word
+    // back, so it is the one whose two halves have to differ. The
+    // counts ride after them unjudged for the reason `fetch-fail`'s
+    // do.
     Verb {
         name: "fetch-hover",
         when: &[(
@@ -133,13 +133,13 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "fetch_hover tip=true word=true rest=true stopped=false",
     },
-    // The word inside that tip which is a place to go, pressed. The
-    // panel is put away first — the failures raised it on the way
-    // here — so `open=` is the press's own doing and not what it
-    // walked in on, and `lit=` is the panel saying which reader it
-    // is standing for. The picture holds the second one and not the
-    // first: a panel that was never down looks exactly like a panel
-    // that came back up.
+    // The word inside that tip which is a place to go,
+    // pressed. The panel is put away first — the failures
+    // raised it on the way here — so `open=` is the press's own
+    // doing, and `lit=` is the panel saying which reader it is
+    // standing for. The picture holds the second one alone: a
+    // panel that was never down looks exactly like a panel that
+    // came back up.
     Verb {
         name: "fetch-tip-link",
         when: &[],
@@ -174,10 +174,10 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "push_hold mode=diverged busy=true",
     },
-    // The bare button's wait. `framed=false` is judged rather than
-    // looked at: a frame that grew while git was out would be a line
-    // in the picture, but a frame that did not grow is nothing at
-    // all, and nothing is what a correct run looks like too.
+    // The bare button's wait. `framed=false` is judged: a frame that
+    // grew while git was out would be a line in the picture, but a
+    // frame that did not grow is nothing at all, and nothing is what
+    // a correct run looks like too.
     Verb {
         name: "fetch-busy",
         when: &[],

@@ -45,8 +45,8 @@ pub fn run(args: &[String]) -> Result<PathBuf, String> {
     let root = root_for(preset, at)?;
     let work = build_or_copy_in(preset, &root, "repo", named)?;
     // This door is the one a person types at, and what comes out of it is
-    // a tree to look at rather than a run's leavings — so it is marked,
-    // and the sweep that takes the runs of a day ago leaves it standing
+    // a tree to look at — so it is marked, and the sweep that takes the
+    // runs of a day ago leaves it standing
     // (`verify::keep`).
     crate::verify::keep(&root)?;
     Ok(work)
@@ -89,15 +89,15 @@ pub(crate) fn claim_root(stem: &str) -> Result<PathBuf, String> {
 
 /// The one directory the runs and the templates they copy share.
 ///
-/// Sharing it is what makes a copy a rewrite of one path segment rather
-/// than of a whole path (`template`), and it puts the templates where the
-/// sweep that takes yesterday's runs already looks.
+/// Sharing it is what makes a copy a rewrite of one path segment
+/// (`template`), and it puts the templates where the sweep that takes
+/// yesterday's runs already looks.
 pub(super) fn base() -> PathBuf {
     std::env::temp_dir().join("pgg-demo")
 }
 
-/// Builds `preset` with the work tree called `name` rather than `repo` —
-/// a tab is titled after its work-tree folder (`models::tab_name`).
+/// Builds `preset` with the work tree called `name` — a tab is titled
+/// after its work-tree folder (`models::tab_name`).
 ///
 /// A root of this run's own is a copy of the preset's template
 /// (`template`); a root somebody named is built in directly, because what
@@ -246,8 +246,8 @@ mod tests {
         let unique: std::collections::BTreeSet<_> = made.iter().collect();
         assert_eq!(unique.len(), made.len(), "two runs were handed one root");
         for root in made {
-            // Empty, and so nobody else's: the claim made it rather than
-            // finding it, which is what `create_dir_all` could not say.
+            // Empty, and so nobody else's: the claim created it, which
+            // is what `create_dir_all` could not say.
             std::fs::remove_dir(&root).expect("an empty directory this call created");
         }
     }

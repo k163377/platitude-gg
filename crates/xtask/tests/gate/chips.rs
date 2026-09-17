@@ -1,5 +1,5 @@
 //! The chip guard's git side: what a seat already has open is read from
-//! the repository rather than from the payload, so a chip over this
+//! the repository, so a chip over this
 //! session's own work is refused where a chip over anything else is not.
 
 use std::fs::File;
@@ -50,13 +50,13 @@ fn a_chip_is_refused_over_the_work_the_seat_is_already_holding() {
 
     // The same file, once this seat is changing it. An unstaged edit is
     // the ` M` line of a status listing, and the first such line is
-    // where a reading that counts columns instead of reading the letters
-    // off goes wrong — git's answer arrives trimmed.
+    // where a reading that counts columns goes wrong — git's answer
+    // arrives trimmed.
     sb.write_refs(&sb.seat, 1);
     let refused = pre_chip(&sb, &sb.seat, core);
     assert!(refused.contains("already has open"), "{refused}");
 
-    // And once it is committed rather than merely written: the branch
+    // And once it is committed: the branch
     // carries it until it lands, so the chip's session would still
     // start from a main without it.
     sb.commit_all(&sb.seat, "feat(core): refs", &[]);

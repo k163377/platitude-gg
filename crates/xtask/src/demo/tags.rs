@@ -110,7 +110,7 @@ pub(super) fn tagonly(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["tag", "v1.1-kept"])?;
 
     // The trunk goes on past it, so the row the eye takes out sits
-    // inside the graph rather than on the end of it.
+    // inside the graph.
     repo.git(&["switch", "main"])?;
     repo.commit("src/lib.txt", "lib v1\n", "feat: add the library")?;
     Ok(())

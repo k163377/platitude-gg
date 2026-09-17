@@ -43,8 +43,8 @@ pub(super) const TABLE: &[Verb] = &[
     // The picture holds the band; it cannot hold whether the mark
     // still answers, and a `+` wired to nothing frames exactly like
     // one that opened the form. Folded, `collapsed=` is the second
-    // half: the rail's own cell must reach the dialog without
-    // putting the list back over whatever the fold was made for.
+    // half: the rail's own cell must reach the dialog and leave
+    // the fold standing over whatever it was made for.
     Verb {
         name: "nav-add-remote",
         when: &[(
@@ -60,7 +60,7 @@ pub(super) const TABLE: &[Verb] = &[
     // forced push wearing an empty lease is a plain force, which is the
     // failure this row exists to prevent (デザイン規約 §相手の履歴を置き換える).
     //
-    // **`:drift` is a wait, not a claim.** The readings come from
+    // **`:drift` is a wait.** The readings come from
     // `ls-remote --tags` well after the fetch they ride out with, so a
     // run that stopped at the fetch would photograph the plain row and
     // call it the forced one. Both halves are needed: the plain side
@@ -74,8 +74,8 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "push=true code=push held=false lease= ",
     },
-    // The two that run a delete. **Judged on the sidebar afterwards**, not on
-    // the write: the read that rebuilds the list answers after the write
+    // The two that run a delete. **Judged on the sidebar afterwards**:
+    // the read that rebuilds the list answers after the write
     // does, so a run stopped at the write barrier photographs the row it
     // just deleted and passes. `was=` / `sides=` is that name's own
     // reading either side of the press — a count would not do, since the
@@ -98,19 +98,19 @@ pub(super) const TABLE: &[Verb] = &[
     // card that never offered it. `sides=` is the reading they come off,
     // so a wrong row and a wrong reading are not the same failure.
     //
-    // **Read as a set of four.** A name held only here must not offer
-    // the remote rows (git would report success for deleting nothing —
-    // measured), one held only over there must not offer the local delete
-    // (there is nothing to name), one held on both offers all three, and
-    // the drifted run is the push row's own second form. Any single one
-    // proves none of that.
+    // **Read as a set of four.** A name held only here offers the local
+    // delete alone (git would report success for deleting nothing —
+    // measured), one held only over there offers the remote rows alone
+    // (there is nothing to name), one held on both offers all three,
+    // and the drifted run is the push row's own second form. Any
+    // single one proves none of that.
     Verb {
         name: "tag-menu",
         when: &[
             // The drifted run answers for both halves of one reading:
             // the push row takes its second form, and the two rows that
-            // would reach the name over there stand greyed rather than
-            // going (デザイン規約 §左メニューの所作 の削除の表). They sit
+            // would reach the name over there stand greyed
+            // (デザイン規約 §左メニューの所作 の削除の表). They sit
             // together in the line because one run has to assert them
             // together.
             (
@@ -132,7 +132,7 @@ pub(super) const TABLE: &[Verb] = &[
     // a bar saying nothing frames exactly like a bar saying the right
     // thing, and the whole claim is that the sentence was built out of
     // what core classified — which remote, which branch, and that it was
-    // a deletion rather than a send. `why=true` is the other half: the
+    // a deletion. `why=true` is the other half: the
     // far side's own words came across as well, and a report without
     // them is a report of nothing (デザイン規約 §可否・警告の出し場所).
     //
@@ -175,7 +175,7 @@ pub(super) const TABLE: &[Verb] = &[
     // Which remote a push goes to. The mark is one badge on one row:
     // a picture of the band cannot tell "marked" from "the badge was
     // never wired", and `local=true` is what says the repository's own
-    // config holds it rather than the machine's.
+    // config holds it.
     Verb {
         name: "push-default",
         when: &[],
@@ -256,7 +256,7 @@ pub(super) const TABLE: &[Verb] = &[
     // what holds the fetch off; this row is what says so afterwards.
     //
     // `plain` claims only that the check answered at all — an argument
-    // nobody has measured must not be failed for saying something true.
+    // nobody has measured passes on any true answer.
     Verb {
         name: "publish-taken",
         when: &[
@@ -277,7 +277,7 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "publish settled far=",
     },
-    // The answer, given rather than merely offered — the line goes out in
+    // The answer, given — the line goes out in
     // the same turn as the press.
     //
     // Plain, the branch this publishes is one no remote holds under that
@@ -295,8 +295,8 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "publish answering far=",
     },
     // The destination list with the mark in it. `marked=` is the field
-    // the rows read, not a row of its own — a list drawn with no mark
-    // and a list whose mark was never plumbed frame the same way, and
+    // the rows read — a list drawn with no mark and a list whose mark
+    // was never plumbed frame the same way, and
     // the plain `publish-remotes` run is the half with nothing marked.
     Verb {
         name: "publish-remotes-marked",
@@ -312,9 +312,9 @@ pub(super) const TABLE: &[Verb] = &[
     // Every field is read in the turn the ✕ was pressed in, which is
     // why `shut=false` leads: it is what says the reading was taken
     // while the bar was still on screen. `neutral=` is the frame — this
-    // question asks where a branch goes rather than for consent, so it
-    // wears the accent colour and not `warning` — and `code=push` is
-    // the pill's word, which two of the flow's own bindings hold. Both
+    // question asks where a branch goes, so it wears the accent
+    // colour — and `code=push` is the pill's word, which two of the
+    // flow's own bindings hold. Both
     // fall off a bar re-dressed at the press, and so do the words.
     Verb {
         name: "publish-dismiss",
@@ -339,8 +339,8 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "there=true answerable=true",
     },
     // Answered, and judged before the press: the write barrier says the
-    // config landed, and this says the question was answerable rather
-    // than answered past a dead pill.
+    // config landed, and this says the question was answerable when it
+    // was answered.
     Verb {
         name: "set-upstream-go",
         when: &[],

@@ -51,8 +51,8 @@ pub(super) const TABLE: &[Verb] = &[
     // written says exactly that), `none` is the same thing from the
     // other side, and `notice` is the order upside down. **`went=` and
     // `left=` cannot catch it on their own** — the run presses the body
-    // Escape runs rather than the key, so a bar whose shortcut is dead
-    // still goes down when it is pressed; what they add is that the
+    // Escape runs, so a bar whose shortcut is dead still goes down when
+    // it is pressed; what they add is that the
     // press moves one bar and only one. And `stood=both` is the fixture
     // half: a report the question quietly lowered would make the rest
     // of the line true and mean nothing.
@@ -61,7 +61,7 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "ask_over_notice stood=both holds=question went=question left=notice",
     },
-    // The same bar, swept rather than photographed. `words=true` is the
+    // The same bar, swept. `words=true` is the
     // fixture half: a bar with nothing in it has air and no fields, and
     // `all=true` off one would be a green run on a screen the reader
     // never sees.
@@ -109,8 +109,8 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "switch_stopped code=stash accept= hold=false bang=false op= branch=main log=false",
     },
     // And the one nothing here can clear: the pill goes to the copy
-    // that has the branch instead of moving onto it, which is what
-    // the `!` after the word says. No chip — git has no one command
+    // that has the branch, which is what the `!` after the word
+    // says. No chip — git has no one command
     // for opening a working copy.
     Verb {
         name: "switch-held",
@@ -118,10 +118,10 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "switch_stopped code= accept=Open hold=false bang=true op= branch=main log=false",
     },
     // The mark ahead of the row, which says the press raises a
-    // question rather than moving. **Read from the report, not the
-    // picture**: it is 16px in a full window, and the row it stands
-    // on is the same row with it and without it. The argument names
-    // which half of the pair the run is.
+    // question. **Read from the report**: it is 16px in a full
+    // window, and the row it stands on is the same row with it and
+    // without it. The argument names which half of the pair the run
+    // is.
     Verb {
         name: "switch-mark",
         when: &[(

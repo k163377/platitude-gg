@@ -65,12 +65,12 @@ pub(super) enum Scope {
     /// This runner's own source: its test blocks by the tests' rules, and
     /// the rest — the tool's body — by the runner's ([`tool_rule_of`]).
     Tool,
-    /// The app harness's Rust half, read the same way — the rules are the
-    /// same shapes and the reason is the same one, so the only thing this
-    /// arm changes is that its files are counted apart. What it does not
-    /// take is the strings: the scripts are this runner's habit, and a
+    /// The app harness's Rust half, read the same way — the rules are
+    /// the same shapes and the reason is the same one, so the only
+    /// thing this arm changes is that its files are counted apart. The
+    /// strings stay out: the scripts are this runner's habit, and a
     /// `Start-Sleep` in the harness's text would be a string about
-    /// PowerShell, not a sleep the harness takes.
+    /// PowerShell.
     Harness,
 }
 
@@ -105,9 +105,9 @@ pub(super) struct Statement {
 /// `;` inside a string is nobody's boundary. Coarse, but exact where it
 /// matters: rustfmt may wrap a call across any number of lines and never
 /// across a statement, so a wrapper and the wait it wraps always share
-/// one. What stays out of sight is a wait threaded through a closure or
-/// macro body (the `{` splits the statement) — this reads the shape the
-/// suites write in, not the language.
+/// one. What stays out of sight is a wait threaded through a closure
+/// or macro body (the `{` splits the statement) — this reads the shape
+/// the suites write in.
 ///
 /// `said` is the same text with its strings kept
 /// ([`source::strings_view`]), or `code` itself where the strings are
@@ -186,9 +186,9 @@ pub(super) fn rule_of(statement: &str) -> Option<&'static str> {
 /// with their strings kept and their comments blanked, and shown where it
 /// stands); a read of the monotonic clock; a receive under a budget —
 /// any budget, since a verb has no suite's to take. The wall clock is a
-/// timestamp in a verb, not a wait; a `Duration` is a ceiling declared
-/// where its reason stands; and nothing here awaits, so the silent waits
-/// have no shape to take.
+/// timestamp in a verb; a `Duration` is a ceiling declared where its
+/// reason stands; and nothing here awaits, so the silent waits have no
+/// shape to take.
 pub(super) fn tool_rule_of(statement: &str, said: &[&str]) -> Option<(&'static str, usize)> {
     if SLEEPS.iter().any(|t| has_token(statement, t)) {
         return Some(("sleep", 0));
@@ -471,7 +471,7 @@ mod tests {
     }
 
     /// The scripts are this runner's habit: a `Start-Sleep` in the
-    /// harness's text is a string about PowerShell, not a sleep it takes.
+    /// harness's text is a string about PowerShell.
     #[test]
     fn a_script_sleep_is_the_runners_alone_and_not_the_harnesss() {
         let text = "let wake = \"Start-Sleep -Seconds 20\";\n";
@@ -521,7 +521,7 @@ let wake = format!(
                 .map(|f| (f.line, f.rule))
                 .collect::<Vec<_>>(),
             vec![(8, "sleep")],
-            "shown at the script's own line, not the statement's first"
+            "shown at the script's own line"
         );
         assert_eq!(scanned.exceptions.len(), 1);
         assert_eq!(scanned.exceptions[0].line, 1);

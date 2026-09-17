@@ -1,16 +1,16 @@
 //! The board's page.
 //!
-//! This is developer tooling, not the product: the token rule of
-//! デザイン規約.md governs what the app paints, and nothing here ends up
-//! in a build. What the page owes the reader is only this — the seat
-//! that took each picture, stated where it cannot be missed, and a
+//! This is developer tooling: the token rule of デザイン規約.md governs
+//! what the app paints, and nothing here ends up in a build. What the
+//! page owes the reader is only this — the seat that took each
+//! picture, stated where it cannot be missed, and a
 //! magnifier that does not interpolate. Whole ratios with
 //! `image-rendering: pixelated` are the point: a 1px design call read off
 //! a smoothed enlargement is a guess, and the system image viewers all
 //! smooth.
 //!
-//! Which is why one picture opens at 1:1 rather than fitted.
-//! Nearest-neighbour only *adds* pixels honestly; under 1 it drops them,
+//! Which is why one picture opens at 1:1. Nearest-neighbour only
+//! *adds* pixels honestly; under 1 it drops them,
 //! so the fitted opening was reading every picture too big for the
 //! window through the one filter that deletes 1px rules and replaces a
 //! flat colour with whichever neighbour survived. Shrinking interpolates
@@ -104,9 +104,9 @@ const CAP: u32 = 28;
 const SCRIPT: &str = r#"
 const INK={a:'#7aa2ff',b:'#5ecf9a',c:'#e0a35c',d:'#d47ba8',e:'#8f7ae0',f:'#4fc3d1',main:'#8b97bd'};
 const ink=s=>INK[s]||'#8b97bd';
-// One entry per *view*, not per picture: a run read abreast is a single
-// view holding all of its pictures in a row, so one zoom and one pan
-// move both halves of a before/after together.
+// One entry per *view*: a run read abreast is a single view holding
+// all of its pictures in a row, so one zoom and one pan move both
+// halves of a before/after together.
 const FLAT=[];
 RUNS.forEach(function(r,ri){
  const view=(parts,si)=>({parts:parts,
@@ -132,7 +132,7 @@ RUNS.forEach(function(r,ri){
  r.shots.forEach(function(s,si){const im=new Image();im.src=s.file;
   im.title=(s.cap?s.cap+'  ':'')+s.from+'  '+s.w+'x'+s.h;
   // Both halves of a pair point at the one view that holds them, so
-  // clicking either brings up the comparison rather than a half of it.
+  // clicking either brings up the comparison.
   im.dataset.k=String(FLAT.findIndex(f=>f.ri===ri&&f.si===(r.abreast?0:si)));
   im.onclick=()=>show(+im.dataset.k);t.append(im)});
  d.append(top,meta,t);side.append(d)});
@@ -147,21 +147,21 @@ function pick(seat){only=seat;chips.forEach((b,s)=>b.classList.toggle('on',s===s
  side.querySelectorAll('.run').forEach(
   r=>r.classList.toggle('off',!!seat&&r.dataset.seat!==seat))}
 // The first view the filter leaves standing: the top of the board as the
-// reader now sees it. Not `top` — `window.top` cannot be shadowed by a
-// declaration at this scope.
+// reader now sees it. Named `first`: a declaration at this scope
+// cannot shadow `window.top`.
 function first(){return only?FLAT.findIndex(f=>f.seat===only):0}
-// The stage follows the chip that was just pressed: a picture it has
-// hidden is not the one the reader asked for, so the top of what is left
-// comes up instead. One the chip leaves standing stays put — `all`
-// widens the board rather than sending anybody back to the top of it.
-// Called from the chip alone, never from `pick`, which the opening runs
-// before `i` is initialised.
+// The stage follows the chip that was just pressed: a
+// picture it has hidden is not the one the reader asked
+// for, so the top of what is left comes up instead. One
+// the chip leaves standing stays put — `all` widens the
+// board. Called from the chip alone: the opening runs
+// `pick` before `i` is initialised.
 function follow(){if(!FLAT.length||!only||FLAT[i].seat===only)return;
  const k=first();if(k>=0)show(k)}
-// The chosen seat goes in the fragment, which is what the reload F5 makes
-// carries over. replaceState rather than location.hash: a file:// page is
-// allowed it (measured) and it leaves no history entry behind every chip.
-// A browser that refuses simply does not remember, so this is written
+// The chosen seat goes in the fragment, which is what the reload
+// F5 makes carries over. replaceState: a file:// page is allowed it
+// (measured) and it leaves no history entry behind every chip. A
+// browser that refuses simply does not remember, so this is written
 // after the filter has already moved.
 function remember(seat){try{history.replaceState(null,'',seat?'#seat-'+seat:'#')}catch(e){}}
 function chip(seat,text,empty){const b=document.createElement('button');b.textContent=text;
@@ -171,9 +171,9 @@ function chip(seat,text,empty){const b=document.createElement('button');b.textCo
  filter.append(b)}
 chip('','all',false);
 seats.forEach(s=>chip(s,'seat '+s,!held.has(s)));
-// A seat whose last picture swept away between two readings has a
-// disabled chip and nothing behind it: fall back to the whole board
-// rather than to a filter that hides every run on it.
+// A seat whose last picture swept away between two
+// readings has a disabled chip and nothing behind it:
+// fall back to the whole board.
 const asked=/^#seat-(.+)$/.exec(location.hash);
 pick(asked&&chips.has(asked[1])?asked[1]:'');
 let i=0,z=1,x=0,y=0;
@@ -192,16 +192,16 @@ function draw(){imgs.style.transform='translate('+x+'px,'+y+'px) scale('+z+')';
   (exact()?'':'≈')+(z*100).toFixed(0)+'%'+(exact()?'':' smoothed')}
 // Centred while the view holds it, against the top-left corner once it
 // does not: a picture read past the window's edges is read from the
-// corner the app's own furniture starts at, not from its middle.
+// corner the app's own furniture starts at.
 function place(){const s=FLAT[i];if(!s)return;
  x=s.w*z<=stage.clientWidth?(stage.clientWidth-s.w*z)/2:0;
  y=s.h*z<=stage.clientHeight?(stage.clientHeight-s.h*z)/2:0;draw()}
 // What a view of one picture opens at: one image pixel on one screen
 // pixel, whatever it costs in panning — the shrink it used to open at
-// is the one ratio a 1px call cannot be read off. Not `one`: `show()`
-// keeps a local of that name for the first picture in the view, and a
-// call from inside it reaches the local (measured: TypeError, and no
-// opening view at all).
+// is the one ratio a 1px call cannot be read off. Named `oneToOne`:
+// `show()` keeps a local `one` for the first picture in the view,
+// and a call from inside it reaches the local (measured: TypeError,
+// and no opening view at all).
 function oneToOne(){z=1;place()}
 // The whole view inside the window, the one thing 1:1 cannot give, and
 // the only place a ratio under 1 is reached — from `0`, and from the
@@ -264,8 +264,8 @@ const BODY: &str = r#"<div id="wrap"><div id="side"><div id="head">
   <div id="stage"><div id="imgs"></div>
   <div id="empty">no shots yet &mdash; <kbd>F5</kbd> once there are</div></div></div></div>"#;
 
-/// The whole page: a few KB whatever the board holds, because the runs
-/// carry paths rather than pictures.
+/// The whole page: a few KB whatever the board holds, because the
+/// runs carry paths.
 pub(super) fn render(runs: &[Run]) -> String {
     let mut out = String::from(
         "<!doctype html><html><head><meta charset=\"utf-8\">\
@@ -359,7 +359,7 @@ mod tests {
         }
     }
 
-    /// The one thing the page must never get wrong.
+    /// The one thing the page has to get right.
     #[test]
     fn every_run_carries_its_seat_onto_the_page() {
         let page = render(&[run("a", "chip padding"), run("e", "graph lanes")]);
@@ -394,7 +394,7 @@ mod tests {
     /// F5 carries the fragment and nothing else, so the chosen seat has
     /// to be written there and read back out of it: the reader who
     /// filtered the board down to their own seat pressed it to see the
-    /// picture they had just taken, not everybody's.
+    /// picture they had just taken.
     #[test]
     fn the_chosen_seat_survives_a_reload() {
         let page = render(&[run("a", "chip padding")]);
@@ -418,7 +418,7 @@ mod tests {
         );
         // The same on the way in. The fragment is read before the first
         // picture is chosen, so the board that comes back from F5 held
-        // to a seat opens on that seat's top rather than the board's.
+        // to a seat opens on that seat's top.
         assert!(page.contains("show(Math.max(first(),0))"));
     }
 
@@ -452,11 +452,11 @@ mod tests {
         assert!(render(&[run("a", "chip padding")]).contains("abreast:false"));
     }
 
-    /// A view of one picture opens at 1:1, and nothing on the way in may
-    /// shrink it. The board exists to be read, and the fitted opening it
-    /// used to have put every picture bigger than the window through a
-    /// shrink — which is the one ratio at which the picture stops being
-    /// the evidence.
+    /// A view of one picture opens at 1:1 whatever the
+    /// window holds. The board exists to be read, and the
+    /// fitted opening it used to have put every picture bigger
+    /// than the window through a shrink — which is the one
+    /// ratio at which the picture stops being the evidence.
     #[test]
     fn a_view_of_one_picture_opens_at_one_image_pixel_per_screen_pixel() {
         let page = render(&[run("a", "chip padding")]);
@@ -464,7 +464,7 @@ mod tests {
         // Both ways in: the picture chosen, and the window reshaped
         // under whatever the reader had already zoomed to. The name is
         // load-bearing — `one` is taken inside `show()`, and the call
-        // would reach that local instead of the opening view.
+        // would reach that local.
         assert!(page.contains("scrollIntoView({block:'nearest'});opening()}"));
         assert!(page.contains("addEventListener('resize',place)"));
         // The ceiling that used to hold the fit at 100% is what kept a
@@ -475,8 +475,8 @@ mod tests {
 
     /// A row of them opens fitted instead — the one place the board
     /// shrinks a view on the way in. At 1:1 the picture beside the first
-    /// stands off the right-hand edge, and the comparison is read out of
-    /// the reader's memory rather than off the screen.
+    /// stands off the right-hand edge, and the comparison is read out
+    /// of the reader's memory.
     #[test]
     fn a_row_of_pictures_opens_with_the_whole_row_in_the_window() {
         let page = render(&[run("a", "chip padding")]);
@@ -498,9 +498,9 @@ mod tests {
         // to `100%` from reading as the ratio a 1px call may be made
         // off, and the word for what is being done to the picture.
         assert!(page.contains("(exact()?'':'≈')+(z*100).toFixed(0)+'%'+(exact()?'':' smoothed')"));
-        // The rule has to live where the ratio changes, not on the
-        // pictures: a rule on `#imgs img` outranks what `draw()` writes
-        // on their parent, and the flip would do nothing at all.
+        // The rule has to live where the ratio changes: a rule on
+        // `#imgs img` outranks what `draw()` writes on their parent,
+        // and the flip would do nothing at all.
         assert!(page.contains("#imgs img{display:block;background:#000}"));
     }
 

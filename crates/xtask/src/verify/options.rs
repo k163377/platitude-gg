@@ -7,10 +7,10 @@ use std::path::PathBuf;
 /// deadline thread looks past it, and the parent reaps behind them both
 /// (`super::child`).
 ///
-/// **A backstop, not a verdict** (.claude/rules/core.md §非同期・並行
-/// テスト). Nothing here asserts that a verb finishes inside a number of
-/// seconds: a machine running several gates at once slows every verb
-/// down, and a ceiling low enough to be reached by that decides by load.
+/// **A backstop** (.claude/rules/core.md §非同期・並行
+/// テスト). The verdict is the words a verb comes back with: a machine
+/// running several gates at once slows every verb down, and a ceiling
+/// low enough to be reached by that decides by load.
 /// The suite's own answer to the same question is
 /// `tests/it/support/wait::OVERALL_BUDGET`; this one is held under it
 /// because a red costs differently on this side — a verb that reaches
@@ -20,15 +20,15 @@ use std::path::PathBuf;
 /// is in internal-docs/反映前テストの機械化.md §動詞の天井.
 ///
 /// Lower it for one run with `--watchdog-ms` when the wait itself is
-/// what is being diagnosed; a suite never does.
+/// what is being diagnosed; a suite keeps it.
 const WATCHDOG_MS: u64 = 600_000;
 
 pub(super) struct Options {
     pub(super) verb: String,
     pub(super) arg: String,
     /// Repositories to open, in tab order. Both flags repeat, because a
-    /// gesture on the tab strip needs a strip to land on — one tab can
-    /// only show that a tab closed, never that the neighbour stayed.
+    /// gesture on the tab strip needs a strip to land on — the neighbour
+    /// staying is what a second tab shows.
     pub(super) repo: Vec<PathBuf>,
     pub(super) preset: Vec<String>,
     pub(super) build: bool,
@@ -45,26 +45,26 @@ pub(super) struct Options {
     /// they come up in can be photographed from a machine that merges.
     /// The variable alone does not reach the app: `app_env` clears every
     /// `PGG_*` the parent shell carries from the runs xtask starts, so a
-    /// headless run has no way to ask for it but this.
+    /// headless run asks for it with this flag alone.
     pub(super) system_title_bar: bool,
     /// Diagnostic ceiling for a run whose causal completion never arrives
     /// ([`WATCHDOG_MS`]).
     pub(super) watchdog_ms: u64,
     /// Hold the app at the station this names, for good (`PGG_FAULT_HANG`
-    /// — the words are `harness::deadline`'s). **A run that will not
-    /// pass**: it is how the two shapes a wedged run comes in are made to
-    /// order, so that what the parent reads back can be checked rather
-    /// than waited for (`super::faults`).
+    /// — the words are `harness::deadline`'s). **A run that always
+    /// fails**: it is how the two shapes a wedged run comes in are made
+    /// to order, so that what the parent reads back can be checked
+    /// (`super::faults`).
     pub(super) fault_hang: String,
     /// Start the app with no deadline thread (`PGG_FAULT_NO_DEADLINE`), so
     /// it leaves no report of its own however it is stopped — the shape a
     /// wedge past `exiting` has anyway.
     pub(super) fault_no_deadline: bool,
     /// Swallow the verb's completion (`PGG_FAULT_HOLD_ACT`), so the run
-    /// ends at the ceiling with the loop still turning. **A run that will
-    /// not pass**, and the one shape that cannot be made by shortening
-    /// the ceiling instead: a ceiling that beats the completion on this
-    /// machine loses to it on a busier one (`super::faults`).
+    /// ends at the ceiling with the loop still turning. **A run that
+    /// always fails**, and the one shape this fault alone can make: a
+    /// ceiling that beats the completion on this machine loses to it on
+    /// a busier one (`super::faults`).
     pub(super) fault_hold_act: bool,
     /// Hold every configuration save the app makes until the station
     /// this names (`PGG_FAULT_HOLD_SAVE`), so a close can land on one
@@ -73,18 +73,18 @@ pub(super) struct Options {
     pub(super) fault_hold_save: String,
     /// Stall the parent's own look at a run reaped at the ceiling: the
     /// thread listing is a process that does nothing for longer than the
-    /// listing's ceiling (`super::look::look_at`). Nothing of the app's
-    /// — the one fault that is the runner's — and the fourth shape
-    /// `wedge-check` drives: a diagnostic that ran out of time, ended,
-    /// said so, and still followed by the app's reaping and the verdict.
+    /// listing's ceiling (`super::look::look_at`). The one fault that is
+    /// the runner's own, and the fourth shape `wedge-check` drives: a
+    /// diagnostic that ran out of time, ended, said so, and still
+    /// followed by the app's reaping and the verdict.
     pub(super) fault_stall_look: bool,
     pub(super) shot_dir: Option<PathBuf>,
     /// Where the run keeps its settings and state. A fresh directory per
-    /// run unless one is named, so a headless run never reads or writes
-    /// the settings of whoever is sitting at this machine.
+    /// run unless one is named, so a headless run keeps to settings of
+    /// its own and leaves this machine's alone.
     pub(super) config_dir: Option<PathBuf>,
     /// Let the app put back the tabs its config directory remembers,
-    /// instead of being told which repository to open.
+    /// the way a plain launch does.
     pub(super) restore: bool,
     /// Whether a write git refused is part of what the verb is showing.
     pub(super) allow_write_failure: bool,
@@ -93,22 +93,22 @@ pub(super) struct Options {
     /// ordinary case: the git this machine has.
     pub(super) old_git: String,
     /// A second git the run may point the settings box at: staged beside
-    /// the pictures, never on PATH (`shim::stage_other_git`). The version
+    /// the pictures, off PATH (`shim::stage_other_git`). The version
     /// it answers `--version` with is what is asked for here.
     pub(super) other_git: String,
     /// What the pictures show, for the board. Empty falls back to the
     /// verb and its argument, which is a poor name but a true one — the
-    /// board would rather hold a weakly named run than lose the run.
+    /// board keeps the run, named as best it can.
     pub(super) label: String,
     /// Keep this run off the board. For every run nobody asked to look
     /// at — a sweep measuring flakiness, where ten identical pictures
     /// bury what somebody wanted to see, and the runs a suite drives
     /// (`verify::suite_words`), which are a picture per verb per side.
     pub(super) no_board: bool,
-    /// Do not record what the run showed in the verb census. For the runs
-    /// that are not about what the line shows — a verb repeated to measure
-    /// how steady it is, or to look at a picture — where moving a
-    /// checked-in file is noise the tree then has to be cleaned of.
+    /// Keep this run out of the verb census. For a verb repeated to
+    /// measure how steady it is, or run to look at a picture, where
+    /// moving a checked-in file is noise the tree then has to be
+    /// cleaned of.
     pub(super) no_census: bool,
 }
 
@@ -118,10 +118,10 @@ impl Options {
     /// and options that only change where its output goes left out. None
     /// for a run nobody can type again elsewhere (`--repo`, `--restore`).
     ///
-    /// **The container never records.** It runs against the host's own
-    /// checkout over a mount, so a run there would write the census of a
-    /// machine that is not the one the file follows, and the two sides of
-    /// the gate — which run at the same time — would take the line in
+    /// **The census is the host's alone.** The container runs on the
+    /// host's own checkout over a mount, so a run there would file the
+    /// census of another machine, and the two sides of the gate — which
+    /// run at the same time — would take the line in
     /// turns.
     pub(super) fn census_line(&self) -> Option<String> {
         if self.no_census
@@ -171,16 +171,16 @@ impl Options {
     }
 }
 
-/// The words after `verify-ui` when a suite drives the run instead of a
-/// person: the line as typed, and `--no-board`.
+/// The words after `verify-ui` when a suite drives the run: the line as
+/// typed, and `--no-board`.
 ///
 /// A gate takes a picture per selected verb on each side, so the runs
 /// somebody asked to look at drown in runs nobody asked for — and `land`
 /// sweeps the seat's runs off the board the moment it is done, so what a
-/// landing gate files is thrown away unread. The flag rides *in* the line
-/// rather than beside it because the container's pictures are filed from
-/// the host once the run is over, and `keepsakes` reads the same line to
-/// know not to.
+/// landing gate files is thrown away unread. The flag rides *in* the
+/// line because the container's pictures are filed from the host once
+/// the run is over, and `keepsakes` reads the same line to know where
+/// they go.
 pub(crate) fn suite_words(line: &str) -> Vec<String> {
     let mut words: Vec<String> = line.split_whitespace().map(String::from).collect();
     words.push("--no-board".to_string());
@@ -243,7 +243,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                 let where_to = it.next().ok_or("--scroll-to needs top/bottom/nav-bottom")?;
                 if !matches!(where_to.as_str(), "top" | "bottom" | "nav-bottom") {
                     return Err(format!(
-                        "--scroll-to takes top, bottom or nav-bottom, not {where_to:?}"
+                        "--scroll-to takes top, bottom or nav-bottom; got {where_to:?}"
                     ));
                 }
                 opts.scroll_to = where_to.clone();
@@ -254,7 +254,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--no-census" => opts.no_census = true,
             "--quit-ms" => {
                 return Err(
-                    "unknown verify-ui option: --quit-ms (shots are not picked by wall clock; use --watchdog-ms only as a diagnostic ceiling)"
+                    "unknown verify-ui option: --quit-ms (shots follow the act's completion; use --watchdog-ms only as a diagnostic ceiling)"
                         .into(),
                 );
             }
@@ -294,8 +294,8 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
             "--other-git" => {
                 opts.other_git = it.next().ok_or("--other-git needs a version")?.clone();
             }
-            // A misspelled flag must not ride on as a verb argument — the
-            // run would go out under different conditions than asked for.
+            // A misspelled flag stops the run here: riding on as a verb
+            // argument, it would go out under conditions nobody asked for.
             other if other.starts_with("--") => {
                 return Err(format!("unknown verify-ui option {other}"));
             }
@@ -306,8 +306,8 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
     Ok(opts)
 }
 
-/// What the words that are not flags mean — the verb and its one
-/// argument — and the verb that cannot be run without one.
+/// What the positional words mean — the verb and its one argument —
+/// and the verb that needs its argument.
 fn name_the_verb(opts: &mut Options, positional: &[&str]) -> Result<(), String> {
     match positional {
         [] => return Err("verify-ui needs a verb (see `cargo xtask`)".into()),
@@ -349,9 +349,9 @@ mod tests {
         assert_eq!(opts.arg, "4");
         assert_eq!(opts.preset, ["co-authors"]);
         // And the census cannot tell the two apart: the flag says where
-        // the pictures go, not what the run was. Compared rather than
-        // spelled out, because the answer is None wherever this runs in
-        // the container — which is where the gate's Linux side runs it.
+        // the pictures go. Compared here, because the answer is None
+        // wherever this runs in the container — which is where the
+        // gate's Linux side runs it.
         let typed = parse(&words[..words.len() - 1]).expect("the same line, boarded");
         assert!(!typed.no_board);
         assert_eq!(opts.census_line(), typed.census_line());
@@ -411,9 +411,9 @@ mod tests {
         assert_eq!(asked.arg, "3");
     }
 
-    /// The one fault that is the runner's own rather than the app's: it
-    /// changes nothing about what the app shows, so the census line is
-    /// whatever the verb's is.
+    /// The one fault that is the runner's own: it changes nothing
+    /// about what the app shows, so the census line is whatever the
+    /// verb's is.
     #[test]
     fn a_stalled_look_is_asked_for_and_leaves_the_census_alone() {
         let plain = parse(&["band".to_string()]).expect("verb only");
@@ -446,9 +446,9 @@ mod tests {
     }
 
     /// The ceiling is a backstop, so the default is set high enough that
-    /// a machine running several gates at once cannot reach it: a verb
-    /// whose own cost is seconds must not be judged by a number a busy
-    /// machine can spend on it. Held under the suite's own backstop
+    /// a machine running several gates at once cannot reach it: the
+    /// verdict is the words a verb comes back with, whatever a busy
+    /// machine spends on it. Held under the suite's own backstop
     /// because a red here is paid in wall clock, one verb at a time.
     #[test]
     fn the_watchdog_is_the_only_time_ceiling() {
@@ -484,7 +484,7 @@ mod tests {
             vec!["publish-new-go".to_string(), "origin|".to_string()],
         ] {
             let Err(error) = parse(&args) else {
-                panic!("an unanswerable dialog must not run until the watchdog")
+                panic!("an unanswerable dialog is refused before the launch")
             };
             assert!(error.contains("non-empty URL"));
         }

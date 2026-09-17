@@ -1,6 +1,6 @@
 //! In a file of its own because seats.rs stands at the length backstop
-//! (.claude/rules/structure.md §長さの閾値) — not because a seat's
-//! operations belong anywhere but the seat module.
+//! (.claude/rules/structure.md §長さの閾値); a seat's operations
+//! belong to the seat module.
 
 use crate::command::{self, Permission, Where};
 

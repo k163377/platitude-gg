@@ -5,14 +5,14 @@
 //! about the item tree, and no Rust test reaches it. QtTest answers those,
 //! and `qmltestrunner` is the binary Qt ships to run it.
 //!
-//! **The import tree is staged, not pointed at.** `import platitude.ui`
+//! **The import tree is staged.** `import platitude.ui`
 //! resolves by directory name, and the product's directory is called `ui`,
 //! so no directory under crates/ can serve as an import path. The whole of
-//! src/ui is copied under `platitude/ui` — with the shipped qmldir rather
-//! than a subset written out here, so the runs read the same singleton
-//! declarations the app does, and a component the closure grows into is
-//! already standing there. (It grows: the test names `InkCanvas`, which
-//! reads `Ink`, which reads `Metrics`.)
+//! src/ui is copied under `platitude/ui` — with the shipped qmldir, so
+//! the runs read the same singleton declarations the app does, and a
+//! component the closure grows into is already standing there. (It
+//! grows: the test names `InkCanvas`, which reads `Ink`, which reads
+//! `Metrics`.)
 //!
 //! **The runner's `-o` log is the only output that survives.** Redirected
 //! on Windows its plain text comes back empty — a verdict with an exit
@@ -53,7 +53,7 @@ const MODULE: &str = "platitude/ui";
 ///
 /// Staged empty on purpose: what it buys is the import line, and a test
 /// that builds something actually reaching into it fails on the name it
-/// wanted rather than on a stub answering for it.
+/// wanted.
 const APP_MODULE: &str = "platitude";
 /// The one type that stub declares, named so that a test reaching for it
 /// reads as the mistake it is.
@@ -127,7 +127,7 @@ fn tests_in(root: &Path) -> Result<Vec<String>, String> {
 fn stage(root: &Path, work: &Path) -> Result<PathBuf, String> {
     let import = work.join("import");
     let module = import.join(MODULE);
-    // Rebuilt rather than topped up: what a killed run left behind holds
+    // Rebuilt from scratch: what a killed run left behind holds
     // components since renamed, and they would resolve here and nowhere
     // else.
     if module.exists() {

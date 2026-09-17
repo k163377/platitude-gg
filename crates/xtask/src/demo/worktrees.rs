@@ -15,7 +15,7 @@ use super::repo::DemoRepo;
 /// Other working copies with something uncommitted in them, so the rows
 /// they draw on the graph have something to say.
 ///
-/// **Its own preset rather than dirt added to `worktrees`.** Those copies
+/// **Its own preset.** Those copies
 /// are clean on purpose — the verbs that use them are about the rows in
 /// the sidebar, and a carried row appearing in the graph would move every
 /// row number they address by.
@@ -173,9 +173,9 @@ pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
     std::fs::remove_dir_all(&gone).map_err(|e| format!("removing {}: {e}", gone.display()))?;
     // A folder and a branch that both run past the pane, on a row that
     // also carries a mark: the seat, the elided name and the branch on
-    // the right have to share the narrowest sidebar there is (180) with
-    // none of them walking over another. **Named to sort last** so the
-    // rows the verbs address by number do not move.
+    // the right have to share the narrowest sidebar there is (180),
+    // each keeping clear of the others. **Named to sort last** so the
+    // rows the verbs address by number stay put.
     repo.git(&[
         "worktree",
         "add",

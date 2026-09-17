@@ -66,7 +66,7 @@ pub(super) fn post_write(input: &str) -> Result<(), String> {
 }
 
 /// The blocks an edit to this tree's markdown just tore off the list they
-/// belonged to (`crate::docs`). Said here rather than left to the gate
+/// belonged to (`crate::docs`). Said here
 /// because nothing about one looks wrong in the source — every word is
 /// still there, in the order it was written — so the turn that made it is
 /// the only one that still knows what it meant to say.
@@ -77,8 +77,8 @@ fn doc_notes(path: &str) -> Vec<String> {
     let Some(name) = path.rsplit('/').next() else {
         return Vec::new();
     };
-    // A file the edit left unreadable is the editor's problem, not this
-    // hook's: only judge what is actually there.
+    // A file the edit left unreadable is the editor's problem: only
+    // judge what is actually there.
     let Ok(text) = std::fs::read_to_string(path) else {
         return Vec::new();
     };
@@ -111,8 +111,8 @@ fn qml_notes(path: &str) -> Result<Vec<String>, String> {
         .ok_or("qml path has no parent")?;
     let mut notes: Vec<String> = Vec::new();
     let mut missing: Vec<String> = Vec::new();
-    // Missing registries are someone else's layout problem, not this hook's:
-    // only judge the files that are actually there.
+    // Missing registries are someone else's layout problem: only judge
+    // the files that are actually there.
     if let Ok(qmldir) = std::fs::read_to_string(ui_dir.join("qmldir"))
         && !qmldir.contains(&file_name)
     {

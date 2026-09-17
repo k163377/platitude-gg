@@ -8,9 +8,9 @@
 //! wrote it, where nothing but this module's own sweep takes it away.
 //!
 //! One shape of red gets more than a copy. Cargo stopping on the lock
-//! file is not the step's own failure and not a verdict on the change —
-//! it is a cargo that did not agree with a file on disk, for a reason
-//! that is not in the message. The host's side of that same question is
+//! file is a cargo that did not agree with a file on disk, for a
+//! reason that is not in the message, and the change stands unjudged.
+//! The host's side of that same question is
 //! written beside the log while the tree still stands as it stood: what
 //! the files a resolve reads are out here (the root's three and every
 //! member's manifest), which cargo is out here, and which image was in
@@ -31,7 +31,7 @@ use crate::subprocess::{Answer, bounded};
 const KEEP: usize = 10;
 
 /// How long a question asked about a red step may take. **The evidence
-/// is never allowed to become the failure**: this runs after the step's
+/// is held to a ceiling of its own**: this runs after the step's
 /// own watched run has ended, on the gate's own thread and inside the
 /// step's ticket, so a docker that does not answer would hold both for
 /// as long as it liked. A daemon that is up answers in well under a
@@ -43,7 +43,7 @@ const ASKING_CEILING: Duration = Duration::from_secs(15);
 /// reads all of them, so evidence that stopped at the root would call a
 /// run sound when it was a member manifest that arrived wrong.
 ///
-/// Read off the tree rather than listed here, so a member added to the
+/// Read off the tree, so a member added to the
 /// workspace is not a member this forgets. What it reads is every
 /// `crates/*/Cargo.toml`, which is where this workspace keeps its
 /// members (root Cargo.toml); **a member kept anywhere else would not be
@@ -77,14 +77,14 @@ fn read_to_resolve(tree: &Path) -> Vec<String> {
 /// A lock that is merely older than the registry is none of the three:
 /// it still satisfies the manifests, so cargo stands on it.
 ///
-/// **The mapping does not run backwards.** "cannot update" is what cargo
+/// **The mapping runs one way.** "cannot update" is what cargo
 /// says about any lock its resolve disagrees with, an empty one being
 /// only the cheapest way to get there — a manifest that arrived wrong
-/// says the same thing. Which is why the evidence beside this is the
-/// bytes of every file the resolve reads, on both sides, rather than a
-/// verdict read off the message.
+/// says the same thing. Which is why the evidence beside this is
+/// the bytes of every file the resolve reads, on both sides, as
+/// they stood.
 ///
-/// **Cargo's own line, not the words anywhere in the log.** A log that
+/// **Cargo's own line.** A log that
 /// quotes the message is not a cargo that stopped — this file's own
 /// tests hold those sentences as data, so a red `test xtask` carrying
 /// them in a panic would otherwise be filed as a cargo that never ran.
@@ -116,9 +116,9 @@ pub(crate) fn keep(
     log: &Path,
     command: &[String],
 ) -> Result<Option<String>, String> {
-    // No log is not a step that left nothing to keep: it is a step that
-    // never wrote one (the tests' faked runs), and there is nothing here
-    // to do about it.
+    // No log is a step that never wrote one (the tests' faked
+    // runs), and there is nothing here to do about
+    // it.
     let Ok(wrote) = std::fs::read(log) else {
         return Ok(None);
     };
@@ -142,8 +142,8 @@ pub(crate) fn keep(
     std::fs::write(&beside, host_side(run, tree, &asking, command, &said))
         .map_err(|e| format!("{}: {e}", beside.display()))?;
     Ok(Some(format!(
-        "cargo stopped on the lock file — a cargo failure of undetermined cause, not a verdict \
-         on the change. Both sides of it: {}",
+        "cargo stopped on the lock file — a cargo failure of undetermined cause, the change \
+         unjudged. Both sides of it: {}",
         shown(tree, &dir)
     )))
 }
@@ -193,7 +193,7 @@ fn host_side(run: &str, tree: &Path, asking: &Path, command: &[String], said: &s
     out
 }
 
-/// What another program said, or why it did not — never longer than
+/// What another program said, or why it did not — within
 /// `ceiling`, and never a second failure of the step.
 fn asked(what: &str, command: Command, ceiling: Duration, scratch: &Path) -> String {
     match bounded(what, command, ceiling, Some(scratch)) {
@@ -310,7 +310,7 @@ mod tests {
             "error: test failed, to rerun pass `--lib`"
         ));
         // The verb's own red, which names the file for a different
-        // reason: this is the step failing, not cargo refusing to start.
+        // reason: this is the step failing.
         assert!(!stopped_on_the_lock(
             "FAIL: the census moved a line for Cargo.lock"
         ));
@@ -376,7 +376,7 @@ mod tests {
         assert_eq!(as_it_stands(&dir.join("nothing-here")), "absent");
     }
 
-    /// A question that cannot be asked is an answer, not a failure. What
+    /// A question that cannot be asked is an answer. What
     /// a question that never answers does is `bounded`'s own
     /// (`subprocess`, `verify::look`'s tests): the ceiling is passed in
     /// here so the call sites say what they are willing to wait.
@@ -467,7 +467,7 @@ mod tests {
             &logs.join("linux-99.log"),
             &[],
         )
-        .expect("no log is not an error");
+        .expect("no log is fine");
         assert_eq!(note, None);
         assert!(!logs.join("failed").exists());
     }

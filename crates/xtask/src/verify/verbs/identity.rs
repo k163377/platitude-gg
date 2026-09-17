@@ -48,8 +48,8 @@ pub(super) const TABLE: &[Verb] = &[
     // The same popup has a real loading and a causally settled form;
     // neither is selected by a millisecond window. Both are opened by
     // the field's own press, and `typing=` is the half of that press a
-    // photograph cannot answer: the list must come down without taking
-    // the caret out of the box it came from.
+    // photograph cannot answer: the list must come down with the caret
+    // left in the box it came from.
     Verb {
         name: "settings-tools-loading",
         when: &[],
@@ -115,12 +115,12 @@ pub(super) const TABLE: &[Verb] = &[
     // page's tick reads is in a unit no box shows — so the store's answer
     // is the line. With no argument both boxes are emptied: the default
     // count — which is the machine's own, a third of its threads, so the
-    // line says `default=true` rather than a number a container would
-    // answer differently — and the copies never read (`copies_ms=0` is
-    // what stops the tick).
+    // line says `default=true`, a word every machine answers the
+    // same — and the copies never read (`copies_ms=0` is what stops
+    // the tick).
     Verb {
         name: "settings-processes",
-        // Three, not a number the machine could default to: the floor is
+        // Three, which no machine defaults to: the floor is
         // two and the ceiling eight, and the line has to be able to say
         // `default=false` on every machine the run is taken on.
         when: &[(

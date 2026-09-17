@@ -5,10 +5,10 @@ edition.workspace = true
 license.workspace = true
 publish = false
 
-# Deliberately no `[lints] workspace = true`: this is a CLI dev tool whose
-# job is printing to stdout, which the workspace lints deny for the app.
-# The fn ceiling is not part of that opt-out — structure.md's 上限 covers
-# every crate, and xtask is where the longest functions like to collect.
+# This crate sets its own `[lints]`: it is a CLI dev tool whose job is
+# printing to stdout, which the workspace lints deny for the app.
+# The fn ceiling still applies — structure.md's 上限 covers every crate,
+# and xtask is where the longest functions like to collect.
 [lints.clippy]
 too_many_lines = "warn"
 

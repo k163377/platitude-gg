@@ -18,13 +18,13 @@ use crate::locks::Locked;
 /// the git it spawns), or one of this runner's own reading verbs.
 pub(crate) const LIGHT: u32 = 1;
 
-/// What a unit that starts a compiler or a test binary takes. Four
-/// rather than one because such a unit is not one process: cargo drives
-/// rustc jobs, a test binary drives its own threads, and the container's
-/// half drives both inside a VM. The number is the ratio the default
-/// verb count was already chosen against — a third of the machine's
-/// threads for the verbs of a side (`gate::default_jobs`) — and it is
-/// admission control, not a cap on either.
+/// What a unit that starts a compiler or a test binary takes. Four,
+/// because such a unit is one process driving many: cargo drives rustc
+/// jobs, a test binary drives its own threads, and the container's half
+/// drives both inside a VM. The number is the ratio the default verb
+/// count was already chosen against — a third of the machine's threads
+/// for the verbs of a side (`gate::default_jobs`) — and it is admission
+/// control.
 pub(crate) const COMPILE: u32 = 4;
 
 /// One gate's worth of machine, which is the whole budget: both sides at
@@ -33,11 +33,11 @@ pub(crate) const COMPILE: u32 = 4;
 ///
 /// Written this way so that a gate running alone never waits for itself
 /// — the budget is exactly what one gate asks for at its widest — and so
-/// that a second gate shares that rather than adding a second machine's
-/// worth. Every process on the machine computes it from the same
-/// `jobs`, so they agree without talking; a gate told `--jobs` above the
-/// machine's count says so in its tickets and widens the pool for
-/// everyone while it runs ([`queue::budget_of`]).
+/// that a second gate shares that one. Every process on the machine
+/// computes it from the same `jobs`, so they agree without talking; a
+/// gate told `--jobs` above the machine's count says so in its tickets
+/// and widens the pool for everyone while it runs
+/// ([`queue::budget_of`]).
 pub(crate) fn demand(jobs: usize) -> u32 {
     let verbs = u32::try_from(jobs).unwrap_or(u32::MAX);
     2 * (COMPILE + verbs.saturating_mul(LIGHT))
@@ -143,7 +143,7 @@ impl Admitted {
     /// Says that this unit has started `program` at `child`, so that a
     /// ledger reading this ticket after its owner is gone knows the
     /// machine is still being used ([`Pool::leftover`]) — and knows it
-    /// by what is at that number, not by the number alone.
+    /// by what is at that number.
     pub(crate) fn started(&self, child: u32, program: &str) {
         if let Some((ticket, _)) = &self.mine {
             write_child(ticket, child, program);
@@ -183,19 +183,19 @@ pub(crate) fn child_started(child: u32, program: &str) {
 ///
 /// The two go down together because a number without a name is a claim
 /// on whoever inherits that number (`Pool::leftover`). The name is the
-/// caller's spelling of the program rather than a probe's reading of it
-/// — a probe costs a process on Windows, and this is on the road of
-/// every one of a gate's seven hundred steps — written in the probe's
-/// own vocabulary so that the reader can compare the two
-/// (`subprocess::as_probed`, `subprocess::image_still_at`).
+/// caller's spelling of the program — a probe costs a process on
+/// Windows, and this is on the road of every one of a gate's seven
+/// hundred steps — written in the probe's own vocabulary so that the
+/// reader can compare the two (`subprocess::as_probed`,
+/// `subprocess::image_still_at`).
 ///
 /// Best effort on purpose: what this protects against is the owner
-/// dying, and a ticket that could not be written simply falls back to
-/// what the ledger did before — the room comes back with the lock. A
-/// failure here must not fail the step, which is the thing the whole
-/// gate is actually for. A ticket already taken down is not written
-/// again either: it is read first, and a name with nothing at it stays
-/// that way rather than coming back as a unit nobody holds.
+/// dying, and a ticket that could not be written simply falls back
+/// to what the ledger did before — the room comes back with the
+/// lock. A failure here leaves the step to run, which is the thing
+/// the whole gate is actually for. A ticket already taken down is
+/// read first, so a name with nothing at it stays that way rather
+/// than coming back as a unit nobody holds.
 fn write_child(ticket: &Path, child: u32, program: &str) {
     let Some(dir) = ticket.parent() else {
         return;
@@ -230,8 +230,8 @@ pub(crate) fn watched(command: &mut Command) -> std::io::Result<std::process::Ex
 }
 
 /// Set for the children of an admitted unit: they run under their
-/// parent's ticket, and a nested ask is answered with a pass rather
-/// than a second ticket ([`under`]).
+/// parent's ticket, and a nested ask is answered with a pass
+/// ([`under`]).
 pub(crate) const HELD: &str = "PGG_BUDGET_HELD";
 
 /// The room for one command that is itself a unit — a verb a session
@@ -255,9 +255,9 @@ pub(crate) fn standalone(
     what: &str,
 ) -> Result<Admitted, String> {
     let room = marked(tree, weight, rank, what, std::env::var_os(HELD).is_some())?;
-    // Said where it happened rather than only in a gate's record: a
-    // command a person is waiting on has to say that what it is waiting
-    // for is the machine and not itself.
+    // Said where it happened: a command a person is waiting
+    // on has to say that what it is waiting for is the
+    // machine.
     if !room.waited.is_zero() {
         println!(
             "waited {} for room on the machine ({what}) — `cargo xtask budget` says who has it",

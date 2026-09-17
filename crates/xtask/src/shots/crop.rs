@@ -10,7 +10,7 @@
 //! drops the five-pixel bar sitting on top of a box (verify-ui skill
 //! §目視は等倍以上で).
 //!
-//! Written through `png::rgba`, which stores rather than compresses, so
+//! Written through `png::rgba`, which stores every pixel as it is, so
 //! a crop is about as many bytes as it has pixels.
 
 use std::path::{Path, PathBuf};
@@ -133,9 +133,9 @@ fn parse(args: &[String]) -> Result<Cut, String> {
     }
     Ok(Cut {
         source: source.ok_or_else(|| "shots crop: no picture to cut from".to_string())?,
-        // Required rather than defaulted to the whole picture: a crop of
-        // everything is the picture, and the reason to make one is that
-        // the judgement is about somewhere in particular.
+        // Required: a crop of everything is the picture, and the
+        // reason to make one is that the judgement is about somewhere
+        // in particular.
         at: at.ok_or_else(|| "shots crop: --at wants x:y:width:height in pixels".to_string())?,
         scale,
         out,
@@ -148,12 +148,12 @@ fn rect(text: &str) -> Result<Rect, String> {
         .split(':')
         .map(|part| {
             part.parse::<u32>()
-                .map_err(|_| format!("shots crop: --at wants whole pixels, and {part:?} is not"))
+                .map_err(|_| format!("shots crop: --at wants whole pixels, got {part:?}"))
         })
         .collect::<Result<Vec<u32>, String>>()?;
     let [x, y, width, height] = numbers[..] else {
         return Err(format!(
-            "shots crop: --at wants x:y:width:height in pixels, not {text:?}"
+            "shots crop: --at wants x:y:width:height in pixels, got {text:?}"
         ));
     };
     if width == 0 || height == 0 {
@@ -175,7 +175,7 @@ fn rect(text: &str) -> Result<Rect, String> {
 fn whole(text: &str) -> Result<u32, String> {
     match text.parse::<u32>() {
         Ok(0) | Err(_) => Err(format!(
-            "shots crop: --scale wants a whole number of times, 1 or more, not {text:?} — \
+            "shots crop: --scale wants a whole number of times, 1 or more, got {text:?} — \
              a fraction would have to interpolate, and then the picture is not the pixels"
         )),
         Ok(scale) => Ok(scale),

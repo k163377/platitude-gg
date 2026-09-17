@@ -4,9 +4,9 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
-    // Naming a branch off the top row, held here for what the run waited
-    // on rather than for what it drew: the barrier every write verb
-    // passes through says whether it waited on **its own write**
+    // Naming a branch off the top row, held here for what the run
+    // waited on: the barrier every write verb passes through says
+    // whether it waited on **its own write**
     // (`AutoActDriver.writeBarrier`).
     //
     // **`mine=false` is a barrier that went back to counting.** A count
@@ -41,8 +41,8 @@ pub(super) const TABLE: &[Verb] = &[
     // as a file**, so on a case-insensitive disk both names would be gone
     // — core refuses it outright, and the box is where that answer belongs
     // (デザイン規約 §答えの要らない報せ, by design). Two runs make the
-    // pair: the one that has to be turned down, and the one beside it that
-    // must not be, since a box that refuses everything frames the same.
+    // pair: the one that has to be turned down, and the one beside it
+    // that goes through, since a box refusing everything frames the same.
     //
     // Every field is the output side. `box=` is the field drawn and
     // holding the keyboard, because the ask that opens it lands before
@@ -97,11 +97,11 @@ pub(super) const TABLE: &[Verb] = &[
     // window that never stood the row in, or one that never let it go.
     //
     // It is the other half of `delete-gone` and fails the other way: a
-    // delete whose rows are put down by counting listings rather than by
-    // measuring them (`ops::StandIn`) can be answered by a reading that
-    // never saw the write, and one measured against a number no reading
-    // reaches is never answered at all. The second of those leaves this
-    // run waiting out the ceiling.
+    // delete whose rows are put down by counting listings
+    // (`ops::StandIn`) can be answered by a reading that never saw the
+    // write, and one measured against a number no reading reaches is
+    // never answered at all. The second of those leaves this run
+    // waiting out the ceiling.
     Verb {
         name: "delete-stood-down",
         when: &[],
@@ -118,10 +118,10 @@ pub(super) const TABLE: &[Verb] = &[
     //
     // `from=` is left outside the run on purpose: an in-window branch
     // answers off the drawn rows and a tip off git, and which of the
-    // two a run gets is the refs' timing rather than the claim.
+    // two a run gets is the refs' timing.
     // `merged=` is one word for both sides for the same reason — the
     // third of them, `unknown`, is the reads having fallen over, and it
-    // fails this claim on a line instead of in silence.
+    // fails this claim on a line.
     Verb {
         name: "delete-branch-early",
         when: &[(
@@ -133,9 +133,9 @@ pub(super) const TABLE: &[Verb] = &[
     // The same card, over the one branch whose tip the drawn rows cannot
     // answer for — so `from=` is in the claim here, where the row above
     // leaves it out: this run takes git's road every time. What settles
-    // it is the repository rather than the timing: `--preset deep-parked`
-    // forks `parked` below the window's cut and leaves it there, and a
-    // tip on no drawn row is what sends the question to `merge-base`
+    // it is the repository: `--preset deep-parked` forks `parked` below
+    // the window's cut and leaves it there, and a tip on no drawn row
+    // is what sends the question to `merge-base`
     // (`GraphModel::branch_delete_merged` empty →
     // `RepoSession::check_branch_delete`).
     //
@@ -147,9 +147,9 @@ pub(super) const TABLE: &[Verb] = &[
     // picture in the suite would frame the same. The rest of the line is
     // the row it dresses, which is the whole point of asking early.
     //
-    // The claim is `plain` rather than a row for the branch's name: the
-    // verb has one repository and one branch in it, so a run given
-    // anything else is a mistake that should fail on a line.
+    // The claim is `plain`: the verb has one repository and one branch
+    // in it, so a run given anything else is a mistake that should fail
+    // on a line.
     Verb {
         name: "delete-branch-early-far",
         when: &[],
@@ -246,14 +246,14 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "tip=true copied=true",
     },
-    // ...and taken from the band around the words rather than off the
-    // words themselves — every place in a tip that nobody else takes
-    // is a start (規約 §hover のツールチップ). The starts are the air
+    // ...and taken from the band around the words — every place in a
+    // tip that nobody else takes is a start
+    // (規約 §hover のツールチップ). The starts are the air
     // itself, sampled: a grid over the tip with the points standing on
     // the sentence dropped, which is exactly what a real press could
     // reach the pad at.
     //
-    // **`all=` and not a count.** How many places a tip's air has
+    // **`all=` is the claim.** How many places a tip's air has
     // depends on the length of the path in it and on the machine that
     // drew it, so the number rides along as diagnosis and the
     // judgement is "every one of them, and there was at least one".
@@ -270,11 +270,11 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "tip_sweep all=true caret=true hand=true",
     },
     // A row's tooltip. `lit=` is the control — the tip that came up
-    // under the same pointer on the way in, so a run that photographs
-    // an empty overlay is showing the row's answer and not a pointer
-    // that never landed. `wants=` is the row's own words and `tip=`
-    // the shared instance carrying them: every row of the sidebar
-    // spells its name in full, so both are judged.
+    // under the same pointer on the way in, so an empty overlay in the
+    // picture is the row's own answer, from a pointer that landed.
+    // `wants=` is the row's own words and `tip=` the shared instance
+    // carrying them: every row of the sidebar spells its name in full,
+    // so both are judged.
     Verb {
         name: "nav-tip",
         when: &[],
@@ -286,9 +286,9 @@ pub(super) const TABLE: &[Verb] = &[
     // moved frame the same — and a wiring that dropped the click
     // silently is exactly the second one. `same=` is the graph's own row
     // carrying the commit the row named, `lit=` the light on it, and the
-    // two together are what the press produced rather than what it was
-    // asked to produce. `wip=false` is beside them because the history
-    // has to be the face on screen for either to mean anything.
+    // two together are what the press produced. `wip=false` is beside
+    // them because the history has to be the face on screen for either
+    // to mean anything.
     //
     // `at=` and `name=` stay out of the claim: they are the repository's
     // numbers — where that commit happened to sort and what the folder
@@ -311,8 +311,8 @@ pub(super) const TABLE: &[Verb] = &[
     // margin or an inset to start from, and that is the change it holds.
     //
     // `row=` and `rested=` are left outside the claim on purpose. They
-    // are the repository's numbers rather than the rule's — where the
-    // current branch happened to sort, and how tall the section came out
+    // are the repository's numbers — where the current branch happened
+    // to sort, and how tall the section came out
     // — and a preset with one more branch in it would fail a claim that
     // reached them while nothing about the stand-in had changed.
     Verb {
@@ -323,10 +323,10 @@ pub(super) const TABLE: &[Verb] = &[
     // The left menu's rename gesture, and the absence that is the
     // whole of its bug: a click landing in the folded list's section
     // after that section went away and came back is an ordinary
-    // click, not the gesture's second one. A picture cannot carry it
-    // — the run that armed nothing frames as a folded rail with a
-    // section beside it, which is what `nav-peek` frames as too. So
-    // the pair is read out loud: `armed=` is the row's own answer to
+    // click. A picture cannot carry it — the run that armed nothing
+    // frames as a folded rail with a section beside it, which is
+    // what `nav-peek` frames as too. So the pair is read out loud:
+    // `armed=` is the row's own answer to
     // the click it was given, `collapsed=`/`box=` what came of it
     // (the box puts the whole list back over the diff the fold was
     // made for — observed).

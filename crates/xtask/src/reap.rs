@@ -3,26 +3,26 @@
 //! [`Child::kill`] reaches the process this runner spawned and nothing
 //! below it. A cargo ended at `check`'s ceiling leaves the rustc it was
 //! waiting on running, and that rustc goes on holding this tree's build
-//! lock: the next gate here waits on the lock with nothing to say why,
-//! which reads as another session's cargo rather than as the step this
-//! one killed.
+//! lock: the next gate here waits on the lock with
+//! nothing to say why, which reads as another
+//! session's cargo.
 //!
 //! The two systems are asked differently, because only one of them keeps
 //! a tree that can be trusted:
 //!
 //! * **unix** — a step that leads a group of its own ([`own_group`]) is
-//!   ended by that group. A group is a kernel object rather than a number
-//!   written on a child, so nothing under such a step escapes it, nothing
-//!   outside it can be caught by it, and SIGKILL to the group cannot be
-//!   refused. What a group of its own costs is every signal aimed at this
-//!   runner: a Ctrl-C goes to the terminal's foreground group and a
-//!   ceiling above this one kills a group, so a step in a group of its
-//!   own takes neither and is left to whatever ceiling it holds itself
-//!   to. A step left in this runner's group is reached instead by walking
-//!   the parent each process names, and that walk needs no start time to
-//!   trust what it reads: the kernel re-points an orphan at init the
-//!   moment its parent goes, so no living process names a number that has
-//!   been handed out again, and one that names the step was made by it.
+//!   ended by that group. A group is a kernel object, so nothing under
+//!   such a step escapes it, nothing outside it can be caught by it,
+//!   and SIGKILL to the group cannot be refused. What a group of its
+//!   own costs is every signal aimed at this runner: a Ctrl-C goes to
+//!   the terminal's foreground group and a ceiling above this one
+//!   kills a group, so a step in a group of its own takes neither and
+//!   is left to whatever ceiling it holds itself to. A step left in
+//!   this runner's group is reached instead by walking the parent each
+//!   process names, and that walk needs no start time to trust what it
+//!   reads: the kernel re-points an orphan at init the moment its
+//!   parent goes, so no living process names a number that has been
+//!   handed out again, and one that names the step was made by it.
 //! * **windows** — there is no group to take, and no job object to take
 //!   either: the calls that make one are Win32, this crate's dependencies
 //!   are std alone (CLAUDE.md 技術スタック), and the one job object here
@@ -61,11 +61,11 @@ pub(crate) struct Reaped {
 }
 
 impl Reaped {
-    /// How this reads in the failure that ended the step. Said even when
-    /// it is nothing: a ceiling that names no survivors is the difference
-    /// between the next stall being this run's fault and being news — so
-    /// a look that could not be taken says that, rather than passing for
-    /// a step that started nothing.
+    /// How this reads in the failure that ended the step.
+    /// Said even when it is nothing: a ceiling that names no
+    /// survivors is the difference between the next stall
+    /// being this run's fault and being news — so a look
+    /// that could not be taken says so.
     pub(crate) fn line(&self) -> String {
         let Some(under) = self.under.as_ref() else {
             return "what it started could not be looked up and may hold this side's build lock"
@@ -89,10 +89,10 @@ impl Reaped {
 }
 
 /// Starts what `command` runs in a group of its own, which [`reap`] ends
-/// whole instead of walking. The group is out of reach of every signal
-/// aimed at this runner — the terminal's Ctrl-C, a ceiling above this one
-/// — so what is put in one is left to [`reap`]'s ceiling alone. A no-op
-/// where the tree is walked instead of grouped.
+/// whole. The group is out of reach of every signal aimed at this runner
+/// — the terminal's Ctrl-C, a ceiling above this one — so what is put in
+/// one is left to [`reap`]'s ceiling alone. A no-op where the tree is
+/// walked.
 #[cfg(unix)]
 pub(crate) fn own_group(command: &mut Command) {
     use std::os::unix::process::CommandExt;
@@ -178,9 +178,9 @@ fn end_tree(child: &mut Child) -> Reaped {
 #[cfg(unix)]
 fn end_group(root: u32) {
     let mut command = Command::new("kill");
-    // `--` before the group: the `kill` on PATH is not the shell's, and
-    // it reads a leading `-1234` as another signal to send rather than as
-    // the group to send it to.
+    // `--` before the group: the `kill` on PATH is not the
+    // shell's, and it reads a leading `-1234` as another
+    // signal to send.
     command.args(["-9", "--", &format!("-{root}")]);
     match crate::subprocess::run_captured(&mut command) {
         Ok(out) if out.status.success() => {}
@@ -506,8 +506,8 @@ mod tests {
             "the kill walked less of the tree than the look did: {reaped:?}"
         );
         assert!(ended.is_some(), "the step itself was not reaped");
-        // Asked until they are gone rather than at once: a process ended
-        // this instant can still be in a listing taken the next.
+        // Asked until they are gone: a process ended this instant can
+        // still be in a listing taken the next.
         until(
             "nothing left under the step",
             || still_running(&under),
@@ -516,8 +516,8 @@ mod tests {
     }
 
     /// The same tree, left in this runner's own group: what reaches it is
-    /// the walk, and what must not is the group — a kill by group here
-    /// would end the test that asked for it.
+    /// the walk — a kill by group here would end the test that asked
+    /// for it.
     #[cfg(unix)]
     #[test]
     fn a_grandchild_of_a_step_in_this_runners_group_goes_with_the_step() {
@@ -581,9 +581,9 @@ mod tests {
         command
     }
 
-    /// Each level backgrounds the next and waits on it: a shell whose
-    /// script is one plain command replaces itself with it, and the tree
-    /// would be one process deep instead of three.
+    /// Each level backgrounds the next and waits on it, so the tree is
+    /// three processes deep: a shell whose script is one plain command
+    /// replaces itself with it.
     #[cfg(unix)]
     fn tree_three_deep() -> Command {
         let mut command = Command::new("sh");

@@ -16,8 +16,8 @@ pub(super) const TABLE: &[Verb] = &[
     // selection stays on the stand-in when the row it stands for is
     // scrolled off, and the stand-in keeps the sliver the list holds
     // above its own first row. `room=4` is `headerHeight` less
-    // `graphRowHeight` — a token moving under it is a thing to look at
-    // rather than a number to follow.
+    // `graphRowHeight` — a token moving under it is a thing to look
+    // at.
     Verb {
         name: "graph-head",
         when: &[],
@@ -32,8 +32,8 @@ pub(super) const TABLE: &[Verb] = &[
     // carrying the selection has anywhere to show — a selected row does
     // not brighten under the pointer, and neither does its stand-in. So
     // this one belongs on the preset whose HEAD is not the row the page
-    // opened on, and its `above=true` is what says the run scrolled for
-    // the top edge there rather than taking the bottom one it started
+    // opened on, and its `above=true` is what says the run scrolled up
+    // for the top edge there, past the bottom one it started
     // with.
     Verb {
         name: "graph-head-lit",
@@ -101,7 +101,7 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "back=true refused=1",
     },
-    // And the one that must *not* refuse: a half-written message is a
+    // And the one that steps anyway: a half-written message is a
     // draft, and the arrows walk off it the way a click does — so
     // what it has to say is a plain step's answer, word for word.
     Verb {

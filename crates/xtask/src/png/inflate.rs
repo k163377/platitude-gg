@@ -1,22 +1,22 @@
 //! Inflate (RFC 1951), all three block types.
 //!
 //! `write` emits stored blocks, but nothing else does: Qt saves a
-//! screenshot through zlib's dynamic Huffman codes, and every IDAT this
-//! is ever pointed at is one of those. Reading a shot back is therefore
-//! the whole of deflate, not the half that undoes what we wrote.
+//! screenshot through zlib's dynamic Huffman codes, and every IDAT
+//! this is ever pointed at is one of those. Reading a shot back is
+//! therefore the whole of deflate.
 //!
-//! Symbols come out a bit at a time (Mark Adler's `puff` walk) rather
-//! than through a decoding table. What this reads is one screenshot,
-//! once, in a debug build of a dev tool; a table is several times the
-//! code for time nobody is waiting on.
+//! Symbols come out a bit at a time (Mark Adler's `puff` walk). What
+//! this reads is one screenshot, once, in a debug build of a dev tool;
+//! a decoding table is several times the code for time nobody is
+//! waiting on.
 
 use super::checksum::adler32;
 
 const SHORT: &str = "the compressed data ends mid-stream";
 
-/// The bytes a zlib stream (RFC 1950) holds. The Adler sum it ends with
-/// is worked out again, so a stream that inflates to the wrong bytes is
-/// caught here rather than downstream as wrong pixels.
+/// The bytes a zlib stream (RFC 1950) holds. The Adler sum it ends
+/// with is worked out again, so a stream that inflates to the wrong
+/// bytes is caught here.
 pub(super) fn zlib(stream: &[u8]) -> Result<Vec<u8>, String> {
     let [cmf, flg, deflated @ ..] = stream else {
         return Err("the compressed data is too short to hold a zlib header".to_string());

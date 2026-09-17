@@ -4,17 +4,17 @@
 //! The verification harness is a thing the product can be built without
 //! (`platitude-app` §features), and what keeps that true on the Rust side
 //! is that the app asks one module what is driving it
-//! (`harness::knobs`) instead of asking `std::env` wherever the answer is
-//! wanted. That module is behind the feature, so a build without it never
-//! looks a `PGG_*` variable up — which is what stops a variable somebody
-//! happens to have exported from reaching a shipped window.
+//! (`harness::knobs`). That module is behind the feature, so a build
+//! without it never looks a `PGG_*` variable up — which is what stops a
+//! variable somebody happens to have exported from reaching a shipped
+//! window.
 //!
 //! It is one line to lose and nothing catches it at run time — on the
 //! machine that would have noticed, the variable is simply not set — so it
 //! is counted here instead (.claude/rules/app-ui.md).
 //!
 //! `PGG_LOG` is the exception, and deliberately: it says how loud to be
-//! rather than who is driving (`settings::NOT_AUTOMATION`), and it is read
+//! (`settings::NOT_AUTOMATION`), and it is read
 //! before there is a harness to ask.
 //!
 //! **Spelling a variable is not the only way to read one.** The core's
@@ -70,8 +70,8 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
                 failures.push(format!(
                     "{APP}/{shown}:{}: names {name} — the only place in this crate that looks \
                      a `PGG_*` variable up is `{READER}` (and `{ENTRY}` for `{LOGGING}`, which \
-                     says how loud to be rather than who is driving). Put the knob on \
-                     `Knobs` instead, so a build without the harness reads no environment \
+                     says how loud to be). Put the knob on \
+                     `Knobs`, so a build without the harness reads no environment \
                      at all (.claude/rules/app-ui.md)",
                     number + 1
                 ));

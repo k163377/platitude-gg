@@ -21,7 +21,7 @@
 //! (the index, the re-exports, the crate roots) is scaffolding that
 //! resolution uses and nothing reads afterwards; the round trip is tested
 //! against the real tree's graph so that a field which stops being
-//! scaffolding is caught here rather than in a selection.
+//! scaffolding is caught here.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -30,7 +30,7 @@ use super::graph::{Graph, Module};
 use crate::subprocess::{common_git_dir, git_query};
 
 /// The format the file is written in. A reader that does not know this
-/// number reads nothing rather than guessing.
+/// number reads nothing.
 const VERSION: &str = "graph-cache 2";
 
 /// How many built graphs a repository keeps. One is a few hundred
@@ -98,8 +98,8 @@ impl Key {
     }
 }
 
-/// FNV-64a, as the step stamps use: a name for a set of bytes, not a
-/// guard against anyone choosing them.
+/// FNV-64a, as the step stamps use: a name for a set of bytes (no
+/// adversary chooses them).
 fn fnv(text: &str) -> u64 {
     fingerprint(text.as_bytes())
 }
@@ -357,7 +357,7 @@ mod tests {
 
     /// The tree's own graph, written and read back: every edge, every
     /// reader, every module and every unresolved path as it was. Against
-    /// the real tree rather than a made-up graph, because what this has
+    /// the real tree, because what this has
     /// to survive is the shapes this workspace actually holds — a module
     /// at a crate root with an empty path, an integration binary, a
     /// directory node, a non-ASCII name.

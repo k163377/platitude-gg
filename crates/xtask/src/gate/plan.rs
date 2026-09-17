@@ -28,8 +28,8 @@ pub(crate) struct Step {
     pub always: bool,
     /// A verify-ui run, which builds the release unless told not to. The
     /// runner tells it not to once an earlier verb of the same side has
-    /// built in this very invocation — never on the strength of a cached
-    /// step, whose build may have happened in another tree.
+    /// built in this very invocation (a cached step's build may have
+    /// happened in another tree).
     pub builds_app: bool,
     /// Reads the release the side's verbs build — a verb, or `bare` — and
     /// so runs in the side's built-app group, beside the checks that
@@ -62,7 +62,7 @@ pub(crate) struct Plan {
     /// Every step asked for again whether or not a stamp answers for it.
     /// Kept past the selection because the run has one more chance to
     /// find a step already green — another tree's, stamped while this
-    /// one queued — and a fresh run is not to take it (`gate::run_one`).
+    /// one queued — and a fresh run runs it anyway (`gate::run_one`).
     pub fresh: bool,
     /// Every file in the tree counted as reached, and why: `--all`, or the
     /// build input that changed.
@@ -74,8 +74,8 @@ pub(crate) struct Plan {
     /// nothing headless shows them, so the gate cannot pass them.
     pub uncovered: Vec<String>,
     /// Changed files nothing reads and no step covers — said out loud,
-    /// so a kind of file nothing tests is visible rather than silently
-    /// green.
+    /// so a kind of file nothing tests is visible in the gate's
+    /// report.
     pub unclaimed: Vec<String>,
     /// What the graph says is wrong with the tree itself
     /// (`graph::complaints`): a path resolving nowhere leaves every
@@ -237,7 +237,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
             .map(|f| format!("{f} is gone"))
     };
     // What the change itself reaches is what has to be shown; a build
-    // input widens what runs, not what the census owes.
+    // input widens only what runs.
     let touched = g.reach(&executable_changes);
     let reach = if everything.is_some() {
         // Every node of the graph, and every QML file whether or not it
@@ -308,7 +308,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
 /// the seconds it takes are not worth one.
 ///
 /// The object ids the keys are made of come from one listing of the
-/// tree, not from a `git rev-parse` per input per step: a whole plan is
+/// tree: a whole plan is
 /// hundreds of steps with dozens of inputs each, and a process for every
 /// pair is minutes of every gate spent starting git before the first
 /// step runs — more under the load of other seats gating beside it.
@@ -359,8 +359,8 @@ fn tree_ids(here: &str, rev: &str) -> Result<BTreeMap<String, String>, String> {
 }
 
 /// `ls-tree -z`: `<mode> <type> <id>\t<path>` per entry, NUL after each.
-/// `-z` so that a path is spelled as it is, never octal-escaped in
-/// quotes the way a non-ASCII name otherwise comes back.
+/// `-z` so that a path is spelled as it is (a non-ASCII name otherwise
+/// comes back octal-escaped in quotes).
 fn parse_ls_tree(listing: &[u8]) -> BTreeMap<String, String> {
     super::inputs::from_listing(listing)
 }
@@ -380,7 +380,7 @@ fn moves_everything(file: &str) -> bool {
 
 /// A source the tree no longer holds, whose readers the graph cannot
 /// name: the graph is read off the tree, and a `use` or a QML type name
-/// still pointing at the file resolves to nothing rather than to an edge.
+/// still pointing at the file resolves to nothing.
 /// Its reach would be the file alone — no crate entered, so no clippy,
 /// no test, no verb — and a module deleted with another crate still
 /// naming it would be stamped green. Everything is the one reach that
@@ -413,7 +413,7 @@ fn words(line: &[&str]) -> Vec<String> {
 /// `cargo xtask <line>`, spelled unquieted the way `check` does so that
 /// cargo's build-lock line reaches the log — and `--locked`, like every
 /// cargo the gate starts: a cargo that would rewrite `Cargo.lock` says
-/// so and stops, instead of leaving a changed lock under a green
+/// so and stops
 /// (internal-docs/反映前テストの機械化.md §gate).
 fn xtask(line: &[&str]) -> Vec<String> {
     let mut command = words(&["cargo", "run", "--locked", "-p", "xtask", "--"]);
@@ -611,8 +611,8 @@ fn always_steps() -> Vec<Step> {
         // or deleted verb whose line the gate would go on running, where
         // the app ignores the name and the run waits out its ceiling
         // saying nothing. The verbs with no line at all are counted and
-        // printed rather than failed: that is a backlog to record
-        // (internal-docs/P3-確認事項.md), not a break to catch here.
+        // printed: that is a backlog to record
+        // (internal-docs/P3-確認事項.md).
         step("verbs", Side::Host, true, xtask(&["verbs"]), &["crates"]),
         step(
             "fmt",
@@ -629,7 +629,7 @@ fn always_steps() -> Vec<Step> {
 /// reads `deny.toml`, so it is named here on its own; every other way the
 /// closure can move is a manifest, and a manifest already sets `whole`
 /// (`moves_everything`). It goes ahead of every build on its side: a
-/// crate the policy forbids should be said in seconds, not after clippy.
+/// crate the policy forbids should be said in seconds.
 ///
 /// Host only. The policy names no `targets` and takes the graph with
 /// `all-features`, so the set of crates it reads is the same on every OS
@@ -659,7 +659,7 @@ fn deny_steps(g: &Graph, changed: &[String], whole: bool) -> Vec<Step> {
 ///
 /// Ahead of clippy because it compiles nothing of the app — the runner
 /// stages the product's QML and hands it to `qmltestrunner`. Its inputs
-/// are the whole module rather than the components a test names: the
+/// are the whole module: the
 /// staging copies all of it, so any of it can be what a test resolves
 /// through (`crate::qmltest`).
 ///
@@ -717,7 +717,7 @@ fn record_of_a_wedge() -> [String; 7] {
 /// Three runs stopped on purpose, when a change reaches what would read
 /// them back.
 ///
-/// **Selected by its own files rather than by the harness.** Every one of
+/// **Selected by its own files.** Every one of
 /// these is a held run paid for in wall clock, and what they check is one
 /// mechanism: nothing outside [`record_of_a_wedge`] can quietly stop a
 /// stopped run from being readable.
@@ -835,7 +835,7 @@ fn it_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
     steps
 }
 
-/// Components for a narrower candidate, never the executed selection.
+/// Components for a narrower candidate only.
 /// The census records only the final state: `settings-escape` exercises
 /// SettingsDialog but closes it before that snapshot. Absence there is
 /// no proof a run did not use a component. `None` keeps the actual set
@@ -919,13 +919,13 @@ fn binary_steps(
     verb_inputs.extend(harness());
     // The runs rewrite their own census lines — the container's does not
     // (`verify::options::census_line` refuses there), so the file stays
-    // one machine's answer rather than a race between the two sides. That
-    // is why the gate records rather than leaving the file to whoever next
-    // types the line: it re-runs exactly the lines a QML change made
-    // stale, and a census only hand-typed runs refresh goes dirty in the
-    // middle of unrelated work. A gate whose runs moved it stops before it
-    // stamps, because the stamp names a commit and the tree that passed is
-    // no longer the one it holds (`gate::execute`).
+    // one machine's answer, the host's. That is why the gate
+    // records the file itself: it re-runs exactly the lines a QML
+    // change made stale, and a census only hand-typed runs refresh
+    // goes dirty in the middle of unrelated work. A gate whose runs
+    // moved it stops before it stamps, because the stamp names a
+    // commit and the tree that passed is no longer the one it holds
+    // (`gate::execute`).
     for line in &lines {
         let mut host = xtask(&["verify-ui"]);
         host.extend(crate::verify::suite_words(line));
@@ -984,8 +984,8 @@ fn uncovered(
     reach
         .iter()
         .filter(|f| f.ends_with(".qml"))
-        // A QtTest file stands in a runner of its own, never in the app's
-        // window: `qmltest_steps` is what shows it.
+        // A QtTest file stands in a runner of its own
+        // (`qmltest_steps` is what shows it).
         .filter(|f| !under(f, &qml_tests))
         .filter(|f| census::instantiable(dir, f))
         .filter(|f| !shown_as(&stem_of(f), worn).iter().any(|s| census.covers(s)))
@@ -1128,7 +1128,7 @@ mod tests {
 
     /// The runner's own steps are spelled `--locked`, like every cargo
     /// the gate starts: a cargo that would rewrite the lock says so and
-    /// stops, instead of leaving a changed lock under a green. The
+    /// stops. The
     /// spelling is also a stamp's key, so a change here re-runs every
     /// step once (`gate::stamp`).
     #[test]

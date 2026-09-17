@@ -3,18 +3,18 @@
 //! A second gate in the same tree runs the same steps over the same
 //! build directory, and the two wait on each other's cargo for the whole
 //! of it. The first keeps the tree; the second is refused with the
-//! first's pid rather than queued — there is nothing for it to do that
-//! the first is not already doing. A gate writes that pid the instant it
-//! has the lock and takes it down under the lock at the end, so a lock
-//! held with nothing to read beside it is a gate at one edge or the
-//! other, looked at again before it is named (`still::SWEEP`).
+//! first's pid — there is nothing for it to do that the first is not
+//! already doing. A gate writes that pid the instant it has the lock
+//! and takes it down under the lock at the end, so a lock held with
+//! nothing to read beside it is a gate at one edge or the other,
+//! looked at again before it is named (`still::SWEEP`).
 //!
 //! What runs at once *across* the machine is the budget (`crate::budget`)
 //! — one pool over every unit of both sides and every seat, with a
 //! landing at the head of the queue. This lock is the one thing that
-//! stayed a lock: it is an exclusion rather than a share, and it refuses
-//! instead of waiting, so it never stands between a landing and the
-//! machine.
+//! stayed a lock: it is an exclusion, and
+//! it answers at once, so a landing goes
+//! straight to the machine.
 //!
 //! Liveness is the lock, as in `still` and `budget`: a lock nobody holds
 //! is free whatever note stands beside it, so a gate killed mid-run
@@ -35,10 +35,10 @@ const LOCK: &str = "lock";
 /// unwinds leaves both to the operating system.
 ///
 /// The lock file stays where it is, and nothing collects there: it stands
-/// at one name per tree (`gate::running_note`), not one per run. Removing
-/// a lock file at a name every gate opens is what would stop it being one
-/// lock — a second gate that opened it first would go on holding a file
-/// no longer at that name while a third made a new one there
+/// at one name per tree (`gate::running_note`). Removing a lock file at
+/// a name every gate opens is what would stop it being one lock — a
+/// second gate that opened it first would go on holding a file no longer
+/// at that name while a third made a new one there
 /// (`still::Name`).
 #[derive(Debug)]
 pub(crate) struct Sole {
@@ -157,9 +157,9 @@ mod tests {
     /// description outright stands in for one a fork hands over: the
     /// gate here lets the lock go and takes its note down while that
     /// description is still held by somebody who writes no note. The
-    /// unlock reaches the description rather than this process's handle
-    /// on it, so the next gate has the tree at once — a close would
-    /// have left it refused until the child was gone.
+    /// unlock reaches the description itself, so the next gate has the
+    /// tree at once — a close would have left it refused until the
+    /// child was gone.
     ///
     /// Linux, where `flock(2)` promises the inheritance and where a
     /// carried lock is seen at all; the gate suite nets the same release

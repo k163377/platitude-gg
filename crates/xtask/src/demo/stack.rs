@@ -11,11 +11,11 @@ const PILED_TAGS: u32 = 41;
 
 /// Every colour a chip column can put on a row, every way two of them can
 /// meet, every depth the fan is drawn at, and the row deep enough that
-/// only the card's own count can say so — **three rows to a shape**,
-/// so the fan is read against its own repeat rather than against a
-/// neighbour of some other depth: what a stack costs the row above and
-/// below it is the whole question the picture answers, and a shape shown
-/// once cannot answer it.
+/// only the card's own count can say so — **three rows to a
+/// shape**, so the fan is read against its own repeat: what a
+/// stack costs the row above and below it is the whole question
+/// the picture answers, and a shape shown once cannot answer
+/// it.
 ///
 /// Newest first, which is how the graph draws them. Each line is three
 /// commits carrying the same names under the same subject:
@@ -36,7 +36,7 @@ const PILED_TAGS: u32 = 41;
 /// one, so the two rows under it wear the same shape with a plain local
 /// in front of it.
 ///
-/// **`v9.1`, `v9.2` and `v9.3` are drifts, not tags only the remote has.**
+/// **`v9.1`, `v9.2` and `v9.3` are drifts.**
 /// A tag whose commit this repository holds comes down with the next
 /// fetch (auto-following takes the tags of objects it already has), and a
 /// tag on a commit that is not here has no row to stand on — so a reading
@@ -47,9 +47,9 @@ const PILED_TAGS: u32 = 41;
 /// 語る」). Both halves show once the window has fetched, which it does as
 /// it opens.
 ///
-/// The detached HEAD marker is not here — it would take the checkout off
-/// `main` and every row would lose the current branch. That colour is
-/// [`stack_max`]'s.
+/// The detached HEAD marker is [`stack_max`]'s — it would take the
+/// checkout off `main` here, and every row would lose the current
+/// branch.
 pub(super) fn stack(repo: &mut DemoRepo) -> Result<(), String> {
     stack_rows(repo)?;
     stack_published(repo)
@@ -138,8 +138,8 @@ fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
         repo.git(&["tag", tag])?;
         // **Named to sort after the two beside it**: the chips come out
         // in the order core sorted the refs, so a held branch whose name
-        // sorts first would take the front card and the row would read as
-        // a dulled one rather than as a branch with a held one behind it.
+        // sorts first would take the front card and the row would read
+        // as a dulled one.
         let held = format!("{name}-held");
         let at = format!("../{held}");
         repo.git(&["worktree", "add", "-b", &held, &at])?;
@@ -162,7 +162,7 @@ fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
             "feat: a branch under forty-one tags on one commit",
         )?;
         repo.git(&["branch", name])?;
-        // **One transaction, not forty-one `git tag` runs.** The names
+        // **One transaction.** The names
         // are all this row wants of them, and each `tag` run is a
         // process of its own; written through `update-ref` they cost
         // one.
@@ -205,7 +205,7 @@ fn stack_published(repo: &mut DemoRepo) -> Result<(), String> {
         repo.git(&["push", "--set-upstream", "origin", name])?;
     }
     // Remote branches under names no local branch carries, so each keeps
-    // a card of its own instead of folding into one.
+    // a card of its own.
     for name in [
         "main", "next", "side", "wide", "deep", "tall", "spot", "mark", "note",
     ] {

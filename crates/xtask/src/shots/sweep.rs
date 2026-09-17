@@ -1,12 +1,12 @@
 //! What leaves the board, and when.
 //!
-//! The board is the surface a change is worked on, not an archive of how
-//! it was arrived at: what stands on it should be the pictures somebody
-//! is looking at now. Left to hand-pruning it is neither — 263 runs and
-//! 612 pictures piled up in half a day, one label standing twelve times
-//! over, and 88 pictures whose run file somebody had deleted from under
-//! them (measured). Three rules keep it a working surface,
-//! and none of them reaches a session that is still using its pictures:
+//! The board is the surface a change is worked on: what stands on it
+//! should be the pictures somebody is looking at now. Left to
+//! hand-pruning it drifts — 263 runs and 612 pictures piled up in half
+//! a day, one label standing twelve times over, and 88 pictures whose
+//! run file somebody had deleted from under them (measured). Three
+//! rules keep it a working surface, and none of them reaches a session
+//! that is still using its pictures:
 //!
 //! * **A picture retaken replaces the one before it** — one seat's runs
 //!   under one label collapse to the newest. The attempts that were
@@ -17,12 +17,12 @@
 //!   Those two are the whole of it: a run stands for exactly as long as
 //!   the work it was taken for.
 //!
-//! **A session ending is not one of them.** The machine sleeps and every
-//! open conversation is handed a SessionEnd, then goes on working at the
-//! next wake — so a board that swept there would empty itself under a
-//! reader who had just been told to press F5 on it. The seat outlives
-//! its sessions anyway: which one took the picture says nothing about
-//! whether the work it argues for is finished.
+//! **A session ending leaves the board standing.** The machine sleeps
+//! and every open conversation is handed a SessionEnd, then goes on
+//! working at the next wake — so a board that swept there would empty
+//! itself under a reader just told to press F5 on it. The seat
+//! outlives its sessions anyway: which one took the picture says
+//! nothing about whether the work it argues for is finished.
 //!
 //! What no rule reaches — a run taken by hand outside a session, or an
 //! approach abandoned under a name nobody retakes — is what `prune` is
@@ -40,9 +40,9 @@ use super::page;
 ///
 /// A run copies its pictures before it writes the file that names them,
 /// and six seats write to one board — a picture that is unreferenced
-/// only because its own run is still being written must not be collected
-/// out from under it. Ten minutes is far past the milliseconds that
-/// window actually is, and nothing is lost by waiting.
+/// only because its own run is still being written is left where it
+/// is. Ten minutes is far past the milliseconds that window actually
+/// is, and nothing is lost by waiting.
 const GRACE: Duration = Duration::from_secs(10 * 60);
 
 /// Which runs a sweep reaches.
@@ -59,8 +59,8 @@ pub(super) struct Scope {
 pub(super) enum Whose {
     /// Runs taken in these trees: roster letters, or `main`.
     Seats(Vec<String>),
-    /// Every run, whoever took it — asked for in words, never arrived at
-    /// by a caller who named nothing.
+    /// Every run, whoever took it — reached only by a caller who
+    /// asks for it in words.
     Everything,
 }
 
@@ -86,11 +86,11 @@ impl Scope {
 /// Takes runs off the board — their pictures and the file that names
 /// them — and rebuilds the page. Answers how many went.
 ///
-/// Every seat writes to one board (`board_dir`), so **what the caller
-/// does not name is not touched**: the runs beside yours belong to a
-/// session that may be showing them right now, and a sweep that took the
-/// board back to empty would be one seat throwing away another's work.
-/// `Whose::Everything` is the deliberate exception.
+/// Every seat writes to one board (`board_dir`), so **only what the
+/// caller names is touched**: the runs beside yours belong to a
+/// session that may be showing them right now, and a sweep that took
+/// the board back to empty would be one seat throwing away another's
+/// work. `Whose::Everything` is the deliberate exception.
 ///
 /// A run whose file cannot be parsed is left where it is. It is invisible
 /// on the page already (`load_runs` skips it), and removing what cannot
@@ -122,14 +122,14 @@ pub(crate) fn seat_freed(seat: &str) -> Result<(usize, PathBuf), String> {
     prune(&Scope::seats(vec![seat.to_string()]))
 }
 
-/// The same, for a seat starting a stretch of work rather than ending
-/// one (`seats::start_at_main`): whatever is still on the board from
-/// this letter belongs to work that is over — landed, or given up on —
-/// and the run that argued for it has nobody left to argue to.
+/// The same, for a seat starting a stretch of work
+/// (`seats::start_at_main`): whatever is still on the board from this
+/// letter belongs to work that is over — landed, or given up on — and
+/// the run that argued for it has nobody left to argue to.
 ///
-/// Quiet in every failure, and quiet about how many went: a board that
-/// is not there yet, or will not be written, must not stop a seat being
-/// handed out.
+/// Quiet in every failure, and quiet about how many
+/// went: a seat is handed out whatever the board does —
+/// missing, or refusing to be written.
 pub(crate) fn seat_reused(seat: &str) {
     if let Err(_unheard) = seat_freed(seat) {
         // The seat is the answer being given; the board is a note beside
@@ -181,19 +181,19 @@ fn replaced(old: &Run, fresh: &Run) -> bool {
 
 /// The page, written from what the board holds now — and the pictures
 /// nothing points at any more, collected on the way past. Every path
-/// that changes the board ends here, so what the page shows and what the
-/// directory holds never disagree for longer than one command.
+/// that changes the board ends here, so what the page shows and what
+/// the directory holds agree within one command.
 pub(super) fn rebuild(board: &Path) -> Result<PathBuf, String> {
     let collected = collect_orphans(board);
     if collected > 0 {
         println!("board: collected {collected} picture(s) no run points at");
     }
     let page = board.join("index.html");
-    // Staged and moved into place: six seats rebuild this page, and a
-    // reader pressing F5 must never meet the half of it one of them has
-    // written so far. Under this process's own name — there is no lock
-    // between the seats, and two staging one name would move each
-    // other's halves into place.
+    // Staged and moved into place: six seats rebuild
+    // this page, and a reader pressing F5 meets a whole
+    // one. Under this process's own name — there is no
+    // lock between the seats, and two staging one name
+    // would move each other's halves into place.
     let staging = board.join(format!("index.html.{}.part", std::process::id()));
     std::fs::write(&staging, page::render(&load_runs(&board.join("runs"))))
         .map_err(|e| format!("could not write {}: {e}", shown(&staging)))?;
@@ -211,9 +211,9 @@ pub(super) fn rebuild(board: &Path) -> Result<PathBuf, String> {
 /// names them. Nothing would ever look at those bytes again, and nothing
 /// but this notices they are there.
 ///
-/// Failures are counted out rather than reported: this runs on the way
-/// past every rebuild, and a picture that would not delete is not a
-/// reason to fail the command that was actually asked for.
+/// Failures are counted out: this runs on the way past every rebuild,
+/// and a picture that would not delete leaves the command that was
+/// actually asked for standing.
 fn collect_orphans(board: &Path) -> usize {
     let referenced = referenced_pictures(&board.join("runs"));
     let now = SystemTime::now();
@@ -245,8 +245,8 @@ fn collectable(name: &str, referenced: &BTreeSet<String>, age: Duration) -> bool
     age >= GRACE && !referenced.contains(&format!("img/{name}"))
 }
 
-/// How long since a file was written, and zero when the filesystem will
-/// not say — an age nobody can read is not grounds for deleting.
+/// How long since a file was written, and zero when the filesystem
+/// will not say — zero keeps a picture whose age nobody can read.
 fn age(path: &Path, now: SystemTime) -> Duration {
     std::fs::metadata(path)
         .and_then(|meta| meta.modified())
@@ -257,10 +257,10 @@ fn age(path: &Path, now: SystemTime) -> Duration {
 
 /// Every picture named by anything in the runs directory.
 ///
-/// Read as text, not as parsed runs, and from every file rather than the
-/// .tsv ones: a run that no longer parses still names the pictures it
-/// holds, and one being staged under .tsv.part names the pictures its
-/// `record` has already copied.
+/// Read as text, and from every file in the directory:
+/// a run that no longer parses still names the pictures
+/// it holds, and one being staged under .tsv.part names
+/// the pictures its `record` has already copied.
 fn referenced_pictures(runs: &Path) -> BTreeSet<String> {
     let Ok(entries) = std::fs::read_dir(runs) else {
         return BTreeSet::new();
@@ -310,11 +310,11 @@ fn take(board: &Path, run: &Run, path: &Path) -> Result<(), String> {
     remove(path)
 }
 
-/// Deletes a file, and calls a file that is already gone done. The board
-/// is written by six seats at once, so the picture this run named may
-/// have been swept a moment ago — that is the outcome asked for, not a
-/// failure. Anything else is reported rather than dropped (CLAUDE.md
-/// Rust 規約).
+/// Deletes a file, and calls a file that is already
+/// gone done. The board is written by six seats at
+/// once, so the picture this run named may have been
+/// swept a moment ago — that is the outcome asked for.
+/// Anything else is reported (CLAUDE.md Rust 規約).
 fn remove(path: &Path) -> Result<(), String> {
     match std::fs::remove_file(path) {
         Ok(()) => Ok(()),

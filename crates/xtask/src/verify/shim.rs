@@ -11,7 +11,7 @@ pub(super) const SHIM_VERSION: &str = "PGG_SHIM_GIT_VERSION";
 /// The git that copy passes everything else to.
 pub(super) const SHIM_REAL: &str = "PGG_SHIM_REAL_GIT";
 /// Set on the app when `--other-git` asks for one: where a second git
-/// stands, staged beside the pictures and **not** on PATH.
+/// stands, staged beside the pictures and **off** PATH.
 pub(super) const OTHER_GIT: &str = "PGG_OTHER_GIT";
 
 /// Stands in for git when this binary was copied onto a run's PATH under
@@ -21,9 +21,9 @@ pub(super) const OTHER_GIT: &str = "PGG_OTHER_GIT";
 /// Only `--version` is answered here; the rest is handed to the real git,
 /// so what the app sees is an installation that works and is old.
 ///
-/// Not a script: CLAUDE.md rules out `.bat`/`.ps1` dev tooling, and a
-/// second binary would have to be built before it could be copied. This one
-/// is already built — it is the one running.
+/// This binary: CLAUDE.md rules out `.bat`/`.ps1` dev tooling, and a
+/// second binary would have to be built before it could be copied. This
+/// one is already built — it is the one running.
 pub fn git_shim() -> Option<ExitCode> {
     let version = std::env::var(SHIM_VERSION).ok()?;
     let real = std::env::var_os(SHIM_REAL)?;
@@ -64,7 +64,7 @@ pub(super) fn real_git(path: &std::ffi::OsStr) -> Result<PathBuf, String> {
 /// git chapter grows its button only for a git that answers and is not the
 /// one running, and no path names a second installation on both a desk and
 /// a container. This one is the same copy `--old-git` puts on PATH, put
-/// somewhere nothing resolves to instead — so a run can point the box at
+/// somewhere nothing resolves to — so a run can point the box at
 /// it and the app spawns it exactly as it would any other git.
 pub(super) fn stage_other_git(shot_dir: &std::path::Path) -> Result<PathBuf, String> {
     let dir = shot_dir.join("gitother");
@@ -94,19 +94,19 @@ pub(super) fn stage_old_git(
 }
 
 /// What the identity verbs type in when nothing else is asked for. Both
-/// halves differ from anything the seed below holds, so a mark means the
-/// write landed rather than that the value was already there.
+/// halves differ from anything the seed below holds, so a mark means
+/// the write landed.
 const IDENTITY_ASKED: &str = "Ada Lovelace|ada@example.com";
 
 /// The identity handed to every run that is not about the identity screen.
 ///
-/// Which machine a run happens on must not reach the picture, and a git
-/// with no `user.*` is one of the ways it would: the window opens a modal
-/// asking for one, and that modal and its dimmer are two popups counted by
-/// verbs with nothing to do with either (`verbs::graph`, `commit-menu`).
-/// Deliberately not what the demo repositories commit as (`demo::repo`),
-/// so a settings screen holding a global value beside a repository's own
-/// still holds two different things.
+/// The picture is the same whatever machine it was taken on, and a git
+/// with no `user.*` would put this one in it: the window opens a modal
+/// asking for one, and that modal and its dimmer are two popups counted
+/// by verbs with nothing to do with either (`verbs::graph`,
+/// `commit-menu`). Deliberately unlike what the demo repositories commit
+/// as (`demo::repo`), so a settings screen holding a global value beside
+/// a repository's own still holds two different things.
 const MACHINE_IDENTITY: &str =
     "[user]\n\tname = Verify Fixture\n\temail = verify@example.invalid\n";
 
@@ -128,10 +128,10 @@ pub(super) fn global_seed(verb: &str) -> &'static str {
 /// asks for an identity on its own.
 pub(super) fn identity_seed(verb: &str) -> Option<&'static str> {
     match verb {
-        // The `badges` pair wants the mark, not the screen: an empty seed
-        // is the one state that raises it without a save having to fail
-        // first, and the repository keeps its own `user.*` so everything
-        // else on the page goes on working.
+        // The `badges` pair wants the mark: an empty seed is the one
+        // state that raises it without a save having to fail first, and
+        // the repository keeps its own `user.*` so everything else on
+        // the page goes on working.
         // `quit-save-held` needs the screen up for the save it holds:
         // the dialog's own submit is the save the close lands on.
         "identity"
@@ -151,8 +151,8 @@ pub(super) fn identity_seed(verb: &str) -> Option<&'static str> {
 
 /// What the dialog on top of that seed is told to do. The identity verbs
 /// are about the write, so they type an identity in; `badges` is about
-/// what stands behind the dialog once it has been waved away, and its own
-/// argument names the shape of the window rather than a person.
+/// what stands behind the dialog once it has been waved away, and its
+/// own argument names the shape of the window.
 pub(super) fn identity_answer<'a>(verb: &str, arg: &'a str) -> &'a str {
     match verb {
         "badges" | "badges-hover" | "badges-hover-early" => "skip",
@@ -181,10 +181,10 @@ pub(super) fn held_save_landed(verb: &str, config: &Path) -> Option<bool> {
 mod tests {
     use super::{global_seed, identity_seed};
 
-    /// The seed is not the identity verbs' alone. A git with no `user.*`
-    /// opens a modal, the modal and its dimmer are popups, and the verbs
-    /// that count popups are about menus — so a run left on the machine's
-    /// own configuration fails or passes by who is sitting at it.
+    /// Every run starts from a seed. A git with no `user.*` opens a
+    /// modal, the modal and its dimmer are popups, and the verbs that
+    /// count popups are about menus — so a run left on the machine's own
+    /// configuration fails or passes by who is sitting at it.
     #[test]
     fn only_the_identity_verbs_start_without_an_identity() {
         for verb in ["commit-menu", "reset-menu", "perf", "wip", "old-git", ""] {

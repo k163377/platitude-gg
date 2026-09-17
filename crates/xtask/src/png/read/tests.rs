@@ -136,8 +136,8 @@ fn a_shape_this_cannot_read_is_named_rather_than_half_read() {
     assert!(decode(&framed(0, 1, 2, &raw)).is_err_and(|why| why.contains("0x1")));
 }
 
-/// The sizes come out of the file, so the length they multiply out to
-/// has to be refused rather than wrapped into a plausible small one.
+/// The sizes come out of the file, so the length they multiply out
+/// to has to be refused.
 #[test]
 fn a_header_naming_more_picture_than_there_is_memory_is_refused() {
     let huge = framed(u32::MAX, u32::MAX, 2, &[0u8; 7]);

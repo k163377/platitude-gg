@@ -86,7 +86,7 @@ fn a_core_change_owes_what_reads_it_and_nothing_beside_it() {
     for spared in ["clippy xtask", "test xtask 1"] {
         assert!(!ran.contains(spared), "{spared} ran; ran: {ran:?}");
     }
-    // And the filters are the modules the reach holds, not the crate.
+    // And the filters are the modules the reach holds.
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(
         text.contains("test platitude-core 1") && text.contains("test it 1"),
@@ -142,8 +142,8 @@ fn a_qml_change_owes_the_verbs_whose_census_names_it_and_no_rust_test() {
 }
 
 /// The final census does not contain a dialog a verb opened and closed.
-/// Narrowing by that snapshot is only a candidate, never permission to
-/// skip a verb reached through the dialog's owner.
+/// Narrowing by that snapshot is only a candidate; a verb reached
+/// through the dialog's owner still runs.
 #[test]
 fn a_qml_leaf_keeps_reached_verbs_and_reports_the_shadow_selection() {
     let sb = Sandbox::new("qml-shown");
@@ -568,7 +568,7 @@ fn a_policy_change_owes_cargo_deny_and_nothing_else() {
     assert_eq!(without_always(&sb.ran()), set(&["deny"]));
 }
 
-/// The policy is read against the closure, not against the sources: a
+/// The policy is read against the closure: a
 /// change to neither leaves the step unselected, however far it reaches.
 #[test]
 fn a_source_change_owes_no_policy_check() {
@@ -581,7 +581,7 @@ fn a_source_change_owes_no_policy_check() {
 
 /// A source taken out of the tree has no readers the graph can name —
 /// the graph is read off the tree, and `Main.qml` still naming the pane
-/// resolves to nothing rather than to an edge — so its reach is
+/// resolves to nothing — so its reach is
 /// everything: the one reach that cannot miss the reader.
 #[test]
 fn a_source_taken_out_of_the_tree_owes_everything() {

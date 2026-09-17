@@ -64,9 +64,9 @@ fn a_run_from_before_pairs_is_read_one_at_a_time() {
 }
 
 /// A run written while the board stamped the session that took it is
-/// still a run: the line is read past. Who took a picture never decided
-/// when it leaves — the seat's work does (`sweep`) — and a board full of
-/// yesterday's runs must not be a board that stops parsing.
+/// still a run: the line is read past. The seat's work decides when a
+/// picture leaves (`sweep`), and a board full of yesterday's runs
+/// still parses.
 #[test]
 fn a_run_stamped_with_a_session_is_read_past_it() {
     let text = "label\tthe chip's badge\nseat\ta\nsession\ts-1\nat\t1700000000000\n\
@@ -76,7 +76,7 @@ fn a_run_stamped_with_a_session_is_read_past_it() {
     assert_eq!(run.shots.len(), 1);
 }
 
-/// A file missing what a run *is* is skipped, not guessed at.
+/// A file missing what a run *is* is skipped.
 #[test]
 fn a_run_without_a_picture_is_not_a_run() {
     assert!(parse_run("label\tnamed\nat\t1\n").is_none());
@@ -99,8 +99,8 @@ fn a_value_never_carries_a_separator() {
 }
 
 /// The board is read top down in the order the runs were put up, so
-/// what `load_runs` answers is the reading order itself — never the
-/// order the directory happened to hand the files back.
+/// what `load_runs` answers is the reading order itself, whatever
+/// order the directory hands the files back in.
 #[test]
 fn runs_come_back_in_the_order_they_went_up() {
     let runs = std::env::temp_dir().join(format!("pgg-shots-order-{}", std::process::id()));

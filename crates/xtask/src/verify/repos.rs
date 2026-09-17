@@ -44,7 +44,7 @@ fn strip_count(verb: &str, arg: &str) -> Result<usize, String> {
     }
     let count: usize = arg
         .parse()
-        .map_err(|_| format!("{verb} takes a number of tabs, not {arg:?}"))?;
+        .map_err(|_| format!("{verb} takes a number of tabs; got {arg:?}"))?;
     if count == 0 || count > TAB_NAMES.len() {
         return Err(format!("{verb} takes 1..={} tabs", TAB_NAMES.len()));
     }
@@ -172,9 +172,9 @@ pub(super) fn tab_name_repos() -> Result<Vec<PathBuf>, String> {
 ///
 /// The commit editor starts empty, so the verbs that pull its box open
 /// have nothing to open it for unless something is in it — and something
-/// longer than the pane is tall, or the pull lands on the end of the text
-/// rather than on the bound this is about. The details pane needs no such
-/// thing: its messages come out of a repository.
+/// longer than the pane is tall, so the pull lands on the bound this is
+/// about. The details pane needs no such thing: its messages come out of
+/// a repository.
 pub(super) fn body_for(verb: &str) -> Option<String> {
     match verb {
         "wip-grow" | "wip-grow-squeeze" => Some(crate::demo::pasted(4000)),
@@ -184,9 +184,9 @@ pub(super) fn body_for(verb: &str) -> Option<String> {
 
 /// The one merge tool the candidate list is guaranteed to hold.
 ///
-/// Named rather than found: `git mergetool --tool-help` is an inventory
-/// of the machine, and a container built to run tests has no windowed
-/// merge tool on it at all.
+/// Named here: `git mergetool --tool-help` is an inventory of the
+/// machine, and a container built to run tests has no windowed merge
+/// tool on it at all.
 const SEEDED_TOOL: &str = "demo-editor";
 
 /// What the seeded tool does once it is launched for real: nothing, out
@@ -196,13 +196,13 @@ const SEEDED_TOOL: &str = "demo-editor";
 /// a tool's `cmd` through its own shell, which on Windows is Git for
 /// Windows' `sh` and its `/usr/bin/sleep` (measured).
 ///
-/// Two seconds, not the thirty the recipe this replaced typed by hand.
-/// The verb is a write act, so its one picture is taken behind
-/// `AutoActDriver.writeBarrier` and the `treeBarrier` after it — after
-/// the tool has exited and the file it resolved has left the conflicted
-/// bucket — and no length buys a frame of the wait. What is left for the
-/// number to be is a wait a person watching a windowed run can see,
-/// against time every `cargo xtask check` pays on both sides.
+/// Two seconds. The verb is a write act, so its one picture is taken
+/// behind `AutoActDriver.writeBarrier` and the `treeBarrier` after it
+/// — after the tool has exited and the file it resolved has left the
+/// conflicted bucket — and no length buys a frame of the wait. What is
+/// left for the number to be is a wait a person watching a windowed
+/// run can see, against time every `cargo xtask check` pays on both
+/// sides.
 const TOOL_CMD: &str = "sleep 2";
 
 /// Puts a tool in the repository's own config, for the verbs whose
@@ -219,12 +219,12 @@ const TOOL_CMD: &str = "sleep 2";
 /// run, and no tool is named as the one to launch — `merge.guitool` would
 /// land in the dialog's own field, which is the thing they photograph.
 ///
-/// `open-mergetool` needs the name launchable rather than merely listed,
-/// so it gets that key and one more. Without `merge.guitool` there is
-/// nothing for `conflict::configured_tool` to answer with, the menu row
-/// becomes the door to the settings instead, and the verb queues no
-/// write. Without `trustExitCode` git asks a closed stdin whether the
-/// merge went well, reads EOF, and calls the file failed (measured).
+/// `open-mergetool` needs the name launchable, so it gets that key and
+/// one more. Without `merge.guitool` there is nothing for
+/// `conflict::configured_tool` to answer with, the menu row becomes the
+/// door to the settings instead, and the verb queues no write. Without
+/// `trustExitCode` git asks a closed stdin whether the merge went well,
+/// reads EOF, and calls the file failed (measured).
 ///
 /// Whatever repositories the run is about are written to, a `--repo` of
 /// one's own included: the run owns them for its length
@@ -311,8 +311,8 @@ pub(super) fn folder_for(
         }
         // The one repository this verb's strip has not got: the thirteenth
         // off the same ladder, so the tab that arrives is named like the
-        // twelve it arrives among. Built here rather than beside them
-        // because [`for_run`]'s list is what the run opens at startup.
+        // twelve it arrives among. Built here, because [`for_run`]'s
+        // list is what the run opens at startup.
         "tab-open-go" => {
             let repo = crate::demo::create_named("basic", None, TAB_NAMES[12])?;
             Ok(repo.display().to_string())
@@ -346,12 +346,12 @@ fn tiny_png() -> Vec<u8> {
 /// The repositories one run opens, in the order their tabs come up.
 ///
 /// Named repositories win outright; otherwise one fresh demo repository
-/// per preset. Six verbs bring a whole strip of their own instead: what
-/// they are about is how a strip of that shape lays out, so the shape is
+/// per preset. Six verbs bring a whole strip of their own: what they
+/// are about is how a strip of that shape lays out, so the shape is
 /// the fixture.
 pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, String> {
     // A named repository and a preset ask for two different fixtures at
-    // once; refusing beats silently running against the wrong one.
+    // once, so the run stops here and says which two.
     if !opts.repo.is_empty() && !opts.preset.is_empty() {
         return Err("--repo and --preset name different fixtures: pass one of them".into());
     }
@@ -366,8 +366,8 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
     // (measured).
     if badges && !opts.repo.is_empty() && band_tab_count(&opts.arg)?.is_some() {
         return Err(
-            "badges builds its own strip from the count in its argument: pass --repo or \
-             `<width>:<tabs>`, not both"
+            "badges builds its own strip from the count in its argument: pass one of \
+             --repo and `<width>:<tabs>`"
                 .into(),
         );
     }
@@ -379,8 +379,8 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
     } else if opts.verb == "tab-widths" {
         tab_width_repos(&opts.arg)?
     } else if opts.verb == "tab-mark" {
-        // Same strip; the argument here names a tab in it rather than
-        // how many there are.
+        // Same strip; the argument here names a tab, where
+        // `tab-widths` counts them.
         tab_width_repos("")?
     } else if opts.verb == "tab-name" {
         // A different strip entirely: names that collide, which the

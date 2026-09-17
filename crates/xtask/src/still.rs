@@ -13,7 +13,7 @@
 //! build announces itself and waits for a hold to lift before it begins;
 //! a hold waits for the builds already announced to finish.
 //!
-//! **Announced where the compiling happens**, not per verb: every app
+//! **Announced where the compiling happens**: every app
 //! build goes through `tree::app_exe` / `tree::shipped_exe` and every
 //! cargo step of `check` and `gate` through `check::run_step`, so a verb
 //! that builds is announced without naming itself — `perf`'s own build
@@ -23,7 +23,7 @@
 //! types while a hold stands, because that one runs outside any verb
 //! that could wait (hook/still.rs).
 //!
-//! **Liveness is a file lock, not a pid.** The hold and each
+//! **Liveness is a file lock.** The hold and each
 //! announcement are a note beside the repository's own `.git` — which
 //! every worktree shares — and a lock file beside the note, held open by
 //! the process for as long as the note stands. A `try_lock` that fails is
@@ -219,9 +219,9 @@ impl Drop for Announced {
 
 thread_local! {
     /// Whether this thread has an announcement standing, so a build
-    /// inside an announced verb does not announce again. Per thread
-    /// rather than per process: the gate runs its two sides in two
-    /// threads, and each is its own announcement.
+    /// inside an announced verb does not announce again. Per thread:
+    /// the gate runs its two sides in two threads, and each is its
+    /// own announcement.
     static ANNOUNCING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -260,8 +260,8 @@ pub(crate) fn busy(tree: &Path, what: &str) -> Result<Busy, String> {
 /// Silent under a parent's announcement, as `busy` is: a step of a verb
 /// is not a second thing to wait for.
 /// Beside a `.git` the caller already knows, because it is asked once
-/// per unit and must not spend a `git rev-parse` on each: the pool holds
-/// the directory its ledger stands in, and the hold stands beside it
+/// per unit and the path comes free that way: the pool holds the
+/// directory its ledger stands in, and the hold stands beside it
 /// (`budget::Pool::admit_once_the_machine_is_free`).
 pub(crate) fn until_free_in(common: &Path, what: &str) -> Result<(), String> {
     if std::env::var_os(UNDER).is_some() {
@@ -463,7 +463,7 @@ fn announce(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Announced, S
     let hold = common.join(HOLD);
     let busy = common.join(BUSY);
     // One wait across the loop: a hold that came between the wait and
-    // the announcement is waited out on the same budget, not a new one.
+    // the announcement is waited out on the same budget.
     let mut wait = Wait::new(what, Budget::whole(HOLD_CEILING), LOOK_AGAIN);
     let mut said = false;
     loop {
@@ -770,7 +770,7 @@ mod tests {
     }
 
     /// The waits under test say every look they take on a channel, so a
-    /// look is proved by the word of it rather than by a clock.
+    /// look is proved by the word of it.
     fn polls() -> (std::sync::mpsc::Receiver<()>, impl Fn()) {
         let (said, looks) = std::sync::mpsc::channel();
         (looks, move || {
@@ -780,7 +780,7 @@ mod tests {
 
     /// Waits for the first look: a wait that has looked once is a wait
     /// that found the hold up. Under the suite's budget, so a wait that
-    /// never looks is named rather than left to the harness's kill.
+    /// never looks is named.
     fn until_polled(looks: &std::sync::mpsc::Receiver<()>) {
         crate::wait::heard("the wait under test", "a look", looks);
     }
@@ -873,9 +873,9 @@ mod tests {
     /// description outright stands in for one a fork hands over: the
     /// hold lets the lock go and its note comes down while that
     /// description is still held by somebody that answers nothing about
-    /// it. The unlock reaches the description rather than this process's
-    /// handle on it, so the waiter has the lock at once — a close would
-    /// have left it refused by the child until the child was gone.
+    /// it. The unlock reaches the description itself, so the waiter has
+    /// the lock at once — a close would have left it refused by the
+    /// child until the child was gone.
     ///
     /// Linux, where `flock(2)` promises the inheritance and where a
     /// carried lock is seen at all; the gate's own lock is netted for
@@ -945,9 +945,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// An announcement locked but not yet readable is read as what the
-    /// asker was looking for — a build under way, not the measurement a
-    /// hold refuses for.
+    /// An announcement locked but not yet readable is read
+    /// as what the asker was looking for — a build under
+    /// way.
     #[test]
     fn an_announcement_not_yet_readable_is_named_a_build() {
         let dir = common("half-written");
@@ -1018,7 +1018,7 @@ mod tests {
         let lock = lock_beside_polled(&note, &|| {
             // Taken down under the lock and let go of, the way
             // `announcing` sweeps it — on the first look again, so what
-            // is under test is the try after it rather than a clock.
+            // is under test is the try after it.
             if let Some(held) = sweeping
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -1087,7 +1087,7 @@ mod tests {
         write(2, now - STAMP_FOR - 1);
         assert!(
             !stamps_ended_since(&stamps, now),
-            "a stamp a day old is swept, not read"
+            "a stamp a day old is swept"
         );
         assert!(!stamps.join("2").exists());
         let _ = std::fs::remove_dir_all(&dir);

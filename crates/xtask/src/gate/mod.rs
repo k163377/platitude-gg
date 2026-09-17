@@ -187,7 +187,7 @@ fn options(args: &[String]) -> Result<Options, String> {
                     .parse::<usize>()
                     .ok()
                     .filter(|n| *n >= 1)
-                    .ok_or_else(|| format!("--jobs takes a count of 1 or more, not {value:?}"))?;
+                    .ok_or_else(|| format!("--jobs takes a count of 1 or more; got {value:?}"))?;
             }
             other => {
                 return Err(format!(
@@ -286,7 +286,7 @@ fn gate(args: &[String]) -> Result<(), String> {
 
 /// The gate for `land`: the seat's tree, both sides, the census's verbs.
 /// What it answers is the landing's to act on — a census the verbs moved
-/// is committed there and gated again, rather than reported.
+/// is committed there and gated again.
 pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> {
     let mut spent = Spent::default();
     // waits(measured): the run's whole, for the record (`Spent::total`)
@@ -393,8 +393,8 @@ fn short(sha: &str) -> String {
 /// The line that says what a verb's rewrite means for whoever reads it.
 fn census_rewritten() -> String {
     format!(
-        " The verbs rewrote {}: it is generated, so review the diff and commit it (never by \
-         hand), and the gate can stamp the commit that holds it.",
+        " The verbs rewrote {}: it is generated, so review the diff and commit it as it \
+         stands, and the gate can stamp the commit that holds it.",
         census::FILE
     )
 }
@@ -804,7 +804,7 @@ fn against_the_build(
 /// block: the next one alone would build the same sources to the same
 /// error, and a block of a hundred verbs would spend its minutes saying
 /// so a hundred times. The checks group's clippy fails on the same
-/// source beside this block rather than ahead of it, so the block has to
+/// source beside this block, so the block has to
 /// stop itself.
 fn verbs(ground: &Ground<'_>, block: &[(usize, &Required)], jobs: usize) -> Vec<String> {
     let name = ground.name;
@@ -812,7 +812,7 @@ fn verbs(ground: &Ground<'_>, block: &[(usize, &Required)], jobs: usize) -> Vec<
         println!("[{name}] cached {}", required.step.id);
     }
     // What the side had waited before this block, so that the line below
-    // says this block's own wait rather than the side's running total.
+    // says this block's own wait.
     let before = ground.waited.read();
     let mut queue = block.iter().filter(|(_, r)| !r.cached);
     let mut failures = Vec::new();
@@ -894,8 +894,8 @@ enum Ran {
 }
 
 /// One step against its log: the machine's room taken for it, then run,
-/// timed, said as ok or FAIL, and stamped when green (never an
-/// always-step, whose seconds are not worth one). `no_build` is a verb's
+/// timed, said as ok or FAIL, and stamped when green (an always-step's
+/// seconds are not worth one). `no_build` is a verb's
 /// `--no-build`, the block's to hand out ([`verbs`]). A failure comes
 /// back as the line to report.
 ///
@@ -932,13 +932,13 @@ fn run_one(
         })
         .map_err(|why| format!("{id}: {why}"))?;
     ground.waited.add(room.waited);
-    // Looked at again now rather than only when the plan was made: a
-    // unit that stood in the queue may have been answered while it stood
-    // — another tree gating the same commit writes the same key, and the
-    // stamps are the repository's rather than the tree's (`stamp`). It
-    // takes duplicated work off a machine full of seats; what it cannot
-    // do is stop two that miss at the same instant, which both then run.
-    // Never under `--fresh`, which is the ask to run the step whatever
+    // Looked at again now, after the plan was made: a unit that stood
+    // in the queue may have been answered while it stood — another tree
+    // gating the same commit writes the same key, and the stamps are the
+    // repository's, whichever tree wrote them (`stamp`). It takes
+    // duplicated work off a machine full of seats; what it cannot do is
+    // stop two that miss at the same instant, which both then run.
+    // Skipped under `--fresh`, which is the ask to run the step whatever
     // any stamp says.
     // The tests' switch for the window itself: the instant between the
     // plan and this look is another tree's to write in, and nothing a
@@ -1119,7 +1119,7 @@ const RUNNER: &str = "xtask-runner-";
 /// host verb logs showed the wait on the build directory (none from the
 /// copy). Built with cargo all the same, so that it is the
 /// tree's code — under `land` the rebase has just brought sources in —
-/// and copied rather than run in place, because the landing has renamed
+/// and copied, because the landing has renamed
 /// the slot away from under this very process and the slot is what cargo
 /// rebuilds. What earlier gates left is taken away first; a copy a
 /// process of theirs still holds stays, its name carrying their pid.
@@ -1216,8 +1216,8 @@ fn app_did_not_build(log: &Path) -> bool {
 
 /// Stop hook: where the seat's gate stands, for the user's eyes. A seat
 /// ahead of main whose tip carries no full stamp is work reported before
-/// it was gated — said as a system message, not a block, so a turn that
-/// ends mid-work is not held to a gate it was never claiming.
+/// it was gated — said as a system message, so a turn that ends
+/// mid-work is not held to a gate it was never claiming.
 pub(crate) fn standing(cwd: &str) -> Option<String> {
     let root = crate::seats::worktree_root(cwd)?;
     let head = crate::subprocess::git_query(&root, &["rev-parse", "HEAD"])?;

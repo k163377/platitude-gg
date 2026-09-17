@@ -11,8 +11,8 @@ pub(super) struct Options {
     pub(super) runs: u32,
     /// How many times a run refused for the state of the machine is taken
     /// again. A person walking away, a parallel build and a locked
-    /// session are all transient; the answer to one is another run, not a
-    /// published number (`sampler::Conditions`).
+    /// session are all transient; the answer to one is another run
+    /// (`sampler::Conditions`).
     pub(super) retries: u32,
     pub(super) watchdog_ms: u64,
     /// How long to hold the app after `perf_done` before reading the
@@ -75,19 +75,19 @@ pub(super) struct Options {
     /// is there. A benchmark repository that was fetched is a different
     /// benchmark (`perf::corpus`).
     pub(super) corpus: String,
-    /// The commit to measure, built on the rig rather than in this tree
-    /// (`perf::rig`); empty measures this tree's own build, edits and all.
+    /// The commit to measure, built on the rig (`perf::rig`); empty
+    /// measures this tree's own build, edits and all.
     pub(super) at: String,
     /// How quiet the machine has to be. Opened by `--allow-noisy`, which
     /// publishes the numbers a busy machine produced.
     pub(super) limits: Limits,
     /// Draw with the software scene graph (`--software`), whose frames
-    /// go through the backing store rather than to a display: the
-    /// reading does not depend on the display being on, off or turned
-    /// on and off while the runs go, nothing holds the screen awake or
-    /// pokes the input timer, and the window is not raised over whatever
-    /// a person has in front. What that renderer's numbers are is the
-    /// report's to say (`perf::report`).
+    /// go through the backing store: the reading does not depend on
+    /// the display being on, off or turned on and off while the runs
+    /// go, nothing holds the screen awake or pokes the input timer,
+    /// and the window is not raised over whatever a person has in
+    /// front. What that renderer's numbers are is the report's to say
+    /// (`perf::report`).
     pub(super) software: bool,
     /// `[defaults]` keys written into the run's `settings.toml` as given
     /// (`--setting key=value`, repeatable): what an A/B over a setting —
@@ -529,8 +529,8 @@ mod tests {
         );
     }
 
-    /// A window the sampler's arithmetic could not hold is refused where
-    /// every other bad option is, not found out after the release build.
+    /// A window the sampler's arithmetic could not hold is refused
+    /// where every other bad option is.
     #[test]
     fn a_run_longer_than_a_day_is_refused() {
         assert!(

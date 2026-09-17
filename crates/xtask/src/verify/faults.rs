@@ -7,7 +7,7 @@
 //! was built for happened once each, under a gate, and every one of them
 //! passed on the spot when it was run again by hand
 //! (internal-docs/P3-確認事項.md §check ハング調査で残った観察). So the
-//! stopping is asked for here instead — the app is held at a station it
+//! stopping is asked for here — the app is held at a station it
 //! names (`PGG_FAULT_HANG`), or started with no deadline thread at all
 //! (`PGG_FAULT_NO_DEADLINE`) — and the check is that the words the next
 //! occurrence will be read from come back.
@@ -27,10 +27,10 @@
 
 use std::time::Instant;
 
-/// A verb cheap enough to be run three times for something that is not
-/// about the verb. What it shows does not matter here — every case below
-/// is about where the process stopped, and one that never completed its
-/// act reaches the same stations by its own watchdog.
+/// A verb cheap enough to be run three times. Every case below is about
+/// where the process stopped, and one whose act was swallowed reaches
+/// the same stations by its own watchdog — what the verb shows is
+/// beside the point.
 const VERB: &str = "band";
 
 /// The ceiling the held run with its deadline thread up is given. Above
@@ -42,7 +42,7 @@ const VERB: &str = "band";
 const HELD_MS: &str = "4000";
 
 /// The ceiling the two held runs with no deadline thread are given. **A
-/// backstop, not what they cost**: the parent ends those on the trail's
+/// backstop**: the parent ends those on the trail's
 /// word, the moment the station they were ordered to hold at is on the
 /// disk (`super::child::ordered_hold`), so this is only what a run that
 /// never gets there pays — and wide enough that no loaded machine reaches
@@ -50,8 +50,8 @@ const HELD_MS: &str = "4000";
 const BACKSTOP_MS: &str = "60000";
 
 /// The ceiling the turning run is given. Long enough that the verb runs
-/// and the loop goes on turning after it — **the ceiling is not what
-/// withholds the completion here**, the fault is (`--fault-hold-act`).
+/// and the loop goes on turning after it — **the fault is what
+/// withholds the completion here** (`--fault-hold-act`).
 ///
 /// It used to be one millisecond, on the reading that no verb could
 /// complete inside a QML timer's own floor. A verb can: the ceiling is
@@ -70,8 +70,8 @@ struct Case {
     /// The words after `verify-ui`, less the ones every case carries.
     args: &'static [&'static str],
     /// Every one of these must appear in what the run printed. Quoted
-    /// from [`super::wedge`] and [`super::outcome`] rather than shared
-    /// with them: what is being checked is the sentence a person reads,
+    /// from [`super::wedge`] and [`super::outcome`]: what is being
+    /// checked is the sentence a person reads,
     /// so a rewording that leaves the reading behind is a red here.
     wants: &'static [&'static str],
     /// The same, held to on Windows alone: what the listing walks there
@@ -80,8 +80,8 @@ struct Case {
     /// line it cannot print. The gate's host side runs wherever the tree
     /// is checked out.
     wants_on_windows: &'static [&'static str],
-    /// A watchdog abort also reaches `exiting`, but is not an act that
-    /// completed before stopping. Do not accept it as the held case.
+    /// A watchdog abort also reaches `exiting`, so these words tell it
+    /// from an act that completed before stopping.
     forbids: &'static [&'static str],
 }
 
@@ -130,7 +130,7 @@ const CASES: &[Case] = &[
             "> exiting ",
             "it got as far as `exiting`",
             "left no wedge.txt",
-            // The listing answered, not only the heading it is under:
+            // The listing's own lines answered, past its heading:
             // this is the shape the next occurrence is read from.
             "threads at the ceiling:",
             " alive — ",
@@ -197,7 +197,7 @@ const CASES: &[Case] = &[
     },
 ];
 
-/// Runs every case and answers for the record, not for the runs: each one
+/// Runs every case and answers for the record: each one
 /// is *meant* to fail, and what is being judged is whether the lines that
 /// say why came back.
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
@@ -229,7 +229,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             for line in said.lines() {
                 println!("  > {line}");
             }
-            missed.push(format!("{}: never said {absent:?}", case.shape));
+            missed.push(format!("{}: missing {absent:?}", case.shape));
         }
     }
     if missed.is_empty() {
@@ -275,8 +275,8 @@ mod tests {
     use super::{BACKSTOP_MS, CASES, HELD_MS, TURNING_MS, VERB};
 
     /// The two runs with no deadline thread are ended on the trail's word
-    /// and never at their ceiling, so the ceiling they carry is the
-    /// backstop and the words they want are a hold's, not a timeout's.
+    /// alone, so the ceiling they carry is the
+    /// backstop and the words they want are a hold's.
     /// The one whose thread is up keeps the ceiling it is paid in.
     #[test]
     fn the_runs_with_no_deadline_are_read_as_held_and_carry_only_a_backstop() {
@@ -325,7 +325,7 @@ mod tests {
             !CASES
                 .iter()
                 .any(|case| case.wants.contains(&"the main thread stands in:")),
-            "the stack line is a Windows want, never a want everywhere"
+            "the stack line is a Windows want alone"
         );
         let said = observed.wants.join("\n");
         let missing = observed.missing(&said);
@@ -401,10 +401,10 @@ mod tests {
 
     /// And one has to be the other mouth: a loop that turned the whole
     /// time. **What withholds the completion is the fault that swallows
-    /// it**, never a ceiling short enough to outrun the act — that is a
-    /// race, and the machine decides it (`TURNING_MS`). A hold is no way
-    /// to make this shape either: it stops the very loop the case is
-    /// about, and a run with no deadline leaves nothing to read.
+    /// it** (a ceiling short enough to outrun the act is a race, and
+    /// the machine decides it — `TURNING_MS`). A hold stops the very
+    /// loop the case is about, and a run with no deadline leaves
+    /// nothing to read.
     #[test]
     fn one_case_is_the_loop_that_kept_turning() {
         let turning = CASES
@@ -414,7 +414,7 @@ mod tests {
         assert!(turning.args.contains(&TURNING_MS));
         assert!(
             turning.args.contains(&"--fault-hold-act"),
-            "the completion is withheld on purpose rather than outrun"
+            "the completion is withheld on purpose"
         );
         assert!(
             !turning.args.contains(&"--fault-hang")

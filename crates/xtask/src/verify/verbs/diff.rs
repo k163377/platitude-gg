@@ -5,14 +5,14 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
-    // The file list's arrows, and the half of the keyboard rule the
-    // diff's own arrows are the other half of: nothing here pressed the
-    // diff, so `focused=true` says the list *kept* the keyboard when the
-    // diff opened over the graph. `lit=true` is the row painted as the
-    // one being read — the rectangle's own answer, not the condition
-    // behind it — and `moved=true` says the diff followed the light
-    // rather than only the light moving. The picture is a weak witness:
-    // one file's diff frames like another's.
+    // The file list's arrows, and the half of the keyboard rule
+    // the diff's own arrows are the other half of: nothing here
+    // pressed the diff, so `focused=true` says the list *kept* the
+    // keyboard when the diff opened over the graph. `lit=true` is
+    // the row painted as the one being read — the rectangle's own
+    // answer — and `moved=true` says the diff followed the light.
+    // The picture is a weak witness: one file's diff frames like
+    // another's.
     Verb {
         name: "changes-step",
         when: &[],
@@ -29,7 +29,7 @@ pub(super) const TABLE: &[Verb] = &[
     // `lit=false` is the whole of it, and it has to be a pair — one of
     // these alone is a list with no diff up, which either answer frames
     // identically. `open=false` is what makes the dark list the list's
-    // own answer rather than a reading still standing over it.
+    // own answer.
     Verb {
         name: "wip-shut",
         when: &[],
@@ -50,10 +50,10 @@ pub(super) const TABLE: &[Verb] = &[
     //
     // `hand=true kept=true` is the other half, and the one no picture
     // could hold: the pane that had the keyboard is the pane that just
-    // went, and `kept=` says the keyboard stayed inside the page rather
-    // than falling out to the window — where this page is a descendant
-    // and nothing it handles is on the key's way any more, so the *next*
-    // Escape would reach nothing at all.
+    // went, and `kept=` says the keyboard stayed inside the page. Out
+    // at the window, this page is a descendant and nothing it handles
+    // is on the key's way any more, so the *next* Escape would reach
+    // nothing at all.
     //
     // `graph=true` says where inside the page it landed: the history the
     // reader is left looking at, so the arrows walk it. One item holds
@@ -77,10 +77,10 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "embedded=true rows=0",
     },
-    // And the end it stops at rather than wraps past, the same shape
-    // `diff-step-edge` reads: the walk asks for ten files, runs out, and
-    // the rest answer false. `moved=true` beside it is what tells this
-    // from a walk that was refused from the first press.
+    // And the end it stops at, the same shape `diff-step-edge` reads:
+    // the walk asks for ten files, runs out, and the rest answer false.
+    // `moved=true` beside it is what tells this from a walk that was
+    // refused from the first press.
     Verb {
         name: "changes-step-edge",
         when: &[],
@@ -88,12 +88,12 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The same list's folder rows, where the arrow is the whole of the
     // picture: `>` shut, `v` open. `turn=` is the rotation the icon is
-    // actually drawn at rather than the model's flag — the two file
-    // lists keep that flag in different fields, and a cell that read
-    // only one of them left this list's arrow lying open in both states
-    // while `shut=` went on answering true. Read as a pair: an arrow on
-    // its own says nothing about which way it turned, so `-unfold`
-    // strikes the same row a second time and has to come back to 90.
+    // actually drawn at — the two file lists keep the model's flag in
+    // different fields, and a cell that read only one of them left this
+    // list's arrow lying open in both states while `shut=` went on
+    // answering true. Read as a pair: an arrow on its own says nothing
+    // about which way it turned, so `-unfold` strikes the same row a
+    // second time and has to come back to 90.
     Verb {
         name: "changes-fold",
         when: &[],
@@ -117,11 +117,11 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "moved=true atEnd=false stopped=false focused=true",
     },
-    // And the end it stops at rather than wraps past. `stopped=true`
-    // is the refusal itself: the walk asks for twenty rows, gets as
-    // far as the bottom, and the rest answer false. Without `moved=`
-    // beside it a pane that refused every step from the start — never
-    // on screen, never focused — would read the same.
+    // And the end it stops at. `stopped=true` is the refusal itself:
+    // the walk asks for twenty rows, gets as far as the bottom, and
+    // the rest answer false. Without `moved=` beside it a pane that
+    // refused every step from the start — never on screen, never
+    // focused — would read the same.
     Verb {
         name: "diff-step-edge",
         when: &[],
@@ -273,9 +273,9 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The plain copy, and the whole of what it claims: the old line
     // stayed out of it. Read back off the pad the copy goes through,
-    // because the clipboard will not answer a headless run — and read as
-    // "does the text hold the removed line" rather than as a line count,
-    // since a copy that took the wrong four lines counts to four as well.
+    // because the clipboard will not answer a headless run — and read
+    // as "does the text hold the removed line", since a copy that took
+    // the wrong four lines counts to four as well.
     Verb {
         name: "diff-copy",
         when: &[],
@@ -283,11 +283,11 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The card itself, for the words on it (the reader's whole way to the
     // old side, so the spelling is the deliverable — the picture is
-    // overlay.png). `open=` is the menu's own answer rather than the
-    // conditions behind it: a card that refused to open because it had
-    // nothing in it photographs exactly like one nobody asked for.
-    // `rows=2` is beside it because a selection that reached only one
-    // side opens a one-row card that reads like a full one.
+    // overlay.png). `open=` is the menu's own answer: a card that
+    // refused to open because it had nothing in it photographs exactly
+    // like one nobody asked for. `rows=2` is beside it because a
+    // selection that reached only one side opens a one-row card that
+    // reads like a full one.
     Verb {
         name: "diff-menu",
         when: &[],
@@ -328,8 +328,8 @@ pub(super) const TABLE: &[Verb] = &[
     //    every press somewhere else (`DiffCodeScroll.offset`).
     //
     // All four are read off the pad the copy goes through
-    // (`ClipboardHelper.lastCopied`) rather than off the model: the claim
-    // is what a reader ends up holding.
+    // (`ClipboardHelper.lastCopied`): the claim is what a reader ends
+    // up holding.
     //
     // `rows=` is the run's own honesty beside them: a fixture whose lines
     // all run past the pane leaves no blank to press in, and five trues
@@ -344,10 +344,10 @@ pub(super) const TABLE: &[Verb] = &[
     // (規約 §diff の中身をコピーする). Three claims, and each answers
     // something the other two cannot:
     //
-    //  - `reach=9/9` — from every corner of that ground, not just its
-    //    middle. A verb that pressed one point in it goes green over a
-    //    hand that only answers there, which is the fault the right
-    //    pane's own values shipped with (`details-sweep`).
+    //  - `reach=9/9` — from every corner of that ground. A verb that
+    //    pressed one point in it goes green over a hand that only
+    //    answers there, which is the fault the right pane's own values
+    //    shipped with (`details-sweep`).
     //  - `ground=true` — the fixture is half the claim. A file that
     //    fills the frame leaves no ground at all, and `reach=0/9` off
     //    one says nothing about the hand (`--preset dirty` の `b.txt`
@@ -362,13 +362,13 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "diff_sweep reach=9/9 ground=true ours=false",
     },
     // The band above those rows, whose path is the one value in it. The
-    // claim is `all=`, not a count, for the reason every `SweepPad` run
-    // makes it: how much air a band has depends on the words in it and
-    // on the machine that drew them. `caret=` is the half a selection
-    // does not say — `Ctrl+C` goes to whatever holds the keyboard — and
-    // `hand=` is the half a sweep cannot say for itself, since a run
-    // enters the pad's functions rather than the pointer and would go
-    // green with the `MouseArea` taken back out.
+    // claim is `all=`, for the reason every `SweepPad` run makes it:
+    // how much air a band has depends on the words in it and on the
+    // machine that drew them. `caret=` is the half a selection does not
+    // say — `Ctrl+C` goes to whatever holds the keyboard — and `hand=`
+    // is the half a sweep cannot say for itself, since a run enters the
+    // pad's functions and would go green with the `MouseArea` taken
+    // back out.
     Verb {
         name: "diff-band-sweep",
         when: &[],
@@ -381,13 +381,13 @@ pub(super) const TABLE: &[Verb] = &[
     // The picture cannot say any of it (a bar that answers nothing is
     // drawn exactly like one that does), so all three are read here:
     //
-    //  - `clear=true` — where the hand ends against where the bar
-    //    begins, read off the two items rather than off the rule that
-    //    places them. Taking the strip back out of `DiffTextSelect`
-    //    turns this false.
-    //  - `reach=true` — and the hand still answers at its own last
-    //    pixel, so the strip went to the bar rather than being eaten
-    //    out of the code.
+    //  - `clear=true` — where the hand ends against where the
+    //    bar begins, read off the two items themselves.
+    //    Taking the strip back out of `DiffTextSelect` turns
+    //    this false.
+    //  - `reach=true` — and the hand still answers at its own
+    //    last pixel, so the strip came out of the bar's side
+    //    and the code kept its width.
     //  - `out=true` — the fixture is half the claim, as it is for
     //    `diff-sweep`: a diff that fits its frame has no bar to be kept
     //    clear of (`--preset manyhunks` の `notes.txt` = 320 rows).
@@ -406,13 +406,13 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_row act=stage-line ready=true",
     },
-    // Not the row this one: `ready=` says the diff arrived, and a diff
-    // that arrived is where this verb's failures start rather than
-    // ends. The place is only kept if the rebuilt list came back to
-    // it, so `at=` is read against `want=` — and `room=` is there
-    // because the fixture is half of it: a file whose diff fits the
-    // pane has no place to lose, scrolls nowhere, and photographs
-    // exactly like one that lost nothing (`--preset manyhunks`).
+    // This one asks for more: `ready=` says the diff arrived, and a
+    // diff that arrived is where this verb's failures start. The
+    // place is only kept if the rebuilt list came back to it, so
+    // `at=` is read against `want=` — and `room=` is there because
+    // the fixture is half of it: a file whose diff fits the pane has
+    // no place to lose, scrolls nowhere, and photographs exactly
+    // like one that lost nothing (`--preset manyhunks`).
     Verb {
         name: "keep-place",
         when: &[],
@@ -429,7 +429,7 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "diff_row act=discard-hunk-go ready=true",
     },
     // The colours that land behind the rows, and the two things they
-    // must not cost. Neither is a picture: a diff whose colours never
+    // leave whole. Neither is a picture: a diff whose colours never
     // came frames as a language the set has no rules for, and a view
     // thrown back to the top frames as one nobody had scrolled. `at=`
     // is `scrollTo`'s own number read back after the swap — 400 or
@@ -448,8 +448,8 @@ pub(super) const TABLE: &[Verb] = &[
     // showing. So the two things that only happen when there is
     // somewhere to go are what it is judged on — the bar came out, and
     // the hand is still carrying the rows. A fixture whose lines fit
-    // the pane fails here rather than passing on a blank
-    // (`--preset widelines` is the one that does not fit).
+    // the pane fails here (`--preset widelines` is the one
+    // that does not fit).
     Verb {
         name: "code-send",
         when: &[],
@@ -481,8 +481,8 @@ pub(super) const TABLE: &[Verb] = &[
     // `code-shrink` is the same file read again with its widest line
     // written away: the place along the row is kept (`kept=`) while the
     // width it is clamped against comes down (`shrank=`), and both
-    // halves of the reach come down with it rather than one of them
-    // latching the largest number it ever saw (`narrower=`).
+    // halves of the reach come down with it, where a latch would keep
+    // the largest number it ever saw (`narrower=`).
     Verb {
         name: "code-shrink",
         when: &[],
@@ -512,7 +512,7 @@ pub(super) const TABLE: &[Verb] = &[
     // Where the pane lands when the file under it is moved whole. The
     // picture shows a diff either way and cannot say which file it is
     // of, so the landing is read: `shown=true` is the half that fails
-    // when the pane closes on the reader instead of following.
+    // when the pane closes on the reader.
     Verb {
         name: "diff-follow",
         when: &[],

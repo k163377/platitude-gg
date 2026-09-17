@@ -7,7 +7,7 @@ use std::path::Path;
 use super::{Entry, holds, leaf, walk};
 
 /// git's answer in `dir`, or the reason it had none — a test that cannot
-/// ask has failed rather than passed quietly.
+/// ask has failed.
 fn git(dir: &Path, arguments: &[&str]) -> String {
     let dir = dir.display().to_string();
     crate::subprocess::git_query(&dir, arguments)
@@ -79,8 +79,8 @@ fn a_copy_pushes_to_its_own_origin() {
         !url.contains(&leaf("tags", "repo")),
         "origin still names the template: {url}"
     );
-    // And it is a URL git can still fetch from, rather than a string that
-    // merely reads right.
+    // And it is a URL git can still fetch from, which the fetch
+    // below proves.
     git(&work, &["fetch", "origin"]);
 }
 
@@ -111,10 +111,10 @@ fn a_copy_of_linked_worktrees_stands_on_its_own_paths() {
 }
 
 /// The rule that keeps a rebind honest: git's own files may name the
-/// directory the repository sits in, and a file git tracks may not —
-/// rewriting one would leave the copy dirty where the template was
-/// clean. Every preset a template is made of has to pass it, so the
-/// check is that the presets under test hold nothing but metadata.
+/// directory the repository sits in, and rewriting a tracked one
+/// would leave the copy dirty where the template was clean. Every
+/// preset a template is made of has to pass it, so the check is that
+/// the presets under test hold nothing but metadata.
 #[test]
 fn only_gits_own_files_name_the_directory_they_were_built_in() {
     for preset in [
@@ -138,7 +138,7 @@ fn only_gits_own_files_name_the_directory_they_were_built_in() {
 /// A copy of a repository with something uncommitted in it answers the
 /// same `status` — the index it was copied with names files by the stat
 /// the copy has changed, and git has to be left to notice that for
-/// itself rather than be told the tree is dirty.
+/// itself.
 #[test]
 fn a_copy_of_an_unclean_tree_is_unclean_in_the_same_way() {
     let first = crate::demo::create("dirty", None).expect("a run of the preset");
@@ -179,7 +179,7 @@ fn runs_started_together_are_handed_one_template() {
         .iter()
         .map(|work| git(work, &["log", "--format=%H", "--all"]))
         .collect();
-    assert_eq!(commits.len(), 1, "the runs were built rather than copied");
+    assert_eq!(commits.len(), 1, "each run built its own repository");
 }
 
 /// `--at` names a directory anywhere on the machine, and a template's

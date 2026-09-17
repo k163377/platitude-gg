@@ -1,6 +1,6 @@
 //! The task-chip guard (`spawn_task` / `dismiss_task`): what may become
-//! a chip at all, the number one leads with, the paths two may not both
-//! claim, and the ledger they are judged against.
+//! a chip at all, the number one leads with, the paths a chip holds
+//! alone, and the ledger they are judged against.
 //!
 //! A chip is read in a list and worked in a session of its own, so three
 //! things about it are not the chip's own business: **whether it is
@@ -15,18 +15,18 @@
 //! So the harness holds them. Every chip this session stacked is
 //! remembered beside the primary checkout's `.git`, and:
 //!
-//! * a chip may not claim what this session already has open — that work
-//!   is this session's to finish, and a second branch over the same file
-//!   buys a conflict and a rebase for nothing (`at_hand`);
+//! * what this session already has open is this session's to finish — a
+//!   second branch over the same file buys a conflict and a rebase for
+//!   nothing (`at_hand`);
 //! * a title leads with its priority (`1. …`), 1 being the most
 //!   important chip live right now;
 //! * a chip that asks the user to decide wears `[任意]` after its number
 //!   — it weighs less than one recommending work, and the list is read
 //!   for which is which;
-//! * a chip may not claim a path a live chip already claims — the two
+//! * a path a live chip already claims stays that chip's — the two
 //!   are one chip, or the first stacks the second itself once its own
 //!   work (or the decision it is waiting on) is done;
-//! * a turn does not end while the live set fails to read 1..N.
+//! * a turn ends only once the live set reads 1..N.
 //!
 //! The ledger is this session's alone. A chip the user has since started
 //! or dropped by hand is invisible from here, and a session that ends
@@ -55,8 +55,8 @@ struct Chip {
     /// told from a second chip for the same work.
     body: String,
     /// Whether it wears the weight mark: a chip asking the user to
-    /// decide, rather than one recommending work.
+    /// decide.
     optional: bool,
-    /// The paths its words named — what the next chip may not claim too.
+    /// The paths its words named — held against the next chip's.
     targets: BTreeSet<String>,
 }

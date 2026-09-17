@@ -33,8 +33,8 @@ fn a_crop_holds_the_region_asked_for_with_every_pixel_a_square_block() {
     assert_eq!((crop.width, crop.height), (12, 8));
     for y in 0..crop.height {
         for x in 0..crop.width {
-            // Nearest neighbour: the source pixel this one stands on,
-            // never a value between two of them.
+            // Nearest neighbour: the source pixel this
+            // one stands on.
             let (from_x, from_y) = (2 + x / 4, 1 + y / 4);
             assert_eq!(
                 crop.pixel(x, y),

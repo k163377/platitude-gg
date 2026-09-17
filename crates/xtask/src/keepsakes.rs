@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 pub(crate) struct Keepsake {
     /// Where the container's mount lands out here.
     pub(crate) dir: PathBuf,
-    /// Never read. Holding it *is* the run's ownership of `dir`, and it
-    /// is released however the process ends. `None` would mean this run
+    /// Held for the holding: it *is* the run's ownership of `dir`,
+    /// released however the process ends. `None` would mean this run
     /// had already claimed the path, which it never has: the directory
     /// was made a line earlier.
     _claim: Option<crate::verify::ResourceClaim>,
@@ -27,7 +27,7 @@ pub(crate) struct Keepsake {
 /// pictures belong to is the one out here — which is what
 /// `onto_the_board` is for, once the run is done.
 ///
-/// **The claim is taken here rather than in there.** The run inside makes
+/// **The claim is taken on this side.** The run inside makes
 /// one too (`verify::run` claims its `--shot-dir`), but it writes that
 /// lock into the container's own `/tmp`, which is empty in every
 /// container — a claim that can never refuse anybody. What two runs can
@@ -54,8 +54,8 @@ pub(crate) fn bridge(command: &mut Vec<String>, mount: &str) -> Result<Option<Ke
 /// verb (CLAUDE.md ビルド・テスト): a board holding two pictures that do
 /// not say which side each came from cannot show that.
 ///
-/// **The command has to be the one that was typed**, not the one `bridge`
-/// handed the container — see [`boarding`].
+/// **The command has to be the one that was typed** — see
+/// [`boarding`].
 pub(crate) fn onto_the_board(out: Option<&Path>, command: &[String]) {
     let Some(out) = out else {
         return;
@@ -106,8 +106,8 @@ fn naming(command: &[String]) -> (String, String) {
 /// the same path in every container, so what keeps two of them apart is
 /// this directory alone: hand the same one twice and the second app to
 /// start finds the first still holding `/out/config`
-/// (`settings::Store::claim`), opens the window that says so instead of
-/// the one the verb is about, and waits out its watchdog.
+/// (`settings::Store::claim`), opens the window that says so, and
+/// waits out its watchdog.
 fn keepsakes(command: &[String]) -> Result<Option<PathBuf>, String> {
     if !command.iter().any(|word| word == "verify-ui") {
         return Ok(None);
@@ -218,8 +218,8 @@ mod tests {
         let unique: std::collections::BTreeSet<_> = made.iter().collect();
         assert_eq!(unique.len(), made.len(), "two runs were handed one /out");
         for dir in made {
-            // Empty, and so nobody else's: the claim made it rather than
-            // finding it, which is what `create_dir_all` could not say.
+            // Empty, and so nobody else's: the claim made it, which
+            // is what `create_dir_all` could not say.
             std::fs::remove_dir(&dir).expect("an empty directory this call created");
         }
     }

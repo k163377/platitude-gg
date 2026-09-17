@@ -85,7 +85,7 @@ pub(super) fn compare(mut opts: Options) -> Result<(), String> {
         expected = Some(signature);
     }
     println!(
-        "A/B complete: {} (ABBA, {} samples per variant; compare matching cache/platform/case rows, not pooled values)",
+        "A/B complete: {} (ABBA, {} samples per variant; compare matching cache/platform/case rows)",
         directory.display(),
         blocks * 2
     );
@@ -133,7 +133,7 @@ pub(super) fn prepare_cold(opts: &Options, exe: &Path, output: &Path) -> Result<
     if opts.cache != "cold" {
         return Ok(());
     }
-    // The operator supplies an OS-specific executable, never a shell string.
+    // The operator supplies an OS-specific executable.
     // It must finish successfully after preparing the named repo and binary.
     // No repository inspection or calibration follows it before app launch.
     let log = std::fs::File::create(output.join("cold-prepare.log")).map_err(|e| e.to_string())?;

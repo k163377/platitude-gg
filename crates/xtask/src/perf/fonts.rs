@@ -8,10 +8,10 @@
 //! the fallback-family and emoji-family APIs only order that list, the
 //! QML `font` type has no `families`, and the fonts are the machine's.
 //! The record reads the budget line net of it
-//! (ci/baseline/perf-windows-x64.md §判定), so it has to be weighed
-//! rather than assumed — and weighed where the sampler can see it. The
-//! corpus asks during the scroll, where the walk's bytes and the
-//! bench's arrive in the same ticks; the calibration run asks before
+//! (ci/baseline/perf-windows-x64.md §判定), so it is weighed, and
+//! weighed where the sampler can see it. The corpus asks during
+//! the scroll, where the walk's bytes and the bench's arrive in the
+//! same ticks; the calibration run asks before
 //! `perf_done` instead, idle either side, and says when ([`mark`] —
 //! `WindowPerfDriver` under `PGG_PERF_FONT_WALK=1`). Offscreen there is
 //! no walk to weigh: that platform's FreeType database holds no fonts,

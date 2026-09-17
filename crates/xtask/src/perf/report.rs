@@ -25,8 +25,8 @@ pub(super) struct Context<'a> {
     pub(super) built: &'a super::rig::Built,
     pub(super) retries: u32,
     /// What the calibration run weighed the font walk at, read beside
-    /// the kept runs rather than among them (`perf::fonts`); `None`
-    /// under `--no-font-walk` and for the shipped build.
+    /// the kept runs (`perf::fonts`); `None` under `--no-font-walk`
+    /// and for the shipped build.
     pub(super) font_walk: Option<&'a FontWalk>,
 }
 
@@ -191,7 +191,7 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
     }
     println!("  private     : {}", spread(&private));
     if cfg!(target_os = "linux") {
-        println!("  Linux private column is VmData, not Windows committed Private Bytes.");
+        println!("  Linux private column is VmData; Windows is committed Private Bytes.");
     }
     println!("  memory units: MiB (1024 * 1024 bytes)");
     diagnostic_notes(opts, context);
@@ -234,7 +234,7 @@ fn paid_the_walk(opts: &Options) -> bool {
 
 /// The flag that named this run's shape, for the line that says why
 /// there is no net — the reader asked for the shape and gets it named
-/// back rather than a sentence about scrolling in general.
+/// back.
 fn shape_of(opts: &Options) -> &'static str {
     if !opts.open {
         "--no-open"
@@ -580,7 +580,7 @@ mod tests {
 
     /// The run as its flags shaped it, settled the way an invocation's
     /// are — so a test names the measurement mode the reader names
-    /// (`--no-scroll`) rather than poking the field behind it.
+    /// (`--no-scroll`).
     fn shaped(words: &[&str]) -> Options {
         let mut args = vec!["--repo".to_string(), "x".to_string()];
         args.extend(words.iter().map(|w| (*w).to_string()));

@@ -2,7 +2,7 @@
 //!
 //! The code is one of the two things a review answers for. The other is
 //! the session that asked for it: every instruction the user gave in it,
-//! met once and not twice. That half has no diff to read, and the turns
+//! met exactly once. That half has no diff to read, and the turns
 //! it lives in are the first thing a summarized context drops, so the ask
 //! for a review carries it back in.
 

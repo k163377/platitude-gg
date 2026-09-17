@@ -1,16 +1,16 @@
-//! What this session already has open, and why a chip may not claim it.
+//! What this session already has open, and why it stays this session's.
 //!
-//! A chip is not work put off. It is work handed to another session, on
-//! another seat, starting from a main that does not have this branch —
-//! so a chip over a file this branch is changing is two branches editing
-//! one file, and a conflict and a rebase are what comes back for it.
+//! A chip is work handed to another session, on another seat, starting
+//! from a main that does not have this branch — so a chip over a file
+//! this branch is changing is two branches editing one file, and a
+//! conflict and a rebase are what comes back for it.
 //!
 //! The work that kept arriving as a chip is the work the session was
 //! finishing: the verification of what it just changed, the cleanup it
 //! passed on the way, the fix the change asked for next. All of it names
 //! the files the seat already has open, which is exactly what makes this
 //! the session that can answer it — the seat is entered, the files are
-//! read, and doing it here costs a turn instead of a session.
+//! read, and doing it here costs a turn.
 
 use std::collections::BTreeSet;
 
@@ -85,7 +85,7 @@ fn carried(cwd: &str) -> BTreeSet<String> {
 /// lead every line, and a rename carries both of its names — a chip
 /// naming either of them is over the same work.
 ///
-/// The letters are read off rather than counted off: `git_query` trims
+/// The letters are split off at the first blank: `git_query` trims
 /// what it answers, so a first line whose first letter is a blank (` M`,
 /// the shape of an unstaged edit) arrives one column short of every
 /// other line. Pure so the tests can ask.
@@ -99,7 +99,7 @@ fn touched(status: &str) -> BTreeSet<String> {
         .collect()
 }
 
-/// What the refusal says. The three ways out are not equal: the first is
+/// What the refusal says. The three ways out are ranked: the first is
 /// the answer, the second is where a leftover goes when it is not, and
 /// the third is what a chip is for at all.
 fn reason(shared: &[String]) -> String {
@@ -110,12 +110,12 @@ fn reason(shared: &[String]) -> String {
          this branch in it: over a file this branch is changing, that session and \
          this one edit it from two sides, and the user gets a conflict and a \
          rebase for it. The verification of a change, the cleanup beside it and \
-         the fix it asks for next are this session's own work, not a session's \
-         worth of somebody else's (CLAUDE.md ビルド・テスト). Do it in this turn, \
+         the fix it asks for next are this session's own work \
+         (CLAUDE.md ビルド・テスト). Do it in this turn, \
          in this seat, on this branch. If it must have a session of its own — it \
          needs another machine, a real window, or a decision this one cannot get \
          — land this branch first and stack the chip once the files are on main. \
-         If it is neither, it is a leftover to write down rather than to spawn: \
+         If it is neither, it is a leftover to write down: \
          internal-docs/P3-確認事項.md (P5 for what waits on distribution) is the \
          list the user reads back, and it costs no seat.",
         shared.join(", ")

@@ -1,5 +1,5 @@
 //! `cargo xtask corpus` — the repository the performance record is
-//! measured against, built here rather than cloned from anywhere.
+//! measured against, built here.
 //!
 //! **Why it is generated.** The record used to be taken against a live
 //! clone of `JetBrains/kotlin`, which is somebody's working copy: an
@@ -9,10 +9,10 @@
 //! being comparable without anything visibly happening
 //! (ci/baseline/perf-windows-x64.md §この記録の読み方 2).
 //!
-//! **Why it is not in git.** It is 200,000 commits, 50,000 refs and a
-//! hundred thousand tracked files — seven and a half gigabytes on disk,
-//! built in six minutes from `shape`'s constants. The generator is the
-//! thing worth keeping, not its output.
+//! **Why the generator is what git holds.** It is 200,000 commits,
+//! 50,000 refs and a hundred thousand tracked files — seven and a half
+//! gigabytes on disk, built in six minutes from `shape`'s constants.
+//! The generator is the thing worth keeping.
 //!
 //! **What the six minutes is.** Nine and a half million objects through
 //! `git fast-import`, which reads a stream on one thread. The bodies
@@ -20,13 +20,13 @@
 //! at once (`BLOB_IMPORTS`); the trees and the commits are one history
 //! and go through one, and that one is most of what is left. What would
 //! move it further is asking for fewer objects, which is a fidelity
-//! decision rather than a speed one (`shape`, `tree`).
+//! decision (`shape`, `tree`).
 //!
 //! **Why it is built once.** Every seat measures the same corpus, so it
-//! sits beside the primary checkout's `.git` rather than in any one
-//! tree, and a run that finds it already there does nothing. Delete it
-//! and the next `corpus` builds it again — to the same object ids,
-//! because the dates and the strings are fixed (`shape`).
+//! sits beside the primary checkout's `.git`, and a run that finds it
+//! already there does nothing. Delete it and the next `corpus` builds
+//! it again — to the same object ids, because the dates and the
+//! strings are fixed (`shape`).
 
 mod probe;
 mod remotes;
@@ -53,8 +53,8 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&CORPUS];
 
 /// The directory name, ignored and beside the primary checkout's `.git`
 /// like the shot board and the chip ledger: one for all six seats, in
-/// the project rather than outside it, and never inside a seat's own
-/// tree (six copies, and one `cargo clean` short of gone).
+/// the project and outside every seat's own tree (inside one it would
+/// be six copies, one `cargo clean` short of gone).
 ///
 /// **A `git clean -xfd` in the primary checkout takes it**, as it takes
 /// the board — it is ignored, which is what an ignored directory means.
@@ -97,9 +97,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     if let Some(other) = reference {
         if force || path.is_some() || copies.is_some() {
-            return Err(
-                "--against only reads; it takes neither --force, --path nor --copies".to_string(),
-            );
+            return Err("--against only reads: drop --force, --path or --copies".to_string());
         }
         return against(&other);
     }
@@ -112,7 +110,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if !at.join(".git").is_dir() {
         // Minutes of fast-import on every core: announced like a build
         // (`still`), and only on this path — a corpus already there is
-        // read, not made.
+        // only read.
         let _busy = crate::still::busy(&crate::tree::workspace_root(), "corpus")?;
         build(&at)?;
     }
@@ -141,7 +139,7 @@ fn copy_path(at: &Path, nth: usize) -> PathBuf {
 /// that reads them has a row to find, and named for their number beside
 /// the corpus (`<corpus>-copy-<n>`, ignored like the corpus itself).
 ///
-/// **Each on a branch of its own (`pgg-copy-<n>`), not detached.** A
+/// **Each on a branch of its own (`pgg-copy-<n>`).** A
 /// copy standing on no branch is a row only the walk can draw
 /// (`session::joins::WorktreeNews`), so the opening's listing asks for a
 /// rebuild that takes the opening stream over before its first chunk —
@@ -216,8 +214,8 @@ fn given_path(path: PathBuf) -> Result<PathBuf, String> {
 /// In the primary checkout, whichever seat is asking.
 ///
 /// `--git-common-dir` answers the *shared* git directory, so six seats
-/// resolve to one corpus rather than building six of it — the same call
-/// the shot board is placed by (`shots::board::board_dir`).
+/// resolve to one corpus — the same call the shot board is placed by
+/// (`shots::board::board_dir`).
 fn default_path() -> Result<PathBuf, String> {
     let cwd = std::env::current_dir().map_err(|e| format!("no working directory: {e}"))?;
     let cwd = cwd.to_string_lossy().replace('\\', "/");
@@ -245,7 +243,7 @@ fn beside(common: &str) -> Option<PathBuf> {
 fn build(at: &Path) -> Result<(), String> {
     sweep(at)?;
     // Named for this process, so two seats building at once are two
-    // builds rather than one destroyed twice.
+    // builds, each in a tree of its own.
     let partial = partial_path(at, std::process::id());
     if partial.exists() {
         std::fs::remove_dir_all(&partial)
@@ -452,10 +450,10 @@ fn fill(at: &Path, clock: &mut Clock) -> Result<(), String> {
         shape::REFS
     );
     std::fs::create_dir_all(at).map_err(|e| format!("could not make {}: {e}", at.display()))?;
-    // The hash algorithm is pinned rather than inherited: `init` would
-    // otherwise take it from `init.defaultObjectFormat`, and the same
-    // stream under sha256 produces different object ids — so a corpus
-    // built on such a machine could never match a recorded token.
+    // The hash algorithm is pinned: `init` would otherwise take it
+    // from `init.defaultObjectFormat`, and the same stream under
+    // sha256 produces different object ids — so a corpus built on such
+    // a machine could never match a recorded token.
     git(
         at,
         &[
@@ -494,9 +492,9 @@ fn fill(at: &Path, clock: &mut Clock) -> Result<(), String> {
     // does, and its speed does not depend on the level.
     git(at, &["config", "pack.compression", "1"])?;
     // The checkout is a hundred thousand files, which on Windows is
-    // where the wall clock goes rather than in the reading.
+    // where the wall clock goes.
     git(at, &["config", "checkout.workers", "0"])?;
-    // **Nothing may repack this corpus behind the measurement.** `git
+    // **This corpus holds still under a measurement.** `git
     // fetch` runs `gc --auto` after itself, and against nine million
     // objects that is four minutes (measured — it was the whole of what
     // looked like a slow fetch). The application fetches at open and
@@ -545,8 +543,8 @@ fn report(at: &Path) -> Result<(), String> {
     let refs = git(at, &["show-ref"])?;
     let commits = git(at, &["rev-list", "--all", "--count"])?;
     // The copies' branches (`stand_copies`) are refs of this generator's
-    // own making, not of the corpus's shape: counted out here, and still
-    // in the token, which is what a run is compared under.
+    // own making: counted out here, and still in the token, which is
+    // what a run is compared under.
     let counted = refs
         .lines()
         .filter(|l| !l.is_empty() && !l.contains(" refs/heads/pgg-copy-"))
@@ -602,7 +600,7 @@ fn readings(at: &Path) -> Result<(), String> {
     diffs(at)
 }
 
-/// What the timed diff costs — over the whole window, not at the tip.
+/// What the timed diff costs — over the whole window.
 ///
 /// **The harness opens the first changed file of the first row**
 /// (`--selection first`, `perf::options`), so one file's size is the
@@ -699,9 +697,9 @@ fn diffs(at: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// How large each of those blobs is, asked once rather than once each:
-/// two thousand `cat-file` processes cost more than the reading is
-/// worth, and `--batch-check` answers them all down one pipe.
+/// How large each of those blobs is, asked in one go: two thousand
+/// `cat-file` processes cost more than the reading is worth, and
+/// `--batch-check` answers them all down one pipe.
 fn sizes(at: &Path, oids: &[&str]) -> Result<Vec<u64>, String> {
     if oids.is_empty() {
         return Ok(Vec::new());
@@ -717,9 +715,9 @@ fn sizes(at: &Path, oids: &[&str]) -> Result<Vec<u64>, String> {
     let asking = child.stdin.take().ok_or("git cat-file took no input")?;
     let mut asking = std::io::BufWriter::new(asking);
     for oid in oids {
-        // **One `\n` a line, never the platform's ending.** git takes
-        // the whole line as the name of an object, so a carriage return
-        // makes every one of them `missing`.
+        // **One `\n` a line.** git takes the whole line as the name of
+        // an object, so a carriage return makes every one of them
+        // `missing`.
         writeln!(asking, "{oid}").map_err(|e| format!("could not ask about {oid}: {e}"))?;
     }
     drop(asking);
@@ -757,8 +755,8 @@ fn tags(at: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// How the object database is reached, which is not the same axis as
-/// how large it is.
+/// How the object database is reached, an axis of its own beside its
+/// size.
 ///
 /// **Every git process maps this before it resolves anything**, and an
 /// opening spawns about fifteen of them. A repository that has been
@@ -777,7 +775,7 @@ fn packs(at: &Path) -> Result<(), String> {
 }
 
 /// The build output a working repository accumulates, which is ignored
-/// and is not therefore free.
+/// and still paid for.
 ///
 /// **`-uall` walks it.** `status::read` asks for every untracked path,
 /// so git stats each of these and matches it against the ignore rules
@@ -815,9 +813,9 @@ fn spill(at: &Path, tracked: &[String]) -> Result<(), String> {
 /// corpus that is a fraction of that is measuring a fraction of the
 /// startup it claims to.
 ///
-/// **The time is a reading of the walk, not of a clone's settings.** On
-/// the reference repository `core.fsmonitor` — which is how that clone is
-/// configured — makes the status slower, not faster
+/// **The time is a reading of the walk.** On the reference repository
+/// `core.fsmonitor` — which is how that clone is configured — makes
+/// the status slower
 /// (ci/baseline/code-costs-windows-x64.md §コーパス生成), so a corpus that
 /// copied the setting would be measuring a daemon's health on the day.
 fn worktree(at: &Path) -> Result<(), String> {
@@ -830,8 +828,8 @@ fn worktree(at: &Path) -> Result<(), String> {
     // **`--no-optional-locks`, because the application never runs a
     // status without it** (`process::executor::FIXED_ARGS`), and
     // because this same reading is taken of repositories that are only
-    // being read — a status without it rewrites their index. It is not
-    // a timing device: warm, with and without read the same
+    // being read — a status without it rewrites their index. The time
+    // is the same either way, warm
     // (ci/baseline/code-costs-windows-x64.md §コーパス生成).
     git(
         at,
@@ -857,11 +855,11 @@ fn worktree(at: &Path) -> Result<(), String> {
     let dirs = git(at, &["ls-tree", "-r", "-d", "--name-only", "HEAD"])?
         .lines()
         .count();
-    // The size histogram, because "a hundred thousand files" is not one
-    // reading: a tree of that many stubs and a tree of that many
-    // sources cost different amounts to check out, to status and to
-    // open, and the record's claim is about the histogram rather than
-    // the count.
+    // The size histogram, because "a hundred thousand files" covers
+    // many trees: one of that many stubs and one of that many sources
+    // cost different amounts to check out, to status and to open, and
+    // the record's claim is about the histogram, which is what this
+    // prints.
     let mut bytes: Vec<u64> = git(at, &["ls-tree", "-r", "--format=%(objectsize)", "HEAD"])?
         .lines()
         .filter_map(|line| line.trim().parse().ok())
@@ -1080,7 +1078,7 @@ fn window(at: &Path) -> Result<(), String> {
 /// refs, it prints a token. The counts are what say it is stale, and
 /// the answer is always the same one, so it is in the message.
 ///
-/// **Three counts, not the whole shape.** A generator whose lane
+/// **Three counts.** A generator whose lane
 /// widths or file sizes moved leaves all three standing, and what says
 /// *that* is the token the record carries. These are the ones a
 /// half-finished or superseded build gets wrong on its own.
@@ -1155,8 +1153,8 @@ const PIPE_BUFFER: usize = 4 * 1024 * 1024;
 /// **The blobs are two thirds of the import and the only part of it
 /// that parallelises.** `fast-import` reads its stream on one thread,
 /// and a stream that spells every body out in its commit puts tens of
-/// gigabytes through that one thread — the bodies, not the number of
-/// commits, are what the wait is (times:
+/// gigabytes through that one thread — the bodies are what the wait
+/// is (times:
 /// ci/baseline/code-costs-windows-x64.md §コーパス生成; the generator
 /// writing the whole stream is a rounding error beside it,
 /// `stream::tests::time_the_generator_alone`). The bodies hash to the
@@ -1170,7 +1168,7 @@ const PIPE_BUFFER: usize = 4 * 1024 * 1024;
 /// packs and the one the commits and trees make is that shape. More
 /// would shave seconds and add a pack each.
 ///
-/// **`--depth=0` is not a shortcut.** It skips the delta attempt on
+/// **`--depth=0` costs pack size.** It skips the delta attempt on
 /// every blob, which is about a quarter of a single-process import
 /// (ci/baseline/code-costs-windows-x64.md §コーパス生成), but also the
 /// deltas between versions of the big directories' trees, and the pack
@@ -1239,7 +1237,7 @@ fn import(at: &Path, clock: &mut Clock) -> Result<stream::Newest, String> {
 /// live at once for as long as the stream takes: a git that filled its
 /// error pipe would stop reading the stream, and a writer that never
 /// stops writing would never read the error. Each waiting for the other
-/// is a build that hangs rather than one that says why.
+/// is a build that hangs.
 fn fast_import<T>(
     at: &Path,
     args: &[&str],
@@ -1332,8 +1330,8 @@ mod tests {
     }
 
     /// The name a build writes and the name the sweep reads have to be
-    /// one name, or an abandoned build is never found — and a directory
-    /// that merely sits beside the corpus must never be read as one.
+    /// one name, or an abandoned build is never found — and only that
+    /// name is ever read as a partial build.
     #[test]
     fn a_partial_build_is_found_under_the_name_it_was_given() {
         let at = std::path::Path::new("/home/x/platitude-gg/.pgg-perf-corpus");
@@ -1365,11 +1363,11 @@ mod tests {
             .replace('\\', "/")
     }
 
-    /// One corpus in the primary checkout, whichever seat asks — a
-    /// seat's own path must not reach the answer, or six seats would
-    /// build six of it. `--git-common-dir` is what makes that true: it
-    /// answers the shared directory, so every seat is handed the same
-    /// string this works from.
+    /// One corpus in the primary checkout, whichever seat asks — the
+    /// answer comes from the shared directory alone, or six seats
+    /// would build six of it. `--git-common-dir` is what makes that
+    /// true: it answers that directory, so every seat is handed the
+    /// same string this works from.
     #[test]
     fn every_seat_is_pointed_at_the_same_corpus() {
         let from_seat = shown("C:/Users/x/IdeaProjects/platitude-gg/.git");

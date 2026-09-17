@@ -1,7 +1,7 @@
 //! The app itself: the environment one run hands it, the wait with a
 //! kill guard at the end of it, and what came back.
 //!
-//! **Never an unbounded wait or poll.** The app has a watchdog of its
+//! **Every wait is bounded.** The app has a watchdog of its
 //! own ([`crate::verify::run`] passes it in); this side allows it
 //! [`GRACE_MS`] beyond that and then reaps, so a wedged GUI cannot hold
 //! the run open. The ceiling is the run's, the wait is `crate::wait`'s.
@@ -50,7 +50,7 @@ pub(super) struct Ran {
     /// line it belongs to (`crate::app_out::Said::at`). What a run that
     /// ended itself is read off: the account it wrote on the way out is
     /// a line here like any other, so the silence that says where it
-    /// stood is the one before that line rather than the one after it
+    /// stood is the one before that line
     /// ([`super::wedge`]).
     pub(super) out_at: Vec<Duration>,
     pub(super) err_at: Vec<Duration>,
@@ -61,7 +61,7 @@ pub(super) struct Ran {
     pub(super) timed_out: bool,
     /// The station the app was found held at, for the run ordered to
     /// hold there with no deadline thread of its own ([`ordered_hold`]):
-    /// what the reaping was on the word of, rather than the ceiling.
+    /// what the reaping was on the word of.
     /// `None` for every other run.
     pub(super) held_at: Option<String>,
     pub(super) elapsed: Duration,
@@ -107,7 +107,7 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     let _held = hold_the_store(start.config_dir, &start.opts.verb)?;
     super::wedge::clear_any_account(start.shot_dir);
 
-    // Bounded wait with a kill guard — never an unbounded wait or poll.
+    // Bounded wait with a kill guard.
     let mut wait = Wait::new(
         format!("the app running {}", start.opts.verb),
         Budget::whole(Duration::from_millis(start.opts.watchdog_ms + GRACE_MS)),
@@ -117,8 +117,8 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to start the app: {e}"))?;
-    // What this unit is doing, where the run is a session's own rather
-    // than a gate's step: a verb killed at the wrong moment leaves the
+    // What this unit is doing, where the run is a session's own: a
+    // verb killed at the wrong moment leaves the
     // app standing, and the room is held while it does
     // (`crate::budget::child_started`). Silent under a gate, whose steps
     // say it through the ticket they were handed.
@@ -159,8 +159,8 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
             super::wedge::last_station(start.shot_dir).as_deref() == Some(*station)
         });
         // Nothing left to wait for: no window was built, so no verb will
-        // run and no picture will be taken. Ended here rather than at the
-        // ceiling, and said in its own words — the diagnostics a wedge
+        // run and no picture will be taken. Ended here, and said in its
+        // own words — the diagnostics a wedge
         // takes are about a run whose reason is unknown, and this one's
         // is in the lines the app already wrote.
         if unloadable.load(std::sync::atomic::Ordering::SeqCst) {
@@ -183,14 +183,14 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         );
         // The app takes the git it was waiting on with it — a hook
         // that never returns, a fetch to nowhere — which `reap`
-        // reaches by walking from the app rather than leaving it to
-        // the step's own ceiling. The app is left in this runner's
-        // own group, so that a signal aimed at the runner from
-        // outside (a Ctrl-C, the step's group kill) ends it here
-        // instead of leaving it holding this run's store lock until
-        // its own watchdog fires. What ran out is reported off the
-        // run itself (`super::wedge`: the ceiling, the silence, what
-        // went with it), so the wait's own words are not repeated.
+        // reaches by walking from the app. The app is left in this
+        // runner's own group, so that a signal aimed at the runner
+        // from outside (a Ctrl-C, the step's group kill) ends it
+        // here, and this run's store lock goes with it before the
+        // app's own watchdog fires. What ran out is reported off
+        // the run itself (`super::wedge`: the ceiling, the
+        // silence, what went with it), which is the whole
+        // account.
         let (under, ended) = crate::reap::reap(&mut child);
         reaped = Some(under.line());
         timed_out = true;
@@ -229,8 +229,8 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
 }
 
 /// The station a run was ordered to hold at where no deadline thread will
-/// end it there: the one run this side ends on the trail's word rather
-/// than the ceiling's. **The ceiling stays, as the backstop** — a run
+/// end it there: the one run this side ends on the trail's word.
+/// **The ceiling stays, as the backstop** — a run
 /// that never reaches its station is still reaped at it. A hold with the
 /// deadline thread up is left to the thread: what that case reads is the
 /// account the thread writes, which a reaping from here would forestall
@@ -328,7 +328,7 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         // Naming a repository is what turns tab restoring off (Main.qml):
         // a run that is told what to open is not being asked what it
         // remembers. More than one opens a tab each, in this order —
-        // joined rather than formatted, so a path git accepts but UTF-8
+        // joined, so a path git accepts but UTF-8
         // does not still reaches the app whole.
         let mut open = std::ffi::OsString::new();
         for (position, repo) in repos.iter().enumerate() {
@@ -389,8 +389,8 @@ pub(super) fn stages_a_held_store(verb: &str) -> bool {
 /// Holds the settings lock for the two verbs whose subject is a *second*
 /// process finding it held.
 ///
-/// Holding the real lock — rather than setting a flag that imitates the
-/// state — is what makes the picture proof of the mechanism. The name is
+/// Holding the real lock is what makes the picture proof of the
+/// mechanism. The name is
 /// `settings::LOCK_FILE`; xtask depends on std alone (CLAUDE.md), so it
 /// is spelled again here, and a drift shows up as the run reporting
 /// `blocked=false`.

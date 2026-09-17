@@ -86,8 +86,8 @@ mod tests {
         }
     }
 
-    /// Ids name the operation, not the spelling: a verb rename must not
-    /// be able to change one, so nothing derives an id from a call.
+    /// Ids name the operation: a verb rename leaves every
+    /// one as it is, so nothing derives an id from a call.
     #[test]
     fn an_id_is_not_derived_from_the_call() {
         for command in all() {

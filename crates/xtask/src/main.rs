@@ -1,8 +1,8 @@
 //! Development task runner (`cargo xtask <command>`).
 //!
-//! Cross-platform by construction (CLAUDE.md: no Windows-only dev tooling):
-//! plain Rust + std, with OS differences expressed as code, not as parallel
-//! script files.
+//! Cross-platform by construction (CLAUDE.md: one runner on all 3 OSes):
+//! plain Rust + std, with OS differences expressed as code inside the
+//! one source.
 
 mod app_env;
 mod app_out;

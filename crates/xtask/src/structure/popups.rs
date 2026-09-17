@@ -24,7 +24,7 @@
 //!   named and closed from outside — the beginning of the hand-spelled set.
 //!
 //! The bars (`AskBar`, `FindBar`, `NoticeBar`) keep their `dismiss()`: they
-//! are items with a verb of their own, not popups with Qt's underneath.
+//! are items with a verb of their own.
 //!
 //! Comments and string literals are taken out before anything is read:
 //! the product's comments say `close()` wherever they explain a close, and

@@ -24,7 +24,7 @@
 //!   The table ends the list, so the list's own text after it goes on at
 //!   an indent that continues nothing.
 //!
-//! The count reads structure and never style: how wide a line runs and
+//! The count reads structure only: how wide a line runs and
 //! how a sentence is built are the writer's, and a machine that had an
 //! opinion on either would be answering a question nobody asked it.
 
@@ -126,7 +126,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         wrong.push(format!(
             "{} generated command reference(s) that do not quote the catalogue: a command is \
              declared beside the code that runs it, and `{}` writes what quotes it — change \
-             the declaration, not the copy",
+             the declaration",
             held.writable.len(),
             SYNC.line()
         ));
@@ -184,8 +184,8 @@ fn written(root: &Path, held: commands::Held, sync: bool) -> Result<commands::He
 /// Hold the design document's value cells to the sources, writing them
 /// when asked to.
 ///
-/// The write happens before the findings are answered, not instead of
-/// them: `--sync` is how a value cell is corrected, and a run that
+/// The write happens ahead of the findings, which are still said:
+/// `--sync` is how a value cell is corrected, and a run that
 /// corrects one still says which cell it was, so that the drift reaches
 /// the person who has to decide whether the source was the side that was
 /// wrong.
@@ -213,8 +213,8 @@ fn quote(root: &Path, sync: bool) -> Result<tokens::Quoted, String> {
 
 /// The torn blocks of one document, as the sentences a reader is given.
 /// The Write hook says the same thing about the one file an edit just
-/// landed in, so a tear is answered in the turn that made it rather than
-/// at the next gate.
+/// landed in, so a tear is answered in the turn that made it, ahead
+/// of the next gate.
 pub(crate) fn findings(text: &str) -> Vec<String> {
     breaks(text)
         .into_iter()
@@ -231,8 +231,8 @@ pub(crate) fn covers(path: &str) -> bool {
 }
 
 /// One place a block was torn off what it belonged to, at the line whose
-/// reader is meant to look — the break itself, not the symptom, where the
-/// two differ.
+/// reader is meant to look — the break itself, where it and the
+/// symptom differ.
 struct Break {
     line: usize,
     kind: Kind,
@@ -301,10 +301,10 @@ fn breaks(text: &str) -> Vec<Break> {
     // The start of a document reads as a blank line: the first heading
     // has nothing above it to have been spliced onto.
     let mut blank_above = true;
-    // One finding per closed region — not per line, and not per run of
-    // them: everything hanging under one torn block is one tear, however
-    // many blank lines fall through it. Cleared at column 0, where the
-    // next block begins and the next tear would be a different one.
+    // One finding per closed region: everything hanging under one torn
+    // block is one tear, however many blank lines fall through it.
+    // Cleared at column 0, where the next block begins and the next
+    // tear would be a different one.
     let mut orphaned = false;
 
     while at < lines.len() {
@@ -489,7 +489,7 @@ mod tests {
     }
 
     /// A second tear is a second finding: what separates them is a block
-    /// at column 0, not the blank lines inside one of them.
+    /// at column 0 (blank lines inside one split nothing).
     #[test]
     fn two_blocks_that_each_tore_something_are_two_findings() {
         let text = "段落ひとつ。\n  字下げ\n段落ふたつ。\n\n  字下げ\n";
@@ -511,7 +511,7 @@ mod tests {
     }
 
     /// The first heading has nothing above it to be swallowed by, and a
-    /// `#` that opens a word is prose rather than a heading.
+    /// `#` that opens a word is prose.
     #[test]
     fn the_first_line_and_a_hash_inside_a_word_are_left_alone() {
         assert!(kinds("# 見出し\n\n本文\n").is_empty());

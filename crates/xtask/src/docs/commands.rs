@@ -44,10 +44,10 @@ fn dispatch_path() -> String {
 }
 
 /// The roster of ids, so that one going missing is a line in a diff and
-/// a red check rather than a silent loss of every reference to it.
+/// a red check.
 pub(crate) const ROSTER: &str = "crates/xtask/command-ids.txt";
 
-/// Built rather than written out, because it names the command that
+/// Built at run time, because it names the command that
 /// writes it.
 fn roster_header() -> String {
     format!(
@@ -189,7 +189,7 @@ fn push(out: &mut String, line: &str, text: &str) {
     }
 }
 
-/// A line inside a fence: read for its verbs, never rewritten.
+/// A line inside a fence: read for its verbs, kept as it is.
 fn fence_line(
     line: &str,
     catalogue: &[&'static Command],
@@ -204,7 +204,7 @@ fn fence_line(
             command.id
         ));
     }
-    // Word by word rather than as one call: a compound line reads as no
+    // Word by word: a compound line reads as no
     // command at all when taken whole.
     for verb in called_verbs(line) {
         unknown(verb, catalogue, named, number, held);
@@ -700,8 +700,8 @@ mod tests {
         assert_eq!(say("cargo xtask <command>"), "none");
     }
 
-    /// An escape in front is never a mention: the flag is the permission,
-    /// and it is the half that must not drift.
+    /// An escape in front makes it managed: the flag is the permission,
+    /// and it is the half held in step.
     #[test]
     fn an_escape_in_front_makes_even_a_bare_verb_managed() {
         assert_eq!(say("PGG_ALLOW_GUI=1 cargo xtask launch"), "managed");
@@ -878,7 +878,7 @@ mod tests {
         );
     }
 
-    /// A fence is read for its verbs and never rewritten: a marker
+    /// A fence is read for its verbs and left as it is: a marker
     /// cannot stand inside a compound shell line, and the verify-ui
     /// skill's fast path is one.
     #[test]

@@ -8,7 +8,7 @@
 //! knob the app never had — were readable in the file and unreachable by
 //! any run.
 //!
-//! What it reproduces is the job, not the runner: the same build, the same
+//! What it reproduces is the job: the same build, the same
 //! collection of test executables, the same script, and the same empty
 //! network namespace. CI reaches that namespace with `unshare -n` and a
 //! sudo; a container is handed one by asking for no network at all, which
@@ -85,11 +85,11 @@ pub(super) fn offline(root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// The test executables cargo built, as paths inside the container. CI
-/// reads the same field of the same stream through jq
-/// (.github/workflows/ci.yml); this reads it here, so that what runs
-/// offline is chosen the way the job chooses it rather than by guessing at
-/// file names under deps/.
+/// The test executables cargo built, as paths
+/// inside the container. CI reads the same field of
+/// the same stream through jq (.github/workflows/ci.yml);
+/// this reads it here, so that what runs offline is
+/// chosen the way the job chooses it.
 fn test_binaries(root: &Path, tag: &str) -> Result<Vec<String>, String> {
     let mut cmd = docker_run(root, true, &[]);
     cmd.arg(tag).args([

@@ -18,20 +18,20 @@ pub(super) struct Outcome {
     /// it fires, so the parent sees an ordinary exit — and a run that
     /// wedged after its first `grabToImage` came back has a screenshot to
     /// show for itself as well (observed: a half-finished shot pair
-    /// passed on the strength of `app.png` alone). Reaching the ceiling is
-    /// never a pass: it is the harness saying it stopped waiting.
+    /// passed on the strength of `app.png` alone). Reaching the ceiling
+    /// is the harness saying it stopped waiting, and a red.
     pub(super) watchdog_expired: bool,
     pub(super) write_failures: usize,
     pub(super) allow_write_failure: bool,
     /// Whether the run said its own write barrier's contract broke
-    /// (`AutoActDriver.sayBroken`). **No flag excuses it and no picture
-    /// answers it**: the harness is saying the run stopped being about the
-    /// write it was pressed for, so the shot is of some other page —
+    /// (`AutoActDriver.sayBroken`). **A red whatever else the run did**:
+    /// the harness is saying the run stopped being about the write it
+    /// was pressed for, so the shot is of some other page —
     /// `--allow-write-failure` is about git refusing a write the verb
     /// meant to make, which is a different sentence.
     ///
-    /// The run ends itself the moment it says so, rather than spending the
-    /// ceiling in silence, so this line is the whole of the evidence.
+    /// The run ends itself the moment it says so, so this line is the
+    /// whole of the evidence.
     pub(super) contract_broken: bool,
     /// Whether the app was refused the settings it was handed *and
     /// nothing staged that* — the two verbs whose subject is a held
@@ -41,8 +41,8 @@ pub(super) struct Outcome {
     /// reading left is that something else got hold of it, and the run
     /// goes on with an empty store and a window about *that*, which the
     /// verb's own waiting never comes back from. Said in the second it
-    /// happens rather than read off the top of the log once the watchdog
-    /// has spent the whole of its ceiling (`super::options`).
+    /// happens, so the reading is had at once, with the ceiling
+    /// still standing (`super::options`).
     pub(super) store_refused: bool,
     /// What a verb whose failure the camera cannot see has to be caught
     /// saying. `solo` photographs a perfectly good ordinary window if the
@@ -135,8 +135,8 @@ pub(super) fn judge(
 /// The app's own watchdog is a QML `Timer` (`auto/AutoShotDriver.qml`),
 /// so a run it ended answered its event loop when the timer fired.
 /// This says nothing about earlier stalls or which completion was missing.
-/// The other red is a process that stopped answering, and
-/// it is read off the ceiling instead (`super::wedge`), whose account
+/// The other red is a process that stopped answering, and is
+/// read off the ceiling (`super::wedge`), whose account
 /// already carries the machine's load. **Exclusive, so the load is said
 /// once**: a run whose watchdog fired and whose teardown then wedged is
 /// the ceiling's, and the account under it is the fuller reading.
@@ -145,10 +145,10 @@ pub(super) fn loop_was_turning(outcome: &Outcome, ran: &super::child::Ran) -> bo
 }
 
 /// The pictures the run left, named, and filed on the board as the run
-/// goes rather than when somebody remembers: the seat is read from the
-/// working directory there, so a picture that is registered is a picture
-/// that says which tree took it. A pass is not the condition — a failing
-/// run's picture is the one most worth looking at.
+/// goes: the seat is read from the working directory there, so a
+/// picture that is registered is a picture that says which tree took
+/// it. Filed whatever the verdict — a failing run's picture is the one
+/// most worth looking at.
 fn filed_shots(opts: &super::options::Options, shot_dir: &std::path::Path) -> Vec<PathBuf> {
     let mut shots: Vec<PathBuf> = std::fs::read_dir(shot_dir)
         .map(|it| {
@@ -170,8 +170,8 @@ fn filed_shots(opts: &super::options::Options, shot_dir: &std::path::Path) -> Ve
         };
         match crate::shots::record(&label, &opts.verb, &shots) {
             Ok(page) => println!("board: {}", crate::shots::shown(&page)),
-            // The board is not what this run is judging. Say the reason
-            // and let the verdict stand on the pictures themselves.
+            // This run is judged on its pictures. Say the reason the
+            // board could not be updated and let the verdict stand.
             Err(message) => println!("board: not updated ({message})"),
         }
     }
@@ -286,17 +286,17 @@ pub(super) fn announce(
     if outcome.contract_broken {
         println!(
             "  the harness broke its own write barrier's contract — the `write_contract` line \
-             above says which press and what it was armed over. The run ended there rather \
-             than at the ceiling, and its picture is of whatever page it had got to; no flag \
-             excuses this one, because the run stopped being about the write it was pressed for."
+             above says which press and what it was armed over. The run ended there, and its \
+             picture is of whatever page it had got to; a red whatever the flags say, because \
+             the run stopped being about the write it was pressed for."
         );
     }
     if outcome.store_refused {
         println!(
-            "  the settings this run was handed were already held, so it opened the window \
-             that says so rather than the one the verb is about. Nothing else knows that \
-             directory, so two runs were given one: on the container side, the host \
-             directory mounted at /out."
+            "  the settings this run was handed were already held, so the window it \
+             opened is the one that says so. Nothing else knows that directory, so \
+             two runs were given one: on the container side, the host directory \
+             mounted at /out."
         );
     }
     if outcome.passed() {
@@ -327,11 +327,11 @@ mod tests {
         held_save_landed: None,
     };
 
-    /// **The harness saying its own barrier broke is a red nothing
-    /// excuses.** `--allow-write-failure` is about git refusing a write
-    /// the verb meant to make; this is the run saying it stopped being
-    /// about the write it was pressed for, and the picture it took is of
-    /// some other page.
+    /// **The harness saying its own barrier broke is a red on its own.**
+    /// `--allow-write-failure` is about git refusing a write the verb
+    /// meant to make; this is the run saying it stopped being about the
+    /// write it was pressed for, and the picture it took is of some
+    /// other page.
     #[test]
     fn a_broken_contract_fails_the_run_whatever_else_it_did() {
         let broken = Outcome {
@@ -372,8 +372,8 @@ mod tests {
     /// A run's settings are its own — nothing else knows the directory —
     /// so a store that came back held means two runs were handed one, and
     /// the picture is of a window about that. Waiting out the watchdog to
-    /// discover it costs the whole ceiling — the backstop's height, not a
-    /// verb's — and says only that the verb never finished.
+    /// discover it costs the whole ceiling — the backstop's height — and
+    /// says only that the verb never finished.
     #[test]
     fn a_run_refused_its_own_settings_fails_where_it_stands() {
         let refused = Outcome {

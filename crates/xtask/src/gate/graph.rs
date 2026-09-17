@@ -26,9 +26,9 @@
 //! test that reads QML files off the disk (a directory literal).
 //!
 //! Everything here over-approximates on purpose: a module is the unit (an
-//! item's file, not the item), a glob re-export lands on every file it
+//! item's file), a glob re-export lands on every file it
 //! could mean, and a path that stops resolving early lands on the
-//! deepest module it did reach. The one failure this must not have is an
+//! deepest module it did reach. The one failure it guards against is an
 //! edge missing, so unresolvable paths are counted and printed.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -88,7 +88,7 @@ fn is_ident(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
-/// Markdown is checked by the always-run harness checks, not test dependencies.
+/// Markdown is checked by the always-run harness checks alone.
 pub(crate) fn is_markdown(file: &str) -> bool {
     !file.ends_with('/')
         && Path::new(file)
@@ -408,7 +408,7 @@ fn roots_of(root: &Path, dir: &Path, package: &str, g: &mut Graph) -> Result<(),
 }
 
 /// Registers `file` as `module` and follows its `mod x;` declarations
-/// into the module index — an index, not an edge.
+/// into the module index only.
 fn walk_modules(root: &Path, file: &str, module: Module, g: &mut Graph) -> Result<(), String> {
     g.index.insert(
         (module.krate.clone(), module.path.clone()),
@@ -1050,7 +1050,7 @@ fn literal_paths(root: &Path, file: &str, bodies: &[String]) -> Vec<String> {
             if name.starts_with("target") || name.is_empty() {
                 continue;
             }
-            // The census is the plan's input, never a step's: the gate
+            // The census is the plan's input alone: the gate
             // reads it to pick the verbs and the verbs write it back, and
             // no test opens the committed one (the sandboxes lay out
             // their own). An edge here would put it in the cache key of
@@ -1129,7 +1129,7 @@ fn string_bodies(text: &str) -> Vec<String> {
         } else if bytes[i] == b'\'' {
             i = char_literal_end(bytes, i);
         } else if let Some((body_start, end, hashes)) = string_literal(bytes, i) {
-            // A byte string is bytes, never a path: `b"../"` is content
+            // A byte string is bytes: `b"../"` is content
             // a generator writes into a repository it makes up, and
             // nothing ever opens it (`corpus::shape::content_into`).
             // Read as a path it resolved against the writing file's own
@@ -1295,8 +1295,8 @@ fn directories(root: &Path, g: &mut Graph) -> Result<(), String> {
 /// that edge carried, and a crate root with a reader is the hub every
 /// change reaches everything through (.claude/rules/structure.md
 /// §クレート root). So the gate reads this off the graph it already
-/// holds, on every run, rather than through a test that only some
-/// selections pick.
+/// holds, on every run (a test would sit in only some
+/// selections).
 pub(crate) fn complaints(g: &Graph) -> Vec<String> {
     let mut out = Vec::new();
     for (file, path) in g.unresolved.iter().take(10) {
@@ -1411,7 +1411,7 @@ mod tests {
         );
     }
 
-    /// A byte string is bytes a generator writes, not a path anything
+    /// A byte string is bytes a generator writes and nothing
     /// opens: `b"../"` read as one made the file naming it a reader of
     /// every source beside it (`corpus::shape::content_into`). The `b`
     /// has to be its own word — `lib"x"` is not a byte string, and the
@@ -1448,7 +1448,7 @@ mod tests {
         assert!(named(plan, "../").is_empty());
         assert!(named("crates/xtask/src/hook/seat.rs", "crates/xtask").is_empty());
         assert!(named(plan, crate::gate::census::FILE).is_empty());
-        // What the rule must not take away: a directory the file is not
+        // What the rule keeps: a directory the file is not
         // in, and a file of its own. Spelled in pieces, or naming them
         // here would be this very file reading them.
         let ui = format!("crates/{}/src/ui", "platitude-app");
@@ -1611,7 +1611,7 @@ mod tests {
     /// The whole tree, as it stands. The same reading every gate does
     /// before it runs anything ([`complaints`]) — here so that
     /// `cargo test -p xtask` says it too, and says it against a graph
-    /// read fresh off the sources rather than one off the shelf.
+    /// read fresh off the sources.
     #[test]
     fn the_crate_roots_have_no_readers_and_every_path_resolves() {
         let root = crate::tree::workspace_root();

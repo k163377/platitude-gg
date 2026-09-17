@@ -9,11 +9,11 @@ use super::{Candidate, Exception, Finding};
 /// Why a timed wait is allowed to stand, as its marker names it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Purpose {
-    /// A sleep that paces a retry whose completion is causal: the loop
-    /// ends on an answer, never on the clock.
+    /// A sleep that paces a retry whose completion is causal: the
+    /// loop ends on an answer.
     Paced,
-    /// A wall-clock ceiling outside the common budget that only names a
-    /// failure, never decides one.
+    /// A wall-clock ceiling outside the common budget that only names
+    /// a failure.
     Ceiling,
     /// A clock read that is printed or handed to the code under test,
     /// and judged by nothing.
@@ -46,8 +46,8 @@ impl Purpose {
 }
 
 /// A `// waits(<purpose>): <reason>` marker on one line. What is wrong
-/// with a malformed one is carried instead of the purpose, so the file
-/// names it as a finding rather than reading it as nothing.
+/// with a malformed one is carried in the purpose's place, so the file
+/// names it as a finding.
 pub(super) struct Marker {
     pub line: usize,
     pub purpose: Result<Purpose, String>,
@@ -629,8 +629,8 @@ pub(super) fn line_of(chars: &[char], at: usize) -> usize {
 }
 
 /// Whether `token` occurs in `haystack` on a word boundary at each end
-/// it has one: `timeout(` must not be found inside `no_timeout(`, nor
-/// `bounded(` inside `unbounded(`, nor `Instant::now` inside
+/// it has one: `timeout(` is its own token apart from `no_timeout(`,
+/// `bounded(` from `unbounded(`, `Instant::now` from
 /// `Instant::nowhere`. An end that is not a word byte (`.outcome()`,
 /// `sleep(`) guards nothing and matches anywhere — which is what lets a
 /// name be looked for however the call spells it, `Instant::now()` and

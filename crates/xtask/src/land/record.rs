@@ -30,7 +30,7 @@ impl Phases {
     }
 
     pub(super) fn mark(&mut self, what: &str) {
-        // waits(measured): the end of a phase, never an admission condition
+        // waits(measured): the end of a phase, for the record
         self.mark_at(what, Instant::now());
     }
 

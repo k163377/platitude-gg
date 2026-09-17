@@ -1,7 +1,7 @@
 //! What a gate run cost, kept where the next run cannot take it away.
 //!
-//! The wall clock alone says a gate was slow, never where the time went.
-//! A gate is four things in a row: the tree's one gate lock, the plan (a
+//! The wall clock alone says only that a gate was slow. A gate is
+//! four things in a row: the tree's one gate lock, the plan (a
 //! dependency graph read off the sources, one listing of the tree for the
 //! cache keys, the census and who wears whom), the task runner built and
 //! copied, and the two sides — inside which a verb can be waiting for a
@@ -127,7 +127,7 @@ pub(crate) struct Spent {
     /// Reading the dependency graph off the sources, or off the shelf
     /// (`super::reuse`).
     pub graph: Duration,
-    /// Whether that graph came off the shelf rather than the sources.
+    /// Whether that graph came off the shelf.
     pub graph_reused: bool,
     /// Why the graph was reused, rebuilt or kept out of the cache.
     pub graph_cache: String,
@@ -236,10 +236,10 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::Shift) -> Stri
             .collect();
         out.push_str(&format!("  longest {}\n", units.join(" / ")));
     }
-    // What the run's verbs did to the census, by name rather than as a
-    // file: one name every line gained is the whole file's diff, and the
-    // row that says so is what keeps the one line that moved on its own
-    // readable beside it (`super::census::Shift`).
+    // What the run's verbs did to the census, by name: one name every
+    // line gained is the whole file's diff, and the row that says so is
+    // what keeps the one line that moved on its own readable beside it
+    // (`super::census::Shift`).
     out.push_str(&shift.block());
     out
 }

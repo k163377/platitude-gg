@@ -18,13 +18,13 @@ pub(super) fn pre_launch(input: &str) -> Result<bool, String> {
         return Ok(false);
     };
     // Checked before the approval flag and outside any worktree: the flag records
-    // that the user asked for a window, not that the session may stop
-    // answering, and a launch takes the turn wherever it is started from.
+    // that the user asked for a window, and a launch takes the turn
+    // wherever it is started from.
     if reads_the_launch(&command) {
         println!(
             "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
              \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
-             \"A launch must not feed a pipe or a command substitution. The \
+             \"A launch runs unread — no pipe, no command substitution. The \
              window it starts inherits the write end of the shell's pipe and \
              holds it open for as long as it lives, so the reader never sees \
              end-of-file: the call does not come back until the window closes, \
@@ -45,11 +45,11 @@ pub(super) fn pre_launch(input: &str) -> Result<bool, String> {
         println!(
             "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
              \"permissionDecision\":\"deny\",\"permissionDecisionReason\":\
-             \"A launch is not background work. It reaps this tree's stale \
+             \"A launch is foreground work. It reaps this tree's stale \
              runs, builds, starts the window detached and answers, all in the \
-             foreground; a background task instead leaves the session busy \
-             until it lands and then wakes the agent again, which is the one \
-             thing a launch is not supposed to do. Run it in the foreground \
+             foreground; a background task leaves the session busy \
+             until it lands and then wakes the agent again, for a window \
+             already up. Run it in the foreground \
              (raise the tool's timeout if the release build needs it), report, \
              and end the turn.\"}}}}"
         );
@@ -356,7 +356,7 @@ mod tests {
             "PGG_ALLOW_REBASE=1 git rebase main && PGG_ALLOW_GUI=1 cargo xtask launch",
             // Nobody reads a file, and stderr joining stdout adds no reader.
             "PGG_ALLOW_GUI=1 cargo xtask launch > launch.log 2>&1",
-            // The pipe belongs to the command beside it, not to the launch.
+            // The pipe belongs to the command beside it.
             "git rebase main 2>&1 | tail -2 && PGG_ALLOW_GUI=1 cargo xtask launch",
             // These two end their app themselves, so their reader sees an end.
             "cargo xtask verify-ui commit --preset basic | tail -5",

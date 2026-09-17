@@ -67,29 +67,29 @@ pub(crate) struct Run {
     /// The tree that took them: a roster letter a-f, or `main` for the
     /// primary checkout. The whole of who a run belongs to — the session
     /// that took it is nobody's business here, because a seat outlives
-    /// the sessions that pass through it and a run stands for the work,
-    /// not for the conversation it was taken in (`sweep`).
+    /// the sessions that pass through it and a run stands for the
+    /// work it was taken for (`sweep`).
     pub(crate) seat: String,
     /// Milliseconds since the epoch. The page formats it — it has a
     /// calendar, and xtask depends on std alone (CLAUDE.md 技術スタック).
     pub(crate) at: u128,
     /// Whether the pictures are read *abreast* — one view holding them
-    /// all in a row under one zoom — rather than one at a time.
+    /// all in a row under one zoom.
     ///
-    /// What a before/after is for: shown one after the other, the reader
-    /// carries the first picture in their head while looking at the
-    /// second, and the difference is whatever they remember rather than
-    /// whatever changed. Side by side under one
-    /// magnifier there is nothing to remember.
+    /// What a before/after is for: shown one after the other, the
+    /// reader carries the first picture in their head while looking
+    /// at the second, and the difference is whatever they remember.
+    /// Side by side under one magnifier there is nothing to
+    /// remember.
     pub(crate) side_by_side: bool,
     pub(crate) shots: Vec<Shot>,
 }
 
 /// One picture on the board.
 pub(crate) struct Shot {
-    /// Board-relative path. The page points at the files rather than
-    /// carrying them, so index.html stays a few KB however many runs
-    /// pile up behind it.
+    /// Board-relative path. The page points at the files, so
+    /// index.html stays a few KB however many runs pile up behind
+    /// it.
     pub(crate) file: String,
     /// What the file was called where it was taken (app.png, overlay.png)
     /// — the name that ties it back to the run that produced it.

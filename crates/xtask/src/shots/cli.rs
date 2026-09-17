@@ -22,8 +22,8 @@ cargo xtask shots <command>
       single view holding both side by side under one magnifier, each
       with its word over it. Read one after the other they are not a
       comparison — the reader carries the first picture in their head
-      while looking at the second — so a before/after goes on the board
-      this way and never as two runs.
+      while looking at the second — so a before/after goes on the
+      board as one run.
 
   add --label \"<what these show>\" --part <word> <png> [--part <word> <png>]...
       The same again, for a set of pictures of one part in its several
@@ -49,27 +49,27 @@ cargo xtask shots <command>
 
   prune [--seat <letter>]... [--label \"<label>\"]
       Take runs off the board — their pictures and all — and rebuild the
-      page. Without --seat it reaches this seat's own runs and nobody
-      else's: the board is shared, and the runs beside yours belong to a
-      session that may be showing them right now. Name others to include
-      them, or `--seat all` to sweep the board. --label narrows it to one
+      page. Without --seat it reaches this seat's own runs alone: the
+      board is shared, and the runs beside yours belong to a session
+      that may be showing them right now. Name others to include them,
+      or `--seat all` to sweep the board. --label narrows it to one
       name, which is how the pictures of an approach that was abandoned
       leave without taking the rest of the seat's work with them.
 
       Most runs need none of this: a retake replaces the picture it was
       taken to replace, and a seat's runs go when its work does — the
       branch landing on main, or the seat being handed to a fresh
-      stretch of work. Nothing goes because a session ended
+      stretch of work. The board outlives a session
       (shots/sweep.rs).
 
   open [--again]
       Put the board in front of the reader, in one window and only one:
       the page is rewritten at a fixed path, so a window already open
-      is one F5 away from the board as it stands, and this says so
-      instead of opening another. The page is read top down in the
-      order the runs went up, so the newest is at the bottom. That
-      holds across seats and sessions — the board is shared, and six
-      windows of it are six answers to \"which one is current\".
+      is one F5 away from the board as it stands, and this says so.
+      The page is read top down in the order the runs went up, so
+      the newest is at the bottom. That holds across seats and
+      sessions — the board is shared, and six windows of it are six
+      answers to \"which one is current\".
       --again is the reader's own word that they closed it, and the
       only way past: nothing here can see a closed window
       (shots/window.rs).
@@ -165,9 +165,9 @@ fn add(args: &[String]) -> Result<(), String> {
                     );
                 }
             },
-            // Named rather than left to the catch-all, so the hand that
-            // reaches for it is told where the board is read instead of
-            // "unknown option".
+            // Named here, so the hand that reaches
+            // for it is told where the board is
+            // read.
             "--open" => {
                 return Err(format!(
                     "shots add: --open is gone — the board is read in one window, \
@@ -181,9 +181,9 @@ fn add(args: &[String]) -> Result<(), String> {
             other => pngs.push(PathBuf::from(other)),
         }
     }
-    // Half a comparison is not one, and the halves must not arrive as
-    // two runs by accident: the whole point of the pair is that they are
-    // looked at together.
+    // The halves arrive as one run: the whole point of the pair
+    // is that they are looked at together, and half of a
+    // comparison is a picture.
     let (page, count) = match (before, after) {
         (Some(before), Some(after)) if pngs.is_empty() && parts.is_empty() => {
             (board::record_pair(&label, &verb, &before, &after)?, 2)
@@ -195,7 +195,7 @@ fn add(args: &[String]) -> Result<(), String> {
         _ => {
             return Err(
                 "shots add: a run is one of three — plain pictures, --before with --after, \
-                 or --part words with their pictures — and they do not mix"
+                 or --part words with their pictures — so pick one"
                     .to_string(),
             );
         }
@@ -224,10 +224,10 @@ fn prune(args: &[String]) -> Result<(), String> {
     while let Some(arg) = rest.next() {
         match arg.as_str() {
             "--seat" => match rest.next().map(String::as_str) {
-                // The sweep is a word rather than a missing flag: a
-                // prune that reached every seat because nobody typed
-                // anything is the one mistake this command can make
-                // that another session pays for.
+                // The sweep is a word: a prune that reached every
+                // seat because nobody typed anything is the one
+                // mistake this command can make that another session
+                // pays for.
                 Some("all") => every = true,
                 Some(seat) => seats.push(seat.to_string()),
                 None => return Err("shots prune: --seat wants a letter, or `all`".to_string()),
@@ -305,8 +305,8 @@ mod tests {
         assert_eq!(stamp(1_709_164_800_000), "2024-02-29 00:00Z");
         assert_eq!(stamp(951_782_400_000), "2000-02-29 00:00Z");
         assert_eq!(stamp(4_107_542_400_000), "2100-03-01 00:00Z");
-        // UTC, not the clock on the wall: this run was taken at 02:12
-        // local on the 22nd, nine hours ahead.
+        // UTC: this run was taken at 02:12 local on the 22nd,
+        // nine hours ahead.
         assert_eq!(stamp(1_787_332_329_346), "2026-08-21 17:12Z");
     }
 }

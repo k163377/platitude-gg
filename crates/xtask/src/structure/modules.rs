@@ -100,7 +100,7 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
 /// written, and the slots' own names in the camel case
 /// `ConvertToCamelCase` gives them.
 ///
-/// Read out of the source rather than listed here, so a knob added to the
+/// Read out of the source, so a knob added to the
 /// harness is out of the product's reach without anybody remembering to
 /// add it twice.
 ///
@@ -203,7 +203,7 @@ fn harness_types(root: &Path) -> Result<Vec<String>, String> {
 }
 
 /// Whether one line of QML names `type` the way the engine resolves —
-/// an object declaration or a typed property, not a mention in prose.
+/// an object declaration or a typed property.
 fn names_type(line: &str, type_name: &str) -> bool {
     let code = line.trim_start();
     if code.starts_with("//") || code.starts_with("///") {
@@ -258,7 +258,7 @@ mod tests {
         ));
         // A longer name that merely starts with one.
         assert!(!names_type("    TabProbeSeat {", "TabProbe"));
-        // The property's own name, not its type.
+        // The property's own name only.
         assert!(!names_type("    property var tabProbe", "TabProbe"));
         // A call through a seat says nothing about the type.
         assert!(!names_type("    harness.ask().begin()", "WindowHarness"));

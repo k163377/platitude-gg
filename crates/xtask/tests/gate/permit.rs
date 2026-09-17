@@ -1,6 +1,6 @@
 //! The landing permit: the landing verb goes through on the user's own
-//! message, once — and the once is a landing that moved main, not an
-//! attempt. Git of the session's own never writes main at all.
+//! message, once — and the once is a landing that moved main. Git of
+//! the session's own never writes main at all.
 
 use std::fs::File;
 use std::path::Path;
@@ -271,6 +271,6 @@ fn a_sessions_own_git_does_not_write_main_on_any_flag() {
             "{command}: {refused}"
         );
     }
-    // A merge in the seat lands on the seat's own branch, not on main.
+    // A merge in the seat lands on the seat's own branch.
     assert_eq!(shell(&sb, &sb.seat, "git merge --ff-only some-branch"), "");
 }

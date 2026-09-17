@@ -10,10 +10,10 @@
 //!
 //! `launch` is the real-window start (the verify-ui skill's fast path):
 //! reap this tree's stale runs, build, start detached from a copy of the
-//! build ([`standing_copy`], so a window left standing is never what the
-//! next build runs into), and say whether it lived past the first
+//! build ([`standing_copy`], so a window left standing stays clear of
+//! the next build), and say whether it lived past the first
 //! second. The app separates its settings store by build tree on its own
-//! (a seat's build locks `dev-<seat>`, never another seat's), so no
+//! (a seat's build locks its own `dev-<seat>`), so no
 //! store juggling happens here.
 
 use std::path::{Path, PathBuf};
@@ -47,7 +47,7 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&KILL, &LAUNCH];
 /// launched: long enough for a Qt platform plugin failure to have ended
 /// the process (that death is immediate — the margin is for a cold
 /// start, ci/baseline/code-costs-windows-x64.md §テストとハーネス).
-/// A stretch of the product's own standing, not a wait for anything
+/// A stretch of the product's own standing
 /// (`wait::stood`) — a window nothing drives says nothing this could
 /// wait for.
 const FIRST_MOMENT: Duration = Duration::from_millis(900);
@@ -72,7 +72,7 @@ pub fn kill(args: &[String]) -> Result<(), String> {
 
 /// `cargo xtask launch [--no-build]`: start a real window from this tree.
 /// The pre-shell hook requires PGG_ALLOW_GUI=1 in front from a worktree —
-/// a real window is the user's ask, never routine verification.
+/// a real window is the user's own ask.
 pub fn launch(args: &[String]) -> Result<(), String> {
     let mut build = true;
     for arg in args {
@@ -143,7 +143,7 @@ const APP_NAME: &str = "platitude-gg";
 /// as well as the uplift. A window is the one process here that outlives
 /// the command that started it, which made "launch, then gate" an order
 /// nobody could walk: the gate's first verb builds ([`crate::tree`]), and
-/// the user's own window is the one run a gate must never reap. So the
+/// the user's own window is the one run a gate leaves standing. So the
 /// copy is what stands and the slot stays free.
 ///
 /// **The file name is the app's** — that is what [`app_processes`]
@@ -303,7 +303,7 @@ mod tests {
     use super::{is_under, parse_pid_paths, standing_copy};
     use std::path::{Path, PathBuf};
 
-    /// The two things the copy a window stands from has to be: not the
+    /// The two things the copy a window stands from are: beside the
     /// slot cargo links into, and still this tree's own app — a name the
     /// process listing does not know is a window `kill` walks past.
     #[test]

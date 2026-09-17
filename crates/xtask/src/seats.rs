@@ -14,8 +14,8 @@ mod commands;
 
 pub(crate) use commands::COMMANDS;
 
-/// The reusable worktree seats. Sessions rotate through these six instead
-/// of minting a name per topic — a topical worktree is never reused, so
+/// The reusable worktree seats. Sessions rotate through these six —
+/// a topical worktree is never reused, so
 /// every one paid a cold target/ build and kept the gigabytes afterwards
 /// (CLAUDE.md ビルド・テスト).
 pub(crate) const SEATS: [&str; 6] = ["a", "b", "c", "d", "e", "f"];
@@ -45,8 +45,8 @@ const WORKTREES: &str = "/.claude/worktrees/";
 /// it has been still — a guess that unlocks a live session's seat out
 /// from under it. A number is not a name, though; the machine hands it
 /// back out the moment its process ends, so the two marks recorded
-/// beside it are what make it answer for one process rather than for
-/// whoever holds it next.
+/// beside it are what make it answer for one process, whoever holds
+/// the number next.
 pub(crate) struct Identity {
     pub session: String,
     pub pid: Option<u32>,
@@ -69,7 +69,7 @@ impl Identity {
     /// This session's marks: the session id a hook payload carries, or
     /// the environment's for a command run outside one, and the Claude
     /// process both run under. Codex's task id supplies the session when
-    /// no Claude identity is present; no desktop or shell pid is inferred.
+    /// no Claude identity is present; the pid is CLAUDE_PID's alone.
     pub(crate) fn current(session: Option<&str>) -> Self {
         let session = session_id(
             session,
@@ -101,8 +101,8 @@ impl Identity {
     ///
     /// A session's claim records the program behind its pid and when that
     /// process began, because a number alone is handed back out the moment
-    /// its process is gone and nothing here may assume how a session is
-    /// installed or spelled — an image name in this source is a guess that
+    /// its process is gone and how a session is installed or spelled is the
+    /// machine's to say — an image name in this source is a guess that
     /// hands a live session's seat away the day it is wrong. Both marks go
     /// in because neither answers alone: the program tells a stranger of
     /// another kind that inherited the number, and the beginning tells the
@@ -111,8 +111,8 @@ impl Identity {
     /// record nothing extra: `Held::ByRunner` asks after this very
     /// program, which it may name outright.
     ///
-    /// Probed here rather than in [`Identity::current`] because that one
-    /// runs on every hook event, and this runs once per claim taken.
+    /// Probed here because [`Identity::current`] runs on every hook
+    /// event, and this runs once per claim taken.
     pub(crate) fn reason(&self, held: Held) -> String {
         let Some(pid) = self.pid else {
             return format!("{SEAT_CLAIM} {}", self.session);
@@ -354,8 +354,8 @@ pub(crate) fn take_seat(cwd: &str, seat_path: &str, me: &Identity, held: Held) -
         Standing::Ours => Standing::Ours,
         Standing::Foreign(reason) => Standing::Foreign(reason),
         // Two sessions can meet one dead claim in the same moment, and
-        // this unlock is not the thing that decides between them: the
-        // lock below is, because git refuses the second one.
+        // the lock below is what decides between them: git refuses
+        // the second one.
         Standing::Stale(_) => {
             unlock_seat(cwd, seat_path);
             lock_or_read(cwd, seat_path, me, held)
@@ -366,7 +366,7 @@ pub(crate) fn take_seat(cwd: &str, seat_path: &str, me: &Identity, held: Held) -
 
 /// One atomic claim, and what the seat looked like afterwards.
 /// `git worktree lock` refuses a second lock, so the loser of a race is
-/// told here rather than after settling in.
+/// told here.
 fn lock_or_read(cwd: &str, seat_path: &str, me: &Identity, held: Held) -> Standing {
     let mut command = std::process::Command::new("git");
     command
@@ -429,7 +429,7 @@ pub(crate) struct SeatState {
     /// to judge a long-still seat and nobody unlocks a live one by hand.
     pub claim_dead: bool,
     /// Commits main does not have (`main..HEAD`); None when git could not
-    /// answer. Ranges run on HEAD, not the branch name, so a detached
+    /// answer. Ranges run on HEAD, so a detached
     /// seat still counts.
     pub ahead: Option<u32>,
     /// The reverse (`HEAD..main`); zero of each means HEAD is main's tip.
@@ -454,7 +454,7 @@ pub(crate) struct Assigned {
 }
 
 impl Assigned {
-    /// What the session is told. An instruction and not a menu: this path
+    /// What the session is told. An instruction: this path
     /// is the one EnterWorktree argument that will be let through, because
     /// the claim behind it is already this session's.
     pub(crate) fn report(&self) -> String {
@@ -472,12 +472,12 @@ impl Assigned {
 
 /// `cargo xtask seat`: the roster hands this session a seat.
 ///
-/// Nobody names a letter, because naming one means choosing it from a
-/// survey, and a survey is a snapshot two sessions can agree on while
-/// both are wrong about it. Only the lock ever decided which of them got
-/// the seat, so the choosing happens here, behind that lock: letters are
-/// tried until one is claimed, and the letter comes back as an answer
-/// rather than going in as a request (CLAUDE.md ビルド・テスト).
+/// The letter is the roster's answer, because a letter named is one
+/// chosen from a survey, and a survey is a snapshot two sessions can
+/// agree on while both are wrong about it. Only the lock ever decided
+/// which of them got the seat, so the choosing happens here, behind
+/// that lock: letters are tried until one is claimed, and the letter
+/// comes back as an answer (CLAUDE.md ビルド・テスト).
 pub fn take(args: &[String]) -> Result<(), String> {
     let root = crate::tree::workspace_root().to_string_lossy().to_string();
     let me = Identity::current(None);
@@ -504,7 +504,7 @@ pub fn take(args: &[String]) -> Result<(), String> {
 /// event reaches every open conversation (CLAUDE.md ビルド・テスト).
 /// What the seat still carries is named on the way out: the roster hands
 /// out no seat with work in it, so a release leaves that work for a
-/// reader to land or drop rather than for the next session to find.
+/// reader to land or drop.
 fn release(root: &str, me: &Identity) -> Result<(), String> {
     me.require_session()?;
     let (primary, trees) = primary_checkout(root)?;
@@ -523,8 +523,8 @@ fn release(root: &str, me: &Identity) -> Result<(), String> {
 
 /// What a released seat still carries, said on the way out so that the
 /// roster's refusal to hand it to anybody is not a surprise later. A
-/// figure git could not answer for is reported as unknown rather than as
-/// nothing — the seat is released either way, and a silent zero would be
+/// figure git could not answer for is reported as unknown — the seat is
+/// released either way, and a silent zero would be
 /// the one reading that needs no reply.
 fn left_behind(path: &str) -> String {
     let (Some(ahead), Some(dirty)) = (commits_in(path, "main..HEAD"), dirty_lines(path)) else {
@@ -544,7 +544,7 @@ fn left_behind(path: &str) -> String {
 /// The seat this session holds, taking one if it holds none.
 ///
 /// Every refusal on the way is a seat somebody else is in, so the loop
-/// walks the roster rather than stopping at the first no. What it hands
+/// walks the whole roster. What it hands
 /// back is a tree that is ready to be worked in: claimed, empty, and at
 /// main's tip.
 pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
@@ -557,9 +557,9 @@ pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
     // The tree the session is standing in comes first when it is free to
     // take: a landed seat is empty at main's tip with its claim handed
     // back (`land`), and a session that goes on working there wants that
-    // tree — its warm target/ — rather than a letter drawn at random. A
-    // tree somebody else holds is passed over like any other; the claim
-    // below is still what decides, and nothing here reads a survey.
+    // tree — its warm target/. A tree somebody else holds is passed over
+    // like any other; the claim below is still what decides, and the
+    // listing is only where the letters come from.
     let standing_in = worktree_root(cwd).and_then(|root| {
         entries
             .iter()
@@ -570,8 +570,8 @@ pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
     {
         return Ok(taken);
     }
-    // A tree that refused the claim above (ahead, or dirty) is not asked
-    // again on its turn: the answer would be the same, at the cost of a
+    // A tree that refused the claim above (ahead, or dirty) is skipped
+    // on its turn: the answer would be the same, at the cost of a
     // second lock and unlock on it.
     let asked = standing_in.map(|entry| entry.seat);
     for name in spread_order()
@@ -589,14 +589,14 @@ pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
     Err(
         "every seat a-f is held, carrying unmerged commits, or holding \
          uncommitted work — no seat is free to hand out. Tell the user; \
-         seats are not added past f (CLAUDE.md ビルド・テスト)"
+         the roster ends at f (CLAUDE.md ビルド・テスト)"
             .into(),
     )
 }
 
 /// The seat this session already holds, if it holds one. A session works
-/// one seat at a time, and asking twice must give the same answer rather
-/// than a second seat.
+/// one seat at a time, and asking twice gives the same
+/// answer.
 fn held_seat(entries: &[SeatEntry], me: &Identity) -> Option<Assigned> {
     entries
         .iter()
@@ -677,7 +677,7 @@ fn create_seat(primary: &str, seat: &'static str, me: &Identity) -> Option<Assig
     let branch = format!("worktree-{seat}");
     // A letter with no tree can still own a branch, left behind when its
     // worktree was removed. Reusing that name is only safe once main has
-    // its commits; a branch still carrying work is skipped, not reset.
+    // its commits; a branch still carrying work is skipped.
     if commits_in(primary, &format!("main..{branch}")).is_some_and(|ahead| ahead > 0) {
         return None;
     }
@@ -768,7 +768,7 @@ pub(crate) fn survey(cwd: &str) -> Option<Vec<Seat>> {
 }
 
 /// Measures one created seat. Each figure is None when its git call
-/// fails, and the callers print those as unknowns rather than guess.
+/// fails, and the callers print those as unknowns.
 fn seat_state(entry: &SeatEntry, now: SystemTime) -> SeatState {
     let dir = entry.tree.path.as_str();
     SeatState {
@@ -785,7 +785,7 @@ fn seat_state(entry: &SeatEntry, now: SystemTime) -> SeatState {
 
 /// How long since the seat's own index was written. The path has to be
 /// asked for: a worktree's admin directory is named after the directory
-/// the tree was first created as, not after the seat — one seat here
+/// the tree was first created as — one seat here
 /// sits on .git/worktrees/skillcare — so .git/worktrees/<seat>/index is
 /// a guess that misses (measured).
 fn index_age(dir: &str, now: SystemTime) -> Option<Duration> {
@@ -950,7 +950,7 @@ pub(crate) fn primary_checkout(cwd: &str) -> Result<(String, Vec<WorktreeBlock>)
 /// The reading, one line, the way CLAUDE.md ビルド・テスト has it.
 const GUIDE: &str = "reading: dirty>0 or ahead>0 = in use; dirty=0 and ahead=0 = free, and \
     `cargo xtask seat` is what takes one — it claims the seat and puts it at main's tip \
-    itself, so nothing here is a letter to pick; a locked seat is held by the session its \
+    itself; a locked seat is held by the session its \
     claim names, unless the note says that session has ended.";
 
 /// The table: a header, one line per seat, and the reading. Pure so the
@@ -1084,8 +1084,8 @@ mod tests {
         super::standing(reason, me, super::Held::BySession)
     }
 
-    /// A pid that certainly names no process — not a reaped child's,
-    /// which is the kernel's to give out again before the assertion runs
+    /// A pid that certainly names no process — a reaped child's is
+    /// the kernel's to give out again before the assertion runs
     /// (`subprocess::NO_SUCH_PID`).
     fn dead_pid() -> u32 {
         crate::subprocess::NO_SUCH_PID
@@ -1158,8 +1158,8 @@ mod tests {
             stood(Some("claude-seat s2".into()), &mine),
             Standing::Foreign(_)
         ));
-        // Nor may a session with no marks of its own read a claim as one
-        // it wrote: that assumption is what put two sessions in seat e.
+        // A session with no marks of its own reads a claim as somebody
+        // else's: assuming it its own put two sessions in seat e.
         assert!(matches!(
             stood(Some("claude-seat s2".into()), &me("", None)),
             Standing::Foreign(_)
@@ -1272,7 +1272,7 @@ mod tests {
         let predecessor = format!("claude-seat s9 pid {pid} born 1 as {image}");
         assert!(
             matches!(stood(Some(predecessor.clone()), &mine), Standing::Stale(_)),
-            "a claim this number outlived is litter, not this session's"
+            "a claim this number outlived is litter"
         );
         assert!(super::claim_is_dead(&predecessor));
 

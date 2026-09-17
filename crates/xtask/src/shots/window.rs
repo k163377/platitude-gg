@@ -16,10 +16,10 @@
 //! `--again` is the one way past it — for the single case the board
 //! cannot see, which is the reader having closed theirs.
 //!
-//! What stands is remembered beside the page rather than in the session,
-//! because six seats read one board (`board_dir`): a marker each session
-//! kept to itself would let six of them open a window apiece and each be
-//! certain it had opened only one.
+//! What stands is remembered beside the page, because six seats read
+//! one board (`board_dir`): a marker each session kept to itself would
+//! let six of them open a window apiece and each be certain it had
+//! opened only one.
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -28,21 +28,21 @@ use super::board::{seat_here, shown};
 
 /// Where the board remembers the window it handed out.
 ///
-/// Beside the page, not under `runs/` or `img/`: the sweeps reach those
-/// two, and a window is not evidence — it outlives the run that was
-/// opened to be looked at, the session that took it, and the seat that
-/// landed.
+/// Beside the page: the sweeps reach `runs/` and
+/// `img/`, and a window is not evidence — it outlives
+/// the run that was opened to be looked at, the session
+/// that took it, and the seat that landed.
 fn marker(board: &Path) -> PathBuf {
     board.join("window")
 }
 
-/// A window handed out earlier, and never taken back.
+/// A window handed out earlier and still standing.
 pub(super) struct Standing {
     /// Milliseconds since the epoch, so a reader can be told how old the
     /// window they are being sent to is.
     at: u128,
-    /// The tree it was opened from. Not a claim on it — the window shows
-    /// the whole board — only the answer to "who opened this".
+    /// The tree it was opened from: the answer to "who opened this",
+    /// since the window shows the whole board.
     seat: String,
 }
 
@@ -76,8 +76,8 @@ pub(super) fn show(board: &Path, page: &Path, again: bool) -> Result<(), String>
         shown(page)
     );
     // The window is open whatever happens next, so a marker that would
-    // not write is reported rather than raised: failing here would say
-    // the board did not open when it did.
+    // not write is reported: failing here would say the board did not
+    // open when it did.
     if let Err(message) = remember(board) {
         println!(
             "board: could not write down the window ({message}) — the next `open` will open another"
@@ -123,9 +123,9 @@ fn remember(board: &Path) -> Result<(), String> {
     std::fs::write(&path, text).map_err(|e| format!("could not write {}: {e}", shown(&path)))
 }
 
-/// The inverse. None when the file says nothing a window can be read out
-/// of — an unreadable marker is no window, which errs towards opening
-/// one rather than towards a reader sent to a window that is not there.
+/// The inverse. None when the file says nothing a window can be read
+/// out of — an unreadable marker is no window, which errs towards
+/// opening one.
 fn read_standing(text: &str) -> Option<Standing> {
     let mut at = 0;
     let mut seat = String::new();
@@ -205,9 +205,9 @@ fn spawn(page: &Path) -> Result<&'static str, String> {
     ))
 }
 
-/// Candidates in order of preference, per OS. Named rather than searched
-/// for: xtask carries std alone, and the differences between the three
-/// targets belong in code, not in parallel scripts (CLAUDE.md ビルド・テスト).
+/// Candidates in order of preference, per OS. Named here: xtask
+/// carries std alone, and the differences between the three targets
+/// belong in code (CLAUDE.md ビルド・テスト).
 fn browsers(app: &str, url: &str) -> Vec<(&'static str, Vec<String>)> {
     if cfg!(windows) {
         vec![

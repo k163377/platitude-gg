@@ -9,9 +9,9 @@
 //! the local branch alone still changes the rows, the ref counts and the
 //! commit whose diff is being opened.
 //!
-//! So the token is taken over the whole ref listing rather than over a
-//! name, and the parts that made it are printed beside it so a mismatch
-//! says what moved.
+//! So the token is taken over the whole ref listing, and the
+//! parts that made it are printed beside it so a mismatch says
+//! what moved.
 
 use std::io::Write;
 use std::path::Path;
@@ -88,8 +88,8 @@ fn count(refs: &str, kind: &str) -> usize {
     refs.lines().filter(|line| line.contains(kind)).count()
 }
 
-/// A blob id over the ref listing, taken by the git that is already a
-/// dependency rather than by a hash of this runner's own.
+/// A blob id over the ref listing, taken by the git that is already
+/// a dependency.
 fn token(repo: &Path, refs: &str) -> Result<String, String> {
     let mut child = Command::new("git")
         .current_dir(repo)

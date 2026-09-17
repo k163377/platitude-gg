@@ -15,7 +15,7 @@
 //! directories go, how many files each holds, and how large those files
 //! are. Each is walked by a stride coprime to its length, which makes
 //! the walk a permutation — every band is drawn exactly as often as the
-//! table says, rather than approximately.
+//! table says.
 
 use super::shape::{self, mix};
 
@@ -37,13 +37,13 @@ pub(super) const SLOTS: u64 = TRACKED + SPARE;
 /// Directories holding at least one file. The reference repository has
 /// 14,609 of them under 22,887 trees.
 ///
-/// **This is a multiplier on the build, not just on the tree.** Every
+/// **This multiplies the build as well as the tree.** Every
 /// commit rewrites one tree object per directory on the path of every
 /// file it touches, and `fast-import` hashes and deflates each of them
 /// on a single thread — so the directory count decides both what the
 /// walk costs the application and what the corpus costs to build.
 ///
-/// **It is not a knob on its own.** The walk makes directories until
+/// **It is one half of a pair.** The walk makes directories until
 /// every file has a home, so what decides how many there are is this
 /// against [`FANOUT`]: the mean fan-out has to come to `SLOTS / DIRS`,
 /// or the walk runs past the table and keeps inventing directories
@@ -95,7 +95,7 @@ const DIR_DEPTHS: [u64; 20] = [
 /// repository holds them.
 /// The shares are the reference repository's; the sizes are doubled, so
 /// the mean comes to `SLOTS / DIRS` and the walk ends where the table
-/// does instead of running past it.
+/// does.
 const FANOUT: [(u64, u64); 11] = [
     (5_929, 2),
     (3_846, 4),
@@ -145,12 +145,12 @@ const EXT_TAIL: [&str; 12] = [
 ];
 
 /// Strides for the three walks. Each is coprime to the length it walks,
-/// which is what makes the walk a permutation rather than a sample. The
-/// two over directories differ so that depth and fan-out are not paired
-/// by index (identity pairing put the median file fourteen deep where
-/// the reference repository's is eight); the size walk is over slots,
-/// a different table, so sharing a value with the depth walk pairs
-/// nothing. **Changing any of them changes the corpus** (`corpus::token`).
+/// which is what makes the walk a permutation. The two over directories
+/// differ so that depth and fan-out are drawn apart (identity pairing
+/// put the median file fourteen deep where the reference repository's
+/// is eight); the size walk is over slots, a different table, so
+/// sharing a value with the depth walk pairs nothing. **Changing any of
+/// them changes the corpus** (`corpus::token`).
 const SIZE_STEP: u64 = 40_009;
 const DEPTH_STEP: u64 = 40_009;
 const FANOUT_STEP: u64 = 30_011;
@@ -219,7 +219,7 @@ impl Tree {
 fn directory(d: u64, segments: &mut Vec<String>) -> String {
     let want = depth_of(d).max(1) as usize;
     // Keep a little of what the last one had, so siblings and cousins
-    // exist rather than only chains.
+    // exist.
     let keep = segments.len().min(want.saturating_sub(1));
     let keep = keep.saturating_sub((mix(d ^ 0x00D1_2E00) % 3) as usize);
     segments.truncate(keep);
@@ -279,8 +279,8 @@ fn fanout(d: u64) -> u64 {
 
 fn size_of(slot: u64) -> u64 {
     // Over `TRACKED`, because that is what the table sums to: the spare
-    // slots take a second lap of it rather than falling off the end
-    // into a band that does not exist.
+    // slots take a second lap of it, every one landing in a band the
+    // table has.
     let k = slot.wrapping_mul(SIZE_STEP) % TRACKED;
     let mut seen = 0;
     for (count, lo) in SIZES {
@@ -319,8 +319,8 @@ fn ext_of(slot: u64) -> &'static str {
 mod tests {
     use super::{DIR_DEPTHS, DIRS, SIZES, SLOTS, TRACKED, build};
 
-    /// The tables have to describe what they say they describe, or the
-    /// walks over them are samples rather than permutations.
+    /// The tables have to describe what they say they describe, which is
+    /// what makes the walks over them permutations.
     #[test]
     fn the_tables_sum_to_what_they_are_walked_against() {
         assert_eq!(SIZES.iter().map(|(count, _)| count).sum::<u64>(), TRACKED);
@@ -356,8 +356,8 @@ mod tests {
         assert!(largest >= 4_194_304, "the largest was {largest}");
     }
 
-    /// No segment may be a Windows device name: git refuses the whole
-    /// stream on one, a hundred seconds after it was written.
+    /// Every segment is a name Windows takes: git refuses the stream on
+    /// a device name, a hundred seconds after writing.
     #[test]
     fn no_path_carries_a_reserved_name() {
         const RESERVED: [&str; 6] = ["con", "aux", "nul", "prn", "com1", "lpt1"];

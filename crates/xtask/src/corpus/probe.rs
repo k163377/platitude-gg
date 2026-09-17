@@ -16,8 +16,8 @@
 //! - **the existence probe** before a blob read (`rev-parse --verify`,
 //!   `preview::blob_is_there`), against a resident `--batch-check`.
 //!
-//! Nothing here is the product: stdin stays closed there (`scratch`), and
-//! the resident process is a design the record decides on.
+//! This is a probe: the product keeps stdin closed (`scratch`), and the
+//! resident process is a design the record decides on.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
@@ -103,7 +103,7 @@ fn status_table(copy: &Path) -> Result<(), String> {
     // application never makes), then filled by one status that may write
     // the index — which is the one the product's conditions forbid — so
     // what is measured after is a cache the product would find already
-    // there, and never refresh.
+    // there and read as is.
     git(copy, &[], &["update-index", "--untracked-cache"])?;
     git(
         copy,

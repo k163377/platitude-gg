@@ -59,7 +59,7 @@ fn a_sampler_line_parses_into_a_tick() {
         (parsed.kernel, parsed.user, parsed.idle, parsed.app),
         (7, 8, 9, 10)
     );
-    // Before the window exists the display is a dash, not a name; before
+    // Before the window exists the display is a dash; before
     // the power broadcast answered, the screen's state is nothing.
     let bare = parse_sample("ws=1 pv=1 display=- win=0 fg=0 int=1 min=0 k=0 u=0 i=0 app=0 dark=-")
         .unwrap();
@@ -214,7 +214,7 @@ fn a_blink_of_the_secure_desktop_is_not() {
 }
 
 /// Two short blinks are not one long one: the gate reads the longest
-/// unbroken stretch, not the total.
+/// unbroken stretch.
 #[test]
 fn scattered_blinks_do_not_add_up_to_a_lock() {
     let mut series = Series::default();

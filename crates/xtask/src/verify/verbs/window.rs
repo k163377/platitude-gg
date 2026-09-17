@@ -5,7 +5,7 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
-    // `edge=` rides along in that report but is not judged: whether an
+    // `edge=` rides along in that report as diagnosis: whether an
     // edge would land off the screen is a question about a real
     // monitor, and the offscreen platform has none to answer with.
     Verb {
@@ -27,7 +27,7 @@ pub(super) const TABLE: &[Verb] = &[
     // way. `gone=` is the pressed tab's own path, asked of the strip
     // after it caught up with the model — a run that closed the
     // neighbour, or one that reported before a tab had ever opened,
-    // is caught by nothing else. How many are left is not judged: the
+    // is caught by nothing else. How many are left is the run's: the
     // verb takes as many repositories as it is given.
     Verb {
         name: "middle-close",
@@ -77,7 +77,7 @@ pub(super) const TABLE: &[Verb] = &[
     // holding no repository — and it is the one thing here no picture
     // can say. `folded=` / `log=` are the layout the reader left the
     // last tab in, found on the next one; `empty=` is that tab's own
-    // commit editor, which the words did *not* follow into; `back=`
+    // commit editor, which the words stayed out of; `back=`
     // is those words still standing where they were typed, after
     // everything else on that page was thrown away and read again;
     // `wip=` is the pane holding them being the one on screen, which
@@ -85,8 +85,8 @@ pub(super) const TABLE: &[Verb] = &[
     // Another working copy's uncommitted row opening that copy. `grew=`
     // is the whole claim — the picture of a second tab showing a
     // repository is the same picture whichever door opened it, and a row
-    // that did nothing leaves the run to the ceiling rather than to a
-    // red line.
+    // that did nothing leaves the run to spend the whole of the
+    // ceiling.
     Verb {
         name: "carried-open",
         when: &[],
@@ -125,7 +125,7 @@ pub(super) const TABLE: &[Verb] = &[
     // strip cannot hold: a strip whose tab was never drawn away from
     // its own row photographs exactly like one whose rows only ever
     // jumped. `lifted=` is the offset the transform is carrying, read
-    // off the tab rather than off what was asked of it.
+    // off the tab itself.
     Verb {
         name: "tab-hold",
         when: &[],
@@ -189,8 +189,8 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "tab_pin_go crushed=0 gone=true onScreen=true travelled=true",
     },
-    // And the same arrival asked for by opening a repository rather than
-    // by pressing the stand-in. No picture holds this one either: a strip
+    // And the same arrival asked for by opening a repository.
+    // No picture holds this one either: a strip
     // standing on its newest tab frames the same whether the band went
     // there or was sitting on that end all along, so the three that are
     // judged say the band moved, the tab it moved for is whole in the run,
@@ -224,10 +224,10 @@ pub(super) const TABLE: &[Verb] = &[
     // cannot be told from a band that gave the crowd room — so the
     // crowd has to be said out loud.
     //
-    // Neither the fit nor which of the group's three shapes landed is
-    // judged: this verb takes a width, and the widths that show the
-    // last shape are below the floor a hand can drag the window to
-    // (`fits=false` is what was asked for there). The floor itself is
+    // The claim stops before the fit and which shape landed: this verb
+    // takes a width, and the widths that show the last shape are below
+    // the floor a hand can drag the window to (`fits=false` is what was
+    // asked for there). The floor itself is
     // `window-floor`'s question.
     Verb {
         name: "badges",
@@ -266,7 +266,7 @@ pub(super) const TABLE: &[Verb] = &[
     // it up. So the model's own two are read beside it, one of them true
     // and the other false, and the card is required open because that
     // line is where the difference is written. `tint=` rides in the
-    // judged run rather than beside it: both states are `danger` (規約
+    // judged run: both states are `danger` (規約
     // §状態), and a badge that came up warning is the rule not having
     // reached the paint.
     Verb {
@@ -316,7 +316,7 @@ pub(super) const TABLE: &[Verb] = &[
     // in it. A band shot at one width says nothing about the width its
     // shape was supposed to change at, so what is judged is that the
     // words were still there at the narrowest cell that holds one.
-    // `cut=` rides along rather than being judged: how long the stretch
+    // `cut=` rides along as diagnosis: how long the stretch
     // where the wordings are cut lasts is a question about the
     // installed fonts, and for a four-letter command it can be nothing
     // at all (`…` and two characters measure what `push` does).
@@ -375,7 +375,7 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "old-git badge=true",
     },
-    // And the card it opens. `rows=` is not judged: the other three
+    // And the card it opens. `rows=` rides along: the other three
     // rows come and go with the machine (a container with no identity
     // configured stands one of them), and only this row is the verb's.
     Verb {
@@ -387,8 +387,8 @@ pub(super) const TABLE: &[Verb] = &[
     // the picture holds neither on its own: a mark that never came up
     // frames as a band with room to spare, and the colour of three
     // dots is not something a cropped screenshot settles an argument
-    // about. `tint=` is named rather than spelled in hex — what is
-    // being judged is which rule painted it (規約 §状態: 最も重い状態が
+    // about. `tint=` is named — what is being judged is which rule
+    // painted it (規約 §状態: 最も重い状態が
     // 決める), and a red mark over a lone warning is the way that rule
     // fails silently.
     Verb {

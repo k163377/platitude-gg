@@ -14,9 +14,9 @@
 //!   per `AllocationBase` and counted by size class, which is where the
 //!   heap segments line up.
 //! * `QueryWorkingSetEx` says which of those pages are resident, so a
-//!   mapped file is charged for what it costs — the working set a font
-//!   adds is this line, not the file's size — and `GetMappedFileNameW`
-//!   says which file each resident page belongs to.
+//!   mapped file is charged for what it costs — the working set a
+//!   font adds is this line — and `GetMappedFileNameW` says which
+//!   file each resident page belongs to.
 //! * `RtlQueryProcessDebugInformation(PDI_HEAPS | PDI_HEAP_BLOCKS)` walks
 //!   the process heaps block by block: busy and free by size class, which
 //!   is what turns "the heap grew by this much" into "by this many blocks
@@ -307,8 +307,8 @@ impl Armed {
 /// PowerShell that compiles it, says `ready`, reads the pid and prints
 /// the text.
 ///
-/// **The heap entry's flags are what this Windows reports, not what the
-/// published header says.** Busy is 0x0001 and a segment 0x0002 in both;
+/// **The heap entry's flags are what this Windows reports.** Busy is
+/// 0x0001 and a segment 0x0002 here and in the published header;
 /// the uncommitted remainder of a segment is 0x0100 in the header and
 /// 0x1000 here (measured on 26100: a 64K segment with 4K committed
 /// reports its 60K remainder under 0x1000), so both are read as one.
@@ -317,11 +317,11 @@ impl Armed {
 ///
 /// **The debug buffer is reserved at 512MB.** The default is far under
 /// what a process with a million blocks writes into it, and the walk
-/// then fails with `STATUS_NO_MEMORY` rather than a short answer. The
-/// structure offsets — `Heaps` at +112 of the buffer, 96 bytes per heap
-/// with `NumberOfEntries` at +36 and `Entries` at +80, 32 bytes per
-/// entry with `Size` at +0 and `Flags` at +8 — are the 64-bit layout
-/// this machine measured with, and the only one this runs on.
+/// then fails with `STATUS_NO_MEMORY`. The structure offsets —
+/// `Heaps` at +112 of the buffer, 96 bytes per heap with
+/// `NumberOfEntries` at +36 and `Entries` at +80, 32 bytes per entry
+/// with `Size` at +0 and `Flags` at +8 — are the 64-bit layout this
+/// machine measured with, and the only one this runs on.
 ///
 /// Every number on the `key=value` lines is bytes; the tables are MiB.
 #[cfg(windows)]
@@ -535,9 +535,9 @@ mod tests {
         assert!(found.said().contains("0xC0000017"), "{}", found.said());
     }
 
-    /// An `error:` text, or a text with no resident line, is no
-    /// attribution — `missing` refuses the run rather than printing a
-    /// summary of zeros.
+    /// An `error:` text, or a text with no resident
+    /// line, is no attribution — `missing` refuses
+    /// the run.
     #[test]
     fn a_text_without_a_resident_line_is_no_attribution() {
         assert_eq!(parse("error: OpenProcess(1) failed with error 5\n"), None);
@@ -545,11 +545,11 @@ mod tests {
         assert_eq!(parse("resident private=x mapped=1 image=1 total=2\n"), None);
     }
 
-    /// The script against a real process: the C# compiles under this
-    /// PowerShell, the structure offsets hold on this Windows, and a
-    /// process that did nothing but start still has an image, private
-    /// pages and heap blocks to show. Killed after, not left to its
-    /// thirty pings.
+    /// The script against a real process: the C# compiles
+    /// under this PowerShell, the structure offsets hold on
+    /// this Windows, and a process that did nothing but start
+    /// still has an image, private pages and heap blocks to
+    /// show. Killed after.
     #[cfg(windows)]
     #[test]
     fn a_process_is_attributed_from_outside() {

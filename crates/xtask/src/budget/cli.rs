@@ -33,10 +33,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
 /// `cargo xtask budget hold …` — one unit's ticket, taken from a process
 /// of this machine's own so that the priority, the exclusion and the
-/// death of a holder can be watched between real processes rather than
-/// between threads. Says one word when it has joined the queue
-/// (`--queued`) and one when it is admitted (`--say`), and holds until a
-/// file appears: the test drives every edge, and no clock is in it.
+/// death of a holder can be watched between real processes. Says one
+/// word when it has joined the queue (`--queued`) and one when it is
+/// admitted (`--say`), and holds until a file appears: the test drives
+/// every edge, and no clock is in it.
 fn hold(args: &[String]) -> Result<(), String> {
     let mut dir = crate::tree::workspace_root();
     let (mut weight, mut jobs) = (LIGHT, crate::gate::default_jobs());
@@ -130,10 +130,10 @@ fn hold(args: &[String]) -> Result<(), String> {
             .map_err(|e| format!("could not write {}: {e}", say.display()))?;
     }
     println!("held {what} after {}ms", held.waited.as_millis());
-    // The ceiling is the queue's silence one rather than its whole: a
-    // hold is a test's, and one whose word never comes — the suite gone,
-    // the directory taken away with it — must not sit on the machine's
-    // room for the length of a queue.
+    // The ceiling is the queue's silence one: a hold is a test's, and
+    // one whose word never comes — the suite gone, the directory taken
+    // away with it — gives the machine's room back once the queue has
+    // been silent that long.
     let mut wait = Wait::new(
         format!("the word at {}", until.display()),
         Budget::whole(QUIET_CEILING),

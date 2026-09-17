@@ -18,23 +18,23 @@
 //! the runner already has (`gate::run_one`). Both sides draw on the same
 //! budget, because both sides are the same machine.
 //!
-//! **What a ticket weighs** is what its unit takes of the machine, not
-//! what it is allowed: a weight is admission control and never a cap
-//! (cargo has its own parallelism inside, and nothing here bounds a
-//! rustc's threads or a container's memory). Two weights are enough to
-//! say what a gate runs ([`weight_of`]).
+//! **What a ticket weighs** is what its unit takes of the machine: a
+//! weight is admission control (cargo has its own parallelism
+//! inside, and nothing here bounds a rustc's threads or a
+//! container's memory). Two weights are enough to say what a gate
+//! runs ([`weight_of`]).
 //!
 //! **The budget is one gate's worth**, computed the same way in every
 //! process on the machine ([`demand`]) — so a single gate never waits
 //! for itself and nothing gets slower when it is alone, and the second
-//! seat's gate shares that one gate's worth rather than adding another.
+//! seat's gate shares that one gate's worth.
 //!
 //! **A landing goes first** (CLAUDE.md Git 運用): its units sort ahead
 //! of every other seat's, and while one of them is waiting for room, no
 //! ordinary unit is handed what frees — the rule and its consequences
-//! are [`queue`]. Nothing is ever killed or suspended to make room: a
-//! landing waits out the units already running, which is why how long
-//! one unit runs is worth measuring (`gate::record`).
+//! are [`queue`]. Room comes from the units already running finishing:
+//! a landing waits them out, which is why how long one unit runs is
+//! worth measuring (`gate::record`).
 //!
 //! **Landings queue against each other** on a turn ([`Pool::turn`]),
 //! which is FIFO and outside the budget: one landing at a time goes
@@ -64,13 +64,13 @@
 //! ## What waits for what
 //!
 //! A unit takes its ticket **before** it announces itself to a
-//! measurement (`still::busy`, inside `check::run_step`) and never the
-//! other way about, so the order across the runner is: the tree's one
-//! gate (`lanes::sole`, which refuses rather than waits) → a landing's
-//! turn → a ticket → the measurement's hold. Nothing that holds a
-//! ticket is waited for by `still::hold`'s side of it, so the order has
-//! no cycle; and a unit holds exactly one ticket, taken whole, so
-//! nothing ever waits while holding part of what it needs.
+//! measurement (`still::busy`, inside `check::run_step`), so the order
+//! across the runner is: the tree's one gate (`lanes::sole`, which
+//! refuses) → a landing's turn → a ticket → the measurement's hold.
+//! Nothing that holds a ticket is waited for by `still::hold`'s side of
+//! it, so the order has no cycle; and a unit holds exactly one ticket,
+//! taken whole, so nothing ever waits while holding part of what it
+//! needs.
 //!
 //! A child of an admitted unit is under its parent's ticket and takes
 //! none of its own ([`under`]).

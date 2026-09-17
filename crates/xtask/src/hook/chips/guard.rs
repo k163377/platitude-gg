@@ -8,7 +8,7 @@ use super::at_hand;
 use super::ledger::{load, store};
 use crate::hook::payload::{deny, printable, string_field};
 
-/// The mark a chip wears when it is not a recommendation but a question:
+/// The mark a chip wears when it is a question:
 /// the user decides whether the work is wanted at all, and may decide it
 /// is not. It sits right after the number (`3. [任意] …`) and is spelled
 /// exactly this way, because what it buys is a list read at a glance.
@@ -51,7 +51,7 @@ pub(crate) fn pre_spawn(input: &str) -> Result<(), String> {
     }
     let claimed = targets(&words(asked));
     // Asked before anything about the list is: a chip over work this
-    // session is already holding is not a chip to find a number for.
+    // session is already holding is refused, whatever its number.
     if let Some(objection) = at_hand::objection(&session_cwd(input), &claimed) {
         deny(&objection);
         return Ok(());
@@ -78,7 +78,7 @@ pub(crate) fn pre_spawn(input: &str) -> Result<(), String> {
              parallel sessions, so two of them over one path land conflicting edits \
              — and a chip waiting on the other's outcome (a user decision included) \
              cannot run beside it at all. {} If this is that same chip re-weighed or \
-             reworded rather than a second one, the title is all the guard knows it \
+             reworded, the title is all the guard knows it \
              by: dismiss_task the live one first, then stack this.",
             shared.join(", "),
             chip.label(),
@@ -101,9 +101,9 @@ pub(crate) fn post_chip(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Stop: the turn does not end on a list nobody can read by its numbers.
+/// Stop: a turn ends only on a list that reads by its numbers.
 ///
-/// It is judged here rather than at each spawn because a renumbering
+/// It is judged here because a renumbering
 /// passes through states no single call can approve — the replacement is
 /// stacked before the chip it replaces is dismissed, so the set is
 /// briefly two of everything. What matters is where it comes to rest.
@@ -118,7 +118,7 @@ pub(crate) fn stop(input: &str) -> Result<bool, String> {
         printable(&format!(
             "The task chips this session stacked are left out of order: {}. Live \
              now: {}. The list is read by its numbers, so before a turn ends the \
-             live set reads 1..N with no gap, no number twice and no chip twice, \
+             live set reads 1..N, each number once and each chip once, \
              1 being the most important. Re-stack whatever moved — spawn the chip \
              again under its new number, then dismiss its old task_id — and say in \
              the reply which chips changed number.",
@@ -251,8 +251,8 @@ fn resolution(claimed: bool, held: bool) -> &'static str {
             "One of the two asks the user to decide and the other proposes work on \
              the same file, so the question leads: the '[任意]' chip is the one that \
              stays live — a question is answered without touching anything — and its \
-             prompt ends by stacking the work chip once the answer is in. Not the \
-             other way round. A session that works the file first has already picked \
+             prompt ends by stacking the work chip once the answer is in. \
+             A session that works the file first has already picked \
              one of the answers, and a question folded into a work chip is not asked \
              until somebody starts that work."
         }
@@ -271,7 +271,7 @@ fn misspelt_mark(body: &str) -> bool {
 /// The shapes a title takes when it asks and does not end on the asking.
 const QUESTIONS: [&str; 4] = ["かどうか", "どちらが", "どちらを", "べきか"];
 
-/// Whether a title asks rather than proposes. The user answers a
+/// Whether a title asks a question. The user answers a
 /// question and may answer no, which is the whole of what the mark
 /// carries — a chip nobody is recommending yet.
 fn asks(body: &str) -> bool {
@@ -344,7 +344,7 @@ fn section<'a>(input: &'a str, key: &str) -> &'a str {
 }
 
 /// Where the session asking is standing, read from the payload's own
-/// half rather than from the whole: a chip may carry a `cwd` of its own
+/// half: a chip may carry a `cwd` of its own
 /// for another repository, and the first `"cwd"` in the input is the
 /// answer `string_field` gives.
 fn session_cwd(input: &str) -> String {
@@ -353,9 +353,9 @@ fn session_cwd(input: &str) -> String {
 }
 
 /// The task id in `input`, however the harness quoted it. An MCP result
-/// arrives as text with its JSON escaped inside, so the punctuation
-/// around the key is not worth matching on; the id is the stable part —
-/// the first run of id characters after the key.
+/// arrives as text with its JSON escaped inside, so the id is read as
+/// the stable part — the first run of id characters after the key —
+/// past whatever quoting sits around it.
 fn id_in(input: &str) -> Option<String> {
     const KEY: &str = "task_id";
     let tail = &input[input.find(KEY)? + KEY.len()..];
@@ -394,22 +394,21 @@ const UNNUMBERED: &str = "A task chip's title must lead with its priority: '1. �
      1 being the most important chip live right now. The number is the whole order \
      of the list, and a chip stacked without one is read wherever it happens to \
      land. Stack it again as '<n>. <title>' — or '<n>. [任意] <title>' when the chip \
-     asks the user to decide rather than recommending work — and if it outranks \
+     asks the user to decide — and if it outranks \
      chips already live, renumber those first: spawn each one again under its new \
      number, then dismiss its old task_id.";
 
 const MISSPELT: &str = "says 任意 where the weight mark goes and does not spell it \
      '[任意]'. The mark is read at a glance, so a second spelling is invisible in \
-     the list rather than merely wrong in it: it is exactly '[任意]', right after \
-     the number ('3. [任意] …'), and it goes on a chip that asks the user to decide \
-     instead of recommending work. Stack it again with that spelling — or with no \
-     mark and the word out of the title's head, if the chip is a recommendation.";
+     the list: it is exactly '[任意]', right after the number ('3. [任意] …'), and it \
+     goes on a chip that asks the user to decide. Stack it again with that \
+     spelling — or with no mark and the word out of the title's head, if the chip \
+     is a recommendation.";
 
-const UNMARKED: &str = "asks a question, and a question is not a recommendation: \
-     the user answers it and may answer no, so it does not carry the weight of a \
-     chip proposing work. Stack it again as '<n>. [任意] <title>', which is what \
-     the list is read by. If the chip really is recommending something, reword the \
-     title as the work itself rather than as the question behind it.";
+const UNMARKED: &str = "asks a question: the user answers it and may answer no, so \
+     it weighs less than a chip proposing work. Stack it again as '<n>. [任意] \
+     <title>', which is what the list is read by. If the chip really is \
+     recommending something, reword the title as the work itself.";
 
 #[cfg(test)]
 mod tests {

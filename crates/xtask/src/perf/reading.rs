@@ -25,10 +25,10 @@ pub(super) struct Reading {
     pub(super) settled_working_set: u64,
     /// Process start to the first frame of the visible graph.
     ///
-    /// Timed here rather than taken off the app's own `first_chunk_ms`,
-    /// which starts counting when the walk starts and so leaves out
-    /// everything before it: the runtime, the window, the QML engine and
-    /// opening the repository. Those are most of what a person waits for.
+    /// Timed here, because the app's own `first_chunk_ms` starts
+    /// counting when the walk starts and so leaves out everything
+    /// before it: the runtime, the window, the QML engine and opening
+    /// the repository. Those are most of what a person waits for.
     pub(super) startup_ms: Option<u64>,
     /// Process start to the graph stream saying it finished — a data
     /// event, one frame short of anything being on screen.
@@ -206,9 +206,9 @@ pub(super) fn read_app(
 }
 
 /// Refuses a reading that lost a number this run was asked to take: a
-/// run that measured nothing must not read as one that measured well.
-/// The app's log picking up colour is one way to lose every `key=value`
-/// at once (`platitude_gg::init_tracing`).
+/// run that measured nothing says so. The app's log picking up colour
+/// is one way to lose every `key=value` at once
+/// (`platitude_gg::init_tracing`).
 pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     super::interactions::validate(reading, opts)?;
     let mut gaps = Vec::new();
@@ -279,8 +279,8 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
 
 /// What the scenario this run was asked to drive had to say about
 /// itself: the selection it settled on and the completion it named, each
-/// driven point's two numbers, and the scroll. **Both ways round** — a
-/// page nobody selected on must not be holding a selection's numbers.
+/// driven point's two numbers, and the scroll. **Both ways round** —
+/// the numbers a page holds are the ones its scenario asked for.
 fn scenario_gaps(reading: &Reading, opts: &Options) -> Vec<&'static str> {
     let expected = format!(
         "selection={} details={} diff={} graph={} scrolled={}",
@@ -340,8 +340,8 @@ fn font_walk_gap(reading: &Reading, opts: &Options) -> Option<&'static str> {
 }
 
 /// The line every build says when the graph has finished streaming —
-/// ordinary application logging, not the harness, which is what makes it
-/// the one edge the two builds share (`Reading::graph_ms`).
+/// ordinary application logging, which is what makes it the one edge
+/// the two builds share (`Reading::graph_ms`).
 pub(super) fn graph_finished(line: &str) -> bool {
     line.contains("graph stream finished") || line.contains("graph replaced in place")
 }

@@ -11,8 +11,8 @@ use crate::seats::{
 };
 use crate::subprocess::git_query;
 
-/// PreToolUse(EnterWorktree): a session enters the seat the roster gave
-/// it, and no other.
+/// PreToolUse(EnterWorktree): a session enters only the seat the roster
+/// gave it.
 ///
 /// Choosing a letter and then entering it is what this refuses. The
 /// choosing was always done from a survey, and a survey is exactly the
@@ -24,8 +24,8 @@ use crate::subprocess::git_query;
 pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
     let name = string_field(input, "name");
     let path = string_field(input, "path");
-    // The rig is entered by nobody, and a name for it must not make it
-    // either: EnterWorktree creates the tree a name does not find.
+    // The rig is entered by nobody, and a name for it is refused here
+    // too: EnterWorktree creates the tree a name does not find.
     if name.as_deref() == Some(RIG) {
         deny(&rig_reason());
         return Ok(());
@@ -73,14 +73,14 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
 
 /// Where a seat stands for the session asking to enter it: the plain
 /// standing, except that an unclaimed seat the session is already
-/// standing in is claimed again rather than refused.
+/// standing in is claimed again.
 ///
 /// A claim can go missing under a session that never left its tree, and
 /// the refusal that meets it on the way back in reads as somebody else's
 /// seat — a session that takes a fresh letter over it leaves its commits
 /// behind in the old one. Re-entering the tree the session is already
 /// working in names no letter — it is the seat it already had — so the
-/// claim is written back instead of the door being shut on it.
+/// claim is written back.
 fn standing_here(cwd: &str, tree: &str, me: &Identity) -> Standing {
     let standing = standing(lock_reason(tree), me, Held::BySession);
     match reclaims_on_entry(cwd, tree, &standing) {
@@ -91,9 +91,9 @@ fn standing_here(cwd: &str, tree: &str, me: &Identity) -> Standing {
 
 /// Whether this entry is a session going back into the tree it is already
 /// working in, and finding no claim on it. Pure, so the one exception to
-/// "seats are handed out, never chosen" can be asserted rather than
-/// probed: everywhere else, an unclaimed letter is still a letter picked
-/// out of a survey.
+/// "seats are handed out" can be asserted: everywhere else, an unclaimed
+/// letter is still a letter picked out of a survey, and the door below
+/// refuses it.
 fn reclaims_on_entry(cwd: &str, tree: &str, standing: &Standing) -> bool {
     matches!(standing, Standing::Free)
         && worktree_root(cwd).is_some_and(|here| same_tree(&here, tree))
@@ -151,11 +151,11 @@ fn entry_verdict(entry: &Entry, me: &Identity) -> Option<(&'static str, String)>
     Some((
         "deny",
         format!(
-            "{} Seats are not chosen, they are handed out: run `cargo xtask \
+            "{} Seats are handed out: run `cargo xtask \
              seat` and enter the path it prints. It claims a free letter behind \
              the lock — the only step that ever decided which session got a \
-             seat — and hands back the one this session may enter, so there is \
-             nothing to survey and nothing to pick (CLAUDE.md ビルド・テスト).",
+             seat — and hands back the one this session may enter \
+             (CLAUDE.md ビルド・テスト).",
             refusal(entry, me)
         ),
     ))
@@ -174,14 +174,14 @@ fn refusal(entry: &Entry, me: &Identity) -> String {
             work_already_there(tree),
         ),
         Entry::Seat(Standing::Free, _) => {
-            "This seat carries no claim for this session, and an unclaimed seat \
-             is not the same as one that is yours: the claim is what keeps a \
+            "This seat carries no claim for this session, and the claim is \
+             what makes a seat yours: it is what keeps a \
              second session out."
                 .to_string()
         }
         // The spelling that resolved to nothing is the spelling that
-        // walked two sessions into seat e (2026-09-02): it is refused,
-        // never waved through.
+        // walked two sessions into seat e (2026-09-02), so it is
+        // refused.
         _ => "This call names no seat this session holds — a path that resolved \
               to no worktree of this repository, or a roster letter with no tree \
               yet."
@@ -215,22 +215,22 @@ pub(super) fn post_worktree(input: &str) -> Result<(), String> {
 /// What a session owes the user the moment a seat becomes its own.
 ///
 /// Sessions settle into a seat and never name it — often enough that the
-/// user asked for it to be made certain rather than left to habit. The
-/// letter is what everything downstream is read against: which tree a
-/// change is in, which tree a build came out of, which tree took a
-/// screenshot, which branch there is to land. A session that never says
-/// it leaves the user guessing at all four.
+/// user asked for it to be made certain. The letter is what everything
+/// downstream is read against: which tree a change is in, which tree a
+/// build came out of, which tree took a screenshot, which branch there
+/// is to land. A session that never says it leaves the user guessing at
+/// all four.
 fn announce(seat: &str) -> String {
     format!(
         "Seat {seat} is this session's now. Name it to the user in your very next \
-         reply, in Japanese and by its letter (「席 {seat} を取った」) — a session \
-         that never says which seat it took leaves the user unable to tell which \
-         tree a change, a build or a screenshot came from (CLAUDE.md ビルド・テスト)."
+         reply, in Japanese and by its letter (「席 {seat} を取った」) — the letter \
+         is how the user tells which tree a change, a build or a screenshot \
+         came from (CLAUDE.md ビルド・テスト)."
     )
 }
 
 /// The worktree a tool's `path` names, resolved the way git resolves it
-/// and answered by the listing rather than by reading the string.
+/// and answered by the listing.
 ///
 /// A path is only a seat's if this says so: `.claude/worktrees/e` and its
 /// absolute spelling are one tree, and judging the raw string calls the
@@ -280,8 +280,8 @@ fn existing_seat_path(cwd: &str, name: &str) -> Option<String> {
 
 /// PreToolUse(Write|Edit): where a write would land decides whether it
 /// may. This is the door the whole seat mechanism hangs on — a session
-/// only ever needs a seat because a write of its own was held here, and
-/// what it is told is one command, never a letter to pick (CLAUDE.md
+/// only ever needs a seat because a write of its own was held here,
+/// and what it is told is one command, `cargo xtask seat` (CLAUDE.md
 /// ビルド・テスト).
 pub(super) fn write_objection(input: &str, path: &str) -> Option<(&'static str, String)> {
     let cwd = string_field(input, "cwd").unwrap_or_default();
@@ -319,14 +319,14 @@ enum Landing {
 }
 
 /// The rule the write door holds, apart from the git that placed the
-/// path. Pure so it can be asserted rather than probed by hand.
+/// path. Pure so it can be asserted.
 fn write_verdict(landing: &Landing, me: &Identity) -> Option<(&'static str, String)> {
     match landing {
         // A seat of this session's own, and everywhere outside this
         // repository, are nobody's business here. An unclaimed seat is
         // let through too: the post-write re-claim takes it back.
         Landing::Outside | Landing::Seat(_, Standing::Ours | Standing::Free, _) => None,
-        // The rig is built and measured, never edited: an edit there is
+        // The rig is built and measured only: an edit there is
         // what stops every measurement until somebody cleans it up.
         Landing::Rig => Some(("deny", rig_reason())),
         // A seat somebody else is in: refused outright, because the cost
@@ -338,7 +338,7 @@ fn write_verdict(landing: &Landing, me: &Identity) -> Option<(&'static str, Stri
                 "This edit would write in seat {name}, which this session does \
                  not hold. The seat's lock says: {}. This session is {}. {}{} Run \
                  `cargo xtask seat` for a seat of this session's own and redo \
-                 the edit there — do not name a letter (CLAUDE.md \
+                 the edit there (CLAUDE.md \
                  ビルド・テスト).",
                 printable(reason),
                 printable(&me.mark()),
@@ -354,8 +354,8 @@ fn write_verdict(landing: &Landing, me: &Identity) -> Option<(&'static str, Stri
          reaching for the same files and a direct commit to main collides \
          with theirs (CLAUDE.md ビルド・テスト / Git 運用). Run `cargo xtask \
          seat` — the roster claims a free letter for this session and prints \
-         the path to enter with EnterWorktree — then redo the edit there. Do \
-         not pick a letter and do not survey for one: a session that chooses \
+         the path to enter with EnterWorktree — then redo the edit there. \
+         The letter comes from the claim: a session that chooses \
          from a snapshot is choosing from something another session can \
          agree with and both be wrong. Allow this only if the user asked for \
          a direct change to the primary checkout in so many words."
@@ -405,8 +405,8 @@ fn in_primary_checkout(cwd: &str, path: &str) -> bool {
 }
 
 /// Whether `path` is `root` itself or something inside it. The boundary
-/// is checked rather than the prefix: a sibling directory whose name
-/// starts the same way is not inside it.
+/// is checked: a sibling directory whose name starts the same way is
+/// not inside it.
 fn under(root: &str, path: &str) -> bool {
     let root = root.trim_end_matches('/');
     same_tree(root, path)
@@ -559,7 +559,7 @@ mod tests {
     }
 
     /// A tree no git call can answer for, so the verdicts under test are
-    /// the rule alone and not what a repository happened to hold.
+    /// the rule alone.
     const NO_TREE: &str = "";
 
     #[test]
@@ -580,12 +580,12 @@ mod tests {
                 NO_TREE.into()
             )),
             Some("deny"),
-            "a seat whose claim died is the roster's to hand out, not this session's to take"
+            "a seat whose claim died is the roster's to hand out"
         );
         assert_eq!(
             decision(&Entry::Seat(Standing::Free, NO_TREE.into())),
             Some("deny"),
-            "an unclaimed seat is not the same as one that is yours"
+            "a seat is this session's by its claim alone"
         );
         assert_eq!(decision(&Entry::OffRoster), Some("ask"));
         // The spelling that resolved to nothing is the spelling that
@@ -623,7 +623,7 @@ mod tests {
         );
         assert!(
             !reclaims_on_entry(seat_e, seat_e, &theirs()),
-            "a claim somebody else holds is never written over"
+            "a claim somebody else holds stays theirs"
         );
     }
 
@@ -659,7 +659,7 @@ mod tests {
         assert_eq!(
             decision(&Landing::Rig),
             Some("deny"),
-            "the rig is built and measured, never edited"
+            "the rig is built and measured only"
         );
     }
 
@@ -680,7 +680,7 @@ mod tests {
         // The trap a plain prefix test falls into: a sibling whose name
         // begins with the checkout's would be held as one of its files.
         assert!(!under(PRIMARY, "C:/x/platitude-gg-notes/CLAUDE.md"));
-        // What the guard must never hold: a memory file, a scratchpad, a
+        // What the guard lets through: a memory file, a scratchpad, a
         // sibling project — everything outside the repository.
         assert!(!under(PRIMARY, "C:/Users/x/.claude/memory/note.md"));
         assert_eq!(
@@ -707,9 +707,9 @@ mod tests {
         // The rig sits beside the seats and is none of them.
         assert_eq!(roster_seat("C:/x/platitude-gg/.claude/worktrees/rig"), None);
         assert_eq!(roster_seat("C:/x/platitude-gg"), None);
-        // Why nothing may be judged by the raw string a tool was given:
-        // a seat spelled relatively reads as no seat here, so a path
-        // goes through `named_tree` before it reaches this.
+        // Why a path goes through `named_tree` before it reaches this:
+        // the raw string a tool was given can spell a seat relatively,
+        // and that reads as no seat here.
         assert_eq!(roster_seat(".claude/worktrees/e"), None);
     }
 

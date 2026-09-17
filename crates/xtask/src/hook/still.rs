@@ -25,7 +25,7 @@ const HARMLESS: [&str; 8] = [
     "pkgid",
 ];
 
-/// The programs a command is run through rather than by: stepped over
+/// The programs a command is run through: stepped over
 /// to reach the command, flags and all, so `env X=1 cargo build`, `time
 /// cargo test`, `bash -c "cargo build"` and `cmd /c cargo build` are
 /// read as the cargo they run.
@@ -122,7 +122,7 @@ fn segment_is_bare_cargo(segment: &str) -> bool {
 }
 
 /// `NAME=value` in front of a command, which the shell takes as
-/// environment rather than as the command.
+/// environment.
 fn is_assignment(token: &str) -> bool {
     token.split_once('=').is_some_and(|(name, _)| {
         !name.is_empty() && name.bytes().all(|b| b == b'_' || b.is_ascii_alphanumeric())

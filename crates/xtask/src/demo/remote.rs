@@ -14,7 +14,7 @@ use super::repo::{DemoRepo, file_url};
 /// **neither answer can be given from this end**. The checked-out branch
 /// has no upstream at all.
 ///
-/// **"Never fetched here" is not this builder's to keep.** Opening a tab
+/// **"Never fetched here" is `verify::seed`'s to keep.** Opening a tab
 /// fetches once, and one that runs puts `outsider`'s commit in the
 /// repository — the comparison then answers `refused` like any other
 /// diverged name and the third shape is gone. What holds it is
@@ -62,7 +62,7 @@ pub(super) fn unpublished(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("src/new.txt", "new\n", "feat: draft the new thing")?;
     // Sent from here under a second name, then left behind: the name is
     // taken over there by a commit this branch still contains, which is
-    // the half git carries rather than refuses.
+    // the half git carries.
     repo.git(&["push", "origin", "HEAD:refs/heads/carried"])?;
     repo.commit("src/new.txt", "new v2\n", "feat: finish the new thing")?;
     Ok(())
@@ -71,7 +71,7 @@ pub(super) fn unpublished(repo: &mut DemoRepo) -> Result<(), String> {
 /// A fork workflow: the branch goes on fetching from `origin`, and its
 /// own mark (`branch.main.pushRemote`) sends every push of it to `fork`.
 ///
-/// **The arrangement `remote.pushDefault` cannot stand in for.** git
+/// **The branch's own mark is what decides.** git
 /// weighs the branch's mark first and the repository's second
 /// (git-config(5); measured 2.55), so a destination worked out from the
 /// repository's alone names `origin` here while the push goes to the
@@ -132,11 +132,11 @@ pub(super) fn behind(repo: &mut DemoRepo) -> Result<(), String> {
 ///
 /// [`behind`] with work of our own on top, and nothing fetched since.
 ///
-/// **Any window over this has to open without fetching**, or what is on
+/// **Any window over this opens with the fetch off**, or what is on
 /// screen is [`diverged`] — the preset next door, which is this one plus
-/// the fetch. `verify::seed` writes the settings that stop the timer, and
-/// it does it for the preset rather than for one verb, because the fetch
-/// an opening fires asks that same setting for its permission
+/// the fetch. `verify::seed` writes the settings that stop the timer,
+/// and it does it for the whole preset, because the fetch an opening
+/// fires asks that same setting for its permission
 /// (`session::fetch_on_open`). That is also what makes the toolbar offer
 /// a plain `push`: an end that had fetched would know it was diverged and
 /// offer the overwrite instead.
@@ -194,9 +194,9 @@ pub(super) fn hooked(repo: &mut DemoRepo) -> Result<(), String> {
 /// `sleep` is the blocking command all three machines agree on (the
 /// seeded merge tool's own stand-in says why — `verify::repos`), and two
 /// seconds holds the write across a sampler beat and the close behind it
-/// without making every run pay for more. The wait is arrangement, not a
-/// completion condition: a hook that somehow ends early fails the run
-/// out loud — the close goes through and takes the window the shots
+/// without making every run pay for more. The wait is arrangement: a
+/// hook that somehow ends early fails the run out loud — the close goes
+/// through and takes the window the shots
 /// needed.
 pub(super) fn slowhook(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
@@ -211,7 +211,7 @@ pub(super) fn slowhook(repo: &mut DemoRepo) -> Result<(), String> {
 
 /// Both sides moved on, and this repository has already seen it happen:
 /// the fetch is part of the preset, so the toolbar offers the overwrite
-/// (`push -f`) from the moment the window opens rather than after a verb.
+/// (`push -f`) from the moment the window opens.
 ///
 /// Break the remote's URL afterwards (`.git/config`) and the overwrite
 /// fails without the tracking refs moving — which is how the refused shape
@@ -234,13 +234,13 @@ pub(super) fn diverged(repo: &mut DemoRepo) -> Result<(), String> {
 /// failed write — the runs carry `--allow-write-failure`.
 ///
 /// The push comes first, so the branch has an upstream and the remote's
-/// ref is on record: what the failures are about is a remote that went
-/// away, not a repository that never had one.
+/// ref is on record: what the failures are about is a remote that
+/// went away.
 ///
 /// **The URL is absolute**, which is what lets a copy of this preset's
 /// template be rebound to its own root along with the rest of git's
 /// metadata (`template::rebind`) — a copy is then unreachable in the
-/// copy's own words rather than in the template's.
+/// copy's own words.
 pub(super) fn unreachable(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;

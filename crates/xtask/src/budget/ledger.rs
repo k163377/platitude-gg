@@ -26,10 +26,10 @@ const ADMIT: &str = "admit.lock";
 pub(super) const SEQ: &str = "seq";
 
 /// Where the seats' running totals stand — what each has been handed, by
-/// rank ([`queue::Served`]). Beside the tickets rather than in them,
-/// because it has to outlive the units it counts: a seat that was just
-/// served has nothing left in the ledger to say so, and a fairness read
-/// off the live tickets alone hands that seat the machine again.
+/// rank ([`queue::Served`]). Beside the tickets, because it has to
+/// outlive the units it counts: a seat that was just served has nothing
+/// left in the ledger to say so, and a fairness read off the live
+/// tickets alone hands that seat the machine again.
 const SERVED: &str = "served";
 
 /// The extension of a lock file; a ticket's own file has no extension
@@ -37,7 +37,7 @@ const SERVED: &str = "served";
 const LOCK: &str = "lock";
 
 /// How long the queue may stand entirely still before a wait calls it
-/// hung. Silence, not the wait's length: a queue that keeps handing the
+/// hung. Silence is what is measured: a queue that keeps handing the
 /// machine on is working however long this unit stands in it, and what
 /// this catches is a ledger nothing moves — every holder gone without
 /// its ticket coming down, which the sweep would have answered, or a
@@ -64,7 +64,7 @@ const WHOLE_CEILING: Duration = if cfg!(test) {
 /// at all, read off the ceiling that says so, because a leftover *is* a
 /// step that was running when its runner died.
 ///
-/// **It reports and never releases.** A step past this is still a step
+/// **It reports and holds on.** A step past this is still a step
 /// on the machine, and the room it holds is room it is using; what
 /// crossing this says is that nothing but a person will end it now
 /// ([`queue::Ticket::overdue`]).
@@ -93,15 +93,15 @@ impl Pool {
             .ok_or_else(|| format!("{} is not a git repository", dir.display()))?;
         Ok(Pool {
             carried: std::env::var_os(HELD).is_some(),
-            // Never under one unit's weight: a budget too small for the
+            // At least one unit's weight: a budget too small for the
             // heaviest unit is one nothing ever fits in.
             ..Pool::at(Path::new(&common), demand(jobs).max(COMPILE))
         })
     }
 
     /// The same, beside a `.git` named outright and with the budget
-    /// spelled out — the tests' own, and the one shape that does not
-    /// read the machine or the environment.
+    /// spelled out — the tests' own, answering to its arguments
+    /// alone.
     pub(crate) fn at(common: &Path, budget: u32) -> Pool {
         Pool {
             dir: common.join(DIR),
@@ -117,15 +117,15 @@ impl Pool {
     }
 
     /// The same, once no measurement is holding the machine still
-    /// (`still::until_free`). Every unit that is about to run something
-    /// goes through here rather than through [`Pool::admit`]: a ticket
-    /// taken ahead of the measurement would sit in the ledger as a unit
-    /// that is running when it cannot start, and a reader could not tell
-    /// the queue from a stall.
+    /// (`still::until_free`). Every unit that is about to run
+    /// something goes through here: a ticket taken ahead of the
+    /// measurement would sit in the ledger as a unit that is running
+    /// when it cannot start, and a reader could not tell the queue
+    /// from a stall.
     pub(crate) fn admit_once_the_machine_is_free(&self, ask: &Ask<'_>) -> Result<Admitted, String> {
-        // Off the ledger's own directory rather than off a tree: this is
-        // asked once per unit, and reading it from a tree would spend a
-        // `git rev-parse` on every one of a gate's seven hundred.
+        // Off the ledger's own directory: this is asked once per unit,
+        // and reading it from a tree would spend a `git rev-parse` on
+        // every one of a gate's seven hundred.
         if let Some(common) = self.dir.parent() {
             crate::still::until_free_in(common, ask.what)?;
         }
@@ -264,14 +264,14 @@ impl Pool {
         // one is about to write at is never one another process can
         // still read a gone unit's weight from.
         let live = self.read()?;
-        // Where this seat stands, written the moment it joins the queue
-        // rather than the moment it is first served. The two are not the
-        // same: a seat that queued at the start and has been served
-        // nothing must stand *below* one that has been served, while a
-        // seat arriving into somebody else's hour must stand *level*
-        // with it. Only a row made on arrival can tell those apart —
-        // without one, both look alike and the older unit wins, which is
-        // the seat that was already served (`queue::order`).
+        // Where this seat stands, written the moment it joins the
+        // queue. Arrival and first service are two moments: a seat
+        // that queued at the start and has been served nothing must
+        // stand *below* one that has been served, while a seat
+        // arriving into somebody else's hour must stand *level* with
+        // it. Only a row made on arrival can tell those apart —
+        // without one, both look alike and the older unit wins, which
+        // is the seat that was already served (`queue::order`).
         if !turn {
             let served = self.served(&live);
             if !served.contains_key(&(ask.rank, ask.seat.to_string())) {
@@ -476,17 +476,17 @@ impl Pool {
     /// compared as one answer (`subprocess::image_still_at`). A ticket
     /// from before that recorded no name is asked the older question.
     ///
-    /// **The probe is the whole of the decision, and elapsed time is
-    /// none of it.** A step that has run past the longest a step may run
-    /// ([`LEFTOVER_CEILING`]) is a thing to report, not a room to hand
-    /// out: the load behind it is on the machine whether or not it is
-    /// late, and admitting somebody into a room whose occupant is still
-    /// compiling is the over-subscription this exists to stop — for four
-    /// weight, with nobody left to notice. So the ceiling turns the
-    /// leftover into an anomaly that names itself
-    /// ([`Ticket::overdue`], `queue::standing`) and holds on, and the
-    /// same is true where the probe could not be asked at all: an
-    /// unanswerable question is not a licence either.
+    /// **The probe is the whole of the decision.** A step that has
+    /// run past the longest a step may run ([`LEFTOVER_CEILING`]) is
+    /// a thing to report: the load behind it is on the machine
+    /// whether or not it is late, and admitting somebody into a room
+    /// whose occupant is still compiling is the over-subscription
+    /// this exists to stop — for four weight, with nobody left to
+    /// notice. So the ceiling turns the leftover into an anomaly that
+    /// names itself ([`Ticket::overdue`], `queue::standing`) and
+    /// holds on, and the same is true where the probe could not be
+    /// asked at all: an unanswerable question holds the room as
+    /// well.
     ///
     /// What that costs is a room a person may have to end by hand: a
     /// stranger that inherited both the number and the name, or a
@@ -497,10 +497,10 @@ impl Pool {
     /// can detect. Every waiting unit's wait says what it is behind, and
     /// `cargo xtask budget` says which number to look at.
     ///
-    /// The ceiling is measured from the second the unit was handed the
-    /// machine ([`Ticket::ran_since`]) and never from its arrival, so a
-    /// step that queued out a busy machine is not reported as late for
-    /// having waited.
+    /// The ceiling is measured from the second the unit was handed
+    /// the machine ([`Ticket::ran_since`]), so a step that queued
+    /// out a busy machine is not reported as late for having
+    /// waited.
     ///
     /// A unit that has started nothing yet (`child` zero — every waiting
     /// unit, and every one that takes no child at all) is let go of at
@@ -519,8 +519,8 @@ impl Pool {
         // Asked at most once a second for the whole machine, because on
         // Windows the ask is a process of its own and every waiter looks
         // ten times a second. Between asks the last answer stands, which
-        // is what `probed` marks. Not a wait — nothing here is waited
-        // for; it is how often the ledger pays for the question.
+        // is what `probed` marks — a pace, being how often the ledger
+        // pays for the question.
         if ticket.probed == now {
             return Ok(Some(held(&ticket, now)));
         }
@@ -528,15 +528,15 @@ impl Pool {
             return Ok(None);
         }
         ticket.probed = now;
-        // Said once for the whole machine rather than by every waiter
-        // that looks: the ledger remembers that somebody has been told,
-        // and the standing goes on naming it for anyone who asks later.
+        // Said once for the whole machine: the ledger remembers that
+        // somebody has been told, and the standing goes on naming it
+        // for anyone who asks later.
         if overdue(&ticket, now) && !ticket.told {
             ticket.told = true;
             println!(
                 "  budget: {} has held {} weight past the longest a step may run, and pid {} \
-                 ({}) is still there. Nothing takes that room until it goes — `cargo xtask \
-                 budget` says where it stands, and ending it is a person's.",
+                 ({}) is still there. The room is held until it goes — `cargo xtask budget` \
+                 says where it stands, and ending it is a person's.",
                 ticket.what, ticket.weight, ticket.child, ticket.child_name
             );
         }
@@ -692,7 +692,7 @@ fn still_at(child: u32, name: &str) -> bool {
 
 /// Whether a running leftover has been on the machine longer than a step
 /// is allowed to run ([`LEFTOVER_CEILING`]) — which says it is worth
-/// reporting and never that its room is free ([`Pool::leftover`]).
+/// reporting, its room still held ([`Pool::leftover`]).
 fn overdue(ticket: &Ticket, now: u64) -> bool {
     now.saturating_sub(ticket.ran_since) > LEFTOVER_CEILING
 }

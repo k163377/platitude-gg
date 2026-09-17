@@ -78,15 +78,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "details_select_away dropped=true held=true",
     },
-    // A range selection is taken from the room beside the values, not
-    // from the values themselves — they are a few characters wide and
-    // one line tall, and aiming at that misses. Two claims, because
+    // A range selection is taken from the room beside the values —
+    // they are a few characters wide and one line tall, and aiming
+    // at them misses. Two claims, because
     // either alone photographs as a working pane: the sweep reaches the
     // value, and a press on the value's own box is still whatever
     // control was there. On the plate's two that second answer must be
     // `false`, which is the whole of "the hit areas did not shrink".
     //
-    // Not for a value the row had to cut: a sweep reaches what is on
+    // For a value the row shows whole: a sweep reaches what is on
     // screen, which is the point of it, and the tail lives in the card
     // and under Ctrl+A (`details-select`).
     Verb {
@@ -112,9 +112,9 @@ pub(super) const TABLE: &[Verb] = &[
     // did to the drag before it, without which the plate copies out
     // from under a wash nobody is making any more; and `hand=` is the
     // half no gesture gives itself: the run enters the hand's own
-    // functions rather than the pointer, so a hand taken out, disabled
-    // or shrunk would answer every gesture it was asked and never see a
-    // press. Whether Qt hands the press to the plate at all is a
+    // functions, so a hand taken out, disabled or shrunk would answer
+    // every gesture it was asked and never see a press. Whether Qt
+    // hands the press to the plate at all is a
     // question only a real pointer answers, and it is asked where one
     // can be made (`qmltest`, tst_hashplate).
     Verb {
@@ -136,8 +136,8 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // And the other order, which is the one that breaks: the press
     // lands before the tip arrives. The attached tooltip takes its
-    // words when `visible` rises rather than when it opens, so a tip
-    // still counting out its rest comes up answering a press with the
+    // words when `visible` rises, so a tip still counting out its
+    // rest comes up answering a press with the
     // offer unless the answer re-arms it. `counting=` is the setup
     // half — nothing was up when the press went in — and it has to be
     // said, because a run where the tip had already arrived would
@@ -192,13 +192,13 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "description_grow keeps=true",
     },
-    // Whether the corner text gives the pane's foot back. **The working
-    // tree's foot is never lent at all** — a commit button is pinned to
-    // it — so `shown=false room=0` is the whole of that pane's answer,
-    // whatever list is above it; the give-and-take that can go either
-    // way is the details pane's, and which way it goes there is the
-    // preset's business rather than the argument's, so only the pane is
-    // claimed for a row.
+    // Whether the corner text gives the pane's foot back. **The
+    // working tree's foot stays its own** — a commit button is pinned
+    // to it — so `shown=false room=0` is the whole of that pane's
+    // answer, whatever list is above it; the give-and-take that can
+    // go either way is the details pane's, and which way it goes
+    // there is the preset's business, so only the pane is claimed
+    // for a row.
     //
     // Judged on `shown=`, the label's own visibility. `room=` is what
     // was asked, and a run that claimed only that would be green with
@@ -223,8 +223,8 @@ pub(super) const TABLE: &[Verb] = &[
     // The panel's slab is opaque, so it steps between named inks and the
     // colour itself is the report — a frame's ink while the list is
     // being sent, one step off the pane's ground once the reader has
-    // left (デザイン規約 §QML 実装ルール のバーの明るさ). Reporting
-    // `bright` instead would be the asked-for side, green with the paint
+    // left (デザイン規約 §QML 実装ルール のバーの明るさ). The ink is the
+    // paint that landed; the asked-for `bright` stays green with it
     // cut off.
     Verb {
         name: "pane-bar",
@@ -262,9 +262,9 @@ pub(super) const TABLE: &[Verb] = &[
     // the write barrier is answered by whichever finished first.
     // `empty=true` is the whole claim: the answer found the editor that
     // sent it, out of the answers that notify carried (`ops::Press`),
-    // rather than off a property the fetch behind it rewrites. `amend=`
-    // is the row under the boxes going down with them, which is why the
-    // two verbs want the same line — `amend` turns it on before pressing.
+    // where a property would be rewritten by the fetch behind it.
+    // `amend=` is the row under the boxes going down with them, which is
+    // why the two verbs want the same line — `amend` turns it on first.
     Verb {
         name: "commit",
         when: &[],
@@ -292,7 +292,7 @@ pub(super) const TABLE: &[Verb] = &[
     // arrangement the bar was moved out of the graph pane for: a bar
     // that lived in that pane says nothing at all here, and the two
     // windows photograph the same. `clears=true` is the claim itself —
-    // the middle is standing under the bar rather than behind it.
+    // the middle is standing under the bar.
     Verb {
         name: "notice-over-diff",
         when: &[],
@@ -313,8 +313,8 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The dress each kind of report wears, asked of the page's own door
     // (`RepoPage.showReport`) so the run reads the same `Words` the answer
-    // does. **The colour is a two-pixel hairline** — the whole reason this
-    // is a report line rather than something to look for in a picture.
+    // does. **The colour is a two-pixel hairline** — the whole reason
+    // this is a report line.
     //
     // **The pair is the claim**: every report is `danger` except the one
     // that left something standing, so a run of the second alone would
@@ -336,10 +336,10 @@ pub(super) const TABLE: &[Verb] = &[
             // the plan was composed (`ReportKind::RewriteTipMoved`), or an
             // operation was already standing (`RewriteWhileStanding`).
             // **The verb hands the kind in**, so nothing is spawned here
-            // and `log=false` is a claim about the dress rather than the
-            // route — the plan's own check refuses before any spawn, but
-            // the carry's guard refuses after git's one refusal and that
-            // one does leave a row (`session_integration::standing_op`).
+            // and `log=false` is a claim about the dress — the plan's
+            // own check refuses before any spawn, but the carry's guard
+            // refuses after git's one refusal and that one does leave a
+            // row (`session_integration::standing_op`).
             // `why=true` is this application's own second line, which is
             // what a log row cannot give either way.
             (
@@ -356,9 +356,9 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "write_notice open=true clears=true tone=danger",
     },
     // Another working copy's uncommitted work, read in this window as a
-    // pane of its own. `copy=` is that pane standing on that copy rather
-    // than on this window's tree; `files=` and `tally=` are the one list
-    // and the row above it agreeing, which they only do because both fold
+    // pane of its own. `copy=` is that pane standing on that copy;
+    // `files=` and `tally=` are the one list and the row above it
+    // agreeing, which they only do because both fold
     // a path's two sides into one (`Bucket::Whole` / `Kinds::folded`);
     // `cut=` and `tip=` are what a name too long for the band does; and
     // the two after them are the diff offering neither its whole-file

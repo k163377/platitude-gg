@@ -2,9 +2,9 @@
 //!
 //! The git this repository holds until the user asks for it — a landing,
 //! a rebase, a commit in the primary checkout — and the launches, kills,
-//! seats and chips a session may not handle unasked. Main moves on the
-//! permit the user's own message opens (`permit`), and on nothing a
-//! session types.
+//! seats and chips a session handles only when asked. Main moves on
+//! the permit the user's own message opens (`permit`), and on that
+//! alone.
 //!
 //! Wired from .claude/settings.json. Each handler reads the hook's JSON
 //! payload from stdin and answers on stdout; printing nothing means "no
@@ -41,7 +41,7 @@ pub(crate) const GUI_APPROVAL_FLAG: &str = "PGG_ALLOW_GUI";
 /// The same, for an instruction that approved stopping processes outside this worktree.
 const PROCESS_STOP_APPROVAL_FLAG: &str = "PGG_ALLOW_KILL";
 
-/// Every escape this hook reads — the four above and nothing else, which
+/// Every escape this hook reads — the four above, which
 /// is what a flag spelled elsewhere is held to.
 pub(crate) const APPROVAL_FLAGS: [&str; 4] = [
     MAIN_APPROVAL_FLAG,
@@ -105,12 +105,12 @@ fn stop(input: &str) -> Result<(), String> {
 
 /// SessionEnd: the chip ledger goes with the session that wrote it.
 ///
-/// The seat does not go with it. This event is handed to every open
+/// The seat stays. This event is handed to every open
 /// conversation when the machine sleeps, and each one goes on working at
 /// the next wake (shots/sweep.rs) — a claim released here comes off a
 /// seat its session is still sitting in, and the session meets its own
 /// tree as somebody else's on waking. The seat goes back where the work
-/// does instead: landing the branch hands the letter to the roster
+/// does: landing the branch hands the letter to the roster
 /// (`land::release_claim`), and a claim whose Claude process is gone is
 /// litter the next `cargo xtask seat` lifts (`seats::claim_is_dead`).
 fn session_end(input: &str) -> Result<(), String> {

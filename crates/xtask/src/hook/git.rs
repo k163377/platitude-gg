@@ -43,8 +43,8 @@ fn gate_control_change_denied(command: &str) -> bool {
     };
     deny(&format!(
         "{name} decides whether refs/heads/main answers to the gate ({} is the user's own \
-         manual test-skip control, {} is how the gate knows a session's git from the user's), so a \
-         session may spell neither. Run `cargo xtask gate` (or `land`, which gates on the \
+         manual test-skip control, {} is how the gate knows a session's git from the user's), so \
+         either name is the user's. Run `cargo xtask gate` (or `land`, which gates on the \
          way) and require a passing stamp for main. If validation appears incorrect, stop \
          and report the validation error to the user.",
         crate::gate::SKIP,
@@ -54,10 +54,10 @@ fn gate_control_change_denied(command: &str) -> bool {
 }
 
 /// Putting a branch on main and rewriting the branch under the session
-/// are both the user's call (CLAUDE.md Git 運用). The landing verb goes
-/// through on the user's permit, and nothing else does: a session does
-/// not write refs/heads/main with git of its own, whatever it puts in
-/// front of the line. A rebase carries its own approval flag.
+/// are both the user's call (CLAUDE.md Git 運用). The landing verb alone
+/// goes through, on the user's permit — whatever a session puts in
+/// front of a git line of its own. A rebase carries its own approval
+/// flag.
 fn guarded_git_denied(input: &str, command: &str, cwd: &str) -> bool {
     let Some(guarded) = guarded_call(command) else {
         return false;
@@ -128,7 +128,7 @@ impl Offence {
     fn reason(&self, what: &str) -> String {
         match self {
             Offence::WritesMain { .. } | Offence::Landing => format!(
-                "{what} would write refs/heads/main by hand, and a session does not — \
+                "{what} would write refs/heads/main by hand, \
                  whatever stands in front of the line. {} is the one way a branch reaches \
                  main (CLAUDE.md Git 運用): it rebases the branch in its seat, gates it, \
                  fast-forwards main where main actually is (a hand-typed merge inherits \
@@ -142,8 +142,8 @@ impl Offence {
             Offence::Rebase => format!(
                 "{what} rewrites the branch under the session, and a rebase runs \
                  only when the user asks for it in so many words (CLAUDE.md Git \
-                 運用). A branch behind main is a seat's normal resting state, \
-                 not something to fix — leave it and report what is on the \
+                 運用). A branch behind main is a seat's normal resting state \
+                 — leave it and report what is on the \
                  branch. A merged seat starts over with `git reset --hard main`, \
                  which is not a rebase and needs nothing. If the user did ask \
                  for this one, run the same command again with \
@@ -153,10 +153,10 @@ impl Offence {
     }
 }
 
-/// The first guarded git invocation in `command`, if any. Read-only git and
-/// git that names main as a source (`git log main`, `git switch main`) are
-/// not it — the verbs that write refs/heads/main, and rebase, which
-/// rewrites whichever branch it runs on.
+/// The first guarded git invocation in `command`, if any: the verbs that
+/// write refs/heads/main, and rebase, which rewrites whichever branch it
+/// runs on. Git that names main as a source (`git log main`, `git switch
+/// main`) only reads it.
 fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
     let tokens: Vec<&str> = command.split_whitespace().collect();
     // The sanctioned landing verb is a landing: the permit is what says
@@ -262,7 +262,7 @@ pub(super) fn unquote(token: &str) -> &str {
 /// `cargo run -p xtask -- <verb>`), anywhere in it: the verb is the first
 /// positional token after `xtask` when `cargo` stands right before it,
 /// or the token after the `--` that ends cargo's own options when `run`
-/// does. `cargo test -p xtask land` names a test filter, not the verb.
+/// does. `cargo test -p xtask land` names a test filter.
 /// A quoted mention keeps its quote character on the token and does not
 /// match.
 pub(super) fn xtask_verb(tokens: &[&str], verb: &str) -> bool {

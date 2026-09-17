@@ -1,4 +1,4 @@
-//! `cargo xtask verbs` — which verbs the gate never runs.
+//! `cargo xtask verbs` — the verbs the gate skips.
 //!
 //! The gate runs the argument lines the census holds, so **a verb with no
 //! line in the census is one no change ever re-photographs** — whatever
@@ -11,11 +11,11 @@
 //! **Both sides are read from the tree.** The verbs are what the harness
 //! compares `PGG_AUTO_ACT` against, which is the only thing that decides
 //! whether a name is answered at all; the recorded side is the census's
-//! own first word per line. Reading the skill's prose instead undercounts
+//! own first word per line. The skill's prose undercounts
 //! — its verbs live inside sentences beside every other backticked word,
 //! and a count taken off it was out by an order of magnitude.
 //!
-//! The other direction is an invariant rather than a backlog: a line
+//! The other direction is an invariant: a line
 //! whose verb the harness no longer names is one the gate still runs,
 //! and the run spends its whole ceiling doing nothing (the harness
 //! ignores a name it does not know). So that line fails this command,
@@ -45,15 +45,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let recorded = recorded(&root);
 
     let unrecorded: Vec<&String> = harness.answered.difference(&recorded).collect();
-    // Judged against every name the harness holds rather than against the
-    // dispatches alone: a verb reached through a list this does not read
+    // Judged against every name the harness holds: a verb reached
+    // through a list this does not read
     // is answered all the same, and a gate that failed on one would be
     // blaming a census line for how the harness was written.
     let gone: Vec<&String> = recorded.difference(&harness.mentioned).collect();
 
     println!("verbs the harness answers: {}", harness.answered.len());
     println!("verbs the census records:  {}", recorded.len());
-    println!("never run by the gate:     {}", unrecorded.len());
+    println!("unrecorded in the census:  {}", unrecorded.len());
     for verb in &unrecorded {
         println!("  {verb}");
     }
@@ -103,7 +103,7 @@ fn harness(root: &Path) -> Result<Harness, String> {
     }
     if files == 0 {
         // Every census line would read as stale, which is a scan that
-        // found nothing rather than a census that means nothing.
+        // found nothing.
         return Err(format!(
             "no QML under {HARNESS} — the harness is not where this expects it, so nothing \
              here can be said about which verbs are answered"
@@ -128,7 +128,7 @@ fn recorded(root: &Path) -> BTreeSet<String> {
 /// read `Harness.autoAct` where they stand — and both are the same
 /// question: does this run answer to that name. Either may be reached
 /// through whatever holds it (`planOpenTimer.act`), so what is asked is
-/// read off the last word rather than the whole of it.
+/// read off the last word.
 fn verbs_in(text: &str) -> BTreeSet<String> {
     let mut found = BTreeSet::new();
     for (at, _) in text.match_indices("===") {
@@ -177,8 +177,8 @@ fn words_in(text: &str) -> BTreeSet<String> {
 
 /// What a verb name looks like: the kebab-case word a run is started
 /// with. The same comparison is made against an argument's own words
-/// (`"go"`, `"older"`, a preset's name with a colon in it), and those are
-/// not verbs — they are read out of an act that already matched.
+/// (`"go"`, `"older"`, a preset's name with a colon in it), which are
+/// read out of an act that already matched.
 fn is_verb(name: &str) -> bool {
     !name.is_empty()
         && name
@@ -207,7 +207,7 @@ mod tests {
         );
     }
 
-    /// The list a family reads instead of comparing: no dispatch names
+    /// The list a family reads: no dispatch names
     /// these, and the failing half must still count them as answered.
     #[test]
     fn a_name_in_a_list_is_a_name_the_harness_holds() {
