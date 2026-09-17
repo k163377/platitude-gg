@@ -1,9 +1,11 @@
 //! Reads outside the configuration family that answer with their exit
 //! code, pinned the way config_reads.rs pins the config ones: unmarked,
-//! each of these logged a failed row over an ordinary answer — the HEAD
-//! reads on every refresh and both graph passes of a detached or unborn
-//! repository (規約 core.md §終了コードで答える問い合わせはコマンドログ
-//! でも答え).
+//! each of these logged a failed row over an ordinary answer (規約
+//! core.md §終了コードで答える問い合わせはコマンドログでも答え).
+//!
+//! **The two HEAD reads are pinned where the state they answer is**
+//! (`refs_integration`): detached and unborn *are* those exit codes, so
+//! the state and the classification come off one read of one repository.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -12,7 +14,7 @@ use crate::support::TestRepo;
 use crate::support::exec::{assert_answered, logged};
 use platitude_core::details::{self, DiffTarget};
 use platitude_core::process::CommandEnd;
-use platitude_core::{Oid, preview, refs, stash};
+use platitude_core::{Oid, preview, stash};
 
 /// Every `cat-file` that ran, ran against a side that was there.
 #[track_caller]
@@ -20,48 +22,6 @@ fn assert_read_what_exists(ends: &[CommandEnd]) {
     assert!(
         ends.iter().all(|e| *e == CommandEnd::Exited(0)),
         "cat-file only runs against a side that is there: {ends:?}"
-    );
-}
-
-/// `symbolic-ref -q` exits 1 to say "detached", on every read of HEAD.
-#[tokio::test]
-async fn reading_a_detached_head_answers_by_code() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.git(&["switch", "--detach", "HEAD"]);
-    let (exec, log, cancel) = logged();
-
-    let head = refs::head_state(&exec, &repo.path, &cancel)
-        .await
-        .expect("head state");
-
-    assert!(head.branch.is_none(), "detached HEAD names no branch");
-    assert!(head.oid.is_some(), "the commit is still there");
-    assert_eq!(
-        log.ends_of(&["symbolic-ref"]),
-        vec![CommandEnd::Answered(1)]
-    );
-    assert_eq!(
-        log.ends_of(&["rev-parse", "--verify"]),
-        vec![CommandEnd::Answered(0)]
-    );
-}
-
-/// `rev-parse --verify -q HEAD` exits 1 to say "unborn" — the state every
-/// freshly initialised repository opens in.
-#[tokio::test]
-async fn reading_an_unborn_head_answers_by_code() {
-    let repo = TestRepo::init();
-    let (exec, log, cancel) = logged();
-
-    let head = refs::head_state(&exec, &repo.path, &cancel)
-        .await
-        .expect("head state");
-
-    assert!(head.oid.is_none(), "an unborn branch resolves to no commit");
-    assert_eq!(
-        log.ends_of(&["rev-parse", "--verify"]),
-        vec![CommandEnd::Answered(1)]
     );
 }
 

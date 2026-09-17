@@ -1,5 +1,10 @@
 //! Refs listing and HEAD state against real git, including a local
 //! file-based "remote" (no network involved).
+//!
+//! **HEAD is read here in all three states, and each is read once**: two
+//! of the three are an exit code, so what the state is and how the
+//! command log classifies it are the same read (`answer_reads` holds the
+//! rest of that family).
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::expect_used)]
@@ -7,8 +12,9 @@
 use std::collections::HashSet;
 
 use crate::support::TestRepo;
-use crate::support::exec::env;
+use crate::support::exec::{env, logged};
 use platitude_core::Oid;
+use platitude_core::process::CommandEnd;
 use platitude_core::refs::{self, RefKind};
 
 /// main (upstream: origin/main) + feature (no upstream, same name on
@@ -112,11 +118,18 @@ async fn lists_branches_tags_and_remotes() {
     assert!(!with_remote.contains("refs/heads/local-only"));
 }
 
+/// **Two of the three states answer by exit code**, and the same two
+/// reads say what the state is: `symbolic-ref -q` exits 1 for "detached",
+/// `rev-parse --verify -q HEAD` exits 1 for "unborn". So the state and
+/// its classification are read off one repository — unmarked, each of
+/// these logged a failed row over an ordinary answer, on every refresh
+/// and on both graph passes (規約 core.md §終了コードで答える問い合わせは
+/// コマンドログでも答え).
 #[tokio::test]
-async fn head_state_on_branch_and_detached() {
+async fn head_state_on_branch_and_detached_answers_by_code() {
     let mut repo = TestRepo::init();
     let sha = repo.commit_file_id("a.txt", "1\n", "initial");
-    let (executor, cancel) = env();
+    let (executor, log, cancel) = logged();
 
     let on_branch = refs::head_state(&executor, &repo.path, &cancel)
         .await
@@ -124,24 +137,48 @@ async fn head_state_on_branch_and_detached() {
     assert_eq!(on_branch.branch.as_deref(), Some("main"));
     assert!(!on_branch.detached);
     assert_eq!(on_branch.oid, Some(Oid::from_hex_str(&sha).unwrap()));
+    assert_eq!(
+        log.ends_of(&["symbolic-ref"]),
+        vec![CommandEnd::Answered(0)],
+        "a branch is the plain answer"
+    );
 
     repo.git(&["checkout", "--detach", "HEAD"]);
     let detached = refs::head_state(&executor, &repo.path, &cancel)
         .await
         .unwrap();
     assert!(detached.detached);
-    assert_eq!(detached.branch, None);
-    assert_eq!(detached.oid, Some(Oid::from_hex_str(&sha).unwrap()));
+    assert_eq!(detached.branch, None, "detached HEAD names no branch");
+    assert_eq!(
+        detached.oid,
+        Some(Oid::from_hex_str(&sha).unwrap()),
+        "the commit is still there"
+    );
+    assert_eq!(
+        log.ends_of(&["symbolic-ref"]),
+        vec![CommandEnd::Answered(0), CommandEnd::Answered(1)],
+        "detached is an answer, not a failed row"
+    );
+    // Both of them, counted: `ends_of` drops the rows that never ended,
+    // so a read whose end went missing would leave an `all()` over this
+    // true — and so would no read at all.
+    assert_eq!(
+        log.ends_of(&["rev-parse", "--verify"]),
+        vec![CommandEnd::Answered(0), CommandEnd::Answered(0)],
+        "the commit resolved on both reads, and both reads ended"
+    );
 
     // No ref carries the HEAD marker while detached.
     let refs_list = refs::load(&executor, &repo.path, &cancel).await.unwrap();
     assert!(refs_list.iter().all(|r| !r.is_head));
 }
 
+/// The third state — the one every freshly initialised repository opens
+/// in — and the exit code that says so.
 #[tokio::test]
-async fn empty_repository_has_unborn_head() {
+async fn empty_repository_has_unborn_head_and_says_so_by_code() {
     let repo = TestRepo::init();
-    let (executor, cancel) = env();
+    let (executor, log, cancel) = logged();
 
     let state = refs::head_state(&executor, &repo.path, &cancel)
         .await
@@ -149,6 +186,11 @@ async fn empty_repository_has_unborn_head() {
     assert_eq!(state.branch.as_deref(), Some("main"));
     assert_eq!(state.oid, None, "unborn branch has no commit");
     assert!(!state.detached);
+    assert_eq!(
+        log.ends_of(&["rev-parse", "--verify"]),
+        vec![CommandEnd::Answered(1)],
+        "unborn is an answer, not a failed row"
+    );
 
     let refs_list = refs::load(&executor, &repo.path, &cancel).await.unwrap();
     assert!(refs_list.is_empty());
