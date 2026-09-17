@@ -11,8 +11,8 @@ import platitude.ui
 ///
 /// Built by `WindowAutoActDriver`, which is what `Main` builds when a verb was given; what these verbs act
 /// on is handed down below, one property per part of the window they reach into.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing and is
-// never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -22,8 +22,8 @@ Item {
     required property TopBar topBar
     required property Item mainUi
 
-    // PGG_AUTO_ACT=window-fill: whether the window's contents reach all four edges while maximised. Numbers rather than
-    // a picture: the app is the whole screen, so there is no desktop left beside it to show a gap against.
+    // PGG_AUTO_ACT=window-fill: whether the window's contents reach all four edges while maximised. Numbers say it:
+    // the app is the whole screen, so there is no desktop left beside it to show a gap against.
     SampleTimer {
         id: fillActTimer
         running: Harness.autoAct === "window-fill"
@@ -46,8 +46,8 @@ Item {
     // back.
     SampleTimer {
         id: fillReportTimer
-        // Measured in scene coordinates rather than from the margins that were asked for, because a margin that misses
-        // is exactly what this is looking for.
+        // Measured in scene coordinates, because a margin that misses is exactly what this is looking
+        // for.
         onTriggered: {
             const at = mainUi.mapToItem(null, 0, 0)
             if (at.x !== 0 || at.y !== 0 || mainUi.width !== window.width || mainUi.height !== window.height)
@@ -90,8 +90,8 @@ Item {
                     return
                 if (window.width < window.floorWidth || window.height < window.floorHeight)
                     return
-                // Reported from the same stage as the forms that take an argument, rather than here: the band's
-                // floor is `bandRow.Layout.minimumWidth`, which the layout writes in its own pass, so the mark
+                // Reported from the same stage as the forms that take an argument: the band's floor is
+                // `bandRow.Layout.minimumWidth`, which the layout writes in its own pass, so the mark
                 // that status just put up is not in the number until a pass has run under it.
                 stop()
                 floorReportTimer.start()
@@ -208,8 +208,8 @@ Item {
             "window_floor fits="
             + (window.width >= floorW && window.height >= floorH)
             + " floorW=" + floorW + " floorH=" + floorH
-            // The two `floorW` is the larger of (`Main.floorWidth`), so which of them set it is read here rather than
-            // worked back out of the number: folding the list lowers `pageW` and leaves `bandW` where it is, and on an
+            // The two `floorW` is the larger of (`Main.floorWidth`), so which of them set it is read here: folding
+            // the list lowers `pageW` and leaves `bandW` where it is, and on an
             // OS whose band carries the window buttons and the grab runs that is where the two change places.
             + " bandW=" + Math.ceil(topBar.floorWidth)
             + " pageW=" + (window.floorPage !== null
@@ -295,15 +295,15 @@ Item {
                 + " commands=" + AppBackend.startCommandsShown()
                 + " maximized=" + (window.visibility === Window.Maximized)
                 // What the report above left in the store, which is what the next launch comes back to. Read back
-                // rather than repeated from the window, so a run that had nothing to say (minimised) is told apart from
+                // from the store, so a run that had nothing to say (minimised) is told apart from
                 // one that said this.
                 + " windowW=" + AppBackend.startWindowWidth()
                 + " windowH=" + AppBackend.startWindowHeight()
                 + " windowMax=" + AppBackend.startWindowMaximized()
                 + " autoFetch=" + AppBackend.autoFetchMinutes
                 + " initialCommits=" + AppBackend.initialCommits)
-            // Back up for the shot: `grabToImage` has nothing to hand back from a window that is down. Windowed rather
-            // than maximised, so the picture is the size every other verb's is — the offscreen platform maximises to
+            // Back up for the shot: `grabToImage` has nothing to hand back from a window that is down. Windowed,
+            // so the picture is the size every other verb's is — the offscreen platform maximises to
             // its own 800x800 screen, and a shot that shape is a shot of the harness.
             if (Harness.autoActArg === "minimize")
                 window.visibility = Window.Windowed

@@ -10,8 +10,8 @@ import platitude.ui
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -37,7 +37,7 @@ Item {
     readonly property var stashDeleteItem: driver.stashDeleteItem
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb has one family (`AutoActDriver`).
     function run(act, arg) {
         if (act === "commit") {
             // A message of its own when none was named: git refuses an empty one outright, and a run that asked for a
@@ -49,7 +49,7 @@ Item {
             page.commitNow()
         } else if (act === "commit-refused" || act === "notice-over-diff") {
             // The same press against a repository whose `pre-commit` hook says no (`--preset hooked`). Nothing is
-            // half written and `--no-verify` is never passed, so the hook's own words come down as a report
+            // half written and the hook runs in full, so the hook's own words come down as a report
             // (デザイン規約 §答えの要らない報せ).
             //
             // `notice-over-diff` runs it **with a file open in the middle**, which is the one arrangement that tells
@@ -105,8 +105,8 @@ Item {
             // `named` leaves a summary in the commit box first, which the entry is then called after (デザイン規約
             // §変更を退避する). The words are the driver's own, the way `wip-message` supplies its own line: a summary
             // written for a commit has spaces and a colon in it, and the argument cannot carry either (`check --verb`
-            // splits its line on whitespace). The pane still is not opened — the button does not need it, and the name
-            // is read back off the sidebar rather than off the box.
+            // splits its line on whitespace). The pane stays shut — the button does not need it, and the name
+            // is read back off the sidebar.
             if (arg === "named") {
                 driver.stashWanted = "feat: write the summary"
                 wipPane.setMessage(driver.stashWanted, "")
@@ -154,8 +154,8 @@ Item {
                 page.popStash(commitMenuState.menuStashRef)
             }
         } else if (act === "wip-embedded") {
-            // The row of a repository of its own — the one file row whose pane answers with a sentence instead of a
-            // patch, because git will not open what is behind it (core `details::embedded`). The argument is the row,
+            // The row of a repository of its own — the one file row whose pane answers with a sentence,
+            // because git will not open what is behind it (core `details::embedded`). The argument is the row,
             // `<path>` with the trailing slash git spells such an entry with.
             page.showWip()
             embeddedTimer.path = arg === "" ? "vendor/nest/" : arg
@@ -167,7 +167,7 @@ Item {
         } else if (act === "carried-read") {
             // **The argument is which copy**, because the two in the preset are different shapes: one holds an
             // untracked file, which has no pieces to stage whoever owns it, and the other a staged edit — the one
-            // where "no hunk puts a seat out" is a claim about this pane rather than about the file.
+            // where "no hunk puts a seat out" is a claim about this pane.
             carriedReadTimer.start()
         } else if (act === "carried-stand") {
             // The same pane with nothing read yet — the argument is the copy, as above.
@@ -186,11 +186,11 @@ Item {
         } else if (act === "wip-commit-half") {
             // A commit of what is staged over a tree that keeps the rest (`--preset dirty`), which is the one shape
             // where the uncommitted row survives its own commit: HEAD goes somewhere new and the row has to be drawn
-            // again above it, with what is left. **Not `stageAll()`** — staging everything commits the whole tree and
-            // leaves no row on the far side, so the pair would show a row going away rather than moving.
+            // again above it, with what is left. **Staged as found** — staging everything commits the whole tree and
+            // leaves no row on the far side, so the pair would show a row going away.
             //
             // The argument stops it part-way: `during` is the write out and the picture not yet moved, which is what
-            // says the graph and the tree arrive together rather than one at a time.
+            // says the graph and the tree arrive together.
             page.showWip()
             wipPane.setMessage("feat: record the staged half", "")
             driver.headOidBefore = workTree.headOid
@@ -228,7 +228,7 @@ Item {
             //
             // **The argument is the bare word**, dashes added here: a positional that begins with `--` is turned away
             // by the option parser as a misspelled flag of its own (`verify::options`), so a verb that took the flag
-            // whole could not be asked for at all. **No default** — the word *is* which of the four rows to run, so a
+            // whole could not be asked for at all. **Required** — the word *is* which of the four rows to run, so a
             // run that forgot it matches nothing and says `op_exit_held false`, which is the line it is judged on.
             page.showWip()
             if (act === "op-exit-go")
@@ -236,17 +236,17 @@ Item {
         } else if (act === "op-exit-lands") {
             // The same press as "-go", followed all the way to where it puts the reader — which is a status later than
             // the write's own answer (`AutoActDriver.awaitOpExitLanding`). The argument is the bare word for the same
-            // reason as above, and here it does have a default: this verb asks after one landing rather than after a
-            // row.
+            // reason as above, and here it does have a default: this verb asks after one
+            // landing.
             page.showWip()
             Harness.report("op_exit_held "
                               + wipPane.completeOpExit("--" + (arg === "" ? "continue" : arg)))
             driver.awaitOpExitLanding()
         } else if (act === "eol-commit") {
-            // Nothing is committed — the shot is the state before anyone decides.
+            // The shot is the state before anyone decides.
             page.showWip()
             repoTab.stageAll()
-            // `amend` asks for the other wording rather than for a message: the two forms of this button differ in what
+            // `amend` asks for the other wording: the two forms of this button differ in what
             // they say, and both have to be photographable.
             if (arg === "amend") {
                 wipPane.setAmendChecked(true)
@@ -285,8 +285,8 @@ Item {
     /// the full ones frame identically at that moment.
     ///
     /// `empty=` is the claim — the answer reached the editor that sent it and the boxes were let go — and `amend=`
-    /// the row under them going down with it. Both are read off the pane rather than off the tab: what the tab said
-    /// is the input to this, not the proof of it.
+    /// the row under them going down with it. Both are read off the pane: what the tab said
+    /// is the input to this, and only that.
     Connections {
         target: acts.page
         enabled: commitAnswer.armed
@@ -345,7 +345,7 @@ Item {
     // The lanes of the uncommitted row, in the tokens its delegate paints from. A lane is a stroke a couple of pixels
     // wide and its dashes are one pixel each, so which of them are dotted is not a question the photograph answers.
     // The row is put there by the pass behind the status read — the same read that says what a standing merge is
-    // bringing in — so the wait is for the row itself to lead the graph, not for the tree to be loaded.
+    // bringing in — so the wait is for the row itself to lead the graph.
     // The press has to land on rows that are actually on screen, so the diff has to have been read first — and the
     // fingerprint handed in is one the bytes cannot have, which is the whole of the arrangement.
     SampleTimer {
@@ -366,10 +366,10 @@ Item {
     // Another working copy's uncommitted row, read in this window: the pane lists that copy's files and opens one of
     // them, and every control that would write is down (P3-確認事項 §別 worktree の未コミット行).
     //
-    // **The whole line is output side.** The two counts say the pane really is showing that copy rather than this
-    // window's own tree, and each of the four verdicts is read off the control itself — the two presses are made the
+    // **The whole line is output side.** The two counts say the pane really is showing that copy,
+    // and each of the four verdicts is read off the control itself — the two presses are made the
     // way a hand makes them and answer whether the button took them, and the two diff readings are the button's own
-    // `enabled` and whether a hunk puts a seat out at all. Built out of `writable` instead, every one of them would
+    // `enabled` and whether a hunk puts a seat out at all. Built out of `writable`, every one of them would
     // go green with the disabling unwired (app-ui.md §UI 自動化の因果性).
     SampleTimer {
         id: carriedReadTimer
@@ -409,7 +409,7 @@ Item {
                 if (key === "")
                     return
                 const cut = key.indexOf(":")
-                // **Asked of the row, not of the page.** The model says which row to reach for; what is read is
+                // **Asked of the row.** The model says which row to reach for; what is read is
                 // whatever that row makes of the model on its own — which is the half a run that carried the model's
                 // own answer to `openDiff` can never see, and the half that was empty here (verify-ui §壊れない動詞).
                 // The row answers null until the list has built it, which is this tick's whole wait.
@@ -431,7 +431,7 @@ Item {
             if (carriedReadTimer.walked) {
                 // **The run ends on the file the step below asked for.** A pane still waiting on that read
                 // photographs empty and builds no rows, so both the picture and the census would be of the race
-                // rather than of the file. Where the step moved nothing there is no second read to wait for, and
+                // Where the step moved nothing there is no second read to wait for, and
                 // the settle above is the whole of it.
                 if (carriedReadTimer.moved
                         && (!page.diffShown || page.diffPath === carriedReadTimer.leftPath))
@@ -449,7 +449,7 @@ Item {
             const lit = driver.carriedPane.filesWalk.litPath() === page.diffPath
             const litRows = driver.carriedPane.filesWalk.litRows()
             // One step of the arrows, through the pane's own walk. **A row is found by the side its bytes are on**
-            // even in this one list, so a pane handed the run's name instead of the file's bucket walks from nowhere
+            // even in this one list, so a pane handed the run's name for the file's bucket walks from nowhere
             // and answers the file it is already on (observed).
             carriedReadTimer.leftPath = page.diffPath
             const stepped = driver.carriedPane.filesWalk.stepFile(1, false)
@@ -524,8 +524,8 @@ Item {
             if (driver.carriedPane.view.count === 0 || gitCorner.width <= 0)
                 return
             carriedStandTimer.stop()
-            // `corner=` is the label's own visibility rather than the room it was handed — reporting what was asked
-            // for goes green with the binding cut (`corner`, which learned this the hard way).
+            // `corner=` is the label's own visibility — reporting the room it was handed
+            // goes green with the binding cut (`corner`, which learned this the hard way).
             Harness.report("carried_stand copy=" + files.carriedName
                               + " files=" + files.total
                               + " litRows=" + driver.carriedPane.filesWalk.litRows()
@@ -548,7 +548,7 @@ Item {
         }
     }
     // The offer to take HEAD's authorship over is only in the picture once HEAD's author has arrived, so the shot
-    // waits for it rather than for a stretch of time.
+    // waits for it.
     SampleTimer {
         id: amendAuthorTimer
         onTriggered: {
@@ -563,8 +563,8 @@ Item {
     QtObject {
         id: halfWatch
         property bool duringOnly: false
-        /// Whether the pair below has been seen, and what the page was holding when it was. Kept rather than read
-        /// back: the commit lands while the run is still on its way out, so afterwards these are the settled page's.
+        /// Whether the pair below has been seen, and what the page was holding when it was. Kept at the edge: the
+        /// commit lands while the run is still on its way out, so a later read gives the settled page's numbers.
         property bool caught: false
         property bool sawWipRow: false
         property int sawRows: -1
@@ -572,10 +572,10 @@ Item {
     // The write out and nothing moved yet.
     //
     // **Both halves, or the moment is not this one.** Busy stays up past the write's own answer while the reads behind
-    // it run, so a look that beat the answer and one that missed it both find it raised — and the second is the
-    // picture this verb is not about. HEAD still where it was is what tells them apart.
+    // it run, so a look that beat the answer and one that missed it both find it raised — and the second is a
+    // later picture. HEAD still where it was is what tells them apart.
     //
-    // **The pair is read on the tab's own notify rather than on the beat** (app-ui.md §一瞬だけ立つ状態). The window
+    // **The pair is read on the tab's own notify** (app-ui.md §一瞬だけ立つ状態). The window
     // is a git subprocess wide, but the loop can take the whole of it in one turn — the answer and the reads behind it
     // drained together — and a beat that lands behind the landing finds HEAD moved at every beat after that, which is
     // a watchdog spent in silence. This handler runs inside the turn the edge belongs to, so the window cannot close
@@ -591,11 +591,11 @@ Item {
             halfWatch.caught = true
         }
     }
-    // Completed a turn later rather than inside the notify that carried the edge (app-ui.md §UI 自動化の因果性), and
-    // **the run ends either way**: a window that shut without one notify raising busy had no `during` in it to stop
-    // at, which is said out loud and finished the way an inventory that named nothing is (`WindowSettingsActs`). That
-    // line is not the one this verb is judged on, so the run fails on it in the second it takes rather than in the
-    // watchdog's silence — and it names which of the two ways the run ended.
+    // Completed a turn after the notify that carried the edge (app-ui.md §UI 自動化の因果性), and **the run ends
+    // either way**: a window that shut without one notify raising busy had no `during` in it to stop at, which is
+    // said out loud and finished the way an inventory that named nothing is (`WindowSettingsActs`). That line sits
+    // outside the lines this verb is judged on, so the run fails on it in the second it takes — and it names which
+    // of the two ways the run ended.
     SampleTimer {
         id: halfDuringTimer
         onTriggered: {
@@ -649,8 +649,8 @@ Item {
             wipPane.setResetAuthorChecked(true)
             wipPane.setMessage(Harness.autoActArg, "")
             // The run is deferred, so nothing raises a barrier for it on the way out: the commit is sent from here and
-            // waited out from here. The mark is re-read on the spot rather than carried over from
-            // `prepareCompletion` — the page's own opening fetch can have answered in between.
+            // waited out from here. The mark is re-read on the spot — the page's own opening fetch can
+            // have answered since `prepareCompletion` read it.
             driver.headOidBefore = workTree.headOid
             driver.pressWrite("commit", () => {
                 page.commitNow()
@@ -668,10 +668,10 @@ Item {
     // and is not always true: a stash made on top of it keeps it drawn as its own parent, so `--preset basic` comes
     // back from an amend one row *longer* than it went in, with the commit that was amended still on screen.
     //
-    // That is also why the pane is waited for by the selection rather than by the tip. Where the page puts the reader
+    // That is also why the pane is waited for by the selection. Where the page puts the reader
     // afterwards is its own business and it differs by repository — onto the new tip where the amended row led, back
-    // onto the same commit where the graph still holds it — but either way the shot must not be taken while the pane
-    // is still fetching, and `shown=` is then what says whose name the author line in the picture is.
+    // onto the same commit where the graph still holds it — but either way the shot waits for the pane
+    // to finish fetching, and `shown=` is then what says whose name the author line in the picture is.
     SampleTimer {
         id: resetAuthorLandedTimer
         onTriggered: {
@@ -735,14 +735,14 @@ Item {
     // the run waits out its watchdog on a graph nobody asked to change. What follows the press is the graph barrier
     // (`graphGoneOid`), which is why nothing else is read here.
     //
-    // **The row that has to go is read here rather than at the dispatch.** The walk prepends the working tree's row
+    // **The row that has to go is read here.** The walk prepends the working tree's row
     // only once the status says the tree is stacked on HEAD, and that status can arrive after the graph's first pass —
     // a repository opened onto a stopped merge is the case where it does. Read too early, the verb waits out its
     // watchdog on the newest *commit*, which was never going anywhere (measured, `--preset conflict-staged`).
     SampleTimer {
         id: stashPressTimer
         /// Whether the press is made from the working tree's own row with the pane that describes it open — the seat
-        /// `stash-lands` is about, taken here rather than at the dispatch so the row is there to sit on.
+        /// `stash-lands` is about, taken here so the row is there to sit on.
         property bool fromWip: false
         onTriggered: {
             if (driver.graphTopKind() !== "wip" || page.pageBand === null)
@@ -770,7 +770,7 @@ Item {
         function begin() {
             mergeCommitTimer.wanted = workTree.opSubject
             mergeCommitTimer.headWas = workTree.headOid
-            // Read now rather than at the report: the editor is cleared by the landing, so afterwards every run says
+            // Read now: the editor is cleared by the landing, so afterwards every run says
             // the boxes were empty.
             mergeCommitTimer.typed = wipPane.subjectText !== "" || wipPane.bodyText !== ""
             mergeCommitTimer.seenHead = -1
@@ -779,8 +779,8 @@ Item {
         onTriggered: {
             if (!driver.wroteAndSettled())
                 return
-            // The commit exists; the picture is of the graph holding it. **Against the id it moved from**, not
-            // merely "HEAD is somewhere in the graph": refs and the walk arrive behind the write and behind each
+            // The commit exists; the picture is of the graph holding it. **Against the id it moved
+            // from**: refs and the walk arrive behind the write and behind each
             // other, so the old tip answers that question perfectly well, and the shot came back framing the branch
             // still on it with a working-tree row above (measured).
             if (!workTree.headKnown || workTree.headOid === mergeCommitTimer.headWas

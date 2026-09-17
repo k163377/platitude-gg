@@ -43,11 +43,11 @@ pub fn keep_system_gestures() {
 /// Maximises the window, or puts it back, through the platform's own
 /// command — the same one the band's double-click sends.
 ///
-/// Not the scene's `visibility`: Qt maximises a frameless window by
-/// resizing it, which leaves Windows holding no maximised state at all
-/// (measured: the window covers the work area with `IsZoomed` false), and
-/// putting it back then has nothing to put back. Sending the command
-/// keeps one answer for both gestures (`take_frame_hit_test`).
+/// Qt maximises a frameless window by resizing it, which leaves
+/// Windows holding no maximised state at all (measured: the window
+/// covers the work area with `IsZoomed` false), and putting it back
+/// then has nothing to put back. Sending the command keeps one answer
+/// for both gestures (`take_frame_hit_test`).
 pub fn set_maximized(maximized: bool) {
     #[cfg(windows)]
     win32::set_maximized(maximized);
@@ -58,16 +58,16 @@ pub fn set_maximized(maximized: bool) {
 /// Puts the window down onto the taskbar through the platform's own
 /// command — again the same one the window menu sends.
 ///
-/// Not the scene's `visibility` either, and for a sharper reason than
-/// the maximise: `QWindow::setVisibility(Minimized)` carries a window
-/// state of *minimised alone*, so Qt reads the maximise as being given
-/// up at the same moment and clears `WPF_RESTORETOMAXIMIZED` off the
-/// placement to match (`QWindowsWindow::setWindowState_sys`, Qt 6.10).
-/// The window goes down maximised and comes back an ordinary one
-/// (observed). Windows minimises on its own command without
-/// touching the flag, and Qt keeps the maximised bit when it sees the
-/// resize (`SIZE_MINIMIZED` adds to the state it holds rather than
-/// replacing it), so both sides still agree on the way back up.
+/// The reason is sharper than the maximise's:
+/// `QWindow::setVisibility(Minimized)` carries a window state of
+/// *minimised alone*, so Qt reads the maximise as being given up at the
+/// same moment and clears `WPF_RESTORETOMAXIMIZED` off the placement to
+/// match (`QWindowsWindow::setWindowState_sys`, Qt 6.10). The window
+/// goes down maximised and comes back an ordinary one (observed).
+/// Windows minimises on its own command without touching the flag, and
+/// Qt keeps the maximised bit when it sees the resize (`SIZE_MINIMIZED`
+/// adds to the state it holds), so both sides still agree on the way
+/// back up.
 pub fn minimize() {
     #[cfg(windows)]
     win32::minimize();
@@ -78,7 +78,7 @@ pub fn minimize() {
 /// whether it had to. Windowed windows only — a maximised one is the
 /// platform's own arrangement.
 ///
-/// **Named, because "the monitor it came up on" is the wrong monitor.**
+/// **Named, because the right monitor is the saved one.**
 /// Where the platform first puts a window is the pointer's screen, and
 /// fitting the restore to that one is how a window saved on another
 /// monitor ended up on this one (2026-09-05 実測, P3-確認事項). An empty
@@ -91,8 +91,8 @@ pub fn minimize() {
 /// remembered 1920 came back as a 1936-wide frame at x=-5 on a 1920
 /// monitor).
 ///
-/// Shrinks only as far as it must, and moves rather than shrinks
-/// wherever moving is enough.
+/// Moves wherever moving is enough, and shrinks only as far as it
+/// must.
 #[cfg(windows)]
 pub fn fit_to_work_area(screen: &str) -> bool {
     win32::fit_to_work_area(screen)
@@ -106,21 +106,21 @@ pub fn fit_to_work_area(screen: &str) -> bool {
     false
 }
 
-// Do not answer `WM_NCCALCSIZE` ("the client is the whole window") from a
-// subclass: Qt never sees the message and keeps the frame margins it
-// cached at creation, so the client grows and the scene does not
-// (measured: frame and client both 1450x908 with the scene still drawing
-// 1434x900, black down the right-hand edge and along the bottom).
-// Nudging the size, forcing a frame recalculation and letting the message
-// through first were all tried; none make Qt re-measure. What would is a
-// way to set the window's custom margins, which the bridge does not
-// expose.
+// `WM_NCCALCSIZE` ("the client is the whole window") is Qt's to
+// answer. From a subclass, Qt never sees the message and keeps the
+// frame margins it cached at creation, so the client grows and the
+// scene does not (measured: frame and client both 1450x908 with the
+// scene still drawing 1434x900, black down the right edge and along
+// the bottom). Nudging the size, forcing a recalculation and letting
+// the message through first were all tried; none make Qt re-measure.
+// What would is a way to set the window's custom margins, which the
+// bridge does not expose.
 
 /// Takes `WM_NCHITTEST` away from Qt for the windows that are up, and
 /// answers it from the strips `set_caption_strips` describes.
 ///
-/// This is not an optimisation, it is the bug fix. Qt 6.10's own answer
-/// for an `ExpandedClientAreaHint` + `CustomizeWindowHint` window
+/// This is the bug fix. Qt 6.10's own answer for an
+/// `ExpandedClientAreaHint` + `CustomizeWindowHint` window
 /// (`QWindowsWindow::handleNonClientHitTest`) polls `GetAsyncKeyState`
 /// on *every* hit test, compares it against one `static` button state,
 /// and on an edge delivers a synthesised press or release straight into
@@ -142,7 +142,7 @@ pub fn fit_to_work_area(screen: &str) -> bool {
 /// behaviour — drag, snap, double-click, and the window menu on
 /// right-click — through the front door.
 ///
-/// This does not cross the `WM_NCCALCSIZE` finding above: that message
+/// This agrees with the `WM_NCCALCSIZE` finding above: that message
 /// feeds frame metrics Qt caches and must keep seeing, while this one
 /// is a pure query answered fresh every time, with no Qt state behind
 /// it.
@@ -151,9 +151,9 @@ pub fn take_frame_hit_test() {
     win32::take_frame_hit_test();
 }
 
-// The scene is never told the resize border's width. `hit_test` measures
-// the edges by it, in device pixels, and is the only reader (written up
-// on `Main.mainUi`).
+// The resize border's width stays here: `hit_test` measures the edges
+// by it, in device pixels, and is the only reader (written up on
+// `Main.mainUi`).
 
 /// Where the band's empty runs sit, in logical scene pixels: each from
 /// its `x0` to its `x1`, all of them reaching down from the window's top
@@ -161,8 +161,8 @@ pub fn take_frame_hit_test() {
 /// carries them. The subclass turns them into device pixels itself, per
 /// hit test, so a DPI change needs no new report.
 ///
-/// All of them together, on every report: a run that has gone comes back
-/// as an empty one rather than being left behind at the width it had.
+/// All of them together, on every report: a run that has gone comes
+/// back as an empty one.
 pub fn set_caption_strips(runs: [(f64, f64); CAPTION_RUNS], bottom: f64) {
     #[cfg(windows)]
     win32::set_caption_strips(runs, bottom);

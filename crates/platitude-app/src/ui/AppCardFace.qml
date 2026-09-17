@@ -2,10 +2,10 @@ import QtQuick
 import platitude.ui
 
 // The face every card, menu and dialog in the app is drawn on: the elevated ground and the frame that floats it above
-// whatever it covers (規約 §メニュー). Menus and dialogs are not popups and popups are not menus, so the ground they share is
-// a `background:` rather than a base type — `AppCard` is the popup that stands on this one.
+// whatever it covers (規約 §メニュー). Menus, dialogs and popups each need their own component, so the ground they share is
+// a `background:` — `AppCard` is the popup that stands on this one.
 //
-// `SectionPeekPopup` and the sidebar's own band keep `bgSurface` instead: what is in them is a piece of the sidebar,
+// `SectionPeekPopup` and the sidebar's own band keep `bgSurface`: what is in them is a piece of the sidebar,
 // and its header band would be lost against `bgElevated`.
 Rectangle {
     id: face
@@ -13,7 +13,7 @@ Rectangle {
     /// Whether the face has to report the pointer resting on it, for a card that closes when the hand leaves
     /// (`AppCard.pointerInside`).
     ///
-    /// Off unless asked, and the handler stands on an item of its own rather than on the face: a `HoverHandler` turns
+    /// Off unless asked, and the handler stands on an item of its own: a `HoverHandler` turns
     /// hover on for the item it is declared under whether or not anyone reads it, and a face with hover on stops the
     /// hover reaching what the card is lying over. An invisible item is skipped by the delivery walk outright, so an
     /// unwatched face costs nothing.
@@ -45,7 +45,7 @@ Rectangle {
     /// The hand a range selection over this card's words is taken with, named so a run can enter it
     /// (`<card>.background.pad`, the way `tip-copy` reaches `tip.contentItem`).
     property alias pad: sweepHand
-    // It stands in the ground rather than over the content, so it is reached only where nothing else took the press
+    // It stands in the ground, so it is reached only where nothing else took the press
     // (measured, qmltestrunner `tst_cardpad`).
     SweepPad {
         id: sweepHand

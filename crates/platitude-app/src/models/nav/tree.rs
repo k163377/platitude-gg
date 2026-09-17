@@ -34,8 +34,8 @@ impl NavSectionModel {
                 out.push(Arranged::Made(Box::new(NavItem {
                     name: label,
                     full: key.clone(),
-                    // `full` is the fold key, not a path; the path itself
-                    // rides in the rename slot (see `NavItem::orig_path`).
+                    // `full` is the fold key; the path itself rides in
+                    // the rename slot (see `NavItem::orig_path`).
                     orig_path: path.clone(),
                     group: group.to_string(),
                     depth,
@@ -77,9 +77,9 @@ impl NavSectionModel {
     /// Turns the flat sorted name list into an indented tree with
     /// collapsible folder rows for every `/` level.
     ///
-    /// The leaves are pointed at rather than copied: what a row of the
-    /// tree adds to the name the source holds is its depth, and the
-    /// segment it shows falls out of that (`shown_name`).
+    /// The leaves are pointed at: what a row of the tree adds to the name
+    /// the source holds is its depth, and the segment it shows falls out
+    /// of that (`shown_name`).
     pub(super) fn build_tree(&self) -> Vec<Arranged> {
         let mut out = Vec::new();
         let mut open_path: Vec<String> = Vec::new();
@@ -87,11 +87,11 @@ impl NavSectionModel {
         let mut collapsed_at: Option<usize> = None;
 
         for at in 0..self.all.len() {
-            // Skipped before its folders are opened, not after: the rows
-            // that carry a `/` are the only thing that puts a folder row
-            // on screen, so a leaf shown as gone takes with it any folder
-            // it was the last of — and leaves the ones it shared standing,
-            // because the next leaf opens those itself.
+            // Skipped before its folders are opened: the rows that carry
+            // a `/` are the only thing that puts a folder row on screen,
+            // so a leaf shown as gone takes with it any folder it was the
+            // last of — and leaves the ones it shared standing, because
+            // the next leaf opens those itself.
             let Some(leaf) = self.all.entry(at).filter(|_| !self.hidden_at(at)) else {
                 continue;
             };

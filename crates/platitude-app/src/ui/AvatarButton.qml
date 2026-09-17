@@ -27,17 +27,17 @@ Item {
     property string signatureSigner: ""
     property bool signaturePointedAt: false
     /// The sentence the mark's own tooltip carries. Left alone it reads git's verdict code; the editor's badge is a
-    /// setting rather than a verdict and hands its own in.
+    /// setting and hands its own in.
     property alias signatureTip: sigMark.tip
     /// The ink both corner badges are drawn at. `iconSm` on the details pane's 40px face; a face smaller than that
     /// hands in `iconXs`, since the badge's share of what it covers is the only lever there is (§アバターを与える).
     property int badgeInk: Theme.iconSm
     /// How far the signature mark's **ink** is to stand past the face's square, up and to the right. The round face
-    /// leaves that corner empty, so the mark lands on the pane's own ground rather than on anybody's picture — and how
+    /// leaves that corner empty, so the mark lands on the pane's own ground — and how
     /// far it may go is set by what stands next to it, which only the pane knows (§署名の表示). Two numbers, because
     /// the air above the face and the air beside it are rarely the same.
     ///
-    /// Ink, not box: the mark's own square holds air past its tick, and this adds that back (`SignatureMark.inkAir*`),
+    /// Ink: the mark's own square holds air past its tick, and this adds that back (`SignatureMark.inkAir*`),
     /// so what the pane asks for is the distance it can actually see.
     property real badgeTopOut: 0
     property real badgeRightOut: 0
@@ -80,7 +80,7 @@ Item {
         }
     }
     // The other corner, pushed out of it by however much the pane says. Always out when there is a signature to speak
-    // of, since it is a state of the commit rather than an affordance of the pointer.
+    // of, since it is a state of the commit.
     SignatureMark {
         id: sigMark
         anchors.right: parent.right
@@ -92,7 +92,7 @@ Item {
         signer: avatarBox.signatureSigner
         pointedAt: avatarBox.signaturePointedAt
         ink: avatarBox.badgeInk
-        // Anchored rather than laid out, so the implicit size has to be taken by hand.
+        // Anchored, so the implicit size has to be taken by hand.
         width: sigMark.implicitWidth
         height: sigMark.implicitHeight
     }
@@ -110,8 +110,8 @@ Item {
     // reached for, so the face's sentence stands down while it is there.
     ToolTip.visible: avatarBox.showBadge && !sigMark.pointed
     ToolTip.delay: Metrics.tipDelayMs
-    // The one word the whole feature goes by (デザイン規約 §アバターを与える). The article is what splits the two states, not a
-    // second noun: the one being changed is the face under the pointer, the one being chosen does not exist yet (§長さ).
+    // The one word the whole feature goes by (デザイン規約 §アバターを与える). The article is what splits the two states:
+    // the one being changed is the face under the pointer, the one being chosen does not exist yet (§長さ).
     ToolTip.text: avatarBox.faceUrl !== "" ? qsTr("Change the avatar for %1").arg(avatarBox.email)
                   : qsTr("Choose avatar for %1").arg(avatarBox.email)
 }

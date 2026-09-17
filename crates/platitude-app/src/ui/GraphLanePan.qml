@@ -46,7 +46,7 @@ MouseArea {
     /// strip's own frame, so **the mapping from the point to a row is the strip's own**, which is the half worth
     /// proving (PGG_AUTO_ACT=graph-reclick-lanes). Answers false where the point is on no row.
     ///
-    /// **It goes in at the handler's own body**, not beside it: a hook that did what the handler would have done
+    /// **It goes in at the handler's own body**: a hook that did what the handler would have done
     /// stays green while the handler does something else, which is exactly how the gap this proves survived a run.
     function clickAt(x, y) {
         return pan.pressLanded({ "x": x, "y": y }, 0)
@@ -60,8 +60,8 @@ MouseArea {
         const idx = pan.view.indexAt(pan.columns.labelW + 1, pan.view.contentY + p.y)
         return idx < 0 ? null : pan.view.itemAtIndex(idx)
     }
-    // **The lanes are part of the row, so both gestures are the row's own.** Handed straight to the row rather than
-    // worked out again here: where a row leads and what a second click on it means are decided in one place
+    // **The lanes are part of the row, so both gestures are the row's own.** Handed straight to the row:
+    // where a row leads and what a second click on it means are decided in one place
     // (`GraphRowDelegate`), and this strip covers the whole of the column between the two dividers — the half of the
     // row a reader is most likely to aim at when the graph is wide. Answering it with a copy of half of what a click
     // does is how the name gesture came to do nothing there, in exactly the repositories wide enough to raise this
@@ -86,7 +86,7 @@ MouseArea {
         return true
     }
     /// A press under the last row. The only thing down there is the window's own footer, and it takes presses now
-    /// (`GraphTailFooter.loadMore`) — handed over rather than answered here, for the reason the rows' gestures are:
+    /// (`GraphTailFooter.loadMore`) — handed over, for the reason the rows' gestures are:
     /// what a press on the cut means is decided in one place.
     function tailPressed(at) {
         const tail = pan.view.footerItem

@@ -20,15 +20,15 @@ Item {
     /// (`models::details::FileItem`), which is the answer below; a working copy's spell it `full`
     /// (`models::nav::Role`), so the pane showing one says so.
     ///
-    /// **A role this model does not answer is not an error** — it reads back `undefined`, says nothing about it, and
-    /// leaves every row holding the same empty string. Two of those match, so the whole list lights up the moment
+    /// **A role this model does not answer reads back `undefined`** — silently, leaving every row holding the same
+    /// empty string. Two of those match, so the whole list lights up the moment
     /// nothing is being read, and none of it lights while something is (observed on the carried pane).
     property string pathText: model.path ?? ""
     /// Which side of the index this row's bytes are on, empty for a commit's changed files — those sit in no bucket.
     /// A working copy's rows carry one (`Bucket::routing_of`), and it is half of what addresses the file: the page
     /// opens the diff by the pair.
     property string bucket: ""
-    /// What a folder row folds by. **Not always the path above**: a commit's changed files keep one field for both
+    /// What a folder row folds by. **A key of its own**: a commit's changed files keep one field for both
     /// (`models::details::FileItem.path`), which is the answer here; a working copy's model folds by `<run>:<path>`
     /// and keeps the path itself beside it, so a pane on that one says which is which. A file row never folds.
     property string foldKey: fileRow.pathText
@@ -41,7 +41,7 @@ Item {
     /// sidebar's model packs it into the change code, so a pane on that one says so (`NameCell.folded`, which is
     /// asked the same way and for the same reason).
     property bool isFolded: (model.collapsed ?? false) === true
-    /// The path the middle pane is reading, handed down by the pane — one copy there rather than one per row. A folder
+    /// The path the middle pane is reading, handed down by the pane — one copy for the whole list. A folder
     /// is never it: a folder has no diff, and its own path is the fold key.
     property string readPath: ""
     readonly property bool selected: !fileRow.isFolder && fileRow.pathText === fileRow.readPath
@@ -51,12 +51,12 @@ Item {
     /// That name while the row is painted as the one being read, empty otherwise — what a headless run reads off the
     /// list. The rectangle's own `visible`, since reading the condition back would go green with the rectangle unwired.
     readonly property string litKey: selectedBox.visible ? fileRow.walkKey : ""
-    /// The same rectangle as a bare answer. **The name above cannot count** — it carries the row's own path, which is
-    /// the very thing a list lighting every row it has failed to read, so rows counted by it come to none exactly
-    /// where the count is worth taking (`FileRowWalk.litRows`).
+    /// The same rectangle as a bare answer. **Counted on this one** — the name above carries the row's own path,
+    /// which is the very thing a list lighting every row it has failed to read, so a count off it comes to none
+    /// exactly where it is worth taking (`FileRowWalk.litRows`).
     readonly property bool litNow: selectedBox.visible
-    /// The turn this row's fold arrow is drawn at, -1 on a file row — what a headless run reads instead of the flag
-    /// behind it, since reading the flag back would go green with the arrow unwired (`NameCell.foldTurn`).
+    /// The turn this row's fold arrow is drawn at, -1 on a file row — what a headless run reads, since the flag
+    /// behind it would go green with the arrow unwired (`NameCell.foldTurn`).
     readonly property real foldTurn: nameCell.foldTurn
 
     /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed
@@ -107,7 +107,7 @@ Item {
         id: nameCell
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceXs + (fileRow.model.depth ?? 0) * Theme.spaceMd
-        // Not padding: the gutter the list's own scroll bar is drawn in. This list is the details pane's, so the bar
+        // The gutter the list's own scroll bar is drawn in. This list is the details pane's, so the bar
         // is the pane's own slab — 5px of ink against the edge and 3 of ground behind it — and anything short of this
         // stands the last glyph of an elided name under it (デザイン規約 §余白).
         anchors.rightMargin: Theme.navBarGutter
@@ -126,7 +126,7 @@ Item {
     // Hover says the path, whatever the row shows and however wide the pane is (デザイン規約 §hover のツールチップ). Asking
     // whether the row had already said it — tree leaf against paths view, and either against what the pane elided —
     // bought a repeat avoided at the price of a condition nobody could read off the screen.
-    // Not behind a standing menu: the pointer is in the menu, and a tip that comes out now is drawn over the rows the
+    // Gone behind a standing menu: the pointer is in the menu, and a tip coming out now is drawn over the rows the
     // hand is reading (デザイン規約 §メニュー).
     ToolTip.visible: (fileMouse.containsMouse || fileRow.tipPointedAt) && !fileRow.menuStanding
     ToolTip.delay: Metrics.tipDelayMs

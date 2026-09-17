@@ -10,16 +10,16 @@ import platitude.ui
 // character the count sees and the font draws nothing for. No Rust test reaches it, and the headless screenshots
 // cannot judge it either (a diff sent to its end and one with nowhere to go photograph alike).
 //
-// **The expected width is taken from what the pane is supposed to draw, never from the same instrument**: the rulers
-// read the row's markup as `StyledText`, and every case here is held against a `PlainText` Label carrying the
-// characters that markup stands for. A ruler left on `AutoText` agrees with itself about a line of source that looks
-// like markup; it does not agree with this.
+// **The expected width is taken from what the pane is supposed to draw**: the rulers read the row's markup as
+// `StyledText`, and every case here is held against a `PlainText` Label carrying the characters that markup
+// stands for. A ruler left on `AutoText` agrees with itself about a line of source that looks like markup; it
+// does not agree with this.
 Item {
     id: root
     width: 400
     height: 200
 
-    /// Lines built from code points rather than written out: these are rulers, not words (`DiffTextMetrics`).
+    /// Lines built from code points: these are rulers (`DiffTextMetrics`).
     readonly property string wideLine: String.fromCharCode(0x65e5).repeat(400)
     readonly property string narrowLine: "0".repeat(700)
     readonly property string mixedLine:
@@ -97,8 +97,8 @@ Item {
             font.bold: true
         }
     }
-    /// How far the furthest of them is drawn, as far as they have settled. **Never read at a moment of anyone's
-    /// choosing**: a `Text` answers with every glyph at the family's own advance until the fallback carrying the wide
+    /// How far the furthest of them is drawn, as far as they have settled. **The rows name the moment they are
+    /// read at**: a `Text` answers with every glyph at the family's own advance until the fallback carrying the wide
     /// ones is resolved, and a rendered frame is not something a test window is promised
     /// (`waitForRendering` answers false on a real platform). What the cases below wait for is the two sides
     /// agreeing, which is only true once both have settled.
@@ -124,9 +124,9 @@ Item {
         name: "DiffReach"
         when: windowShown
 
-        /// The pane's answer and the characters it stands for, once both have settled. Held as one condition rather
-        /// than read one after the other: neither side is finished at a moment this test can name, and a zero on
-        /// both sides is two things not measured yet rather than an agreement.
+        /// The pane's answer and the characters it stands for, once both have settled. Held as one condition:
+        /// neither side is finished at a moment this test can name, and a zero on both sides means two things
+        /// still to be measured.
         function agreed() {
             return metrics.codeW > 0 && metrics.codeW === root.drawnWidth()
         }
@@ -158,8 +158,8 @@ Item {
             tryVerify(agreed)
         }
 
-        /// The packing carries a length rather than a mark between records, because the text is somebody's file and
-        /// can hold anything — including the digits and colons the length itself is spelled with.
+        /// The packing carries a length, because the text is somebody's file and can hold anything — including
+        /// the digits and colons the length itself is spelled with.
         function test_a_line_holding_the_packings_own_marks_is_cut_out_whole() {
             const awkward = ["12:34:56 and a tab's worth of spaces    done"]
             root.shown = awkward
@@ -167,8 +167,8 @@ Item {
             tryVerify(agreed)
         }
 
-        /// Nothing picked measures at nothing, which is not a diff with nowhere to go: holding the width through the
-        /// gap is `DiffReach`'s to do, and the cases below are where it is held against.
+        /// Nothing picked measures at nothing, and holding the width through that gap is `DiffReach`'s to do —
+        /// the cases below are where it is held against.
         function test_nothing_picked_measures_at_nothing() {
             root.shown = []
             diffModel.widestLines = ""

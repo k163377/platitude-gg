@@ -10,7 +10,7 @@ import platitude.ui
 // came out to, which nothing outside a laid-out chip knows.
 //
 // The records are the fixed-width flags plus a name (`encode::labels`): kind, is-head, on-a-remote, has-a-PR, here,
-// held elsewhere. Spelled out rather than assembled, so a flag that moves is a test that fails.
+// held elsewhere. Spelled out whole, so a flag that moves is a test that fails.
 Item {
     id: root
     width: 400
@@ -21,7 +21,7 @@ Item {
     readonly property string local2: "L00010hotfix"
     readonly property string held: "L00011spike"
     readonly property string remote: "R00000origin/preview"
-    /// A working copy standing on this commit with no branch out — a marker rather than a ref, and a colour of its
+    /// A working copy standing on this commit with no branch out — a marker, and a colour of its
     /// own (デザイン規約 §ref の種別).
     readonly property string copy: "W00010rig"
     readonly property string tagHere: "T00010v1.0"
@@ -36,7 +36,7 @@ Item {
         id: stack
         maxWidth: 200
     }
-    /// A card of the kind the chip's list is made of: one name, wrapped rather than cut, and a room handed to it from
+    /// A card of the kind the chip's list is made of: one name, wrapped, and a room handed to it from
     /// outside. The list hands over a room of its own as it opens and reads the width back in that same turn, which is
     /// the whole of what `RefChipRoom` is about.
     RefChip {
@@ -81,7 +81,7 @@ Item {
         function test_the_front_card_s_own_colour_is_the_one_that_may_come_twice() {
             stack.records = [root.tagHere, root.tagHere2, "T00010v1.2", "T00010v1.3"]
             compare(stack.sheets, ["tag"])
-            // And it stands out by the step every other sheet stands out by: the repeat is not spaced away from the
+            // And it stands out by the step every other sheet stands out by: the repeat sits one step from the
             // card it repeats.
             compare(stack.layout[0].x, stack.step)
         }
@@ -127,8 +127,8 @@ Item {
         function test_every_colour_at_once_is_one_sheet_apiece() {
             stack.records = [root.head, root.current, root.local2, root.held,
                              root.remote, root.copy, root.tagHere, root.tagAway]
-            // **The working copy's marker adds no sheet of its own**: it wears the frame a branch another copy holds
-            // wears, and a sheet is a colour rather than a record (デザイン規約 §重ね表示).
+            // **The working copy's marker wears the frame a branch another copy holds wears**, and a sheet is a
+            // colour (デザイン規約 §重ね表示).
             compare(stack.sheets, ["local", "held", "remote", "tag", "tagdim"])
             compare(stack.sheets.length, stack.maxSheets)
         }
@@ -137,8 +137,8 @@ Item {
         function test_the_row_with_a_second_local_on_it() {
             stack.records = [root.current, root.local2, root.remote, root.tagHere]
             compare(stack.sheets, ["local", "remote", "tag"])
-            // One step apiece, all the way back: the sheet of the card's own colour is not spaced any further out
-            // than the two behind it.
+            // One step apiece, all the way back: the sheet of the card's own colour steps out the same as the
+            // two behind it.
             for (let i = 0; i < stack.layout.length; ++i)
                 compare(stack.layout[i].x, (i + 1) * stack.step)
         }
@@ -153,9 +153,9 @@ Item {
                     [root.current, root.local2, root.held, root.remote, root.tagHere, root.tagAway]]
         }
 
-        // One slope for every row, at every depth: a sheet is a step right and the row's own drop down wherever it
-        // stands, the fan fits the row it is drawn in, and the row centres the card and the fan together rather than
-        // the card alone.
+        // One slope for every row, at every depth: a sheet is a step right and the row's own drop down wherever
+        // it stands, the fan fits the row it is drawn in, and the row centres the card and the fan
+        // together.
         function test_every_sheet_takes_the_same_step_and_the_row_centres_the_stack() {
             const rows = depths()
             for (let i = 0; i < rows.length; ++i) {
@@ -179,10 +179,10 @@ Item {
         }
 
         // How far the fan falls is the row's own, and how many sheets it carries is what decides it: the steepest
-        // whole step that many of them fit the row at, never past the step they stand out by (デザイン規約 §重ね表示).
-        // **The rule rather than the pixels** — what is held here is that no row leaves a step it had the room for and
-        // no deeper row fans steeper than a shallower one, so a token that moves the row or the chip moves the
-        // answers without moving the test.
+        // whole step that many of them fit the row at, capped at the step they stand out by (デザイン規約 §重ね表示).
+        // **The rule is what is held** — every row takes the whole step it has the room for, and a deeper fan
+        // falls no further than a shallower one, so a token that moves the row or the chip moves the answers
+        // without moving the test.
         function test_the_count_decides_how_far_the_fan_falls() {
             const rows = depths()
             const drops = []
@@ -259,16 +259,16 @@ Item {
         }
 
         // Every term the frame spends beside the name is in `furnitureW`, so the contents of the worst-dressed card
-        // come to exactly the room inside its frame — never past it. A forgotten term is a name handed room the frame
-        // does not have, and the frame clips its own right-hand end — the count first, since it stands last, and a
-        // `+41` cut to `+4` is a wrong number rather than a missing one.
+        // come to exactly the room inside its frame. A forgotten term is a name handed room the frame does not
+        // have, and the frame clips its own right-hand end — the count first, since it stands last, and a `+41`
+        // cut to `+4` is a wrong number.
         function test_the_dressed_card_s_contents_stop_at_its_frame() {
             stack.records = [root.dressed].concat(tags(41))
             const chip = stack.chipItem
             verify(chip.hasCount && chip.hasBadge && chip.recHeld, "the card is not the worst-dressed one")
             // The row inside the frame is a positioner and the name inside it elides: both answer their width in a
-            // pass after the records land, not in the turn that assigns them. **Waited out, not sampled** — a read
-            // taken at the first pass that answers anything at all catches the name at its unelided width.
+            // pass after the records land. **Waited out** — a read taken at the first pass that answers anything
+            // at all catches the name at its unelided width.
             verify(waitForRendering(stack), "the stack was laid out and drawn")
             fuzzyCompare(chip.contentW, chip.maxWidth - 2 * Theme.spaceXs, 0.01)
             compare(chip.width, chip.maxWidth)
@@ -299,9 +299,9 @@ Item {
                    "the floor left the count out")
         }
 
-        // **The column opens at `Metrics.labelColW` without being clamped** (`GraphColumnMetrics.labelW` — only a
-        // width a hand dragged is held inside the two ends), so a floor that rose past it would open every window
-        // with the chip already crushed. Every term added to the furniture is spent out of this margin.
+        // **The column opens at `Metrics.labelColW`** (`GraphColumnMetrics.labelW` — only a width a hand dragged
+        // is held inside the two ends), so a floor that rose past it would open every window with the chip
+        // already crushed. Every term added to the furniture is spent out of this margin.
         function test_the_column_opens_no_narrower_than_its_own_floor() {
             verify(columns.labelColWMin <= Metrics.labelColW,
                    "the floor " + columns.labelColWMin + " is past the width the column opens at "

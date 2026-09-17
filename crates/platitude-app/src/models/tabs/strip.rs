@@ -19,10 +19,10 @@ impl TabsModel {
     /// appear (opening and restoring) ask here, so the two cannot come
     /// to different conclusions about the same folder.
     ///
-    /// Compared by `repo::open_key` rather than by the string: the same
-    /// folder arrives spelled differently depending on the way in, and
-    /// the worktree row — the row naming the repository already open —
-    /// is the one that arrives in git's spelling every time.
+    /// Compared by `repo::open_key`: the same folder arrives spelled
+    /// differently depending on the way in, and the worktree row — the
+    /// row naming the repository already open — is the one that arrives
+    /// in git's spelling every time.
     ///
     /// Resolves every open tab's path, so the cost is one filesystem
     /// lookup per tab. That is bounded by the cap on the tab list and is
@@ -80,9 +80,9 @@ impl TabsModel {
     }
 
     /// Hands the hub the tab strip as it stands. Opening, closing and
-    /// switching are single acts rather than something that moves under a
-    /// dragging hand, so they report as they happen; the file itself is
-    /// still only written by the flush.
+    /// switching are single acts, so they report as they happen; the
+    /// file itself is still only written by the
+    /// flush.
     ///
     /// **Called before the act's own `current_index_changed()`**, because
     /// this is also where the tab in front is named ([`settle_current`]) —
@@ -99,8 +99,8 @@ impl TabsModel {
         // Named the way the file names it. The store normalises separators
         // on the way out anyway, so handing it the raw path would leave the
         // state held here unequal to the one on disk — harmless today only
-        // because the flush compares against what it last wrote rather than
-        // against the file.
+        // because the flush compares against what it last
+        // wrote.
         let paths = self
             .items
             .iter()
@@ -115,9 +115,9 @@ impl TabsModel {
     /// From [`report`], which every act on the strip ends with — so a tab
     /// opened, closed, renamed against a new namesake or carried past its
     /// neighbour all land here, and those are the four things that can
-    /// change what the list says. The path is the row's own spelling
-    /// rather than the store's: it is what the reader hands back when
-    /// they pick a name, and git is run in it.
+    /// change what the list says. The path is the row's own spelling: it
+    /// is what the reader hands back when they pick a name, and git is
+    /// run in it.
     ///
     /// Silent when nothing came out different — the act that ends here is
     /// usually a switch, which moves neither a name nor an order.
@@ -158,8 +158,8 @@ pub(super) fn title_of(path: &str) -> String {
 /// taken out and put down at `to`.
 ///
 /// Everything between the two shifts by one, towards the place the moved
-/// row left. `current` is a position rather than a tab: a strip with
-/// nothing in front of it says -1, and no move gives it a tab.
+/// row left. `current` is a position: a strip with nothing in front of
+/// it says -1, and no move gives it a tab.
 pub(crate) fn index_after_move(current: i32, from: usize, to: usize) -> i32 {
     let Ok(at) = usize::try_from(current) else {
         return current;

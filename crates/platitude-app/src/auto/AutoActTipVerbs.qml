@@ -7,13 +7,13 @@ import platitude
 import platitude.ui
 
 /// The cards and tooltips something puts out under a pointer — the signature, a stash, a path, an author, the
-/// people a message credits. Hover cannot be injected, so each of these names its target instead.
+/// people a message credits. Each of these names its target — hover cannot be injected.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -33,7 +33,7 @@ Item {
     readonly property var carriedPane: driver.carriedPane
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb has one family (`AutoActDriver`).
     function run(act, arg) {
         if (act === "signature") {
             // The mark appears when the verify comes back, so the report waits for it.
@@ -45,14 +45,14 @@ Item {
             signatureTipTimer.start()
         } else if (act === "stash-tip") {
             // The box is asked why it refuses the caret — the row decides which refusal answers. `older` names the
-            // row under HEAD's, so the commit that is not HEAD's own is found without reading a preset's order.
+            // row under HEAD's, so a commit other than HEAD's own is found off the graph itself.
             page.activateRow(graphModel.oidAt(
                 arg === "older" ? graphModel.rowOf(workTree.headOid) + 1 : Number(arg)))
             stashTipTimer.start()
         } else if (act === "path-tip") {
             // Row 0 is the elided leaf in the flattened view, the folder chain in the tree (`-tree`). The argument
             // picks the pane the way `corner` does, with one more: `carried:<copy>` is another working copy's, which
-            // is named rather than numbered — its rows all answer to the same all-zero id (`driver.rowOfCopy`).
+            // is named — its rows all answer to the same all-zero id (`driver.rowOfCopy`).
             // **The tree's suffix is read off the whole argument**, so a copy whose own folder ends in `-tree` is
             // read as the tree form of a copy without it; the presets hold no such name.
             const wantsTree = ("" + arg).endsWith("-tree")
@@ -225,13 +225,13 @@ Item {
             driver.complete()
         }
     }
-    // A tooltip's words are a field, not a label (`CardText`), and this is the run that says so: it takes the whole of
+    // A tooltip's words are a field (`CardText`), and this is the run that says so: it takes the whole of
     // the tip into a selection the way a reader's drag would, and reports what came back against what the tip is
     // showing. **Selection is as far as a run can go** — the clipboard belongs to the platform, and a run that wrote to
-    // it would be testing Qt rather than this window; the walk from the row into the tip cannot be injected at all
+    // it would be testing Qt; the walk from the row into the tip cannot be injected at all
     // (verify-ui スキル), so that half is measured on a throwaway qmltestrunner scene.
     //
-    // Asked of the contentItem without checking what it is: a tip wearing the style's own `Text` again has no
+    // Asked of the contentItem, whatever it is: a tip wearing the style's own `Text` again has no
     // `selectAll` and the run dies on the spot, which is the answer.
     SampleTimer {
         id: tipCopyTimer
@@ -250,7 +250,7 @@ Item {
             driver.complete()
         }
     }
-    // ...and the same words taken from the band around them rather than from the words themselves — the padding a tip
+    // ...and the same words taken from the band around them — the padding a tip
     // keeps between its ground and its sentence, which is the whole of a tooltip's air (規約 §hover のツールチップ).
     //
     // **The starts are the air itself, sampled** (`SweepPad.airPoints`): a grid over the tip with the points standing
@@ -259,7 +259,7 @@ Item {
     // taken back out. `air=` is beside `reach=` because a tip is a small box: a run that found two places to press
     // has said less than one that found twenty, and the number says which it was.
     //
-    // Reached the way `tip-copy` reaches the words — off the tip's own parts, without checking what they are. A ground
+    // Reached the way `tip-copy` reaches the words — off the tip's own parts, whatever they are. A ground
     // that lost its pad dies here, which is the answer.
     SampleTimer {
         id: tipSweepTimer
@@ -271,7 +271,7 @@ Item {
             if (!tip.visible || tip.width <= 0)
                 return
             tipSweepTimer.stop()
-            // **`all=` is the claim, not `reach=`**: how many places a tip's air has depends on how long the path is
+            // **`all=` is the claim**: how many places a tip's air has depends on how long the path is
             // and on which machine drew it, so the number is a diagnosis and "every one of them, and there was at
             // least one" is the judgement. `caret=` is the half a selection does not say — `Ctrl+C` goes to the field
             // holding the keyboard, so a value picked out without one is not a value the reader can take away. The
@@ -313,8 +313,8 @@ Item {
             if (Harness.autoAct === "co-authors-open" && !detailsPane.authorCards.matesCardOpen)
                 return
             coAuthorTimer.stop()
-            // `open` is the card's own visibility, not the input that asked for it: reporting the input would go green
-            // with the binding cut. `cut=` is the credit line's own eliding, read rather than judged (verbs.md).
+            // `open` is the card's own visibility: reporting the input that asked for it would go green
+            // with the binding cut. `cut=` is the credit line's own eliding, read as it is (verbs.md).
             Harness.report(
                 "co_authors count=" + detailsPane.messageBlock.coAuthorRecords.length
                 + " cut=" + detailsPane.messageBlock.matesClipped

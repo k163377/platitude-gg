@@ -46,8 +46,8 @@ Item {
     /// nobody is at, whose offscreen platform reports an 800x800 screen that would cut every window down to fit.
     property bool keepSavedSize: false
 
-    /// A remembered length, kept inside the screen the window comes up on. `Screen.width`, *not*
-    /// `Screen.desktopAvailableWidth` — that is the whole virtual desktop (measured on a three-monitor machine: 5760,
+    /// A remembered length, kept inside the screen the window comes up on. `Screen.width` —
+    /// `Screen.desktopAvailableWidth` is the whole virtual desktop (measured on a three-monitor machine: 5760,
     /// so nothing is ever wider).
     function insideScreen(saved, screen) {
         return shape.keepSavedSize ? saved : Math.min(saved, screen)
@@ -56,13 +56,13 @@ Item {
     /// The screen the saved top-left corner falls on, or `null` for a position nobody saved and for one whose screen
     /// is not here any more — a monitor unplugged since the run that wrote it.
     ///
-    /// **The saved place decides the screen, not the window and not the pointer.** Before this, everything about the
+    /// **The saved place decides the screen.** Before this, everything about the
     /// restore was measured against wherever the platform had just put the window — which on Windows is the screen
     /// the pointer is on — so a window saved on one monitor was sized to another monitor's width and pulled into that
     /// monitor's work area (2026-09-05 実測, P3-確認事項). Both of those are answers to "where is it now", and the
     /// question is "where was it left".
     ///
-    /// Takes the list rather than reading `Qt.application.screens` itself, so the arithmetic can be held against a
+    /// Takes the list, so the arithmetic can be held against a
     /// desktop this machine does not have (`tst_windowshape`).
     function screenHolding(x, y, screens) {
         if (x === shape.unplaced || y === shape.unplaced)
@@ -76,9 +76,9 @@ Item {
         return null
     }
 
-    // The size and place the window was left in. Assigned rather than bound: from here on the window manager and the
-    // person dragging it own these. An unsaved position stays unset so the platform places the window itself — a first
-    // run should not open at 0,0.
+    // The size and place the window was left in. Assigned: from here on the window manager and the
+    // person dragging it own these. An unsaved position stays unset so the platform places the window itself — a
+    // first run opens where the platform puts it.
     function applySavedWindow() {
         const x = AppBackend.startWindowX()
         const y = AppBackend.startWindowY()
@@ -88,7 +88,7 @@ Item {
         const home = shape.screenHolding(x, y, Qt.application.screens)
         const roomW = home !== null ? home.width : Screen.width
         const roomH = home !== null ? home.height : Screen.height
-        // Over the floor on the way in, not after: what is assigned here is what `settleTimer` measures the frame slop
+        // Over the floor on the way in: what is assigned here is what `settleTimer` measures the frame slop
         // from, and what a maximise would come back to.
         const wantWidth = Math.max(
             shape.insideScreen(AppBackend.startWindowWidth(), roomW),
@@ -106,13 +106,13 @@ Item {
         }
         // The *frame* has to fit, and it is wider than the window says it is (measured, a remembered 1920
         // came back as a 1936-wide frame at x=-5 on a 1920 screen). `insideScreen` sees neither number; the platform
-        // side moves the window back and says whether it had to. Before the maximise, not after: the shape standing
+        // side moves the window back and says whether it had to. Before the maximise: the shape standing
         // when a window is maximised is the shape a restore comes back to.
         //
-        // **Named rather than found from the window**: the platform side is told which monitor to fit to, so a
-        // window the platform has put somewhere else is pulled back to the saved one instead of being clamped into
-        // wherever it landed. An empty name leaves it to answer from the window, which is what a first run and an
-        // unplugged monitor both want — the nearest monitor, rather than a window left off the desktop.
+        // **Named**: the platform side is told which monitor to fit to, so a
+        // window the platform has put somewhere else is pulled back to the saved one.
+        // An empty name leaves it to answer from the window, which is what a first run and an
+        // unplugged monitor both want — the nearest monitor.
         const moved = AppBackend.fitWindowToScreen(home !== null ? home.name : "")
         if (AppBackend.startWindowMaximized()) {
             // Through the platform, so it holds the shape to come back to (`toggleMaximized`). Where there is no
@@ -145,8 +145,8 @@ Item {
 
     Timer {
         id: settleTimer
-        // One beat, so the window has answered the size it was given: the answer arrives as a queued platform event,
-        // not inside the assignment.
+        // One beat, so the window has answered the size it was given: the answer arrives as a queued platform
+        // event.
         interval: Metrics.anchorDelayMs
         onTriggered: {
             // Only against a size this window was just handed, and only while nothing else has resized it — a maximise

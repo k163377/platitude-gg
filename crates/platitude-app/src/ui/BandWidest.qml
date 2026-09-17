@@ -8,8 +8,8 @@ import platitude.ui
 //
 // `push` is inside `push -f`, fetch says the command in every shape but the stopped one, and stash has the one
 // wording, so four cover all seven states. `stash` never wins — five monospaced cells is what `fetch` already is —
-// but it is measured rather than reasoned about, so re-wording any of them cannot leave the box short. Labels
-// rather than TextMetrics: TextMetrics reports a few pixels tighter than a Label — the set could be ranked on one
+// but it is measured all the same, so re-wording any of them cannot leave the box short. Labels:
+// TextMetrics reports a few pixels tighter than a Label — the set could be ranked on one
 // measure and sized by another, and the loser could then be the wider of them.
 Item {
     id: bandWidest
@@ -20,10 +20,10 @@ Item {
     readonly property alias stashCodeWidest: stashCodeWidest
 
     /// The narrowest a wording is drawn before the button gives it up altogether: two characters and the mark a cut
-    /// leaves — counted in characters rather than pixels, for the reason the state badges' floor is (規約 §ウィンドウの縁:
+    /// leaves — counted in characters, for the reason the state badges' floor is (規約 §ウィンドウの縁:
     /// the same count costs a different number of pixels in each platform's font).
     ///
-    /// **Drawn rather than added up.** Two things went wrong the other way, and both were silent. Counted in the
+    /// **Drawn, as a wording is.** Two things went wrong the other way, and both were silent. Counted in the
     /// family's *average* character — which is what the tab names and the state badges count in — the floor came out
     /// **above the box** on Linux (58 against a box of 52) and the wordings were never drawn at all: an average that
     /// counts a family's full-width glyphs is twice a mono advance, which is harmless where the box is a whole badge

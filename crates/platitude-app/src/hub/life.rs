@@ -89,11 +89,11 @@ impl Hub {
                 }
             }
             if let Some(rt) = hub.runtime.take() {
-                // A local write in flight is waited out, never dropped
-                // with the runtime — `kill_on_drop` would end git itself,
-                // mid-write. Normally instant: the window does not close
-                // while one is pending (`Hub::writes_settled`), so what
-                // is joined here has already ended.
+                // A local write in flight is waited out — `kill_on_drop`
+                // would end git itself, mid-write. Normally instant: the
+                // window does not close while one is pending
+                // (`Hub::writes_settled`), so what is joined here has
+                // already ended.
                 crate::harness::station(crate::harness::Station::WritesJoining);
                 rt.block_on(async {
                     for write in writes {
@@ -147,8 +147,8 @@ impl Hub {
     /// The handle a configuration save runs on: the application's git
     /// with the stock time budget lifted, which is the local write
     /// lane's own rule (`operation::Lane::Local`) — a `git config` is a
-    /// local write, waited out and never killed, since the one thing
-    /// worse than either half of the pair is one half landed
+    /// local write, waited out, since the one thing worse than either
+    /// half of the pair is one half landed
     /// (`hub::saves`).
     pub fn save_executor(&self) -> GitExecutor {
         saves::executor_for(&self.executor)
@@ -203,8 +203,8 @@ impl GitChoice {
 ///
 /// **Asked even when the settings name a binary**, because the settings
 /// screen has to be able to tell an emptied box from a chosen one: empty
-/// means this, and a reader who picks the very git already running must
-/// not be told they picked another.
+/// means this, and a reader who picks the very git already running is
+/// told that it is the one running.
 fn path_program() -> String {
     platitude_core::process::default_program_path()
         .to_string_lossy()
@@ -216,12 +216,12 @@ fn path_program() -> String {
 /// cloned by every session, and the first tab is opened from the same
 /// handler that starts the version check).
 ///
-/// **A named git that does not answer is fallen back on, not obeyed.**
-/// Obeying it would put the window behind the missing-git gate, which has
-/// no way into the settings screen — the reader would be locked out of
-/// the one box that could fix the path, by the value in that box. The
-/// fallback is the same reading the rules already take of an old git:
-/// only a git that is nowhere at all is a gate (規約 §git が無い時・古い時).
+/// **A named git that does not answer is fallen back on.** Obeying it
+/// would put the window behind the missing-git gate, which has no way
+/// into the settings screen — the reader would be locked out of the one
+/// box that could fix the path, by the value in that box. The fallback
+/// is the same reading the rules already take of an old git: only a git
+/// that is nowhere at all is a gate (規約 §git が無い時・古い時).
 /// Nothing on screen says it happened: what does is the settings screen
 /// asking that same path again as it opens, and answering in red under
 /// the box that holds it.
@@ -235,11 +235,11 @@ fn resolve_git(runtime: &tokio::runtime::Runtime, git_path: &str) -> GitChoice {
     let cancel = tokio_util::sync::CancellationToken::new();
     let probe = runtime.block_on(platitude_core::version::probe(git_path, &cancel));
     if probe.answered() {
-        // Recorded as what is spawned for the path, not as the path: a
-        // chooser opened on a Git for Windows install lands on the
+        // Recorded as what is spawned for the path: a chooser
+        // opened on a Git for Windows install lands on the
         // launcher, and the executor spawns the git behind it
-        // (`process::spawnable`), so the screen shows that one as the git
-        // this run is on.
+        // (`process::spawnable`), so the screen shows that one
+        // as the git this run is on.
         let program = platitude_core::process::spawnable(std::path::Path::new(git_path));
         let program = program.to_string_lossy().into_owned();
         tracing::info!(

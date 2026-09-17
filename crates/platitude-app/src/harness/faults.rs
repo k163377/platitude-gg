@@ -14,13 +14,13 @@ use platitude_core::session::PassStep;
 
 /// The fault standing over every graph pass this process runs.
 ///
-/// **One for the process rather than one per tab.** What is driven into
-/// this is being photographed, not used (`PGG_AUTO_ACT=graph-stale` /
-/// `graph-stopped`), and a run photographs one window on one repository;
-/// a fault raised for a tab is a fault raised for the run. It stands once
-/// raised — a fault one pass could lift would be a race, the pass already
-/// walking taking it and the pass asked for next succeeding, so the mark
-/// would go up and straight back down (`PassHooks::fault`).
+/// **One for the process.** What is driven into this is being
+/// photographed (`PGG_AUTO_ACT=graph-stale` / `graph-stopped`), and a run
+/// photographs one window on one repository; a fault raised for a tab is
+/// a fault raised for the run. It stands once raised — a fault one pass
+/// could lift would be a race, the pass already walking taking it and the
+/// pass asked for next succeeding, so the mark would go up and straight
+/// back down (`PassHooks::fault`).
 #[cfg(feature = "automation")]
 #[derive(Default)]
 struct GraphFaults {
@@ -50,8 +50,8 @@ impl GraphFaults {
 
 #[cfg(feature = "automation")]
 impl PassHooks for GraphFaults {
-    /// Nothing: a screen is driven by a fault that stands, never by
-    /// something run once inside a pass — that door is the tests'.
+    /// Nothing: a screen is driven by a fault that stands, and this
+    /// door is the tests'.
     fn before(&self, _at: PassStep) {}
 
     fn fault(&self, at: PassStep) -> Option<platitude_core::GitError> {
@@ -102,12 +102,12 @@ pub(crate) fn let_the_working_tree_row_through(_tab_id: i32) -> bool {
 /// Asks the tab's session for a pass with the hold left standing,
 /// answering whether it was up (`GraphModel.walkAgainWhileHeld`).
 ///
-/// **What a write leaves behind does not bring one on its own.** A
-/// rebuild follows a read that moved (`session::refresh`), and a replay
-/// that stops moves no branch — what moves is this window's own row
-/// appearing, which is the very thing the hold takes away. So the pass a
-/// landing owed by a stopped operation has to turn down is asked for
-/// here.
+/// **A rebuild follows a read that moved**
+/// (`session::refresh`), and a replay that stops moves no
+/// branch — what moves is this window's own row appearing,
+/// which is the very thing the hold takes away. So the pass
+/// a landing owed by a stopped operation has to turn down is
+/// asked for here.
 #[cfg(feature = "automation")]
 pub(crate) fn walk_again_while_held(tab_id: i32) -> bool {
     let held = GraphFaults::standing()

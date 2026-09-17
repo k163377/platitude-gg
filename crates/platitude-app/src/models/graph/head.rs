@@ -2,9 +2,9 @@
 //! would show if it were on screen.
 //!
 //! The pane draws a stand-in for it while the row itself is scrolled off
-//! (`GraphHeadPin`), so the answer has to be a property rather than a
-//! slot: the rows arrive in chunks and the chips a second pass later,
-//! and only a property tells a binding about either (app-ui.md
+//! (`GraphHeadPin`), so the answer has to be a property: the rows arrive
+//! in chunks and the chips a second pass later, and only a property
+//! tells a binding about either (app-ui.md
 //! 「QML バインディングはプロパティにしか反応しない」).
 
 use super::*;
@@ -17,11 +17,11 @@ impl GraphModel {
     /// HEAD is all move the answer, and each lands on its own.
     ///
     /// **The row is found by the id the session reported**
-    /// (`GraphMsg::Head`), through the index — not by the chips, which
-    /// arrive a pass after the rows and are one refs read's picture. So
-    /// the row is found the moment it is drawn, before it can say its
-    /// own name, and a HEAD that moved under a standing graph leads the
-    /// pin to the new row without waiting for the rebuild.
+    /// (`GraphMsg::Head`), through the index. So the row is found the
+    /// moment it is drawn, before it can say its own name — the chips
+    /// arrive a pass later — and a HEAD that moved under a standing
+    /// graph leads the pin to the new row without waiting for the
+    /// rebuild.
     ///
     /// A field that has not moved is not rewritten, so the steady case
     /// allocates nothing. Answers whether anything the stand-in draws

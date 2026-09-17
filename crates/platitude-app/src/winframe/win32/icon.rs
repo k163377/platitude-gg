@@ -9,8 +9,8 @@ const ICON_SMALL: usize = 0;
 const ICON_BIG: usize = 1;
 
 /// `SM_CXSMICON` / `SM_CXICON` (winuser.h): the two sizes this display
-/// asks for. Reading them is what keeps the icon sharp on a screen
-/// that is not at 100%.
+/// asks for. Reading them is what keeps the icon sharp on a scaled
+/// screen.
 const SM_CXSMICON: i32 = 49;
 const SM_CXICON: i32 = 11;
 
@@ -33,10 +33,10 @@ const RENDERED: &[(i32, &[u8])] = &[
 ];
 
 thread_local! {
-    /// The pair the icon walk hands to each window, so the two
-    /// handles are built once rather than once per window. Nothing
-    /// destroys them: the windows read them for as long as they are
-    /// up, and the process exiting is what releases them.
+    /// The pair the icon walk hands to each window, so the
+    /// two handles are built once. The windows read them for
+    /// as long as they are up, and the process exiting is
+    /// what releases them.
     static WEARING: Cell<(*mut c_void, *mut c_void)> =
         const { Cell::new((std::ptr::null_mut(), std::ptr::null_mut())) };
 }
@@ -56,8 +56,8 @@ pub(crate) fn set_icon() {
     }
 }
 
-/// A system metric, or `fallback` if Windows declines to answer (it
-/// returns zero rather than an error).
+/// A system metric, or `fallback` if Windows declines to answer
+/// (it returns zero).
 fn metric(index: i32, fallback: i32) -> i32 {
     // SAFETY: reads one system-wide integer.
     let asked = unsafe { GetSystemMetrics(index) };

@@ -8,11 +8,11 @@ import QtQuick
 // summary frame put no caret anywhere, which on a one-line box is a quarter of its height (qmltestrunner measured,
 // `tst_messageband`).
 //
-// **It lies under the view rather than over it** (規約 §右のペインの字は掴める「手はその面の一番下に 1 枚だけ敷き、
+// **It lies under the view** (規約 §右のペインの字は掴める「手はその面の一番下に 1 枚だけ敷き、
 // 上の誰も取らなかった press だけが届くようにする」) — so the words, the scroll bar and the description box's grip
-// all keep every press they had, and that is structural rather than a claim to re-prove.
+// all keep every press they had, and that is structural.
 //
-// **A plain `MouseArea`, not a handler** — the pair `SweepRoom` measured holds here too: a passive `PointHandler`
+// **A plain `MouseArea`** — the pair `SweepRoom` measured holds here too: a passive `PointHandler`
 // loses half a drag and a `TapHandler` never fires over a selectable field.
 Item {
     id: band
@@ -22,8 +22,8 @@ Item {
 
     /// The character nearest a point of this band, in the field's own coordinates. A point outside the text comes
     /// back clamped to the nearest position, which is the whole of what the band is for; the map carries the view's
-    /// scroll with it, so a band press on a box that has been sent lands on the line under the pointer rather than
-    /// on the line that would be there unscrolled.
+    /// scroll with it, so a band press on a box that has been sent lands on the line under the
+    /// pointer.
     function caretAt(x, y) {
         const at = band.field.mapFromItem(band, x, y)
         return band.field.positionAt(at.x, at.y)

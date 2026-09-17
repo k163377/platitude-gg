@@ -8,12 +8,12 @@ import platitude.ui
 /// question, and the two roads out of a folder that turned out not to be a repository.
 ///
 /// The settings screen's own verbs are `WindowSettingsActs` — they reach into one dialog and nothing else,
-/// which is what makes them a file rather than a section.
+/// which is what makes them a file of their own.
 ///
 /// Built by `WindowAutoActDriver`, which is what `Main` builds when a verb was given; what these verbs act
 /// on is handed down below, one property per part of the window they reach into.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing and is
-// never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -31,7 +31,7 @@ Item {
     required property QuitWaitDialog quitWaitDialog
 
     // The picker completes once its dialog is up, and `visible` is the property that says so: `FolderDialog` is
-    // `QtQuick.Dialogs`' own type, not a `Popup`, so the `opened` the dialogs around it answer to is undefined here.
+    // `QtQuick.Dialogs`' own type, so the `opened` the dialogs around it answer to is undefined here.
     SampleTimer {
         running: Harness.autoAct === "open-picker"
         onTriggered: {
@@ -43,7 +43,7 @@ Item {
         }
     }
     // Every *other* verb that happens to put the picker up says where it was pointed, which nothing on this side of
-    // the platform's own box says afterwards. Not the verb above's — that one reports where its own wait ended.
+    // the platform's own box says afterwards. The verb above reports where its own wait ended.
     Connections {
         target: acts.window
         enabled: Harness.autoAct !== "open-picker"
@@ -94,7 +94,7 @@ Item {
                     window.finishAutoAct()
                     return
                 }
-                // The name is typed rather than left to follow the URL: one of these two has to land where the
+                // The name is typed: one of these two has to land where the
                 // source is not, and the other exactly on it.
                 cloneDialog.setFields(acts.cloneFrom,
                                       act === "clone-go"
@@ -124,8 +124,8 @@ Item {
     /// stay, down for the one that landed — `said=` is git's line standing in it, and `grew=` is the strip gaining the
     /// tab the clone became.
     ///
-    /// **The four the table judges are written first and in one run**: `must_say` matches a run of the line, so a
-    /// field none of the verbs judges must not stand between two that they do (verbs.md).
+    /// **The four the table judges are written first and in one run**: `must_say` matches a run of the line, so
+    /// the judged fields stand together (verbs.md).
     function reportClone() {
         Harness.report("clone dialog=" + cloneDialog.opened
                           + " said=" + (cloneDialog.refusal !== "")
@@ -155,7 +155,7 @@ Item {
             pickAnswerTimer.start()
         }
     }
-    // Poll the dialog's observable answer. The 25ms cadence is sampling only; it is not a correctness deadline.
+    // Poll the dialog's observable answer. The 25ms cadence is sampling only.
     SampleTimer {
         id: pickAnswerTimer
         onTriggered: {
@@ -231,7 +231,7 @@ Item {
                 }
             failTabTimer.stop()
             if (Harness.autoAct === "open-fail-sweep") {
-                // The tab's own failure screen, swept instead of photographed. This one *does* carry the log's seat at
+                // The tab's own failure screen, swept. This one *does* carry the log's seat at
                 // its foot, so git's answer is reachable there — but the folder is not, and it is the half a reader
                 // needs to paste back into a shell (規約 §右のペインの字は掴める). `kind=` says which of the three
                 // screens the sweep landed on, since only one of them has a line from git in it at all.
@@ -287,7 +287,7 @@ Item {
 
     // PGG_AUTO_ACT=identity-tip: the mark's reason, read where the pointer cannot go. `tip=` is the card's own `opened`;
     // `badge=` is the group in whichever shape the width left it — reading the mark alone would fail a band that is
-    // saying exactly what it should. Dismissal waits on `identityUnsaved` — the save's answer, not the open dialog.
+    // saying exactly what it should. Dismissal waits on `identityUnsaved` — the save's answer.
     //
     // **Three hops, and each says so as it is taken** (`step=`). The verb is three samplers in a row, and a run that
     // stops answering leaves the same silence whichever of them it stopped in: no line at all is a question that was
@@ -295,11 +295,11 @@ Item {
     // is a card that would not come up. They also move the clock the app's own account measures its silence against
     // (`harness::report`), which is what a run at the ceiling is read by.
     //
-    // **A field that can only print the guard it has just passed says nothing**, so no line echoes its own condition
-    // back: what each one carries is what could have come out the other way.
+    // **A field that can only print the guard it has just passed says nothing**, so what each line
+    // carries is what could have come out the other way.
     //
-    // **`step=` is not judged, and must not stand where the judged fields do**: `must_say` matches a run of the last
-    // line (verbs.md), so these are lines of their own and the four the table reads stay together in theirs.
+    // **`step=` stands on lines of its own**: `must_say` matches a run of the last
+    // line (verbs.md), so the four the table reads stay together in theirs.
     SampleTimer {
         running: Harness.autoAct === "identity-tip"
         onTriggered: {
@@ -328,8 +328,8 @@ Item {
             identityTipReport.start()
         }
     }
-    // The attached card intentionally has a visual tip delay. Completion is still gated by its opened property, never
-    // by that duration.
+    // The attached card intentionally has a visual tip delay. Completion is gated by its opened
+    // property.
     SampleTimer {
         id: identityTipReport
         onTriggered: {
@@ -354,16 +354,16 @@ Item {
     // the repository's own pre-commit hook (`--preset slowhook` — it sleeps), so the write is provably in flight when
     // the close lands: the gate turns the close away and stands the wait dialog up. `quit-waits` photographs that
     // state; `quit-locked` tries the door a second time and then watches the held write land anyway — the wait takes
-    // no answer, and it was never a kill.
+    // no answer, and the write finishes.
     //
     // The window is closed through `window.close()`, the same call the band's ✕ and the ☰'s Exit make — and, once the
     // lock stands, **the only road left**: the modal seals both the pointer and the window's own `Shortcut`s
     // (measured, qmltestrunner — rules-refs/app-ui.md §close ゲート), while a close request still reaches `onClosing`
-    // the way Alt+F4 does. That is why the second press is the honest test of a lock with no way out, and why no verb
-    // here fires a write behind it: a handler called from QML would run whatever the modal is covering, and reporting
+    // the way Alt+F4 does. That is why the second press is the honest test of a lock with no way out, and why the
+    // verbs here stop at the door: a handler called from QML would run whatever the modal is covering, and reporting
     // that it did not would be a claim about a road this harness cannot drive.
     //
-    // Neither verb is a write act: the commit deliberately has not landed when `quit-waits` photographs, and
+    // Both defer: the commit deliberately has not landed when `quit-waits` photographs, and
     // `quit-locked` waits the landing out in its own sampler (`AutoActCompletion`).
     SampleTimer {
         id: quitTimer

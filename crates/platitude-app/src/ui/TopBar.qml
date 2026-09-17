@@ -68,9 +68,9 @@ Rectangle {
     /// page's and only the body that seats both has it (`WindowBody`). The group gives up its words there whatever
     /// else is true.
     property bool windowAtFloor: false
-    /// The width the window may not be laid out under **with the left list open**, whether or not it is open now
+    /// The narrowest the window is laid out at **with the left list open**, whether or not it is open now
     /// (`Main.floorWidth` measured on `RepoPage.openFloorWidth`). The three actions finish giving their words up
-    /// exactly there. The open floor rather than the floor of the moment: folding the list lowers the real floor, and
+    /// exactly there. The open floor: folding the list lowers the real floor, and
     /// a schedule read off that would put the words back on screen as the rail took the list's place — a thing nobody
     /// asked to see move (規約 §窓の床).
     property real windowFloorWidth: 0
@@ -100,7 +100,7 @@ Rectangle {
     readonly property bool appMenuOpen: tabStrip.appMenuOpen
 
     /// The narrowest this band can be laid out at — one of the two numbers the window's floor is the larger of
-    /// (`Main.floorWidth`). Read off the row's *minimum* rather than summed here, so a control added to the band later
+    /// (`Main.floorWidth`). Read off the row's *minimum*, so a control added to the band later
     /// is counted without anybody remembering to.
     readonly property real floorWidth: bandRow.Layout.minimumWidth + bandRow.anchors.rightMargin
 
@@ -116,7 +116,7 @@ Rectangle {
     /// refusal frames the same way.
     readonly property string stashMode: stashButton.mode
     readonly property bool stashLive: stashButton.enabled
-    /// Whether either action has a string to open under a pointer. **The string, not a ToolTip caught open** — a
+    /// Whether either action has a string to open under a pointer. **The string itself** — a
     /// disabled control takes hover and opens its attached ToolTip like any other one (rules-refs/app-ui.md §hover),
     /// so what tells the two sides apart is whether there is anything to open (`fetch-tip`).
     readonly property bool stashTipShown: stashButton.tip !== ""
@@ -131,8 +131,8 @@ Rectangle {
     /// claim about a line that is not there, and a picture cannot be judged on the absence of one.
     readonly property int fetchFails: fetchButton.fails
     readonly property bool fetchFramed: fetchButton.framed
-    /// Automation: the Stash button, pressed (`PGG_AUTO_ACT=stash`). Put in at the button rather than at what it calls,
-    /// so what answers is the band's real wiring and not a second way in written for the run. **Answers whether the
+    /// Automation: the Stash button, pressed (`PGG_AUTO_ACT=stash`). Put in at the button,
+    /// so what answers is the band's real wiring. **Answers whether the
     /// press went in**: the band refuses it while the tab is busy — the fetch a repository does on the way open is one
     /// — and a shot fired at nothing is not one to latch, so the caller keeps offering it.
     function stashNow() {
@@ -173,7 +173,7 @@ Rectangle {
     readonly property alias tabsView: tabStrip.tabsView
 
     /// The word all three toolbar buttons are measured for: one box for the set keeps any of them from shifting the
-    /// others, and which wording is wider is a question about the installed fonts. Settled once rather than bound: a
+    /// others, and which wording is wider is a question about the installed fonts. Settled once: a
     /// binding that reads four text metrics and feeds three button widths is a loop as far as the engine is concerned.
     property string widestAction: ""
     property bool widestActionCode: false
@@ -199,8 +199,8 @@ Rectangle {
     /// wording is whole; on the floor every one of them is a mark in an end cell; between the two the cap comes down
     /// evenly and each wording elides into what is left (`ActionButtonLabel.cap`).
     ///
-    /// Read off the window's width rather than off what the row has spare: the row's leftover is a question about how
-    /// many tabs are open and how long their names are, and the width this has to be finished at is not. The row still
+    /// Read off the window's width: the row's leftover is a question about how many tabs are open and how long their
+    /// names are; the width this has to be finished at is the window's. The row still
     /// takes more when the tabs need it — the cap is a ceiling, and the share-out underneath it can come down to the
     /// end cell on its own.
     readonly property real actionCap:
@@ -209,8 +209,8 @@ Rectangle {
                    Math.min(fetchButton.naturalWidth,
                             fetchButton.naturalWidth
                             - (topBar.windowFloorWidth + 3 * topBar.actionGive - topBar.width) / 3))
-    /// Where the words go. Said once for the set: three cells the row rounded differently must not come out in two
-    /// different shapes.
+    /// Where the words go. Said once for the set: three cells the row rounded differently come out in one
+    /// shape.
     readonly property bool actionsFolded: topBar.actionCap < topBar.actionFold
 
     /// Automation: the two ends of the cap's travel and what the band made of it at this width (`band-actions`). A
@@ -220,7 +220,7 @@ Rectangle {
     readonly property int actionFoldW: Math.round(topBar.actionFold)
     readonly property int actionCapW: Math.round(topBar.actionCap)
     readonly property int actionWordFloorW: Math.round(topBar.actionWordFloor)
-    /// The widest wording actually **on** the band right now, which is not the widest the box was measured for: the
+    /// The widest wording actually **on** the band right now: the
     /// box holds every state's wording, and the run that has to land between "cut" and "given up" has to aim at the
     /// one being said (`band-actions`).
     readonly property int actionWantW: Math.round(Math.max(fetchButton.wordWant,
@@ -235,11 +235,11 @@ Rectangle {
     readonly property int actionCellH: Math.round(pushButton.height)
     readonly property int actionWordW: Math.round(pushButton.wordRoom)
     readonly property int actionInkW: Math.round(pushButton.wordInk)
-    /// Whether any of the three had to cut its wording. Asked of the set rather than of push: the cell is shared, so
+    /// Whether any of the three had to cut its wording. Asked of the set: the cell is shared, so
     /// the widest wording is the first to be cut, and which of the three is saying it is a question about the fonts.
     readonly property bool actionWordCut:
         fetchButton.wordCut || pushButton.wordCut || stashButton.wordCut
-    /// Whether either of the two that can wear a `!` is wearing one. Asked of the pair rather than of push: the run
+    /// Whether either of the two that can wear a `!` is wearing one. Asked of the pair: the run
     /// that can stage a refusal without a network is the fetch that cannot reach its remote (`band-actions-alert`).
     readonly property bool actionAlertShown: fetchButton.alert || pushButton.alert
 
@@ -274,8 +274,8 @@ Rectangle {
         id: bandRow
         anchors.fill: parent
         // The band's own right edge is not the window's: the client area reaches past what is drawn, so a row flush
-        // with it puts the close button's last few pixels off screen and its wash reads as clipped. `spaceXs` lands it
-        // flush instead.
+        // with it puts the close button's last few pixels off screen and its wash reads as clipped. `spaceXs` lands
+        // it flush.
         anchors.rightMargin: topBar.captionMerged ? Theme.spaceXs : Theme.spaceMd
         spacing: Theme.spaceXs
         TabStrip {
@@ -310,9 +310,9 @@ Rectangle {
             tabContentWidth: tabStrip.contentWidth
             tabRunAvail: tabStrip.runAvail
             tabCount: tabStrip.tabCount
-            // Measured off the pair beside it rather than written to tokens of its own: what sets how big a target is
+            // Measured off the pair beside it: what sets how big a target is
             // here is the padding a Fusion `ToolButton` keeps around its content — a number the theme does not have.
-            // The button's `padding` rather than the two sides it settles to: those carry the shared box's slack as
+            // The button's `padding`: the two sides it settles to carry the shared box's slack as
             // well (`ActionButton.slack`), so reading them would move this group whenever fetch changed its wording.
             controlPadding: fetchButton.padding
             controlHeight: fetchButton.implicitHeight
@@ -334,7 +334,7 @@ Rectangle {
             widestCode: topBar.widestActionCode
             wordFloor: topBar.actionWordFloor
             foldRequested: topBar.actionsFolded
-            // Laid out by the row rather than measured to its own content, so the band can take its width back as it
+            // Laid out by the row, so the band can take its width back as it
             // runs short. **The three ask for the same three numbers** — the box the set shares, the band's end cell,
             // and the cap the window's width settles — and none of them moves with the shape the button is in, so
             // giving the word up cannot change the width that decided to. The floor is the **folded** width, the way
@@ -384,7 +384,7 @@ Rectangle {
             implicitHeight: Theme.iconMd
             color: Theme.borderDefault
         }
-        // The window's own three, drawn here rather than left to the platform: the platform's cannot be styled and its
+        // The window's own three, drawn here: the platform's cannot be styled and its
         // maximize mark never becomes a restore mark (P3-確認事項 §ウィンドウ chrome).
         WindowButton {
             id: minimizeButton
@@ -410,8 +410,8 @@ Rectangle {
 
     // The run the divider stands in: the line, and the band's own spacing either side of it — which together are the
     // whole stretch between the last thing the app can be asked and the first thing the window can. The hit test
-    // answers HTCAPTION for it the way it does for the run past the last tab (`TabStrip.grabArea`), so a press here is
-    // the platform's own gesture rather than a press that lands on nothing.
+    // answers HTCAPTION for it the way it does for the run past the last tab (`TabStrip.grabArea`), so a press here
+    // is the platform's own gesture.
     //
     // Outside the row, so that measuring the row's own layout does not become part of it: a child of a `RowLayout` is
     // laid out, and this one only wants to know where two of the row's items came to rest. `bandRow` fills the band,

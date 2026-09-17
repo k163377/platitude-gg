@@ -6,14 +6,14 @@ import platitude.ui
 // The chip column of one commit: the front card with the first name on it (`RefChip`), and behind it one sheet per
 // **colour** the row carries.
 //
-// **One sheet per colour, not per name — the card's own `+N` is what counts them** (デザイン規約 §重ね表示). The two say
-// different things about the same row and neither can be read off the other: a colour is one sheet however many names
-// wear it, so a commit wearing forty tags fans exactly as one wearing two does. Per name, the fan said the same thing
-// over and over instead — measured on `JetBrains/kotlin`, 4,351 commits carry more than one ref and 3,650 of them are
-// one commit wearing several tags, so five sixths of a per-name fan would have been the colour already on the front
-// card. **The one colour that is allowed twice is the front card's own** — a second sheet right behind it says "and
-// more of these", and the sheets further back are one apiece. Everything the row holds is still read whole in the card
-// the chip unfolds into.
+// **One sheet per colour, and the card's own `+N` counts the names** (デザイン規約 §重ね表示). The two say different
+// things about the same row and neither can be read off the other: a colour is one sheet however many names wear it,
+// so a commit wearing forty tags fans exactly as one wearing two does. Per name, the fan said the same thing over and
+// over — measured on `JetBrains/kotlin`, 4,351 commits carry more than one ref and 3,650 of them are one commit
+// wearing several tags, so five sixths of a per-name fan would have been the colour already on the front card.
+// **The one colour that is allowed twice is the front card's own** — a second sheet right behind it says "and more of
+// these", and the sheets further back are one apiece. Everything the row holds is still read whole in the card the
+// chip unfolds into.
 //
 // **The fan goes down and to the right, and the stack is what the column holds** — the deepest sheet's right edge
 // stands where a bare chip's would, and the front card is pushed left by as many sheets as there are — a name's left
@@ -21,8 +21,8 @@ import platitude.ui
 // grows the same way, so the ground the fan is on is ground that card takes (§グラフ行のダブルクリック).
 //
 // **One step and one drop for every sheet of a row, and the row centres the fan with the card** — how many sheets the
-// row carries is what sets the drop, so no sheet fans at a rate the rest of its own pile does not, and no depth pushes
-// the card out of the middle of its row (デザイン規約 §重ね表示).
+// row carries is what sets the drop, so every sheet of a row fans at one rate and the card keeps the middle of its
+// row (デザイン規約 §重ね表示).
 Item {
     id: stack
 
@@ -43,19 +43,19 @@ Item {
     readonly property alias chipWaiting: frontChip.waiting
 
     /// How far each sheet stands right of the one in front of it — the half gap the card's own contents are spaced by,
-    /// so what shows of each sheet is the edge of a card rather than a band of its colour.
+    /// so what shows of each sheet is the edge of a card.
     readonly property real step: Theme.spaceXs / 2
     /// And how far it falls: **how many sheets the row carries decides it** — the steepest whole step that many of
     /// them fit the row at (デザイン規約 §重ね表示). A shallow fan falls as far as it steps sideways and reads as a pile of
     /// cards; only the deepest row, which cannot hold that, comes down to a border apiece.
     ///
-    /// **The row decides it, never the sheet.** A slope that flattens part-way back leaves the last sheet of the
-    /// deepest fan sliding sideways with a slope the ones in front of it do not have; read off the count, every sheet
-    /// of a row fans at one rate and the row is the only thing that changes it.
+    /// **The row decides it.** A slope that flattens part-way back leaves the last sheet of the deepest fan sliding
+    /// sideways with a slope the ones in front of it do not have; read off the count, every sheet of a row fans at
+    /// one rate and the row is the only thing that changes it.
     ///
-    /// **And never steeper than it steps sideways**: what shows of a sheet is the edge of a card, and past the
-    /// corner's own radius it is a band of that card's ground instead — the same figure across as down, for the same
-    /// reason [`step`] is half a gap.
+    /// **And the step is its ceiling**: what shows of a sheet is the edge of a card, and past the corner's own radius
+    /// it is a band of that card's ground instead — the same figure across as down, for the same reason [`step`] is
+    /// half a gap.
     readonly property real drop: {
         if (stack.sheets.length === 0)
             return stack.step
@@ -63,12 +63,12 @@ Item {
         return Math.max(Theme.borderWidth, Math.min(stack.step, held))
     }
     /// How many sheets can ever stand behind one card: one per colour, less the card's own — the colour that repeats
-    /// takes that one back (`sheets`). Read off the list of colours rather than written down, so a kind added to
-    /// `RefChip.kindKeyOf` is counted here without anybody remembering to.
+    /// takes that one back (`sheets`). Read off the list of colours, so a kind added to `RefChip.kindKeyOf` is
+    /// counted here without anybody remembering to.
     readonly property int maxSheets: frontChip.kindKeys.length - 1
     /// The room under the card before the row's own floor: half of what the row is taller than a chip. **One side of
-    /// the row, not what the fan may spend** — the card rises out of the other half (`lift`), and what the fan is
-    /// held to is [`fanDepthMax`].
+    /// the row** — the card rises out of the other half (`lift`), and what the fan may spend is
+    /// [`fanDepthMax`].
     readonly property real fanRoom: (Theme.graphRowHeight - frontChip.height) / 2
     /// And how deep the fan may come at all: **both halves of that room, less a border either side**. Both, because
     /// the row centres the card and the fan together (`lift`) — the room over the card is the fan's as much as the
@@ -101,8 +101,8 @@ Item {
         return out.slice(0, stack.maxSheets)
     }
     /// Where each sheet stands, in whole pixels off the front card's own corner. **One step and one drop apiece, the
-    /// sheet that repeats the card's colour included** — the fan opens at one rate all the way back, so no sheet of a
-    /// row stands at a slope the rest of that row's fan does not.
+    /// sheet that repeats the card's colour included** — the fan opens at one rate all the way back, so every sheet
+    /// of a row stands at the slope the rest of its fan does.
     readonly property var layout: {
         const out = []
         for (let i = 0; i < stack.sheets.length; ++i)
@@ -132,9 +132,9 @@ Item {
     // along its floor that the card in front does not cover. A card that is not a tag has no ground of its own, so a
     // whole sheet left standing behind one shows straight through the name.
     //
-    // **A sheet is the card it stands for, cut down to its edge** — the same frame and the same ground that kind wears
-    // when it is the one in front. **Not the kind's colour poured into the exposed four pixels**: a solid block reads
-    // as neither a frame nor a card beside an outlined one.
+    // **A sheet is the card it stands for, cut down to its edge** — the same frame and the same ground that kind
+    // wears when it is the one in front. The kind's colour poured into the exposed four pixels would read as
+    // neither a frame nor a card beside an outlined one.
     Repeater {
         model: stack.layout
         Item {

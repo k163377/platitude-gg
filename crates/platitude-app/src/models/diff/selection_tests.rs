@@ -1,4 +1,4 @@
-//! The cases for `selection`. Beside it rather than in it (structure.md
+//! The cases for `selection`, in a file beside it (structure.md
 //! §分割): everything here names only what `selection` publishes to `diff`.
 
 use std::sync::Arc;
@@ -8,12 +8,12 @@ use platitude_core::parse::diff::parse_patch;
 use super::DiffModel;
 
 /// `\t` written out, so the tabs these cases turn on are visible in the
-/// source of the test rather than hiding in its indentation.
+/// source of the test itself.
 const TAB: &str = "\t";
 
-/// The rows laid out by hand rather than through `lay_out_rows`: that one
-/// tells the QObject side its list was reset, and there is no QObject side
-/// here (`rows::line_items` is the half both use).
+/// The rows laid out by hand: `lay_out_rows` tells the QObject side its
+/// list was reset, and there is no QObject side here
+/// (`rows::line_items` is the half both use).
 fn model(patch: &str, coloured: bool) -> DiffModel {
     let patches = parse_patch(patch.as_bytes());
     let colors = if coloured {
@@ -70,8 +70,8 @@ fn the_two_ends_are_cut_and_the_rows_between_them_are_not() {
     model.start_select(1, 3);
     model.drag_select(3, 7);
     assert_eq!(model.copied_new(), "main() {\n    let");
-    // The far end is a run of places along the line rather than the whole
-    // of it.
+    // The far end is a run of places along the line, cut where the drag
+    // stopped.
     assert_eq!(model.lines[3].sel, "0:7");
 }
 

@@ -19,7 +19,7 @@ import platitude.ui
 /// a little at a time. That is what the space between two places in a history looks like, and it is what keeps a hard
 /// edge from cutting the row underneath in two.
 ///
-/// **The pane adopts this, and not the list** (`GraphPane`), which is the other way round from the sidebar's. The lane
+/// **The pane adopts this** (`GraphPane`), which is the other way round from the sidebar's. The lane
 /// column has a press-taking strip of its own over the list (`GraphLanePan`), so a stand-in inside the list would hand
 /// its middle third to a strip that answers with the row underneath.
 Rectangle {
@@ -38,7 +38,7 @@ Rectangle {
     /// How much of the right edge belongs to the list's own scroll bar. **What this stand-in takes presses on stops
     /// short of it** — one that took them there answered the trough with a jump to HEAD (observed + measured).
     /// Its ink is a separate question and does not read this: the words stop where a row's words stop, four pixels off
-    /// the pane, and the ground is laid under the bar rather than over it (`band`).
+    /// the pane, and the ground is laid under the bar (`band`).
     required property real barRoom
 
     /// The stand-in was pressed: go to the row it stands for.
@@ -49,7 +49,7 @@ Rectangle {
     property bool pointed: false
 
     readonly property int headRow: pin.graphModel.headRow
-    /// Where that row sits in the list's own content coordinates. Worked out rather than read off the item: the row is
+    /// Where that row sits in the list's own content coordinates. Worked out: the row is
     /// two thousand rows away and the view has not built it (`GraphRowWalk.revealStep` does the same arithmetic).
     readonly property real rowTop: pin.view.originY + pin.headRow * Theme.graphRowHeight
     readonly property bool rowAbove: pin.rowTop < pin.view.contentY
@@ -59,7 +59,7 @@ Rectangle {
     readonly property bool wanted: pin.headRow >= 0 && pin.graphModel.headLabels !== ""
     /// The list's selection is on the row this stands in for — the same question a row asks of itself
     /// (`GraphRowDelegate.selected`), asked from out here because the stand-in is not one of the list's delegates.
-    /// **The grounds below read this rather than each other's `visible`**: Qt's `visible` is the effective one, so a
+    /// **The grounds below read this**: Qt's `visible` is the effective one, so a
     /// band that asked its neighbour would be answering "is the stand-in drawn at all" in the same breath.
     readonly property bool selected: pin.view.currentIndex === pin.headRow
     /// The chips the stand-in draws, less the ones the window has already said are gone — the same answer the rows
@@ -80,8 +80,8 @@ Rectangle {
     /// — without this the two overlap and neither reads, and what is left below the
     /// stand-in is a row at half strength rather than a stretch of nothing.
     ///
-    /// **A quarter of a row, not half**: the whole going-out sits that much higher, so the
-    /// commit directly under the stand-in is most of the way back rather than wiped across its middle. It is still the
+    /// **A quarter of a row**: the whole going-out sits that much higher, so the
+    /// commit directly under the stand-in is most of the way back. It is still the
     /// only room the lanes have to dissolve in, so it cannot go to nothing — a hard edge is what is on the other side.
     readonly property real hold: Theme.graphRowHeight / 4
     /// And how long they take coming back. **What the hold gives up, this takes** — the two
@@ -99,9 +99,9 @@ Rectangle {
     readonly property real topRoom: pin.rowAbove ? pin.view.topMargin : 0
     readonly property real rowY: pin.rowAbove ? pin.topRoom : pin.hold + pin.fadeRoom
     readonly property real rowMidY: pin.rowY + Theme.graphRowHeight / 2
-    /// Where the lane leaves the node — **a hairline past its edge, not the row's**. The row's
+    /// Where the lane leaves the node — **a hairline past the node's own edge**. The row's
     /// own cell is cut here and the going-out takes over, so the last full-strength pixel of graph is the
-    /// one against the face rather than one at the bottom of a row that is mostly air.
+    /// one against the face.
     readonly property real nodeOutY: pin.rowMidY
         + (pin.rowAbove ? 1 : -1) * (Metrics.nodeIcon / 2 + Theme.borderWidth)
     /// How much of this the ground holds whole: the sliver above, the row, and the hold past it.
@@ -124,13 +124,13 @@ Rectangle {
     // it. What says "this one is yours" is the colour of its words.
     //
     // It holds through the row and half a row past it — the stretch where the graph has gone and nothing has come back
-    // yet, which is what makes the two read as one movement rather than as a crossfade — and lets go over the row after
+    // yet, which is what makes the two read as one movement — and lets go over the row after
     // that. **The sliver this keeps above itself at the top edge is inside it** (`topRoom`): a ground that began at the
     // row would let whatever is scrolling past show in the strip the list leaves empty when it is at rest.
     // **The ground is laid inside the list; everything else stands over it out here.** Two things have to hold at once
     // and only this seat holds both. It has to cover the whole width — a row's message runs on under the bar now
     // (規約 §余白), so a band that stopped short of the bar would leave the tail of whatever is scrolling past showing
-    // in that strip. And it may not hide the bar. A child of the view is drawn over the rows and
+    // in that strip. And the bar stays in sight. A child of the view is drawn over the rows and
     // under the bar (`AutoScrollBar` takes `z: 1` for exactly this), which is both. The chip, the lanes and the words
     // stay out here, where the lane strip below cannot answer a press for them.
     Item {
@@ -162,7 +162,7 @@ Rectangle {
         // that, because a selected row does not brighten under it either.
         //
         // **Only over the row, and over the sliver it keeps above itself** — what is under it is a way out of this
-        // band, not part of the target, while the sliver is the row's own (`topRoom`): a band that stopped at the
+        // band, while the sliver is the row's own (`topRoom`): a band that stopped at the
         // row's top edge would leave a dark strip between it and the bands either side of the graph, which is what
         // the first row's own bleed is there to close.
         Rectangle {
@@ -214,7 +214,7 @@ Rectangle {
             fullWidth: pin.graphFullWidth
             geometry: pin.graphModel.headGeometry
             nodeLane: pin.graphModel.headLane
-            // The stand-in shows the commit, not the credits: the badge is a second face, and this row is already
+            // The stand-in shows the commit: the badge is a second face, and this row is already
             // standing in for something (規約 §co-author の表示).
             coAuthors: ""
             avatar: pin.graphModel.headAvatar
@@ -268,7 +268,7 @@ Rectangle {
             }
             /// A lane's colour at `a` of its strength, as a gradient stop.
             ///
-            /// **`Theme.graphLane` holds strings, not colours** — the token is a `var` array, so `.r` / `.g` / `.b` off
+            /// **`Theme.graphLane` holds strings** — the token is a `var` array, so `.r` / `.g` / `.b` off
             /// one is `undefined` and `Qt.rgba` of that is a transparent black that draws nothing at all
             /// (measured). Qt reads `#AARRGGBB`, so the alpha goes on the front of the string the token already is.
             function faded(hex, a) {
@@ -300,7 +300,7 @@ Rectangle {
         y: pin.rowMidY - height / 2
         // **The same box a row gives its message**: from the tick to the pane's own inset (デザイン規約 §余白), so this
         // commit's message is cut at exactly the character it is cut at down in the list. Read off the same numbers
-        // rather than off `barRoom` — a stand-in that stopped at the bar's box cut a word earlier than the row it
+        // — a stand-in that stopped at the bar's box cut a word earlier than the row it
         // stands for, and the message changed length as the reader scrolled it off.
         width: pin.width - subject.x - Theme.spaceXs
         cutAt: "end"
@@ -315,7 +315,7 @@ Rectangle {
         color: Theme.textLink
     }
 
-    // **No rule along the edge the rows pass under**. The graph has no horizontal
+    // **The edge the rows pass under is bare**. The graph has no horizontal
     // lines anywhere, and one drawn here would be the loudest thing on the pane for as long as the branch is off
     // screen. What this row is is said by the chip, the colour of its words and the graph going out under them.
 

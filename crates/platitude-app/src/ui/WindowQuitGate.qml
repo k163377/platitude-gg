@@ -4,7 +4,7 @@ import platitude.ui
 
 // The close that arrived while git was still writing, and the wait that makes good on it. A part of its own so the
 // whole of the quit wait is read in one place (and `Main` keeps its size): the window's `onClosing` asks the gate,
-// the gate stands the dialog up instead of accepting, the dialog takes itself down when the queue settles
+// the gate vetoes and stands the dialog up, the dialog takes itself down when the queue settles
 // (`QuitWaitDialog`), and the gate closes the window on its word.
 //
 // The user gives this the window's whole face (`anchors.fill`): the dialog's sizing reads its parent, and an
@@ -17,7 +17,7 @@ Item {
     property var window
     /// A finished headless run is the one caller the gate steps aside for (`Main.finishAutoAct`): its shots are
     /// saved, nothing after them needs the window, and the shutdown joining the write loops (`Hub::shutdown`) is
-    /// what waits the seeded write out. Latched rather than bound — the yield is an event in the run's life — and
+    /// what waits the seeded write out. Latched — the yield is an event in the run's life — and
     /// spent by the close it lets through, so a process that outlives its run gets its gate back.
     property bool yields: false
     /// The harness's door to the dialog (`WindowAutoActDriver`).

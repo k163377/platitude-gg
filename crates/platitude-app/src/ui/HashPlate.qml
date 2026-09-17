@@ -11,7 +11,7 @@ import platitude.ui
 // §右のペインの字は掴める). Neither the face nor the target moves: the hand is laid over the control's own whole face,
 // so what is pressable is what it always was.
 //
-// **The hand is what the face answers with, not the field under it.** A `TextEdit` takes the press wherever it is
+// **The hand is what the face answers with.** A `TextEdit` takes the press wherever it is
 // drawn, `selectByMouse: false` and all, and the control above it then never hears a click at all (qmltestrunner
 // `tst_hashplate`) — so the words are given no press of their own (`grabbable: false`) and the hand hands the drag
 // down to them. The room around the plate reaches the same fields from the row's gaps (`SweepRoom`).
@@ -22,7 +22,7 @@ ColumnLayout {
     property string fullSha: ""
     property string parentSha: ""
     /// How loud the hash is. The pane's own plate speaks at full strength — there the hash *is* the value the column
-    /// is for. **In a list it stands beside a message and must not outrank it**: the id is how a row is told apart
+    /// is for. **In a list it stands beside a message and stays under it**: the id is how a row is told apart
     /// once the words already said which commit it is (デザイン規約 §複数のコミットを選ぶ).
     property color shaColor: Theme.textPrimary
     /// And how big. The pane's plate speaks at the window's own step; in a list the id sits beside a message and is
@@ -117,7 +117,7 @@ ColumnLayout {
         const tip = hashCopy.ToolTip.toolTip
         return !!tip && tip.visible && tip.parent === hashCopy
     }
-    /// **The attached tooltip is handed its words when `visible` rises, not when it opens** (measured, qmltestrunner
+    /// **The attached tooltip is handed its words when `visible` rises** (measured, qmltestrunner
     /// Qt 6.10.3: a text changed while the tip was still counting out its rest came up carrying the old one). A press
     /// made before the tip arrives would therefore be answered with the offer it had snapshotted — so the words are
     /// put right as the tip comes up, which is the one place that covers both orders. A tip already standing takes a
@@ -129,7 +129,7 @@ ColumnLayout {
     function forceTip(on) {
         hashCopy.tipForced = on
     }
-    /// Automation: and that there is a hand at all — a run enters the functions above rather than the pointer, so a
+    /// Automation: and that there is a hand at all — a run enters the functions above, so a
     /// hand taken out, disabled or shrunk would answer every gesture it was asked and never see a press.
     function handStands(which) {
         const hand = plate.handFor(which)
@@ -142,10 +142,10 @@ ColumnLayout {
 
     /// The hand a row that is both a control and a value answers with. **The press is the control's until it travels**
     /// — past that it is a drag, and a drag belongs to the words (デザイン規約 §右のペインの字は掴める). The distance
-    /// is the platform's own (`drag.threshold`), and the selection is anchored where the press landed rather than
-    /// where the threshold was crossed, so it begins under the finger.
+    /// is the platform's own (`drag.threshold`), and the selection is anchored where the press landed,
+    /// so it begins under the finger.
     ///
-    /// **A plain `MouseArea` and not a handler**, for the pair already measured for the row beneath this plate
+    /// **A plain `MouseArea`**, for the pair already measured for the row beneath this plate
     /// (`SweepRoom`): a passive `PointHandler` answers one move of a two-move drag inside the pane's Flickable, and a
     /// `TapHandler` never taps at all over a selectable field. `preventStealing` is what keeps that Flickable from
     /// taking the drag away part-way through.
@@ -205,10 +205,9 @@ ColumnLayout {
 
     spacing: 0
 
-    // The hash is the button, not just the icon beside it — a 16px glyph was too small to aim at. Hovering underlines
-    // the hash and lights the icon so the whole plate reads as one control. Not a HoverToolButton: the style's panel
-    // would make the plate taller than one line and drop this hash out of step with the author name beside it, so it
-    // draws the same wash over its own flat face.
+    // The hash is the button — a 16px glyph was too small to aim at. Hovering underlines the hash and lights the icon
+    // so the whole plate reads as one control. It draws the same wash over its own flat face: a HoverToolButton's
+    // panel would make the plate taller than one line and drop this hash out of step with the author name beside it.
     ToolButton {
         id: hashCopy
         Layout.alignment: Qt.AlignRight
@@ -221,11 +220,11 @@ ColumnLayout {
         topPadding: 0
         bottomPadding: 0
         readonly property bool lit: hovered || visualFocus
-        /// The press that just landed here took the hash away, and the one word this control has says so instead of
-        /// offering again (規約 §hover のツールチップ — 結論を先頭に 1 文で). It stands until the pointer is done with
+        /// The press that just landed here took the hash away, and the one word this control has says so
+        /// (規約 §hover のツールチップ — 結論を先頭に 1 文で). It stands until the pointer is done with
         /// the plate; there is no beat to wait out, so nothing here counts one.
         property bool copied: false
-        // **Arriving clears it too, not only leaving.** A copy taken from the keyboard leaves the mark standing with
+        // **Arriving clears it as well as leaving.** A copy taken from the keyboard leaves the mark standing with
         // no pointer anywhere near, and the next hand would be greeted by the answer to something it did not do.
         onHoveredChanged: hashCopy.copied = false
         /// Automation: raise the tooltip with no pointer behind it. The same property the real hover drives, so a run
@@ -244,7 +243,7 @@ ColumnLayout {
         background: Rectangle {
             radius: Theme.radiusSm
             color: hashCopy.down ? Theme.bgPressed : hashCopy.lit ? Theme.bgHover : "transparent"
-            // Drawn here rather than as the label's font underline so the rule runs under the icon too — the hash and
+            // Drawn here so the rule runs under the icon too — the hash and
             // the icon are one target, so they get one line.
             Rectangle {
                 visible: hashCopy.lit
@@ -265,12 +264,12 @@ ColumnLayout {
                 mono: true
                 pixelSize: plate.shaSize
                 color: plate.shaColor
-                // The button owns every press on this face. The field is here to be written into, not to be pressed
+                // The button owns every press on this face. The field is here to be written into
                 // (デザイン規約 §右のペインの字は掴める).
                 grabbable: false
                 Layout.alignment: Qt.AlignVCenter
             }
-            // A seat drawn to the mark's ink rather than its box: the two squares fill nine of the sixteen, so the box
+            // A seat drawn to the mark's ink: the two squares fill nine of the sixteen, so the box
             // holds air either side of them and that air is what the eye measures (デザイン規約 §余白). Unseated it was
             // spent twice — once doubling the step after the hash, and once holding the mark short of the right edge
             // the parent hash under it is cut to.
@@ -308,10 +307,10 @@ ColumnLayout {
             id: parentRow
             anchors.fill: parent
             spacing: Theme.spaceXs
-            // The mark is drawn, not typed. The fonts disagree about `←`: Cascadia Mono holds it in one cell (7px of
+            // The mark is drawn. The fonts disagree about `←`: Cascadia Mono holds it in one cell (7px of
             // ink) where Noto Sans Mono CJK JP gives it a full-width one (12px), so Ubuntu grew a tail nobody chose —
-            // the same way `⚑` came out a different shape on each of the three. The seat is the mark's ink, not its
-            // box, so the `spaceXs` beside it lands where the eye measures it (規約 §余白).
+            // the same way `⚑` came out a different shape on each of the three. The seat is the mark's ink,
+            // so the `spaceXs` beside it lands where the eye measures it (規約 §余白).
             Item {
                 Layout.preferredWidth: parentBack.inkWidth
                 Layout.preferredHeight: Theme.iconSm

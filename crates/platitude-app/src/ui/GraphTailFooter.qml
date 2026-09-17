@@ -6,14 +6,14 @@ import platitude.ui
 
 // Window cut: the lanes run on into the footer and the message sits where subjects go. One row tall — one more
 // commit's worth of lane is all it takes to read as "and it continues" — unless the message needs more than that. It
-// is the only thing explaining the cut, so a narrow subject column grows the footer rather than eliding it.
+// is the only thing explaining the cut, so a narrow subject column grows the footer.
 //
-// **And the line offers the next step of history rather than only naming the cut**: the whole
+// **And the line offers the next step of history**: the whole
 // footer is the press, worn like a row's own — the same `bgHover` band, and a hand over it. What it loads is a quarter
 // of the window the graph opened with (`session::log_window_step`), and the words lead with that offer, because the
 // fading lanes have already said that this is as far as the graph goes.
 //
-// **And that run of lane goes out rather than stopping.** Full strength where the last row leaves off, gone by the
+// **And that run of lane goes out.** Full strength where the last row leaves off, gone by the
 // bottom of this band: there is nothing past the cut to draw, so what stands for it fades into the ground
 // (observed). Nothing is added on top — a mark there said the same thing twice, and the line below already names
 // the cut in words.
@@ -82,7 +82,7 @@ Item {
                     const lane = parseInt(t.substring(1, dot))
                     const color = parseInt(t.substring(dot + 1))
                     const x = Metrics.laneInset + lane * Metrics.laneW + Metrics.laneW / 2
-                    // **The lanes go out rather than stop.** Drawn flat at `dimFade` they put a step between the last
+                    // **The lanes go out.** Drawn flat at `dimFade` they put a step between the last
                     // row and this one exactly where the eye is following a line down. Full
                     // strength where the last row leaves off, gone by the bottom — the history past the cut is not
                     // there to be drawn, so what stands for it fades out.
@@ -99,8 +99,8 @@ Item {
                 }
                 ctx.setLineDash([])
             }
-            /// A lane's colour at `a` of its strength, as a gradient stop. **`Theme.graphLane` holds strings, not
-            /// colours** — the token is a `var` array, so `.r` off one is `undefined` and `Qt.rgba` of that draws
+            /// A lane's colour at `a` of its strength, as a gradient stop. **`Theme.graphLane` holds
+            /// strings** — the token is a `var` array, so `.r` off one is `undefined` and `Qt.rgba` of that draws
             /// nothing (measured). Qt reads `#AARRGGBB`, so the alpha goes on the front of the token's own string.
             function faded(hex, a) {
                 const v = Math.round(Math.max(0, Math.min(1, a)) * 255)
@@ -112,8 +112,8 @@ Item {
             }
         }
     }
-    // Bounded like a subject: the message stays in the subject column rather than running under the next pane. Told in
-    // the secondary colour, not a state one: the window is how the graph is meant to work, and nothing is waiting on it
+    // Bounded like a subject: the message stays in the subject column. Told in
+    // the secondary colour: the window is how the graph is meant to work, and nothing is waiting on it
     // (デザイン規約 §状態).
     Label {
         id: tailMessage
@@ -134,8 +134,8 @@ Item {
         rightPadding: Theme.spaceXs
         wrapMode: Text.Wrap
         // What the press loads leads; how far the graph has come follows it in brackets, which is the shape of the two
-        // being an offer and its footnote. The second number is **the walk's own count**, not
-        // the row count: the WIP row and sifted stash parents move rows off the round window limit, and this footer
+        // being an offer and its footnote. The second number is **the walk's own count**:
+        // the WIP row and sifted stash parents move rows off the round window limit, and this footer
         // only stands when the walk hit it.
         text: qsTr("Load %L1 more commits (%L2 loaded)")
                 .arg(tail.graphModel.windowStep)
@@ -149,7 +149,7 @@ Item {
     // one step under the words, so it does not compete with them — and up to the words' own colour under the
     // pointer.** No token is added, and the only ink this puts on a resting window is this 1px.
     //
-    // A rule rather than `font.underline`: the same reason the hash plate draws its own (`HashPlate`) — the line is
+    // A rule: the same reason the hash plate draws its own (`HashPlate`) — the line is
     // wanted under the words alone, and the label's box is the whole subject column.
     Rectangle {
         x: tailMessage.x + tailMessage.leftPadding
@@ -160,8 +160,8 @@ Item {
         color: tailMouse.containsMouse && tail.canLoadMore ? Theme.textSecondary : Theme.borderStrong
     }
     // The wait, where the words end: a press here goes to git like any other, and the ring is what this window says
-    // about a press it is still waiting on (デザイン規約 §進行中・長押しの定数). Placed off the line's own ink rather
-    // than in a seat of its own — a seat kept warm for it would push the footer's words out of the subject column the
+    // about a press it is still waiting on (デザイン規約 §進行中・長押しの定数). Placed off the line's own ink
+    // — a seat kept warm for it would push the footer's words out of the subject column the
     // rows above line up in.
     SpinnerIcon {
         id: tailWait

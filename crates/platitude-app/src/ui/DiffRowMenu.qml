@@ -13,8 +13,8 @@ import platitude.ui
 // Two rows, because a diff has two sides and only one of them can be dragged over
 // (デザイン規約 §diff の中身をコピーする):
 //
-//  - `Copy` takes the new side — the unchanged and added lines, exactly the ones wearing the wash. No object in the
-//    words: the selection is showing what it is (規約 §メニュー「行が自分で示しているものは文言で言い直さない」).
+//  - `Copy` takes the new side — the unchanged and added lines, exactly the ones wearing the wash. The
+//    word stands alone: the selection is showing what it is (規約 §メニュー「行が自分で示しているものは行に任せる」).
 //  - `Copy removed lines` takes the old side, whole lines. Removed lines carry no wash, so there is nothing on screen
 //    that could name a part of one — the same answer GitKraken gives from its own `Copy deleted line`.
 //
@@ -34,7 +34,7 @@ Item {
     property bool canCopy: false
     property int removed: 0
 
-    /// The card is on screen. A plain property rather than an alias — `visible` read from another file comes back
+    /// The card is on screen. A plain property — `visible` read from another file comes back
     /// stale (`RefusalBadge`) — and what the page reads to know that hover is behind a menu now (デザイン規約 §メニュー).
     readonly property bool showing: codeMenu.visible
 
@@ -43,13 +43,13 @@ Item {
 
     anchors.fill: parent
 
-    /// The card was asked for, and whether it came up. `offer()`'s own answer, not the conditions behind it: a card
+    /// The card was asked for, and whether it came up. `offer()`'s own answer: a card
     /// that refused to open because it had nothing to put in it is the one failure a picture of an empty overlay
     /// cannot tell from a card nobody asked for. An automation-only exposure, the same one `GraphPane.view` is
     /// (app-ui.md) — the rest of what it says is on this object already.
     signal offered(bool shown)
 
-    /// Opens on whatever the selection holds. Says nothing about where the click landed: a selection that takes
+    /// Opens on whatever the selection holds, wherever the click landed: a selection that takes
     /// neither side has no row to offer, and an empty card is not an answer (規約 §メニュー).
     function offer() {
         diffRowMenu.canCopy = diffRowMenu.diffModel.selHasNew
@@ -57,7 +57,7 @@ Item {
         diffRowMenu.offered(codeMenu.offer())
     }
 
-    /// What each row does, named so a headless run enters where the row enters rather than beside it (verify-ui).
+    /// What each row does, named so a headless run enters where the row enters (verify-ui).
     function copyNow() {
         diffRowMenu.copyRequested(diffRowMenu.diffModel.selectionText())
     }

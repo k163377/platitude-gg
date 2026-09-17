@@ -3,9 +3,9 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// Where a name too long for the box stops, and that it is short of the arrow rather than under it.
+// Where a name too long for the box stops, and that it is short of the arrow.
 //
-// **Only a built field can answer it.** The box scrolls its text rather than eliding it, so what decides the overlap
+// **Only a built field can answer it.** The box scrolls its text, so what decides the overlap
 // is the inset the input keeps at its right edge against the seat the chevron actually stands in — two geometries
 // that only exist once the control has been laid out. Nothing in Rust reaches either, and a picture of a field whose
 // last letter is half under a glyph is exactly the kind of one-pixel judgement a headless PNG cannot be trusted with
@@ -54,7 +54,7 @@ Item {
 
         /// The premise the field's own inset is worked out from: the control keeps the indicator's width back and
         /// nothing else, so the seat being pushed further in than that is the whole of what the word has to clear.
-        /// Here rather than in a comment, because it is a fact about the style underneath and not about this code.
+        /// A test, because the premise belongs to the style underneath and a test goes red when it changes.
         function test_the_control_reserves_the_indicators_width_and_no_more() {
             const input = typed.contentItem
             compare(typed.width - (input.x + input.width), typed.indicator.width)
@@ -71,8 +71,8 @@ Item {
                    "the text stops at " + textRight(typed) + ", the arrow's seat starts at " + seat.x)
         }
 
-        /// The caret is what the reader is following while they type, so the end of the name has to be readable at
-        /// the inset — not under the glyph, and not off the end of a box that never scrolled.
+        /// The caret is what the reader is following while they type, so the end of the name has to be
+        /// readable at the inset.
         function test_the_caret_at_the_end_stays_off_the_arrow() {
             typed.contentItem.forceActiveFocus()
             typed.contentItem.cursorPosition = root.longName.length
@@ -83,10 +83,10 @@ Item {
                      + ", the arrow's seat starts at " + typed.indicator.x)
         }
 
-        /// **A picked name is cut, not scrolled.** Nothing can put a caret in this field, so a text too wide for it
+        /// **A picked name is cut in the middle.** Nothing can put a caret in this field, so a text too wide for it
         /// would sit at whatever offset it was left at — which on a fresh field is the end, with the head of the name
-        /// off the left edge and no mark saying any of it was taken. It is cut in the middle instead, keeping both of
-        /// the ends a remote is told apart by.
+        /// off the left edge and no mark saying any of it was taken. The cut keeps both of the ends a remote is
+        /// told apart by.
         function test_a_picked_name_too_long_for_the_box_is_cut_rather_than_scrolled() {
             const shown = picked.contentItem.text
             verify(shown.length < root.longName.length, "something was taken out of it: " + shown)
@@ -97,8 +97,8 @@ Item {
             compare(picked.wanted, root.longName, "while the value itself is untouched")
         }
 
-        /// And what is drawn fits: the cut is made against the room the word has, so the ink stops inside the box and
-        /// short of the arrow rather than being clipped by the frame.
+        /// And what is drawn fits: the cut is made against the room the word has, so the ink stops
+        /// inside the box and short of the arrow.
         function test_a_picked_name_stops_inside_the_box() {
             verify(picked.contentItem.contentWidth
                        <= picked.width - picked.contentItem.leftPadding - picked.contentItem.rightPadding + 1,
@@ -108,7 +108,7 @@ Item {
         }
 
         /// Nothing to open, nothing to keep clear of: the field falls back to the plain frame-to-word inset every
-        /// other box keeps, so a chooser-less field does not lose a quarter of its width to an arrow it never draws.
+        /// other box keeps, so a chooser-less field keeps the whole of its width for the word.
         function test_a_field_with_no_list_keeps_the_plain_inset() {
             verify(!bare.indicator.visible, "no list, no arrow")
             compare(bare.contentItem.rightPadding, bare.contentItem.leftPadding,

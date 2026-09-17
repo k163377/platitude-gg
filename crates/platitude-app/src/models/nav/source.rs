@@ -22,9 +22,9 @@ pub(super) enum Source {
         current: String,
     },
     /// The pending changes, with the order the pane shows them in. **A
-    /// row is a bucket and an entry**, not an entry: an entry with both
-    /// halves changed (`MM`) is one row under the index and another under
-    /// the working tree.
+    /// row is a bucket and an entry**: an entry with both halves changed
+    /// (`MM`) is one row under the index and another under the working
+    /// tree.
     Files {
         status: platitude_core::status::WorkTreeStatus,
         order: Vec<FileAt>,
@@ -81,8 +81,8 @@ impl Source {
 
     /// The branch row named `short`, through the snapshot's own index —
     /// the two ref sections are name-ordered, so a menu's question about
-    /// a name is a binary search rather than a walk of every row
-    /// (`RefsSnapshot::local_named`). `None` for every other section.
+    /// a name is a binary search (`RefsSnapshot::local_named`). `None`
+    /// for every other section.
     pub(super) fn branch_named(&self, short: &str) -> Option<&platitude_core::session::BranchItem> {
         match self {
             Self::Locals(snapshot) => snapshot.local_named(short),
@@ -104,9 +104,9 @@ impl Source {
     /// repository has the tag; empty when the two agree, when that remote
     /// does not carry the name, or when nothing has read the remotes yet.
     ///
-    /// Off the snapshot's own sorted run rather than the rows: a drift is
-    /// listed once for the local tag, and no row of the sidebar is the
-    /// remote's reading of a name that is here as well.
+    /// Off the snapshot's own sorted run: a drift is listed once for the
+    /// local tag, and no row of the sidebar is the remote's reading of a
+    /// name that is here as well.
     pub(super) fn tag_drift(&self, name: &str, remote: &str) -> String {
         let Self::Tags(snapshot) = self else {
             return String::new();
@@ -126,9 +126,9 @@ impl Source {
     }
 
     /// Whether the entry at `at` is one of `names` — the names being
-    /// what git is asked about rather than what a row shows, so a stash
-    /// answers to its selector and every other row to the name it shows
-    /// (the same split `Entry::full` makes).
+    /// what git is asked about, so a stash answers to its selector and
+    /// every other row to the name it shows (the same split `Entry::full`
+    /// makes).
     ///
     /// What the sidebar shows a row as gone by while its delete is out
     /// (`NavSectionModel::set_hidden`).
@@ -152,8 +152,8 @@ impl Source {
             .count()
     }
 
-    /// The same status as one list of paths rather than four runs of
-    /// sides — what another working copy's changes are shown as
+    /// The same status as one list of paths — what another working
+    /// copy's changes are shown as
     /// ([`Bucket::Whole`]).
     pub(super) fn whole_files(status: platitude_core::status::WorkTreeStatus) -> Self {
         let mut order: Vec<FileAt> = (0..status.items.len())
@@ -229,8 +229,8 @@ pub(super) enum Bucket {
     /// Every changed path once, whichever sides it changed on — the one
     /// list another working copy's changes are shown as.
     ///
-    /// **The split is the index's, and the index is not this window's to
-    /// move.** Told apart here, a file edited and then edited again would
+    /// **The split is the index's, and that index belongs to the other
+    /// copy.** Told apart here, a file edited and then edited again would
     /// stand twice under two headings that name two halves of an act
     /// nobody reading can take part in. What is left is the question a
     /// reader of somebody else's copy is actually asking — what has that
@@ -277,11 +277,11 @@ impl Bucket {
         }
     }
 
-    /// The same for a row that stands for a whole path rather than one
-    /// side of it: **the side that holds the newest bytes**, which is the
-    /// index where anything is staged and the working tree otherwise. A
-    /// reader opening one of these rows is asking what the copy has, and
-    /// the staged side is the nearer answer to that.
+    /// The same for a row that stands for a whole path: **the side that
+    /// holds the newest bytes**, which is the index where anything is
+    /// staged and the working tree otherwise. A reader opening one of
+    /// these rows is asking what the copy has, and the staged side is the
+    /// nearer answer to that.
     pub(super) fn routing_of(self, item: &platitude_core::status::StatusItem) -> &'static str {
         use platitude_core::status::StatusItem;
         match (self, item) {
@@ -395,7 +395,7 @@ mod tests {
 
     /// Which entries a bucket holds is git's answer, and core is where it
     /// is written down — this list asks one entry at a time so a row can
-    /// name the bucket it came out of, and the two must not drift.
+    /// name the bucket it came out of, and the two stay in step.
     #[test]
     fn a_bucket_holds_what_core_says_it_holds() {
         let status = pending();
@@ -445,7 +445,7 @@ mod tests {
         // a.txt (conflicted), c.txt (untracked), d.txt (staged rename),
         // src/b.txt (both sides — the index's letter wins).
         assert_eq!(letters, vec!["UU", "?", "R", "M"]);
-        // And the side each row opens is the row's own, not the run's.
+        // And the side each row opens is the row's own.
         let sides: Vec<&str> = order
             .iter()
             .map(|at| at.bucket.routing_of(&status.items[at.at as usize]))

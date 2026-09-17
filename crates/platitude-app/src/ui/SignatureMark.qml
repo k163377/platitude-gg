@@ -8,7 +8,7 @@ import platitude.ui
 // Where it stands is the caller's to say, and there are two seats for it.
 // In the details pane it rides the committer's name, on the shoulder every
 // other `!` in this app stands on (規約 §署名の表示). In the commit editor
-// there is no name to hang it off — the phrase names a branch, not a person
+// there is no name to hang it off — the phrase names a branch
 // — so it rides the corner of the face the phrase already carries, the way
 // the pen rides the other one. One shape either way, so both panes say
 // "signature" in one vocabulary.
@@ -34,8 +34,8 @@ Item {
     property bool pointedAt: false
     /// The ink of the mark itself; the disc under it is that plus its
     /// own ring, the same arithmetic the pen badge does. A smaller face
-    /// hands in a smaller ink rather than wearing the same badge twice
-    /// over (デザイン規約 §アバターを与える).
+    /// hands in a smaller ink
+    /// (デザイン規約 §アバターを与える).
     property int ink: Theme.iconSm
     /// Line weight. A mark standing at `iconSm` beside a word carries 4/3
     /// the weight of the letters unless the caller hands the grid ratio in,
@@ -52,7 +52,7 @@ Item {
     readonly property bool pointed: signatureHover.hovered || signatureMark.pointedAt
 
     /// The air this mark's own square holds past its ink, on whichever
-    /// side is set against something. **The seat is the ink, not the box**
+    /// side is set against something. **The seat is the ink**
     /// (規約 §余白): the mark is drawn well inside its square, so one
     /// placed a pixel off a frame — or half a gap off a name — would leave
     /// several between that and anything actually drawn. Whoever places
@@ -74,8 +74,8 @@ Item {
     readonly property color tone: signatureMark.kind === "verified" ? Theme.success
         : signatureMark.broken ? Theme.danger : Theme.textSecondary
     /// Conclusion first, one line (デザイン規約 §hover のツールチップ).
-    /// git's verdict by default; the commit editor's badge is a setting
-    /// rather than a verdict, so it hands its own sentence in.
+    /// git's verdict by default; the commit editor's badge is a setting,
+    /// so it hands its own sentence in.
     property string tip:
         signatureMark.code === "G"
         ? (signatureMark.signer !== ""
@@ -99,10 +99,10 @@ Item {
     implicitWidth: signatureMark.ink
     implicitHeight: signatureMark.ink
 
-    // **No disc under it.** The pen's is what makes the pen legible on a
+    // **The mark is bare.** The pen's disc makes the pen legible on a
     // face of any colour, but this mark is never on one: beside a name it
     // stands on the pane's own ground, and on a face it is placed past the
-    // round corner rather than over it. A ring either way would only be a
+    // round corner. A ring either way would only be a
     // second small frame beside whatever frame it is set against.
     NavIcon {
         id: mark
@@ -114,7 +114,7 @@ Item {
     ToolTip.visible: signatureMark.pointed
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: signatureMark.tip
-    // A handler, not a MouseArea: handlers are passive, so the face
+    // A handler: handlers are passive, so the face
     // under this one keeps the hover that raises its own badge (規約
     // §hover のツールチップ).
     HoverHandler { id: signatureHover }

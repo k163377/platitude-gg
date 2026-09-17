@@ -81,20 +81,20 @@ impl NavSectionModel {
         });
         self.head_row = head.map_or(-1, |row| row as i32);
         // The fold the stand-in steps itself in by, read off the row it
-        // stands for rather than guessed: a branch carrying a `/` sits one
-        // step in and `main` sits at none, and a stand-in that always took
-        // the same step began its name in a column no row was in.
+        // stands for: a branch carrying a `/` sits one step in and `main`
+        // sits at none, and a stand-in that always took the same step
+        // began its name in a column no row was in.
         self.head_depth = head
             .and_then(|at| self.row_at(at))
             .map_or(0, |row| self.field(row, Role::Depth).number());
         self.shown_total = self.shown_rows() as i32;
-        // The count the section's band shows. **A hidden row is not one
-        // of them** — the band is saying how many the repository has, and
-        // a row being shown as already deleted has to be gone from the
+        // The count the section's band shows. **A hidden row comes off
+        // it** — the band is saying how many the repository has, and a
+        // row being shown as already deleted has to be gone from the
         // number as well as from the list, or the band reads one more
         // than the reader can count (デザイン規約 §消す操作は先に画面から消す).
         // A *filtered* row still counts: that band answers "how many are
-        // there", not "how many match" (`set_filter`).
+        // there" (`set_filter`).
         self.total = (self.all.len() - self.all.named_count(&self.hidden)) as i32;
         // The bucket heading's number, counted where the rows are cut to
         // the run — so the heading and the list under it cannot come to
@@ -201,10 +201,10 @@ impl NavSectionModel {
 
     /// What the row identified by one field answers for another.
     ///
-    /// Asks the section's whole source rather than the visible rows, so
-    /// an active filter or a collapsed folder does not hide the answer —
-    /// and asks it undented, because a name given from outside is the
-    /// whole one git knows.
+    /// Asks the section's whole source, so an active filter or a
+    /// collapsed folder does not hide the answer — and asks it
+    /// undented, because a name given from outside is the whole one git
+    /// knows.
     pub(super) fn told(&self, known: Role, text: &str, wanted: Role) -> String {
         (0..self.all.len())
             .filter_map(|at| self.all.entry(at))
@@ -224,7 +224,7 @@ impl NavSectionModel {
     /// Two fields decide it, so this cannot go through `told`: the branch
     /// a worktree row shows on its right, and the mark saying the row is
     /// the copy this window is already in — that one is where a switch is
-    /// a no-op, not where it is refused.
+    /// a no-op.
     pub(super) fn worktree_with(&self, branch: &str) -> String {
         if branch.is_empty() || self.section != "worktrees" {
             return String::new();

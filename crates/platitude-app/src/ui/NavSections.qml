@@ -64,8 +64,8 @@ ColumnLayout {
     readonly property bool headPinLit: headPin.visible && headPin.pointed
     readonly property string headPinWords: headPin.tipWords
     /// Whether the stand-in is standing, which edge it took, and the coordinate that edge came out as
-    /// (PGG_AUTO_ACT=nav-pin-edge). The third is not a second opinion on the second — the place is bound straight off
-    /// it — but it is where the edge itself is, which a run can hold to a number while the pane's height cannot.
+    /// (PGG_AUTO_ACT=nav-pin-edge). The third is where the edge itself is, which a run can hold to a number while
+    /// the pane's height cannot — the place is bound straight off the second.
     readonly property bool headPinShown: headPin.visible
     readonly property bool headPinAbove: headPin.rowAbove
     readonly property real headPinY: headPin.y
@@ -121,10 +121,10 @@ ColumnLayout {
         // takes a row of its own and the rows begin under it (`HeadPinRow.seated`). The list asks for that much more
         // height along with it, or the row the margin pushed down would be the one that cannot be read.
         //
-        // **A section with nothing in it keeps its 1px of ground and nothing else.** That 1px is an instruction, not
-        // a consequence of anything here (デザイン規約 §QML 実装ルール のセクションの地), so a seat is never taken
-        // out of it: a filter that matched no branch is answered by the section standing empty, not by one row
-        // appearing in it.
+        // **A section with nothing in it keeps its 1px of ground and nothing else.** That 1px is an instruction
+        // (デザイン規約 §QML 実装ルール のセクションの地), so the stand-in stays off it: a filter that matched
+        // no branch is answered by the section standing empty, and the stand-in's row waits for a
+        // branch to ride above.
         topMargin: headPin.seated && branchList.count > 0 ? Theme.rowHeight : 0
         Layout.verticalStretchFactor: sections.sectionPull
         onRefActivated: oidHex => sections.refActivated(oidHex)
@@ -135,8 +135,8 @@ ColumnLayout {
             // The list is a Flickable: children declared in one are
             // adopted by its content item and scroll away with it.
             // Parenting to the list itself is what keeps this still,
-            // so the adoption is written here rather than inside the
-            // component (app-ui.md).
+            // so the adoption is written here, at the instance
+            // (app-ui.md).
             parent: branchList
             pointed: sections.headPinPointed
                      || (branchList.pointedTipRow >= 0

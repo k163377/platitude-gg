@@ -20,7 +20,7 @@ Item {
     /// automation report reads their widths.
     required property Item graphPane
 
-    /// What is drawn, not what was asked for — the one badge's own
+    /// What is drawn — the one badge's own
     /// `shown` (`RefusalBadge`, on why not its `visible`).
     readonly property alias shown: overlay.shown
 
@@ -30,8 +30,8 @@ Item {
     readonly property alias at: overlay.at
 
     /// Every split bar in this page, and whichever one has the hand. One
-    /// pointer, so at most one at a time. The list is collected rather
-    /// than declared: one `handle:` Component builds every bar of its
+    /// pointer, so at most one at a time. The list is collected:
+    /// one `handle:` Component builds every bar of its
     /// SplitView, so there is nothing to hang an id on.
     property var splitBars: []
     property Item heldSplit: null
@@ -53,12 +53,12 @@ Item {
 
     /// What the watcher settles on, given where the hand is in the scene.
     /// The `PointHandler` and the automation hook both come through here,
-    /// so the refusal is one answer rather than two kept in step.
+    /// so the refusal is one answer.
     ///
-    /// Not a binding: `mapToItem` is a method, and a binding over it would
+    /// A function: `mapToItem` is a method, and a binding over it would
     /// take no dependency on the geometry it reads and freeze on its first
     /// answer (app-ui.md). A drag moves the bar every frame, so this is
-    /// pushed on each point instead.
+    /// pushed on each point.
     function settleSplitRefusal(sceneX, sceneY) {
         const bar = watch.heldSplit
         if (!bar) {

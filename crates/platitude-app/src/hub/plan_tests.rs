@@ -65,7 +65,7 @@ fn a_late_answer_to_an_older_click_cannot_eat_the_one_the_screen_waits_on() {
 
 /// The three answers share one slot, so the watermark has to hold across
 /// their kinds: a refusal for the newest click is as much its answer as a
-/// plan is, and an older click's plan must not stand in front of it.
+/// plan is, and the newest click's answer is the one that lands.
 #[test]
 fn an_older_plan_cannot_stand_in_front_of_a_newer_refusal() {
     let feeds = Arc::new(Feeds::default());
@@ -95,7 +95,7 @@ fn an_older_plan_cannot_stand_in_front_of_a_newer_refusal() {
 }
 
 /// A generation already drained is spent: an answer arriving under it
-/// again must not wake the consumer for a plan it has finished with.
+/// again is let go, and the consumer sleeps on.
 #[test]
 fn a_drained_answer_is_not_requeued_by_a_late_duplicate() {
     let feeds = Arc::new(Feeds::default());

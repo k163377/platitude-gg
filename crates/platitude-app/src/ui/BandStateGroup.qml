@@ -25,13 +25,13 @@ Item {
     property real tabRunAvail: 0
     property int tabCount: 0
     /// The padding and the height of the buttons this group stands between — what sets how big a target is here is the
-    /// padding a Fusion `ToolButton` keeps around its content, a number the theme does not have. Handed in rather than
-    /// read off a neighbour by id, so the group can be laid out beside anything.
+    /// padding a Fusion `ToolButton` keeps around its content, a number the theme does not have. Handed in,
+    /// so the group can be laid out beside anything.
     property real controlPadding: 0
     property real controlHeight: 0
     /// The buttons beside this group have given their words up and stand in the band's own end cells now
     /// (`TopBar.actionsFolded`). The mark goes with them: what it is drawn at is «the same box as its neighbours»
-    /// rather than a size of its own (規約 §ウィンドウの縁「その 2 つは 1 つの箱の高さに揃える」), and a mark left at the box a *word*
+    /// (規約 §ウィンドウの縁「その 2 つは 1 つの箱の高さに揃える」), and a mark left at the box a *word*
     /// stood in would be the one low target in a row of marks.
     property bool cellFolded: false
 
@@ -46,7 +46,7 @@ Item {
     readonly property bool identityBadgeShown: AppBackend.identityState === "missing" || AppBackend.identityUnsaved
         || (stateGroup.curPage !== null && !stateGroup.curPage.pageTab.identityReady)
     readonly property bool oldGitBadgeShown: AppBackend.gitUnsupported
-    /// What is drawn is not the repository's history.
+    /// The graph and the repository disagree.
     ///
     /// **Two ways in, one badge.** The walk gave up part-way, so rows are missing (`failed`); or every row is drawn
     /// and the rebuild that would have refreshed them did not land, so none of them is current (`stale`). Told apart
@@ -61,11 +61,11 @@ Item {
     readonly property bool stateShown: stateGroup.opBadgeShown || stateGroup.conflictBadgeShown
                                        || stateGroup.identityBadgeShown || stateGroup.oldGitBadgeShown
                                        || stateGroup.staleBadgeShown
-    /// The narrowest a badge is drawn before the group gives up on words. Counted in characters rather than pixels (規約
+    /// The narrowest a badge is drawn before the group gives up on words. Counted in characters (規約
     /// §ウィンドウの縁) — the same count costs a different number of pixels in each platform's UI font. Two, where the tab
     /// names keep three.
     readonly property int stateMinChars: 2
-    /// Settled rather than bound, and settled where it is measured
+    /// Settled where it is measured
     /// (`BandStateMetrics`).
     readonly property real stateBadgeMinW: badgeMetrics.minW
     readonly property bool stateHasAlso: stateGroup.stateWt !== null && stateGroup.stateWt.opAlso !== ""
@@ -82,8 +82,8 @@ Item {
     /// (`PGG_AUTO_ACT=badges` / `badges-hover`).
     readonly property bool stateWordsShown: badgeRow.visible
     readonly property bool stateMarkShown: stateToggle.visible
-    /// What the mark was actually painted with — the heaviest state's colour (規約 §状態). Read off the group rather than
-    /// recomputed, for the reason `commandsMarkColor` is: what is being checked is that the rule reached the paint, and
+    /// What the mark was actually painted with — the heaviest state's colour (規約 §状態). Read off the group,
+    /// for the reason `commandsMarkColor` is: what is being checked is that the rule reached the paint, and
     /// a second copy of the rule cannot say so.
     readonly property color stateMarkColor: stateGroup.tint
     readonly property int stateCapW: stateGroup.cap === Number.MAX_VALUE ? -1 : Math.round(stateGroup.cap)
@@ -94,7 +94,7 @@ Item {
     readonly property bool stateCardLaidOut: stateCard.laidOut
 
     /// Which colour the mark takes once the words are gone. The two that stop work win whenever they are among them
-    /// (規約 §状態): a conflict, and a graph that is not the history the repository has — **either way it came to be
+    /// (規約 §状態): a conflict, and a graph that disagrees with the repository — **either way it came to be
     /// so**, since a picture that cannot be acted on is one state whether rows are missing from it or merely old.
     readonly property color tint: stateGroup.conflictBadgeShown || stateGroup.staleBadgeShown
                                   ? Theme.danger : Theme.warning
@@ -111,11 +111,11 @@ Item {
     /// What each badge's box is drawn at, once they have given way together. `Number.MAX_VALUE` is "nothing is
     /// narrowed". Settled by hand (`settleCap`), since it is read off a list of measurements.
     property real cap: Number.MAX_VALUE
-    /// Whether the words have been given up altogether. Bound rather than assigned beside the cap: two of the three
+    /// Whether the words have been given up altogether. Bound, because two of the three
     /// conditions can change without the group's own width moving, and an assignment made in `settleCap` would never be
     /// asked for again.
     readonly property bool tabsScrolling: stateGroup.tabContentWidth > stateGroup.tabRunAvail
-    /// How many tabs the strip has room for as they are drawn now. Off their real width rather than their cap: a cap is
+    /// How many tabs the strip has room for as they are drawn now. Off their real width: a cap is
     /// a ceiling the names may be nowhere near.
     readonly property int tabsInView: {
         const each = stateGroup.tabCount > 0 ? stateGroup.tabContentWidth / stateGroup.tabCount : 0
@@ -133,7 +133,7 @@ Item {
     /// **A cell the band skipped is still at the origin.** A row leaves out a child that is not visible, and this
     /// group stands only once a badge does — so the frame it first stands in, it is still at (0, 0) at its implicit
     /// size, which is where the pointer is until a hand moves one. The hover taken there is the group arriving under
-    /// the hand rather than the hand arriving on the group, and it opens the card over a band nobody has touched; the
+    /// the hand, and it opens the card over a band nobody has touched; the
     /// row then places the group, the hover falls, and the card shuts itself a beat later — which is a picture that
     /// differs from run to run (measured 2026-09-05: the card stood in 6 headless runs of `file-menu-conflict` in 10,
     /// and offscreen is where the hand never moves off the origin at all). So the card waits for the row's answer,
@@ -142,7 +142,7 @@ Item {
     /// A hand already resting where the group lands keeps its card until it moves, which is the same rule read the
     /// other way: this card answers a hand that comes to the mark.
     ///
-    /// **Said once and never taken back**: the row leaves a cell it stops laying out where it put it, so a group that
+    /// **Said once and kept**: the row leaves a cell it stops laying out where it put it, so a group that
     /// stops standing and stands again is already where it belongs. This group is never the row's first cell — the
     /// tab strip stands in front of it carrying a floor width — so the origin is the unplaced position and no other.
     /// A band that put this group first would leave the card unable to open at all, which `badges-hover` is what says.
@@ -202,7 +202,7 @@ Item {
     /// row placing the group a frame later. The card then waits out the watchdog with the pointer on it
     /// (`badges-hover`).
     ///
-    /// **The hand's own rule is not this one and is not repaired here**: a hover the group arrived under is answered
+    /// **The hand keeps its own rule**: a hover the group arrived under is answered
     /// when it next moves, and until then there is deliberately no card (`placed`). So this watches the stand-in and
     /// nothing else — the two roads to the card differ in exactly this, and the verbs that stand a pointer in
     /// (`graph-stale` / `old-git-card` / `identity-tip`) all take this one.
@@ -235,7 +235,7 @@ Item {
         minChars: stateGroup.stateMinChars
     }
 
-    // A handler rather than an area: it is passive, so the identity badge under it still takes its own press
+    // A handler: it is passive, so the identity badge under it still takes its own press
     // (app-ui.md).
     HoverHandler {
         id: groupHover
@@ -268,7 +268,7 @@ Item {
                 // (app-ui.md §自然幅の上限は切り上げる). The three badges below cap themselves the same way.
                 Layout.maximumWidth: Math.ceil(implicitWidth)
             }
-            // Drawn, not typed — a middle dot would put a full-width cell in the badge (規約 §余白).
+            // Drawn — a typed middle dot would put a full-width cell in the badge (規約 §余白).
             DotMark {
                 visible: stateGroup.stateWt !== null && stateGroup.stateWt.opAlso !== ""
                 tint: Theme.warning
@@ -323,13 +323,13 @@ Item {
                 Layout.maximumWidth: Math.ceil(implicitWidth)
             }
         }
-        // `danger`, where the two outlined ones beside it are `warning`: the graph on screen is not the repository's
-        // history and nothing is going to make it so on its own (規約 §状態「今止まっている・失敗した」). **Outlined, not
-        // filled** — the fill is `CONFLICTS`, the one state with files waiting on the reader; this one is read, not
-        // worked through. Whatever was said about it is in the card behind this badge, which is where every one of
+        // `danger`, where the two outlined ones beside it are `warning`: the graph on screen disagrees with the
+        // repository and nothing is going to settle it on its own (規約 §状態「今止まっている・失敗した」). **Outlined**
+        // — the fill is `CONFLICTS`, the one state with files waiting on the reader; this one is read.
+        // Whatever was said about it is in the card behind this badge, which is where every one of
         // these keeps its sentence.
         //
-        // **Ahead of `OLD GIT`, which is the one that is not a state of this repository or this window** (規約
+        // **Ahead of `OLD GIT`, which is a state of the machine** (規約
         // §ウィンドウの縁): every badge before that one is a mark that somebody is in the middle of something, and this is
         // one of them — the next read that lands takes it down, where an old git stands until the machine's is replaced.
         StateBadge {
@@ -365,7 +365,7 @@ Item {
         }
     }
 
-    // `…` typed rather than drawn: the ellipsis is what Qt spends on its own eliding and it measured the same on both
+    // `…` typed: the ellipsis is what Qt spends on its own eliding and it measured the same on both
     // OSes (764c362). The same box the command log's mark takes (規約 §ウィンドウの縁). `Theme.buttonMinWidth` does not reach it
     // — that floor is for a box put round a *word*, and given it the mark came out 80 wide with 26px of air at either
     // end of three dots.

@@ -5,13 +5,13 @@ import platitude.ui
 
 // Where a remote is written down: a name and a URL.
 //
-// A window of its own rather than the standing question's bar, because this is not a question about what is on screen —
-// it is repository configuration, the same kind of thing as identity, which デザイン規約 §可否・警告の出し場所 keeps in a popup.
-// Putting it in the bar also put a remote's own name and URL on a second row while the branch name stayed on the first,
-// which grouped them backwards.
+// A window of its own, because this is repository configuration, the same kind of thing as
+// identity, which デザイン規約 §可否・警告の出し場所 keeps in a popup. Putting it in the bar also put a
+// remote's own name and URL on a second row while the branch name stayed on the first, which
+// grouped them backwards.
 //
-// The same form corrects a URL. Adding one and fixing one differ by which half is filled in already, not by what has to
-// be typed.
+// The same form corrects a URL. Adding one and fixing one differ by which half is filled in already; the
+// typing is the same.
 AppDialog {
     id: remoteDialog
 
@@ -32,12 +32,12 @@ AppDialog {
         remoteDialog.editing === "" && remoteDialog.wantedName !== ""
         && remoteDialog.taken.indexOf(remoteDialog.wantedName) >= 0
 
-    /// The remote was written down. The URL is not judged here: `git remote add` contacts nothing, so only a push can
-    /// find it wrong.
+    /// The remote was written down. The URL goes in as typed: `git remote add` contacts nothing, so only a push
+    /// can find it wrong.
     signal submitted(string name, string url)
-    /// The box was left in a different state than it opened in. Its own signal, not part of `submitted`: what it
-    /// changes is one config key and not the remote, and a form that reported both would have the caller work out
-    /// which of the two it was being told about.
+    /// The box was left in a different state than it opened in. Its own signal: what it changes is one config
+    /// key, and a form that reported both would have the caller work out which of the two it was being told
+    /// about.
     signal markChanged(string name, bool marked)
 
     function start(name, url, takenNames, marked, markLocal) {
@@ -93,10 +93,10 @@ AppDialog {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             color: Theme.textSecondary
-            // The one thing the fields cannot ask for: where the URL comes from. Not "make one first" — the definite
-            // article already puts the repository over there, and nothing here could make it anyway. That the URL is
-            // untouched until the push is left unsaid; the push says it, at the moment it can be acted on. The same
-            // line has to fit a correction, where the repository plainly exists.
+            // The one thing the fields cannot ask for: where the URL comes from. The definite article already puts
+            // the repository over there, and nothing here could make it anyway. That the URL is untouched until the
+            // push is left unsaid; the push says it, at the moment it can be acted on. The same line has to fit a
+            // correction, where the repository plainly exists.
             text: qsTr("Paste the URL of the repository on your host.")
         }
 
@@ -110,8 +110,8 @@ AppDialog {
                 Layout.fillWidth: true
                 // Only while nothing is called that. The box is prefilled whenever the repository has no remote at all,
                 // so this shows in exactly the case a name already exists — and a greyed suggestion the Add button
-                // would refuse is worse than no suggestion. No second name is invented in its place: which one fits is
-                // the person's to know.
+                // would refuse is worse than no suggestion. The box then stays empty: which name fits is the
+                // person's to know.
                 placeholderText: remoteDialog.taken.indexOf("origin") >= 0 ? "" : "origin"
                 onAccepted: remoteDialog.submit()
             }
@@ -136,8 +136,8 @@ AppDialog {
         // holding it is this form's own heading (デザイン規約 §リモートを書き留める). The same words as the row on the left menu's
         // menu: two ways into one operation say one sentence (§メニュー).
         //
-        // Not offered on the first remote of a repository, which is where every push goes anyway — the line is about
-        // taking the destination from somewhere else, and there is nowhere else yet.
+        // Offered from the second remote on — the line is about taking the destination from somewhere else, and a
+        // repository's first remote is where every push goes anyway.
         ColumnLayout {
             id: markRow
             Layout.fillWidth: true
@@ -151,7 +151,7 @@ AppDialog {
                 enabled: remoteDialog.markLocal || !remoteDialog.marked
             }
             // What checking it costs, and what unchecking it gives back (デザイン規約 §長さ: 見出し 1 行 + 失うもの 1 行). The third
-            // line is not about this box at all: it says the one move a repository has against a mark it cannot clear.
+            // line says the one move a repository has against a mark it cannot clear.
             Label {
                 Layout.fillWidth: true
                 leftPadding: Theme.spaceXl

@@ -15,8 +15,8 @@ import QtTest
 //  - **two enabled `StandardKey.Cancel` shortcuts in one window fire neither.**
 //
 // The last one is the trap: the ask bar and the notice bar each own one
-// already, so anything else that wants Escape has to take it as a key handler
-// (`RepoPage.escapePressed`) rather than as a third shortcut.
+// already, so anything else that wants Escape takes it as a key handler
+// (`RepoPage.escapePressed`).
 //
 // And two more about the ancestor in that third fact, which is only an
 // ancestor for as long as the keyboard stays inside it:
@@ -86,8 +86,8 @@ TestCase {
         compare(scene.secondFired, 0, "the disabled one does not")
     }
 
-    // **The trap.** Neither is called — so a second owner does not win, it puts
-    // the first one out of action as well.
+    // **The trap.** Neither is called — a second owner puts the first one out
+    // of action along with itself.
     function test_two_at_once() {
         scene.secondOn = true
         keyClick(Qt.Key_Escape)

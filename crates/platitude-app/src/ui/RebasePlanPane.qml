@@ -17,10 +17,10 @@ Rectangle {
     required property var planModel
     /// The commit the page's selection sits on, so the row under it reads selected the way a graph row would.
     property string selectedOid: ""
-    /// The read that opens the plan is still out. The pane takes the graph's seat at the press rather than at the
-    /// answer (`RepoPage.planShown`), so this is the face it has until the rows land: the band's one word, the turning
-    /// mark in the middle of the column that will hold them, and nothing it does not yet know — the base has no name
-    /// and no id yet, and neither has the question of whether there is a base at all (デザイン規約 §フル interactive rebase).
+    /// The read that opens the plan is still out. The pane takes the graph's seat at the press (`RepoPage.planShown`),
+    /// so this is the face it has until the rows land: the band's one word, the turning mark in the middle of the
+    /// column that will hold them, and nothing it does not yet know — the base has no name and no id yet, and
+    /// neither has the question of whether there is a base at all (デザイン規約 §フル interactive rebase).
     required property bool waiting
 
     /// Which commit the reader picked, for the page to select (the details pane follows it).
@@ -28,8 +28,8 @@ Rectangle {
 
     /// `Discard` would take composed work away with the plan — verbs set, rows moved, a reword saved into it, or one
     /// typed into the right pane's boxes and not yet given to it. None of that can be read back off the screen
-    /// afterwards, so the button is held rather than clicked (デザイン規約 §長押し). Handed in: half the answer is the
-    /// right pane's, and this pane owns nothing but the rows (`RepoPage.planDiscards`).
+    /// afterwards, so the button is held (デザイン規約 §長押し). Handed in: half the answer is the right pane's, and
+    /// this pane owns nothing but the rows (`RepoPage.planDiscards`).
     property bool discards: false
 
     /// The list the rows stand in, so a verb can make the same calls a hand on a row makes. An automation-only
@@ -51,7 +51,7 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
 
-        // The head names the mode, not a command: nothing is running (§git 用語のコード表記 — 状態は通常表記).
+        // The head names the mode: nothing is running (§git 用語のコード表記 — 状態は通常表記).
         Item {
             id: planHead
             Layout.fillWidth: true
@@ -65,10 +65,10 @@ Rectangle {
                 // band says what this face is for the whole time it is up, and the rest of the sentence arrives with
                 // the rows.
                 //
-                // **The `…` is the sentence's, not the wait's**: what it marks is that this phrase is cut short and
-                // will be finished — the elision mark of 規約 §ウィンドウの縁, not the progress mark
-                // §進行中・長押しの定数 refuses. Without it the band reads as a finished sentence and the name
-                // arriving rewrites it; with it the name lands where the mark already said something was missing.
+                // **The `…` is the sentence's**: what it marks is that this phrase is cut short and will be
+                // finished — the elision mark of 規約 §ウィンドウの縁, where §進行中・長押しの定数 refuses the progress
+                // mark. Without it the band reads as a finished sentence and the name arriving rewrites it; with it
+                // the name lands where the mark already said something was missing.
                 Label {
                     text: planPane.waiting ? qsTr("Rebasing…")
                         : planPane.planModel.root ? qsTr("Rebasing back to the very first commit")
@@ -95,16 +95,16 @@ Rectangle {
                     id: cancelButton
                     //: The way out of the plan being composed. What it throws away is the draft on screen.
                     text: qsTr("Discard")
-                    // **Not a command chip, and not a flag.** Nothing has run and nothing runs from this button, so
-                    // `--abort` here would name a command git refuses on this screen (デザイン規約 §git 用語のコード表記
-                    // — コマンドでないものに着せない). The word takes its object from the screen it stands on, the way
+                    // **A plain word.** Nothing has run and nothing runs from this button, so `--abort` here would
+                    // name a command git refuses on this screen (デザイン規約 §git 用語のコード表記
+                    // — 着せるのはコマンドだけ). The word takes its object from the screen it stands on, the way
                     // the file row's own `Discard` takes its object from the row under the pointer.
                     //
                     // The frame carries what is about to be lost, and the word takes the colour only because this is
                     // a hold (規約 §長押し — `RebasePlanRunBar` と同じ線). The word itself does not change: pressing
                     // this still puts the plan away, hold or no hold. **The dressing reads the length the press was
-                    // given** (`ActionButton.armedMs`), not `discards`: the boxes in the right pane can empty under a
-                    // hand that is already holding, and the button would lose its frame there.
+                    // given** (`ActionButton.armedMs`): the boxes in the right pane can empty under a hand that is
+                    // already holding, and the button would lose its frame there.
                     frameColor: cancelButton.armedMs > 0 ? Theme.warning : Theme.borderDefault
                     tone: cancelButton.armedMs > 0 ? Theme.warning : Theme.textPrimary
                     holdMs: planPane.discards ? Metrics.holdMs : 0
@@ -127,13 +127,13 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.topMargin: Theme.spaceXs
-            // No rows until they are the plan's — the half of this face that arrives late, and what makes the wait one
-            // face rather than a band and a mark laid over whatever else is there. **Costs nothing while the read is
-            // really out**: the model has no rows then either.
+            // The rows arrive once they are the plan's — the half of this face that arrives late, and what makes
+            // the wait one face of its own. **Costs nothing while the read is really out**: the model has no rows
+            // then either.
             //
-            // The count, not `visible`: a hidden child leaves the column with nothing to stretch, and the band drops to
-            // the middle of the pane with the mark on top of it (observed on Linux — where the rows land before the
-            // grab does, and the report line stays green because it says what the edge saw).
+            // The count: a hidden child leaves the column with nothing to stretch, and the band drops to the middle
+            // of the pane with the mark on top of it (observed on Linux — where the rows land before the grab does,
+            // and the report line stays green because it says what the edge saw).
             model: planPane.waiting ? 0 : planPane.planModel
 
             /// What every row reads and calls (the delegate reaches the pane through its view).
@@ -220,10 +220,10 @@ Rectangle {
 
     // The read walking the range, in the middle of the column that will hold its rows — the same mark at the same size
     // in the same seat the graph's own first load puts one in (`GraphEmptyState`), because this pane is standing where
-    // that column was and waiting should not change its look when the seat changes hands.
+    // that column was and waiting keeps its look when the seat changes hands.
     //
-    // Centred below the head rather than in the pane: the band is up the whole time and the rows will start under it,
-    // so the middle of what is waiting is half a head lower than the middle of the pane.
+    // Centred below the head: the band is up the whole time and the rows will start under it, so the middle of what
+    // is waiting is half a head lower than the middle of the pane.
     SpinnerIcon {
         anchors.centerIn: parent
         anchors.verticalCenterOffset: planHead.height / 2
@@ -263,9 +263,9 @@ Rectangle {
                 onTriggered: planPane.planModel.setAction(verbMenu.forRow, "edit")
             }
             AppMenuSeparator {}
-            // The two folds land in the nearest row below that stays in the history, so a row with nothing under it
-            // but drops — or nothing at all — never offers them (the model demotes what a later change strands, the
-            // same line).
+            // The two folds land in the nearest row below that stays in the history, so they are gone from a row
+            // with nothing under it but drops — or nothing at all (the model demotes what a later change strands,
+            // the same line).
             AppMenuItem {
                 code: "squash"
                 text: qsTr("into parent, both messages")

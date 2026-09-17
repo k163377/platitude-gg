@@ -15,8 +15,8 @@ Rectangle {
     /// whether a write is running (`DiffPane`).
     required property bool fromWorkTree
     required property bool staged
-    /// Whether the file is this window's own to write (`DiffPane.writable`). **The word does not stand where it is
-    /// not** — a file read out of another working copy is read the way a commit's file is, and a commit's diff has
+    /// Whether the file is this window's own to write (`DiffPane.writable`). **The word stands where it can
+    /// write** — a file read out of another working copy is read the way a commit's file is, and a commit's diff has
     /// no whole-file word either (デザイン規約 §別の作業コピーを読む).
     required property bool writable
     /// The copy the file belongs to, where it is not this window's. **Said in front of the path**: this band is the
@@ -32,8 +32,8 @@ Rectangle {
     /// Whether the band ran out of room for the path and is showing the tail of it. The output side, and the half a
     /// picture of a wide pane cannot answer.
     readonly property alias cut: titleField.clipped
-    /// Automation: whether the file's own word is there to press, read off the button rather than off what was
-    /// handed in — a report built from `writable` would go green with the button unwired (app-ui.md §UI 自動化の因果性).
+    /// Automation: whether the file's own word is there to press, read off the button
+    /// — a report built from `writable` would go green with the button unwired (app-ui.md §UI 自動化の因果性).
     readonly property bool stageOffered: stageFileButton.visible && stageFileButton.enabled
 
     signal stageFileRequested()
@@ -44,7 +44,7 @@ Rectangle {
     // This is the band the hairline was written for: the row under it is a hunk heading of the same colour.
     BandRule { z: 1 }
     // The hand the path is dragged over from the band's own air (規約 §右のペインの字は掴める): the inset at the near
-    // end, the step either side of the words, the room beside a short path. Under the row rather than over it, so the
+    // end, the step either side of the words, the room beside a short path. Under the row, so the
     // word that stages the file and the way out keep every press they had.
     SweepPad {
         id: headerHand
@@ -75,7 +75,7 @@ Rectangle {
             }
             // Whose file, where it is not this window's. **Before the path and outside the field**: the path is a
             // value the reader takes away (`titleField`), and a copy's name pasted with it would be a path nothing
-            // can open. Its own cut, so a long name loses its middle rather than the file's.
+            // can open. Its own cut, so a long name loses its own middle.
             //
             // **A quarter of the band at most**, because the path is what the band is for: a copy can be named
             // anything, and left to take what it asks for it would push the file it is about off the end.
@@ -120,8 +120,8 @@ Rectangle {
         ActionButton {
             id: stageFileButton
             visible: header.fromWorkTree && header.writable
-            // The same `git add` on a conflicted file is not a staging at all — it is how git is told the conflict has
-            // been dealt with, so the word says that instead (デザイン規約 §diff の中のステージ).
+            // The same `git add` on a conflicted file is how git is told the conflict has
+            // been dealt with, so the word says that (デザイン規約 §diff の中のステージ).
             text: header.conflicted ? qsTr("Mark resolved")
                   : header.staged ? qsTr("Unstage file") : qsTr("Stage file")
             tone: header.staged ? Theme.diffRemovedFg : Theme.diffAddedFg

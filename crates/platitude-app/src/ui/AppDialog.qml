@@ -2,16 +2,16 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// Modal dialog shell shared by every app dialog: centered over the window, escape to close, elevated card face, no
-// built-in header/footer chrome. When open, a Dialog is parented into the window overlay, so `parent` here is the full
+// Modal dialog shell shared by every app dialog: centered over the window, escape to close, elevated card face, the
+// content its whole body. When open, a Dialog is parented into the window overlay, so `parent` here is the full
 // window.
 Dialog {
     id: dialog
 
-    /// The dialog takes the whole window instead of standing as a card in the middle of it. For the two settings
-    /// screens, which are read rather than answered: a card sized to its own content grows a scrollbar as soon as one
-    /// chapter does, and what is behind it is not what the reader is looking at anyway. A face that covers everything
-    /// has no edge left to float above, so it gives up the corners and the frame as well.
+    /// The dialog takes the whole window. For the two settings screens, which are read: a card sized to its own
+    /// content grows a scrollbar as soon as one chapter does, and what is behind it is not what the reader is looking
+    /// at anyway. A face that covers everything has no edge left to float above, so it gives up the corners and the
+    /// frame as well.
     property bool fills: false
 
     /// The words this dialog hands over, for the hand that takes them from the air around them

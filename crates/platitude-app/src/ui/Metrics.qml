@@ -2,8 +2,8 @@
 // is that number.
 //
 // Same standing as `Theme`: this file is where these values live, and the グラフ・インタラクション定数 and
-// 進行中・長押しの定数 tables of internal-docs/デザイン規約.md quote it (`cargo xtask docs --sync`). A number that is not
-// a token here does not belong in a component.
+// 進行中・長押しの定数 tables of internal-docs/デザイン規約.md quote it (`cargo xtask docs --sync`). Take every number
+// a component draws with from here.
 //
 // Grouped by the same three tiers `Theme` uses (規約 §トークンの三層): the timings and amounts a gesture is answered
 // with are 基礎 — no screen is in them — while the numbers that lay the ordinary window out are ベーシック. Nothing
@@ -22,17 +22,17 @@ QtObject {
     readonly property int holdFillMin: Theme.spaceXs
     readonly property int holdBackMs: 150
     readonly property int opticalDrop: 1
-    // The one opacity anything is dimmed to (デザイン規約 §暗く落とした段). Same 45% the `*Dim` colours already are — measured, not
-    // chosen.
+    // The one opacity anything is dimmed to (デザイン規約 §暗く落とした段). Same 45% the `*Dim` colours already are —
+    // measured.
     readonly property real dimFade: 0.45
     // How much of a round wash's radius is its rim — the run over which the paint comes down to `dimFade` of itself
-    // instead of stopping at a line (デザイン規約 §当たり判定). A quarter: less and the disc has an edge again, more and it
+    // (デザイン規約 §当たり判定). A quarter: less and the disc has an edge again, more and it
     // stops being a disc.
     readonly property real washRimShare: 0.25
     // One delay everywhere a tooltip opens: a faster or slower one per place would answer the same gesture
     // differently depending on where the hand made it.
     readonly property int tipDelayMs: 600
-    // How long something opened by hover waits before closing, which is not the delay it opened with: opening
+    // How long something opened by hover waits before closing: opening
     // confirms an intent, closing waits for the hand to finish crossing to the next target. `Qt.callLater` is too
     // short — walking from a line to the card that line opened changes the two hovers on different frames, and a
     // callLater runs between them and closes the card.
@@ -49,37 +49,37 @@ QtObject {
     // the hand pointed past what it can reach = how fast", and two sensitivities would make one gesture run at
     // different speeds depending on where it was made.
     readonly property real middleScrollGain: 0.12
-    // The chip column's default width. Its floor is not this number and is not in pixels at all: it is a count of
+    // The chip column's default width. Its floor is a count of
     // characters, measured at run time from the font in use.
     readonly property int labelColW: 152
     readonly property int graphDefaultLanes: 12
     // What the subject column always keeps, which is one of the two things that stop the graph column from taking
     // more room as the window narrows (the other is the lane ceiling).
     readonly property int messageMinW: 160
-    // The floor under each of the two boxes a question bar asks its `<remote>/<branch>` in. They fill the bar rather
-    // than standing at a fixed width — the room is there, and a name cut while the bar is half empty is a name cut
+    // The floor under each of the two boxes a question bar asks its `<remote>/<branch>` in. They fill the bar
+    // — the room is there, and a name cut while the bar is half empty is a name cut
     // for nothing — but neither goes under this, which is the width they used to be given outright
     // (デザイン規約 §レイアウト初期値).
     readonly property int askFieldMinW: 160
     readonly property int hoverBodyRows: 4
     readonly property int detailsAvatar: 40
     readonly property int anchorDelayMs: 50
-    // Arrow-key stepping settles here before the details load, so a held key loads once at the end rather than at
-    // every row. **It has to outlast every OS's key-repeat interval** (macOS 15ms / X11 25ms / Windows ≈32ms) for
+    // Arrow-key stepping settles here before the details load, so a held key loads once at the end.
+    // **It has to outlast every OS's key-repeat interval** (macOS 15ms / X11 25ms / Windows ≈32ms) for
     // that, and it does not decide the first step: the wait before a first repeat is longer than this everywhere, so
     // the first press has always settled before the run starts. A repeat is told from a fresh press by the key itself
-    // (`KeyEvent.isAutoRepeat`), never by timing.
+    // (`KeyEvent.isAutoRepeat`).
     readonly property int keyStepSettleMs: 150
     // Repository reload while the page is on screen. **One tick contains a `git status -uall`**, and on a
     // reference-sized repository that read is most of a second (ci/baseline/poll-cost-windows-x64.md) — the
-    // measurement is what set this interval, so it is not shortened to feel more responsive.
+    // measurement is what set this interval, and only a new measurement moves it.
     readonly property int pollIntervalMs: 10000
-    // What the *other* working copies are carrying is on a tick of its own, and **its interval is a setting rather
-    // than a token** (`AppBackend.copiesIntervalMs` ← `settings::Defaults::copies_interval_secs`): one `git status`
+    // What the *other* working copies are carrying is on a tick of its own, and **its interval is a
+    // setting** (`AppBackend.copiesIntervalMs` ← `settings::Defaults::copies_interval_secs`): one `git status`
     // per copy is a cost that scales with how many copies a person keeps, so it is theirs to set.
     // The badge's `n/m` while a replay runs, on a tick of its own. It reads two progress files out of the git
     // directory and **starts no process**, which is why the cost above does not apply to it. Faster than this and
-    // what is hit is not the read but the notify side: the work tree's model has one `changed()`, and that one
+    // what is hit is the notify side: the work tree's model has one `changed()`, and that one
     // signal re-pulls every binding on the page.
     readonly property int opProgressMs: 250
     // Wide enough that a long-press fill crossing it reads as progress.

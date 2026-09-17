@@ -7,13 +7,13 @@ import platitude.ui
 // The `REPOSITORY OVERRIDE` group of the settings screen's `Git` category: what one repository writes into its own
 // configuration file, and which repository that is (規約 §設定の画面).
 //
-// A file of its own because it is a whole group with a model behind it, not a chapter — the group above it is two
+// A file of its own because it is a whole group with a model behind it — the group above it is two
 // chapters and a sentence, this one is a chooser, a chapter, and the reads and write that follow whichever repository
-// was picked. The chooser stands above the chapter rather than inside it: it is not a setting, it is what the setting
-// below is about, so it wears a field's caption and not a chapter's heading.
+// was picked. The chooser stands above the chapter: it is what the setting
+// below is about, so it wears a field's caption.
 //
-// **The repository need not be the one in front.** Only the tab in front has a session (`RepoPageStack`), so the reads
-// and the write go through a model that is handed a work tree path (`RepoConfigModel`) rather than through the tab's.
+// **The repository is whichever one was picked.** Only the tab in front has a session (`RepoPageStack`), so the reads
+// and the write go through a model that is handed a work tree path (`RepoConfigModel`).
 ColumnLayout {
     id: pane
 
@@ -45,7 +45,7 @@ ColumnLayout {
     readonly property var repoNames: pane.openRepos.map(repo => repo.name)
 
     /// Shows the repository standing at `at` in the strip. Answers whether there was one — the automation waits
-    /// rather than counting a pick it never made.
+    /// for one.
     function showRepoAt(at) {
         const repo = pane.openRepos[at]
         if (!repo)
@@ -68,13 +68,13 @@ ColumnLayout {
     /// follows a save, or a `changed` for something else entirely — from overwriting it.
     property bool touched: false
     /// The boxes say something other than what this repository's file holds. What the Save is enabled by: empty is an
-    /// answer here rather than a missing one, so "both filled" would refuse the very thing that takes an override
+    /// answer here, so "both filled" would refuse the very thing that takes an override
     /// back out.
     readonly property bool dirty: identityFields.nameText.trim() !== repoConfig.localName
                                   || identityFields.emailText.trim() !== repoConfig.localEmail
 
-    /// The boxes hold an edit **somebody made** that this repository's file has not been given — which is not the
-    /// same question as `dirty` above. That one lights the Save and asks only whether the boxes and git disagree;
+    /// The boxes hold an edit **somebody made** that this repository's file has not been given — a different
+    /// question from `dirty` above. That one lights the Save and asks only whether the boxes and git disagree;
     /// this one is what the way out of the screen stops for, so it also asks whether anybody typed
     /// (`IdentityFields.dirty`). Guarded on the read as well: before git has answered there is nothing to disagree
     /// with.
@@ -119,7 +119,7 @@ ColumnLayout {
     /// chooser showing the picked row looks the same whether the pick moved anything or not.
     property string endingsWere: ""
     /// Picks the row for `value` through the same call a pick from the list makes (`LineEndingField.pick`). Answers
-    /// whether the list holds such a row, so a run waits rather than counting a pick it never made.
+    /// whether the list holds such a row, so a run waits for one.
     function autoPickEnding(value) {
         const at = endingsField.rowOf(value)
         if (at < 0)
@@ -131,8 +131,8 @@ ColumnLayout {
     /// The line-ending chapter in one reading. An automation-only exposure, the same one `GraphPane.view` is
     /// (app-ui.md) — the values are the model's and the chooser's, and neither is on this pane as a property.
     ///
-    /// `scope=local` is the whole of the chapter: this screen writes `core.autocrlf` into the repository somebody
-    /// picked and nowhere else (規約 §設定の画面).
+    /// `scope=local` is the whole of the chapter: this screen writes `core.autocrlf` into the repository
+    /// somebody picked (規約 §設定の画面).
     function endingsTally() {
         return "scope=local state=" + repoEndings.state
              + " were=" + pane.endingsWere
@@ -165,14 +165,14 @@ ColumnLayout {
     RepoConfigModel {
         id: repoConfig
     }
-    // The same repository's line-ending setting, read and written into the same file. A model of its own rather than
-    // more properties on the one above: the two chapters ask git about different keys, and this is the only chapter
+    // The same repository's line-ending setting, read and written into the same file. A model of its own: the two
+    // chapters ask git about different keys, and this is the only chapter
     // on the screen that writes `core.autocrlf` at all (`LineEndingsModel`).
     LineEndingsModel {
         id: repoEndings
     }
     // What git answers with is what the boxes say, until somebody types. Every property arrives on the one signal, so
-    // the guard is the reader's touch rather than which value moved (`SettingsGitPane.toolTouched` is the same shape).
+    // the guard is the reader's touch (`SettingsGitPane.toolTouched` is the same shape).
     Connections {
         target: repoConfig
         function onChanged() {
@@ -181,16 +181,16 @@ ColumnLayout {
         }
     }
 
-    // Where this group's values live, said before its chapter rather than in a line at the foot — and as help text
-    // rather than a warning. The group above wears `warning` because it replaces what every
-    // git on the computer reads; this one reaches one repository, which is the reader's own choice and undone by
-    // emptying a box. A colour that says "careful" on both would stop saying anything on either.
+    // Where this group's values live, said before its chapter — and as help text. The group above wears `warning`
+    // because it replaces what every git on the computer reads; this one reaches one repository, which is the
+    // reader's own choice and undone by emptying a box. A colour that says "careful" on both would stop saying
+    // anything on either.
     HelpText {
         text: qsTr("Saved in the chosen repository's own git configuration. What is set here stands over the values above, for that repository only.")
     }
 
     // Nothing to choose from and nothing to set. The screen is reachable with no repository open, because the app
-    // menu's one row opens it rather than a category (規約 §設定の画面).
+    // menu's one row opens the screen itself (規約 §設定の画面).
     HelpText {
         visible: pane.autoRepoRows === 0
         text: qsTr("No repository is open. These settings are about one repository, so there is nothing to show.")
@@ -223,7 +223,7 @@ ColumnLayout {
             id: identityFields
             heldName: repoConfig.localName
             heldEmail: repoConfig.localEmail
-            // What an empty box gets you, rather than an example of what to type: this pair has somewhere to fall
+            // What an empty box gets you: this pair has somewhere to fall
             // back to, and the box standing empty is how a reader asks for it.
             namePlaceholder: qsTr("inherited")
             emailPlaceholder: qsTr("inherited")
@@ -235,18 +235,18 @@ ColumnLayout {
                          ? qsTr("git still reports something else for this repository. Its configuration may have been written from elsewhere.")
                          : ""
             // How far the write reaches is the warning's line above; this one is left with the pair of keys, and with
-            // what an empty box means — which is the one thing about this chapter that is not true of the other.
+            // what an empty box means — the one thing this chapter carries alone.
             note: qsTr("Written as user.name and user.email in that repository. An empty box is not written at all.")
-            // **`edited`, not the text changing.** Filling the boxes from git changes their text too, so a reload
-            // guarded on this would be told "the reader is typing" by its own reload — and the boxes would then stop
+            // **The touch comes from `edited`.** Filling the boxes from git changes their text too, so a reload
+            // guarded on text would be told "the reader is typing" by its own reload — and the boxes would then stop
             // following git for good. Picking another repository empties them first (`RepoConfigModel::read_repo`),
             // which is exactly such a change, so the screen would sit with empty boxes over a repository that has an
-            // identity — and an empty box here asks for it to be taken out (measured, `settings-repo 0`).
+            // identity — and an empty box asks for it to be taken out (measured, `settings-repo 0`).
             onEdited: pane.touched = true
             onSubmitted: pane.submitIdentity()
         }
         // What an empty box actually falls back to cannot be shown inside it: the value lives in a file this screen is
-        // not showing, and git resolves it through more than one of them. So it is said out loud instead, as what a
+        // not showing, and git resolves it through more than one of them. So it is said out loud, as what a
         // commit made here would carry right now.
         HelpText {
             visible: repoConfig.effectiveName !== "" && repoConfig.effectiveEmail !== ""

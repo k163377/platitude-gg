@@ -7,10 +7,10 @@ use super::*;
 impl Hub {
     /// Asks whether `path` can be opened, without opening anything.
     ///
-    /// Only the picker goes through here — a folder that is no repository
-    /// must never become a (remembered) tab. Every other way in (a
-    /// restored tab, a worktree row, `PGG_AUTO_OPEN`) opens straight away
-    /// and fails on the page's own failure screen
+    /// Only the picker goes through here — what it remembers as a tab is
+    /// a folder that opened. Every other way in (a restored tab, a
+    /// worktree row, `PGG_AUTO_OPEN`) opens straight away and fails on
+    /// the page's own failure screen
     /// (デザイン規約 §可否・警告の出し場所).
     pub fn probe_repo(&self, path: PathBuf, feed: Arc<Feed<PickMsg>>) -> bool {
         let Some(handle) = self.runtime_handle() else {
@@ -68,9 +68,9 @@ impl Hub {
                 .await
             {
                 Ok(()) => CloneMsg::Done { path: into },
-                // A clone the reader stopped is not something to report
-                // back at: the dialog it was asked in has gone with the
-                // press that stopped it.
+                // A clone the reader stopped answers nowhere: the dialog
+                // it was asked in has gone with the press that stopped
+                // it.
                 Err(e) if e.is_cancelled() => return,
                 Err(e) => CloneMsg::Failed {
                     message: git_said(&e),
@@ -181,9 +181,9 @@ impl Hub {
     /// What is left afterwards is a tab in exactly the state
     /// [`Hub::reserve_tab`] leaves one in: a path, empty feeds, and no
     /// session. Selecting it again runs [`Hub::ensure_open`], which opens
-    /// a new session and reads the repository from the start — so this is
-    /// only ever a matter of memory, never of what the reader can get
-    /// back to.
+    /// a new session and reads the repository from the start — so this
+    /// is only ever a matter of memory, and all of it comes back to
+    /// the reader.
     ///
     /// **The models are the other half.** This releases what the *hub*
     /// holds; the rows already handed to QML are released by the page
@@ -191,7 +191,7 @@ impl Hub {
     /// memory report is told to forget this tab's models — their last
     /// reported footprints describe objects that no longer exist.
     ///
-    /// **A write still running does not hold any of it back.** The close
+    /// **What it held goes even with a write still running.** The close
     /// keeps the session alive to the end of that write, but the session
     /// lets go of what it had drawn as it closes and reads nothing behind
     /// the write — the graph and the refs of a repository this size are
@@ -272,10 +272,10 @@ impl Hub {
     /// a loop with nothing left ends on its own and needs no watching.
     ///
     /// **Only the waiting is the hub's.** What that tail means for the
-    /// next session on the same repository is not: the working tree holds
-    /// the order its writes run in, and the session a reselected tab opens
-    /// joins it by the directory git named, not by the tab it was opened
-    /// for (`platitude_core::session::write_order`). So a reopen queues
+    /// next session on the same repository is the working tree's: it
+    /// holds the order its writes run in, and the session a reselected
+    /// tab opens joins it by the directory git named
+    /// (`platitude_core::session::write_order`). So a reopen queues
     /// behind this write wherever it was opened from, a second tab on
     /// another repository waits for none of it, and a hub holding no
     /// handle at all would still get the order right.
@@ -288,10 +288,10 @@ impl Hub {
         }
     }
 
-    /// Whether nothing git was asked to write would outlast the window:
-    /// no open tab has a local write queued or running, every write a
-    /// closed tab left running has ended, and every identity save the
-    /// application asked for has answered (`hub::saves`). The quit gate
+    /// Whether every write git was asked for is done: no open tab has a
+    /// local write queued or running, every write a closed tab left
+    /// running has ended, and every identity save the application asked
+    /// for has answered (`hub::saves`). The quit gate
     /// reads this — the window stays until it answers true (`Main.qml`),
     /// so the join in [`Hub::shutdown`] normally has nothing left to
     /// wait for.
@@ -361,9 +361,9 @@ impl Hub {
 /// it — the half a screen quotes (デザイン規約: 赤は git の文言だけ).
 ///
 /// The `Display` of a failed command spells the whole invocation out
-/// first, which belongs in the command log and not in a dialog. Where git
-/// itself said nothing (it never started, or it was killed by the
-/// budget), the error's own words are all there is.
+/// first, which belongs in the command log. Where git itself said
+/// nothing (it never started, or it was killed by the budget), the
+/// error's own words are all there is.
 fn git_said(e: &platitude_core::GitError) -> String {
     let stderr = match e {
         platitude_core::GitError::Failed { stderr, .. }
@@ -388,7 +388,7 @@ pub fn from_session<R>(tab_id: i32, f: impl FnOnce(&Arc<RepoSession>) -> R) -> O
 /// The same for telling it to do something, where there being no session
 /// means there is nothing to do. What the session answers — the id of a
 /// write it accepted — is let go here; a slot that has to hand that id
-/// back to the page asks through [`from_session`] instead.
+/// back to the page asks through [`from_session`].
 pub fn with_session<R>(tab_id: i32, f: impl FnOnce(&Arc<RepoSession>) -> R) {
     from_session(tab_id, f);
 }
@@ -397,15 +397,15 @@ pub fn with_session<R>(tab_id: i32, f: impl FnOnce(&Arc<RepoSession>) -> R) {
 /// as gone (`ops::StandIn`) — none at all for a tab this hub does not
 /// have, which is also the right picture for one.
 ///
-/// **The caller is handed the rows rather than the machine**: the borrow
-/// is over before this returns, so the copy a property is read from is
-/// never taken while the hub is held (the re-entrant borrow the bridge
-/// panics on — 規約 §Qt Bridges の要点).
+/// **The caller is handed the rows**: the borrow is over before this
+/// returns, so the copy a property is read from is taken with the hub
+/// free (the re-entrant borrow the bridge panics on —
+/// 規約 §Qt Bridges の要点).
 /// The sidebar section called `section` has **applied** a listing to its
 /// rows, stamped as the read that made it was taken
 /// (`session::Standing::stamp`).
 ///
-/// **Recorded, not acted on, and only for that section's own rows.**
+/// **Recorded, and only for that section's own rows.**
 /// Which write it answers for — if any — is the stand-in's to decide when
 /// the page says a list has drawn (`ops::StandIn::look_again`); all this
 /// says is what one list is now showing, which is the only thing a

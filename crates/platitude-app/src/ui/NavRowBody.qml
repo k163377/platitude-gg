@@ -7,7 +7,7 @@ import platitude.ui
 // the right-aligned columns (a worktree's branch, the head's ahead/behind, the remote/PR badge, the push mark).
 //
 // The row itself (`NavItemDelegate`) keeps the gestures, the washes and the box: this is only the ink. It is handed
-// the whole row rather than eighteen mirrored properties — the row is recycled with its delegate, so there is nothing
+// the whole row — the row is recycled with its delegate, so there is nothing
 // here to keep, and a second copy of every binding would be paid on every reuse.
 //
 // **Every column past the name is built only on the rows that wear it.** A delegate is built per row on screen, and
@@ -32,7 +32,7 @@ RowLayout {
     // name at a given depth beginning in one column.
     NameCell {
         // The box below takes the row's slack while it is open, and the slot stays where it is: a name going into a
-        // box must not walk the columns beside it sideways.
+        // box leaves the columns beside it where they are.
         Layout.fillWidth: !body.row.editing
         showName: !body.row.editing
         folder: body.row.folder
@@ -45,8 +45,8 @@ RowLayout {
         // wears the quiet colour every other row mark does; a folder git can no longer find is a warning.
         //
         // A branch row uses the same slot for the one question it shares with those rows: whether a move can land
-        // here. Its mark is the WORKTREES section's own (`tree`) — where the branch actually is — and **not the
-        // padlock**, which is spoken for by `git worktree lock`; a mark cannot mean two things in one window.
+        // here. Its mark is the WORKTREES section's own (`tree`) — where the branch actually is. **The padlock**
+        // is spoken for by `git worktree lock`; a mark cannot mean two things in one window.
         seatMark: body.row.kindHint === "branch" ? (body.row.change === "HELD" ? "tree" : "")
                 : body.row.kindHint !== "worktree" ? ""
                 : body.row.change === "LOCKED" ? "lock"
@@ -88,7 +88,7 @@ RowLayout {
         }
     }
     // How far this branch stands from its upstream, left of the state icon. **Every branch that has something to say
-    // says it, not only the one HEAD is on** — the counts ride each row out of the listing (`models::nav` の
+    // says it** — the counts ride each row out of the listing (`models::nav` の
     // `Role::Ahead`), so a branch the remote moved past is legible without switching to it.
     //
     // The seat is empty wherever there is nothing to count: level with the upstream, or no upstream to measure
@@ -128,7 +128,7 @@ RowLayout {
     }
     // The remote this repository sends pushes to. The toolbar's own push mark, in the seat the badge above holds
     // on every other row — one question, one mark, one size. `accent` because what it answers is which of the rows
-    // is the one in effect (デザイン規約 §色 アクセント: 選択インジケータ), not what kind of ref the row is.
+    // is the one in effect (デザイン規約 §色 アクセント: 選択インジケータ).
     Loader {
         id: pushSeat
         active: body.row.pushesHere

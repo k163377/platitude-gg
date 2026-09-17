@@ -1,6 +1,6 @@
 //! The walk the arrow keys take over the file rows, and what a bucket
-//! list answers about the files it is not showing. Beside the walk rather
-//! than in it, so the ceiling the walk sits under stays about the walk
+//! list answers about the files it is not showing. Beside the walk, so
+//! the ceiling the walk sits under stays about the walk
 //! (.claude/rules/structure.md).
 
 use super::testkit::*;
@@ -27,9 +27,9 @@ fn a_bucket_list_shows_one_run_and_answers_for_the_whole_tree() {
     assert_eq!(model.told(Role::Full, "d.txt", Role::Bucket), "staged");
 }
 /// The arrows walk the rows on screen, one file per press, and stop at
-/// each end rather than wrapping (規約 §diff のファイル一覧). A list is one
-/// bucket, so its own ends are where a step runs out — the pane carries
-/// the walk into the next list from there (`FileRowWalk`).
+/// each end (規約 §diff のファイル一覧). A list is one bucket, so its own
+/// ends are where a step runs out — the pane carries the walk into the
+/// next list from there (`FileRowWalk`).
 #[test]
 fn the_arrows_walk_one_bucket_and_stop_at_its_ends() {
     let mut model = worktree("staged", Source::files(pending()));
@@ -57,7 +57,7 @@ fn the_arrows_walk_one_bucket_and_stop_at_its_ends() {
 /// Where the walk comes in when it crosses out of the bucket above or
 /// below: the row at the end of this list it is entering by, and nothing
 /// at all from a bucket holding no files (the arrows go past an empty
-/// heading rather than stopping in it).
+/// heading).
 #[test]
 fn a_walk_crossing_into_a_bucket_lands_at_the_end_it_comes_in_by() {
     let mut model = worktree("staged", Source::files(pending()));
@@ -74,9 +74,9 @@ fn a_walk_crossing_into_a_bucket_lands_at_the_end_it_comes_in_by() {
     assert_eq!(empty.edge(1), "");
     assert_eq!(empty.edge(-1), "");
 }
-/// A folder is not a file: the walk steps over its row rather than
-/// landing on one that has no diff behind it, and a list whose only rows
-/// are folders is one the crossing walk goes straight past.
+/// A folder is not a file: the walk steps over its row, which has no
+/// diff behind it, and a list whose only rows are folders is one the
+/// crossing walk goes straight past.
 #[test]
 fn the_arrows_step_over_a_folder_row() {
     let mut model = worktree("unstaged", Source::files(pending()));
@@ -95,10 +95,10 @@ fn the_arrows_step_over_a_folder_row() {
         format!("1{FIELD_SEP}unstaged{FIELD_SEP}src/b.txt")
     );
 }
-/// The key a choice holds a row by, answered for every row on screen and
-/// not only for the ones a view has built a delegate for. A folder row
-/// answers nothing — a folder is not a file to choose — and so does a
-/// number past the end.
+/// The key a choice holds a row by, answered for every
+/// row on screen. A folder row answers nothing — a folder
+/// is not a file to choose — and so does a number past
+/// the end.
 ///
 /// **A row carries its own bucket.** An untracked file is shown under the
 /// unstaged heading, so its key reads `untracked:` while the list's run is

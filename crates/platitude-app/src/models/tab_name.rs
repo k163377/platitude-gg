@@ -1,10 +1,10 @@
 //! What a tab is called: as much of its path as it takes to tell it
 //! apart from the other tabs in the strip (デザイン規約 §タブの所作).
 //!
-//! A rule over the whole strip rather than over one path, so it lives
-//! away from the model that applies it: a name is only ever ambiguous
-//! against the names standing beside it, and the same folder is called
-//! one thing on its own and another once its namesake is opened.
+//! A rule over the whole strip, so it lives away from the model that
+//! applies it: a name is only ever ambiguous against the names standing
+//! beside it, and the same folder is called one thing on its own and
+//! another once its namesake is opened.
 
 use std::collections::HashMap;
 use std::path::{Component, Path};
@@ -13,12 +13,12 @@ use std::path::{Component, Path};
 ///
 /// Each starts at its own folder name and grows a parent at a time —
 /// **the whole group that shares a name grows together**, so two
-/// repositories called `repo` both come out as `<parent>/repo` rather
-/// than one of them keeping the bare word (デザイン規約 §タブの所作). A
-/// group that is still ambiguous a parent up grows again, which is what
-/// takes `1/foo/repo` and `2/foo/repo` down to the level they differ at.
+/// repositories called `repo` both come out as `<parent>/repo`
+/// (デザイン規約 §タブの所作). A group that is still ambiguous a parent
+/// up grows again, which is what takes `1/foo/repo` and `2/foo/repo`
+/// down to the level they differ at.
 ///
-/// A name that nobody shares never grows: the strip is read for the
+/// A name that nobody shares stays put: the strip is read for the
 /// repositories in it, and a path standing in a tab that has no namesake
 /// is answering a question nobody asked.
 pub(super) fn names_for(paths: &[&str]) -> Vec<String> {
@@ -42,9 +42,9 @@ pub(super) fn names_for(paths: &[&str]) -> Vec<String> {
             }
             for at in group {
                 // Two tabs on one path cannot happen — the strip moves to
-                // the tab already holding a repository rather than opening
-                // a second (`TabsModel::position_of`) — but a group that
-                // cannot grow is what ends the loop rather than looping it.
+                // the tab already holding a repository
+                // (`TabsModel::position_of`) — but a group that cannot
+                // grow is what ends the loop.
                 if depth[at] < parts[at].len() {
                     depth[at] += 1;
                     grew = true;
@@ -71,10 +71,10 @@ pub(super) fn names_for(paths: &[&str]) -> Vec<String> {
 /// same path a second way.
 ///
 /// A name grown as far as the path itself answers with **the path as it
-/// was given** rather than with its segments put back together: the
-/// pieces have lost the root they hung off, and `home/ada/repo` is not a
-/// place. Nothing shorter can lose anything — every segment above the
-/// cut is still there to be read in the hover (デザイン規約 §hover のツールチップ).
+/// was given**: the pieces have lost the root they hung off, and
+/// `home/ada/repo` is not a place. Nothing shorter can lose anything —
+/// every segment above the cut is still there to be read in the hover
+/// (デザイン規約 §hover のツールチップ).
 fn name_at(segments: &[String], depth: usize, whole: &str) -> String {
     if depth == 0 || depth >= segments.len() {
         return whole.to_string();
@@ -84,10 +84,10 @@ fn name_at(segments: &[String], depth: usize, whole: &str) -> String {
 
 /// The named parts of a path, root and separators dropped.
 ///
-/// Read through `Path` rather than split on a character, so each platform
-/// says for itself what separates one segment from the next: a backslash
-/// is a folder boundary on Windows and an ordinary letter of a name
-/// everywhere else. **Only the reading follows the platform** — what the
+/// Read through `Path`, so each platform says for itself what separates
+/// one segment from the next: a backslash is a folder boundary on
+/// Windows and an ordinary letter of a name everywhere else. **Only the
+/// reading follows the platform** — what the
 /// pieces are put back together with does not ([`name_at`]). The prefix
 /// comes along as a segment of its own — `C:` against `D:` is the only
 /// thing telling two drives' `repo` apart.

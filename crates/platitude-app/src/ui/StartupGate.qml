@@ -5,8 +5,8 @@ import platitude.ui
 
 // ---- the two ways the window has nothing to show ---------------------
 // No git to ask, or another process already has the files. A git
-// older than the supported minimum is not one of them: it answers, so
-// the app runs and wears the band's `OLD GIT` badge instead
+// older than the supported minimum answers, so
+// the app runs and wears the band's `OLD GIT` badge
 // (規約 §ウィンドウの縁).
 Item {
     id: gate
@@ -23,7 +23,7 @@ Item {
 
     visible: AppBackend.gitState !== "ok" || AppBackend.alreadyRunning
 
-    // Its own ground rather than the window's, so that a grab of this
+    // Its own ground, so that a grab of this
     // item is a picture of the screen (`AutoShotDriver`). Nothing under it
     // is drawn while it is up — `mainUi` is hidden — so the colour is
     // the one the window would have shown anyway.
@@ -32,8 +32,8 @@ Item {
         color: Theme.bgBase
     }
     // The hand the words on this screen are dragged over from the air
-    // around them (規約 §右のペインの字は掴める). It lies under the column
-    // rather than over it, so a press reaches it only where nothing else
+    // around them (規約 §右のペインの字は掴める). It lies under the column,
+    // so a press reaches it only where nothing else
     // took one — the step between two lines, the room beside a short one —
     // and the `Close` button keeps every press it had.
     //
@@ -66,7 +66,7 @@ Item {
         // Which one, since two builds are alike on screen and the
         // taskbar's launch entry does not say which it started.
         //
-        // Wrapped rather than cut in the middle, the way the sentences
+        // Wrapped, the way the sentences
         // above it are: this is a path a reader has to be able to read and
         // to take away, a field has no `elide` to cut it with, and there is
         // nothing beside it on this screen to carry what a cut would drop
@@ -85,7 +85,7 @@ Item {
             text: qsTr("Close")
             onActivated: gate.closeRequested()
         }
-        // The drawn ring, not Fusion's BusyIndicator
+        // The drawn ring
         // (規約 §進行中・長押しの定数).
         SpinnerIcon {
             spinning: AppBackend.gitState === "checking" && !AppBackend.alreadyRunning

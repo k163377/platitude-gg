@@ -27,14 +27,14 @@ impl NavSectionModel {
                 match msg {
                     RefsMsg::Snapshot { snapshot, looked } => {
                         settled = true;
-                        // **Said at the moment this list applies it**, and
-                        // said with the stamp of the read rather than of
-                        // the arrival: whoever is holding rows off the
-                        // screen for a write has to tell a listing that
-                        // saw what the write left from one that was
-                        // already in flight when it ended, and the two
-                        // reach here down separate feeds in no fixed
-                        // order (`ops::StandIn`).
+                        // **Said at the moment this list applies it**,
+                        // and said with the stamp of the read: whoever
+                        // is holding rows off the screen for a write has
+                        // to tell a listing that saw what the write left
+                        // from one that was already in flight when it
+                        // ended, and the two reach here down separate
+                        // feeds in no fixed order
+                        // (`ops::StandIn`).
                         crate::hub::listing_applied(self.tab_id, &self.section, looked);
                         // The first snapshot is news whatever it holds:
                         // the default selection is waiting on
@@ -57,9 +57,9 @@ impl NavSectionModel {
                         }
                     }
                     // Only the branches section is handed this
-                    // (`hub::sink`): the row it highlights and the
-                    // stand-in above it are the record's, not the
-                    // snapshot's.
+                    // (`hub::sink`): the row it highlights and
+                    // the stand-in above it are the
+                    // record's.
                     RefsMsg::Head(head) => {
                         if self.head_name != head.branch || self.head_oid != head.oid_hex {
                             self.head_name = head.branch;
@@ -146,11 +146,11 @@ impl NavSectionModel {
     /// the snapshot yet (a HEAD reported ahead of the first listing, or a
     /// branch made since it). Answers whether any of them moved.
     ///
-    /// **The counts are read here rather than off the arranged row**
-    /// (`view::arrange`, where `head_depth` comes from): a filter or a
-    /// folded folder leaves the branch with no row at all, and that is
-    /// exactly when the stand-in takes a seat of its own
-    /// (`HeadPinRow.seated`) and still has its pair to draw.
+    /// **The counts are read here** (`view::arrange`, where
+    /// `head_depth` comes from): a filter or a folded folder leaves the
+    /// branch with no row at all, and that is exactly when the stand-in
+    /// takes a seat of its own (`HeadPinRow.seated`) and still has its
+    /// pair to draw.
     pub(super) fn settle_head_marks(&mut self) -> bool {
         let branch = if self.head_name.is_empty() {
             None

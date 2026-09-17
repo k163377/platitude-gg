@@ -3,14 +3,14 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-/// A branch's ahead / behind against its upstream, drawn rather than typed.
+/// A branch's ahead / behind against its upstream, drawn, arrows included.
 ///
 /// `↑` and `↓` are East Asian Ambiguous, so the CJK families this app names hold them in a full-width cell: the space
-/// between arrow and digit was that cell's leftover rather than a token of ours, and each family drew its own arrow
+/// between arrow and digit was that cell's leftover, and each family drew its own arrow
 /// inside it — Windows a thin long one, Ubuntu a heavy one with a small head (measured). Same reason the
-/// parent link's `←` is drawn (デザイン規約 §寸法「印はフォントの字に任せない」).
+/// parent link's `←` is drawn (デザイン規約 §寸法「印は描いて出す」).
 ///
-/// **A leg that counts nothing is not drawn** — git spells its own answer the same way (`[ahead 2]`, never
+/// **Only a leg that counts is drawn** — git spells its own answer the same way (`[ahead 2]`, never
 /// `[ahead 2, behind 0]`), and whoever seats this leaves the seat empty when neither leg has anything to say
 /// (デザイン規約 §左メニューの所作). What is left is never a zero, so the numbers here are always the point.
 RowLayout {
@@ -31,7 +31,7 @@ RowLayout {
     spacing: Theme.spaceXs
 
     /// One arrow and the number it counts, cut the same way as the graph row's tally (`GraphRowDelegate.Tally`) — no
-    /// step between them and a seat drawn to the ink rather than the box.
+    /// step between them and a seat drawn to the ink.
     component Leg: RowLayout {
         id: leg
         required property int turn
@@ -47,7 +47,7 @@ RowLayout {
                 kind: "arrow"
                 rotation: leg.turn
                 tint: leg.hue
-                /// A step under `iconSm`: this mark stands beside a digit of its own rather than beside a word (規約
+                /// A step under `iconSm`: this mark stands beside a digit of its own (規約
                 /// §寸法).
                 width: Theme.iconXs
                 height: Theme.iconXs

@@ -4,7 +4,7 @@ import platitude.ui
 
 // The plan's one door onto the repository, in the seat where things are concluded — the commit button's, which the
 // exit card will take over the moment the run stops part-way (§進行中の操作から出る). The warning is the note's own
-// amber, said inside the phrase and never a gate; the hold is the drop table's (§履歴を合流させる — 見るのは先端).
+// amber, said inside the phrase; the hold is the drop table's (§履歴を合流させる — 見るのは先端).
 Item {
     id: bar
 
@@ -30,14 +30,14 @@ Item {
         centred: true
         phraseHead: "rebase -i"
         text: qsTr("%n commit(s)", "", bar.plan.stepCount)
-        // **The warning is a clause of the phrase, not a line above the button.** The count is the fact, said in the
-        // tag's own words at the end of what the button says; a line of its own would put a second thing to read in
-        // the seat this button fills, and the two colours would then have to be told apart before either is read.
+        // **The warning is a clause of the phrase.** The count is the fact, said in the tag's own words at the end of
+        // what the button says; a line of its own would put a second thing to read in the seat this button fills, and
+        // the two colours would then have to be told apart before either is read.
         phraseNote: bar.pushedCount > 0 ? qsTr("%n already pushed", "", bar.pushedCount) : ""
         // The frame carries the warning and only a hold colours the word (§長押し — BandPushButton と同じ線).
-        // **The dressing reads the length the press was given** (`ActionButton.armedMs`), not `holds`:
-        // `tipHeldElsewhere` follows the fetch the plan's freeze deliberately leaves running, so a button dressed from
-        // the live answer would lose its red under a hand that is already holding.
+        // **The dressing reads the length the press was given** (`ActionButton.armedMs`): `tipHeldElsewhere` follows
+        // the fetch the plan's freeze deliberately leaves running, so a button dressed from the live answer would
+        // lose its red under a hand that is already holding.
         frameColor: runButton.armedMs > 0 ? Theme.danger
                     : bar.pushedCount > 0 ? Theme.warning : Theme.accent
         tone: runButton.armedMs > 0 ? Theme.danger : Theme.textPrimary

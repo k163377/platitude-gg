@@ -17,14 +17,14 @@ import platitude.ui
 /// this file. Each of those gates itself on `Harness.autoAct`, so the grouping is only ever about where a verb is
 /// read: nothing here hands one its turn. The two that stay are the two that cannot — they read the change signals
 /// latched just below, which have to be connected before the verb they belong to starts.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing and is never
-// given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: driver
 
     /// The window these verbs act on, and the parts of it they read back or leave standing for the shot. An
-    /// automation-only exposure, the same one `GraphPane.view` is (app-ui.md). `var` because `Main` is the file the
-    /// engine loads rather than a type anything can name.
+    /// automation-only exposure, the same one `GraphPane.view` is (app-ui.md). `var` because `Main` is the file
+    /// the engine loads.
     property var window
 
     property TabsModel tabsModel
@@ -63,9 +63,9 @@ Item {
     /// nothing. The verbs missing from this list start themselves — theirs is a `running:` that is true from the moment
     /// this is built.
     function begin() {
-        // All timers below are state polls. They never decide that a state is ready because a duration elapsed; each
-        // one stops only after the property/event it reports is observable. The parent watchdog is the sole hang
-        // ceiling.
+        // All timers below are state polls. Each one stops only after the
+        // property/event it reports is observable. The parent watchdog is the sole
+        // hang ceiling.
     }
 
     // PGG_AUTO_ACT=commands-clear. The band is where the answer is — the rows and the line both feed one mark, and
@@ -105,9 +105,9 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=fetch-recover: recovery, not the reader, is what retires fetch news. This waits for the refusal to
-    // reach the band and raise the panel, reads the mark, fires the fetch that can land, and reads both again — the
-    // picture can only hold the quiet half.
+    // PGG_AUTO_ACT=fetch-recover: recovery is what retires fetch news. This waits for the refusal to reach the band
+    // and raise the panel, reads the mark, fires the fetch that can land, and reads both again — the picture can
+    // only hold the quiet half.
     //
     // **`-held` is the same run over a panel the reader put up first** (the page opened it before the failing fetch),
     // and the two are one timer because what they do is one thing: the answer they part on is the last `open=`, which
@@ -172,8 +172,8 @@ Item {
         topBar: driver.topBar
         tabProbe: tabProbe
     }
-    /// What the strip's own items came out as. Here rather than in the strip: reading tabs back is the harness's
-    /// business, and the strip's part in it is the one name it hands over (`TabStrip.tabsView`).
+    /// What the strip's own items came out as, read here: reading tabs back is the harness's business, and the
+    /// strip's part in it is the one name it hands over (`TabStrip.tabsView`).
     TabProbe {
         id: tabProbe
         view: driver.topBar.tabsView

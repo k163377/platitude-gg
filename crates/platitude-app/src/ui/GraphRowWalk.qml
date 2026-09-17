@@ -30,7 +30,7 @@ Item {
     /// where the selection goes, only when the row is read (`noteStep`).
     ///
     /// Refused while something stands over a row: a question waiting to be answered, or a name box being typed into.
-    /// The name box is the one that has to be named here rather than left to the focus: it lives inside a row, and a
+    /// The name box is the one that has to be named here: it lives inside a row, and a
     /// single-line box does not consume Up and Down — they come up through the delegate to the list.
     ///
     /// Refused as well while the pane is off screen: this item is inside it, so its own visibility is the pane's.
@@ -53,7 +53,7 @@ Item {
     /// Brings a stepped-onto row into view. `near` moves as little as will do, which is the row itself; anything else
     /// centers.
     ///
-    /// Row positions are worked out rather than read off the items: `itemAtIndex` answers null for rows the view has
+    /// Row positions are worked out: `itemAtIndex` answers null for rows the view has
     /// not built, and a walk that trusts it is cut to the viewport (P3-確認事項: the WIP list's range selection is the
     /// standing example).
     function revealStep(row, near) {
@@ -62,7 +62,7 @@ Item {
             return
         }
         // The first row's box carries the list's top margin with it — its highlight is painted over that sliver — so
-        // stepping onto it goes the whole way to the top rather than leaving a dark band.
+        // stepping onto it goes the whole way to the top.
         const top = walk.view.originY + row * Theme.graphRowHeight
                     - (row === 0 ? walk.view.topMargin : 0)
         const bottom = walk.view.originY + (row + 1) * Theme.graphRowHeight
@@ -113,7 +113,7 @@ Item {
     /// Without it the settle behind a single press would read the same row twice.
     property bool stepPending: false
     function landStep() {
-        // The row under the highlight as it stands, not the one the key asked for: a background rebuild during the
+        // The row under the highlight as it stands: a background rebuild during the
         // settle writes the rows in place, and what was stepped onto is whatever is there to be seen now.
         const row = walk.view.currentIndex
         const oidHex = walk.graphModel.oidAt(row)
@@ -163,7 +163,7 @@ Item {
     /// Brings `row` into view once the pass that put it there has settled, and only if it is not already on screen — a
     /// row in sight is not worth taking the reader's place for (the same rule `goToMatch` answers to).
     ///
-    /// Carried by the shift timer rather than one of its own: the two write the same contentY for opposite reasons, and
+    /// Carried by the shift timer: the two write the same contentY for opposite reasons, and
     /// whether the row is on screen is only true of the position the shift leaves behind. One timer settles the order.
     function showRowSoon(row) {
         shiftTimer.showRow = row

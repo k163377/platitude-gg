@@ -14,8 +14,8 @@ import platitude.ui
 Item {
     id: chip
 
-    /// The command, spelled the way git spells it — and not translated, since what it names is the command rather than
-    /// a word for it.
+    /// The command, spelled the way git spells it — untranslated, since what it names is the command
+    /// itself.
     property string word: ""
     /// The ink. The ground is the same everywhere; the word takes the colour of whatever is speaking, which for a
     /// question bar is the tone that says what answering costs.
@@ -39,15 +39,15 @@ Item {
     implicitHeight: wordLabel.implicitHeight
 
     Rectangle {
-        // Drawn to the ink, not to the cell: an elided word paints narrower than the width it was given, and a ground
+        // Drawn to the ink: an elided word paints narrower than the width it was given, and a ground
         // stretched to that width leaves a tail of chip with nothing on it (measured).
         anchors.left: wordLabel.left
-        // The word's own step rather than the label's height, which is the mono family's line box — the one part of
+        // The word's own step: the label's height is the mono family's line box — the one part of
         // this dress each OS settles differently (`ActionButtonLabel` carries the measurements).
         anchors.verticalCenter: wordLabel.verticalCenter
         height: chip.size + Theme.spaceXs / 2
-        // Half a gap of ground either side, not a whole one: it eats into the air the line already had rather than
-        // pushing the glyphs about, so the word starts where it would have started bare.
+        // Half a gap of ground either side: it eats into the air the line already had, so the word starts where it
+        // would have started bare.
         anchors.leftMargin: -Theme.spaceXs / 2
         width: wordLabel.paintedWidth + Theme.spaceXs
         radius: Theme.radiusSm
@@ -57,7 +57,7 @@ Item {
         id: wordLabel
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
-        // Bounded by the cap rather than by the chip's width, which comes from this — reading it back closes a loop.
+        // Bounded by the cap: the chip's width comes from this — reading it back closes a loop.
         // A ref that will not fit gives way in the middle: the tail of a branch name is what tells two of them apart
         // (`feature/…-a` and `feature/…-b`), and eliding the right would leave the reader with the half they share.
         width: chip.cap > 0 ? Math.min(implicitWidth, chip.cap) : implicitWidth

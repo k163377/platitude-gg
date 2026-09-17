@@ -42,7 +42,7 @@ Item {
             compare(shape.screenHolding(-1, -1, root.desktop).name, "\\\\.\\DISPLAY3")
         }
 
-        /// **Scale is not in this arithmetic.** Qt lays every screen out in one coordinate space whatever each is
+        /// **The arithmetic is in Qt's space.** Qt lays every screen out in one coordinate space whatever each is
         /// scaled by, so the saved place is compared with those coordinates and nothing is multiplied — and what
         /// crosses to the platform side is the screen's name, because that space is Qt's own and Windows need not
         /// agree with it about where a point on a scaled monitor is. Whether the two do agree is a thing only two
@@ -52,16 +52,16 @@ Item {
             compare(shape.screenHolding(-1200, -1000, root.desktop).name, "\\\\.\\DISPLAY3")
         }
 
-        /// The edges, said once: a screen holds its own origin and not the first pixel of the next one along.
+        /// The edges, said once: a screen holds its own origin, and the seam belongs to the one on the right.
         function test_the_seam_between_two_screens_belongs_to_the_one_on_the_right() {
             compare(shape.screenHolding(1919, 0, root.desktop).name, "\\\\.\\DISPLAY1")
             compare(shape.screenHolding(1920, 0, root.desktop).name, "\\\\.\\DISPLAY2")
         }
 
-        /// The two shapes with no answer, which the restore reads as "take the window's own nearest monitor": a first
-        /// run, and a place on a monitor that is not here any more. **Not the same as being off the desktop** — both
-        /// end with the platform side fitting the window to the nearest monitor rather than leaving it where nobody
-        /// can reach it.
+        /// The two shapes with no answer, which the restore reads as "take the window's own nearest monitor":
+        /// a first run, and a place on a monitor that is not here any more. **Both end with the platform
+        /// side fitting the window to the nearest monitor**, so the window lands where the reader can
+        /// reach it.
         function test_an_unsaved_place_and_a_screen_that_has_gone_answer_with_nothing() {
             compare(shape.screenHolding(shape.unplaced, shape.unplaced, root.desktop), null)
             compare(shape.screenHolding(240, shape.unplaced, root.desktop), null)

@@ -12,7 +12,7 @@ MenuSeparator {
     property Menu inMenu: null
 
     // A divider is a claim that a group ends here, so it is drawn only where there is a row left on each side of it.
-    // With the rows that cannot be chosen gone rather than greyed (デザイン規約 §メニュー) a whole group can empty out, and
+    // With the rows that cannot be chosen gone (デザイン規約 §メニュー) a whole group can empty out, and
     // the line left behind would divide nothing — or, at the top or bottom of the card, divide the menu from the air
     // outside it.
     //
@@ -23,7 +23,7 @@ MenuSeparator {
     // find nothing on one side (measured, the current branch's menu, where `switch` / merge / rebase are all
     // out and `Create branch here…` ran straight into the BRANCH card).
     //
-    // The rows are asked what they are offering, not whether they are visible: a closed menu's list has released them
+    // The rows are asked what they are offering: a closed menu's list has released them
     // and turned their visibility off, and this has to hold before the menu opens (AppMenuItem.offered).
     readonly property bool dividing: {
         if (!divider.inMenu)

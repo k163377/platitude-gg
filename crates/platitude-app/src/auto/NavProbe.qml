@@ -5,11 +5,11 @@ import QtQuick
 /// What a headless run does to the sidebar, and what it reads back off it.
 ///
 /// Every one of these goes in where a hand goes in — the filter field itself, the rail's own `enterAt` /
-/// `leaveAt` / `tapAt`, the header band's `tap` — so what answers is the pane's wiring rather than a second copy
-/// of it (verify-ui スキル §注入はハンドラ本体そのものへ入れる). Hover is the input that cannot be injected, so
+/// `leaveAt` / `tapAt`, the header band's `tap` — so what answers is the pane's wiring
+/// (verify-ui スキル §注入はハンドラ本体そのものへ入れる). Hover is the input that cannot be injected, so
 /// resting on something is always "write the one property a real hover writes".
 ///
-/// Here rather than on `SidebarPane`: the pane's part in this is the three children it hands over (`autoRail` /
+/// A file of its own: the pane's part in this is the three children it hands over (`autoRail` /
 /// `autoSections` / `autoPeek`) and the one piece of its own state a peek moves (`peekEntered`). Composing them into
 /// what a verb wants is the harness's.
 QtObject {
@@ -29,7 +29,7 @@ QtObject {
         return probe.sections.filterText
     }
 
-    /// PGG_AUTO_ACT=nav-peek: rest on one section's cell. Named rather than hovered — hover cannot be injected
+    /// PGG_AUTO_ACT=nav-peek: rest on one section's cell. Named — hover cannot be injected
     /// (verify-ui スキル). Whether that opens anything is the cell's answer: an empty section answers no.
     function peekAt(kind) {
         probe.rail.enterAt(kind, probe.rail.topOf(kind))
@@ -44,9 +44,9 @@ QtObject {
         probe.rail.tapAt(kind)
     }
     /// PGG_AUTO_ACT=nav-peek-into / nav-peek-out: the pointer walked off the cell down into the open section, and then
-    /// out of the section the other way (into the diff or the graph) instead of back over the cell. They write the
-    /// same `peekEntered` the popup's own hover writes — the leaving and the being-inside are one state, and a
-    /// headless run that cannot say "inside" cannot tell the exit that closes it from the one that must not.
+    /// out of the section the other way (into the diff or the graph). They write the
+    /// same `peekEntered` the popup's own hover writes — leaving and being inside are one state, and a headless
+    /// run that cannot say "inside" cannot tell the exit that closes it from the one that keeps it open.
     function peekInto(kind) {
         probe.rail.leaveAt(kind)
         probe.sidebar.peekEntered = true
@@ -67,7 +67,7 @@ QtObject {
         return probe.sections.headOf(kind)
     }
     /// PGG_AUTO_ACT=nav-add-remote: press the `+` at the end of the REMOTES band. It goes in at the band's own signal,
-    /// so what answers is the page's wiring and not a second way in.
+    /// so what answers is the page's wiring.
     function tapAddRemote() {
         probe.headOf("remote").addRemoteRequested()
     }
@@ -84,7 +84,7 @@ QtObject {
     }
     readonly property real groundTop: probe.sections.groundTop
     /// Where the section the folded rail has open begins and ends (PGG_AUTO_ACT=nav-peek). The panel is a popup, so a
-    /// headless run reads its placement here rather than off the picture: it starts at the top edge of the cell that
+    /// headless run reads its placement here: it starts at the top edge of the cell that
     /// opened it and stops inside the pane, whatever the section's row count.
     readonly property real peekY: probe.peek.y
     readonly property real peekBottom: probe.peek.y + probe.peek.height
@@ -108,7 +108,7 @@ QtObject {
         const list = probe.listOf(kind)
         return list ? list.rowNameAt(row) : ""
     }
-    /// Whether one section's row is on screen. Read off the list rather than off whatever is standing in for the row,
+    /// Whether one section's row is on screen. Read off the list,
     /// so a run can say the row left before it says what took its place.
     function rowInView(kind, row) {
         const list = probe.listOf(kind)
@@ -126,7 +126,7 @@ QtObject {
     readonly property real headPinY: probe.sections.headPinY
 
     /// PGG_AUTO_ACT=nav-pin-edge: jump the branches list to its end, which is the other of the two ways the stand-in
-    /// comes on screen — its row scrolled off, rather than a filter leaving it no row at all (`nav-tip head`). Only
+    /// comes on screen — its row scrolled off (the filter's way is `nav-tip head`). Only
     /// scroll changes which edge it rides, and a headless run has no other way to produce one. The scroll answers
     /// where the list came to rest (`NavSections.scrollBranchesToEnd`).
     function scrollBranchesToEnd() {

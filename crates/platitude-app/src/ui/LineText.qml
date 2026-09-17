@@ -6,14 +6,14 @@ import platitude.ui
 // like any other text in this window (デザイン規約 §右のペインの字は掴める).
 //
 // The line half of the pair `CardText` is the other half of. That one wraps and caps its height for a card; this one
-// is a single line standing in a row, so **what it cuts is its width** — and it cuts the same way, by clipping rather
-// than eliding: `TextEdit` has no `elide`, and a field whose text had been elided into it would hand the reader
+// is a single line standing in a row, so **what it cuts is its width** — and it cuts the same way, by clipping:
+// `TextEdit` has no `elide`, and a field whose text had been elided into it would hand the reader
 // `Yuki Tana…` when they dragged over it. The whole value stays in the field, what does not fit is clipped, and the
 // mark on the pane's own ground says so (規約 §hover のツールチップ「切ったのは見えている量であって、持ち帰れる量ではない」).
 //
-// **A cut line is read in the card the row already opens** (the author's, the co-authors'), which is where a name that
-// did not fit is shown in full and wraps. Nothing here tries to scroll the tail into view: this is a value on a row,
-// not a box to read in.
+// **A cut line is read in the card the row already opens** (the author's, the co-authors'), which is where a name
+// that did not fit is shown in full and wraps. Nothing here tries to scroll the tail into view: this is a value on
+// a row.
 Item {
     id: line
 
@@ -31,8 +31,8 @@ Item {
     property real pixelSize: Theme.fontMd
     property int weight: Font.Normal
     /// Spelled in git's own family. A hash is git's spelling and wears the mono one (規約 §git 用語のコード表記);
-    /// everything else is the window's. The two the design has, chosen by name rather than passed in — a family that
-    /// came from a caller would skip the per-OS fallback Theme resolves (規約 §QML 実装ルール).
+    /// everything else is the window's. The two the design has, chosen by name — a family that came from a caller
+    /// would skip the per-OS fallback Theme resolves (規約 §QML 実装ルール).
     property bool mono: false
     /// What the cut mark is drawn on. The pane's own ground by default — the mark is drawn over the last glyphs it
     /// cuts, and needs something opaque under it.
@@ -54,16 +54,16 @@ Item {
     /// right for a name or a stamp — the head is what tells two of them apart. `"start"` drops the head and keeps the
     /// tail on screen. `"middle"` drops the middle, which is right for a path told apart by both of its ends: the
     /// leaf names the file, and the first folders say which tree it is in (`DiffPaneHeader`). The same choice
-    /// `CutName` spells with its own `cutAt`, said here for a field rather than for a pair of labels.
+    /// `CutName` spells with its own `cutAt`, said here for a field.
     ///
-    /// **The middle cut is drawn, not elided.** The field is held against the far edge exactly as `"start"` holds it,
-    /// and the head is painted onto the mark's own ground beside the `…` — so it is a mark that happens to spell the
-    /// head, never a second Text carrying a piece of the value. That is what keeps the copy whole where three Texts
-    /// would hand over a value with its middle missing (規約 §右のペインの字は掴める).
+    /// **The middle cut is drawn.** The field is held against the far edge exactly as `"start"` holds it, and the
+    /// head is painted onto the mark's own ground beside the `…` — so it is a mark that happens to spell the head.
+    /// That is what keeps the copy whole where three Texts would hand over a value with its middle missing
+    /// (規約 §右のペインの字は掴める).
     ///
     /// **The whole value is in the field either way** — only what is on screen moves. That is the difference between
-    /// this and an elide, and it is the whole reason these are fields: a reader who drags gets the value, never a
-    /// `…` (規約 §右のペインの字は掴める).
+    /// this and an elide, and it is the whole reason these are fields: a reader who drags gets the whole value
+    /// (規約 §右のペインの字は掴める).
     property string cutAt: "end"
 
     /// The width ran out and the tail is not on screen. The output side, and what a headless run reads in place of a
@@ -75,7 +75,7 @@ Item {
     readonly property bool cutsHead: (line.cutAt === "start" || line.cutAt === "middle") && line.clipped
     /// What the mark spells: `…` on its own, or the head and then the `…` where the cut is taken out of the middle.
     /// The split is the one `Text.ElideMiddle` makes at this width, read off a ruler — the field below is untouched,
-    /// so this is what the band paints over the value rather than anything the value became.
+    /// so this is what the band paints over the value.
     readonly property string markText: (line.cutAt === "middle" && line.clipped
                                         ? line.headOf(line.text, middleRuler.elidedText) : "") + "…"
     /// What is selected right now, for a run that has no pointer to drag with.
@@ -87,8 +87,8 @@ Item {
     /// Whether the keyboard is here — which is what `Ctrl+C` needs, and the half a selection alone does not say. The
     /// caret arrives with a selection and only with one (`anchorFrom`).
     readonly property alias hasCaret: field.activeFocus
-    /// Whether the words answer their own press — the output side of `grabbable`, so a run reads what the field is
-    /// rather than what it was asked to be.
+    /// Whether the words answer their own press — the output side of `grabbable`, so a run reads what the field
+    /// actually is.
     readonly property alias grabs: field.selectByMouse
     /// Where the caret ended up, for a run that has to say why a drag came away with nothing.
     readonly property alias caretPos: field.cursorPosition
@@ -106,8 +106,8 @@ Item {
     function deselect() {
         field.deselect()
     }
-    /// The head of an elided value. **Looked for rather than assumed** — `…` is a character a value may hold of its
-    /// own — so the answer is the first mark that leaves a real head and a real tail of the value behind it.
+    /// The head of an elided value. **Looked for** — `…` is a character a value may hold of its own — so the answer
+    /// is the first mark that leaves a real head and a real tail of the value behind it.
     function headOf(whole, elided) {
         for (let i = elided.indexOf("…"); i >= 0; i = elided.indexOf("…", i + 1)) {
             if (whole.startsWith(elided.substring(0, i)) && whole.endsWith(elided.substring(i + 1)))
@@ -127,8 +127,8 @@ Item {
     /// column, so a sweep that arrived from over or under the words picked the same character at both ends of its
     /// drag and came away with nothing (observed).
     ///
-    /// **The answer is in the field's coordinates, not this item's** — they are the same box only while the head is
-    /// on screen. A field cutting its head hangs off the near edge (`field.x` is negative), and a column read at this
+    /// **The answer is in the field's coordinates** — they are the same box as this item's only while the head is on
+    /// screen. A field cutting its head hangs off the near edge (`field.x` is negative), and a column read at this
     /// item's x would be the column that many pixels further into the value than the one under the pointer.
     function onLine(item, x, y) {
         const p = line.mapFromItem(item, x, y)
@@ -147,10 +147,10 @@ Item {
         field.select(line.grabAnchor, field.positionAt(p.x, p.y))
     }
 
-    /// The width the value wants — measured off a ruler rather than off the field, because a field asked for its
-    /// implicit width while it is being squeezed answers about the box it was given (規約 §QML 実装ルール). Rounded up:
-    /// a layout hands an item the whole pixel below a fractional width, and a value asking for 79.28 given 79 cuts
-    /// itself against a row meant to hold it (app-ui.md §自然幅の上限は切り上げる).
+    /// The width the value wants — measured off a ruler, because a field asked for its implicit width while it is
+    /// being squeezed answers about the box it was given (規約 §QML 実装ルール). Rounded up: a layout hands an item the
+    /// whole pixel below a fractional width, and a value asking for 79.28 given 79 cuts itself against a row meant
+    /// to hold it (app-ui.md §自然幅の上限は切り上げる).
     implicitWidth: Math.ceil(ruler.implicitWidth)
     implicitHeight: field.implicitHeight
     // Only ever the width, and only when the row could not give it (see the mark below).
@@ -183,18 +183,18 @@ Item {
         x: line.cutsHead ? line.width - field.width : 0
         height: line.height
         text: line.markup !== "" ? line.markup : line.text
-        // Pinned, not left to `AutoText`. What these fields carry is git's own words as often as this application's,
-        // and AutoText decides by guessing whether a string looks like markup — a branch called `<b>` would vanish.
-        // The one line that is markup says so because a caller built it and escaped everything that went into it.
+        // Pinned. What these fields carry is git's own words as often as this application's, and `AutoText` decides
+        // by guessing whether a string looks like markup — a branch called `<b>` would vanish. The one line that is
+        // markup says so because a caller built it and escaped everything that went into it.
         textFormat: line.markup !== "" ? TextEdit.RichText : TextEdit.PlainText
         color: line.color
         font.family: line.mono ? Theme.monoFamily : Theme.uiFamily
         font.pixelSize: line.pixelSize
         font.weight: line.weight
         // One line: the value is a name, a stamp or a hash, and none of them is a paragraph. What does not fit is cut
-        // by the item above rather than folded into a second line that would move the row it stands in.
+        // by the item above; a second line would move the row it stands in.
         wrapMode: Text.NoWrap
-        // Read, not written: the pane is a view of a commit, and nothing here is edited from it.
+        // Read only: the pane is a view of a commit, and nothing here is edited from it.
         readOnly: true
         selectByMouse: line.grabbable
         // The keyboard comes with a press only where the words answer one. Where they do not, it arrives with the
@@ -206,11 +206,11 @@ Item {
         // stays on whether or not the words answer the pointer: where they do not, the caret arrives with the
         // selection a sweep puts in, and `Ctrl+C` has to reach it once it has.
         selectByKeyboard: true
-        // **Never `persistentSelection`.** There is one selection in this window, and it belongs to whatever the caret
-        // is in: a field that kept its own after the caret left would leave the pane lit in two or three places at
-        // once, which is what the pane did the first day it had fields (observed — three values washed
-        // blue in one shot). Keeping it was for the camera, and the camera never needed it: a field that has not taken
-        // focus answers `selectedText` after `selectAll()` all the same (measured, qmltestrunner `tst_twofields`).
+        // **There is one selection in this window**, and it belongs to whatever the caret is in: a field with
+        // `persistentSelection` keeping its own after the caret left would leave the pane lit in two or three places
+        // at once, which is what the pane did the first day it had fields (observed — three values washed blue in
+        // one shot). Keeping it was for the camera, and the camera never needed it: a field that has not taken focus
+        // answers `selectedText` after `selectAll()` all the same (measured, qmltestrunner `tst_twofields`).
         selectionColor: Theme.accent
         selectedTextColor: Theme.textOnAccent
         // A field of its own width, with no room around it: the row's spacing is the row's.
@@ -218,9 +218,9 @@ Item {
         textMargin: 0
     }
 
-    // What the width left behind, on the pane's own ground rather than over the words: the glyphs it cuts through are
-    // drawn under this, and a mark read through a name is not a mark. The same shape `CardText` draws for the height
-    // it caps. It stands at the end the cut was taken from, so the mark is always on the side the value runs off.
+    // What the width left behind, on the pane's own ground: the glyphs it cuts through are drawn under this, and a
+    // mark read through a name is not a mark. The same shape `CardText` draws for the height it caps. It stands at
+    // the end the cut was taken from, so the mark is always on the side the value runs off.
     Rectangle {
         visible: line.clipped
         color: line.ground

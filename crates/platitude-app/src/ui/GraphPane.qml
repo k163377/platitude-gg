@@ -9,8 +9,8 @@ Rectangle {
     id: graphArea
 
     required property var graphModel
-    // The uncommitted row's tallies ride on the ListView for the delegate. They come off status rather than off the
-    // file list — the same status the list itself is built from, counted by kind (`status::Kinds`).
+    // The uncommitted row's tallies ride on the ListView for the delegate. They come off status — the
+    // same status the list itself is built from, counted by kind (`status::Kinds`).
     required property var workTree
     // No repository behind this pane: the empty-window call to action.
     property bool blank: false
@@ -50,8 +50,8 @@ Rectangle {
     /// clicking one spot twice clicks the row and then the card, and those are one target.
     signal rowRenameRequested(string oidHex, string record)
     /// How the graph's rows answer a click, for the card that stands on them (`RowHoverHost`). **The card's rows are
-    /// these rows**, so they go through this door rather than building the same key and the same payload beside it —
-    /// two surfaces that had to agree on what "the same target" means is exactly what was wrong before.
+    /// these rows**, so they go through this door — two surfaces that had to agree on what "the same target"
+    /// means is exactly what was wrong before.
     function noteRowClick(oidHex, record, held) {
         return graphList.noteClick(oidHex, record, held)
     }
@@ -74,12 +74,12 @@ Rectangle {
     }
     readonly property alias rowClickGuarded: graphList.clickGuarded
     /// The pointer settled on a row (or left it): open the commit card under it. `row` is the delegate, which the page
-    /// needs for its position and its fields — it must not hold on to it.
+    /// needs for its position and its fields — and lets it go at once.
     signal rowHoverRequested(var row, bool inside)
     /// The pointer left that chip — put it back, unless it went into the list itself (only the owner can tell).
     signal chipCollapseRequested()
     signal createBranchRequested(string oidHex, string name)
-    /// The same box, answered with a tag instead. Two signals rather than one with a word in it: what the page does
+    /// The same box, answered with a tag instead. Two signals: what the page does
     /// with the answer is a different command, and the pane has already read which box it was.
     signal createTagRequested(string oidHex, string name)
     /// And the same box again, answered with a new name for something that already has one. The kind travels with it:
@@ -144,7 +144,7 @@ Rectangle {
         // the click it belongs to (`FocusRelease` fires on the press, `MouseArea.clicked` on the release), so by the
         // time the click is answered the box is already gone — and a click that found no box would come up as a
         // second one and open it again a window later, which is the blink that was reported twice (observed). Asked
-        // here rather than at the click, because this is the one place that knows a box was standing.
+        // here, because this is the one place that knows a box was standing.
         if (graphList.namingOid !== "")
             graphList.forgetClicks()
         graphList.namingOid = ""
@@ -153,8 +153,8 @@ Rectangle {
         graphArea.namingId = ""
         graphArea.namingOpenedWith = ""
     }
-    /// The ref a rename box is changing the name of, and the name it came up holding. Empty for the two boxes that
-    /// make a name rather than change one.
+    /// The ref a rename box is changing the name of, and the name it came up holding. Empty for the two
+    /// boxes that make a name.
     property string namingId: ""
     property string namingOpenedWith: ""
     /// What the box is standing on, for the page to decide whether what is typed can be accepted at all — the models
@@ -172,7 +172,7 @@ Rectangle {
     /// its box; eight names on this pane said nothing the card does not, and the key that opens it cannot be pressed
     /// from there.
     readonly property alias findCard: findBar
-    /// How far the graph has stepped down out from under the card. This one is the list's, not the card's.
+    /// How far the graph has stepped down out from under the card. This one is the list's.
     readonly property real findShift: graphList.anchors.topMargin
     signal findLanded(string oidHex)
     function startFind() { findBar.startFind() }
@@ -180,7 +180,7 @@ Rectangle {
     function findPrevious() { findBar.findPrevious() }
 
     // ---- a press that landed somewhere else -------------------------
-    /// Both boxes this pane can be standing on are offers rather than work half done: the find card and the name box on
+    /// Both boxes this pane can be standing on are offers: the find card and the name box on
     /// a row. An empty one goes away with the press that landed elsewhere (`RepoPage.releasePressedAway`, `scenePos` =
     /// where it landed); one with something typed in it stays, because the typing is what there would be to lose.
     function dropEmptyBoxes(scenePos) {
@@ -196,17 +196,17 @@ Rectangle {
 
     // ---- a standing question ---------------------------------------
     // The bar comes down from the top of the pane and pushes the history down (デザイン規約 §可否・警告の出し場所); the row it
-    // concerns is marked rather than worded, so the question is written exactly once.
+    // concerns is marked, so the question is written exactly once.
 
     /// Raises the bar. `oidHex` is the row it is about ("" for none, and a row outside the loaded window simply goes
-    /// unmarked — the bar stands either way). `hold` takes the answer as a press held down instead of a click, and
+    /// unmarked — the bar stands either way). `hold` takes the answer as a press held down, and
     /// `tip` is what the pill says on hover — the questions whose write leaves this machine ask that way (デザイン規約 §長押し).
     /// `form` is what the question needs in order to take an answer at all — a chooser, a name box. Most questions have
     /// none: they are answered by the pill and nothing else. `code` is the git command the question is about, said at
     /// the head of the question and on the pill both, where the act has one word of its own (デザイン規約 §git 用語のコード表記);
     /// `accept` carries the wording everywhere else. `refName` is the ref the question names inside its own words, and
     /// **`label` comes with the name's seat still in it (`%1`) whenever one is handed over**: the name is drawn in its
-    /// own colour, so the sentence has to be cut at the seat rather than the name looked for in the finished line
+    /// own colour, so the sentence has to be cut at the seat
     /// (`AskBar.labelSentence`, デザイン規約 §ref の種別).
     function startAsking(oidHex, label, detail, accept, danger, hold = false, tip = "", form = null, code = "",
                          refName = "") {
@@ -234,7 +234,7 @@ Rectangle {
     /// Whether the standing question can be answered yet. A question with a form turns this off until the form has
     /// something to send.
     property alias askAnswerable: askBar.answerable
-    /// Whether it is asking for information rather than for consent, how it is answered, and what it says while it
+    /// Whether it is asking for information, how it is answered, and what it says while it
     /// stands — these change under a publish question as the remote answers what the typed name means. The wording of
     /// the pill is not among them: the command it names is settled when the question opens (デザイン規約 §はじめてリモートへ送る).
     property alias askNeutral: askBar.neutral
@@ -290,7 +290,7 @@ Rectangle {
         view: graphList
         graphModel: graphArea.graphModel
         asking: askBar.open
-        // The walk names the commit it landed on, not the row — the page looks that one up.
+        // The walk names the commit it landed on — the page looks the row up.
         onActivated: (oidHex, atRow) => graphArea.rowActivated(oidHex, atRow, Qt.NoModifier)
     }
     function stepRow(delta, held) { return rowWalk.stepRow(delta, held) }
@@ -341,11 +341,11 @@ Rectangle {
         color: Theme.borderStrong
         visible: columnDividers.graphLineWanted
     }
-    // The list starts under the question — the graph moves down rather than losing its top rows behind it. A closed
+    // The list starts under the question — the graph moves down. A closed
     // bar has no height at all, so it costs nothing while none stands.
     //
-    // **The report is not here.** It is about a write, and a write can be answered while the reader is looking at a
-    // file rather than at the history, so it stands above the whole middle of the page rather than inside this pane
+    // **The report stands over the page.** It is about a write, and a write can be answered while the reader is
+    // looking at a file, so it stands above the whole middle of the page
     // (`RepoPage`, デザイン規約 §答えの要らない報せ). What is left here is the question, which is always about the rows below it.
     AskBar {
         id: askBar
@@ -356,7 +356,7 @@ Rectangle {
         onConfirmed: graphArea.askConfirmed()
         onCancelled: graphArea.askCancelled()
     }
-    // Hangs from the top-right corner, over the list rather than above it — declared here rather than inside the view
+    // Hangs from the top-right corner, over the list — declared here
     // because a Flickable adopts what is declared in it and scrolls it away. Only one of the two is ever up: a question
     // already standing keeps the place, since it is one gesture from being over.
     GraphFind {
@@ -369,8 +369,8 @@ Rectangle {
         view: graphList
         asking: askBar.open
         // How far left the card may reach: `spaceXs` past where a subject starts, which is about half of the first
-        // character (§コミットを探す). Measured from the columns rather than from the pane, so the cap follows the dividers
-        // when they are dragged — it is a distance from the tick the messages begin at, not a fraction of the window.
+        // character (§コミットを探す). Measured from the columns, so the cap follows the dividers
+        // when they are dragged — it is a distance from the tick the messages begin at.
         maxWidth: graphArea.width - graphArea.subjectTextX - Theme.spaceXs - anchors.rightMargin
         onDismissed: {
             findBar.runFind()
@@ -384,7 +384,7 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.top: askBar.bottom
-        // The card hangs over the top rows rather than pushing them down — but when the newest commit is itself one of
+        // The card hangs over the top rows — but when the newest commit is itself one of
         // the answers, the graph steps down by the card's height so that answer is not the one thing the search covers.
         // It goes back the moment the top row stops matching, so the band is not a place the eye learns to expect (規約
         // §コミットを探す).
@@ -400,7 +400,7 @@ Rectangle {
         chosenCount: graphArea.chosenCount
         chipListAnchor: graphArea.chipListAnchor
         rowCardOid: graphArea.rowCardOid
-        // The arrows are answered here rather than in the list, because it is this pane that walks the history with
+        // The arrows are answered here, because it is this pane that walks the history with
         // them and the page that hears where they landed (規約 §矢印で履歴を辿る). The key says whether it was already down,
         // which is the only thing that tells a run apart from a press (`GraphRowWalk.noteStep`).
         Keys.onUpPressed: event => event.accepted = graphArea.stepRow(-1, event.isAutoRepeat)
@@ -427,7 +427,7 @@ Rectangle {
                 return
             }
             graphArea.stopNaming()
-            // An empty box is the way out of the offer, not a branch or a tag called nothing — and a rename that
+            // An empty box is the way out of the offer — and a rename that
             // reaches here is one left holding the name it opened with, which is the same way out.
             if (name === "" || mode === "rename")
                 return
@@ -476,7 +476,7 @@ Rectangle {
     // The current branch's stand-in, riding whichever edge its own row went out of. **Over the lane strip and under the
     // dividers**: the strip takes presses across the lane column, so a stand-in below it would answer its own lanes
     // with the row scrolling underneath — and the dividers stay on top, because a boundary that can be dragged is only
-    // a few pixels wide wherever it crosses. It follows the list's frame instead of living in it (`view`), which is
+    // a few pixels wide wherever it crosses. It follows the list's frame (`view`), which is
     // what keeps it still while the rows go by.
     GraphHeadPin {
         id: headPin
@@ -522,7 +522,7 @@ Rectangle {
     function dragDividerPast(which) {
         columnDividers.dragDividerPast(which)
     }
-    /// What is drawn, not what was asked for: the automation hook reports the line and the badge themselves, so a
+    /// What is drawn: the automation hook reports the line and the badge themselves, so a
     /// column that cannot be resized but still promises a drag cannot pass.
     readonly property alias graphDividerShown: columnDividers.graphDividerShown
     readonly property alias graphDividerLineShown: graphDividerLine.visible
@@ -534,7 +534,7 @@ Rectangle {
     /// the two lines is being asked about.
     readonly property bool refusedLineShown: columnDividers.labelDragging ? labelDividerLine.visible
         : graphDividerLine.visible
-    /// Whether the pointer is anywhere in this pane. A `HoverHandler` rather than a `MouseArea`: handlers are passive,
+    /// Whether the pointer is anywhere in this pane. A `HoverHandler`: handlers are passive,
     /// so the rows', chips' and dividers' own hover does not take this one away. Real hover and the automation hook
     /// write the same property — hover cannot be injected (verify-ui).
     ///
@@ -548,7 +548,7 @@ Rectangle {
     /// Automation: the pointer resting in the pane, which is what puts the lane bar on screen at all
     /// (`PGG_AUTO_ACT=graph-bar`).
     function restPointer(inside) { graphArea.pointerInside = inside }
-    /// What is drawn and how brightly, not what was asked for: the hooks report the bar itself, so a broken binding
+    /// What is drawn and how brightly: the hooks report the bar itself, so a broken binding
     /// cannot pass (verify-ui).
     readonly property alias laneBarShown: laneBar.visible
     readonly property alias laneBarInk: laneBar.opacity

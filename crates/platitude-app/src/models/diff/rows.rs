@@ -75,9 +75,9 @@ impl DiffModel {
             .map(|r| r.old_no.max(r.new_no))
             .max()
             .unwrap_or(0);
-        // Read off the patches rather than the rows: a coloured row holds
-        // markup, and the length of `<font color="#…">` is not the length
-        // of anything on screen.
+        // Read off the patches: a coloured row holds markup, and the
+        // length of `<font color="#…">` is not the length of anything
+        // on screen.
         self.widest_lines = widest_lines(&patches, colors);
         // The rows on screen are of this reading now (`DiffReach`).
         self.rows_gen = self.rows_gen.wrapping_add(1);
@@ -105,13 +105,13 @@ impl DiffModel {
     /// (`same_file`).
     pub(super) fn begin_request_in(&mut self, at: String, title: String, target: DiffTarget) {
         let key = diff_key(&target);
-        // Reading the same file again — which is what every partial write
-        // ends with — keeps the rows that are on screen until the new ones
-        // arrive. Emptying here would blank the pane for the length of the
-        // round trip and drop the view to the top, and on a diff of any
-        // size that reads as a flash rather than as an update. `drain`
-        // swaps the whole list inside one call, so the exchange is never
-        // seen half done.
+        // Reading the same file again — which is what every partial
+        // write ends with — keeps the rows that are on screen until the
+        // new ones arrive. Emptying here would blank the pane for the
+        // length of the round trip and drop the view to the top, and on
+        // a diff of any size that reads as a flash. `drain` swaps the
+        // whole list inside one call, so the exchange is never seen half
+        // done.
         let same_file = key == self.current_key && at == self.current_at;
         self.requested_at = Some(std::time::Instant::now());
         self.current_key = key;
@@ -119,13 +119,13 @@ impl DiffModel {
         self.title = title;
         self.is_binary = false;
         self.fingerprint = String::new();
-        // Goes with the fingerprint rather than with the rows: it is a
-        // statement about bytes that have not been read yet, and a notice
-        // held over from the last file would be about that file.
+        // Goes with the fingerprint: it is a statement about bytes that
+        // have not been read yet, and a notice held over from the last
+        // file would be about that file.
         self.apply_endings(None);
         self.loading = true;
-        // Goes with the fingerprint rather than with the rows, for the
-        // same reason: the colours that are on screen are the last file's.
+        // Goes with the fingerprint for the same reason: the colours
+        // that are on screen are the last file's.
         self.coloured = false;
         if !same_file {
             // Goes down with the rows it describes: while they are still
@@ -260,7 +260,7 @@ pub(super) fn bucket_target(bucket: &str, path: &str, orig_path: String) -> Diff
 
 /// Everything about the file that is open, in arrival order.
 ///
-/// Not simply the newest arrival, for two reasons. One diff now sends two
+/// Every arrival for it, for two reasons. One diff now sends two
 /// messages — its rows, then its colours — and taking only the last would
 /// leave the other unread. And two diffs started a moment apart need not
 /// finish in that order: colouring a file of source can take hundreds of
@@ -269,9 +269,9 @@ pub(super) fn bucket_target(bucket: &str, path: &str, orig_path: String) -> Diff
 /// for.
 ///
 /// In order, so a file asked for twice — which every partial write does —
-/// ends on its latest answer rather than the one it superseded, and so
-/// colours never overtake the rows they belong to. Everything else is
-/// dropped: those are answers to questions nobody is asking any more.
+/// ends on its latest answer, and so colours never overtake the rows they
+/// belong to. Everything else is dropped: those are answers to questions
+/// nobody is asking any more.
 pub(crate) fn wanted(msgs: Vec<DiffMsg>, key: &str) -> Vec<DiffMsg> {
     msgs.into_iter()
         .filter(|msg| diff_key(msg.target()) == key)

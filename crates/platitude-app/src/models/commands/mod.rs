@@ -30,9 +30,9 @@ const KEEP: usize = 500;
 #[derive(QModelItem, Default, Clone)]
 pub struct CommandItem {
     /// The time of day this went out, `HH:mm:ss`, already in the reader's
-    /// own zone (`selection::clock_of`). Made here rather than at the row
-    /// so that the clock the reader copies and the clock they are looking
-    /// at cannot be two different times.
+    /// own zone (`selection::clock_of`). Made here, so the clock the
+    /// reader copies and the clock they are looking at are the one
+    /// time.
     clock: String,
     /// Everything after the program name (`push origin main`). The row
     /// draws `git` itself: it never varies, and what does is what the
@@ -69,8 +69,8 @@ struct Invocation {
 pub struct CommandsModel {
     rows: Vec<CommandItem>,
     /// One per row: what a `Finished` message finds its row by, and
-    /// whose doing the row is. Kept beside the rows rather than in them —
-    /// QML has no use for either.
+    /// whose doing the row is. Kept beside the rows — QML has no use for
+    /// either.
     ids: Vec<Invocation>,
     /// Whether a command is in flight right now.
     running: bool,
@@ -375,8 +375,8 @@ impl CommandsModel {
                     if self.respell_row(index) {
                         self.notify_runs([(index, index)]);
                     }
-                    // "Still running" is about the whole list, not this
-                    // row: a fetch can outlive the write that started it.
+                    // "Still running" is about the whole list: a fetch
+                    // can outlive the write that started it.
                     self.running = self.rows.iter().any(|r| r.state == "running");
                     touched = true;
                     // A command nobody asked for leaves its row and

@@ -22,7 +22,7 @@ import platitude.ui
 // Measured against the `Label` the rows are set in — same family, size and weight — on ASCII, combining marks, CJK,
 // emoji, indentation, trailing spaces and escaped tags: every one agrees to the pixel, and agrees **cold**, in the
 // same statement the line was put on it (`tests/qml/tst_diffhit.qml`, `tst_commandshit.qml`). That is what lets one
-// ruler serve every row of a pane: the answer is a property of the line, not of when it was asked for.
+// ruler serve every row of a pane: the answer is a property of the line.
 //
 // **Nobody binds to it** — every function below sets the line it is asking about first, so two callers in one frame
 // cannot read each other's answer.
@@ -30,7 +30,7 @@ TextEdit {
     id: ruler
 
     visible: false
-    // A ruler, not a field: it must never take a press, a caret or the keyboard away from the pane's own sheet.
+    // A ruler: the press, the caret and the keyboard all stay with the pane's own sheet.
     readOnly: true
     activeFocusOnPress: false
     selectByMouse: false
@@ -67,7 +67,7 @@ TextEdit {
     /// the approximation is on the generous side. A cursor sitting on a direction boundary has two places on screen
     /// and Qt's QML text API answers with one of them — `TextEdit` / `TextInput` publish `positionToRectangle` and
     /// `positionAt` and nothing that takes the direction the caller means, so there is no way from here to ask which
-    /// (Qt 6.10). The pieces then reach past the characters the run names rather than falling short of them.
+    /// (Qt 6.10). The pieces then reach past the characters the run names.
     function rectsOf(line, bold, runs) {
         if (runs === "")
             return []
@@ -78,7 +78,7 @@ TextEdit {
             const cut = run.split(":")
             const from = Number(cut[0])
             const to = from + Number(cut[1])
-            // **A run past the end of the line is not this line's.** A row is handed its line and the runs on it
+            // **A run past the end of the line belongs to another.** A row is handed its line and the runs on it
             // one property at a time (`DiffRowDelegate`, `reuseItems`), so in between them a run can stand against
             // a line that has none of its places — the row before's runs on the row after's blank line. Nothing is
             // drawn for it and nothing is asked of the layout: the half still to arrive settles the washes again,
@@ -118,7 +118,7 @@ TextEdit {
     }
     /// Whether the line can be drawn in both directions — the strong right-to-left blocks, the marks that turn a run
     /// on their own, their presentation forms, and the lead surrogates the right-to-left planes begin with. Said in
-    /// code points rather than in the letters themselves: this is a rule and not a word, and letters of a script
+    /// code points: this is a rule, and letters of a script
     /// written out here read like the hardcoded wording the rules forbid (CLAUDE.md 絶対制約 — the same reason
     /// `DiffTextMetrics` builds its wide ruler out of `String.fromCharCode`).
     ///

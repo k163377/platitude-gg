@@ -4,7 +4,7 @@ import platitude.ui
 
 // The seat a toolbar action's icon sits in. A button with no icon to name it spends no width on one — the word is the
 // whole of it (the hunk header's buttons). A button that swaps between a named icon and the mark keeps the wider of the
-// two seats whichever it is wearing, so its width does not change with its state and the toolbar does not slide under a
+// two seats whichever it is wearing, so its width holds across its states and the toolbar stays put under a
 // pointer already resting on it. One that only ever wears the mark fits it, and its words sit as close to it as a menu
 // row's do.
 Item {
@@ -14,7 +14,7 @@ Item {
     property string kind: ""
     /// How long the button has to be held; zero for an ordinary one.
     property int holdMs: 0
-    /// The icon is a mark standing next to the word, rather than an icon at the head of a band
+    /// The icon is a mark standing next to the word
     /// (`ActionButton.besideWord`).
     property bool besideWord: false
     /// How far into the hold the press has got, 0 to 1.
@@ -31,7 +31,7 @@ Item {
     property bool cornerAlert: false
     property color cornerAlertTone: seat.tint
 
-    /// Both marks to wear at once: what the button does, and that it is held rather than clicked.
+    /// Both marks to wear at once: what the button does, and that it is held.
     readonly property bool paired: seat.kind !== "" && seat.holdMs > 0
     /// How far the two are set apart across the slash.
     readonly property int spread: Theme.iconMd - Theme.spaceXs
@@ -63,12 +63,12 @@ Item {
         stroke: Metrics.iconStroke * seat.step / 16
         visible: seat.holdMs <= 0 && !seat.busy
     }
-    // The wait, in the seat the shape kept warm. Drawn at the seat's own step so the button's width does not move, and
-    // never beside the hold mark: the press is over by the time git is out, so the ring and the mark swap rather than
-    // share (デザイン規約 §進行中・長押しの定数「回るリングと長押しの印は同じボタンの上で入れ替わり、同時には出ない」).
+    // The wait, in the seat the shape kept warm. Drawn at the seat's own step so the button's width holds, and
+    // in the hold mark's place: the press is over by the time git is out, so the ring and the mark swap
+    // (デザイン規約 §進行中・長押しの定数「回るリングと長押しの印は同じボタンの上で入れ替わり、同時には出ない」).
     //
-    // Its own item rather than a rotation on the icon above: an animator leaves the angle where it stopped, and the
-    // icon that comes back when the wait is over must not come back tilted.
+    // Its own item: an animator leaves the angle where it stopped, and the
+    // icon that comes back when the wait is over comes back upright.
     SpinnerIcon {
         width: seat.step
         height: seat.step
@@ -76,7 +76,7 @@ Item {
         tint: seat.tint
         spinning: seat.busy
     }
-    // The mark a folded button has nowhere else to put. Drawn over the seat rather than inside it, so the icon under
+    // The mark a folded button has nowhere else to put. Drawn over the seat, so the icon under
     // it keeps the step and the centre it had while the word was still there.
     NavIcon {
         visible: seat.cornerAlert

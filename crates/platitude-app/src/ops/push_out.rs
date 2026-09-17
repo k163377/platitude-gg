@@ -6,19 +6,19 @@ use super::Press;
 /// overwrite, the first push the question just took — and the branch it
 /// was about, until git's answer to that press and no other.
 ///
-/// **By id, never by the word `push`.** A remote branch's rename and
-/// delete answer under the same label, and the fetch running behind a
-/// press comes back in the same drain: a property every answer rewrote
-/// said "a push answered" about somebody else's, and the button beside
-/// it put the refusal on whichever branch was checked out by then
-/// (`PublishFlow.pushSentBranch`, before this). The press writes the id
-/// down here with the branch it was sent for, and what is handed to the
-/// page is the answer at that id and the branch beside it.
+/// **By id alone.** A remote branch's rename and delete answer under
+/// the same label, and the fetch running behind a press comes back in
+/// the same drain: a property every answer rewrote said "a push
+/// answered" about somebody else's, and the button beside it put the
+/// refusal on whichever branch was checked out by then
+/// (`PublishFlow.pushSentBranch`, before this). The press writes the
+/// id down here with the branch it was sent for, and what is handed
+/// to the page is the answer at that id and the branch beside it.
 ///
 /// **The branch outlives the answer**: a refusal is remembered per
 /// branch (デザイン規約 §リモートへ送る), and the page reads which branch
-/// off the same notify the answer arrived in — after which a second
-/// press overwrites it, and nothing else does.
+/// off the same notify the answer arrived in — after which only a
+/// second press overwrites it.
 #[derive(Debug, Default)]
 pub struct PushOut {
     press: Press,
@@ -30,10 +30,10 @@ impl PushOut {
     /// The press: the push went to the queue and came back with this id,
     /// and was about `branch`.
     ///
-    /// Where the queue accepted nothing nothing is waited for — the
-    /// press is not held open by an answer that is never coming — and
-    /// the branch is still written down, so a later reader is not handed
-    /// the branch of the press before.
+    /// Where the queue accepted nothing nothing is waited for — an
+    /// answer that is never coming would hold it open for good — and
+    /// the branch is still written down, so a later reader is handed
+    /// this press's own.
     pub fn asked(&mut self, accepted: Option<u64>, branch: String) {
         self.press.asked(accepted);
         self.branch = branch;

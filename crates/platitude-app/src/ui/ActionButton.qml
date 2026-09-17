@@ -13,18 +13,18 @@ HoverToolButton {
     /// The state's colour taken a step down for the wait — the ring and the frame wear it while git is on the network
     /// (デザイン規約 §暗く落とした段).
     ///
-    /// The state's, not `tone`'s: where the word stays plain and only the frame and the mark carry a warning, this
+    /// The state's: where the word stays plain and only the frame and the mark carry a warning, this
     /// follows the frame. A plain button has no darker step of its own and takes `textMuted`.
     property color toneDim: Theme.textMuted
     /// git is on the network for this button: the ring takes the icon's seat, the word stays and steps down to the
     /// disabled colour, and the whole of it goes as dim and as deaf as a disabled one (デザイン規約 §進行中・長押しの定数).
     ///
-    /// The word stays rather than stepping aside: what a button is waiting on is the thing the button names, and a
+    /// The word stays: what a button is waiting on is the thing the button names, and a
     /// ring alone in a bare button leaves nothing on the band to say which action is out. The seat is where the ring
     /// goes because it is the one place already measured for a mark of exactly this size, so the button's width does
     /// not move.
     ///
-    /// Dimmed rather than actually disabled: `enabled` would take the focus away, and the press that started the
+    /// Dimmed, still enabled: `enabled: false` would take the focus away, and the press that started the
     /// network call is the very one that may have come from the keyboard.
     property bool busy: false
     /// How long this button has to be held to fire `held()`; zero for an ordinary button, where a click is the whole
@@ -33,8 +33,8 @@ HoverToolButton {
     /// How far into the hold the press has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
     /// **The length the press under way was given** (`HoldDriver.armedMs`), which is the live one while no press is
-    /// under way. An owner whose wording, frame or tone is worked out from the same condition the length is reads this
-    /// instead, so the button cannot change what it says under a hand that is already holding
+    /// under way. An owner whose wording, frame or tone is worked out from the same condition the length is reads this,
+    /// so the button cannot change what it says under a hand that is already holding
     /// (デザイン規約 §長押し「長押しか否かは押した瞬間に確定」).
     readonly property alias armedMs: holdDrive.armedMs
     /// **A gesture is under way**, the fill's slide back included (`HoldDriver.gesturing`) — what an owner latches on
@@ -64,7 +64,7 @@ HoverToolButton {
     readonly property bool framed: actionBtn.frameColor.a > 0
     /// The label is a git command said in git's own spelling, and wears the chip that says so — lowercase, mono, on a
     /// faint ground (デザイン規約 §git 用語のコード表記). The command is the whole label, so `text` itself is what the chip is drawn
-    /// around — and that text is never translated: it is the command, not a phrase about it.
+    /// around — and that text is left untranslated: it is the command itself.
     property bool code: false
     /// The label is a phrase with a command at each end — a chip, `text` between them, and a second chip in a colour
     /// of its own (`ActionButtonLabel.phraseHead`). Empty is the ordinary single-wording button.
@@ -86,7 +86,7 @@ HoverToolButton {
     /// Stands in for the pointer on that tick, so its one line can be photographed — hover cannot be injected.
     property bool phraseSignaturePointedAt: false
     readonly property bool phraseSignatureTipShown: btnLabel.phraseSignatureTipShown
-    /// The icon is a mark standing next to the word, rather than an icon at the head of a band.
+    /// The icon is a mark standing next to the word.
     ///
     /// The step goes with the role (デザイン規約 §寸法「段は役割で選ぶ」 — `iconSm` is the mark beside a word, `iconMd` the icon a row
     /// or a band starts with), and the seat comes in to the icon itself: the wider seat is there to hold the icon and
@@ -112,8 +112,8 @@ HoverToolButton {
     property bool foldRequested: false
     /// The room the word is given inside this cell, once the marks and the air either side are paid for.
     ///
-    /// Read off the control's own `padding` rather than off `leftPadding` / `rightPadding`: those two are answered
-    /// from here (through `slack`), and reading them back would close the ring. `padding` is the style's own and never
+    /// Read off the control's own `padding`: `leftPadding` / `rightPadding` are answered from here (through
+    /// `slack`), and reading them back would close the ring. `padding` is the style's own and never
     /// moves, so this is a question about the width the row handed over and nothing else.
     readonly property real wordRoom:
         actionBtn.wordFloor <= 0 ? btnLabel.box
@@ -122,8 +122,8 @@ HoverToolButton {
     readonly property bool folded: actionBtn.wordFloor > 0
         && (actionBtn.foldRequested || actionBtn.wordRoom < actionBtn.wordFloor)
     /// The widest this button is ever drawn, and the narrowest it is drawn with a word still on it. **Neither moves
-    /// with the shape the button is in** — the row lays the cell out from these rather than from what the button asks
-    /// for at the moment, so giving the word up cannot change the width that decides whether to give it up (`TopBar`).
+    /// with the shape the button is in** — the row lays the cell out from these, so giving the word up cannot
+    /// change the width that decides whether to give it up (`TopBar`).
     readonly property real naturalWidth:
         2 * actionBtn.padding + seat.implicitWidth + btnRow.spacing + btnLabel.box
     ///
@@ -143,22 +143,22 @@ HoverToolButton {
     /// holds around it (`naturalWidth - wordBox`).
     readonly property real wordWant: btnLabel.wantWidth
     readonly property real wordBox: btnLabel.box
-    /// Icon and word centred as a pair rather than packed from the left. A toolbar button is measured to its content
-    /// and never sees the difference; one told to fill a pane's width does — the icon would sit against the far edge
+    /// Icon and word centred as a pair. A toolbar button is measured to its content and never sees the difference;
+    /// one told to fill a pane's width does — packed from the left the icon would sit against the far edge
     /// with the word adrift from it.
     property bool centred: false
     /// What the shared box hands this state past its own wording: the box is measured for the longest thing either of
     /// the pair ever says, so every shorter wording is given air it has no use for.
     ///
-    /// Split between the button's two ends rather than left where it falls — packed from the left it all lands behind
+    /// Split between the button's two ends — packed from the left it all lands behind
     /// the word, and the wash, the warning frame and the hold's fill all reach well past the last letter.
     ///
     /// The phrase moves whole, so the step from the icon to the word is the same in every state (デザイン規約 §余白). Centring
     /// the word inside the box instead would open that step wider than the gap to the button beside it.
     ///
     /// **A cell narrower than the box has no slack at all** — what it has is a word too long for it, and the word
-    /// elides into what there is (`ActionButtonLabel.cap`). Measured against the *wanted* width rather than the
-    /// painted one for the same reason the box is measured off a hidden label: the painted width is the answer this
+    /// elides into what there is (`ActionButtonLabel.cap`). Measured against the *wanted* width, for the same
+    /// reason the box is measured off a hidden label: the painted width is the answer this
     /// arithmetic produces.
     readonly property real slack:
         actionBtn.folded ? 0
@@ -166,35 +166,35 @@ HoverToolButton {
     /// What a framed button is short of `Theme.buttonMinWidth`, which it takes as slack like any other (so the phrase
     /// still moves whole and the ink still comes out even at the two ends).
     ///
-    /// A frame is a box put round a word, and a short word draws a box the eye reads as a chip rather than as something
+    /// A frame is a box put round a word, and a short word draws a box the eye takes for a chip: nothing
     /// to press.
     ///
     /// Only where a frame is drawn. A bare button is a word among words — the hunk heading's two, a dialog's `Cancel` —
     /// and a floor there would stretch the hover wash and the hold's fill well past what the button names.
     ///
-    /// **A phrase has no floor.** The floor exists so a short word does not draw a box the eye reads as a chip, and a
+    /// **A phrase has no floor.** The floor exists so a short word's box still reads as a button, and a
     /// button told to fill a pane is already far past it. It cannot be measured here either: a phrased cell asks for
     /// no width at all (`ActionButtonLabel.phraseRoom`), so the row reads as a tiny button and the floor would charge
     /// the padding a whole `buttonMinWidth` — straight out of the room the phrase then has to elide itself into.
     ///
     /// **Nor does a button that has given its word up.** That floor is a box put round a *word*; a box put round a
     /// mark takes the size of the mark, which is the same ruling the state group's `…` is drawn under (規約 §ウィンドウの縁
-    /// 「枠を着ていても `buttonMinWidth` は敷かない」).
+    /// 「枠を着ていても `buttonMinWidth` の外」).
     readonly property real floorSlack:
         actionBtn.framed && !btnLabel.phrased && !actionBtn.folded
         ? Theme.buttonMinWidth - btnRow.implicitWidth - 2 * actionBtn.padding : 0
     /// The air each end is already holding before the slack is shared out (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」): a lone
     /// mark sits centred in the two-mark seat, and a command's chip reaches half a gap past its last letter. Taken off
-    /// before the halves are cut, so what comes out even is the **ink** at the two ends rather than the row between
-    /// them.
+    /// before the halves are cut, so what comes out even is the **ink** at the two
+    /// ends.
     readonly property real headInk: seat.visible ? (seat.implicitWidth - seat.step) / 2 : 0
     readonly property real tailInk: actionBtn.code ? Theme.spaceXs / 2 : 0
     /// Held all the way down.
     signal held()
     /// Pressed and let go, meaning the button's ordinary action.
     ///
-    /// A hold button never emits this: neither the release that completes a hold nor the one that gives up on it part
-    /// way may fall through to what this button does when it is not a hold button.
+    /// A plain press alone raises it: on a hold button both releases — the one that completes the hold and the one
+    /// that gives up on it part way — stop there.
     signal activated()
     readonly property color fg: actionBtn.busy ? Theme.textMuted
                                 : holdProgress > 0 ? Theme.textOnAccent : enabled ? tone : Theme.textMuted
@@ -203,9 +203,9 @@ HoverToolButton {
     ///
     /// A separate colour from `fg` because the two paths mean different things: dimming a **word** is the disabled
     /// signal and has one colour only (§無効 — `textMuted`), while a mark keeps its hue and drops a step (§暗く落とした段).
-    /// Read off the state rather than the word, so a wait says which button is waiting.
+    /// Read off the state, so a wait says which button is waiting.
     readonly property color markFg: actionBtn.busy ? actionBtn.toneDim : actionBtn.fg
-    /// Nothing here answers a press while git is on the network for it.
+    /// A press lands only with git off the network for this button.
     readonly property bool live: actionBtn.enabled && !actionBtn.busy
 
     /// Automation: run the hold to its end without a press behind it.
@@ -236,17 +236,17 @@ HoverToolButton {
             actionBtn.activated()
     }
     /// A button that goes deaf under the hand — git took it onto the network, or the state it acts on went — has
-    /// nothing left for the gesture to land on. The fill blanks rather than sliding back, and no signal is raised:
+    /// nothing left for the gesture to land on. The fill blanks, and no signal is raised:
     /// the press was made on a button that is no longer there to press.
     onLiveChanged: if (!actionBtn.live) {
         // Both, so the next `clicked()` — which may be one raised with no press behind it — is judged from what is
-        // true then rather than from a press this button never answered.
+        // true then.
         actionBtn.clickWanted = false
         actionBtn.clickJudged = false
         holdDrive.blank()
     }
     onDownChanged: {
-        // **The press is gated, the release is not.** A release left unanswered leaves the fill running, and it runs
+        // **Only the press is gated.** A release left unanswered leaves the fill running, and it runs
         // on to fire a hold under a hand that has already let go (and the latch below never opens again).
         if (actionBtn.down && !actionBtn.live)
             return
@@ -285,7 +285,7 @@ HoverToolButton {
     /// How far in from the cell's two ends the frame is drawn. Nothing at all for a button measured to its own
     /// content, where the cell **is** the box; in a folded cell, which fills the band's height the way the ☰ and the
     /// window's three do, the frame keeps the height the button's own box has — **a line drawn along the band's top
-    /// edge is a box glued to the window rather than a frame round a button** (measured). The wash still fills
+    /// edge reads as a box glued to the window** (measured). The wash still fills
     /// the whole cell, because that is the target, and the target is what the pointer is answering.
     ///
     /// Read only where the two can differ. A button measured to its own content **is** its implicit height, and a
@@ -295,15 +295,15 @@ HoverToolButton {
         actionBtn.folded ? Math.max(0, (actionBtn.height - actionBtn.implicitHeight) / 2) : 0
 
     background: Rectangle {
-        // The same wash every other tool button answers with (`HoverToolButton.washColor`), read rather than left out:
+        // The same wash every other tool button answers with (`HoverToolButton.washColor`), read here:
         // a background handed in replaces the one that carries it, so the wash, the frame, the hold's fill and the
         // focus ring all have to be drawn here.
         //
         // Only while it is answering: a button with git out on the network is as deaf as a disabled one (`live`), and
-        // the hand that started the fetch is still resting on it — the wash must not stay up for the whole call.
+        // the hand that started the fetch is still resting on it — the wash comes down for the whole call.
         color: actionBtn.live ? actionBtn.washColor : "transparent"
         radius: Theme.radiusSm
-        // The frame, and the fill a hold puts inside it. Its own item rather than this one's border, so that a cell
+        // The frame, and the fill a hold puts inside it. Its own item, so that a cell
         // taller than the button's box can wash edge to edge and still draw the frame round the box (`frameInset`).
         Rectangle {
             anchors.fill: parent
@@ -325,11 +325,11 @@ HoverToolButton {
                 inset: actionBtn.framed ? Theme.borderWidth : 0
             }
         }
-        // Drawn outside the frame rather than in it: the frame's colour is already saying this button is the dangerous
-        // one, and focus must not be able to take that over.
+        // Drawn outside the frame: the frame's colour is already saying this button is the dangerous
+        // one, and focus leaves that in sight.
         //
-        // `visualFocus`, which is focus that arrived from the keyboard — not `activeFocus`, which a press gives it as
-        // well (`focusPolicy` is StrongFocus and nothing on this band takes it back, so an `activeFocus` ring would
+        // `visualFocus`, which is focus that arrived from the keyboard (a press gives `activeFocus` as well, and
+        // `focusPolicy` is StrongFocus and nothing on this band takes it back, so an `activeFocus` ring would
         // come up on a click and stay).
         Rectangle {
             anchors.fill: parent
@@ -348,7 +348,7 @@ HoverToolButton {
     // The slack goes into the button's own air, so what one end takes the other gives: the width stays the one the pair
     // was measured for and the toolbar's right-hand end does not move (デザイン規約 §リモートへ送る — 全状態が同じ幅).
     //
-    // The trailing side is what is left rather than the other half rounded: a wording measures in fractions of a pixel,
+    // The trailing side is what is left: a wording measures in fractions of a pixel,
     // and `floor` beside `ceil` would round the pair of them up to a button a pixel wider than its box. The odd pixel
     // also lands on the side with a mark to stand clear of (`alert`). Only a button with slack to share reads the ink
     // off its two ends — one measured into a shared box (`widestText`) or one held open by the frame's floor
@@ -382,8 +382,8 @@ HoverToolButton {
         when: actionBtn.wordFloor > 0
     }
 
-    // The row keeps its size while the network call runs — the toolbar must not shuffle under a pointer that is still
-    // resting on the button — so nothing here leaves the layout: the word stays where it is and only its colour steps
+    // The row keeps its size while the network call runs — a pointer is still resting on the button — so nothing here
+    // leaves the layout: the word stays where it is and only its colour steps
     // down, and the ring turns inside the seat the icon was already measured into.
     contentItem: Item {
         implicitWidth: btnRow.implicitWidth
@@ -415,14 +415,14 @@ HoverToolButton {
                 tint: actionBtn.markFg
                 // With the word gone the `!` has nowhere to stand after it, so it comes to the mark's own corner —
                 // the warning has to survive the fold, being the one thing on this button that is news (規約 §長押し:
-                // 警告の色は語ではなく枠と印が持つ).
+                // 警告の色は枠と印が持つ).
                 cornerAlert: actionBtn.folded && actionBtn.alert
                 cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
                 Layout.alignment: Qt.AlignVCenter
             }
             ActionButtonLabel {
                 id: btnLabel
-                // **Out of the row once the word is given up**, not merely emptied. A zero-width child still takes
+                // **Out of the row once the word is given up.** A zero-width child still takes
                 // the row's `spacing` on both sides of itself, and the two spacers either end share out what is
                 // left — so the mark came to rest half a gap left of its cell's middle while the gap the word was
                 // not in hung to the right of it (measured: 2px in a 36px cell, on all three of the band's
@@ -430,7 +430,7 @@ HoverToolButton {
                 // bindings, which an item out of the layout goes on answering.
                 //
                 // **This cannot unfold the button**: `wordRoom` is what decides the fold, and it is arithmetic on
-                // the cell's width, the padding and the seat — never a reading of the row this label is in. A fold
+                // the cell's width, the padding and the seat alone. A fold
                 // answered by what the row came out at would give the word its room back by hiding it.
                 visible: !actionBtn.folded
                 text: actionBtn.text

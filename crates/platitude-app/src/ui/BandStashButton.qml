@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// Everything uncommitted, set aside in one entry, on the press (デザイン規約 §変更を退避する). It stands on the band
-// rather than over the file list: what it sets aside is the working tree, which is there whichever pane is
+// Everything uncommitted, set aside in one entry, on the press (デザイン規約 §変更を退避する). It stands on the band:
+// what it sets aside is the working tree, which is there whichever pane is
 // open, and the pane that could otherwise host it is one row's selection away most of the time.
 ActionButton {
     id: stashButton
@@ -23,15 +23,14 @@ ActionButton {
     // state: nothing here changes what the press costs, so there is no second shape to say.
     text: "stash"
     code: true
-    // Nothing worn on top of that: a stash destroys nothing, so no frame, no `!` and no hold (デザイン規約
-    // §変更を退避する). No ring either — the ring names a wait on the network and this write is local (§進行中・
-    // 長押しの定数); while it runs the band is busy and the button is down, like the commit button beside its
+    // The word alone: a stash destroys nothing (デザイン規約 §変更を退避する). The ring names a wait on the network and this write
+    // is local (§進行中・長押しの定数); while it runs the band is busy and the button is down, like the commit button beside its
     // own write.
     // Held down with the sidebar while a rebase plan is being composed: the one write that runs then is the plan's
     // own button, and fetch is the only other door left open.
     // And held down while the pane is reading another working copy: this is the one button outside that pane that
-    // acts on the very changes it is listing, and a press here would set aside *this* window's rather than the ones
-    // on screen (P3-確認事項 §別 worktree の未コミット行).
+    // acts on the very changes it is listing, and a press here would set aside *this* window's changes
+    // (P3-確認事項 §別 worktree の未コミット行).
     enabled: stashButton.mode === "ready" && stashButton.curPage.pageTab.busyCount === 0
              && !stashButton.curPage.planShown && stashButton.curPage.wipWritable
     tip: {
@@ -62,7 +61,7 @@ ActionButton {
         // said (デザイン規約 §hover のツールチップ).
         return qsTr("Set these changes aside, files git is not tracking yet included")
     }
-    // The name comes from the page rather than being asked for here: a summary already written for these
+    // The name comes from the page: a summary already written for these
     // changes is the name the reader would have given them anyway (デザイン規約 §変更を退避する).
     onActivated: stashButton.curPage.pageTab.pushStash(stashButton.curPage.pageStashName)
 }

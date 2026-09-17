@@ -16,8 +16,8 @@ Item {
     property int frameBefore: 0
     readonly property bool expectsPage: Harness.autoOpen !== ""
     readonly property bool identityReady: AppBackend.identityState === "ready"
-    // ScreenInfo names can be friendly labels, not OS device IDs. The runner
-    // separately records the native window's monitor; never infer its Hz from fps.
+    // ScreenInfo names can be friendly labels. The runner separately records the
+    // native window's monitor, which is where its Hz comes from.
     readonly property string displayInfo: !Harness.autoPerf || !window || !window.screen ? "{}" : JSON.stringify({
         screen: window.screen.name, model: window.screen.model, manufacturer: window.screen.manufacturer,
         screenX: window.screen.virtualX, screenY: window.screen.virtualY,
@@ -94,7 +94,7 @@ Item {
     /// the database knows — on Windows a DirectWrite face over each file, kept for the life of the process: tens of
     /// MB once, whichever glyph asked, and nothing the product can decline (the fallback-family and emoji-family
     /// APIs only order that list). The corpus asks during the scroll, where the walk's bytes and the bench's arrive
-    /// in the same ticks, so this asks before `perf_done` instead, idle either side, and says when: the parent reads
+    /// in the same ticks, so this asks before `perf_done`, idle either side, and says when: the parent reads
     /// its sampler at the first mark and the last. The walk is the product's own — the same question a gitmoji
     /// subject asks, the same fonts, the same bytes — only the moment is chosen. Offscreen there is nothing to weigh
     /// (that platform's FreeType database holds no fonts), so `verify-ui perf font-walk` checks the three lines alone.

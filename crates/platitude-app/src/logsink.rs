@@ -1,7 +1,7 @@
 //! Where a log line goes, and where it goes when the stream it was meant
 //! for will not take it.
 //!
-//! **This writer never fails.** What it is standing in front of is
+//! **Every write succeeds.** What it is standing in front of is
 //! `tracing_subscriber`'s answer to a failed write, which is `eprintln!`
 //! — and that panics when stderr is the thing that just failed. Anything
 //! that makes stderr unwritable then takes the process with it at the
@@ -10,14 +10,14 @@
 //! is what crossing that boundary means (measured 2026-09-03 by closing
 //! the read end at both times under `verify-ui`).
 //!
-//! Unwritable stderr is not exotic for a window. A GUI-subsystem process
+//! Unwritable stderr is ordinary for a window. A GUI-subsystem process
 //! started from the shell or the taskbar has no standard error at all —
 //! `GetStdHandle` answers null and `std` turns that into
 //! `ERROR_INVALID_HANDLE` on every write — and a run whose reader walked
 //! away leaves a pipe nobody is holding open.
 //!
-//! So the line is offered somewhere else rather than dropped. On Windows
-//! that is `OutputDebugStringW`, which is where Qt's own logging goes in
+//! So the line is offered somewhere else. On Windows that is
+//! `OutputDebugStringW`, which is where Qt's own logging goes in
 //! the shipped build for exactly the same reason (no console to write
 //! to): one debugger window shows both halves of the app's log. Nowhere
 //! else has a second sink that costs nothing, so nowhere else has one.

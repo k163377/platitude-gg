@@ -6,14 +6,14 @@ import platitude.ui
 
 /// The diff pane's verbs. Most of them wait on the same thing first — a row of the first hunk being on screen —
 /// so the wait is made once, below, and the verb it belongs to is chosen from there. The rest are chains of
-/// their own rather than branches: the ones that read a place, write and read it again, or send the code
-/// sideways. The dispatch starts those by name instead of answering for them.
+/// their own: the ones that read a place, write and read it again, or send the code
+/// sideways. The dispatch starts those by name.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -32,7 +32,7 @@ Item {
     readonly property var writeBarrier: driver.barrierWrite
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "stage-hunk" || act === "stage-line"
             || act === "discard-hunk" || act === "discard-hunk-go"
@@ -53,7 +53,7 @@ Item {
             const named = head === "staged" || head === "unstaged"
                           || head === "untracked" || head === "conflicts"
             page.showWip()
-            // The source of a rename comes off the model rather than out of the argument: a row hands it over when it
+            // The source of a rename comes off the model: a row hands it over when it
             // is clicked, and a run that opened the destination alone would photograph a file git thinks appeared out
             // of nowhere.
             const wtPath = named ? arg.substring(cut + 1) : arg
@@ -78,8 +78,8 @@ Item {
         } else if (act === "preview" || act === "preview-unstaged" || act === "preview-staged"
                    || act === "preview-close") {
             // The toggle only asks; the read is a git subprocess away, so completion is the pane settling
-            // (`stageRowTimer`), not the ask. No path is a run with nothing to open: said and stopped on the rendered
-            // surface, rather than holding a wait no read will answer — the wanted line is what fails it.
+            // (`stageRowTimer`). No path is a run with nothing to open: said and stopped on the rendered
+            // surface (no read would answer a wait) — the wanted line is what fails it.
             // "preview-close" opens the unstaged side the same way and closes the pane once the pictures are there.
             if (arg === "") {
                 Harness.report("diff_arg act=" + act + " named=false")
@@ -112,7 +112,7 @@ Item {
         diffPane.pickText(1, 0, lastRow, driver.pastLineEnd)
         // `door=` is the half a headless drag cannot make for itself: a run enters the hand's own functions and never
         // delivers a press, so what brings the keyboard — the sheet the pane watches presses from — is asked where it
-        // stands instead. A selection nothing holds the keyboard for is not one `Ctrl+C` can take away.
+        // stands. A selection nothing holds the keyboard for is not one `Ctrl+C` can take away.
         Harness.report("diff_pick door=" + diffPane.doorOnTop() + " " + diffPane.pickTally()
                           + " removedRow=" + removedRow + " to=" + lastRow)
         if (act === "diff-select")
@@ -140,13 +140,13 @@ Item {
         Harness.report(name + " holdsRemoved=" + (removed !== "" && text.indexOf(removed) >= 0)
                           + " lines=" + (text === "" ? 0 : text.split("\n").length))
     }
-    // The diff has to arrive before a row of it can be staged. Asked for rather than waited out: a fixed wait
+    // The diff has to arrive before a row of it can be staged. Asked for: a fixed wait
     // photographs an empty pane the same as a late one (measured, a verb fired against this repository named no
     // row and passed). The asking has no ceiling: a row that never lands leaves the run without a report line at all,
     // and the watchdog is what ends it.
     //
-    // A beat of its own rather than the shared one, because what it asks costs a diff read per tick.
-    // waits(paced): the loop ends on the diff having arrived, never on a count of these
+    // A beat of its own, because what it asks costs a diff read per tick.
+    // waits(paced): the loop ends on the diff having arrived
     Timer {
         id: stageRowTimer
         interval: 50
@@ -157,14 +157,14 @@ Item {
             stageRowTimer.start()
         }
         // Whether what the verb is about to name is on screen. They all act on the first hunk, so a changed line in it
-        // is the one answer they share — "diff-file" alone reads the model instead of a row, and the pictures and
+        // is the one answer they share — "diff-file" alone reads the model, and the pictures and
         // binary files it also opens have no rows to find.
         function ready() {
-            // "diff-file" alone reads the model instead of a row, and "conflict-sides" reads every row there is — the
+            // "diff-file" alone reads the model, and "conflict-sides" reads every row there is — the
             // one it is about (a side's own line, once it has been typed over) is a removal, which is not a changed
             // line of the first hunk. The previews take the settled form too: what they open can be all picture or
             // binary notice and no rows, and no row of it is theirs to name.
-            // "diff-band-sweep" is about the band above the rows and not about a row at all, so the settled diff is
+            // "diff-band-sweep" is about the band above the rows, so the settled diff is
             // the whole of what it waits for — a file with no changed line in its first hunk still has a path in the
             // band, and demanding one would leave that run waiting out its watchdog.
             if (["diff-file", "conflict-sides", "diff-tick", "diff-band-sweep",
@@ -184,11 +184,11 @@ Item {
                 return
             stageRowTimer.stop()
             const act = Harness.autoAct
-            // Which line the line-level verbs mean. Not 0: a hunk numbers its lines through the context it carries, and
-            // the context is not part of the change (see `firstChangedLine`).
+            // The line the line-level verbs mean, the first changed: a hunk numbers its lines through the context
+            // it carries, which is not part of the change (see `firstChangedLine`).
             const line = diffPane.firstChangedLine(0)
-            // Said before the acting, so a verb that goes on to fail its write says both. `waited=` is ticks, not a
-            // clock.
+            // Said before the acting, so a verb that goes on to fail its write says both. `waited=` is a count of
+            // ticks.
             Harness.report("diff_row act=" + act + " ready=" + arrived
                               + " rows=" + diffPane.view.count
                               + " line=" + line
@@ -223,10 +223,10 @@ Item {
                 driver.complete()
                 return
             }
-            // The page's tick, fired here rather than waited for. What it asks about is a file this run has not
+            // The page's tick, fired here. What it asks about is a file this run has not
             // touched, so core answers it with nothing (`RepoSession::refresh_diff`) and there is no arrival to
             // observe — the ask is the edge, and it is read in the same beat it is made. `loading=` is the other half
-            // of the claim: a tick must not put the pane back into the state a click does.
+            // of the claim: a tick leaves the pane standing where a click would reload it.
             if (act === "diff-tick") {
                 const asked = page.pollDiff()
                 Harness.report("diff_tick asked=" + asked
@@ -282,7 +282,7 @@ Item {
                 escapeTimer.start()
                 return
             }
-            // The squares a line only puts out under the pointer, named rather than hovered (hover cannot be injected
+            // The squares a line only puts out under the pointer, named (hover cannot be injected
             // on Windows).
             if (act === "line-tools") {
                 diffPane.showLineTools(0, line)
@@ -290,7 +290,7 @@ Item {
                 return
             }
             // The heading's two words carry their colours only under the pointer, and hover cannot be injected, so the
-            // row is named instead. A heading's own row is line -1 (`flatten_patches`).
+            // row is named. A heading's own row is line -1 (`flatten_patches`).
             if (act === "hunk-tools") {
                 diffPane.showLineTools(0, -1)
                 renderedBarrier.begin()
@@ -306,7 +306,7 @@ Item {
                 renderedBarrier.begin()
                 return
             }
-            // The same text, taken from the ground under the last row instead of from the rows themselves — the one
+            // The same text, taken from the ground under the last row — the one
             // place inside the code column where a press used to reach nothing (規約 §diff の中身をコピーする). The
             // rows have arrived by here; the view still has to lay them out, which is what the timer waits for.
             if (act === "diff-sweep") {
@@ -392,9 +392,9 @@ Item {
     // covering the frame covers the bar with it, and the hand that picks the text out took every press on the
     // trough. Two claims:
     //
-    // **`clear=`** — where this hand ends against where the bar begins, read off the two items rather than off the
-    // rule that places them. **`reach=`** — the hand still answers at its own last pixel, so the strip was given back
-    // to the bar and not eaten out of the code. And `out=` is the run's own honesty: a diff that fits its frame has
+    // **`clear=`** — where this hand ends against where the bar begins, read off the two items
+    // themselves. **`reach=`** — the hand still answers at its own last pixel, so the strip was given back
+    // to the bar. And `out=` is the run's own honesty: a diff that fits its frame has
     // no bar to be kept clear of.
     SampleTimer {
         id: diffBarTimer
@@ -470,7 +470,7 @@ Item {
     /// Every row whose line ends inside the pane, dragged in beside it: once entirely in the blank right of it, and —
     /// while the head of the line is still on screen (`fromHead`) — once from that head out into the blank. Answers
     /// how many rows were reachable, the shortest line among them, and whether the drags said what they have to.
-    /// **A pass that found no row says `rows=0` rather than going green.**
+    /// **A pass that found no row says `rows=0`.**
     ///
     /// It enters `takeAt` / `followAt` / `releaseText`, which is what the `MouseArea`'s own handlers call: a hand
     /// that was never wired up reports nothing (verify-ui §壊れない動詞の実装).
@@ -518,7 +518,7 @@ Item {
     /// What the plain `Copy` puts on the pad for one row, taken by row number — a way in that reads nothing off the
     /// pixels, so it can stand as the answer the drags below are held against.
     ///
-    /// **Read off the pad and not off the model** (`ClipboardHelper.lastCopied`): the claim is about what a reader
+    /// **Read off the pad** (`ClipboardHelper.lastCopied`): the claim is about what a reader
     /// ends up holding, and the copy is where a selection that is right on screen could still go wrong. `took` is
     /// what keeps a run honest — a copy that put nothing out leaves the pad saying whatever it said last.
     function copyOfRow(row) {
@@ -539,7 +539,7 @@ Item {
     /// A drag that runs from the head of one row out into the blank beside a later one, held against those rows
     /// taken one at a time by number. **The rows between the two ends are the half a single-row drag cannot ask
     /// about**: the copy joins them with newlines and leaves the removed lines out, and an end that landed on the
-    /// wrong place would come back a line short at either edge rather than not at all.
+    /// wrong place would come back a line short at either edge.
     ///
     /// Answers "" where the fixture has fewer than two reachable rows, so a run that proved nothing says so.
     function spanTakes() {
@@ -615,7 +615,7 @@ Item {
     //
     // Three answers in one run, because they are one story: the line goes (the rows shrink), the line comes back (the
     // rows are as they were), and staging the rest empties the side being read — where the pane follows the file to the
-    // side it went to rather than closing on the reader (`RepoPage.followEmptySide`). Each step waits for its own write
+    // side it went to (`RepoPage.followEmptySide`). Each step waits for its own write
     // to land *and* for the pane to say so — the rows and the key are the output, the write is only the cause.
     SampleTimer {
         id: lineBackTimer
@@ -690,7 +690,7 @@ Item {
         }
     }
     // Line after line, the way a hand does it. The pane refuses a press while the rows it would be written against are
-    // still coming (`RepoPage.diffSettling`), so this waits for exactly that and no clock — which is also the thing
+    // still coming (`RepoPage.diffSettling`), so this waits for exactly that — which is also the thing
     // that broke: held on a signal the file list only sends when its rows differ, the pane went quiet for good at the
     // second line of a file already on both sides, and no `+` anywhere would go in again.
     SampleTimer {
@@ -723,8 +723,8 @@ Item {
             // A row is named by walking the list's own items, and the list builds them a frame after the model hands
             // the rows over: read too early it names nothing, which is not the same as there being nothing
             // (`keep-place` learned it too). So an empty answer is waited on — but not for ever. **The 5s cut-off
-            // decides no verb**: it never passes a run as green — the report says `staged=n want=m` and the judge
-            // fails the shortfall — it only converts "the fixture has fewer changed lines than the run asks for"
+            // names a shortfall**: the report says `staged=n want=m` and the judge
+            // fails it — it turns "the fixture has fewer changed lines than the run asks for"
             // from a silent watchdog into a diagnosable line.
             const line = diffPane.firstChangedLine(0)
             if (line < 0) {
@@ -769,7 +769,7 @@ Item {
                               + " kept=" + page.activeFocus
                               // **Active focus is held by one item at a time**, so this is also the file list
                               // saying it let go: the hand was in the diff, the diff is gone, and the arrows now
-                              // enter where `GraphPane.stepRow` does rather than at a list nobody is looking at.
+                              // enter where `GraphPane.stepRow` does.
                               + " graph=" + graphPane.view.activeFocus)
             renderedBarrier.begin()
         }
@@ -806,7 +806,7 @@ Item {
             }
             // The landing is the output: the pane has to have moved off the key it was on and settled somewhere with
             // rows — and stopped reading (`RepoPage.diffSettling`), so the rows it lands with are the rows the run
-            // ends on rather than ones a read still out is about to replace.
+            // ends on.
             const now = page.diffShown ? page.diffKind + ":" + page.diffPath : ""
             if (!driver.wroteAndSettled()
                     || now === followTimer.was || (page.diffShown && diffPane.view.count === 0)
@@ -822,12 +822,12 @@ Item {
         }
     }
     // Sending the diff's code sideways, by the bar's own path and then by the hand that carries the rows with it. What
-    // is read back is where the code and the rows ended up, never what was asked for: a bar bound to nothing still
+    // is read back is where the code and the rows ended up: a bar bound to nothing still
     // takes a press, and a hand wired to nothing still starts.
     //
     // The wait is for the view (`keep-place` learned the same lesson): rows that have arrived are not rows the list has
     // laid out, and until it has, `codeMax` is measured against a width of nothing. A diff with nowhere sideways to go
-    // says so and stops there rather than at the watchdog — a run over one photographs a pane that proves nothing
+    // says so and stops there — a run over one photographs a pane that proves nothing
     // (app-ui.md §UI 自動化の因果性).
     SampleTimer {
         id: codeSendTimer
@@ -985,7 +985,7 @@ Item {
                 if (!acts.viewLaidOut())
                     return
                 // A diff that fits its frame has no row below the fold to arrive from, so there is nothing here to
-                // see: said and stopped, rather than held to the watchdog over a fixture that stopped asking the
+                // see: said and stopped — the fixture stopped asking the
                 // question (app-ui.md §UI 自動化の因果性).
                 if (diffPane.view.maxY <= 0) {
                     codeGrowTimer.finish()
@@ -1027,7 +1027,7 @@ Item {
                 diffPane.sendCode(diffPane.codeMax)
                 return
             }
-            // The send lands in the turn it is made — the clamp is arithmetic, not an animation — but where the rows
+            // The send lands in the turn it is made — the clamp is arithmetic — but where the rows
             // are drawn after it is a layout away, so what is waited for is the ink standing still.
             const ink = diffPane.codeInkRight()
             const now = Math.round(diffPane.codeAt) + "," + Math.round(ink)
@@ -1100,7 +1100,7 @@ Item {
                     return
                 }
                 // An eighth of the way along: far enough to be somewhere, and short of where the shorter reading of
-                // this file ends, so what is being claimed is that the place was kept and not that it was clamped.
+                // this file ends, so what is being claimed is that the place was kept.
                 diffPane.sendCode(diffPane.codeMax / 8)
                 codeShrinkTimer.at0 = diffPane.codeAt
                 codeShrinkTimer.max0 = diffPane.codeMax
@@ -1183,7 +1183,7 @@ Item {
                 codeSwapTimer.drawn0 = diffPane.codeDrawn
                 codeSwapTimer.was = page.diffKind + ":" + page.diffPath
                 // The row beside this one under the same heading, as `<bucket>:<path>`. A fixture with nothing beside
-                // it says so here rather than at the watchdog.
+                // it says so here.
                 const beside = worktreeModel.besidePath(page.diffKind, page.diffPath)
                 if (beside === "") {
                     codeSwapTimer.finish()
@@ -1196,7 +1196,7 @@ Item {
                 codeSwapTimer.step = 1
                 return
             }
-            // The other file's own rows, and not the last one's on their way out: the pane has to be on it, to have
+            // The other file's own rows: the pane has to be on it, to have
             // stopped reading, and to have laid something down before the width it comes to is anybody's answer.
             if (page.diffKind + ":" + page.diffPath !== codeSwapTimer.landed
                     || page.diffSettling || !acts.viewLaidOut())
@@ -1209,11 +1209,11 @@ Item {
             codeSwapTimer.finish()
         }
     }
-    // PGG_AUTO_ACT=diff-sweep: the diff's text taken from the ground under the last row of a short file instead of from
-    // the rows themselves — the one place inside the code column where a press used to reach nothing
+    // PGG_AUTO_ACT=diff-sweep: the diff's text taken from the ground under the last row of a short file — the one
+    // place inside the code column where a press used to reach nothing
     // (規約 §diff の中身をコピーする). The shape is `details-sweep`'s, and so are its two claims:
     //
-    // **Nine starts, not one** (`reach=`). A reach that worked from a single place in the ground is exactly the fault
+    // **Nine starts** (`reach=`). A reach that worked from a single place in the ground is exactly the fault
     // the right pane's values shipped with, and the middle is the one place that hides it.
     // Each start is judged on its own, over a board cleared first — a run that read the selection once at the end
     // would report the last try and call the other eight green.
@@ -1253,7 +1253,7 @@ Item {
             const hunkRow = hand.firstHunkRow()
             const ours = hunkRow < 0 || hand.pressOnHunk(hunkRow)
             // `ground=` is the run's own honesty: a file that fills the frame has nowhere to sweep from, and a
-            // `reach=0/9` off one is a fixture that stopped saying anything rather than a hand that stopped working.
+            // `reach=0/9` off one is a fixture that stopped saying anything.
             // `ours=` reads the way `details_sweep` reads it — false is the pass, and it says the heading's own two
             // words kept every press across their face.
             Harness.report("diff_sweep reach=" + reach + "/" + tries
@@ -1266,10 +1266,10 @@ Item {
     }
     // Reading part way down a long diff and then writing: the rebuild has to come back to the same place.
     //
-    // The wait is for the view, not for the model (`diff-step` learned the same lesson): rows that have arrived are not
+    // The wait is for the view (`diff-step` learned the same lesson): rows that have arrived are not
     // rows the list has laid out, and until it has there is no place to lose — the scroll goes nowhere and the restore
     // has nothing to undo. So what is waited for is the room the reading consumes, and a diff that is laid out and
-    // still too short says so and stops there rather than at the watchdog: nothing that short can hold a place, and a
+    // still too short says so and stops there: nothing that short can hold a place, and a
     // run over it photographs a pane that proves nothing (app-ui.md §UI 自動化の因果性).
     SampleTimer {
         id: keepPlaceTimer
@@ -1301,7 +1301,7 @@ Item {
             }
             // Both edges of the write, and then the one output the whole verb is about: the rebuilt list put back on
             // the place. A write that emptied this side never gets a row back and so never lands anywhere — which is a
-            // fixture with no place in it, and the run waits rather than passing on the silence.
+            // fixture with no place in it, and the run waits.
             if (!driver.wroteAndSettled()
                     || diffPane.placeLandedY < 0)
                 return

@@ -11,7 +11,7 @@ import platitude.ui
 // a rest opens. What is written here in full was measured to take the pane over — a 2,000 byte summary filled the list
 // on its own and left the others below the fold.
 //
-// **The row draws no choice of its own, and the only press it takes is a held one.** Commits are picked in the graph
+// **The only press the row takes is a held one.** Commits are picked in the graph
 // and this list is what was picked, so there is nothing here to select or aim a menu at — but the list of what is held
 // is where a reader looks to drop one, so Ctrl takes a commit back out from here as it does there. Its words are
 // fields all the same — dragged over and taken away like the rest of the pane (規約 §右のペインの字は掴める).
@@ -31,11 +31,11 @@ Item {
     readonly property string author: commitRow.modelData.author
     readonly property double atime: commitRow.modelData.atime
     readonly property string co_authors: commitRow.modelData.mates
-    /// **-1, and not this row's place in the list.** The number that travels with a card is a row of the graph, which
+    /// **Always -1.** The number that travels with a card is a row of the graph, which
     /// is what a press in one lands on; this list has its own numbering and handing that over would pick a commit at
     /// random (`RepoPage.activateRow` looks the commit up when it is given -1).
     readonly property int index: -1
-    /// Where the pointer is along the row, so the card opens under the hand rather than at the row's left edge.
+    /// Where the pointer is along the row, so the card opens under the hand.
     readonly property real pointerX: rowHover.point.position.x
     /// This row showed one cut line of the message, so its card is where the message is read: nothing held back, and
     /// no way out of it offered (`RowHoverHost.openRowCard`, デザイン規約 §複数のコミットを選ぶ).
@@ -84,7 +84,7 @@ Item {
         id: block
         anchors.fill: parent
         anchors.leftMargin: Theme.spaceXs
-        // Not padding: the gutter this list's own scroll bar is drawn in. The bar is the pane's own slab — ink against
+        // The gutter this list's own scroll bar is drawn in. The bar is the pane's own slab — ink against
         // the edge, opaque — and a row that ended short of this would stand its hash under it (`FileRowDelegate` and
         // the left panel's rows take the same one).
         anchors.rightMargin: Theme.navBarGutter
@@ -132,8 +132,8 @@ Item {
     // it goes on down to the words and the hand under them exactly as if this were not here. Declared last so the one
     // press it does take is taken before the words can select on it.
     //
-    // Never hover — an area that asked for it would take the pointer from the fields below and from the row's own
-    // handler (app-ui.md §HoverHandler は下の hover を殺す), and it draws no cursor of its own for the same reason.
+    // Deaf to hover: an area that asked for it would take the pointer from the fields below and from the row's own
+    // handler (app-ui.md §HoverHandler は下の hover を殺す), and it draws no cursor of its own either.
     MouseArea {
         id: dropHand
         anchors.fill: parent
@@ -141,13 +141,13 @@ Item {
         onPressed: mouse => { mouse.accepted = commitRow.takesPress(mouse.modifiers) }
         onClicked: mouse => commitRow.leftClick(mouse.modifiers)
     }
-    /// Automation only: that there is a hand at all, since a run enters `leftClick` rather than the pointer — an area
+    /// Automation only: that there is a hand at all, since a run enters `leftClick` itself — an area
     /// taken out, disabled or shrunk would answer every press it was asked and never see one (verify-ui).
     readonly property bool dropStands: dropHand.enabled && dropHand.width === commitRow.width
                                        && dropHand.height === commitRow.height
 
     // Passive, and on the row's own root: a handler here leaves the fields under it their presses, and hover reaches
-    // this row's children rather than being eaten by a layer over them (app-ui.md).
+    // this row's children (app-ui.md).
     HoverHandler {
         id: rowHover
         onHoveredChanged: {
@@ -159,7 +159,7 @@ Item {
             commitRow.hoverRequested(commitRow, false)
         }
     }
-    // The card comes out on a rest, not on arrival — the same beat the graph's rows keep (規約 §hover のツールチップ).
+    // The card comes out on a rest — the same beat the graph's rows keep (規約 §hover のツールチップ).
     Timer {
         id: restDelay
         interval: Metrics.tipDelayMs
@@ -173,7 +173,7 @@ Item {
     function rowReady() {
         return face.pictureReady() && subjectLine.width > 0
     }
-    /// Whether the summary ran past the room the row gave it. Read back rather than left to a picture: the mark is a
+    /// Whether the summary ran past the room the row gave it. Read back: the mark is a
     /// few pixels wide, and a row that cut its summary frames the same as one that did not.
     readonly property alias summaryCut: subjectLine.clipped
 }

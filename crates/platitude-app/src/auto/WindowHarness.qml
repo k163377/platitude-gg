@@ -9,7 +9,7 @@ import platitude.ui
 /// `Main.qml`'s ids, and one list of them is what says how far the harness reaches into the window.
 ///
 /// The three ways in the window itself calls — `begin`, `claimPageAct`, `finish` — are forwarded from here, so the
-/// window holds one null check apiece instead of one per part.
+/// window holds one null check apiece.
 Item {
     id: harness
 
@@ -29,29 +29,29 @@ Item {
     required property var openFailedDialog
     required property var identityGate
     required property var identityDialog
-    /// The seat the two biggest screens are built in, rather than the screens: neither exists until somebody asks
+    /// The seat the two biggest screens are built in: neither exists until somebody asks
     /// for it, and asking is this file's ([`screensUp`]).
     required property var dialogSeat
     required property var folderDialog
     required property var quitWaitDialog
 
-    /// The tab in front. The one seat that moves under the harness, so the window writes it rather than handing it
-    /// over once (`Main.qml`'s `Binding`).
+    /// The tab in front. The one seat that moves under the harness, so the window keeps writing it
+    /// (`Main.qml`'s `Binding`).
     property var page: null
 
-    /// The screens have been asked for, so the verbs that read them may be built. **Two phases rather than one
-    /// binding**: the order two siblings finish being built in is not something to stand a null check on, and this
-    /// whole part is built inside the window's own completion handler, so both phases are over before the window
-    /// reaches its next line (`HarnessSeat`).
+    /// The screens have been asked for, so the verbs that read them may be built. **Two phases**: the order
+    /// two siblings finish being built in is Qt's to choose, and this whole part is built inside the
+    /// window's own completion handler, so both phases are over before the window reaches its next line
+    /// (`HarnessSeat`).
     property bool screensUp: false
     readonly property var cloneModel: harness.dialogSeat.cloneModel
     readonly property var cloneDialog: harness.dialogSeat.cloneDialog
     readonly property var settingsDialog: harness.dialogSeat.settingsDialog
 
     Component.onCompleted: {
-        // A verb reads a screen's properties before opening it, and a null there is a dead run rather than a
-        // refusal. Only where a verb or the identity hook is going to want one: holding the two ready costs the bare
-        // window working set it never uses (`WindowDialogSeat`).
+        // A verb reads a screen's properties before opening it, and a null there is a dead run. Only where a verb
+        // or the identity hook is going to want one: holding the two ready costs the bare window a working set it
+        // leaves idle (`WindowDialogSeat`).
         harness.dialogSeat.keepBuilt = Harness.autoAct !== "" || Harness.autoIdentity !== ""
         // The offscreen platform reports an 800x800 screen, which would cut every picture down to fit.
         harness.windowShape.keepSavedSize = Harness.automated
@@ -68,14 +68,14 @@ Item {
         value: Harness.autoAct !== "" ? 0.25 : -1
     }
     // The photograph is of the wait itself, and a seeded write can land while the shot pipeline is still grabbing —
-    // the close the dialog would fire takes the window, and the PNGs, down with it (`finishAutoAct` ends a run, never
-    // a window).
+    // the close the dialog would fire takes the window, and the PNGs, down with it (`finishAutoAct` ends the run
+    // alone).
     Binding {
         target: harness.quitWaitDialog
         property: "selfCloses"
         value: Harness.autoAct === ""
     }
-    // PGG_AUTO_OPEN: ';'-separated repositories open as tabs in order, instead of the ones that were left.
+    // PGG_AUTO_OPEN: ';'-separated repositories are the tabs, opened in order.
     Connections {
         target: harness.window
         function onStartingTabs() {
@@ -105,13 +105,13 @@ Item {
     function noteWriteState(state) {
         shotDriver.writeState = state
     }
-    /// One run has one ending. The census is not asked for here: the picture calls for it
-    /// (`AutoShotDriver.appPictured`) and it walks once the window has stopped arriving, which the ending waits for.
+    /// One run has one ending. The picture calls for the census (`AutoShotDriver.appPictured`), and it walks once the
+    /// window has stopped arriving, which the ending waits for.
     function finish() {
         // …and a run ordered to hold its act has none (`PGG_FAULT_HOLD_ACT`): the verb did its work, the loop goes on
         // turning, and the only thing left to end the run is the ceiling. That is a shape `cargo xtask wedge-check`
-        // has to be able to read back, and the one shape it cannot wait for — so it is ordered here rather than raced
-        // for with a ceiling short enough to outrun a completion (`xtask::verify::faults`).
+        // has to be able to read back, and the one shape it cannot wait for — so it is ordered here
+        // (`xtask::verify::faults`).
         if (Harness.faultHoldAct)
             return
         shotDriver.finish()
@@ -172,8 +172,8 @@ Item {
         }
     }
 
-    // The identity hooks are not verbs and run without one (`PGG_AUTO_IDENTITY`), so they are built off their own
-    // knob rather than beside the verbs.
+    // The identity hooks run with no verb at all (`PGG_AUTO_IDENTITY`), so they are built off their
+    // own knob.
     Loader {
         active: harness.screensUp && Harness.autoIdentity !== ""
         sourceComponent: WindowIdentityActs {

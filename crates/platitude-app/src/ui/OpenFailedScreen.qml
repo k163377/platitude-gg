@@ -5,14 +5,14 @@ import platitude.ui
 // A tab whose repository would not open, said where the panes would be.
 //
 // The same three lines the picker's dialog says, out of the same place (`Words.openFailure`): which of the three it was
-// is core's answer (`errorKind`), not something read off git's wording. Which of the two screens a failure lands on is
-// decided by the road, not the kind: the picker's answers go to the dialog, everything else — a restored tab, a
+// is core's answer (`errorKind`). Which of the two screens a failure lands on is
+// decided by the road: the picker's answers go to the dialog, everything else — a restored tab, a
 // worktree row, PGG_AUTO_OPEN — comes here.
 //
-// Not one component with that dialog: they are two seats (デザイン規約 §可否・警告の出し場所) and read as such — this one is centred in
+// Two components, this and that dialog: two seats (デザイン規約 §可否・警告の出し場所) that read as such — this one is centred in
 // the seat it takes over and offers the way out of a tab, the dialog is a window's left-aligned form and offers the
 // picker again. What they do share is the wording, which already lives in `Words`, and the width those same three
-// lines are set to (`Theme.textWidth` — 規約 §レイアウト初期値): a different seat is not a different amount to read.
+// lines are set to (`Theme.textWidth` — 規約 §レイアウト初期値): a different seat reads the same amount.
 Item {
     id: screen
 
@@ -20,7 +20,7 @@ Item {
     required property string kind
     required property string path
     required property string message
-    /// How wide the page is. Measured against the page rather than this item's own box: a `SplitView` gives no width to
+    /// How wide the page is. Measured against the page: a `SplitView` gives no width to
     /// an item that is not on screen, and this one is off screen until the moment it is needed.
     required property real pageWidth
     /// The page this screen took the panes' seat on. This screen stands where the left menu would be, so the block at
@@ -36,7 +36,7 @@ Item {
     signal closeRequested()
 
     // The hand this screen's words are dragged over from the air around them (規約 §右のペインの字は掴める). Under the
-    // column rather than over it, so it is reached only where nothing else took the press — the step between two
+    // column, so it is reached only where nothing else took the press — the step between two
     // lines, the room beside a short one — and the `Close tab` button keeps every press it had.
     SweepPad {
         id: failedHand
@@ -56,7 +56,7 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             width: parent.width
         }
-        // Wrapped rather than cut in the middle: a field has no `elide` to cut with, and a path put through one would
+        // Wrapped: a field has no `elide` to cut with, and a path put through one would
         // hand the reader a `…` when they dragged over it (規約 §右のペインの字は掴める). Nothing stands beside this line
         // to carry what a cut would drop, which is the same reason the sentence under it wraps.
         CardText {
@@ -79,7 +79,7 @@ Item {
         }
     }
 
-    // Named rather than left as a mark: this screen has no list for the mark to stand at the foot of, so the band it
+    // Named: this screen has no list for the mark to stand at the foot of, so the band it
     // would have been read against is not here either.
     CommandsToggle {
         id: commandsSeat

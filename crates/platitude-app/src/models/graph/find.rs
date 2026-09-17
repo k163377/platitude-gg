@@ -37,10 +37,10 @@ impl GraphModel {
 
     /// Sets `matched` on the rows already in the model and counts them.
     ///
-    /// Written in place rather than through [`Self::splice_notified`]:
-    /// that one takes a whole new `Vec`, and cloning every row's strings
-    /// on every keystroke is exactly the work this search exists to
-    /// avoid. Only the runs that actually changed are notified.
+    /// Written in place: [`Self::splice_notified`] takes a whole new
+    /// `Vec`, and cloning every row's strings on every keystroke is
+    /// exactly the work this search exists to avoid. Only the runs that
+    /// actually changed are notified.
     pub(super) fn remark_notified(&mut self) {
         let mut ranges: Vec<(usize, usize)> = Vec::new();
         let mut count = 0;

@@ -4,10 +4,10 @@
 /// is what the corner of the right pane says to tell them apart, beside
 /// the git version (CLAUDE.md ビルド・テスト).
 ///
-/// It comes from the build path, not from the environment: the exe lives
-/// in the tree that built it, so the mark travels with the file however it
-/// is started, and a build from a plain checkout — every build anyone
-/// outside this repository makes — carries none at all.
+/// It comes from the build path: the exe lives in the tree that built
+/// it, so the mark travels with the file however it is started, and a
+/// build from a plain checkout — every build anyone outside this
+/// repository makes — carries none at all.
 pub fn build_tree() -> String {
     tree_of(&env!("CARGO_MANIFEST_DIR").replace('\\', "/")).to_string()
 }

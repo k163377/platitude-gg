@@ -2,8 +2,8 @@
 //! decide it — the press, the answer, and the status whose counts can
 //! speak for that answer, in either order.
 //!
-//! No Qt and no repository: what a tree emptying means is the
-//! application's own question, and this is the whole of what decides it.
+//! Plain Rust: what a tree emptying means is the application's own
+//! question, and this is the whole of what decides it.
 
 use super::*;
 
@@ -116,9 +116,9 @@ fn a_tree_the_stash_did_not_empty_settles_the_press_all_the_same() {
     assert!(!out.taken(AFTERWARDS, EMPTIED));
 }
 
-// Once: the landing is spent by the status it answers for, so the next
-// tree to empty — somebody committing in a terminal — is not read as
-// this window's doing all over again.
+// Once: the landing is spent by the status it answers for, so the
+// next tree to empty — somebody committing in a terminal — is
+// read as theirs.
 #[test]
 fn one_press_empties_one_tree() {
     let mut out = landed();

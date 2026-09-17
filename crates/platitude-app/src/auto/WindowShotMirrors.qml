@@ -7,13 +7,13 @@ import platitude
 import platitude.ui
 
 // The two grabbable stand-ins a headless shot is taken from, and nothing else.
-// Both sit behind everything the window draws and are never looked at: what
-// they are for is `grabToImage`, which cannot be pointed at what they mirror.
-// Built only while a shot directory is set, so an ordinary run carries none of
-// it, and refreshed at shot time by `AutoShotDriver`.
+// Both sit behind everything the window draws, and exist for `grabToImage`,
+// which cannot be pointed at what they mirror. Built only while a shot
+// directory is set, so an ordinary run carries none of it, and refreshed at
+// shot time by `AutoShotDriver`.
 //
-// An `Item`, not a `QtObject`: these are Loaders, and a `QtObject` has nowhere
-// to put a child (rules-refs/structure.md).
+// An `Item` because these are Loaders, and a `QtObject` has nowhere to put a
+// child (rules-refs/structure.md).
 Item {
     id: mirrors
 
@@ -42,9 +42,9 @@ Item {
         }
     }
     // The two laid over each other, for the one question a pair of pictures cannot answer: *where* the thing that
-    // opened stands against the thing it opened off. Two sources rather than one of the window's root item: this
-    // mirror is inside the content, so a mirror of everything would be a mirror of itself. Refreshed only when the
-    // overlay was holding something — with nothing open this picture is app.png again, and a board of doubles is a
+    // opened stands against the thing it opened off. Two named sources: this mirror is inside the content, so a
+    // mirror of everything would be a mirror of itself. Refreshed only when the overlay was holding something —
+    // with nothing open this picture is app.png again, and a board of doubles is a
     // board nobody reads.
     Loader {
         id: sceneMirror

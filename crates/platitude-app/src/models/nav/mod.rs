@@ -58,10 +58,10 @@ pub struct NavSectionModel {
     /// The rows as shown — indented, folded, filtered — or `None` when
     /// they are the source's rows in its own order.
     ///
-    /// `None` is not an optimisation of an empty list but of an identical
-    /// one: a section with no tree and no filter (tags, stashes) shows the
-    /// source exactly, and an index per row would say only that the rows
-    /// are where they already are.
+    /// `None` is an optimisation of an identical list: a section with no
+    /// tree and no filter (tags, stashes) shows the source exactly, and
+    /// an index per row would say only that the rows are where they
+    /// already are.
     arranged: Option<Vec<Arranged>>,
     /// Whether a tree placed these rows — the one thing that gives a
     /// **ref** row a full name (a branch arrives knowing only what it is
@@ -74,19 +74,19 @@ pub struct NavSectionModel {
     /// Keyed the way `Row::Full`-carrying rows are named to git — a
     /// stash by its selector, a ref by its short name.
     ///
-    /// Not the same thing as `filter`: a filtered-out row is still one of
-    /// the section's rows and is still counted, where one of these is
-    /// being shown as though the delete had already landed, `total`
-    /// included. A name goes in when the write goes out and comes back
-    /// out when that write is refused or the reading it invalidated has
-    /// arrived — which of the two, and for which write, is decided away
-    /// from here (`ops::StandIn`); the page only hands over what it was
+    /// One of these is shown as though the delete had already
+    /// landed, `total` included, where a filtered-out row is still
+    /// one of the section's rows and is still counted. A name goes
+    /// in when the write goes out and comes back out when that
+    /// write is refused or the reading it invalidated has arrived —
+    /// which of the two, and for which write, is decided away from
+    /// here (`ops::StandIn`); the page only hands over what it was
     /// told to draw without.
     hidden: Vec<String>,
     total: i32,
     /// Rows on screen — what filtering, folding and the run leave shown.
-    /// A property rather than the slot beside it because the pane's share
-    /// of room is worked out from it, and a binding follows properties
+    /// A property, because the pane's share of room is worked out from
+    /// it, and a binding follows properties
     /// (app-ui.md 「QML バインディングはプロパティにしか反応しない」).
     shown_total: i32,
     /// Worktree sections only: files in this list's bucket run — the
@@ -98,9 +98,9 @@ pub struct NavSectionModel {
     /// (`RefsMsg::Head`, the report every consumer at HEAD is handed —
     /// `hub::sink`). What the highlighted row is found by
     /// (`Role::IsHead`), and what the sticky row that stands in for it
-    /// while its own row is scrolled off says. **Not read off the
-    /// snapshot**: that is one refs read's picture, and a status read
-    /// that landed since may already have moved HEAD.
+    /// while its own row is scrolled off says. **The record has it**:
+    /// the snapshot is one refs read's picture, and a status read that
+    /// landed since may already have moved HEAD.
     head_name: String,
     head_oid: String,
     /// What that branch's own row wears, read off the snapshot by name
@@ -109,9 +109,9 @@ pub struct NavSectionModel {
     head_has_pr: bool,
     /// How far that branch stands from its upstream, off the same lookup
     /// — the pair the stand-in draws, so it and the row it stands for
-    /// cannot say different numbers. **Not the status read's pair**
-    /// (`WorkTreeModel.ahead`): those are held back while the counts are
-    /// not yet about the branch HEAD is on, which is the moment after a
+    /// cannot say different numbers. **Drawn while the status read's
+    /// pair** (`WorkTreeModel.ahead`) is held back: the counts are not
+    /// yet about the branch HEAD is on, which is the moment after a
     /// switch when this stand-in is the one on screen.
     head_ahead: i32,
     head_behind: i32,
@@ -129,17 +129,17 @@ pub struct NavSectionModel {
     /// from "detached / no local branches" for the default selection).
     refs_loaded: bool,
     /// Worktree section only: tree vs flat-path display. The page's
-    /// restore is the only writer (`PageLayout.applySavedLayout` →
-    /// `set_tree_view`, before anything shows — the saved default is the
-    /// tree; the derive-`Default` false here is never on screen):
-    /// `attach_*` must not touch it — an attach after the restore once
-    /// put the saved flat view back to a tree and then wrote the tree
-    /// over the saved flag.
+    /// restore is the sole writer and `attach_*` a reader
+    /// (`PageLayout.applySavedLayout` → `set_tree_view`, before anything
+    /// shows — the saved default is the tree; the derive-`Default` false
+    /// here is never on screen). An attach after the restore once put
+    /// the saved flat view back to a tree and then wrote the tree over
+    /// the saved flag.
     tree_view: bool,
     /// Which row the pointer is on; the notice follows, taken apart into
-    /// the pieces its sentence needs. Kept once here rather than on every
-    /// row — one row wears it at a time (see `NavItem::eol_mark`).
-    /// Flat because `qproperty!` names one member, not a path through one.
+    /// the pieces its sentence needs. Kept once here — one row wears it
+    /// at a time (see `NavItem::eol_mark`). Flat because `qproperty!`
+    /// names one member.
     pointed_eol_path: String,
     pointed_eol_kind: String,
     pointed_eol_from: String,

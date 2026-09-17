@@ -45,7 +45,7 @@ fn the_clock_is_read_in_the_zone_the_display_side_named() {
 #[test]
 fn a_day_that_wraps_backwards_is_still_a_time_of_day() {
     // 00:30Z read five hours west is half past seven the evening before,
-    // which is a negative day-of-year the arithmetic must not carry.
+    // which is a negative day-of-year the arithmetic folds back in.
     assert_eq!(
         clock_of(
             1_787_876_000_000 - 1_787_876_000_000 % 86_400_000 + 1_800_000,
@@ -117,9 +117,9 @@ fn the_pane_is_handed_the_column_it_has_to_lay_out() {
 fn a_place_of_a_column_is_a_character_of_it() {
     // A path in kanji is three places and nine bytes, and a press on the
     // second of them is the byte that character starts at. **How wide any
-    // of them is drawn is not a question this side can be asked** — the
-    // walk that answered it in columns put the press beside the character
-    // the reader had pressed on.
+    // of them is drawn is the row's own question** — the walk that
+    // answered it in columns put the press beside the character the
+    // reader had pressed on.
     let model = log(vec![row("add -- 日本語.txt", "ok", "", "5 ms", "")]);
     let at_cmd = 9;
     assert_eq!(model.hit(0, AT_CMD, 11), at_cmd + 11);
@@ -190,7 +190,7 @@ fn a_line_taken_whole_brings_gits_own_words_with_it() {
 #[test]
 fn a_line_taken_in_part_leaves_them_behind() {
     // There is no way on screen to point at part of the block, so it
-    // comes with a line taken end to end and not otherwise.
+    // comes with a line taken end to end.
     let mut model = log(vec![row(
         "switch nope",
         "failed",

@@ -30,28 +30,28 @@ Item {
     required property NavSectionModel tagsModel
 
     /// Why every row here is out, in one line, while the window's write doors are held — a write that replays is
-    /// running behind the screen (`RepoPage.doorsHeldWhy`). Handed down rather than worked out here: the left pane
-    /// holds the same doors off the same answer, and two readings of "is a rewrite under way" would be two answers.
-    /// **The rows grey rather than go** — see `AppMenu.heldReason`.
+    /// running behind the screen (`RepoPage.doorsHeldWhy`). Handed down: the left pane holds the same doors off the
+    /// same answer, and two readings of "is a rewrite under way" would be two answers. **The rows grey** — see
+    /// `AppMenu.heldReason`.
     property string heldReason: ""
     /// What the offers are asked with while that is standing: **nothing running**. The hold already answers for every
     /// row here, and the busy count would answer a second time by taking rows away — leaving a menu that is a
     /// different shape on each side of a lock the reader is waiting to see come off. A row that is only ever *out* is
     /// read as one the menu does not have; a row that greys and says why is read as the wait it is
-    /// (デザイン規約 §メニュー の例外: 「今できない」行は消えず無効になる).
+    /// (デザイン規約 §メニュー の例外: 「今できない」行は無効で残る).
     readonly property int askBusy: refRowMenu.heldReason !== "" ? 0 : refRowMenu.repoTab.busyCount
 
-    /// The row the menu stands on. `refId` is what git knows it by, which on a stash is a selector rather than
-    /// the message the row shows.
+    /// The row the menu stands on. `refId` is what git knows it by, which on a stash is a selector, apart from
+    /// the row's message.
     property string kind: ""
     property string refId: ""
     property string refOid: ""
 
     /// What this menu offers, decided as it opens (see the note above).
     property bool canSwitch: false
-    /// Whether that row will raise a question rather than move — an operation standing, files still waiting on a
-    /// decision, or the branch out in another working copy. Worn as the `!` in the row's mark seat, so the press is
-    /// read for what it is before it is made (デザイン規約 §進行中の操作から出る).
+    /// Whether that row will raise a question — an operation standing, files still waiting on a decision, or the
+    /// branch out in another working copy. Worn as the `!` in the row's mark seat, so the press is read for what it
+    /// is before it is made (デザイン規約 §進行中の操作から出る).
     property bool switchAsks: false
     property bool canBranchHere: false
     property bool canIntegrateFrom: false
@@ -76,8 +76,8 @@ Item {
     property bool rebasePublished: false
 
     /// Whether the card is on screen, and whether it has finished opening: the folded list asks the first, the chip's
-    /// stacked list asks the second. Plain properties rather than aliases — `visible` read from another file comes back
-    /// stale (`RefusalBadge`).
+    /// stacked list asks the second. Plain properties — `visible` read from another file comes back stale
+    /// (`RefusalBadge`).
     readonly property bool showing: refMenu.visible
     readonly property bool opened: refMenu.opened
 
@@ -129,10 +129,10 @@ Item {
         // row's menu carries, asked the same way (RefBranchMenu / RefTagMenu).
         branchMenu.offerOn(kind, name, full, oidHex)
         tagMenu.offerOn(kind, full, oidHex)
-        // Whether another working copy has this row's branch out. **git refuses `switch` for one** (measured), and the
-        // row wears the `!` for it rather than greying — this level's one use of the answer; the delete rows read
-        // their own copy inside the card. A remote row lands on the local branch of the same name, so it is that one
-        // another copy can be holding.
+        // Whether another working copy has this row's branch out. **git refuses `switch` for one** (measured), and
+        // the row wears the `!` for it — this level's one use of the answer; the delete rows read their own copy
+        // inside the card. A remote row lands on the local branch of the same name, so it is that one another copy
+        // can be holding.
         const held = kind === "branch" ? refRowMenu.worktreesModel.worktreeHolding(full)
                    : kind === "remote" ? refRowMenu.worktreesModel.worktreeHolding(
                                              refRowMenu.repoTab.localNameFor(full))
@@ -161,21 +161,21 @@ Item {
         return refMenu.offer()
     }
 
-    // Nothing here closes the menu from outside: a row that runs something takes it down with `dismiss()`, and the
-    // branch card standing for a delete's answer goes by itself when that answer lands (`RefBranchMenu`).
+    // The menu closes itself: a row that runs something takes it down with `dismiss()`, and the branch card
+    // standing for a delete's answer goes by itself when that answer lands (`RefBranchMenu`).
     AppMenu {
         id: refMenu
         heldReason: refRowMenu.heldReason
-        // A refused delete's offer is not cleared here: the card puts it back as it opens (`RefBranchMenu.offerOn`),
+        // A refused delete's offer is left standing: the card puts it back as it opens (`RefBranchMenu.offerOn`),
         // and nothing reads it while the card is down.
         onClosed: refRowMenu.dismissed()
         // **The card holds what moves the reader; the rest is behind a mark** (デザイン規約 §メニュー の入れ子). Every row on
         // this level answers the question the reader came with — where am I, and where do I go from here — and the
-        // cards at the foot hold what is *done to* a ref rather than gone from it.
+        // cards at the foot hold what is *done to* a ref.
         //
-        // A branch of one's own, started where this row stands, is one of those moves and not a thing done to this
-        // ref: it is where the reader carries on from. **Beside `switch`, in one group**: what it runs is
-        // `switch --create`, so it is that row's other form — the move to a branch that does not exist yet
+        // A branch of one's own, started where this row stands, is one of those moves: it is where the reader
+        // carries on from. **Beside `switch`, in one group**: what it runs is `switch --create`, so it is that
+        // row's other form — the move to a branch that does not exist yet
         // (デザイン規約 §ブランチ・コミットへの移動). Same words in the same seat as the graph row's menu
         // (§メニュー: 入口が違っても同じ操作は同じ文).
         AppMenuItem {
@@ -188,9 +188,9 @@ Item {
             id: refSwitchItem
             code: "switch"
             offered: refRowMenu.canSwitch
-            // **Never blocked by what stands in the move's way**: a branch another copy holds and a tree with unmerged
-            // files both press through to a question instead, and the mark is what says so before the press
-            // (デザイン規約 §進行中の操作から出る). Greying is the delete rows' answer, not this one's — a row that cannot be
+            // **What stands in the move's way presses through to a question**: a branch another copy holds and a tree
+            // with unmerged files both do, and the mark is what says so before the press
+            // (デザイン規約 §進行中の操作から出る). Greying is the delete rows' answer — a row that cannot be
             // pressed says why only on hover, and the reader who reached for it is the one who needs to read it.
             //
             // **The doors being held is the other thing**, and this row is held with the rest of them (`heldReason`):
@@ -220,7 +220,7 @@ Item {
             // row lands on stays where it is — git peels an annotated tag to its commit, and `--update-refs` carries
             // branches only (measured).
             offered: refRowMenu.integrateOffered
-            // Said, not asked (要望: rewriting a pushed commit shows a warning). Published = reachable from a
+            // Said (要望: rewriting a pushed commit shows a warning). Published = reachable from a
             // remote-tracking ref, only as fresh as the last fetch.
             note: refRowMenu.rebasePublished ? Words.rewritesPushed : ""
             onTriggered: refRowMenu.repoTab.rebase(refRowMenu.refId, "", true)

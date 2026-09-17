@@ -36,7 +36,7 @@ ToolButton {
     padding: 0
     hoverEnabled: true
     Accessible.name: qsTr("Application menu")
-    // Written out instead of borrowing HoverToolButton: an open menu keeps the wash, which no hover of its own can
+    // Written out here: an open menu keeps the wash, which no hover of its own can
     // say — what is on screen has to say which mark put it there (`NavRail`).
     background: Rectangle {
         color: menuButton.hovered || appMenu.opened ? Theme.bgHover : "transparent"
@@ -51,12 +51,12 @@ ToolButton {
         }
     }
     // The mark is the way in and the way out: a press on it while the card stands takes the card down, the way a
-    // press anywhere else in the window does. Written as a toggle rather than as `open()` — `open()` on a card
+    // press anywhere else in the window does. Written as a toggle — `open()` on a card
     // already up does nothing, which reads as a mark that can never be pressed a second time.
     onClicked: appMenu.opened ? appMenu.close() : appMenu.open()
     AppMenu {
         id: appMenu
-        // Outside the ☰ itself, not outside the card. The default policy calls the mark's own press "outside" and
+        // Outside the ☰ itself. The default policy calls the mark's own press "outside" and
         // closes on it — and the click that follows the same press opens the card again, so the second press never
         // shuts anything (`AppCombo.popup` was written from the same reading). Every press elsewhere in the window
         // still takes the card down, the band's own empty run included (`WindowChrome.captionYielded`).
@@ -94,7 +94,7 @@ ToolButton {
         AppMenuSeparator {}
         AppMenuItem {
             text: qsTr("Exit")
-            // Up to the window rather than `Qt.quit()`: quitting is a close of the window, and one named road
+            // Up to the window: quitting is a close of the window, and one named road
             // (`TopBar.closeRequested` → `root.close()`) is what keeps the close gate that waits a running
             // write out from having a second spelling (`Main.qml` onClosing).
             onTriggered: menuButton.exitRequested()

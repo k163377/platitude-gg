@@ -12,8 +12,8 @@ import platitude.ui
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -41,7 +41,7 @@ Item {
     readonly property var renderedBarrier: driver.barrierRendered
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "nav-dbl") {
             // A double-click in the left menu, entered where the row enters it. The argument is `<section>:<name>`.
@@ -57,7 +57,7 @@ Item {
                    || act === "nav-peek-out" || act === "nav-peek-shut") {
             // Hover cannot be injected, so the rail cell is named. "-away" walks the pointer off the cell, "-into" down
             // into the opened list, "-out" on out the far side (the exit no cell can see), "-shut" clicks the cell;
-            // only "-into" leaves the section standing. "nav-peek" on an empty section must not open at all
+            // only "-into" leaves the section standing. "nav-peek" on an empty section stays shut
             // (NavRail.enterAt decides — `--preset empty` reads that side).
             if (arg === "no-tags")
                 repoTab.setTagsShown(false)
@@ -89,7 +89,7 @@ Item {
             // The eye pressed at the band itself, with the list left standing beside the graph: what the switch is
             // about is the graph, and TAGS keeping its count while the graph loses a row is half of what the picture
             // says. The argument names the tag whose commit is the subject — `<tag>` presses once, `<tag>:back`
-            // presses again afterwards so the round trip is read rather than one half of it.
+            // presses again afterwards so the round trip is read whole.
             const backing = arg.endsWith(":back")
             const tagName = backing ? arg.substring(0, arg.length - ":back".length) : arg
             acts.tagEyeOid = tagsModel.oidOfName(tagName)
@@ -104,7 +104,7 @@ Item {
         } else if (act === "nav-reclick" || act === "nav-reclick-away") {
             // The rename gesture, on the section the folded rail has open. The plain verb clicks the same row twice
             // with that section standing; "-away" lets the pointer leave in between, so the two clicks land in a list
-            // that went and came back — and that one must not read as a second click (デザイン規約 §左メニューの所作).
+            // that went and came back — and that one reads as a first click again (デザイン規約 §左メニューの所作).
             // The argument is `<section>[:<row>]`.
             page.foldByHand(true)
             acts.reclickAway = act === "nav-reclick-away"
@@ -131,7 +131,7 @@ Item {
             // Every door onto the history while a write that replays is running behind the screen: the left pane's,
             // and the graph's beside it. Nothing is frozen and nothing dims (`SidebarPane.doorsHeld`). **The rebase is
             // a real one** — the argument names the branch to rebase onto, and the same one the menus are then opened
-            // on — and the state comes from `RepoTab.replaying`, not from a flag set for the run. A demo repository
+            // on — and the state comes from `RepoTab.replaying`. A demo repository
             // answers inside one beat of the sampler, so the rise is caught at the signal below and held for the
             // picture. **One run for both panes**: standing this state up twice would be two runs of the same thing.
             acts.heldBranch = arg
@@ -189,13 +189,13 @@ Item {
             // the list (`nav-tip head`).
             if (branchesModel.headRow < 0)
                 return
-            // Re-applied rather than taken once: the list is handed its height by a layout pass of its own, and one
+            // Re-applied every tick: the list is handed its height by a layout pass of its own, and one
             // asked for its end before that has nowhere to go. What comes back is where it came to rest, which is
             // also what a repository too small for this says — a section showing every row it holds goes on
             // answering 0 and the row never leaves, so the run waits its watchdog out. That is why the preset is
-            // named with the verb (verify-ui スキル) rather than left to whatever a run was pointed at.
+            // named with the verb (verify-ui スキル).
             const rested = navProbe.scrollBranchesToEnd()
-            // **The row leaving is what is waited for, not the stand-in arriving.** A stand-in that is up because
+            // **The row leaving is what is waited for.** A stand-in that is up because
             // something else took the row out of the list is a different state wearing the same picture, so the
             // row's own place in the list is asked first and the stand-in only after.
             if (navProbe.rowInView("branch", branchesModel.headRow))
@@ -209,9 +209,9 @@ Item {
             + " rowshown=" + navProbe.rowInView("branch", branchesModel.headRow)
             + " name=" + branchesModel.headName
             // Where the layout put it, beside the edge it was asked for: riding above, that is the top of the list
-            // whatever the pane's height, so the drawn number can be claimed rather than only the answer about it.
+            // whatever the pane's height, so the drawn number can be claimed.
             + " y=" + Math.round(navProbe.headPinY)
-            // Last, and the repository's rather than the rule's: which row the current branch sorted to, and how
+            // Last, and the repository's: which row the current branch sorted to, and how
             // far the list had to go to leave it behind.
             + " row=" + branchesModel.headRow
             + " rested=" + Math.round(rested))
@@ -252,13 +252,13 @@ Item {
             driver.complete()
         }
     }
-    /// PGG_AUTO_ACT=doors-held: the branch rebased onto, and the one the right-click then lands on. Not the one the tree
-    /// is standing on — `switch` is only offered away from where you already are, and that row is the whole point of
+    /// PGG_AUTO_ACT=doors-held: the branch rebased onto, and the one the right-click then lands on. One away from
+    /// the tree's own — `switch` is only offered away from where you already are, and that row is the whole point of
     /// the hold.
     property string heldBranch: ""
     /// The replay's own rising edge, caught where it cannot be missed. **A sampler would miss it**: the write starts
-    /// and finishes inside one beat on a repository this size, and what the page then holds up is the state itself
-    /// rather than a stand-in for it (`RepoPage.autoReplayHeld`).
+    /// and finishes inside one beat on a repository this size, and what the page then holds up is the state
+    /// itself (`RepoPage.autoReplayHeld`).
     Connections {
         target: acts.repoTab
         function onReplayingChanged() {
@@ -266,7 +266,7 @@ Item {
                 page.autoReplayHeld = true
         }
     }
-    // The doors, tried one by one once the replay is under way. Each is read back rather than photographed: a box that
+    // The doors, tried one by one once the replay is under way. Each is read back: a box that
     // never opened, a double-click that led nowhere and a `+` that cannot be pressed all frame exactly like a pane
     // nobody touched (app-ui.md §UI 自動化の因果性). What the picture is for is the other half — that none of the rest
     // of the pane went out with them.
@@ -313,7 +313,7 @@ Item {
             refSwitchItem.tipForced = true
         }
     }
-    /// What each door did, read at the press rather than at the report — which waits out the tooltip's delay after
+    /// What each door did, read at the press — the report waits out the tooltip's delay after
     /// them.
     property bool heldBox: false
     property bool heldMenu: false
@@ -322,7 +322,7 @@ Item {
     property bool heldDrop: false
     function reportHeld() {
         // **`frozen=` is in the line because the two states frame differently on purpose**: the plan's freeze takes the
-        // pane whole and dims it, and this one must not — a run that photographed the wrong one of the two would leave
+        // pane whole and dims it, and this one keeps it — a run that photographed the wrong one of the two would leave
         // a picture nobody could tell apart from the other verb's.
         Harness.report("doors_held held=" + (page.doorsHeldWhy !== "")
                           + " frozen=" + page.sidebarFrozen
@@ -349,7 +349,7 @@ Item {
     //
     // The press waits for that same row too, and reads it in the arming step alone: a page is current as soon as the
     // *first* pass finishes, and the first pass is the tag-less one, so a run that pressed at dispatch would be
-    // taking the tags out of a graph that never had them in (規約 §前提条件を完了判定に混ぜない).
+    // taking the tags out of a graph that never had them in (規約 §前提条件は入力を出す枝で読む).
     property string tagEyeOid: ""
     property int tagEyeFinish: 0
     property bool tagEyeBack: false
@@ -393,7 +393,7 @@ Item {
     }
     // PGG_AUTO_ACT=nav-jump: one click on a row of the left panel, and the commit it led to.
     //
-    // **The claim is read off the graph, not off the page.** Where the click sent the page is the click's own
+    // **The claim is read off the graph.** Where the click sent the page is the click's own
     // bookkeeping, and a wiring that kept the selection while the history stood still would answer it; what says the
     // jump arrived is the graph's row for that commit, lit and laid out (帳簿の外の証人 — `GraphRowDelegate.selected`).
     /// What the row named when it was pressed, and whether the press is in. Read before the click: the delegate is
@@ -433,7 +433,7 @@ Item {
             if (page.selectedOid !== acts.jumpWant || !driver.cardSettled)
                 return
             const at = graphModel.rowOf(acts.jumpWant)
-            // **A commit the walk never reached is an answer, not a wait.** The page had settled before the click
+            // **A commit the walk never reached is an answer.** The page had settled before the click
             // (`AutoActDriver` / `PageSettled` — the walk has finished a pass), so a row that is not there is not
             // going to arrive, and a run that went on waiting for it would spend the watchdog to say what it
             // already knows — and take no picture of the state it found (`screenshot saved=false`). A row the model
@@ -445,8 +445,8 @@ Item {
             Harness.report("nav_jump section=" + jumpTimer.kind
                               + " row=" + jumpTimer.row
                               // The graph's own answer about the row the click landed on: the commit it carries and
-                              // the light it draws. `same=` is what makes `lit=` about this jump rather than about
-                              // wherever the window opened.
+                              // the light it draws. `same=` is what makes `lit=` about this
+                              // jump.
                               + " same=" + (!!item && item.oid_hex === acts.jumpWant)
                               + " lit=" + (!!item && item.selected)
                               // The row the click landed on keeps the mark, which is the left panel's half of the
@@ -508,7 +508,7 @@ Item {
                 if (!reclickTimer.peeked() || section.rowGuarded(reclickTimer.row)
                         || !section.clickRow(reclickTimer.row))
                     return
-                // Read where it is set, not where it lapses: the wait is short and the box is what it turns into.
+                // Read where it is set: the wait is short and the box is what it turns into.
                 acts.reclickArmed = section.rowArmed(reclickTimer.row)
                 acts.reclickStep = 4
             } else if (acts.reclickStep === 4) {
@@ -523,7 +523,7 @@ Item {
                 + " marked=" + sidebarPane.activeKey
                 + " away=" + acts.reclickAway
                 + " armed=" + acts.reclickArmed
-                // The fold is not undone for a box, the box is there, and it has the keyboard — the three that say the
+                // The fold stays for a box, the box is there, and it has the keyboard — the three that say the
                 // gesture landed where the hand was (デザイン規約 §左メニューを畳む).
                 + " collapsed=" + page.sidebarCollapsed
                 + " box=" + (sidebarPane.editKey !== "")
@@ -537,7 +537,7 @@ Item {
     /// PGG_AUTO_ACT=nav-add-remote: the run stops with the real dialog on screen. `remotes=` is the section the `+` was
     /// pressed on — at 0 the band around it is unavailable, and that the form still came up is the half of this a
     /// picture of an empty section cannot hold either way. `collapsed=` says which of the two doors it came through,
-    /// and that the folded one did not put the list back on its way (デザイン規約 §左メニューを畳む).
+    /// and that the folded one left the list folded (デザイン規約 §左メニューを畳む).
     SampleTimer {
         id: navAddRemoteTimer
         onTriggered: {

@@ -7,7 +7,7 @@ import platitude.ui
 
 // The history itself: the rows, the viewport arithmetic every mover in the pane goes through (`clampY` /
 // `firstVisibleRow` / `rowOnScreen`), where the keyboard goes, and the state the delegates read back off
-// `ListView.view` — that state is held here rather than in the delegate, which is recycled the moment its row scrolls
+// `ListView.view` — that state is held here, since the delegate is recycled the moment its row scrolls
 // off. Everything outside reaches it through this component's root, which is the list (`GraphPane.view`).
 AppListView {
     id: graphList
@@ -22,9 +22,9 @@ AppListView {
     // Nothing but the pane's own functions move the view — the chase is off in `AppListView`, and the arrow keys
     // move it themselves by as little as will do (`revealStep`).
     //
-    // Qt's own key navigation moves `currentIndex` and tells nobody: the highlight would walk off screen — the
-    // chase above is off — while the panes on the right went on showing the commit it set off from. The arrows are
-    // answered by the pane instead, where the page hears about where they landed (規約 §矢印で履歴を辿る).
+    // The arrows are answered by the pane, where the page hears about where they landed (規約 §矢印で履歴を辿る):
+    // Qt's own key navigation moves `currentIndex` and tells nobody, so the highlight would walk off screen — the
+    // chase above is off — while the panes on the right went on showing the commit it set off from.
     keyNavigationEnabled: false
     /// Where the keyboard goes when a press lands in this pane. Every way in comes through here — a row click, a
     /// press on the lanes, the find card closing, the headless hook — so there is one answer to "what does a press
@@ -48,7 +48,7 @@ AppListView {
     topMargin: Theme.headerHeight - Theme.graphRowHeight
     // A sliver of run-out at the end: without it the oldest row sits flush on the pane edge and reads as clipped
     // rather than as the end of what is loaded. Just enough to see the break — and the lanes' bar's own strip beneath
-    // that whenever the lanes have somewhere sideways to go, so the last row ends above the bar rather than under it.
+    // that whenever the lanes have somewhere sideways to go, so the last row ends above the bar.
     bottomMargin: Theme.spaceSm + (graphList.columns.graphXMax > 0 ? graphList.columns.laneBarRoom : 0)
     // Bridge into the delegate (GraphRowDelegate reads its column geometry off ListView.view).
     property real labelWidth: graphList.columns.labelW
@@ -61,8 +61,8 @@ AppListView {
     property int wipRenamed: graphList.workTree.wipRenamed
     property int wipCopied: graphList.workTree.wipCopied
     property int wipConflicted: graphList.workTree.conflictCount
-    // Which row's chip column is a name box, and what has been typed into it. Held here rather than in the
-    // delegate: the delegate is recycled the moment its row scrolls off.
+    // Which row's chip column is a name box, and what has been typed into it. Held here: the
+    // delegate is recycled the moment its row scrolls off.
     property string namingOid: ""
     property string namingText: ""
     // Which of the three the box is asking for ("branch" / "tag" / "rename"). The field is the same one for all of
@@ -70,8 +70,8 @@ AppListView {
     // tells them apart.
     property string namingMode: "branch"
     // What a rename box is naming, in the word the page's `renameRow` branches on ("branch" / "remote" / "tag"), so
-    // the frame can say which kind is being typed (規約 §ref の種別: 枠 = 種別). Empty for the two boxes that make a name
-    // rather than change one.
+    // the frame can say which kind is being typed (規約 §ref の種別: 枠 = 種別). Empty for the two boxes that
+    // make a name.
     property string namingKind: ""
     // Whether what is in the box can be accepted at all, and the one line that says why not. Decided by the page,
     // which is where the models that answer it are (`RepoPage.graphNameRefusedWhy`) — the row only draws the answer.
@@ -79,7 +79,7 @@ AppListView {
     property string namingRefusedWhy: ""
     // The two clicks the rows answer with one gesture (デザイン規約 §グラフ行のダブルクリック).
     //
-    // **One for the whole graph, not one per row — and the card a chip unfolds into shares it** (`RefListPopup` takes
+    // **One for the whole graph — and the card a chip unfolds into shares it** (`RefListPopup` takes
     // it through `GraphPane.noteRowClick`). Two reasons, and both are things that go wrong without it:
     //
     // - the delegate is pooled the moment its row scrolls off, so a wait carried by the row is either dropped or
@@ -95,10 +95,10 @@ AppListView {
         onRenameAsked: (key, names) => graphList.rowRenameRequested(names.oid, names.record)
     }
     /// A row was left-clicked: answers whether it is a click of its own (see the gesture), and takes the wait with it.
-    /// `record` is the chip's first one, read now rather than when the wait ends — by then the row may be showing
+    /// `record` is the chip's first one, read now — when the wait ends the row may be showing
     /// something else, or be another row altogether.
     function noteClick(oidHex, record, held) {
-        // **A box already standing is not something to open again.** It is what this gesture turns into, so a click
+        // **A standing box is what this gesture turns into**, so a click
         // while one is up is the reader walking away from it — and the row's own click takes it down
         // (`RepoPage.activateRow`). Armed here, the box on the row just clicked would close and come straight back,
         // which reads as a blink. The click still says which target it landed on, so the next
@@ -164,8 +164,8 @@ AppListView {
     signal namingCancelled()
     /// The wheel took the view over: whatever gesture was carrying it ends here.
     signal wheelTaken()
-    /// The wheel asked for the lanes sideways. The pane owns how far they may go, so it is given the turn rather
-    /// than the destination.
+    /// The wheel asked for the lanes sideways. The pane owns how far they may go, so it is
+    /// given the turn.
     signal wheelPanned(real delta)
     delegate: GraphRowDelegate {}
     footer: GraphTailFooter {

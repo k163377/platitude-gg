@@ -21,8 +21,8 @@ impl GraphModel {
         for msg in feed.drain() {
             match msg {
                 // Read as sent, with no generation to check: where HEAD
-                // stands is the repository's, not one stream's, and a
-                // stream starting over does not move it.
+                // stands is the repository's, and a stream starting over
+                // does not move it.
                 GraphMsg::Head(head) => {
                     let head = Oid::from_hex_str(&head.oid_hex).ok();
                     changed |= self.head_oid != head;
@@ -73,9 +73,9 @@ impl GraphModel {
             // because it is the part of the graph's cost that grows with
             // what somebody asks to see, and because what it costs is
             // what a rebuild without `git log` would be paying
-            // (`marks.rs`). Two lines rather than one: the spans grow
-            // with the rows and the ids with the parenthood, and a merge-
-            // heavy history moves only the second.
+            // (`marks.rs`). Two lines: the spans grow with the rows and
+            // the ids with the parenthood, and a merge-heavy history
+            // moves only the second.
             crate::harness::memprobe::note_bytes(
                 "graph-marks",
                 self.tab_id,
@@ -223,9 +223,9 @@ impl GraphModel {
             .iter()
             .map(|row| to_row_item(row, &avatars, pr))
             .collect();
-        // Before the splice, so a rebuild under a standing query notifies
-        // each row once — with its light already right — instead of
-        // twice.
+        // Before the splice, so a rebuild under a standing query
+        // notifies each row once — with its light already
+        // right.
         self.mark_incoming(&mut items);
         self.match_count = items.iter().filter(|i| i.matched).count() as i32;
         self.first_matched = items.first().is_some_and(|i| i.matched);
@@ -245,9 +245,9 @@ impl GraphModel {
         debug_assert_eq!(self.marks.len(), self.rows.len());
         let loaded = self.rows.len() as i32;
         self.settle_footer(loaded, elapsed_ms, walked, truncated);
-        // Only a replacement zeroes these: it is one message rather than
-        // a stream, so there was no first chunk to time, and it is the
-        // answer to whatever failed last.
+        // Only a replacement zeroes these: it is one message, so there
+        // was no first chunk to time, and it is the answer to whatever
+        // failed last.
         self.first_chunk_ms = 0;
         self.error = String::new();
         self.failed = false;
@@ -276,8 +276,8 @@ impl GraphModel {
 
     /// Replaces the whole list in place: unchanged rows stay untouched,
     /// contiguous runs of changed rows emit one ranged dataChanged, and
-    /// only the length delta inserts or removes rows. No model reset —
-    /// the view keeps its scroll position and never shows an empty list.
+    /// only the length delta inserts or removes rows. The view keeps
+    /// its scroll position and a list with rows in it throughout.
     #[expect(unsafe_code)]
     pub(super) fn splice_notified(&mut self, new_rows: Vec<GraphRowItem>) {
         let old_len = self.rows.len();
@@ -347,9 +347,9 @@ impl GraphModel {
         self.walked_total = walked as i32;
         self.truncated = truncated;
         self.finish_count += 1;
-        // What this pass walked with, read off the rows it left rather
-        // than held from the ask: a pass is cancelled and replaced by the
-        // one that overtook it, and only the rows say which of them is on
+        // What this pass walked with, read off the rows it left: a pass
+        // is cancelled and replaced by the one that overtook it, and
+        // only the rows say which of them is on
         // screen.
         // **And that the row is this window's own.** Every working copy's
         // row carries the same all-zero id — that spelling means "there is
@@ -365,8 +365,8 @@ impl GraphModel {
                 .first()
                 .is_some_and(|row| platitude_core::oid::Oid::hex_is_zero(&row.oid_hex));
         // Only the cut needs the step, and only a settled walk knows
-        // there was one — asked for here rather than held from the
-        // opening, so a window the settings widen moves the step with it.
+        // there was one — asked for here, so a window the settings widen
+        // moves the step with it.
         //
         // **Written only where the session answered.** There being no
         // session is not an answer of zero: this drains from a queued

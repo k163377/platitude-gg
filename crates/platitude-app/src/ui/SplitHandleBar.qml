@@ -33,7 +33,7 @@ Rectangle {
     implicitWidth: Theme.splitterWidth
     implicitHeight: Theme.splitterWidth
     color: Theme.borderSubtle
-    // Under the panes rather than over them. **A handle is not laid out inside the content** — SplitView parents it to
+    // Under the panes. **A handle is not laid out inside the content** — SplitView parents it to
     // itself and the panes to its contentItem — so a pane that draws past its own edge is drawn under this bar
     // whatever `z` the pane is given. Nothing reaches into this strip in the ordinary way (the layout stops each pane
     // at the bar's edge), so this changes nothing until something crosses it deliberately, and the one thing that does

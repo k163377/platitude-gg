@@ -7,11 +7,11 @@ import platitude.ui
 // Which remote branch a local one is measured against, from the row that asks to git's write (デザイン規約
 // §ブランチが測られる相手を決める).
 //
-// **A question rather than a row that acts**, because nothing here knows the answer: a branch may belong with a name
+// **A question**, because nothing here knows the answer: a branch may belong with a name
 // unlike its own, on any of several remotes, and the same-named one is a guess. The two halves are answered in the
 // one bar every other question stands in (§立っている質問は 1 か所で聞く).
 //
-// **Information, not consent** — the setting is this repository's own config and takes nothing away, so the bar is
+// **Information** — the setting is this repository's own config and takes nothing away, so the bar is
 // the neutral colour and a click answers it (§はじめてリモートへ送る, the other question of this kind).
 //
 // Sized to the page: nothing is drawn here, and the bar belongs to the graph.
@@ -36,8 +36,8 @@ Item {
     property string remote: ""
     property string branchName: ""
     /// Whether that pair names a remote-tracking branch this repository holds. **git refuses an upstream it cannot
-    /// find** (`fatal: the requested upstream branch … does not exist`, measured), and the answer is here rather than a
-    /// git call away — the refs are already on this side — so the pill goes quiet instead of the press failing.
+    /// find** (`fatal: the requested upstream branch … does not exist`, measured), and the answer is here
+    /// — the refs are already on this side — so the pill goes quiet.
     property bool targetIsThere: false
 
     readonly property var remotes: {
@@ -69,7 +69,7 @@ Item {
             qsTr("Set"),
             upstreamFlow.answer,
             upstreamForm)
-        // After the bar is up, never before: raising it resets the properties the `asking` bindings below own, and a
+        // After the bar is up: raising it resets the properties the `asking` bindings below own, and a
         // binding whose value has not changed does not push back.
         upstreamFlow.asking = true
     }
@@ -99,8 +99,8 @@ Item {
             upstreamFlow.branch, upstreamFlow.remote, upstreamFlow.branchName)
     }
 
-    // The bar's own state follows what has been answered into it, which is why these are bindings rather than
-    // arguments: the question changes what it is saying while it stands. **Nothing is put back when they let go**, for
+    // The bar's own state follows what has been answered into it, which is why these are bindings:
+    // the question changes what it is saying while it stands. **Nothing is put back when they let go**, for
     // the reason the other question of this kind spells out (`PublishFlow`): letting go happens at the press that
     // walks away, and the bar is still on screen for the 200ms after it.
     Binding {
@@ -137,7 +137,7 @@ Item {
             remotes: upstreamFlow.remotes
             remote: upstreamFlow.remote
             branch: upstreamFlow.branchName
-            // An empty box is a question not yet answered, not one answered wrongly (デザイン規約 §可否・警告の出し場所).
+            // An empty box is a question not yet answered (デザイン規約 §可否・警告の出し場所).
             refused: upstreamFlow.filled && !upstreamFlow.targetIsThere
             onRemotePicked: index => upstreamFlow.pickRemote(index)
             onBranchEdited: name => upstreamFlow.setBranchName(name)

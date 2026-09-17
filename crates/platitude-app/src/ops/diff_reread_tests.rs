@@ -1,8 +1,8 @@
 //! Which status a re-read of the open file already answers for.
 //!
-//! No Qt and no repository: telling the status a write published from
-//! one that was in flight when it ended is the application's own
-//! question, and a stamp is the whole of what decides it.
+//! Plain Rust: telling the status a write published from one that
+//! was in flight when it ended is the application's own question,
+//! and a stamp is the whole of what decides it.
 
 use super::*;
 
@@ -68,9 +68,9 @@ fn a_status_nothing_was_read_for_is_news() {
     assert!(!read.taken(AFTERWARDS));
 }
 
-// A write that named no report has nothing to measure a status against,
-// so the status behind it reads the file once more rather than skipping
-// a read nobody can prove was already made.
+// A write that named no report has nothing to
+// measure a status against, so the status behind it
+// reads the file once more.
 #[test]
 fn a_write_that_named_no_report_claims_no_status() {
     let mut read = DiffReread::default();
@@ -91,8 +91,8 @@ fn the_read_made_last_is_the_one_standing() {
 // **The other order.** The answer and the status are drained apart, so
 // the status the write published can be applied before the page has read
 // the answer that asks for the file. The read made then has nothing left
-// to suppress — and left standing, it would swallow the next status
-// instead, which is somebody editing the file in another window.
+// to suppress — and left standing, it would swallow the next
+// status, which is somebody editing the file in another window.
 #[test]
 fn a_status_that_arrived_first_leaves_no_read_standing() {
     let mut read = DiffReread::default();

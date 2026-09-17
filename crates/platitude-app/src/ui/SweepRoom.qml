@@ -7,12 +7,12 @@ import platitude.ui
 // (デザイン規約 §右のペインの字は掴める).
 //
 // **It lies under everything the row draws**, so a press reaches it only where no control and no value took one —
-// every gap in the row, and nothing else. That is what makes "no hit area changed" structural rather than a claim to
-// re-prove: nothing is layered over anything, so the hash plate, the parent link and the avatar cannot lose a press
+// every gap in the row, and nothing else. That is what makes "no hit area changed" structural:
+// nothing is layered over anything, so the hash plate, the parent link and the avatar cannot lose a press
 // to this. It is also what closes the dead corners a hand placed patch by patch kept leaving — the air above and
 // below a value, the plate's own empty strip beside the parent hash.
 //
-// **A plain `MouseArea` and not a handler.** A passive `PointHandler` over the row answered one move of a two-move
+// **A plain `MouseArea`.** A passive `PointHandler` over the row answered one move of a two-move
 // drag inside the pane's Flickable, and none at all once anything else took the press (measured qmltestrunner
 // `tst_inflick`); a `TapHandler` never taps at all over a selectable field, which takes the press (`tst_tapselect`).
 // `preventStealing` is what keeps the Flickable from taking the drag away part-way through.
@@ -44,7 +44,7 @@ Item {
 
     /// The three the hand below calls, in this item's own coordinates — and the three a run enters, so a hand that
     /// was never wired up reports nothing (verify-ui §壊れない動詞の実装). A drag leaves the gap it started in as soon
-    /// as it reaches a value, which is ordinary for a grabbed area: the points are mapped, not clamped.
+    /// as it reaches a value, which is ordinary for a grabbed area: the points are mapped.
     function pressAt(x, y) {
         const p = room.mapToItem(room.row, x, y)
         room.field = null
@@ -132,7 +132,7 @@ Item {
     MouseArea {
         id: hand
         anchors.fill: parent
-        // Never hover: the row's own cards and lights are somebody else's, and a hovering area under the row would
+        // Hover is theirs: the row's own cards and lights are somebody else's, and an area hovering under it would
         // take them (app-ui.md §HoverHandler は下の hover を殺す — a plain area does not, unless it asks for hover).
         hoverEnabled: false
         preventStealing: true

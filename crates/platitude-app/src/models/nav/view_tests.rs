@@ -1,6 +1,6 @@
 //! What the rows come out as once a filter, a fold and a tree have had
-//! their say. Beside the view rather than in it, so the ceiling the view
-//! sits under stays about the view (.claude/rules/structure.md).
+//! their say. Beside the view, so the ceiling the view sits under stays
+//! about the view (.claude/rules/structure.md).
 
 use super::testkit::*;
 use super::*;
@@ -26,8 +26,8 @@ fn a_filtered_remote_row_shows_its_whole_name() {
 /// of the row it stands for, and none at all while there is no such row.
 #[test]
 fn the_head_row_reports_the_fold_its_stand_in_takes() {
-    // The row is the one the record names (`RefsMsg::Head`), not the
-    // one the snapshot marks.
+    // The row is the one the record names
+    // (`RefsMsg::Head`).
     let branches = |head: &str| {
         let mut model = section(
             "branches",
@@ -65,8 +65,8 @@ fn the_head_row_reports_the_fold_its_stand_in_takes() {
 }
 
 /// Where to scroll for a name, in the two shapes a row is keyed by:
-/// the full one a tree gives a leaf, and the shown one a tag has
-/// instead of a full name at all.
+/// the full one a tree gives a leaf, and the shown one a tag carries
+/// on its own.
 #[test]
 fn a_row_is_found_by_the_name_it_is_keyed_by() {
     let mut model = section(
@@ -86,7 +86,7 @@ fn a_row_is_found_by_the_name_it_is_keyed_by() {
     // origin / feature / one / main.
     assert_eq!(model.row_of("origin/feature/one"), 2);
     assert_eq!(model.row_of("origin/main"), 3);
-    // The leaf answers to its whole name, never to what it shows.
+    // The leaf answers to its whole name.
     assert_eq!(model.row_of("one"), -1);
     assert_eq!(model.row_of("origin/feature/two"), -1);
 
@@ -208,8 +208,8 @@ fn a_flat_section_leaves_out_the_row_shown_as_gone() {
     assert_eq!(model.total, 1);
 }
 
-/// A stash is named to git by its selector rather than by the words it
-/// shows, and the selector is what the page hands over.
+/// A stash is named to git by its selector, and the selector is what
+/// the page hands over.
 #[test]
 fn a_stash_is_hidden_by_the_selector_git_knows_it_by() {
     let entry = |name: &str, message: &str| platitude_core::stash::StashEntry {

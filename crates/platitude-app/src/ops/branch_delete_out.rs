@@ -3,9 +3,9 @@
 
 use super::Press;
 
-/// The one press whose menu does not go with it: `git branch --delete`
-/// may be turned down, and the refusal has to land on the row that asked
-/// for it (`AppMenuItem.staysOpen`).
+/// The one press whose menu stays up: `git branch --delete` may be
+/// turned down, and the refusal has to land on the row that asked for
+/// it (`AppMenuItem.staysOpen`).
 ///
 /// **What the press writes down is the name and the id together.** The
 /// card goes, or turns its row into the held `-D`, off the name it asked
@@ -16,7 +16,7 @@ use super::Press;
 ///
 /// **The answer stands until the next plain delete is asked**, because
 /// the card reads it as an edge and may not have been drawn yet when it
-/// arrives. Where in this notify it answered does not stand — that is
+/// arrives. Where in this notify it answered is the drain's — that is
 /// [`Self::answer`], put down at the top of every drain, and it is how
 /// the page tells the answer in hand from one standing over from before.
 ///
@@ -41,12 +41,12 @@ impl BranchDeleteOut {
     /// The press: a plain delete of `name` went to the queue and came
     /// back with this id.
     ///
-    /// The last answer goes with it, so a delete of a re-made branch of
-    /// the same name reads its own answer as a change rather than as the
-    /// old one still standing. Where the queue accepted nothing (the
-    /// session is closed) the last answer still goes — it is over either
-    /// way — but nothing is waited for: no answer is coming, and one
-    /// arriving under some other press's id is not this card's.
+    /// The last answer goes with it, so a delete of a re-made branch
+    /// of the same name reads its own answer as a change. Where the
+    /// queue accepted nothing (the session is closed) the last answer
+    /// still goes — it is over either way — but nothing is waited for:
+    /// no answer is coming, and one arriving under some other press's
+    /// id is not this card's.
     pub fn asked(&mut self, name: &str, accepted: Option<u64>) {
         self.landed = String::new();
         self.refused = String::new();
@@ -64,11 +64,11 @@ impl BranchDeleteOut {
     /// git answered a write, standing at `at` in this notify's answers.
     /// Says whether it was this card's.
     ///
-    /// `reported` is whether the refusal came with something to report —
-    /// the far side keeping the branch, rather than git declining on its
-    /// own. **That one turns no row**: nothing about the name was
-    /// refused, so the card has nothing to morph into and the words go
-    /// to the page's notice bar instead (デザイン規約 §答えの要らない報せ).
+    /// `reported` is whether the refusal came with something to
+    /// report — the far side keeping the branch. **That one goes to
+    /// the page's notice bar**: the refusal is the far side's, so
+    /// the card has nothing to morph into and the row stays as it
+    /// is (デザイン規約 §答えの要らない報せ).
     pub fn answered(&mut self, id: u64, at: usize, failed: bool, reported: bool) -> bool {
         if !self.press.answered(id, at) {
             return false;

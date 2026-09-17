@@ -61,17 +61,17 @@ impl RebasePlanModel {
 
     /// An operation started under the open plan — anything the badge
     /// names, from a terminal or another session — so it was put away;
-    /// nothing was run. Its own signal rather than
-    /// `stalePlan`: the tip has not moved and saying it did would send a
-    /// reader looking for a rewrite nobody made (§答えの要らない報せ).
+    /// nothing was run. Its own signal: the tip has not moved and
+    /// saying it did would send a reader looking for a rewrite nobody
+    /// made (§答えの要らない報せ).
     #[qsignal]
     fn standing_op(&mut self);
 
-    /// The plan was handed over and put away: from here the replay is
-    /// out. Said at the press rather than left to the write's own answer
-    /// — `replaying` rises when the queue *starts* the write, not when
-    /// the button was let go, and the screen must not come back to life
-    /// in between (`RepoPage.planRunSeq`).
+    /// The plan was handed over and put away: from here
+    /// the replay is out. Said at the press — `replaying`
+    /// rises when the queue *starts* the write, and the
+    /// screen stays down in between
+    /// (`RepoPage.planRunSeq`).
     #[qsignal]
     fn plan_ran(&mut self);
 
@@ -129,9 +129,9 @@ impl RebasePlanModel {
     /// by range. Nothing while no plan stands: the count is the plan's,
     /// and there is no range to ask about.
     ///
-    /// Called on the refs *moving*, not on every refs tick — the read
-    /// behind it is a `rev-list`, and hung off the tick it would poll the
-    /// repository at the status rate (`NavSectionModel.refsMoved`).
+    /// Called on the refs *moving* — the read behind it is a `rev-list`,
+    /// and hung off the tick it would poll the repository at the status
+    /// rate (`NavSectionModel.refsMoved`).
     #[qslot]
     fn refresh_pushed(&mut self) {
         if !self.active || self.publish_range.is_empty() {
@@ -212,11 +212,11 @@ impl RebasePlanModel {
     }
 
     /// The row a commit sits on right now, or -1 where the plan does not
-    /// hold it — for a selection that arrives named by its commit rather
-    /// than by its row. The parent hash in the right pane is the one such
-    /// door left open while a plan stands (`RepoPage.jumpToRef`), and the
-    /// answer is what tells a walk down into the plan from a walk out of
-    /// it, past the base and off this screen.
+    /// hold it — for a selection that arrives named by its commit. The
+    /// parent hash in the right pane is the one such door left open
+    /// while a plan stands (`RepoPage.jumpToRef`), and the answer is
+    /// what tells a walk down into the plan from a walk out of it, past
+    /// the base and off this screen.
     ///
     /// A walk of the rows, because a reorder is exactly what the plan is
     /// for: no index survives [`Self::move_step`], and one kept in step
@@ -332,9 +332,9 @@ impl RebasePlanModel {
     /// draft that can no longer run (実行時の照合はその上にもう 1 枚、
     /// core が持つ).
     ///
-    /// **Two strikes, not one.** A status read that began before a tip
-    /// move and landed after the plan opened carries the *older* oid, and
-    /// one strike would discard a plan composed on exactly the tip that
+    /// **Two strikes.** A status read that began before a tip move and
+    /// landed after the plan opened carries the *older* oid, and one
+    /// strike would discard a plan composed on exactly the tip that
     /// exists. Status reads are single-flight, so at most one such stale
     /// report can land — a second disagreeing report is always fresh.
     #[qslot]

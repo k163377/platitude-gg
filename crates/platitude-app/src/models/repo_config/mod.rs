@@ -78,9 +78,9 @@ pub struct RepoConfigModel {
     /// The repository being shown, as the strip spells it. Empty until
     /// the screen names one.
     repo_path: String,
-    /// "idle" | "reading" | "ready" | "error" — the read's, not the
-    /// write's. A save leaves the boxes standing and says how it went in
-    /// the marks beside them.
+    /// "idle" | "reading" | "ready" | "error" — the read's. A save
+    /// leaves the boxes standing and says how it went in the marks
+    /// beside them.
     state: String,
     /// What this repository's own file holds; empty for a key it does not
     /// set, which is the same thing an empty box asks for.
@@ -92,7 +92,7 @@ pub struct RepoConfigModel {
     effective_name: String,
     effective_email: String,
     /// A save is out. Nothing waits on it — the screen stays standing
-    /// either way — but the button says so rather than looking unpressed.
+    /// either way — but the button says so.
     /// A copy of `save_pending.is_some()` for QML to bind to.
     write_busy: bool,
     /// A save finished without both halves landing. It also carries "a

@@ -3,20 +3,20 @@
 use super::*;
 
 /// Routes core session events into the per-tab feeds. Runs on background
-/// tokio threads; must never block beyond the short feed locks.
+/// tokio threads, blocking only for the short feed locks.
 pub(super) struct BridgeSink {
     pub(super) feeds: Arc<Feeds>,
     /// Set when the tab this sink fed was released or closed
     /// (`Hub::release_tab` / `Hub::close_tab`). A write the close let run
     /// on (`RepoSession::close`) answers minutes later — into a page that
     /// no longer exists, or worse, into the fresh session a reselected
-    /// tab has opened over the same `Feeds`. Retired, the late answers go
-    /// nowhere instead of into somebody else's page.
+    /// tab has opened over the same `Feeds`. Retired, the late answers
+    /// go nowhere at all.
     pub(super) retired: std::sync::atomic::AtomicBool,
     /// The refs snapshot the tab was last told its remotes out of. A quiet
     /// tick republishes the very same one (`session::chips`), and the tab
-    /// — every binding on it — must not be woken to be told the same
-    /// three names again. Weak, so the sink keeps nothing alive.
+    /// — every binding on it — is woken only for a snapshot it has
+    /// yet to hear. Weak, so the sink keeps nothing alive.
     remotes_told: Mutex<std::sync::Weak<RefsSnapshot>>,
 }
 
@@ -147,8 +147,8 @@ impl SessionSink for BridgeSink {
             SessionEvent::RefsLoaded { snapshot, looked } => {
                 // The tab hears about its remotes only when the snapshot
                 // is a new one: a quiet tick republishes the same
-                // pointer, and waking every binding on the tab for it is
-                // the one thing a quiet tick must not do.
+                // pointer, and the bindings on the tab are left where
+                // they are.
                 if !self.remotes_already_told(&snapshot) {
                     self.feeds.tab.push(TabMsg::Remotes {
                         names: snapshot.remote_names.clone(),
@@ -285,12 +285,12 @@ impl SessionSink for BridgeSink {
                 marks,
                 embedded,
             } => {
-                // Kept rather than replaced, unlike every other feed here:
-                // rows and colours are two messages of one diff, and two
-                // diffs asked for a moment apart need not finish in that
-                // order — the newest arrival is not always the wanted one.
-                // The consumer's `drain` picks by key and drops the rest,
-                // so nothing accumulates.
+                // Every message kept: rows and colours are two messages
+                // of one diff, and two diffs asked for a moment apart
+                // need not finish in that order — the newest arrival is
+                // not always the wanted one. The consumer's `drain`
+                // picks by key and drops the rest, so nothing
+                // accumulates.
                 self.feeds.diff.push(DiffMsg::Loaded {
                     target,
                     patches,
@@ -413,13 +413,13 @@ impl SessionSink for BridgeSink {
                     signer: signature.signer,
                 });
             }
-            // Ordered by the ask rather than by arrival, the way the
-            // details feed is and for the same reason: two right-clicks a
-            // moment apart need not finish in that order, and a plain
-            // replace lets the *older* answer be the one waiting when the
-            // consumer drains — which the model then drops as stale
-            // (`asked_from`), leaving the newer click unanswered and the
-            // screen waiting on a plan that can no longer arrive.
+            // Ordered by the ask, the way the details feed is and for
+            // the same reason: two right-clicks a moment apart need not
+            // finish in that order, and a plain replace lets the *older*
+            // answer be the one waiting when the consumer drains — which
+            // the model then drops as stale (`asked_from`), leaving the
+            // newer click unanswered and the screen waiting on a plan
+            // that can no longer arrive.
             SessionEvent::RebasePlanLoaded {
                 generation,
                 preview,
@@ -463,9 +463,9 @@ impl SessionSink for BridgeSink {
                     author_email: head.author_email,
                 });
             }
-            // The fetches nobody asked for are the toolbar indicator's,
-            // not the write group's: nobody holds an id for them, and an
-            // offline machine must not raise a banner every interval.
+            // The fetches nobody asked for are the toolbar indicator's:
+            // nobody holds an id for them, and the indicator is all an
+            // offline machine shows for them.
             SessionEvent::WriteStarted {
                 kind: kind @ (OperationKind::AutoFetch | OperationKind::OpenFetch),
                 ..
@@ -487,10 +487,10 @@ impl SessionSink for BridgeSink {
                     announce: kind == OperationKind::AutoFetch,
                 });
             }
-            // The page waits on the answer, not on the reads behind it
-            // (`TabMsg::WriteState`). The run that photographs the page a
-            // write leaves waits on this one instead: it is what says the
-            // last of those reads has been published.
+            // The page waits on the answer (`TabMsg::WriteState`). The
+            // run that photographs the page a write leaves waits on this
+            // one: it is what says the last of those reads has been
+            // published.
             SessionEvent::WriteSettled { id, .. } => {
                 self.feeds
                     .tab
@@ -517,10 +517,10 @@ impl SessionSink for BridgeSink {
                 reads_from,
             } => {
                 // A write that did not happen and has something to say
-                // for itself is not an error of this window's: the page
-                // reports it in words of its own, and the red line that
-                // would say "something went wrong here" is left for the
-                // failures nothing else answers
+                // for itself is the page's to report: it says so in
+                // words of its own, and the red line that would say
+                // "something went wrong here" is left for the failures
+                // nothing else answers
                 // (デザイン規約 §答えの要らない報せ).
                 if let Some(message) = &error
                     && report.is_none()

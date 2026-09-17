@@ -71,9 +71,9 @@ impl<T> Feed<T> {
         Self::wake(guard);
     }
 
-    /// One pending answer, ordered by request rather than completion.
-    /// Keep the watermark after draining so a late duplicate cannot wake
-    /// the consumer or retain stale data. A new session resets it explicitly.
+    /// One pending answer, ordered by request. Keep the watermark after
+    /// draining so a late duplicate cannot wake the consumer or retain
+    /// stale data. A new session resets it explicitly.
     pub fn push_latest(&self, generation: u64, item: T) {
         let mut guard = self.lock();
         if guard.latest.is_some_and(|latest| generation <= latest) {
@@ -155,8 +155,8 @@ pub struct Feeds {
     pub tab: Arc<Feed<TabMsg>>,
     pub graph: Arc<Feed<GraphMsg>>,
     /// Refs fan out to one feed per sidebar section (one consumer each).
-    /// Shared, not copied: a deep copy per section duplicates tens of
-    /// thousands of strings. The branches section's also carries HEAD.
+    /// Shared: a deep copy per section would duplicate tens of thousands
+    /// of strings. The branches section's also carries HEAD.
     pub refs_branches: Arc<Feed<RefsMsg>>,
     pub refs_remotes: Arc<Feed<RefsMsg>>,
     pub refs_tags: Arc<Feed<RefsMsg>>,
@@ -189,11 +189,11 @@ pub struct Feeds {
     /// model; one pending answer, ordered by the ask the way the details
     /// feed is — `Feed::push_latest`).
     pub plan: Arc<Feed<PlanMsg>>,
-    /// How far a running replay has got, on its own rather than inside a
-    /// status snapshot. Same consumer as `status` (the work-tree model
-    /// carries the badge's fields), a different feed because it is asked
-    /// several times a second while the snapshot is asked every ten:
-    /// pushed through that one it would be a whole `git status` per tick
+    /// How far a running replay has got, on its own. Same consumer as
+    /// `status` (the work-tree model carries the badge's fields), a
+    /// different feed because it is asked several times a second while
+    /// the snapshot is asked every ten: pushed through that one it would
+    /// be a whole `git status` per tick
     /// (`RepoSession::refresh_op_progress`).
     pub op_progress: Arc<Feed<OpProgressMsg>>,
 }
@@ -201,7 +201,7 @@ pub struct Feeds {
 /// One feed, seen without its message type — the three questions every
 /// walk over "all of a tab's feeds" asks. None of [`Feed`]'s answers here
 /// depend on `T`, which is what lets the list of feeds live in one plain
-/// array ([`Feeds::each`]) instead of a macro per walk.
+/// array ([`Feeds::each`]).
 pub trait FeedOps {
     fn release(&self);
     fn clear_queued(&self);
@@ -269,7 +269,7 @@ impl Feeds {
 ///
 /// The invoker is passed by value because it has to be: `QmlMethodInvoker`
 /// is `Send` but not `Clone`, so a consumer takes its own from
-/// `get_qml_method_invoker()` rather than sharing one
+/// `get_qml_method_invoker()`
 /// (.claude/rules/app-ui.md "Qt Bridges の要点").
 pub fn attached<T>(feed: &Arc<Feed<T>>, invoker: QmlMethodInvoker) -> Arc<Feed<T>> {
     let feed = Arc::clone(feed);

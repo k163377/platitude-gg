@@ -9,13 +9,13 @@ import platitude
 /// shows: the item tree is walked once, on the picture the run saved, and every type met is reported as
 /// `census=A,B,C` for verify-ui to record against the line that ran (`crates/xtask/verb-census.txt`).
 ///
-/// **One walk, on a window that has stopped arriving — never on a clock.** A sampled walk records where its ticks
-/// landed rather than what the run did: a row a run raises and takes away again is in the census of the machine whose
-/// tick caught it and out of the census of the machine whose tick came late, so the file the gate reads moves under
-/// work that never touched the application (measured: `avatar-remove` names `AvatarAssignRow` for its ticks and
-/// nothing else).
+/// **One walk, on a window that has stopped arriving.** A sampled walk records where its ticks landed: a
+/// row a run raises and takes away again is in the census of the machine whose tick caught it and out of
+/// the census of the machine whose tick came late, so the file the gate reads moves under work that
+/// never touched the application (measured: `avatar-remove` names `AvatarAssignRow` for its ticks
+/// and nothing else).
 ///
-/// **The verb's own edge is not that point.** A verb is finished when what it acted on answers, and the repository is
+/// **The point is past the verb's edge.** A verb is finished when what it acted on answers, and the repository is
 /// still being read behind it: the opening walks the log before the first status has said whether anything is
 /// uncommitted, so the working-tree row — and the tallies on it — arrive with the pass that status asks for. A walk
 /// taken at the picture is on the near side of that read about as often as the far side, and the two answers differ
@@ -29,26 +29,26 @@ import platitude
 /// before — but what it is recorded as showing is the whole of what it brought up, which is the same on every
 /// machine. A window that never settles is the watchdog's to report; there is no clock here that would let one pass.
 ///
-/// **And the walk is taken from a frame, never from the edge that made one due.** What the tree holds is what the
-/// views have built, and a view builds its rows when the window polishes its items for a frame — not when the model
-/// hands the rows over. Two nearer moments each record a list with no rows in it. The picture's callback comes as a
-/// posted event, so whatever was queued ahead of it runs first — a diff's rows arriving is a model reset, and a list
-/// met between its reset and the next polish holds no delegate at all. And the edge on which the window settles is a
-/// data edge: the refs land and the nav list has yet to build a row from them, so a walk taken in the same call as
-/// that edge records a sidebar with no rows in it (measured: `tab-hold 0` lost `NameCell NavItemDelegate NavRowBody`
-/// on the runs whose refs were the last read to land). So once the picture has been called for and the window has
-/// settled, a frame is asked for, and the walk is taken at `afterAnimating` — the window's word, on this thread, that
-/// every item has been polished for the frame about to be synced, with nothing able to run in between.
+/// **And the walk is taken from a frame.** What the tree holds is what the views have built, and a view
+/// builds its rows when the window polishes its items for a frame. Two nearer moments each record a list
+/// with no rows in it. The picture's callback comes as a posted event, so whatever was queued ahead of it
+/// runs first — a diff's rows arriving is a model reset, and a list met between its reset and the next
+/// polish holds no delegate at all. And the edge on which the window settles is a data edge: the refs land
+/// and the nav list has yet to build a row from them, so a walk taken in the same call as that edge records
+/// a sidebar with no rows in it (measured: `tab-hold 0` lost `NameCell NavItemDelegate NavRowBody` on the
+/// runs whose refs were the last read to land). So once the picture has been called for and the window has
+/// settled, a frame is asked for, and the walk is taken at `afterAnimating` — the window's word, on this
+/// thread, that every item has been polished for the frame about to be synced, with nothing able to run in between.
 ///
 /// A QML-defined type answers `String(item)` with `<File>_QMLTYPE_<n>(0x…)`, so the file's name is the part before the
 /// mark; an inline component answers with its bare name and a C++ type with its class, and neither names a file, so
 /// the runner drops them. Popups stand under the window's overlay, which is a child of the root item, so one walk from
-/// the root sees them too. A base a component derives from is not met — the object carries the derived name — which
-/// is why the gate follows the type-reference graph as well.
+/// the root sees them too. The object carries only the derived name, which is why the gate follows the
+/// type-reference graph as well.
 Item {
     id: census
 
-    /// The window whose tree is walked. `var` because `Main` is the file the engine loads, not a type anything names.
+    /// The window whose tree is walked. `var` because `Main` is the file the engine loads.
     required property var window
 
     /// The names met, as an object used for its keys.
@@ -76,16 +76,16 @@ Item {
             census.seen[text.substring(0, mark)] = true
     }
 
-    /// Down the object tree, not the item tree: a Popup (every dialog, every menu) is an object under the item that
-    /// declares it and no item at all, so `children` never names it — `data` (the default property: child items and
-    /// resources alike) does, and its own content hangs off `contentItem` / `contentData`.
+    /// Down the object tree: a Popup (every dialog, every menu) is an object under the item that declares it and no
+    /// item at all, so `children` never names it — `data` (the default property: child items and resources alike)
+    /// does, and its own content hangs off `contentItem` / `contentData`.
     ///
-    /// `shown` is whether this branch is on screen. A popup that is declared but shut (every dialog and menu the
-    /// window keeps ready) is not something this run showed, and neither is what sits inside it — but a popup that
-    /// is open *is*, wherever it is declared: the chip's card is a menu declared inside another menu that stays shut.
-    /// So a shut popup is still walked, with nothing under it noted until an open one turns the light back on.
-    /// `offered` is the one exception: a menu declared in an open menu's content is a row of that menu (`AppMenu`
-    /// offers a submenu as a row), so the parent showing is the submenu showing, open or not.
+    /// `shown` is whether this branch is on screen. A popup that is open is something this run showed,
+    /// wherever it is declared: the chip's card is a menu declared inside another menu that stays shut.
+    /// So a shut popup (every dialog and menu the window keeps ready) is still walked, with nothing under
+    /// it noted until an open one turns the light back on. `offered` is the one exception: a menu declared
+    /// in an open menu's content is a row of that menu (`AppMenu` offers a submenu as a row), so the parent
+    /// showing is the submenu showing, open or not.
     function visit(object, shown, offered) {
         if (!object)
             return
@@ -123,28 +123,28 @@ Item {
         if (content !== undefined && content !== null)
             for (let i = 0; i < content.length; i++)
                 visit(content[i], shown, false)
-        // A menu's content lists a submenu as the row that stands for it, never as the submenu itself (measured);
-        // the submenus are asked for by index.
+        // A menu's content lists a submenu as the row that stands for it (measured); the submenus are asked for by
+        // index.
         if (object.menuAt !== undefined && object.count !== undefined)
             for (let i = 0; i < object.count; i++)
                 visit(object.menuAt(i), shown, shown && object.opened !== undefined)
         const face = object.contentItem
         if (face !== undefined && face !== null && face !== object)
             visit(face, shown, false)
-        // A Control's background is neither its content nor its data, and every card and every menu wears the same
+        // A Control's background is a property of its own, and every card and every menu wears the same
         // one (`AppCardFace`), so without this road no verb shows it at all.
         const back = object.background
         if (back !== undefined && back !== null && back !== object)
             visit(back, shown, false)
-        // A Loader's object is its child but not in its `data` when it is no item (the dialogs `WindowDialogSeat`
+        // A Loader's object sits outside its `data` when it is no item (the dialogs `WindowDialogSeat`
         // loads are popups), so it is reached by name.
         const loaded = object.item
         if (loaded !== undefined && loaded !== null && loaded !== object)
             visit(loaded, shown, false)
     }
 
-    /// Whether the window has stopped arriving — the one point the walk is taken from, and a binding rather than a
-    /// call so the wait below has an edge to hear (every term is a property read, so the dependencies are captured
+    /// Whether the window has stopped arriving — the one point the walk is taken from, and a binding so the wait
+    /// below has an edge to hear (every term is a property read, so the dependencies are captured
     /// through `pageSettled()` as they would be inline).
     readonly property bool settled: census.pageSettled()
 
@@ -156,7 +156,7 @@ Item {
     }
 
     /// The run is finishing: the walk once the window has settled, then the report lines. Held open by the shot
-    /// driver until this says it is done, so a walk is never taken from a window with a read still out.
+    /// driver until this says it is done, so every walk is taken from a window whose reads have landed.
     signal walked()
     property bool waiting: false
     /// The picture was called for before the window had settled, so the walk is from a later moment than the
@@ -200,7 +200,7 @@ Item {
     }
 
     /// What the window answered `settled` with, beside the answer — so a census that moves says why on the run's own
-    /// line rather than leaving the next reader to reproduce a machine.
+    /// line.
     ///
     /// **Only the terms that can still differ once the answer is yes.** Every read `pageSettled` waits on is true
     /// whenever it says settled, so repeating those would say nothing. The rows-against-the-status term is the one
@@ -231,8 +231,8 @@ Item {
         // line, which is read one word at a time (`gate::census::page_settled_in`).
         Harness.report("census page=" + (census.settled ? "settled" : "arriving") + " " + census.terms())
         Harness.report("census=" + Object.keys(census.seen).sort().join(","))
-        // Said from the event loop rather than from inside the frame's polish: the ending this releases may quit the
-        // application, and the frame is left to finish first.
+        // Said from the event loop: the ending this releases may quit the application, and the frame is left to
+        // finish first.
         Qt.callLater(census.done)
     }
     function done() {

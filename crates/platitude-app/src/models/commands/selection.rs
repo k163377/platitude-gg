@@ -16,12 +16,12 @@
 //! in it stands on, and `encode::markup::plain_ranges` says which places a
 //! byte range of it covers.
 //!
-//! **A place, not a pixel.** Where a column's characters are drawn is
-//! known only to the layout that drew them, so the pane puts the column on
-//! the row's own ruler (`LineRuler`) and brings back a place in it; the
-//! column itself comes from here ([`CommandsModel::column`]), because the
-//! line those columns are cut from is here and not there. Nothing in this
-//! file measures a font, and no count of columns stands in for one.
+//! **A place.** Where a column's characters are drawn is known only to
+//! the layout that drew them, so the pane puts the column on the row's
+//! own ruler (`LineRuler`) and brings back a place in it; the column
+//! itself comes from here ([`CommandsModel::column`]), because the line
+//! those columns are cut from is here. Nothing in this file measures a
+//! font, and no count of columns stands in for one.
 //!
 //! Two things follow and are worth saying once:
 //!
@@ -31,9 +31,9 @@
 //!    and what was asked for.
 //!  - **git's own words come with a command line taken whole.** There is
 //!    no way on screen to point at part of the block under a failure (it
-//!    wraps, and the rows are commands rather than lines), so pointing at
-//!    the row is pointing at all of it — the same bargain the diff makes
-//!    with its removed lines (§diff の中身をコピーする).
+//!    wraps, and the rows are whole commands), so pointing at the row is
+//!    pointing at all of it — the same bargain the diff makes with its
+//!    removed lines (§diff の中身をコピーする).
 
 use super::*;
 
@@ -64,10 +64,10 @@ impl Line {
             clock: item.clock.clone(),
             cmd: format!("git {}", item.args),
             // Two words about how it went, and a space between them
-            // because that is one thing being said and not two columns:
-            // `exit 128 12 ms`. Either half can be missing -- a command
-            // that went through says only how long it took, and one still
-            // running says neither.
+            // because that is one thing being said: `exit 128 12 ms`.
+            // Either half can be missing -- a command that went through
+            // says only how long it took, and one still running says
+            // neither.
             out: match (item.result.as_str(), item.duration.as_str()) {
                 ("", duration) => duration.to_string(),
                 (result, "") => result.to_string(),
@@ -250,7 +250,7 @@ impl CommandsModel {
     /// What the oldest rows falling off the end does to the ends: they are
     /// row numbers, and the rows under them have moved. A selection whose
     /// first end went over the edge is not the reader's selection any
-    /// more, so it goes rather than sliding onto rows nobody picked.
+    /// more, so it goes.
     pub(super) fn shift_selection(&mut self, gone: i32) {
         if !self.sel_active {
             return;
@@ -270,8 +270,8 @@ impl CommandsModel {
     /// them actually did.
     ///
     /// The rows are written first and the view told afterwards, in runs —
-    /// a drag that sweeps a hundred rows is one notification rather than a
-    /// hundred (`models::notify`).
+    /// a drag that sweeps a hundred rows is one notification
+    /// (`models::notify`).
     fn respell(&mut self, was: Option<(usize, usize)>) -> bool {
         let now = self.span();
         let (first, last) = match (was, now) {

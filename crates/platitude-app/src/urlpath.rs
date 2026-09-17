@@ -63,10 +63,10 @@ pub fn path_leaf(path: &str) -> &str {
 ///
 /// **Only Windows has anything to fold.** A backslash is a folder
 /// boundary there and an ordinary letter of a name everywhere else, so
-/// folding one on the other two platforms would rename the folder rather
-/// than respell it. The two prefixes that mean their backslashes to
-/// Windows itself are left alone for the reason `repo_key` leaves them:
-/// rewriting `\\?\` addresses somewhere else.
+/// folding one on the other two platforms renames the folder. The two
+/// prefixes that mean their backslashes to Windows itself are left
+/// alone for the reason `repo_key` leaves them: rewriting `\\?\`
+/// addresses somewhere else.
 pub fn shown_path(path: &str) -> String {
     #[cfg(windows)]
     if !path.starts_with(r"\\?\") && !path.starts_with(r"\\.\") {
@@ -85,8 +85,8 @@ fn path_to_file_url(path: &Path) -> String {
     } else if encoded.starts_with('/') {
         format!("file://{encoded}")
     } else if encoded.as_bytes().get(1) == Some(&b':') {
-        // A drive letter is not a root the URL can borrow, so it brings
-        // its own slash: `C:/x` → `file:///C:/x`.
+        // The URL brings its own slash: `C:/x` → `file:///C:/x`. A
+        // drive letter is a root only Windows reads.
         format!("file:///{encoded}")
     } else {
         String::new()
@@ -251,8 +251,8 @@ mod tests {
     // the drive and UNC shapes are only roots where they mean anything.
     #[test]
     fn a_repository_at_a_root_opens_the_root() {
-        // Nothing is above a root, so the picker stays there rather than
-        // falling back on wherever the dialog happens to have been left.
+        // A root is the top, so the picker stays there. An empty answer
+        // would open wherever the dialog was last left.
         assert_eq!(picker_folder_url(Path::new("/")), "file:///");
         // A repository one step in still has the root to go up to.
         assert_eq!(picker_folder_url(Path::new("/repo")), "file:///");

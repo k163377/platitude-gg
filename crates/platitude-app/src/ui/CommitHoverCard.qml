@@ -9,7 +9,7 @@ import platitude.ui
 // it, when, and whoever they credited. **Two lists open it** — the graph's rows and the ones the right pane lists
 // under a choice — and what it holds back depends on what the row it came off had already shown (`bodyRows`).
 //
-// A card rather than a `ToolTip`: a tooltip is a string laid out in one block, and it appears wherever the style
+// A card: a tooltip is a string laid out in one block, and it appears wherever the style
 // decides — which is what made the old one feel detached from the pointer (P3-確認事項 §B). The ground stopped being a
 // reason when the shared tip took the same card (`SharedToolTip`); the one-block shape is still one.
 //
@@ -18,7 +18,7 @@ import platitude.ui
 // reader to the pane that holds the whole of it, which is a place already on screen. **Only where the note stands**
 // (`asksForMore`): a card that held nothing back has nothing to send anyone to.
 //
-// Owned by the page, not the delegate: rows are recycled the moment they scroll off, and a popup parented to one goes
+// Owned by the page: rows are recycled the moment they scroll off, and a popup parented to a row goes
 // with it.
 AppCard {
     id: hoverCard
@@ -29,14 +29,14 @@ AppCard {
     property double atime: 0
     /// Packed co-author records for the line beside the date.
     property string mates: ""
-    /// How wide the message may run before it wraps. The owner sets it from the pane the card opens over — there is no
-    /// token for it because it is not a fixed size, it is a share of what is there.
+    /// How wide the message may run before it wraps. The owner sets it from the pane the card opens over — a share of
+    /// what is there, which is why Metrics holds no token for it.
     property real textWidth: 0
     /// How tall the subject may grow before it stops, from the same share of the same pane as the width. A subject has
     /// no length git enforces, and a card that grows with one runs off the screen and takes its own footer with it:
-    /// measured at a 2,000-byte subject, the date and the credit line ended below the window. It is a share rather than
-    /// a count of lines because the subject is the row's own heading — what may be cut off it is whatever the screen
-    /// cannot hold, not a figure somebody chose. **The body is the other way round** (`Metrics.hoverBodyRows`): a
+    /// measured at a 2,000-byte subject, the date and the credit line ended below the window. It is a share because
+    /// the subject is the row's own heading — what may be cut off it is whatever the screen
+    /// cannot hold. **The body is the other way round** (`Metrics.hoverBodyRows`): a
     /// paragraph is what a glance is worth, and the room there happens to be has nothing to do with it (規約 §hover の
     /// ツールチップ).
     property real subjectHeight: 0
@@ -52,8 +52,8 @@ AppCard {
     /// `--preset edges`). 0 leaves it to `bodyRows`.
     property real bodyHeight: 0
     /// Whether the card offers the way to the rest of a message it had to stop. Off where nothing here is pressable:
-    /// a card standing over the choice must not be a door, since walking through it is walking away from what the
-    /// reader was picking (デザイン規約 §複数のコミットを選ぶ).
+    /// a card standing over the choice is only ever read, since a door there leads away from what the reader was
+    /// picking (デザイン規約 §複数のコミットを選ぶ).
     property bool asksForMore: true
 
     /// What the credit line was actually given, and whether the names ran past it. Read by the headless runs, which
@@ -68,7 +68,7 @@ AppCard {
     /// The note under a cut message was pressed. The card holds no commit of its own beyond the fields it was handed,
     /// so which one this is about is the owner's answer (`RowHoverHost`).
     signal messageAsked()
-    /// The press itself, so a headless run enters where the hand does rather than beside it (verify-ui スキル).
+    /// The press itself, so a headless run enters where the hand does (verify-ui スキル).
     function askMessage() {
         hoverCard.messageAsked()
     }
@@ -79,8 +79,8 @@ AppCard {
     /// Whether the note has the pointer — nothing here gains ink for it, so a PNG cannot say whether the line that is
     /// there is the resting one.
     readonly property bool notePointed: noteHand.containsMouse || hoverCard.notePointedAt
-    /// What the note is actually painting, for a run to read back off the paint rather than off a copy of what the
-    /// note would have decided (`PaneScrollBar.slabColor`, same shape — PGG_AUTO_ACT=card-note-lit).
+    /// What the note is actually painting, for a run to read back off the paint itself (`PaneScrollBar.slabColor`,
+    /// same shape — PGG_AUTO_ACT=card-note-lit).
     readonly property alias noteWordColor: noteWords.color
     readonly property alias noteRuleColor: noteRule.color
 
@@ -116,13 +116,13 @@ AppCard {
             text: hoverCard.body
             color: Theme.textSecondary
             pixelSize: Theme.fontMd
-            // A paragraph's worth, not a share of the pane: the card is what a message is glanced at in, and a preview
+            // A paragraph's worth: the card is what a message is glanced at in, and a preview
             // that reached half the window was promising a read it could not give (規約 §hover のツールチップ).
             capRows: hoverCard.bodyRows
             capHeight: hoverCard.bodyHeight
         }
         // Where the rest of it is, for the message this card had to stop — **and the way there** (規約 §hover の
-        // ツールチップ). The line names itself rather than the commit: the hand reading this is inside the card, and a
+        // ツールチップ). The line names itself: the hand reading this is inside the card, and a
         // sentence that sends it back out to a row it has already left is a sentence about a target the reader cannot
         // see. The press does what the row's own click does, and the card is in the way of what it leads to, so it
         // goes with the press.
@@ -134,9 +134,9 @@ AppCard {
         // nowhere further to go, and a line under every row the pointer crosses would be the card talking about
         // itself.
         //
-        // A `Label` rather than a `CardText`, because this is the card speaking and not the commit: a note that joined
-        // the selection would be dragged out along with the message somebody came here to copy. It is a target now, so
-        // it stands on the card's sweep pad the way the band's badges do (規約 §右のペインの字は掴める).
+        // A `Label`, because this is the card speaking: a note that joined the selection would be dragged out along
+        // with the message somebody came here to copy. It is a target now, so it stands on the card's sweep pad the
+        // way the band's badges do (規約 §右のペインの字は掴める).
         Item {
             id: noteLine
             visible: hoverCard.messageCut && hoverCard.asksForMore
@@ -159,7 +159,7 @@ AppCard {
             // to the words' own colour under the pointer (規約 §author の hover — the footer that loads more commits
             // and the parent hash say the same thing the same way). **The only ink a resting card gains is this 1px.**
             //
-            // The word's own property rather than the token again: "up to the words' colour" is the rule, and written
+            // The word's own property: "up to the words' colour" is the rule, and written
             // this way it cannot come apart from the line above.
             Rectangle {
                 id: noteRule
@@ -169,7 +169,7 @@ AppCard {
                 height: Theme.borderWidth
                 color: hoverCard.notePointed ? noteWords.color : Theme.borderStrong
             }
-            // The words' own width, not the row's: the target is the sentence, and a hand that reaches the empty half
+            // The words' own width: the target is the sentence, and a hand that reaches the empty half
             // of a centred line has not aimed at anything.
             MouseArea {
                 id: noteHand
@@ -184,7 +184,7 @@ AppCard {
         // The same width the message is held to. Nothing in git bounds an author's name either, and this one line was
         // the only field here outside the share: a name of a couple of hundred characters widened the whole card past
         // the pane it opens over (measured 1,031px over a 775px pane), because a Popup is as wide as its widest child
-        // no matter what the others were told. What will not fit wraps rather than being cut — the name is here to be
+        // no matter what the others were told. What will not fit wraps — the name is here to be
         // read and taken away (規約 §hover のツールチップ).
         CardText {
             Layout.fillWidth: true
@@ -207,14 +207,14 @@ AppCard {
                 id: mateLine
                 packed: hoverCard.mates
                 plain: true
-                // The card's own face, so the mark a cut leaves is drawn on it rather than on the pane's ground
+                // The card's own face, so the mark a cut leaves is drawn on it
                 // (`LineText.ground`).
                 ground: Theme.bgElevated
                 Layout.alignment: Qt.AlignVCenter
                 // The message sets this card's width; the credit line takes what is left of it and elides.
                 // `preferredWidth` 0 is what keeps the names out of the card's own size hint — a crowd would otherwise
                 // widen the card past the message it belongs to — and the minimum is the floor under that: what the
-                // names need, but never more than a message column's worth, so a one-line subject still opens wide
+                // names need, capped at a message column's worth, so a one-line subject still opens wide
                 // enough to credit somebody without leaving empty room when it already was (規約 §co-author の表示).
                 Layout.fillWidth: true
                 Layout.preferredWidth: 0

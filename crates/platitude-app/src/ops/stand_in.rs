@@ -90,7 +90,7 @@ impl Rows {
 }
 
 /// When the list that draws each kind of row last applied a reading —
-/// **one number per list, never one for all of them**.
+/// **one number per list**.
 ///
 /// The three refs sections are handed the same snapshot and apply it on
 /// three separate turns. Folded into a single newest-applied, the
@@ -139,59 +139,59 @@ impl Applied {
 /// graph behind it. Left to those, the row would sit there through all of
 /// it with nothing to say whether the press even landed.
 ///
-/// **Three moments, and each is told to this type rather than worked out
-/// from a count.**
+/// **Three moments, and each of them is told
+/// to this type.**
 ///
 /// 1. [`Self::asked`] — the press. The rows go, and the id the queue
 ///    accepted the write under is written down. Where it accepted none
-///    (the session is closed) **nothing is taken away**: an answer is what
-///    puts the rows back, and a press nobody will ever answer would leave
+///    (the session is closed) **the rows stay put**: an answer is what puts
+///    the rows back, and a press nobody will ever answer would leave
 ///    them gone for good.
 /// 2. [`Self::answered`] — git's own answer to that write. Refused, and
 ///    everything the press took comes straight back, because the row a
 ///    refusal is about has to be on screen when the reader is told about
-///    it. Landed, and the rows stay away — but the delete is not over:
+///    it. Landed, and the rows stay away — the delete runs on:
 ///    the lists on screen still hold the rows themselves.
 /// 3. [`Self::look_again`] — a list says it has drawn a reading, so what
 ///    the lists now hold may be the truth and there may be nothing left
 ///    to stand in for. Every row is asked, and each answers off the list
 ///    that draws it: the stash's listing is read after the graph is
-///    rebuilt rather than beside the refs (`session::write`), so a
-///    dropped entry measured against the refs' would be back on screen
-///    for the whole of the rebuild between the two.
+///    rebuilt (`session::write`), so a dropped entry measured against
+///    the refs' would be back on screen for the whole of the rebuild
+///    between the two.
 ///
-/// **By id, never by turn** — and the same for the listings, by stamp.
-/// The answer that comes back next is not necessarily this write's —
-/// every stash operation answers under the same word, and a fetch running
-/// behind a press answers in the middle of it — so an answer that does
-/// not carry this id leaves the rows exactly where they are.
+/// **By id alone** — and the same for the listings, by stamp. The
+/// answer that comes back next may be another write's — every stash
+/// operation answers under the same word, and a fetch running behind
+/// a press answers in the middle of it — so only an answer carrying
+/// this id moves the rows.
 ///
-/// **A listing that arrived is not a listing that saw the write.** The
-/// answer and the listings travel feeds of their own and are applied in
-/// no fixed order, so a read already in flight when the write ended can
-/// be applied after the answer and would, taken as proof, put the row
-/// back under the hand that had just taken it away. Each listing says
-/// **when it looked** ([`Self::listing_applied`], stamped before git was
-/// spawned) and the write's answer says the smallest stamp that can speak
-/// for what it left (`reads_from`, `session::Standing::fence`); only a
-/// listing at or above it answers. Nothing here disarms the wait
-/// otherwise.
+/// **What answers is a listing that saw the write.** The answer
+/// and the listings travel feeds of their own and are applied in
+/// no fixed order, so a read already in flight when the write
+/// ended can be applied after the answer and would, taken as
+/// proof, put the row back under the hand that had just taken it
+/// away. Each listing says **when it looked**
+/// ([`Self::listing_applied`], stamped before git was spawned)
+/// and the write's answer says the smallest stamp that can speak
+/// for what it left (`reads_from`, `session::Standing::fence`);
+/// only a listing at or above it answers, and only it ends the wait.
 ///
-/// **Applied, not published.** The stamps are written down by the list
+/// **Applied on screen.** The stamps are written down by the list
 /// that put the rows on screen, at the moment it put them there — core
 /// having published a reading says nothing about what the window is
 /// showing, which is the whole of what these rows are about.
 ///
-/// **And by the list that draws that row, not by any list.** Each kind
-/// of row is a section of its own, handed the snapshot on its own turn
-/// ([`Applied`]), so a section that has caught up answers for its own row
-/// and for nothing else — a composite delete's two rows go as their two
-/// lists reach them.
+/// **And by the list that draws that row.** Each kind of row
+/// is a section of its own, handed the snapshot on its own turn
+/// ([`Applied`]), so a section that has caught up answers for
+/// its own row alone — a composite delete's two rows go as their
+/// two lists reach them.
 ///
-/// **The stamps belong to the session that numbered them.** They survive
-/// a delete ending, because what a list has drawn is not that delete's to
-/// forget, but not the session ending ([`Self::session_gone`]): the count
-/// begins again at zero with the next one.
+/// **The stamps belong to the session that numbered them.** They
+/// survive a delete ending, because what a list has drawn is the
+/// lists' own to keep, and go with the session ([`Self::session_gone`]):
+/// the count begins again at zero with the next one.
 ///
 /// **What it still cannot tell apart is the composite.** `Delete both`
 /// deletes locally and then pushes, and a remote half that failed answers
@@ -205,8 +205,8 @@ pub struct StandIn {
     /// The write the rows are waiting on, as the bridge carries an
     /// `OperationId` — zero while none is out.
     waiting: u64,
-    /// Whether that write has answered and git did it. Until it has, no
-    /// reading can answer for the rows: a listing already queued when the
+    /// Whether that write has answered and git did it. A reading answers
+    /// for the rows only after it has: a listing already queued when the
     /// press landed says nothing about this delete, and read as though it
     /// did it would put the row straight back under the hand that had
     /// just taken it away.
@@ -214,12 +214,12 @@ pub struct StandIn {
     /// The smallest stamp a listing that saw what this write left can
     /// carry (`WriteFinished::reads_from`); zero while none is out.
     reads_from: u64,
-    /// What each list has drawn. **Kept across a delete ending**, so the
-    /// order the answer and the listings reach this type in stops
-    /// mattering: a listing applied before the answer is still the proof
-    /// it was, and the answer settles on it the moment it lands. It
-    /// describes the lists rather than the delete, so it is not the
-    /// delete's to throw away.
+    /// What each list has drawn. **Kept across a delete
+    /// ending**, so the order the answer and the listings
+    /// reach this type in stops mattering: a listing applied
+    /// before the answer is still the proof it was, and the
+    /// answer settles on it the moment it lands. It describes
+    /// the lists, so it is theirs to keep.
     ///
     /// **The session ending is the one thing that does throw it away**
     /// ([`Self::session_gone`]) — the stamps are a session's own count,
@@ -280,7 +280,7 @@ impl StandIn {
     /// A list has drawn what it was handed, so ask every row again
     /// whether the list that draws *it* has caught up.
     ///
-    /// **One door, because the caller has nothing to add.** Which rows
+    /// **One door, because everything it needs is here.** Which rows
     /// can go is decided from what each list has drawn against the fence
     /// the write named, so a caller naming the list it came from could
     /// only name it wrongly — a stash edge sent to a refs door would
@@ -297,10 +297,10 @@ impl StandIn {
     /// it every list that was drawing these rows and every number they
     /// were measured by.
     ///
-    /// **Not the same as a delete ending**, which is [`Self::put_back`]:
-    /// the readings a list has drawn outlive one delete and are what the
-    /// next one is measured against, but they do not outlive the session
-    /// that numbered them. A new session counts its reads from the start
+    /// **Wider than a delete ending** ([`Self::put_back`]): the
+    /// readings a list has drawn outlive one delete and are what the
+    /// next one is measured against, and they go with the session that
+    /// numbered them. A new session counts its reads from the start
     /// (`session::Standing`), so a stamp kept from the last one sits
     /// above everything the new one can produce and would answer for a
     /// delete no listing has been read for at all.
@@ -315,7 +315,7 @@ impl StandIn {
 
     /// The rows come back and the wait is over — git refused, or the
     /// last of them was proved gone. What the lists have drawn is left
-    /// alone: it describes them, not this delete.
+    /// alone: it describes them.
     fn put_back(&mut self) {
         self.rows = Rows::default();
         self.waiting = 0;

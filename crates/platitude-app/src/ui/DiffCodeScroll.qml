@@ -7,13 +7,13 @@ import platitude.ui
 // How far sideways the diff's code has been sent, and the hands that send it: the bar along the bottom edge of the rows
 // and the middle-click autoscroll, which carries the rows up and down at the same time (デザイン規約 §diff を横へ送る).
 //
-// **Declared beside the pane's body, not inside the list.** Two measured reasons (measured with qmltestrunner):
+// **Declared beside the pane's body.** Two measured reasons (measured with qmltestrunner):
 //
 //  - a `HoverHandler` on an overlay laid over the rows takes their hover away entirely — the `+` a line puts out under
 //    the pointer never appears. A plain `MouseArea` does not, so the hand may stay over the rows while the question "is
 //    the pointer in this pane" is answered by a handler on the pane itself (an **ancestor** handler leaves the rows
 //    their own hover).
-//  - the bar is a child of the pane rather than of the `Flickable`, so a drag along it is never taken away by the
+//  - the bar is a child of the pane, so a drag along it is never taken away by the
 //    list's own filtering.
 Item {
     id: codeScroll
@@ -36,17 +36,17 @@ Item {
 
     /// How far the code has been sent, and how far it can go.
     ///
-    /// **How far there is to go is not decided here.** It arrives as `codeWidth`, worked out by the pane from the
-    /// lines the model picked and from what the rows were actually laid out in (`DiffReach`) — a number this has no
-    /// way to check and must not second-guess. What is this component's is the clamp: a shorter reading of the same
+    /// **How far there is to go is handed in.** It arrives as `codeWidth`, worked out by the pane from the
+    /// lines the model picked and from what the rows were actually laid out in (`DiffReach`) — a number this takes
+    /// as given, having no way to check it. What is this component's is the clamp: a shorter reading of the same
     /// file, or a window that grew, can leave the place being read past the end of what there is to read.
     property real offset: 0
     readonly property real maxOffset: Math.max(0, codeScroll.codeWidth - codeScroll.roomWidth)
     readonly property bool canPan: codeScroll.maxOffset > 0
 
-    /// The strip the bar stands on, below the last row rather than over it — the pane keeps its rows this much clear
+    /// The strip the bar stands on, below the last row — the pane keeps its rows this much clear
     /// of its own bottom edge (`DiffPane`). A line of a file is read while it is being sent sideways, so the bar
-    /// cannot be allowed to lie on one; a file with nowhere sideways to go has no bar and gives the strip back
+    /// stands clear of them; a file with nowhere sideways to go has no bar and gives the strip back
     /// (デザイン規約 §diff を横へ送る). Read off the bar itself: its own size is the only thing that says how tall it is.
     readonly property real barRoom: codeScroll.canPan ? bar.height : 0
 
@@ -97,9 +97,9 @@ Item {
         // every bar in the window carries (`AutoScrollBar`), over a visibility this bar keeps for itself
         // (デザイン規約 §diff を横へ送る).
         //
-        // **It stands below the rows, not on them.** A line of the file is being read at the very moment it is sent
+        // **It stands below the rows.** A line of the file is being read at the very moment it is sent
         // sideways, so the pane holds its rows `barRoom` clear of its own bottom edge and the bar takes that strip
-        // — the one place in this window where the room is taken by the pane and not by a gutter in the rows.
+        // — the one place in this window where the room is taken by the pane.
         //
         // The thumb itself is the style's see-through one, as every bar that takes no gutter is (デザイン規約 §色
         // スクロールバー): the ink comes from the window's palette, so the bar wears it without asking.
@@ -115,8 +115,8 @@ Item {
             size: codeScroll.codeWidth > 0 ? codeScroll.roomWidth / codeScroll.codeWidth : 1
             position: codeScroll.codeWidth > 0 ? codeScroll.offset / codeScroll.codeWidth : 0
             onPositionChanged: {
-                // No flickable to be wired to, so the bar's own position is what says the code has just been sent —
-                // by the thumb, the wheel, or the hand drifting sideways.
+                // The bar's own position is what says the code has just been sent — by the thumb, the wheel, or the
+                // hand drifting sideways.
                 bar.moved()
                 if (pressed)
                     codeScroll.offset = Math.max(0, Math.min(position * codeScroll.codeWidth, codeScroll.maxOffset))

@@ -7,12 +7,12 @@ import platitude.ui
 Rectangle {
     id: badge
     property bool filled: false
-    /// Which state this badge is standing for (規約 §状態). **The frame is what carries it**, not the word
-    /// (規約 §進行中・長押しの定数「警告の色は語ではなく枠と印が持つ」) — a badge whose word is one colour and whose frame is
+    /// Which state this badge is standing for (規約 §状態). **The frame is what carries it**
+    /// (規約 §進行中・長押しの定数「警告の色は枠と印が持つ」) — a badge whose word is one colour and whose frame is
     /// another says two things at once, and the frame is the half a reader takes in first.
     property color tint: Theme.warning
     /// What this badge is drawn at with nothing narrowed. Handed in from
-    /// the hidden measurement rather than read off the row inside: that
+    /// the hidden measurement: that
     /// row is not laid out while the group is folded (`BadgeWord`).
     property real naturalW: 0
     /// What the group narrowed all of its badges to, together.
@@ -37,7 +37,7 @@ Rectangle {
         anchors.leftMargin: Theme.spaceXs
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
-        // Handlers, not a `MouseArea`: an `Item` handed to
+        // Handlers: an `Item` handed to
         // a layout is given a seat in it, and the word
         // beside it loses that much room (measured here as
         // `SET IDENT…` in a window with 800px going spare).

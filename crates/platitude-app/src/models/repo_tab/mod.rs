@@ -33,9 +33,9 @@ pub struct RepoTab {
     state: String,
     title: String,
     repo_path: String,
-    /// Where the picker opens: the folder this repository sits in, as a
-    /// URL — repositories are kept side by side far more often than
-    /// inside one another, so the dialog's own "last folder" is not used.
+    /// Where the picker opens: the folder this repository sits in, as
+    /// a URL — repositories are kept side by side far more often than
+    /// inside one another.
     picker_folder_url: String,
     /// Why the repository would not open: git's own words. Read only on
     /// the `other` kind — for the two the application can name itself,
@@ -59,19 +59,19 @@ pub struct RepoTab {
     /// Whether the write in flight is one that replays history a commit
     /// at a time — the kind's own answer, carried across the bridge
     /// (`TabMsg::WriteState::replays`), so the page holds its write
-    /// doors down without branching on git vocabulary
-    /// (app-ui.md「QML にビジネスロジックを書かない」).
+    /// doors down off that answer alone
+    /// (app-ui.md「QML は表示とインタラクションだけ」).
     replaying: bool,
     /// Merge tool names the settings field can offer, joined by U+001F the
     /// way the graph's label records are. Empty means none to offer, which
     /// is a working state — the field takes a typed name either way.
     merge_tools: String,
     /// A candidate read is out. Asking git what is installed takes about
-    /// eight seconds on Windows, so the field says so rather than looking
-    /// like it has nothing.
+    /// eight seconds on Windows, so the field says so while the read
+    /// runs.
     merge_tools_loading: bool,
     /// Configured remote names joined by U+001F, so the publish question
-    /// can offer them without a model of its own (`remoteAt` answers one
+    /// can offer them from one property (`remoteAt` answers one
     /// at a time, and a slot is not something a binding can follow).
     remote_names: String,
     /// Last answer to `checkRemoteBranch`, as `<remote>\u{1f}<branch>`.
@@ -80,9 +80,9 @@ pub struct RepoTab {
     remote_branch_asked: String,
     /// What a push under that name would meet over there
     /// (`platitude_core::remote::RemoteBranchState`): `free` /
-    /// `fast-forward` / `refused` / `unknown` / `unreachable`. One string
-    /// rather than a pair of flags — the five are exclusive, and the two
-    /// that ask the question to hold back are not the same two that ask it
+    /// `fast-forward` / `refused` / `unknown` / `unreachable`. One
+    /// string — the five are exclusive, and the two that ask the
+    /// question to hold back are not the same two that ask it
     /// to warn.
     remote_branch_state: String,
     /// The commit that remote advertised for the name, hex. What an
@@ -139,8 +139,8 @@ pub struct RepoTab {
     /// **A copy, and the machine is elsewhere.** When they go and when
     /// they come back is decided by `ops::StandIn`, which the hub holds
     /// per tab so a write outlives the page drawing it; these four are
-    /// the picture it leaves, kept here so a QML binding reads a plain
-    /// member and never reaches into the hub for it (`ops_delete`).
+    /// the picture it leaves, kept here so a QML binding reads a
+    /// plain member (`ops_delete`).
     gone_branch: String,
     gone_remote: String,
     gone_tag: String,
@@ -155,11 +155,11 @@ pub struct RepoTab {
     /// so letting it land throws away the answer the pane was waiting
     /// for — which reads on screen as no answer at all, and
     /// nothing asks a third time (observed: a verified
-    /// commit whose tick never came). Dropped here instead, which is what
-    /// デザイン規約 §署名の表示 asks for: 答えは持ち回らない — 選択が動けば
+    /// commit whose tick never came). Dropped here, which is what
+    /// デザイン規約 §署名の表示 asks for: 答えはその選択限り — 選択が動けば
     /// 捨て、同じ行へ戻ってくれば投げ直す.
     ///
-    /// Not a property: QML compares the answer with what it has selected
+    /// A plain member: QML compares the answer with what it has selected
     /// (`RepoPage.signatureIsForSelection`), and that is a different
     /// question — the selection can move without this tab being asked
     /// anything.
@@ -171,9 +171,9 @@ pub struct RepoTab {
     identity_ready: bool,
     /// The same face the identity wears everywhere else: the identicon
     /// its name packs to, and the picture assigned to its address if
-    /// there is one (デザイン規約 §アバターを与える). Held here rather
-    /// than asked for on demand because the commit editor's badge is a
-    /// binding, and a binding only re-reads a property.
+    /// there is one (デザイン規約 §アバターを与える). Held here
+    /// because the commit editor's badge is a binding, and a
+    /// binding only re-reads a property.
     author_avatar: i32,
     author_avatar_url: String,
     /// Whether new commits here get signed, and with what kind of key.
@@ -203,9 +203,9 @@ pub struct RepoTab {
     /// corrects one opens with.
     remotes: Vec<String>,
     remote_urls: Vec<String>,
-    /// Derived from `remotes` on arrival rather than computed on demand:
-    /// QML bindings only re-evaluate on a property change, so anything a
-    /// binding reads has to be a property.
+    /// Derived from `remotes` on arrival: QML bindings only
+    /// re-evaluate on a property change, so anything a binding reads
+    /// has to be a property.
     remote_count: i32,
     default_remote: String,
     /// The remote this repository sends pushes to (`remote.pushDefault`),
@@ -236,13 +236,13 @@ pub struct RepoTab {
     ///
     /// The message stays raw data over there — the push flow shows it.
     /// What an answer *means* is the classified group below: the page
-    /// never branches on git vocabulary (app-ui.md).
+    /// reads meanings alone (app-ui.md).
     last_write_error: String,
     /// git stopped part-way through the write in flight and left the
     /// operation standing. Raised by the message before that write's
     /// answer and read by the answer itself, which is where it becomes
-    /// the answer's own (`WriteAnswer::stopped`): not an error and not a
-    /// landing, and where the screen goes next differs for all three.
+    /// the answer's own (`WriteAnswer::stopped`): a third answer beside
+    /// a refusal and a landing, each sending the screen elsewhere.
     last_write_stopped: bool,
     write_seq: i32,
     /// **The one write a run is waiting for**, kept by the id its own ask
@@ -259,8 +259,8 @@ pub struct RepoTab {
     /// where the owner hands it over, and a copy here would have the page
     /// act on the same answer a second time. The group is emptied at the
     /// top of every drain like the answers beside it, so a notify that
-    /// carried nothing for it says so rather than leaving the last
-    /// drain's classification up to be read again.
+    /// carried nothing for it says so, and the last drain's
+    /// classification went down with it.
     ///
     /// git would not do it, or could not reach the far side to;
     /// `last_write_error` holds its words.
@@ -296,9 +296,9 @@ pub struct RepoTab {
     /// group is then the fetch's: a reader waiting for its own write by
     /// name never sees the name, and a stop the run left standing is
     /// taken back down by the fetch *starting* — both measured as
-    /// silence, not as a wrong answer, and both correlated with how
-    /// loaded the machine is. So the answers are kept as they came, and
-    /// what waits for one of them looks here.
+    /// silence, and both correlated with how loaded the machine is.
+    /// So the answers are kept as they came, and what waits for one
+    /// of them looks here.
     ///
     /// Emptied at the top of every drain: a notify raised from anywhere
     /// else (a slot that writes a setting) carries no answers, and the
@@ -308,8 +308,8 @@ pub struct RepoTab {
     write_answers: Vec<WriteAnswer>,
     /// The commit the editor sent, waiting for the answer that empties
     /// its boxes — **the id it was accepted under, written down by the
-    /// press itself** (`state::commit_from_fields`), so no reader has to
-    /// hold one across the bridge and none has to guess from the order
+    /// press itself** (`state::commit_from_fields`), so every reader
+    /// finds its own answer by that id, whatever order the
     /// answers arrive in.
     ///
     /// **A copy of what it says is beside it.** The owner is plain Rust
@@ -325,20 +325,20 @@ pub struct RepoTab {
     /// The open diff read again where a write answered, waiting for the
     /// status that write publishes behind it (`ops::DiffReread`).
     ///
-    /// **Not a property**, for the reason the stash's landing is not:
-    /// the question has an answer only at the moment a status is being
+    /// **Asked for, the way the stash's landing is:** the question
+    /// has an answer only at the moment a status is being
     /// read, and asking spends it (`takeDiffRead`).
     diff_reread: crate::ops::DiffReread,
     /// The working tree as the page last put it on screen: the report of
     /// HEAD its counts stood beside, and whether they left nothing in it
     /// (`noteTreeRead`).
     ///
-    /// **Kept here rather than in each wait.** It describes the screen
-    /// rather than any one press, and both of the waits above are
-    /// answered against it — held twice, the two could disagree about
-    /// the same status. Written down whether or not anything is waiting:
-    /// a status and the answer it belongs beside are drained apart, so
-    /// this is regularly the half that arrived first.
+    /// **Kept here, once.** It describes the screen, and both of the
+    /// waits above are answered against it — held twice, the two could
+    /// disagree about the same status. Written down whether or not
+    /// anything is waiting: a status and the answer it belongs beside
+    /// are drained apart, so this is regularly the half that arrived
+    /// first.
     tree_seen: u64,
     tree_emptied: bool,
     /// The stash this window pressed to take the working tree away,
@@ -387,9 +387,9 @@ pub struct RepoTab {
     ref_push_target: String,
     /// That write did not happen, and something outside this application
     /// said so — a protected branch, a repository rule, a hook over there
-    /// or here, a remote this end had only an older picture of. Nothing
-    /// here can put it right and nothing was half done, so the page
-    /// reports it rather than raising the log over it
+    /// or here, a remote this end had only an older picture of.
+    /// Nothing here can put it right and nothing was half done,
+    /// so the page reports it
     /// (デザイン規約 §答えの要らない報せ).
     ///
     /// `kind` is which report this is (`delete` / `update` / `outdated` /
@@ -401,11 +401,11 @@ pub struct RepoTab {
     write_report_remote: String,
     write_report_name: String,
     write_report_reason: String,
-    /// A write the user asked for is in flight. **The log does not raise
-    /// itself for a command that fails inside one**: an operation is
-    /// several commands and only its own answer says whether it failed,
+    /// A write the user asked for is in flight. **The log raises itself
+    /// on the operation's own answer**: an operation is several
+    /// commands and only that answer says whether it failed,
     /// or whether the far side turned it down with something to report
-    /// instead (デザイン規約 §git が言ったことを読む場所 — 開く判断は操作の
+    /// (デザイン規約 §git が言ったことを読む場所 — 開く判断は操作の
     /// 答えで下し、コマンド 1 本の終了コードでは下さない).
     write_running: bool,
     /// A branch move that would leave commits unreachable, waiting to be
@@ -413,8 +413,8 @@ pub struct RepoTab {
     move_ask_local: String,
     move_ask_start: String,
     move_ask_seq: i32,
-    /// Auto fetch, reported apart from the shared busy/error surface so an
-    /// offline machine does not raise a banner every interval.
+    /// Auto fetch, reported apart from the shared busy/error
+    /// surface, which an offline machine would set off every interval.
     auto_fetch_running: bool,
     /// Fetches that came back with something to say, in a row, whoever
     /// asked for them. Any fetch that comes back clean puts it to zero.
@@ -423,8 +423,8 @@ pub struct RepoTab {
     /// from the count, so a failure that may not speak — the fetch an
     /// opening fires — counts without using the run's one telling up.
     fetch_log_raised: bool,
-    /// The timer was stopped because of those. Nothing but the button
-    /// that says so starts it again — an automatic resume would happen
+    /// The timer was stopped because of those. Only the button that
+    /// says so starts it again — an automatic resume would happen
     /// behind the reader's back.
     auto_fetch_suspended: bool,
     feed: Option<Arc<Feed<TabMsg>>>,
@@ -448,8 +448,8 @@ pub struct RepoTab {
 /// Whether anybody asked for that write, or it is one of the fetches the
 /// page makes on its own — the interval's and the one an opening fires.
 /// **The set is named in core**, where the queue's own lane already
-/// draws it (`OperationKind::asked_for`), so this side cannot come to
-/// disagree with the queue about which writes have somebody waiting.
+/// draws it (`OperationKind::asked_for`), so this side and the queue
+/// always agree about which writes have somebody waiting.
 pub(super) fn asked_for(kind: OperationKind) -> bool {
     kind.asked_for()
 }
@@ -459,20 +459,20 @@ struct WriteAnswer {
     seq: i32,
     /// Which write, as the queue named it — the type itself, so what an
     /// answer means is matched on it and the word QML reads is made
-    /// from it at the slot and nowhere earlier (`writeAnswerOp`).
+    /// from it at the slot (`writeAnswerOp`).
     kind: OperationKind,
     stopped: bool,
     failed: bool,
     /// git's own words where it was refused, empty where it landed —
-    /// **on the answer, not beside the group** (`last_write_error` is
-    /// whichever answer came last): a reader waiting for one write by
-    /// name reads the words of that one.
+    /// **on the answer** (`last_write_error` is whichever answer came
+    /// last): a reader waiting for one write by name reads the words
+    /// of that one.
     error: String,
     at_tip: bool,
     head_seq: u64,
     /// What the far side, a hook, or this end itself said about refusing
-    /// it — **carried on the answer rather than beside the group**,
-    /// because a report is the answer's and a drain can bring several.
+    /// it — **carried on the answer**, because a report is the
+    /// answer's and a drain can bring several.
     /// Empty `kind` is "this one came with nothing to report", which is
     /// git's plain refusal and the command log's news
     /// (デザイン規約 §答えの要らない報せ).
@@ -485,7 +485,7 @@ struct WriteAnswer {
 /// One of a session's running numbers as the bridge carries it (`i32`)
 /// — the id a write was accepted under, or the report of HEAD an answer
 /// names. A process counts both from one and neither reaches the top of
-/// the range, so the saturation is a formality rather than a case.
+/// the range, so the saturation is a formality.
 fn bridge_id(number: u64) -> i32 {
     i32::try_from(number).unwrap_or(i32::MAX)
 }

@@ -1,7 +1,7 @@
 import QtQuick
 import platitude.ui
 
-// One of the window's own buttons, drawn here rather than left to the platform: the platform's cannot be styled and its
+// One of the window's own buttons, drawn here: the platform's cannot be styled and its
 // maximize mark never becomes a restore mark (P3-確認事項 §ウィンドウ chrome).
 //
 // The close button is the one exception to the wash — red under the pointer is a convention old enough that departing

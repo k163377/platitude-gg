@@ -47,7 +47,7 @@ struct MinMaxInfo {
 const WM_GETMINMAXINFO: u32 = 0x0024;
 
 /// `MONITORINFO` (winuser.h), and the flag that asks for the monitor
-/// a window is most on rather than none at all.
+/// a window is most on.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 struct MonitorInfo {

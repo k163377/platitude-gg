@@ -6,8 +6,8 @@ use super::*;
 /// What came back about a folder somebody picked, before it is a tab.
 #[derive(Debug)]
 pub enum PickMsg {
-    /// It opens. The path is the one that was picked, not the root git
-    /// resolved it to.
+    /// It opens. The path is the folder picked; git's root may sit
+    /// above it.
     Accepted { path: PathBuf },
     /// It does not, and never becomes a tab. `kind` is `plain` / `bare` /
     /// `other` — the same three the tab's own failure screen names.
@@ -27,8 +27,8 @@ pub enum PickMsg {
 #[derive(Debug)]
 pub enum CloneMsg {
     /// It came down. The path is the folder that was named, which is the
-    /// one to open — git was told where to put it rather than left to
-    /// print where it did.
+    /// one to open — git was told where to put it, so this is where it
+    /// is.
     Done { path: PathBuf },
     /// It did not, and `message` is git's own answer. Nothing here reads
     /// it: a destination that is taken, a URL nothing answers and a
@@ -58,18 +58,17 @@ pub enum TabMsg {
     /// git stopped part-way through the write in flight and left the
     /// operation standing. Arrives before the `WriteState` that ends that
     /// write, so the answer the page reads already knows it — and which
-    /// write it was is that answer's own `kind`, not repeated here.
+    /// write it was is that answer's own `kind`.
     WriteStopped,
     /// A write command started / ended. A failed write also arrives as an
     /// `OpError`, so the existing error surface needs no special case;
     /// `error` is here as well so an editor can tell whether the write it
     /// asked for is the one that failed.
     ///
-    /// **Except the failures that are not this window's to report**:
-    /// where the write did not happen and something outside this
-    /// application said so, `report` carries what it said and no
-    /// `OpError` is sent, because the page answers it with a notice
-    /// instead (デザイン規約 §答えの要らない報せ).
+    /// **Except the failures something else reports**: where the write
+    /// did not happen and something outside this application said so,
+    /// `report` carries what it said and no `OpError` is sent — the page
+    /// answers it with a notice of its own (デザイン規約 §答えの要らない報せ).
     WriteState {
         /// The id the queue handed back when the write was asked for
         /// (`platitude_core::OperationId`) — what a reader waiting on its
@@ -100,12 +99,12 @@ pub enum TabMsg {
     /// Everything that write invalidated has been read again and
     /// published (`SessionEvent::WriteSettled`) — the last of its three
     /// boundaries, and the only one that speaks for the readings behind
-    /// the answer rather than for the command.
+    /// the answer.
     ///
-    /// **Published, not drawn.** What the window is showing is the
-    /// window's own business; this says only that nothing further is
-    /// coming for that write, which is what a run waiting to photograph
-    /// the page a write leaves has no other way to know
+    /// **Published.** What the window is showing is the window's own
+    /// business; this says only that nothing further is coming for that
+    /// write, which is what a run waiting to photograph the page a write
+    /// leaves has no other way to know
     /// (`AutoActDriver.writeBarrier`).
     ///
     /// The id and nothing else: what a reader does with it is match its
@@ -120,9 +119,9 @@ pub enum TabMsg {
         local: String,
         start: String,
     },
-    /// Whether a remote already carries a branch name, as of now rather
-    /// than as of the last fetch. The question rides along: the box that
-    /// asked may be on another name by the time this arrives.
+    /// Whether a remote already carries a branch name, as of now. The
+    /// question rides along: the box that asked may be on another name
+    /// by the time this arrives.
     RemoteBranch {
         remote: String,
         branch: String,
@@ -154,8 +153,8 @@ pub enum TabMsg {
         name: String,
         email: String,
         complete: bool,
-        /// `commit.gpgsign`, not `is_active()`: the commit editor is what
-        /// says so, and `tag.gpgsign` would make it say it falsely.
+        /// `commit.gpgsign` alone: the commit editor is what says so,
+        /// and `tag.gpgsign` would make it say it falsely.
         sign_commits: bool,
         signing_format: String,
     },
@@ -187,9 +186,9 @@ pub enum TabMsg {
         author_email: String,
     },
     /// A fetch nobody asked for started or ended — the interval's, or the
-    /// one an opening fires. Kept off the shared error surface: a laptop
-    /// that is simply offline must not raise a fresh banner every
-    /// interval, so the toolbar indicator carries this state instead.
+    /// one an opening fires. Kept off the shared error surface: the
+    /// toolbar indicator is what carries this state, so a laptop that is
+    /// simply offline stays quiet.
     AutoFetch {
         running: bool,
         error: String,
@@ -268,16 +267,16 @@ pub struct StashList {
 /// What a sidebar refs section is handed: the snapshot its rows are, and
 /// — for the branches section — where HEAD stands, so the row it
 /// highlights and the stand-in it rides are the one record's
-/// (`session::standing`) rather than the snapshot's own reading.
+/// (`session::standing`).
 #[derive(Debug)]
 pub enum RefsMsg {
     Snapshot {
         snapshot: Arc<RefsSnapshot>,
         /// When the pass that read this looked at the repository
-        /// (`SessionEvent::RefsLoaded::looked`) — **not when the section
-        /// applied it**, which is later and, across three sections, three
-        /// different moments. A consumer holding rows off the screen for
-        /// a write measures this against the write's `reads_from`.
+        /// (`SessionEvent::RefsLoaded::looked`) — **the pass's own
+        /// moment**, ahead of the three the three sections apply it at.
+        /// A consumer holding rows off the screen for a write measures
+        /// this against the write's `reads_from`.
         looked: u64,
     },
     Head(HeadMsg),
@@ -288,8 +287,8 @@ pub enum RefsMsg {
 pub enum GraphMsg {
     /// Where HEAD stands — what the row the working tree is on is found
     /// by, and what a range asked of the rows starts from. Carried on
-    /// this feed rather than read off the chips: the chips arrive a pass
-    /// after the rows, and a move lands before either.
+    /// this feed: the chips arrive a pass after the rows, and a move
+    /// lands before either.
     Head(HeadMsg),
     Started {
         generation: u64,
@@ -327,8 +326,8 @@ pub enum GraphMsg {
     },
     /// The graph standing on screen has fallen behind the repository, or
     /// has caught up with it again (see [`SessionEvent::LogStale`]). No
-    /// generation: what it describes is the picture as a whole, not one
-    /// stream's rows.
+    /// generation: what it describes is the whole picture, whatever
+    /// stream drew it.
     Stale {
         stale: bool,
     },
@@ -369,8 +368,8 @@ pub enum CommandMsg {
 
 /// The badge's own two halves, arriving on their own several times a
 /// second while a write that replays is out (`SessionEvent::OpProgress`).
-/// A slice of [`StatusMsg`] rather than a message of its own kind — the
-/// same consumer reads both, and this one costs no git process.
+/// A slice of [`StatusMsg`] — the same consumer reads both, and this one
+/// costs no git process.
 #[derive(Debug)]
 pub struct OpProgressMsg {
     pub op_state: OpState,
@@ -380,8 +379,8 @@ pub struct OpProgressMsg {
 /// What another working copy is holding, for the read-only pane
 /// (`SessionEvent::CarriedStatusLoaded`).
 ///
-/// **Not a [`StatusMsg`]**, though the lists it feeds are the same three:
-/// everything else on that message is about the tree this window can
+/// **Its own message**, though the lists it feeds are the same three:
+/// everything else on a [`StatusMsg`] is about the tree this window can
 /// write — the HEAD its counts stand beside, what git is in the middle of
 /// here, where a push would go — and a copy has none of it to give. What
 /// is left is the files, and the copy they belong to.
@@ -413,7 +412,7 @@ pub struct StatusMsg {
     pub op_message: String,
     /// The merge tool git would launch. Empty with none configured, or
     /// while nothing is conflicted. Names the menu row; the launch reads
-    /// the config again rather than trusting this.
+    /// the config again for itself.
     pub merge_tool: String,
     /// Where this branch's own mark sends a push
     /// (`branch.<branch>.pushRemote`), empty where it marks none. Rides
@@ -449,8 +448,8 @@ pub enum PlanMsg {
     Published { range: String, published: i32 },
 }
 
-/// What the diff feed carries. Two messages rather than one, because the
-/// colours come out behind the rows they belong to — see
+/// What the diff feed carries. Two messages, because the colours come
+/// out behind the rows they belong to — see
 /// [`platitude_core::session::SessionEvent::DiffColoured`] for why.
 #[derive(Debug)]
 pub enum DiffMsg {
@@ -468,7 +467,7 @@ pub enum DiffMsg {
         /// What the same bytes said about line endings, if anything.
         endings: Option<platitude_core::eol::Notice>,
         /// What changed inside each row (`intraline`) — rides with the
-        /// rows, not behind them like the colours.
+        /// rows themselves, ahead of the colours.
         marks: Arc<platitude_core::intraline::IntraMarks>,
         /// The commit a stage of this row would point at, for the one row
         /// that has no patch: a repository of its own inside the working

@@ -18,25 +18,25 @@ const MOST_CANDIDATES: usize = 8;
 /// What it is for: the pane draws the code without eliding it and lets the
 /// reader send it sideways, so it wants to know how far sideways there is
 /// to go before the reader has scrolled through the file
-/// (デザイン規約 §diff を横へ送る). **Lines and not a count of columns,
-/// because a column is not a width and no arithmetic here can make it
-/// one**: a wide glyph is counted as two columns, and the fallback a
-/// Latin-only mono family hands it to is not monospaced at all — measured
-/// on Windows at `fontCode`, against 8px for the font's own columns:
+/// (デザイン規約 §diff を横へ送る). **Lines, because a column is not a
+/// width and no arithmetic here can make it one**: a wide glyph is counted
+/// as two columns, and the fallback a Latin-only mono family hands it to
+/// is not monospaced at all — measured on Windows at `fontCode`, against
+/// 8px for the font's own columns:
 /// `日` 13, `の` 11, `。` 9, `「` 7, an emoji 18. And it cuts the other
 /// way as often: a combining mark is a character this walk counts and a
 /// glyph the font draws nothing extra for, so `e`+U+0301 four hundred
 /// times counts 800 columns and is drawn in 400. What leaves here is the
 /// text to measure.
 ///
-/// **A head start, not the answer.** Which line is drawn furthest cannot
-/// be known here, so this hands over the longest few by column count and
-/// nothing is decided by leaving a line out: what settles the reach is the
-/// width of the rows as they are laid out (`DiffReach`), and a line no
-/// record named is measured when its row reaches the screen. Ranking by
-/// columns is a guess; dropping a line on one was a bug — a line beaten
-/// on both counts a walk of columns knows about (`0` seven hundred times
-/// against those four hundred combining pairs) is drawn 2,400px further.
+/// **A head start.** Which line is drawn furthest cannot be known here, so
+/// this hands over the longest few by column count and nothing is decided
+/// by leaving a line out: what settles the reach is the width of the rows
+/// as they are laid out (`DiffReach`), and a line no record named is
+/// measured when its row reaches the screen. Ranking by columns is a
+/// guess; dropping a line on one was a bug — a line beaten on both counts
+/// a walk of columns knows about (`0` seven hundred times against those
+/// four hundred combining pairs) is drawn 2,400px further.
 ///
 /// The text is the row's own (`markup::styled`): escaped, its tabs spelled
 /// as the spaces the row draws them as, and read in one format. Handing
@@ -88,8 +88,8 @@ fn push_candidate(out: &mut String, line: &DiffLine, markup: &str) {
     out.push(':');
     out.push(match line.kind {
         // The two the rows set in bold (`DiffRowDelegate`). A conflict
-        // fence is the exception there and not here: git's `<<<<<<<` is
-        // seven characters and reaches past nothing.
+        // fence is the exception there only: git's `<<<<<<<` is seven
+        // characters and reaches past nothing.
         DiffLineKind::Addition | DiffLineKind::Deletion => '1',
         _ => '0',
     });
@@ -127,13 +127,13 @@ pub(super) fn step_of(ch: char, col: usize) -> usize {
 
 /// Whether the glyph is one a mono font draws two columns wide. The ranges
 /// are the East Asian Wide and Fullwidth blocks plus the emoji that share
-/// their advance — read off Unicode's own table rather than derived, so
-/// the list is what it is.
+/// their advance — read off Unicode's own table, so the list is what it
+/// is.
 ///
 /// Only [`step_of`] asks, and only so that a line reaches the same tab
-/// stops everywhere it is walked. **Nothing turns this into pixels any
-/// more**: where a glyph is drawn is a question for the row's own layout
-/// (`LineRuler`), which needs no count of anything.
+/// stops everywhere it is walked. **This stays a count**: where a glyph is
+/// drawn is a question for the row's own layout (`LineRuler`), which needs
+/// no count of anything.
 pub(super) fn is_wide(ch: char) -> bool {
     matches!(u32::from(ch),
         0x1100..=0x115F
@@ -184,8 +184,8 @@ mod tests {
     }
 
     /// The candidates, and the rows they are supposed to be — read out of
-    /// one patch so a difference between them fails rather than passing
-    /// unnoticed.
+    /// one patch, so a difference between the two shows up here as a
+    /// failure.
     fn picked(patch: &str) -> (Vec<(bool, String)>, Vec<String>) {
         let patches = parse_patch(patch.as_bytes());
         let colors = DiffColors::default();

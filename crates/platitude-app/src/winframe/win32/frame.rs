@@ -1,22 +1,22 @@
-//! The subclass that answers `WM_NCHITTEST` instead of Qt, and the
-//! two other frame messages it takes with it.
+//! The subclass that owns `WM_NCHITTEST`, and the two other frame
+//! messages it takes with it.
 
 use super::*;
 
-/// `TrackPopupMenu` flags: hand the choice back rather than posting it,
-/// and take a right-button press as a choice (winuser.h).
+/// `TrackPopupMenu` flags: hand the choice back, and take a
+/// right-button press as a choice (winuser.h).
 const TPM_RETURNCMD: u32 = 0x0100;
 const TPM_RIGHTBUTTON: u32 = 0x0002;
 
 /// Whether the window covers the whole work area, which is what this
 /// window's "maximised" now looks like from the outside.
 ///
-/// `IsZoomed` is not the question any more. A frameless window Qt
-/// puts at the maximised size is not zoomed (measured: window, client
-/// and work area all 0,0..1920,1032 with `IsZoomed` false), and what
-/// the resize edges have to know is whether there is anywhere left to
-/// drag an edge *to* — which is a fact about the rectangle, not about
-/// the flag.
+/// The question is the rectangle. A frameless window Qt
+/// puts at the maximised size is not zoomed (measured:
+/// window, client and work area all 0,0..1920,1032 with
+/// `IsZoomed` false), and what the resize edges have to
+/// know is whether there is anywhere left to drag an
+/// edge *to*.
 fn fills_work_area(window: *mut c_void) -> bool {
     let mut rect = Rect::default();
     let mut info = MonitorInfo {
@@ -64,8 +64,8 @@ const FRAME_SUBCLASS_ID: usize = 7;
 thread_local! {
     /// The grab-run strips, in logical scene pixels: a left and a right
     /// edge each, and the one bottom they all reach down to. Scene x0 is
-    /// client x0, so no origin shift is owed — only the DPI scale, taken
-    /// fresh per hit test.
+    /// client x0, so the DPI scale is all that is owed, taken fresh per
+    /// hit test.
     static STRIPS: Cell<([(f64, f64); CAPTION_RUNS], f64)> =
         const { Cell::new(([(0.0, 0.0); CAPTION_RUNS], 0.0)) };
 }
@@ -94,9 +94,9 @@ extern "system" fn claim_one(window: *mut c_void, _param: isize) -> i32 {
     1
 }
 
-/// Answers `WM_NCHITTEST` without letting Qt see it (the point of
-/// the whole exercise — see `take_frame_hit_test`), opens the window
-/// menu on a right-click in the strip, and forwards everything else.
+/// Answers `WM_NCHITTEST` itself (the point of the whole exercise —
+/// see `take_frame_hit_test`), opens the window menu on a right-click
+/// in the strip, and forwards everything else.
 extern "system" fn frame_proc(
     window: *mut c_void,
     message: u32,
@@ -115,8 +115,8 @@ extern "system" fn frame_proc(
     }
     // Windows would maximise onto the monitor's own rectangle,
     // inflated by the resize border on every side; `clamp_maximized`
-    // pins it to the work area instead (measured: the frame was
-    // -8..1928 across a 0..1920 screen, and those 8 columns hid the
+    // pins it to the work area (measured: the frame was -8..1928
+    // across a 0..1920 screen, and those 8 columns hid the
     // neighbour's window). Asked after whoever ran before us has
     // filled the rest in, so only the two fields this is about are
     // touched.
@@ -131,8 +131,8 @@ extern "system" fn frame_proc(
 }
 
 /// Writes the work area into the `MINMAXINFO` a maximise is about to
-/// be made from: its size, and its origin in the coordinates that
-/// structure uses, which are the monitor's rather than the desktop's.
+/// be made from: its size, and its origin in the monitor's own
+/// coordinates, which is what that structure uses.
 fn clamp_maximized(window: *mut c_void, lparam: isize) {
     let mut info = MonitorInfo {
         size: size_of::<MonitorInfo>() as u32,
@@ -233,10 +233,10 @@ fn hit_test(window: *mut c_void, lparam: isize) -> isize {
     HTCLIENT
 }
 
-/// The window menu — move, size, minimise, maximise, close — where
-/// the pointer is. Not left to `DefWindowProc`, so showing it does
-/// not depend on the caption behaviour of a window that has no
-/// `WS_CAPTION`.
+/// The window menu — move, size, minimise, maximise, close —
+/// where the pointer is. Tracked here, so it shows on a
+/// window whose frame has no `WS_CAPTION` for
+/// `DefWindowProc` to hang it on.
 fn open_system_menu(window: *mut c_void, x: i32, y: i32) {
     // SAFETY: each call takes plain integers or a handle Windows just
     // handed back, and none of them takes ownership of anything.
@@ -246,7 +246,7 @@ fn open_system_menu(window: *mut c_void, x: i32, y: i32) {
             return;
         }
         // The menu closes when the window it belongs to loses the
-        // foreground, and a menu nobody can dismiss is worse than none.
+        // foreground, so the window takes it and the menu can close.
         SetForegroundWindow(window);
         let chosen = TrackPopupMenu(
             menu,

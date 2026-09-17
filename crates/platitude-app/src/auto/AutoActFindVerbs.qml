@@ -7,14 +7,14 @@ import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
-/// The things that stand over a page rather than in it: the find bar, the command log, the settings dialog and
+/// The things that stand over a page: the find bar, the command log, the settings dialog and
 /// the avatar store.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -32,7 +32,7 @@ Item {
     readonly property var renderedBarrier: driver.barrierRendered
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "open-picker") {
             page.openRepositoryPicker()
@@ -81,7 +81,7 @@ Item {
             else if (act === "find-prev")
                 graphPane.findPrevious()
             // `width` and `cap` are the two halves of the rule the long queries are here to check: the card may grow,
-            // and it may not reach past a subject's first character.
+            // and stops at a subject's first character.
             Harness.report("find open=" + graphPane.findCard.open
                               + " query=" + graphPane.findCard.query
                               + " matches=" + graphPane.findCard.matches
@@ -117,7 +117,7 @@ Item {
                    || act === "commands-escape") {
             // A real refusal in git's own words, raising the panel by itself. The clearing verb starts from the same
             // failure (`Main` waits for it, presses Clear, and reads the band); the shutting one takes the panel back
-            // down with the `>_` instead, which leaves the error line standing and the mark red.
+            // down with the `>_`, which leaves the error line standing and the mark red.
             if (act === "commands-fail-shut" && arg === "fold")
                 page.foldByHand(true)
             repoTab.checkoutBranch("pgg-no-such-branch", false)
@@ -238,8 +238,8 @@ Item {
             page.settingsDialogRequested()
         }
     }
-    // The picture is read off disk asynchronously, so what the shot wants is a beat after the write rather than the
-    // instant it returns.
+    // The picture is read off disk asynchronously, so what the shot wants is a beat after the
+    // write.
     SampleTimer {
         id: avatarReportTimer
         onTriggered: {
@@ -256,8 +256,8 @@ Item {
     }
     // PGG_AUTO_ACT=commands-fail-shut: the mark's red with the panel out of the way, which is the state no other verb
     // can photograph — `commands-fail` leaves the panel standing over it and `commands-clear` takes the red away with
-    // the rows. The press goes in at the `>_`'s own function rather than at `commandsOpen`, so a build where that
-    // press stopped reaching the page waits here instead of passing.
+    // the rows. The press goes in at the `>_`'s own function, so a build where that
+    // press stopped reaching the page waits here.
     SampleTimer {
         id: commandsShutTimer
         property bool pressed: false
@@ -322,7 +322,7 @@ Item {
     // owns which of its commands fail (reading a repository from inside a container answers `not a git repository` for
     // the working copy the tree really lives in, and that one refusal is three more lines: measured).
     //
-    // The write barrier is in front of these rather than behind them (the same wait `dispatchFinished` makes for a
+    // The write barrier is in front of these (the same wait `dispatchFinished` makes for a
     // plain write act): the two writes that give the log something to hold are still queued when this starts, and a
     // tick that arrives before them drags over whatever a background read happened to leave. All of it is read in the
     // branch that acts and nowhere else (規約 §UI 自動化の因果性).
@@ -337,7 +337,7 @@ Item {
             if (!page.commandsShown || page.pageCommands.running || page.pageCommands.rowsHeld() < 2)
                 return
             commandsPickTimer.stop()
-            // The model's own count, not the panel's `(N)` — that one is the view's, and the view is a frame behind
+            // The model's own count — the panel's `(N)` is the view's, and the view is a frame behind
             // the rows in the tick a press lands in (measured, 1 against 4 commands on the clipboard).
             const rows = page.pageCommands.rowsHeld()
             page.pickCommandText(0, 0, rows - 1, driver.pastLineEnd)
@@ -359,11 +359,11 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // PGG_AUTO_ACT=commands-sweep: the same text, started on the ground under the last row instead of on a row — the
+    // PGG_AUTO_ACT=commands-sweep: the same text, started on the ground under the last row — the
     // one place inside the panel's own frame where a press used to reach nothing
     // (規約 §git が言ったことを読む場所). The waits are `commands-select`'s, and the sweep is `details-sweep`'s:
     //
-    // **Nine starts, not one.** A reach that worked from a single place in the ground is exactly the fault the right
+    // **Nine starts.** A reach that worked from a single place in the ground is exactly the fault the right
     // pane's values shipped with, and the middle is the one place that hides it. Each start
     // is judged on its own, over a board cleared first — a run that read the selection once at the end would report
     // the last try and call the other eight green.
@@ -398,7 +398,7 @@ Item {
                 }
             }
             // `ground=` is the run's own honesty: a panel whose log fills it has nowhere to sweep from, and a
-            // `reach=0/9` off one is a fixture that stopped saying anything rather than a hand that stopped working.
+            // `reach=0/9` off one is a fixture that stopped saying anything.
             Harness.report("commands_sweep reach=" + reach + "/" + tries
                               + " ground=" + page.commandsHasGround
                               + " rows=" + page.pageCommands.rowsHeld())

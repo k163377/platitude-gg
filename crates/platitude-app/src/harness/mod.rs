@@ -5,10 +5,10 @@
 //! **The `PGG_*` environment is read in this module and nowhere else in the
 //! crate.** That is what makes the harness a thing a build can be without:
 //! the app asks here what is driving, and a build without the `automation`
-//! feature answers "nothing" from an idle record ([`knobs`]) instead of
-//! from `std::env`. The QML half goes the same way — the verb files are a
-//! module of their own (`src/auto`, `platitude.auto`), embedded under the
-//! same feature, and nothing in `platitude.ui` names a type from it.
+//! feature answers "nothing" from an idle record ([`knobs`]). The QML half
+//! goes the same way — the verb files are a module of their own
+//! (`src/auto`, `platitude.auto`), embedded under the same feature, and
+//! `platitude.ui` names only its own types.
 //!
 //! A plain `cargo build --release` is the build without it. Every xtask
 //! that drives the app asks for the feature back (`crate::app_exe`), so
@@ -56,10 +56,10 @@ pub(crate) fn start_clock() {
 /// and nothing asks for them either, because the QML that names them is
 /// the module the same feature leaves out.
 ///
-/// `Harness` is where everything a run was told to do reaches QML. It is a
-/// type of its own rather than fields on `AppBackend` because that is what
-/// makes it disappear: `#[cfg]` does not reach inside `#[qslot]`, but a
-/// whole type behind the feature leaves no property, slot or name behind
+/// `Harness` is where everything a run was told to do reaches QML. It is
+/// a type of its own because that is what makes it disappear: `#[cfg]`
+/// does not reach inside `#[qslot]`, but a whole type behind the feature
+/// leaves no property, slot or name behind
 /// (`singleton`).
 #[cfg(feature = "automation")]
 pub(crate) fn install(app: &mut qtbridge::QApp) {

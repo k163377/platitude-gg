@@ -149,9 +149,9 @@ pub(super) fn tracked(
     }
 }
 
-/// One of each kind of pending change, in the order git reports them
-/// rather than the order the pane shows them: the entries git tracks
-/// sorted by name, and then the untracked ones sorted after all of them.
+/// One of each kind of pending change, in the order git reports them:
+/// the entries git tracks sorted by name, and then the untracked ones
+/// sorted after all of them.
 pub(super) fn pending() -> platitude_core::status::WorkTreeStatus {
     use platitude_core::status::StatusItem;
     platitude_core::status::WorkTreeStatus {

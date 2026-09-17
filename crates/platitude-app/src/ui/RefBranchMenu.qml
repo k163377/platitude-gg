@@ -3,12 +3,12 @@ import platitude
 import platitude.ui
 
 // Everything a branch's name answers for once it exists, behind the branch's own mark: the delete here, the delete over
-// there, and the pair at once (デザイン規約 §メニュー の入れ子). Starting a branch is not one of them — that is where the
-// reader carries on from, and it stands on the level above with the other moves.
+// there, and the pair at once (デザイン規約 §メニュー の入れ子). Starting a branch stands on the level above with
+// the other moves — that is where the reader carries on from.
 //
 // **One card, two entrances.** The chip on a graph row and the row itself are two ways at the same branch, and what
 // they offer has to be the same thing — so the card is a component, and it works out its own
-// answers rather than being handed them: `offerOn` freezes them as the menu opens, the way every other menu freezes
+// answers: `offerOn` freezes them as the menu opens, the way every other menu freezes
 // what it shows (デザイン規約 §メニュー).
 AppMenu {
     id: branchCard
@@ -54,8 +54,8 @@ AppMenu {
 
     /// What the page answers for: the delete git may still refuse opens a question there.
     ///
-    /// The row taken off the list ahead of git's answer is not one of them — that goes with the write, out of the
-    /// same slot, so this card never writes the page's state to say it pressed something
+    /// The row taken off the list ahead of git's answer goes with the write, out of the same slot, so this card
+    /// never writes the page's state to say it pressed something
     /// (`ops_delete`, デザイン規約 §消す操作は先に画面から消す).
     signal deleteRequested(string kind, string id, string name, string oidHex)
     /// Which remote branch this one is measured against — the page opens the question, because the bar it stands in
@@ -80,7 +80,7 @@ AppMenu {
         property string refName: ""
         property string refOid: ""
         property string remoteCounterpart: ""
-        /// That reading is standing on another commit, so the two rows that reach it say why instead of running.
+        /// That reading is standing on another commit, so the two rows that reach it say why.
         property bool remoteDrifted: false
         property string heldByWorktree: ""
         property bool canDelete: false
@@ -141,7 +141,7 @@ AppMenu {
         state.canSetUpstream = offers.includes("set-upstream")
         state.onCurrentBranch = offers.includes("current")
         // Whether the everyday delete would be refused, answered as the menu opens so the delete row wears `-D` from
-        // the start instead of only after a refused click (§左メニューの所作). Put to the graph's rows first — in hand
+        // the start (§左メニューの所作). Put to the graph's rows first — in hand
         // in the same frame for every branch the window draws, with git's own reference point worked out on that side
         // (`GraphModel.branchDeleteMerged`, 規約 §行が読む答えはどこから来るか) — and to git only for a tip or a
         // reference older than the window, whose answer lands as `branchDeleteAsked` / `branchDeleteMerged`. The chip
@@ -205,12 +205,12 @@ AppMenu {
     // merged, and where it pushes when nothing is marked all come off this one setting (デザイン規約
     // §ブランチが測られる相手を決める).
     //
-    // **No chip, and a `…`**: what runs is `branch --set-upstream-to=<答え>`, and the flag's value is not settled
+    // **Words and a `…`**: what runs is `branch --set-upstream-to=<答え>`, and the flag's value is not settled
     // until the question has been answered — so the row is no more 1:1 with a command than `Create branch here…` is
     // (§git 用語のコード表記). The spelling would not be the short one either: a menu row wears the long form, and
     // `branch --set-upstream-to` in the shared chip column would push every delete row's name across for a row that
-    // is not even a command yet. Above the deletes with a line between, since a table of things that take a name away
-    // is not where a row that only writes configuration belongs (§メニュー の入れ子).
+    // is not even a command yet. Above the deletes with a line between, since this row writes configuration where
+    // the table under it takes names away (§メニュー の入れ子).
     //
     // Only a local branch: a remote-tracking ref is the far side of somebody's setting and has none of its own.
     AppMenuItem {
@@ -245,14 +245,14 @@ AppMenu {
         code: shownRefused ? "branch -D"
             : branchRow ? "branch --delete"
             : "push --delete"
-        // The name is data, not sentence: never translated, and it does not bid for the menu's width
+        // The name is data: untranslated, and it leaves the menu's width to the other rows
         // (`growsForText`).
         text: state.refId
         growsForText: false
         note: shownRefused ? qsTr("not merged") : ""
         // On a branch the three delete forms are a fixed table — rows that cannot be chosen stay and grey out, the
-        // app-menu rule rather than the assembled-menu one (デザイン規約 §メニュー、by design): the current branch
-        // keeps its rows, saying why nothing here answers. The other kinds keep the assembled rule.
+        // app-menu rule (デザイン規約 §メニュー、by design): the current branch keeps its rows, saying why nothing
+        // here answers. The other kinds keep the assembled rule.
         offered: branchRow || (heldRow && state.canDelete)
         blockedReason: !branchRow || state.canDelete ? ""
                      : state.onCurrentBranch ? branchCard.deleteBlockedOnCurrent
@@ -282,8 +282,8 @@ AppMenu {
         text: state.remoteCounterpart
         growsForText: false
         // In the table only while the branch has a remote reading at all: a row for a target that does not exist keeps
-        // no seat. Grey is for "there is one, but not to press now" — busy, or standing on another commit — not for
-        // "no such thing" (デザイン規約 §左メニューの所作 の削除の表).
+        // no seat. Grey is for "there is one, but not to press now" — busy, or standing on another commit
+        // (デザイン規約 §左メニューの所作 の削除の表).
         offered: state.kind === "branch" && state.remoteCounterpart !== ""
         blockedReason: state.canDeleteRemote ? ""
                      : state.remoteDrifted ? Words.remoteOnAnotherCommit
@@ -295,8 +295,8 @@ AppMenu {
             branchCard.deleteRemoteNow(state.remoteCounterpart)
         }
     }
-    // A composite of two commands is no one command, so words rather than a chip (§git 用語のコード表記 の 1:1 規則). The local
-    // half runs first and a refusal stops the pair with nothing touched.
+    // A composite of two commands is no one command, so the row says it in words (§git 用語のコード表記 の 1:1 規則).
+    // The local half runs first and a refusal stops the pair, nothing touched.
     AppMenuItem {
         id: refBothDeleteItem
         /// **Whether the local half goes as `-D`, as the press under way was given it** (デザイン規約 §長押し).

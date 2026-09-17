@@ -43,8 +43,8 @@ Rectangle {
     /// The panel opens on its newest row, wherever it was raised from — the row that has just been added is the one
     /// somebody came here to read. The page raises it; where it is looking when it comes up is this panel's own
     /// answer. **Coming up is being built**: the page builds the panel into its seat as the log is raised and takes
-    /// it down as the log is shut (`RepoPage.commandsSeat`), so the panel is never on screen before it is completed
-    /// and never completed off it — a `visible` that moved would be a seat wired some other way.
+    /// it down as the log is shut (`RepoPage.commandsSeat`), so completion and coming on screen are one
+    /// event — a `visible` that moved would be a seat wired some other way.
     function cameUp() {
         pane.showLatest()
         pane.tellTheZone()
@@ -55,8 +55,8 @@ Rectangle {
     Component.onCompleted: pane.cameUp()
 
     /// The machine's offset from UTC, which is the one thing about the clock the model cannot work out for itself
-    /// (`CommandsModel.setZoneMinutes`). Said again every time the panel comes up rather than only when the page
-    /// starts (`RepoPage`'s model says it first), so a session carried across a change of offset stamps what arrives
+    /// (`CommandsModel.setZoneMinutes`). Said again every time the panel comes up (`RepoPage`'s model says it
+    /// first), so a session carried across a change of offset stamps what arrives
     /// afterwards with the new one.
     function tellTheZone() {
         pane.commandsModel.setZoneMinutes(new Date().getTimezoneOffset())
@@ -112,8 +112,8 @@ Rectangle {
         textPick.releaseText()
     }
     /// Automation: the same hand started on the ground under the last row — the one place inside this panel's own
-    /// frame where a press used to reach nothing (`PGG_AUTO_ACT=commands-sweep`). It goes in through the pixels rather
-    /// than through a row number, because the pixels are the whole of what changed.
+    /// frame where a press used to reach nothing (`PGG_AUTO_ACT=commands-sweep`). It goes in through the pixels,
+    /// because the pixels are the whole of what changed.
     function sweepGround(fx, fy) {
         return textPick.sweepFromGround(fx, fy)
     }
@@ -124,7 +124,7 @@ Rectangle {
     /// Automation: how many rows are wearing a rectangle of the selection, and whether every row that exists is
     /// (`PGG_AUTO_ACT=commands-select`).
     ///
-    /// **The model's `sel` is not this.** A row can hold its whole share of the selection and draw nothing — which
+    /// **Counted on the paint.** A row can hold its whole share of the selection and draw nothing — which
     /// is exactly what a wash asked of the row's layout does when it is asked at the wrong moment (measured: the
     /// runs were right, the rectangles were empty, and the run went green because the picture of an unwashed log
     /// and the picture of a log nobody dragged over are the same picture). So this counts the rectangles.
@@ -142,12 +142,12 @@ Rectangle {
         return "worn=" + (seen > 0 && worn === seen) + " rows=" + seen + " washed=" + worn
     }
 
-    // The mark, over everything this panel draws. A frame rather than a colour swapped into one it already had (which
-    // is what the right pane's box does): this panel has no frame of its own, and the split it stands in is the whole
+    // The mark, over everything this panel draws. A frame (the right pane's box recolours one it already had):
+    // this panel has no frame of its own, and the split it stands in is the whole
     // of what separates it from the pane above.
     //
     // **It reaches up over that separator.** Drawn inside the panel's own top edge the line comes out under the
-    // split's, and the two read as a hairline pair rather than as one box round one thing (measured).
+    // split's, and the two read as a hairline pair (measured).
     Rectangle {
         anchors.fill: parent
         anchors.topMargin: -Theme.splitterWidth
@@ -169,7 +169,7 @@ Rectangle {
             implicitHeight: Theme.headerHeight
             color: Theme.bgElevated
             BandRule { z: 1 }
-            // No inset of its own at the near end — the seat carries the pane's, so the mark and the name stand in the
+            // The seat carries the pane's inset at the near end, so the mark and the name stand in the
             // columns they stood in at the foot of the list.
             RowLayout {
                 anchors.fill: parent
@@ -215,8 +215,8 @@ Rectangle {
 
                 AppCheckBox {
                     text: qsTr("Background reads")
-                    // The panel's own band is shorter than a form row, so this box keeps the band's height rather
-                    // than the control height `AppCheckBox` opens at.
+                    // The panel's own band is shorter than a form row, so this box keeps the band's height
+                    // (`AppCheckBox` opens at the control height).
                     implicitHeight: Theme.iconLg
                     checked: pane.commandsModel.backgroundReads
                     // The reads a repository page makes on a timer are nobody's doing and would bury the rest, so they
@@ -243,13 +243,13 @@ Rectangle {
             Layout.fillHeight: true
             model: pane.commandsModel
             // Nothing above the first row: the band is already the edge, and a sliver of ground under it reads as the
-            // log hanging off its own header rather than as breathing room — 4 pixels of it stood between the band's
+            // log hanging off its own header — 4 pixels of it stood between the band's
             // rule and the first row, which a failure's lit ground and red edge draw for anyone to see (observed).
             // The graph keeps a top margin because it has no band over it (`GraphList`).
             bottomMargin: Theme.spaceXs
 
             /// Whether new rows pull the view along. Reading further up stops that until the end is reached again — the
-            /// same rule the graph follows about not moving the ground under a reader.
+            /// same rule the graph follows: the ground stays put under a reader.
             property bool follow: true
             onMovementEnded: list.follow = list.atYEnd
             onCountChanged: if (list.follow) list.positionViewAtEnd()
@@ -265,7 +265,7 @@ Rectangle {
                 return Math.max(minY, Math.min(y, maxY))
             }
 
-            // The one key this panel answers. `StandardKey` rather than a spelling of our own, so the platform's idea
+            // The one key this panel answers. `StandardKey`, so the platform's idea
             // of copy is what is matched — the same way the diff answers it (規約 §diff の中身をコピーする).
             Keys.onPressed: event => {
                 if (event.matches(StandardKey.Copy))
@@ -293,10 +293,10 @@ Rectangle {
     }
 
     // ---- the hand that picks the text ---------------------------------------------------------------------------
-    /// One column of the mono font the rows are drawn in, measured rather than assumed. **The rows draw nothing at
-    /// it**: where a column's characters fall is a question for that column's own layout (`lineRuler`), and this is
-    /// two spacings the row is built with — the space between `git` and what follows it, and the one between the two
-    /// words about how a command went (`CommandRowDelegate`).
+    /// One column of the mono font the rows are drawn in, measured. **It is the two spacings the
+    /// row is built with**: the space between `git` and what follows it, and the one between the two
+    /// words about how a command went (`CommandRowDelegate`). Where a column's characters fall is a
+    /// question for that column's own layout (`lineRuler`).
     readonly property real charW: charMeasure.implicitWidth / charMeasure.text.length
     Text {
         id: charMeasure
@@ -306,7 +306,7 @@ Rectangle {
         font.pixelSize: Theme.fontSm
     }
     /// Where a place in one of a row's three columns is drawn, and which place a point along it is over — asked of
-    /// the column itself, laid out. One for the panel and not one per row: the answer belongs to the column, so a
+    /// the column itself, laid out. One for the panel: the answer belongs to the column, so a
     /// ruler that has just been handed one answers about it in the same statement (`LineRuler`).
     LineRuler {
         id: lineRuler

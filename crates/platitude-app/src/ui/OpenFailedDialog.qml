@@ -5,16 +5,16 @@ import platitude.ui
 
 // The folder the picker handed over cannot be opened.
 //
-// A window of its own rather than the standing question's bar: there is nothing on screen for a bar to stand over — the
+// A window of its own: there is nothing on screen for a bar to stand over — the
 // folder never became a tab, and the picker it came from has closed. That puts it with the identity and remote forms
-// under デザイン規約 §可否・警告の出し場所, among the popups for what has nowhere else to go, rather than among the confirmations (this
+// under デザイン規約 §可否・警告の出し場所, among the popups for what has nowhere else to go (this
 // asks for nothing back; it says what happened and offers the way on).
 AppDialog {
     id: openFailedDialog
 
     /// What was picked, and what git made of it: `plain` (no repository here or in any folder above), `bare` (one with
-    /// no work tree), or `other` (git had trouble of its own — `message` is its answer). Whichever it was, the folder
-    /// is not becoming a tab: somebody in the middle of choosing one goes back to the choosing.
+    /// no work tree), or `other` (git had trouble of its own — `message` is its answer). Whichever it was, somebody
+    /// in the middle of choosing a folder goes back to the choosing.
     property string path: ""
     property string kind: ""
     property string message: ""
@@ -42,7 +42,7 @@ AppDialog {
     // keystroke.
     onOpened: actions.acceptButton.forceActiveFocus()
 
-    /// This one is a block of words rather than a form, so every gap in it — the padding band included — is a place a
+    /// This one is a block of words, so every gap in it — the padding band included — is a place a
     /// selection can start (規約 §右のペインの字は掴める). **It is also the one failure with no way out to the log**: the
     /// tab's screen carries the panel's own row at its foot, and a modal window carries nothing, so what is written
     /// here is the whole of what there is to take away.
@@ -56,19 +56,19 @@ AppDialog {
             Layout.fillWidth: true
             pixelSize: Theme.fontXl
             weight: Font.DemiBold
-            // One line, and no second one explaining it (§長さ). What git says about parent directories is already
+            // One line (§長さ). What git says about parent directories is already
             // carried by "not a repository" — the folder underneath says which. Shared with the tab's failure screen,
             // which says the same three things (Words.openFailure).
             text: Words.openFailure(openFailedDialog.kind)
         }
         // The picker is gone by now, so the folder it landed on has nothing else left to name it.
         //
-        // Wrapped rather than cut in the middle: a field has no `elide` to cut with, and a path put through one would
+        // Wrapped: a field has no `elide` to cut with, and a path put through one would
         // hand the reader a `…` when they dragged over it. There is room to wrap here and nothing beside the line to
         // carry what a cut would drop, so the whole of it is on screen and the whole of it comes away.
         //
-        // In the same place on all three, above git's line rather than under it: which folder this is about is the same
-        // question every time, and it should not have to be looked for.
+        // In the same place on all three, above git's line: which folder this is about is the same
+        // question every time, and the eye finds it in one place.
         CardText {
             Layout.fillWidth: true
             color: Theme.textSecondary
@@ -87,7 +87,7 @@ AppDialog {
             id: actions
             cancelText: Words.cancel
             acceptKind: "folder"
-            // `again`, not `another`: on two of the three the folder was the wrong one and the heading has already said
+            // `again`: on two of the three the folder was the wrong one and the heading has already said
             // so, and on the third nobody knows that it was — a button that says "a different one" would be claiming
             // what the check could not answer. What it promises in all three is the same, and it is the picker coming
             // back.

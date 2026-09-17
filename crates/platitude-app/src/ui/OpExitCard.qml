@@ -6,8 +6,8 @@ import platitude.ui
 // The way out of a stopped operation, built into the working-tree pane under the button that finishes things.
 //
 // The commit button's seat is already "conclude this": during a merge `--continue` is literally the commit. Standing
-// rather than dropped from a click — while an operation is stopped this is the pane's business, and the file list moves
-// down to make room for it rather than the rows covering the list.
+// in the pane — while an operation is stopped this is the pane's business, and the file list moves
+// down to make room for it.
 Rectangle {
     id: opExitCard
 
@@ -96,7 +96,7 @@ Rectangle {
                 font.weight: Font.DemiBold
                 color: Theme.warning
             }
-            // Bisect, when it is running alongside. The mark between the two names is drawn, not typed (規約 §余白).
+            // Bisect, when it is running alongside. The mark between the two names is drawn (規約 §余白).
             DotMark {
                 visible: opExitCard.workTree.opAlso !== ""
                 tint: Theme.warning
@@ -151,7 +151,7 @@ Rectangle {
                 color: Theme.textSecondary
             }
         }
-        // **A merge does not get one.** `--continue` there *is* the commit — same tree, same two parents, same
+        // **A merge uses the button.** `--continue` there *is* the commit — same tree, same two parents, same
         // message, same hooks as pressing the button above this card (measured, 2.55) — so the card would be offering a
         // second door onto the seat it is standing under, and the one with no message box attached. Everything else
         // here steps, and continuing a step is not a commit anybody is composing (デザイン規約 §進行中の操作から出る).
@@ -211,13 +211,13 @@ Rectangle {
             holdMs: Metrics.holdMs
             onPicked: opExitCard.repoTab.resolveOperation("abort")
         }
-        // **A merge's only way out is a button, not a row.** A column of rows is what the other three are — the hand
+        // **A merge's only way out is a button.** A column of rows is what the other three are — the hand
         // that learned the reset submenu reads them down their first letters, and the chip column is what lines those
         // letters up. One row has no column and nothing to line up with (デザイン規約 §進行中の操作から出る).
         //
         // **The shape is the commit button's, in red**: a frame of its own, the phrase centred inside it, the hold
         // filling the frame it drew. The two then read as the pair they are — the one that finishes the merge and the
-        // one that puts it back — and neither is a box drawn inside another box.
+        // one that puts it back — and each is a box of its own.
         //
         // **The word is red because the gesture is a hold.** Colour on a word is this application's mark of a press
         // that has to be held (§長押し), and taking the hold away would take the colour with it.
@@ -229,11 +229,11 @@ Rectangle {
             tone: Theme.danger
             frameColor: Theme.danger
             holdMs: Metrics.holdMs
-            // The command in git's own spelling, whole rather than as a bare flag: the chip is the row's only name
+            // The command in git's own spelling, whole: the chip is the row's only name
             // now, and `merge --abort` is what a terminal would be told (§git 用語のコード表記 — the same shape the
             // commit button's `commit --amend` takes).
             phraseHead: "merge --abort"
-            // **What happens, not what is lost in general.** The hold's mark already says something goes; the words
+            // **What happens.** The hold's mark already says something goes; the words
             // say where it lands, and that landing is the whole of the answer — nothing done since the merge began
             // survives it.
             text: qsTr("Back to before it started")

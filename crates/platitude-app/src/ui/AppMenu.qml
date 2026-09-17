@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// Context-menu shell: AppDialog's elevated card at menu scale, so a menu reads as a surface lifted off the graph rather
-// than a hole in it (デザイン規約: メニューは bgElevated + 枠).
+// Context-menu shell: AppDialog's elevated card at menu scale, so a menu reads as a surface lifted off the graph
+// (デザイン規約: メニューは bgElevated + 枠).
 //
 // The width comes from the rows. Fusion's own menu background is 200px wide whatever it holds, which silently clips
 // every longer row; here the only limit is the window the menu opens over, and a row that reaches it elides and says
@@ -35,14 +35,13 @@ Menu {
     property bool applies: true
 
     /// Why every row of this menu is out right now, in one line — and, by being non-empty, that they are. The rows read
-    /// it off the menu the way they read `holdIndent`, so a whole card is held with one line rather than each row
-    /// carrying a copy (`AppMenuItem.blockedWhy`).
+    /// it off the menu the way they read `holdIndent`, so a whole card is held with one line
+    /// (`AppMenuItem.blockedWhy`).
     ///
-    /// **The rows stay and grey rather than going** — the app-menu rule rather than the assembled-menu one
-    /// (デザイン規約 §メニュー の例外: 「今できない」行は消えず無効になる). What is out here is not the row's own answer about the ref
-    /// it names but the window's answer about right now, and a row that vanished for it would read as a menu that
-    /// never had it. **A card left standing is not held with them**: it is the rows inside it that say why, and a
-    /// greyed title row would offer nothing to open and no line to read (`AppMenuItem.menuHeldReason`).
+    /// **The rows stay and grey** — the app-menu rule (デザイン規約 §メニュー の例外: 「今できない」行は無効で残る). What is out here is the
+    /// window's answer about right now, and a row that vanished for it would read as a menu that never had it. **A
+    /// card left standing keeps its title row live**: it is the rows inside it that say why, and a greyed title row
+    /// would offer nothing to open and no line to read (`AppMenuItem.menuHeldReason`).
     property string heldReason: ""
 
     /// How many rows this menu is actually offering. A menu is assembled for the thing that was clicked and shows only
@@ -52,7 +51,7 @@ Menu {
         let n = 0
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
-            // A divider is not a row: it is what stands between them, and it decides for itself (AppMenuSeparator).
+            // A divider is what stands between rows, and it decides for itself (AppMenuSeparator).
             if (row && row.offered && row.codeColSeat !== undefined)
                 n++
         }
@@ -96,8 +95,8 @@ Menu {
     // out, the widest command would end past where the other rows' words begin (`cherry-pick` past the head of "into
     // main") and the column would break (デザイン規約 §git 用語のコード表記).
     //
-    // Settled as the menu opens rather than bound: a row that changes its chip while the card stands — the delete row
-    // morphing to `branch -D` — must not drag every other row's words with it. What the menu shows is decided as it
+    // Settled as the menu opens: a row that changes its chip while the card stands — the delete row
+    // morphing to `branch -D` — leaves every other row's words where they are. What the menu shows is decided as it
     // opens and left alone (デザイン規約 §メニュー); the forced spelling is narrower than the plain one, so it sits inside the
     // column it inherited.
     property real codeColW: 0
@@ -116,9 +115,9 @@ Menu {
     // first letters (デザイン規約 §長押し). Zero where nothing here is held, so the everyday menus keep their words hard against
     // the padding.
     //
-    // Carried as extra left padding rather than as a seat in the row's layout: a seat would have to pay the layout's
-    // own gap on top of its width, and that gap is shared with the code chip — the words would end up further from the
-    // mark than they are from anything else in the row. This is the whole distance the words move, and the mark is
+    // Carried as extra left padding: a seat would have to pay the layout's own gap on top of its width, and that gap
+    // is shared with the code chip — the words would end up further from the mark than they are from anything else in
+    // the row. This is the whole distance the words move, and the mark is
     // placed inside it.
     readonly property real holdIndent: {
         for (let i = 0; i < appMenu.count; i++) {
@@ -135,24 +134,24 @@ Menu {
     // Fusion measures a menu by its background (a flat 200) and by its list view (which has no implicit width at all),
     // so the rows never get a say. Here the widest row decides.
     //
-    // **Rounded up, and the rounding is the whole point.** A row's width is measured rather than chosen — a mono chip
+    // **Rounded up, and the rounding is the whole point.** A row's width is measured — a mono chip
     // and a sentence in the UI family both land on fractions wherever the platform's metrics do — so the widest row
     // routinely asks for something like 249.27. Rounded to a whole pixel the other way, the menu hands that row 249:
     // a quarter of a pixel short, which puts its `RowLayout` over budget, and a layout over budget takes the shortfall
     // out of the one item that can give — the words, which then elide. **The row that set the width is the one row
-    // that must never be the one that elides** (デザイン規約 §メニュー: 幅は最も広い行に合わせる).
+    // drawn whole** (デザイン規約 §メニュー: 幅は最も広い行に合わせる).
     readonly property int widestRow: {
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
-            // A row that is not being offered does not get to set the width either. (A divider has no `offered` and no
+            // Only an offered row sets the width. (A divider has no `offered` and no
             // width of its own, so it never had a say here.)
             if (row && row.offered)
                 widest = Math.max(widest, row.implicitWidth)
         }
         return Math.ceil(widest)
     }
-    // ...but never narrower than `menuMinW`. A held row reports itself by filling from the left, and on a row only as
+    // ...and at least `menuMinW` wide. A held row reports itself by filling from the left, and on a row only as
     // wide as its own words there is too little travel to read as progress (デザイン規約 §進行中・長押しの定数).
     implicitWidth: Math.max(Metrics.menuMinW, appMenu.widestRow + appMenu.leftPadding + appMenu.rightPadding)
 

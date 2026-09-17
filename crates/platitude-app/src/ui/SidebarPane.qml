@@ -26,18 +26,18 @@ Rectangle {
     ///
     /// **This is the plan's freeze, and it is meant to be read as one.**
     /// While a rebase is being composed the only way into a write is the
-    /// run button, and the pane is out for as long as the mode lasts
-    /// rather than for as long as a command takes — so it says so with
-    /// the disabled step over the whole of itself (デザイン規約 §フル
-    /// interactive rebase). A write that merely replays behind the screen
-    /// is the other thing entirely, and holds the doors one at a time
+    /// run button, and the pane is out for as long as the mode lasts — so
+    /// it says so with the disabled step over the whole of itself
+    /// (デザイン規約 §フル interactive rebase). A write that merely
+    /// replays behind the screen is the other thing entirely, and holds
+    /// the doors one at a time
     /// (`doorsHeld`).
     ///
-    /// **The `>_` band at the foot is not held with them.** It is the one
+    /// **The `>_` band at the foot stands free.** It is the one
     /// place that answers "what is git doing", which is exactly the
     /// question a reader has while a replay they cannot interrupt is
-    /// running — so the hold is put on the list and the rail rather than
-    /// on the pane, and the band goes on standing at full weight. Dimming
+    /// running — so the hold is put on the list and the rail, and the
+    /// band goes on standing at full weight. Dimming
     /// the pane whole would also have to be undone here: a band that is
     /// pressable while painted like a disabled one is a lie about itself.
     property bool frozen: false
@@ -49,7 +49,7 @@ Rectangle {
     /// the `+` that writes a remote down, and every write row of the menus
     /// the rows raise.
     ///
-    /// **Nothing dims for this one, and no row leaves.** The lock comes
+    /// **The pane keeps its ink and its rows.** The lock comes
     /// off the moment git answers, so the pane has to be the same pane on
     /// both sides of it; and everything it is read with — choosing a row
     /// and jumping to it, scrolling, the filter, folding a section, hover
@@ -86,11 +86,11 @@ Rectangle {
     /// down. Raised from the open list and from the section the folded
     /// rail opens alike — one band, wherever it is standing.
     signal addRemoteRequested()
-    /// Right-click on the row a remote itself stands on: what to do with that remote, rather than with a ref.
+    /// Right-click on the row a remote itself stands on: what to do with that remote.
     signal remoteMenuRequested(string name)
 
     // ---- the row gestures ------------------------------------------
-    // Held beside the lists rather than in one (`SidebarRowGestures`).
+    // Held beside the lists (`SidebarRowGestures`).
     // The pane keeps the names its own callers already reach for: the
     // page opens the box from the row menu, and the smoke hooks read
     // which row has one.
@@ -160,11 +160,11 @@ Rectangle {
     /// headless run writes the one property a real hover writes.
     property bool headPinPointed: false
 
-    // The width the list goes back to. Read off the pane as it folds
-    // rather than fixed, so one that has been widened comes back the
+    // The width the list goes back to. Read off the pane as it folds,
+    // so one that has been widened comes back the
     // width it was left (規約 §レイアウト初期値 is only where it starts).
     property real openWidth: 260
-    /// Narrower than this is not a width anybody dragged to.
+    /// The narrowest width a drag can leave.
     readonly property int minOpenWidth: 180
     SplitView.preferredWidth: sidebar.openWidth
     SplitView.minimumWidth: sidebar.minOpenWidth
@@ -172,7 +172,7 @@ Rectangle {
 
     // Folding is a size, and a size is the splitter's business: pinning
     // both ends to the rail's width is what takes the drag away while it
-    // is folded. Assigned rather than bound — a drag writes the same
+    // is folded. Assigned — a drag writes the same
     // attached property, and a binding here would be gone after the first
     // one (leaving the fold with nothing to set).
     onCollapsedChanged: sidebar.applyFold()
@@ -216,8 +216,8 @@ Rectangle {
     property bool expStashes: true
     property bool expTags: true
 
-    /// What a click on one of the column's header bands flips (`NavSections.sectionToggled`). Held beside the flags
-    /// rather than in the column, so the pane stays the one writer of its own fold state.
+    /// What a click on one of the column's header bands flips (`NavSections.sectionToggled`). Held beside the flags,
+    /// so the pane stays the one writer of its own fold state.
     function toggleSection(kind) {
         if (kind === "branch")
             sidebar.expBranches = !sidebar.expBranches

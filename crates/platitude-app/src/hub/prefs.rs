@@ -4,8 +4,8 @@
 use super::*;
 
 /// Addresses that have a picture, and where it is. Held by whoever is
-/// building rows so the hub is borrowed once for a whole pass rather than
-/// once per commit — the graph draws two thousand of those at a time.
+/// building rows so the hub is borrowed once for a whole pass — the
+/// graph draws two thousand commits at a time.
 #[derive(Debug, Clone, Default)]
 pub struct AvatarUrls {
     by_email: HashMap<String, String>,
@@ -43,7 +43,7 @@ impl Hub {
     }
 
     /// Records the auto-fetch interval and puts it in force on every open
-    /// tab. Written out at once rather than on the state timer.
+    /// tab. Written out at once.
     ///
     /// Takes a number that has already been through
     /// `session::auto_fetch_minutes`, which is where the ceiling lives.
@@ -102,12 +102,12 @@ impl Hub {
     /// Records which git this computer runs. Empty is whichever one
     /// `PATH` resolves.
     ///
-    /// **Written down, not put in force.** The executor every session
-    /// spawns through was settled at install (`resolve_git`), and a run
-    /// that swapped it mid-flight would leave the tabs already open on
-    /// the old binary and the next ones on the new — one repository, two
-    /// gits, and no way to tell from the window which of them answered.
-    /// The next start reads this file and is on one binary throughout.
+    /// **Written down.** The executor every session spawns through was
+    /// settled at install (`resolve_git`), and a run that swapped it
+    /// mid-flight would leave the tabs already open on the old binary and
+    /// the next ones on the new — one repository, two gits, and no way to
+    /// tell from the window which of them answered. The next start reads
+    /// this file and is on one binary throughout.
     pub fn set_git_path(&mut self, path: String) {
         if self.settings.defaults.git_path == path {
             return;
@@ -136,7 +136,7 @@ impl Hub {
     }
 
     /// Every assignment resolved to a URL in one go, so a pass over the
-    /// graph asks the hub once instead of once per row.
+    /// graph asks the hub once for all of its rows.
     pub fn avatar_urls(&self) -> AvatarUrls {
         let Some(dir) = self.store.avatars_dir() else {
             return AvatarUrls::default();

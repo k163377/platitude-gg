@@ -1,5 +1,5 @@
-//! Automation-only clock and frame observations. No wall-clock subtraction
-//! between QML, Rust, and the parent process.
+//! Automation-only clock and frame observations. Every reading is taken
+//! against the one app clock.
 
 use std::sync::OnceLock;
 use std::time::Instant;
@@ -31,7 +31,7 @@ pub struct PerfProbe {
 
 impl Default for PerfProbe {
     /// Built out of what is driving the run, which is read in one place
-    /// (`harness::knobs`) rather than looked up here.
+    /// (`harness::knobs`).
     fn default() -> Self {
         let knobs = super::knobs();
         Self {
@@ -150,8 +150,8 @@ impl PerfProbe {
             return;
         };
         let elapsed = self.clock_ms() - start;
-        // No log or file IO in the per-frame callback. Detailed traces are
-        // diagnostic runs: the flush can affect the final frame and memory.
+        // Written here, past the last frame: no log or file IO in the per-frame
+        // callback; the flush can affect the final frame and memory.
         if self.trace_frames {
             let mut previous = start;
             for (index, &clock_ms) in self.frames.iter().enumerate() {

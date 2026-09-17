@@ -41,9 +41,9 @@ impl AppBackend {
     /// this run is already on (`version::probe` builds its own executor).
     ///
     /// The screen runs this as it opens and again whenever the box is
-    /// finished with, so a path is never shown without an answer beside
-    /// it — and a path that has been fixed on disk since it was typed
-    /// answers differently the next time the screen is opened.
+    /// finished with, so every path is shown with an answer beside it —
+    /// and a path that has been fixed on disk since it was typed answers
+    /// differently the next time the screen is opened.
     pub(super) fn begin_git_path_check(&mut self, path: String) {
         self.git_path_state = "checking".into();
         self.git_path_version.clear();
@@ -128,18 +128,18 @@ impl AppBackend {
         }
         self.identity_busy = true;
         self.identity_error = String::new();
-        // The marks describe the save that is starting, not the last one.
+        // The marks describe the save that is starting.
         self.identity_name_saved = false;
         self.identity_email_saved = false;
         self.identity_unsaved = false;
         self.identity_changed();
         let feed = Arc::clone(&self.check_feed);
-        // Held by the hub rather than spawned bare: the screen can go and
-        // the window cannot close over a `git config` half way through
-        // its pair (`hub::saves`).
+        // Held by the hub: the screen can go and the window cannot close
+        // over a `git config` half way through its pair
+        // (`hub::saves`).
         let spawned = Hub::with(|hub| {
-            // On the save's handle, not the reads': a `git config` is a
-            // local write, waited out rather than killed at a budget
+            // On the save's handle: a `git config` is a local write, and
+            // a local write is waited out to its end
             // (`Hub::save_executor`).
             let executor = hub.save_executor();
             hub.spawn_save(async move {
@@ -190,7 +190,7 @@ impl AppBackend {
                     self.read_identity(name, email);
                 }
                 AppMsg::IdentityUnknown { message } => {
-                    // Not the same as unset: git could not answer, so the
+                    // A state of its own: git could not answer, so the
                     // setup screen stays out of the way.
                     tracing::warn!(error = %message, "could not read the author identity");
                     self.identity_state = "error".into();
@@ -225,11 +225,11 @@ impl AppBackend {
                     // path that answers is one the window can come back
                     // on; one that does not would come back on the git
                     // from `PATH` (`Hub::resolve_git`), and the reader
-                    // would find that out after losing the window rather
-                    // than in the line under the box. An old git answers
-                    // and so is offered — the rules make only a missing
-                    // git a gate (規約 §git が無い時・古い時), and the
-                    // band's badge says the rest.
+                    // would find that out only after losing the
+                    // window. An old git answers and so is offered — the
+                    // rules make only a missing git a gate
+                    // (規約 §git が無い時・古い時), and the band's badge
+                    // says the rest.
                     self.settle_restart_offer();
                 }
                 AppMsg::IdentitySaved(written) => {

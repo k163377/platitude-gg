@@ -8,11 +8,11 @@ import platitude.ui
 // The refs a graph row has, unstacked: every one on a row of its own — branches first, then the tags the chip had no
 // room for. The branches are what can be moved to; the tags are read here and nowhere else.
 //
-// **It opens over the chip, not under it** (規約 §グラフ行のダブルクリック): the owner lands the first row on the chip's own
-// seat, so the name the chip was showing is not written out a second time, and the sheets behind it go with it — the
-// stack is what this card stands in for, so the row it stands on stops drawing one. What is left reads as the chip's
-// own frame widening into the graph, with the rest of the names stacked under it. **Always that way** — see the owner
-// on why the side is not chosen.
+// **It opens over the chip** (規約 §グラフ行のダブルクリック): the owner lands the first row on the chip's own seat, so
+// the name the chip was showing is not written out a second time, and the sheets behind it go with it — the stack is
+// what this card stands in for, so the row it stands on stops drawing one. What is left reads as the chip's own
+// frame widening into the graph, with the rest of the names stacked under it. **Always that way** — see the owner
+// on why the side is fixed.
 //
 // **The rows scroll, and the card stops at the page.** A commit can wear more names than any window can seat at once
 // (`JetBrains/kotlin` deepest: 42, and a 900px page takes 36), and what a card taller than the page loses is the only
@@ -20,9 +20,9 @@ import platitude.ui
 // thing a `Column` gave it for free, which is knowing how wide its widest row is; what it is measured over instead is
 // the rows the page can seat (`layOutRows`).
 //
-// Owned by the page, not by the delegate that raised it — delegates are recycled out from under an open popup, which is
-// why the context menus live there too. It is a popup rather than an item in the row for the same reason a menu is:
-// anything declared inside the list is clipped by it and painted under the row below.
+// Owned by the page — delegates are recycled out from under an open popup, which is why the context menus live there
+// too. It is a popup for the same reason a menu is: anything declared inside the list is clipped by it and painted
+// under the row below.
 AppCard {
     id: refList
 
@@ -32,7 +32,7 @@ AppCard {
     property string currentBranch: ""
     /// One was double-clicked: that is where the reader is going. The whole record, so its kind travels with it.
     ///
-    /// **A single click does not move.** The card lands on the chip's own seat and opens on a rest, so a hand that
+    /// **A single click stays put.** The card lands on the chip's own seat and opens on a rest, so a hand that
     /// stopped over a branch has one under it a beat later — with a click to go, the click a reader aims at the chip
     /// switches the working tree instead. These rows answer a click the
     /// way every other ref row in the app does (デザイン規約 §左メニューの所作: 行き先はダブルクリック、名前は間を空けた 2 回目).
@@ -46,10 +46,10 @@ AppCard {
     signal menuAsked(string record)
 
     /// What a row has to divide between the chip and the reading's remote. **Handed over by the owner, measured from
-    /// where this opens** (規約 §hover のツールチップ「hover で開いたものの幅は、開く位置から測る」) — the pane's own width is not it: a card
-    /// that starts partway across the page has only what is left beyond that point, and one sized to the pane is placed
-    /// inside the window by `Popup` without ever being narrowed, so it ends up flat against an edge with its anchor
-    /// nowhere near the chip.
+    /// where this opens** (規約 §hover のツールチップ「hover で開いたものの幅は、開く位置から測る」) — a card that starts partway
+    /// across the page has only what is left beyond that point, and one sized to the pane is placed inside the window
+    /// by `Popup` without ever being narrowed, so it ends up flat against an edge with its anchor nowhere near the
+    /// chip.
     ///
     /// Both strings on a row are ref components and can run to the same wall (250 bytes, measured), so a row that just
     /// added them together grew until it left the window: a wall-length tag beside a 90-byte remote already reached
@@ -57,13 +57,13 @@ AppCard {
     property real chipRoom: Metrics.labelColW
 
     /// How tall the page can let this card stand — handed over by the owner, and the whole of what the list scrolls
-    /// inside. **A card is never taller than this.** One that ran past the page put its lower rows where nothing could
+    /// inside. **This is the card's ceiling.** One that ran past the page put its lower rows where nothing could
     /// reach them: `JetBrains/kotlin` wears 42 refs on its deepest commit and a 900px page seats 36, so the chip said
     /// `+41` and then showed 35 of them.
     property real listRoom: 0
 
     /// The card's own size once the rows have been laid out, for an owner placing it against the chip. Read off the
-    /// rows rather than off `width` / `height`, which a `Popup` only settles when it is shown.
+    /// rows, since `width` / `height` are only settled by a `Popup` when it is shown.
     readonly property real cardWidth: Math.max(refList.minRowWidth, rows.rowsWidth + 2 * refList.padding)
     readonly property real cardHeight:
         refList.measuring ? refList.listRoom
@@ -87,21 +87,21 @@ AppCard {
     property string rowOid: ""
     /// The narrowest this card may come out — the chip it is covering, handed over by the owner.
     ///
-    /// **The card is never narrower than what it stands on.** Its rows are measured to their own names, and a card
+    /// **The card is at least as wide as what it stands on.** Its rows are measured to their own names, and a card
     /// sized only to those can come out narrower than the chip it is covering and leave a sliver of the frame it is
     /// replacing showing past its edge (measured at two pixels).
     property real minRowWidth: 0
 
-    // Sized here rather than left to the content: a recycling list has no implicit height of its own to hand a popup.
+    // Sized here: a recycling list has no implicit height of its own to hand a popup.
     width: refList.cardWidth
     height: refList.cardHeight
     // **The rows run to the inside of the frame.** What a row wears while the pointer is on it is that row's own
     // target painted whole, the way the toolbar's cells wear theirs (デザイン規約 §当たり判定 —「重ね色の方はセル全体を塗る
     // = 的は隣と同じ」). The air around a chip is the row's own and stays there (see the rows), so nothing is left for
-    // the card to hold. **Not the menu's `spaceXs`**: that band is what keeps a highlighted first or last row clear of
-    // a rounded corner (`AppMenu`), and this card answers that with its corner instead.
+    // the card to hold. **A border's worth**: the menu's `spaceXs` band keeps a highlighted first or last row clear
+    // of a rounded corner (`AppMenu`), and this card answers that with its corner instead.
     padding: Theme.borderWidth
-    // The chip's own corner rather than the menu's. This card is the chip's frame widening into the graph
+    // The chip's own corner. This card is the chip's frame widening into the graph
     // (デザイン規約 §グラフ行のダブルクリック) and its rows reach that frame, so a corner rounder than a row's would be a
     // curve the wash has to be cut by.
     faceRadius: Theme.radiusSm
@@ -142,7 +142,7 @@ AppCard {
         return true
     }
     /// The right-click on one of these rows, as the row answers one: the graph row's own menu, aimed at this name
-    /// instead of the one the chip draws (デザイン規約 §グラフ行の右クリック).
+    /// (デザイン規約 §グラフ行の右クリック).
     function menuRow(i) {
         const row = refList.rowAt(i)
         if (!row)
@@ -152,7 +152,7 @@ AppCard {
     }
     /// The pointer coming to rest on one of these rows, and what that row is wearing because of it — hover cannot be
     /// injected (verify-ui §hover の絵の撮り方), so a run writes the row's own `pointedAt` and reads the wash back off
-    /// the row rather than off a copy of what the row would have decided (PGG_AUTO_ACT=ref-list-lit).
+    /// the row itself (PGG_AUTO_ACT=ref-list-lit).
     function pointRow(i) {
         const row = refList.rowAt(i)
         if (!row)
@@ -162,7 +162,7 @@ AppCard {
     }
     /// A held click put in at one of these rows — the choice moving the way the graph's row moves it — an
     /// automation-only exposure like `menuRow`: the press goes in at this row's own handler, which hands it to the
-    /// graph's, rather than at a copy of what either would decide.
+    /// graph's.
     function chooseRow(i, modifiers) {
         const row = refList.rowAt(i)
         if (!row)
@@ -229,7 +229,7 @@ AppCard {
         }
         rows.rowsHeight = stacked + Math.max(0, refList.records.length - seen) * Theme.rowHeight
         // In that order: whether the bar comes out is what the far side of a row is spaced by, and that is part of
-        // the width (規約 §QML 実装ルール のバーの選び方 — a trough is the bar's, not the row's).
+        // the width (規約 §QML 実装ルール のバーの選び方 — a trough is the bar's).
         rows.rightInset = rows.rowsHeight + 2 * refList.padding > refList.listRoom
                             ? Theme.navBarGutter : Theme.spaceXs
         rows.rowsWidth = widest + rows.rightInset
@@ -247,9 +247,9 @@ AppCard {
         /// row is then laid out to (their highlights have to line up, and so do the chips now that they can stand
         /// flush against either edge), and what they stack up to.
         ///
-        /// **Held rather than derived, because the rows a recycling list has are not the rows it holds.** Left as a
-        /// binding these would be read off whatever the list had built at the time, and the card would breathe as the
-        /// reader scrolled.
+        /// **Held, because the rows a recycling list has are not the rows it holds.** Left as a binding these would
+        /// be read off whatever the list had built at the time, and the card would breathe as the reader
+        /// scrolled.
         property real rowsWidth: 0
         property real rowsHeight: 0
         /// What a row keeps between its far end and the card's frame, taken with the width above (a bar that comes out
@@ -266,18 +266,18 @@ AppCard {
             id: rowsList
             anchors.fill: parent
             model: refList.records
-            // The panels' slab rather than the style's floating thumb (above). Its idle step is counted from the
-            // ground it stands on, and this card's ground is `bgElevated` — the same one the settings screen hands
-            // this colour in for (規約 §ペインのスクロールバー).
+            // The panels' slab (above). Its idle step is counted from the ground it stands on, and this card's
+            // ground is `bgElevated` — the same one the settings screen hands this colour in for
+            // (規約 §ペインのスクロールバー).
             verticalBar: PaneScrollBar {
                 idleColor: Theme.borderSubtle
             }
             delegate: Rectangle {
                 id: refRow
                 required property string modelData
-                // The row now holds a different ref: whatever was resting on the one before it is not resting on this.
-                // A recycled delegate is the same object with new data (`AppListView.reuseItems`), and the wash is
-                // written rather than derived, so nothing else would take it off.
+                // The row now holds a different ref: whatever was resting on the one before it is not resting on
+                // this. A recycled delegate is the same object with new data (`AppListView.reuseItems`), and the
+                // wash is written, so nothing else would take it off.
                 onModelDataChanged: refRow.pointedAt = false
                 /// The pointer resting on this row, for the runs that photograph the wash — hover cannot be injected
                 /// (verify-ui §hover の絵の撮り方), and the same property a real pointer writes is the only place a run
@@ -289,9 +289,9 @@ AppCard {
                 /// as one that sometimes stops working. Where a row leads is said by the colour of its name, as it is
                 /// in the sidebar, whose rows light the same way.
                 readonly property bool lit: rowHover.hovered || refRow.pointedAt
-                // The branch the working tree already stands on is not a place to go, but it is not unavailable either
-                // — it is where the reader is, and it says so in the colour the sidebar says it in (§ref の種別). Only the
-                // move comes off. A tag leads nowhere for its own reason (§タグでは detach しない) and keeps its colour too.
+                // The branch the working tree already stands on is where the reader is, and it says so in the colour
+                // the sidebar says it in (§ref の種別). Only the move comes off. A tag leads nowhere for its own
+                // reason (§タグのダブルクリックは入力欄へ) and keeps its colour too.
                 readonly property bool current:
                     refRow.modelData[0] === "L"
                     && GitFacts.recordName(refRow.modelData) === refList.currentBranch
@@ -300,7 +300,7 @@ AppCard {
                 // working copy has out is unavailable for the other reason there is — git refuses the move outright
                 // (§無効 is for what is actually unavailable, and this one is).
                 //
-                // **None of it is said in the chip's colour here.** Two of the three already say it in their own
+                // **The chip's colour is left alone here.** Two of the three already say it in their own
                 // record — a dulled frame and the `tree` mark, wherever they are drawn — and the detached HEAD's
                 // colour is a state rather than a kind: muting that one here would make the same marker amber on the
                 // row and grey in the card it unfolds into. What this answers is the move and the menu, below.
@@ -323,9 +323,9 @@ AppCard {
                 /// has a width.** The measuring pass is where the card decides how wide to be, so the rows it reads
                 /// there ask for everything the page leaves them (`refList.chipRoom`) — but a row built after it, one
                 /// below the fold that a scroll brings up, was in no reading at all, and a chip still asking for the
-                /// page is drawn wider than the card and **cut by its frame instead of wrapped inside it** (observed
-                /// on a card of forty-three names, scrolled to the long one under them). Held to the card, the name
-                /// wraps, which is what this card does with a name too long for its room.
+                /// page is drawn wider than the card and **cut by its frame** (observed on a card of forty-three
+                /// names, scrolled to the long one under them). Held to the card, the name wraps, which is what this
+                /// card does with a name too long for its room.
                 readonly property real chipRoom: {
                     const page = refList.chipRoom - refRow.whoseRoom
                     if (refList.measuring)
@@ -357,25 +357,25 @@ AppCard {
                     // The same wash the row's own chip wears while a second click waits out its window — this card is
                     // that chip, so the mark is on whichever of the two the reader is looking at (規約 §グラフ行のダブルクリック).
                     waiting: refList.rowClicks ? refList.rowClicks.rowRenameArmed(refRow.modelData) : false
-                    // Unstacking is only worth it if the names read, so the chip takes everything the row has left once
-                    // the reading's remote has its seat — and what will not fit even then is wrapped, not cut: this is
+                    // Unstacking is only worth it if the names read, so the chip takes everything the row has left
+                    // once the reading's remote has its seat — and what will not fit even then is wrapped: this is
                     // the one place the name is shown in order to be read (規約 §hover のツールチップ).
                     wrapped: true
                     maxWidth: refRow.chipRoom
                 }
-                // Whose reading this is. A tag has no namespace to say it in the way `origin/main` does, and a drifted
-                // one puts the same bare name on two rows — this card is where the two meet, so it is where the
-                // question gets answered. Meta about the row rather than part of the name, so it is written in the
-                // colour the row's other meta is (§ref の種別).
+                // Whose reading this is. A tag has no namespace to say it in the way `origin/main` does, and a
+                // drifted one puts the same bare name on two rows — this card is where the two meet, so it is where
+                // the question gets answered. Meta about the row, so it is written in the colour the row's other
+                // meta is (§ref の種別).
                 Label {
                     id: whose
                     visible: rowChip.recWhere !== ""
                     // At the far end of the row, away from the names: put beside its own chip it would sit at a
-                    // different distance on every row, and the reading is meta rather than part of the name. It stops
-                    // at the bar's gutter, which is what that bar takes (`rows.rightInset`).
+                    // different distance on every row, and the reading is meta. It stops at the bar's gutter, which
+                    // is what that bar takes (`rows.rightInset`).
                     x: refRow.width - whose.width - rows.rightInset
-                    // Level with the chip's first line, not with the row: a wrapped name takes the row down with it and
-                    // this is meta about the name's first line.
+                    // Level with the chip's first line: a wrapped name takes the row down with it and this is meta
+                    // about the name's first line.
                     y: refList.chipInset + Theme.borderWidth
                        + Math.round((Theme.fontChipLine - whose.height) / 2)
                     text: rowChip.recWhere
@@ -387,12 +387,12 @@ AppCard {
                     elide: Text.ElideRight
                 }
                 // A name that can be changed: every kind of ref has one, and only the detached-HEAD marker names no
-                // ref to change. **Not `leadsNowhere`** — the branch the reader is standing on and the tag that is a
-                // mark rather than a place both keep their names (the same split the sidebar's rows make).
+                // ref to change. **Its own question, apart from `leadsNowhere`** — the branch the reader is on
+                // and the tag that is a mark both keep their names (the same split the sidebar's rows make).
                 readonly property bool nameable: GitFacts.recordKind(refRow.modelData) !== ""
                 /// A left click and a double-click on this row, as the row answers them. Named so that a run with no
-                /// pointer to press with puts its clicks in at the row itself rather than at a copy of what the row
-                /// would have decided (PGG_AUTO_ACT=graph-reclick-list / ref-list-pick).
+                /// pointer to press with puts its clicks in at the row itself
+                /// (PGG_AUTO_ACT=graph-reclick-list / ref-list-pick).
                 ///
                 /// **Every row takes the click**, whether or not it leads anywhere: what a row that leads nowhere
                 /// still has is a name, and the gesture that changes it begins with a click of its own.
@@ -417,7 +417,7 @@ AppCard {
                 }
                 function doubleClick(modifiers) {
                     const mods = modifiers === undefined ? Qt.NoModifier : modifiers
-                    // **A held double-click is two selection presses, not a double-click** (デザイン規約 §複数のコミットを
+                    // **A held double-click is two selection presses** (デザイン規約 §複数のコミットを
                     // 選ぶ) — the row's rule (`GraphRowDelegate.doubleClick`), and this card is a third way to the same
                     // `switch`, which moves the working tree. The two presses have already done what they do.
                     if (mods & (Qt.ControlModifier | Qt.ShiftModifier))
@@ -434,9 +434,9 @@ AppCard {
                 HoverHandler {
                     id: rowHover
                 }
-                // The whole row answers, the bar's strip included: the bar is a child of the view rather than of these
-                // rows, so it is over them and takes its own presses first — the same as every row down the left menu
-                // (`NavItemDelegate`). What has to stop at the gutter is the ink, not the target.
+                // The whole row answers, the bar's strip included: the bar is a child of the view rather than of
+                // these rows, so it is over them and takes its own presses first — the same as every row down the
+                // left menu (`NavItemDelegate`). What stops at the gutter is the ink.
                 TapHandler {
                     id: rowTap
                     /// When the button went down, for the gesture to take off the wait it has left (see the component).
@@ -446,8 +446,8 @@ AppCard {
                     onDoubleTapped: refRow.doubleClick(rowTap.point.modifiers)
                 }
                 /// A right-click on this row, as the row answers one. Named for the same reason `leftClick` is: a run
-                /// with no pointer to press with puts its press in at the row itself rather than at a copy of what the
-                /// row would have decided (PGG_AUTO_ACT=list-menu).
+                /// with no pointer to press with puts its press in at the row itself
+                /// (PGG_AUTO_ACT=list-menu).
                 function rightClick() {
                     refList.menuAsked(refRow.modelData)
                 }

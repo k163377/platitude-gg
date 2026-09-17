@@ -27,10 +27,10 @@ use marks::RowMark;
 /// delegate asks about it: whose it is, where it is, and the six tallies
 /// it says beside the words.
 ///
-/// **Beside the items rather than in them** — fifteen fields is the
-/// ceiling the model macro allows and every one is spent
-/// (`GraphRowItem`), and these rows are a handful where the window is
-/// thousands.
+/// **Beside the items** — fifteen fields is the ceiling
+/// the model macro allows and every one is spent
+/// (`GraphRowItem`), and these rows are a handful where the
+/// window is thousands.
 #[derive(Default, Clone)]
 struct CarriedRow {
     name: String,
@@ -51,10 +51,10 @@ pub struct GraphModel {
     parent_oids: Vec<Oid>,
     /// The rows another working copy's uncommitted work draws, by row
     /// index: its six tallies packed for the delegate, and the copy's
-    /// name beside them. **A map rather than two more fields on the
-    /// item** — fifteen is the ceiling the model macro allows and all of
-    /// them are spent, and these rows are a handful where the window is
-    /// thousands (`GraphModel::carried_tally`).
+    /// name beside them. **A map** — fifteen is the ceiling the model
+    /// macro allows and all of them are spent, and these rows are a
+    /// handful where the window is thousands
+    /// (`GraphModel::carried_tally`).
     carried: std::collections::HashMap<usize, CarriedRow>,
     /// Bumped every time those two are written. **A delegate's answer
     /// about them is a slot call, and a slot call is not made again
@@ -67,14 +67,14 @@ pub struct GraphModel {
     /// Every drawn row by its id, in id order — how a row is found from
     /// outside (`marks::row_at`): the pin's row on every drain, a
     /// sidebar jump, a menu's question about a commit. A binary search
-    /// rather than a scan of the window per ask. Kept in step with
-    /// `marks` at the same three places.
+    /// per ask. Kept in step with `marks` at the same three
+    /// places.
     index: Vec<(Oid, u32)>,
     /// Where HEAD stands, as the one record has it (`GraphMsg::Head`) —
     /// what the row the pin leads to is found by. `None` until the
-    /// session has reported it. **Not read off the chips**: those arrive
-    /// a pass after the rows, and are one refs read's own picture rather
-    /// than the record's (`session::standing`). A question about a range
+    /// session has reported it. **Read off the record**: the chips
+    /// arrive a pass after the rows, and are one refs read's own
+    /// picture (`session::standing`). A question about a range
     /// from HEAD is handed the record's value by the asker
     /// (`rebaseRewritesPublished`), so the rows and the headline never
     /// answer for two HEADs in one frame.
@@ -101,9 +101,9 @@ pub struct GraphModel {
     truncated: bool,
     /// How many commits one press of the tail would add, as the session
     /// has it (`RepoSession::log_window_step`). Read from there when a
-    /// walk settles rather than held as a number of our own: the window
-    /// the step is a quarter of is the session's to say, and the footer
-    /// names the step in the words it offers.
+    /// walk settles: the window the step is a quarter of is the
+    /// session's to say, and the footer names the step in the words it
+    /// offers.
     window_step: i32,
     /// A press of the tail is out and the wider walk has not landed yet.
     /// The footer wears the wait where the words are, like every other
@@ -122,8 +122,8 @@ pub struct GraphModel {
     /// asks for another. The two disagreeing is how a reader tells that
     /// the graph on screen is still one read behind the repository.
     ///
-    /// Settled with the footer rather than tracked through the splices: a
-    /// pass half-way through its chunks is not a graph anybody reads this
+    /// Settled with the footer, once the pass is whole: a pass half-way
+    /// through its chunks is not a graph anybody reads this
     /// against.
     wip_row: bool,
     /// Whether the row this pass left first belongs to another working
@@ -141,9 +141,9 @@ pub struct GraphModel {
     /// light out while the bar still says how many are lit.
     query: Option<Query>,
     match_count: i32,
-    /// Whether anything is being looked for at all — which is not the
-    /// same as anything being found. What dims the rows: with a query
-    /// and no answers, every row is "not one of them".
+    /// Whether anything is being looked for at all — a query is set,
+    /// whatever it has found. What dims the rows: with a query and no
+    /// answers, every row is "not one of them".
     searching: bool,
     /// Whether the newest row is one of the answers. The graph steps down
     /// from under the card for it (規約 §コミットを探す), and since the
@@ -167,8 +167,8 @@ pub struct GraphModel {
     head_avatar_url: String,
     head_geometry: String,
     error: String,
-    /// The walk stopped, so the rows drawn are not all of them. **Not the
-    /// same as `error` being set**: a walk that ended without an answer at
+    /// The walk stopped, so the rows drawn are not all of them. **A
+    /// state apart from `error`**: a walk that ended without an answer at
     /// all — the task fell over — has nobody's words to show, and the
     /// screen says that in its own (`BandStateCard`, app-ui.md「Rust に
     /// 文言を置かない」).

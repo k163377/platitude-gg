@@ -25,8 +25,8 @@ Rectangle {
     property bool showAddRemote: false
     /// …and held all the same while the pane's write doors are (`SidebarPane.doorsHeld`). **The one thing on this band
     /// that goes grey for it**: the fold, the eye and the count are how the section is read, and the `+` is the only
-    /// place here where a press writes. Greyed rather than taken away — the seat is the section's, and a mark that
-    /// went would read as a band that never carried one (規約 §無効).
+    /// place here where a press writes. Greyed — the seat is the section's, and a mark that went would read as a
+    /// band that never carried one (規約 §無効).
     property bool addHeld: false
     signal toggled()
     signal tagsToggled(bool shown)
@@ -36,26 +36,26 @@ Rectangle {
     /// caption has already said as much. The band keeps its place and goes unavailable — the same answer the folded
     /// rail's cells give (規約 §無効, NavRail).
     readonly property bool empty: header.count === 0
-    /// Whether the rows under this band are on show: what the fold was left at, held against what is in it. Read by
-    /// the list rather than `expanded`, so the fold a reader left a section at survives a repository that has none of
-    /// that section — coming back to one that has them opens it the way it was left.
+    /// Whether the rows under this band are on show: what the fold was left at, held against what is in it. This is
+    /// what the list reads, so the fold a reader left a section at survives a repository that has none of that
+    /// section — coming back to one that has them opens it the way it was left.
     readonly property bool showsRows: header.expanded && !header.empty
     /// Whether the band answers a click at all. One answer, for the pointer and for the smoke hook alike
     /// (`tap` — NavRail.tapAt).
     readonly property bool takesClick: header.foldable && !header.empty
 
-    /// A click landed on the band. Named rather than left to the MouseArea, so PGG_AUTO_ACT=nav-close reaches the same
-    /// refusal a pointer does — clicks cannot be injected (verify-ui スキル).
+    /// A click landed on the band. Named here, so PGG_AUTO_ACT=nav-close reaches the same refusal a pointer does —
+    /// clicks cannot be injected (verify-ui スキル).
     function tap() {
         if (header.takesClick)
             header.toggled()
     }
 
-    /// The eye at the end of the band, pressed (PGG_AUTO_ACT=tags-eye). Put in at the button rather than at this
-    /// component's own signal, so what answers is the band's real wiring and not a second way in written for the run.
-    /// **`toggle()` flips the tick without raising `toggled`**, and a run that only flips it photographs a graph
-    /// nobody asked to change. Refused where a pointer would find nothing to press: at zero tags the switch is not on
-    /// the band at all.
+    /// The eye at the end of the band, pressed (PGG_AUTO_ACT=tags-eye). Put in at the button, so
+    /// what answers is the band's real wiring — the same path a pointer takes. **`toggle()` flips
+    /// the tick without raising `toggled`**, and a run that only flips it photographs a graph
+    /// nobody asked to change. Refused where a pointer would find nothing to press: at zero tags
+    /// the switch is not on the band at all.
     function tapTags() {
         if (header.showTagToggle && !header.empty) {
             tagEye.toggle()
@@ -66,8 +66,8 @@ Rectangle {
     Layout.fillWidth: true
     implicitHeight: Theme.rowHeight
     color: Theme.bgElevated
-    // A HoverHandler rather than the MouseArea's hover: it also fires over the tag toggle, so the row highlight covers
-    // the header's full clickable surface.
+    // A HoverHandler: it also fires over the tag toggle, so the row highlight covers the header's full clickable
+    // surface.
     HoverHandler {
         id: headerHover
     }
@@ -83,7 +83,7 @@ Rectangle {
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
         // The seat stays `iconSm`, so the caption and the section's own mark do not move; the chevron inside it is
-        // drawn on the `iconMd` grid, so what grows is the ink and not the column (デザイン規約 §寸法「箱の大きさと実インクは
+        // drawn on the `iconMd` grid, so what grows is the ink (デザイン規約 §寸法「箱の大きさと実インクは
         // 別物」). The mark is a quarter of its box wide and half of it tall, so an `iconMd` grid still keeps every
         // stroke inside an `iconSm` seat — the air it was holding is what gets taken off.
         //
@@ -105,9 +105,9 @@ Rectangle {
         }
         NavIcon {
             kind: header.iconKind
-            // Grey is what unavailable looks like, and it takes the mark with the words (規約 §無効). The kind's own
-            // tint is not dropped a step instead: `*Dim` says something about the kind, and what is being said here is
-            // that there is nothing to press (デザイン規約 §暗く落とした段).
+            // Grey is what unavailable looks like, and it takes the mark with the words (規約 §無効). `*Dim` says
+            // something about the kind, and what is being said here is that there is nothing to press
+            // (デザイン規約 §暗く落とした段).
             tint: header.empty ? Theme.textMuted : header.iconTint
             width: Theme.iconMd
             height: Theme.iconMd
@@ -118,17 +118,17 @@ Rectangle {
             font.pixelSize: Theme.fontMd
             font.weight: Font.DemiBold
         }
-        // At the caption's own step, in its own label: what says it is a count is the weight and the colour, not the
-        // size (デザイン規約 §タイポグラフィ).
+        // At the caption's own step, in its own label: what says it is a count is the weight and the colour
+        // (デザイン規約 §タイポグラフィ).
         Label {
             text: "(" + header.count + ")"
             color: Theme.textMuted
             font.pixelSize: Theme.fontMd
         }
         Item { Layout.fillWidth: true }
-        // Whether the graph is drawing tags. An eye rather than a flag: a flag is a mark on a commit, which is what a
-        // tag already is — what this switches is whether they are looked at. Told apart by the tint, the way the panes'
-        // tree/flat switches are, not by fading the whole control (§暗く落とした段).
+        // Whether the graph is drawing tags. An eye: what this switches is whether tags are looked at, and a flag
+        // would be a mark on a commit, which is what a tag already is. Told apart by the tint, the way the panes'
+        // tree/flat switches are (§暗く落とした段).
         HoverToolButton {
             id: tagEye
             // With no tags there is nothing to keep out of the graph, so the switch has nothing to answer for — the
@@ -154,8 +154,8 @@ Rectangle {
             enabled: !header.addHeld
             // The seat stays the one every icon button in the window sits in; the mark inside it is one step down, so
             // it is drawn on the same grid as the mark at the head of this band (`iconMd` — デザイン規約 §寸法). A `Control`
-            // stretches its `contentItem` over whatever the padding leaves, so the step is written as that padding and
-            // not on the icon: a width put on the icon is overwritten on the next layout.
+            // stretches its `contentItem` over whatever the padding leaves, so the step is written as that padding:
+            // a width put on the icon is overwritten on the next layout.
             //
             // Undropped, the cross was the only mark in the window drawn on the full `iconLg` grid — and the only one
             // that fills its box in both axes, so it carried a good half again the ink of the `+` on a WIP row
@@ -165,9 +165,9 @@ Rectangle {
             implicitHeight: Theme.iconLg
             contentItem: NavIcon {
                 kind: "plus"
-                // Its own colour is written here rather than left to the palette: a `contentItem` of one's own does
-                // not go through it (規約 §無効), and this is the one thing on the band whose colour says whether it
-                // can be pressed rather than what section it belongs to.
+                // Its own colour is written here: a `contentItem` of one's own does not go through the palette
+                // (規約 §無効), and this is the one thing on the band whose colour says whether it can be pressed
+                // at all.
                 tint: header.addHeld ? Theme.textMuted : header.iconTint
             }
             // The dialog it opens is named by the `…`, the way the chooser's own row names it (デザイン規約 §長押し の語彙).

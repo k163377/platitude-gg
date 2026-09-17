@@ -8,8 +8,8 @@ use super::*;
 #[qobject(ConvertToCamelCase, NoQmlElement)]
 impl LineEndingsModel {
     // The work tree the reads and the write run in, which is the
-    // repository whose own file they are about. Written by `look()` rather
-    // than assigned: the read that follows is what makes the rest mean
+    // repository whose own file they are about. Written by `look()`: the
+    // read that follows is what makes the rest mean
     // anything.
     qproperty!("repoPath", Member = repo_path, Notify = changed);
     // "idle" | "reading" | "ready" | "error". The screen waits for
@@ -46,7 +46,7 @@ impl LineEndingsModel {
 
     /// Writes the picked value into that repository's own file, where **an
     /// empty value asks for the key to be taken out** — which is how an
-    /// override is given back rather than replaced.
+    /// override is given back.
     #[qslot]
     fn save(&mut self, value: String) {
         self.write_value(value)

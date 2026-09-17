@@ -22,9 +22,9 @@ impl TabsModel {
         Notify = current_index_changed
     );
 
-    // Every tab, packed — see the member. Its own signal rather than the
-    // row one: this changes on a name settling and on a carry across the
-    // strip, neither of which moves the tab in front.
+    // Every tab, packed — see the member. Its own signal: this changes
+    // on a name settling and on a carry across the strip, neither of
+    // which moves the tab in front.
     qproperty!(
         "openRepos",
         Member = open_repos,
@@ -52,11 +52,11 @@ impl TabsModel {
     /// Somebody asked to be shown the repository now in front, so the band
     /// travels to that tab's seat (デザイン規約 §タブの所作).
     ///
-    /// Its own signal rather than `current_index_changed`: the strip's own
-    /// gestures move that one too — a press, a carry putting the row
-    /// somewhere else — and those are the reader putting the band where it
-    /// stands, which is the one thing this may not take back. Emitted after
-    /// the index has moved, so the strip reads a model that has already
+    /// Its own signal: `current_index_changed` is moved by the strip's
+    /// own gestures too — a press, a carry putting the row somewhere
+    /// else — and those are the reader putting the band where it
+    /// stands, which this leaves alone. Emitted after the index has
+    /// moved, so the strip reads a model that has already
     /// answered.
     #[qsignal]
     pub(super) fn front_tab_asked(&mut self);
@@ -177,10 +177,10 @@ impl TabsModel {
     /// second budget, for repositories nobody has looked at yet. The rest
     /// open when they are first selected.
     ///
-    /// A path that is no longer a directory is dropped rather than shown
-    /// as a broken tab — it is not something the reader did. One that is
-    /// still there but is no longer a repository keeps its tab and reports
-    /// itself the usual way, because that one is worth seeing.
+    /// A path that is no longer a directory is dropped — it is not
+    /// something the reader did. One that is still there but is no longer
+    /// a repository keeps its tab and reports itself the usual way,
+    /// because that one is worth seeing.
     #[qslot]
     fn restore_tabs(&mut self) {
         let Some(saved) = Hub::with(|hub| hub.state().tabs.clone()) else {

@@ -7,10 +7,10 @@ import platitude.ui
 // height (デザイン規約 §コミットメッセージの 2 つの枠). The commit editor and the commit details pane both write and read messages through
 // this same pair, so the two cannot drift apart.
 //
-// The pair's height is held as one number that the layout splits, not as two heights that have to add up: the
-// description fills what the summary leaves, so the total is exact whatever the font's line height rounds to. One line
-// of summary, the gap, and five lines of description at rest; a summary that wraps takes its extra lines out of the
-// description down to two, and past that the block itself grows — the summary's own cap is what stops that.
+// The pair's height is held as one number that the layout splits: the description fills what the summary leaves, so
+// the total is exact whatever the font's line height rounds to. One line of summary, the gap, and five lines of
+// description at rest; a summary that wraps takes its extra lines out of the description down to two, and past that
+// the block itself grows — the summary's own cap is what stops that.
 //
 // What stands around the pair is the pane's business and comes in as numbers (`listHeight` / `blockRoom` /
 // `blockHeight`): only the pane knows what a file list or an author card is. The answers go back out under the names
@@ -40,8 +40,8 @@ ColumnLayout {
     /// reader's next press: they were moved without asking, and what they were moved to has to be findable at a
     /// glance. **Only the pane that is sent to sets it** — the commit editor is where the hand already is.
     ///
-    /// **The mark is the frames' own colour, not a second thing drawn** — both boxes already carry a border, so a
-    /// resting window gains no ink for it, and the two frames take the pair as one block.
+    /// **The mark is the frames' own colour** — both boxes already carry a border, so a resting window gains no ink
+    /// for it, and the two frames take the pair as one block.
     property bool attention: false
     function callAttention() { editor.attention = true }
     function dropAttention() { editor.attention = false }
@@ -54,8 +54,8 @@ ColumnLayout {
     /// How much of the pane the block holding this pair may take. Only the pane knows what else stands in that block
     /// and above it, so the bound is the pane's — the two panes' definitions differ.
     property real blockRoom: 0
-    /// What that block is asking for (its column's implicitHeight), measured against `blockRoom` rather than against
-    /// any laid-out height — see `descOwed` on why the laid-out height is a ring.
+    /// What that block is asking for (its column's implicitHeight), measured against `blockRoom` — see `descOwed`
+    /// on why a laid-out height is a ring.
     property real blockHeight: 0
 
     // ---- what the pair holds ----------------------------------------
@@ -64,7 +64,7 @@ ColumnLayout {
     /// The read-only tooltip is up. Reported through the ToolTip's own visible — the output side, so a cut binding
     /// cannot read as green.
     readonly property bool summaryTipShown: summaryArea.ToolTip.visible
-    /// What the description box paints — the smoke hooks report the painted side rather than the input side
+    /// What the description box paints — the smoke hooks report the painted side
     /// (app-ui.md).
     readonly property color descriptionColor: descBox.textColor
     readonly property bool descriptionFocused: descBox.focused
@@ -75,8 +75,8 @@ ColumnLayout {
     // -- the message pair is one block of one height --
     /// What the summary box needs for its own lines, capped — nothing in git bounds a summary, and one pasted paragraph
     /// grew this box to 650px, which pushed the description off the pane and left the author row over the window's own
-    /// footer (measured at a 2,000-byte subject). Ceiled, so the box is never a fraction of a pixel shorter than the
-    /// text inside it — that is the difference between a scroll bar and no scroll bar.
+    /// footer (measured at a 2,000-byte subject). Ceiled, so the box is at least as tall as the text inside it —
+    /// that is the difference between a scroll bar and no scroll bar.
     readonly property real summaryNeed:
         Math.min(Math.ceil(summaryArea.implicitHeight) + Theme.spaceSm,
                  Theme.messageMaxHeight)
@@ -106,10 +106,10 @@ ColumnLayout {
     /// growing past the pane's edge — the second term is that overflow, and without it the give-back stalls at the last
     /// 48 pixels the list still had (measured: the command log opening under a pulled-open box).
     ///
-    /// Measured against the room the block is *allowed* (`blockRoom`), never against the height it was laid out at: the
-    /// block's own height follows what the box does, so reading it back here would put the box and the layout in a ring
-    /// — the box grows, the height it is compared to is still last frame's, the box is told it owes the difference, and
-    /// it gives back everything it just took (measured: the grip did nothing at all, `cap` never left 120).
+    /// Measured against the room the block is *allowed* (`blockRoom`): the block's own height follows what the box
+    /// does, so reading a laid-out height back here would put the box and the layout in a ring — the box grows, the
+    /// height it is compared to is still last frame's, the box is told it owes the difference, and it gives back
+    /// everything it just took (measured: the grip did nothing at all, `cap` never left 120).
     readonly property real descOwed:
         Math.max(0, 2 * Theme.rowHeight - editor.listHeight)
         + Math.max(0, editor.blockHeight - editor.blockRoom)
@@ -157,7 +157,7 @@ ColumnLayout {
     /// (`DescriptionBox.pinnedTop`) and for the same reason: assigning `text` leaves the caret at the end, and a
     /// `TextArea` scrolls the flickable under it to keep the caret in view — so a subject longer than the box opens on
     /// its **last** line. A single assignment races that scroll and loses when the layout settles late (measured on a
-    /// 2,000-character subject: the box opened on `終端`). Pinning states the intent instead of racing it.
+    /// 2,000-character subject: the box opened on `終端`). Pinning states the intent.
     property bool summaryPinned: false
     function unpinSummary() {
         editor.summaryPinned = false
@@ -174,8 +174,8 @@ ColumnLayout {
                 summaryView.contentItem.contentY = 0
         }
     }
-    /// Write the texts alone — a revert, or the smoke hook that types into the boxes — moving neither the caret, the
-    /// scroll nor the pull.
+    /// Write the texts alone — a revert, or the smoke hook that types into the boxes — the caret, the scroll and
+    /// the pull stay put.
     function setTexts(subject, description) {
         summaryArea.text = subject
         descBox.text = description
@@ -254,7 +254,7 @@ ColumnLayout {
                 y: summaryView.topPadding
                 height: summaryView.availableHeight
             }
-            // ScrollView keeps its Flickable private -- reach it once it exists. Not interactive, for the reason the
+            // ScrollView keeps its Flickable private -- reach it once it exists. Interaction off, for the reason the
             // description box carries: the flickable answering the same wheel as the handler moved the text twice.
             Component.onCompleted: {
                 contentItem.boundsBehavior = Flickable.StopAtBounds

@@ -1,15 +1,15 @@
 //! Which answer is one press's own, at each of its moments — the press,
 //! the answer, and the notify that carried neither.
 //!
-//! No Qt and no repository: whose press an answer was is the
-//! application's own question, and this is the whole of what decides it.
+//! Plain Rust: whose press an answer was is the application's
+//! own question, and this is the whole of what decides it.
 
 use super::*;
 
 /// The id the queue is pretending to have accepted this press under, and
-/// one it gave somebody else. Any two different numbers would do — what
-/// these are about is that the answer is found by the number rather than
-/// by its turn.
+/// one it gave somebody else. Any two different
+/// numbers would do — what these are about is that
+/// the answer is found by the number.
 const OURS: u64 = 7;
 const SOMEBODY_ELSE: u64 = 8;
 
@@ -35,8 +35,8 @@ fn an_answer_to_somebody_elses_write_is_not_taken() {
     assert_eq!(out.answer(), None);
 }
 
-// …and the press's own is still found when it answers behind that one:
-// where it stands in the list is not read into.
+// …and the press's own is still found when it answers behind that
+// one: the number finds it, wherever it stands.
 #[test]
 fn the_press_is_found_wherever_its_answer_stands() {
     let mut out = pressed();

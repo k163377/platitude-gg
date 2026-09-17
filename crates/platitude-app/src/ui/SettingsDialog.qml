@@ -8,10 +8,10 @@ import platitude.ui
 // own file, and what it writes into git's. The two are kept apart because where a value is stored is the one thing
 // about it a reader cannot see — so it is the split the screen is built on, and each category says it in a line of
 // its own. **How far a git value reaches is a level below that**, inside the git category: `GLOBAL` and
-// `REPOSITORY OVERRIDE` are groups of chapters there, not categories of their own (規約 §設定の画面).
+// `REPOSITORY OVERRIDE` are groups of chapters there (規約 §設定の画面).
 //
-// The whole window, not a card: a settings screen is read rather than answered, and a card sized to its own content
-// grows a scrollbar as soon as one chapter does. The one card left in this family is the identity gate
+// The whole window: a settings screen is read, and a card sized to its own content grows a scrollbar as soon as
+// one chapter does. The one card left in this family is the identity gate
 // (`IdentityDialog`), which is a question.
 AppDialog {
     id: settingsDialog
@@ -45,8 +45,8 @@ AppDialog {
     property var curPage: null
 
     /// The strip, for the git category's repository group: it offers the repositories standing in it, and lands on
-    /// the one the reader is looking at. Not `curPage` — that is the tab in front, and that group is the one place in
-    /// the window where the answer may be about a repository nobody is looking at.
+    /// the one the reader is looking at. `curPage` is the tab in front, and that group is the one place in the
+    /// window where the answer may be about a repository nobody is looking at.
     required property TabsModel tabsModel
 
     /// Opens the screen on one category. The only way in — an `open()` that left the category where the last reader
@@ -57,7 +57,7 @@ AppDialog {
     }
 
     /// Automation: the rail row for `which`, pressed through its own handler (`settings-switch`). Answers whether
-    /// there was such a row — the run waits rather than counting a press it never made.
+    /// there was such a row — the run waits for one.
     function autoTapCategory(which) {
         for (let i = 0; i < categoryRepeater.count; i++) {
             const row = categoryRepeater.itemAt(i)
@@ -109,18 +109,18 @@ AppDialog {
         appPane.load()
         gitPane.loadIdentity()
         gitPane.loadTool()
-        // The git category's repository group lands on the one the reader is looking at, and does it here rather than
-        // on the category showing: "first, the repository I am in" is about the screen opening, not about which
-        // category is read first — and coming back to the category would otherwise throw away the repository they had
-        // chosen. Two `git config` reads, which is the same order of cost as the identity read above; the
-        // eight-second one (`--tool-help`) still waits for the category itself.
+        // The git category's repository group lands on the one the reader is looking at, and does it here, as the
+        // screen opens: "first, the repository I am in" is about the screen, and coming back to the category would
+        // otherwise throw away the repository they had chosen. Two `git config` reads, which is the same order of
+        // cost as the identity read above; the eight-second one (`--tool-help`) still waits for the category
+        // itself.
         gitPane.landOnFront()
-        // **The screen opens with no caret in a box.** A settings screen is read before any of it is answered, and a
+        // **The screen opens ready to be read.** A settings screen is read before any of it is answered, and a
         // caret dropped into the first field of a category aims the reader's next keystroke at a value they did not
-        // come to change. The one door that places one is the avatar's badge, which opened this screen to name a
-        // picture — and it is the door that says so, not the category.
+        // come to change. The one door that places a caret is the avatar's badge, which opened this screen to name
+        // a picture — and it is the door that says so.
         appPane.focusPrefill()
-        // Through the press rather than the popup: what a run asking for this is after is the state a finger on the
+        // Through the press: what a run asking for this is after is the state a finger on the
         // field leaves behind, and opening the list from outside would photograph that just as well with the wiring
         // cut. Last, because a press also takes the caret — whatever was settled above is what a person would be
         // taking it from.
@@ -156,13 +156,13 @@ AppDialog {
     readonly property real blockWidth: 2 * Theme.spaceXxl + Theme.settingsRailWidth + 2 * Theme.spaceLg
                                        + Theme.borderWidth + Theme.textWidth
 
-    /// A way out was taken over an unsaved identity and turned down. **The mark is armed, not the screen blocked**:
+    /// A way out was taken over an unsaved identity and turned down. **The mark is armed**:
     /// the reader was shown what is holding it and the next press goes through (規約 §設定の画面).
     property bool askingLeave: false
 
-    /// A way out was taken over a git waiting to be applied and turned down. Unlike [`askingLeave`] no second press
-    /// gets past it: this only turns the mark, so the reader is told what is holding the screen rather than left
-    /// pressing a `✕` that does nothing. Falls with the offer — the box put back is the way out.
+    /// A way out was taken over a git waiting to be applied and turned down. Unlike [`askingLeave`] this only turns
+    /// the mark, so every press tells the reader what is holding the screen. Falls with the offer — the box put
+    /// back is the way out.
     property bool askingGitPath: false
     onOpenedChanged: if (!settingsDialog.opened) settingsDialog.askingGitPath = false
     Connections {
@@ -182,15 +182,15 @@ AppDialog {
     /// The way out, for the two things that take it: the `✕` in the corner and Escape. One function so they cannot
     /// come apart, and so a run enters the same road a hand does (規約 §UI 自動化の因果性).
     ///
-    /// **The first press over an unsaved identity does not close.** It puts the reader in front of the chapter that
-    /// is holding it — the right category, scrolled to the boxes — and turns the mark. Nothing is asked in words and
-    /// no second window opens: what a person needs at that moment is to *see* the thing, and the Save it needs is
+    /// **The first press over an unsaved identity lands on it.** It puts the reader in front of the chapter that
+    /// is holding it — the right category, scrolled to the boxes — and turns the mark. The answer is on the screen
+    /// itself: what a person needs at that moment is to *see* the thing, and the Save it needs is
     /// standing right there. **The second press closes**, because a way out that can be refused twice is not a way
-    /// out. Leaving puts the boxes back, so a screen opened again is not still offering the edit that was dropped.
+    /// out. Leaving puts the boxes back, so a screen opened again shows what git holds.
     function escapeOut() {
-        // **A chosen git holds the screen shut, and no press gets past it.** The other thing that stops a way out
+        // **A chosen git holds the screen shut.** The other thing that stops a way out
         // arms once and lets the second press through, because what it is holding is an edit the reader may mean to
-        // drop. This is not an edit — the path is already written, and the only question left is which binary the
+        // drop. The path here is already written, and the only question left is which binary the
         // window in front of them is running. Leaving with the two disagreeing is the state this chapter exists to
         // prevent (規約 §設定の画面). The way back is the box: emptied, or put back to what it was, the offer falls
         // and the screen lets go.
@@ -210,7 +210,7 @@ AppDialog {
             gitPane.dropUnsavedIdentities()
         settingsDialog.close()
     }
-    /// Sends the chapters to the boxes that are holding the edit. Mapped rather than measured: the chapters are two
+    /// Sends the chapters to the boxes that are holding the edit. Mapped: the chapters are two
     /// components deep and only the column they are laid into knows where they ended up.
     function showUnsaved() {
         const item = gitPane.unsavedIdentityItem()
@@ -220,24 +220,24 @@ AppDialog {
         chapters.contentY = Math.max(0, Math.min(at - Theme.spaceXl,
                                                  chapterCol.implicitHeight - chapters.height))
     }
-    /// Typing again takes the arming off: the mark is about a press the reader made, not about the state of the
-    /// boxes, and an edit made after it is one they have not been shown yet.
+    /// Typing again takes the arming off: the mark is about a press the reader made, and an edit made after it is
+    /// one they have not been shown yet.
     onUnsavedIdentitiesChanged: settingsDialog.askingLeave = false
 
-    // Two bands, and the rule between them is what says the top one does not move (規約 §設定の画面). It runs the
+    // Two bands, and the rule between them is what says the top one stays (規約 §設定の画面). It runs the
     // whole width. The title follows the centred body; the close target reaches the screen's right edge.
     padding: 0
 
     contentItem: ColumnLayout {
         spacing: 0
 
-        // Escape is heard as a shortcut rather than left to the popup's own `closePolicy`, which needs the key to
-        // reach the screen through whatever holds the caret. Owned by the screen, so Qt hands it over only while
+        // Escape is heard as a shortcut: the popup's own `closePolicy` needs the key to reach the screen through
+        // whatever holds the caret. Owned by the screen, so Qt hands it over only while
         // this is the topmost thing open: a list standing over it still takes the first press for itself and the
         // screen stays (measured, qmltestrunner `tst_esc7`).
         Shortcut {
-            // `sequences` rather than `sequence`: Cancel is more than one key on some platforms, and binding the
-            // single form takes only the first of them (Qt warns about exactly this).
+            // `sequences`: Cancel is more than one key on some platforms, and `sequence` takes only the first of
+            // them (Qt warns about exactly this).
             sequences: [StandardKey.Cancel]
             enabled: settingsDialog.opened
             onActivated: settingsDialog.escapeOut()
@@ -253,7 +253,7 @@ AppDialog {
             armed: settingsDialog.askingLeave || settingsDialog.askingGitPath
             onClosed: settingsDialog.escapeOut()
         }
-        // The band's edge is the window's, so this one line is not laid in the block.
+        // The band's edge is the window's, so this one line runs edge to edge.
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: Theme.borderWidth
@@ -263,8 +263,8 @@ AppDialog {
         // ---- the categories and their chapters -------------------------------
         // **Centred, and the margins are what a narrowing window eats first**. The block is a fixed thing — a rail
         // of a known width beside a column set to the width words are read at — so on a wide window the leftover is
-        // air on both sides rather than a screen hanging off the left edge. Narrower than the block, `fillWidth`
-        // takes over and the column gives way; `blockWidth` is the ceiling, not a floor.
+        // air on both sides. Narrower than the block, `fillWidth`
+        // takes over and the column gives way; `blockWidth` is the ceiling.
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -275,10 +275,10 @@ AppDialog {
             spacing: Theme.spaceLg
 
             // The categories. A list of names down the left of a screen, lit the way the sidebar's rows are
-            // (規約 §左メニューの所作) — the same kind of thing in the same clothes. **Not the sidebar's width**: 260
+            // (規約 §左メニューの所作) — the same kind of thing in the same clothes. **Its own width**: 260
             // is for a column of names this app did not write — branches, remotes, tags, whatever anybody called
             // them — and this one holds a handful of words it did. `settingsRailWidth` leaves room for the longest a
-            // category is going to be. Fixed rather than fitted, because a layout inside a layout fills by default
+            // category is going to be. Fixed, because a layout inside a layout fills by default
             // and a rail that took whatever the chapters did not want would move every time the category changed.
             ColumnLayout {
                 Layout.fillWidth: false
@@ -293,10 +293,10 @@ AppDialog {
                         id: categoryRow
                         required property var modelData
                         readonly property bool current: settingsDialog.category === categoryRow.modelData.key
-                        /// A git waiting to be applied holds the reader here: the screen will not let go until the
-                        /// box is answered, and the other category is a screenful of git's own configuration to
-                        /// wander into meanwhile (規約 §設定の画面). The row a reader is standing in is never the
-                        /// one held down — that would grey the category they are reading.
+                        /// A git waiting to be applied holds the reader here: the screen lets go once the box is
+                        /// answered, and the other category is a screenful of git's own configuration to
+                        /// wander into meanwhile (規約 §設定の画面). The row a reader is standing in stays live —
+                        /// holding it down would grey the category they are reading.
                         enabled: categoryRow.current || !AppBackend.gitPathOffersRestart
                         /// What a press on this row does. The handler below is one line onto it so a run enters the
                         /// same road a hand does (規約 §UI 自動化の因果性).
@@ -344,7 +344,7 @@ AppDialog {
                             // showing is the wash under it, exactly as in the left menu these rows are dressed as —
                             // there a row does not go dim for not being the one selected. Dimming the others says
                             // the wrong thing too: the category nobody is in is the one there is any reason to press
-                            // (規約 §無効 「選ばれていないことを無効の色で言わない」). **Held down is not that** —
+                            // (規約 §無効 「選ばれていない側は自分の Dim」). **Held down differs** —
                             // a row that cannot be pressed at all is the one case the disabled ink is for (§無効).
                             color: categoryRow.enabled ? Theme.textPrimary : Theme.textMuted
                         }
@@ -376,14 +376,14 @@ AppDialog {
             // anything. The floating thumb could not say that: three tenths of one ink over `bgElevated` is barely
             // a colour.
             //
-            // **The bar stands at the window's edge, not against the chapters.** The band's right inset is spent
-            // inside this view rather than outside it, so the room the reader can see to the right of the form is
+            // **The bar stands at the window's edge.** The band's right inset is spent
+            // inside this view, so the room the reader can see to the right of the form is
             // where the bar goes — the chapters keep their own right edge, and nothing of theirs
-            // comes near the ink. `scrollBarGutter` is not what does it: a nine-pixel gutter clears the thumb and
-            // nothing more, which is the same "just barely" in a smaller size.
-            // **No margin of its own.** The row's `spacing` is the step on both sides of the line, and an extra one
+            // comes near the ink. `scrollBarGutter` would only clear the thumb, which is
+            // the same "just barely" in a smaller size.
+            // **Its air is the row's `spacing`** — the step on both sides of the line, and an extra one
             // here puts the chapters eight pixels further from it than the rail is — a difference small enough to
-            // read as a mistake rather than as a choice (observed).
+            // read as a mistake (observed).
             Flickable {
                 id: chapters
                 Layout.fillWidth: true
@@ -400,14 +400,14 @@ AppDialog {
 
                 ColumnLayout {
                     id: chapterCol
-                    // Width rather than a margin: a `Flickable`'s content item is not a layout, so `Layout.*` on this
+                    // Width: a `Flickable`'s content item is not a layout, so `Layout.*` on this
                     // one would be read by nobody. **The band's right inset is spent here** — the view runs to the
                     // window's edge so the bar can stand there — **and the column stops at the width a run of words
                     // is set at** (`textWidth`).
                     //
                     // A settings screen is read, and a sentence set across 1200 pixels is one the eye loses its
                     // place returning from: at `fontMd` that is around 180 characters, twice what a line should be.
-                    // **The boxes stop there too** rather than only the prose — a form whose inputs are twice the
+                    // **The boxes stop there too** — a form whose inputs are twice the
                     // width of the sentences explaining them reads as two columns that happen to be stacked, and a
                     // box a thousand pixels wide for a person's name is not asking for a name. Every settings screen
                     // worth copying does this (VS Code, Windows 11, GitHub all cap the column and leave the rest of
@@ -439,9 +439,9 @@ AppDialog {
                 }
             }
         }
-        // **No foot.** An `OK` here would close a screen that has already written everything it was going to write,
-        // which is a button for confirming nothing. What is left is the way out in the corner, and a way out does
-        // not need a second copy of itself along the bottom edge — every settings screen worth copying (VS Code,
+        // **The chapters run to the bottom edge.** An `OK` here would close a screen that has already written
+        // everything it was going to write, which is a button for confirming nothing. What is left is the way out
+        // in the corner, and one of those is enough — every settings screen worth copying (VS Code,
         // Windows 11, the browsers) ends the same way: content to the bottom of the window and nothing under it.
     }
 }

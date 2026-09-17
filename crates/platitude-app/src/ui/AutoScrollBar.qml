@@ -6,12 +6,12 @@ import QtQuick.Controls.Fusion
 // content size instead. Attached to a Flickable, the bar's parent is the view itself. The comparison carries a pixel of
 // slack. Text heights are fractional -- a font whose line box is 23.5 makes a two-line item 47.0 inside a frame laid
 // out at 47 -- and a strict `>` turns a rounding remainder no eye can see into a bar down the side of a view that has
-// nothing to scroll. A real overflow is a line of text, never a fraction of one, so nothing that
+// nothing to scroll. A real overflow is a line of text, so nothing that
 // should scroll is lost by this.
 //
 // **A bar with somewhere to go is always drawn; what changes is how brightly** (デザイン規約 §QML 実装ルール のバーの明るさ).
-// Full while the reader is sending this view, three tenths of that once they have left the range it sends. Taking the
-// bar away instead is not wanted: over a ground this dark it is the only thing on screen saying where the reading
+// Full while the reader is sending this view, three tenths of that once they have left the range it sends. It stays:
+// over a ground this dark it is the only thing on screen saying where the reading
 // stands, and a bar that has to be waited out has no wait that is right for both reading and leaving.
 //
 // **Above anything else pinned to the view's frame.** An overlay laid over the rows (`GraphHeadPin`'s band, the
@@ -36,7 +36,7 @@ ScrollBar {
 
     /// Whether the reader is inside the range this bar sends. **The view answers for itself**: a `HoverHandler` on the
     /// view is an ancestor of its own rows, and an ancestor's handler leaves every row its own hover (規約 §QML 実装ルール
-    /// — what must not happen is a handler on an item stacked *over* the rows). The two sideways bars have no view to
+    /// — a handler on an item stacked *over* the rows would take them). The two sideways bars have no view to
     /// ask and are handed their pane's answer instead. **A headless run writes this same property**, since hover cannot
     /// be injected (verify-ui).
     ///
@@ -44,8 +44,8 @@ ScrollBar {
     /// QObject parent, so a bar with no view hands its handler to the JS heap and loses it at the next collection,
     /// leaving this binding to read a destroyed object (verify-ui measured, one `TypeError` line per such bar
     /// on every start). **The bars with no view are the two sideways ones** (`GraphLaneBar` / `DiffCodeScroll`),
-    /// which answer for a pane rather than for a flickable. A bar with no view has no range to be inside, so `false`
-    /// is the answer here rather than a repair.
+    /// which answer for a pane. A bar with no view has no range to be inside, so `false`
+    /// is the answer here.
     property bool inArea: viewHover ? viewHover.hovered : false
     HoverHandler {
         id: viewHover
@@ -55,14 +55,14 @@ ScrollBar {
     /// Whether the reader is here at all: pointing into the range, or holding the thumb — a drag may take the pointer
     /// anywhere and is still this view being sent.
     ///
-    /// **Keyboard focus is not attention.** A list keeps `activeFocus` long after the reader has gone elsewhere — one
+    /// **Attention is the pointer's.** A list keeps `activeFocus` long after the reader has gone elsewhere — one
     /// click on a graph row holds it for the rest of the session — so reading it here left a bar bright while its pane
     /// was not being looked at, and let a send nobody asked for light it from across the window (qmltestrunner
     /// measured). Two panes then differed for a reason nothing on screen showed.
     readonly property bool attended: bar.inArea || bar.pressed
 
     /// Whether this bar has been sent since the reader arrived. **Raised by the sending, lowered by leaving** — what
-    /// says a bar is done being read is the reader going elsewhere, not a count of milliseconds, so there is no timer
+    /// says a bar is done being read is the reader going elsewhere, so there is no timer
     /// here (デザイン規約 §QML 実装ルール のバーの明るさ).
     property bool lit: false
     onAttendedChanged: {
@@ -88,7 +88,7 @@ ScrollBar {
     /// What the bar is painting: full ink while it is being used, a step down once it is not.
     readonly property bool bright: bar.lit || bar.pressed
 
-    /// **This bar does not take the hover.** Nothing it paints reads its own `hovered` — brightness is the view being
+    /// **Hover is left to the view.** Nothing it paints reads its own `hovered` — brightness is the view being
     /// sent — and taking it costs twice over (qmltestrunner measured):
     ///
     ///  - **a `Flickable` loses its own handler's hover while the pointer is on a hover-taking child.** A plain `Item`
@@ -97,11 +97,11 @@ ScrollBar {
     ///  - **the bar's `hovered` latches after a press.** Drag the thumb, release, walk the pointer away, and it stayed
     ///    true until the pointer next entered and left the bar — holding `attended` up with it.
     ///
-    /// Named rather than left off, because `Control.hoverEnabled` otherwise falls back to the theme's
+    /// Named, because `Control.hoverEnabled` otherwise falls back to the theme's
     /// `useHoverEffects` (規約 §QML 実装ルール — measured false offscreen, and not something to inherit either way).
     hoverEnabled: false
 
-    // `contentY`, not the bar's own `position`: `position` is `contentY / contentHeight`, so rows arriving below the
+    // `contentY`: the bar's own `position` is `contentY / contentHeight`, so rows arriving below the
     // reader move it without the view having gone anywhere.
     Connections {
         target: bar.view
@@ -111,14 +111,14 @@ ScrollBar {
     z: 1
     policy: view && view.contentHeight + view.topMargin + view.bottomMargin > view.height + 1
             ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
-    /// **No fade: a bar with nowhere to go is not drawn at all.** The style keeps the thumb painted for 450ms and then
+    /// **Drawn exactly while it has somewhere to go.** The style keeps the thumb painted for 450ms and then
     /// takes 200ms over it, so a view that had somewhere to go for one frame of layout went on showing a bar for two
     /// thirds of a second after it stopped having anywhere — a full-height bar standing over a box that fits (observed
     /// / measured: the summary box settles at `policy=AsNeeded size=1 active=false` with the thumb still at 0.75).
-    /// Nowhere to go is not a state to be eased out of; only the brightness below is.
+    /// Only the brightness below is eased.
     ///
-    /// The policy above is the whole question, which is why the style's second term (`active && size < 1`) is not
-    /// repeated here: that term is what an `AsNeeded` bar has instead of an answer, and here there is one.
+    /// The policy above is the whole question, which is why the style's second term (`active && size < 1`) stays
+    /// out: that term stands in for an answer, and here there is one.
     visible: policy === ScrollBar.AlwaysOn
 
     /// **Three tenths of itself when idle, up at once and down over 400ms** (規約 §QML 実装ルール のバーの明るさ). The ink
@@ -127,7 +127,7 @@ ScrollBar {
     /// share has to be that large because the ground is nearly black: the whole range a bar can occupy without
     /// shouting is some forty levels wide, and a step has to take a real part of it to read as a step at all.
     ///
-    /// **Nothing is animated on the way up**: what the reader has just asked for should already be there, and between
+    /// **The way up is instant**: what the reader has just asked for should already be there, and between
     /// two brightnesses there is no jump to soften. Only the way down is drawn out, which is the half nobody should
     /// notice.
     ///

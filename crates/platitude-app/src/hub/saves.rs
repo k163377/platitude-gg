@@ -3,9 +3,9 @@
 //! something that outlives the screen that asked.
 //!
 //! **Why an owner, and why here.** A save is spawned against a path
-//! rather than through a session (`models::repo_config`, `AppBackend`),
-//! because the settings screen offers every repository in the strip and
-//! only the tab in front has a session. Spawned bare, a save was a task
+//! (`models::repo_config`, `AppBackend`), because the settings screen
+//! offers every repository in the strip and only the tab in front has a
+//! session. Spawned bare, a save was a task
 //! nobody held: the screen that asked could go, the tab it was about
 //! could go, and the window could close with `git config` half way
 //! through the pair — the quit gate counted the sessions' writes and
@@ -31,8 +31,8 @@ use tokio::task::JoinHandle;
 /// (`operation::Lane::Local`). A save killed at a budget is the
 /// half-landed pair this module exists to rule out — and it would be
 /// killed under the very shutdown that waits for it — while a `git
-/// config` that is slow is slow for a reason of the machine's, not a
-/// hang.
+/// config` that is slow is slow for a reason of the machine's, and
+/// ends.
 pub(super) fn executor_for(base: &GitExecutor) -> GitExecutor {
     base.clone().without_stock_timeouts()
 }
@@ -108,7 +108,7 @@ mod tests {
 
         release.send(()).expect("the save is waiting on this");
         for save in saves.take_all() {
-            // waits(ceiling): a save that never ends is a named failure here, not a hang
+            // waits(ceiling): a save that never ends is a named failure here
             tokio::time::timeout(std::time::Duration::from_secs(900), save)
                 .await
                 .expect("the save ended within the ceiling")

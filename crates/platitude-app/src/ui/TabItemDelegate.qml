@@ -25,7 +25,7 @@ Rectangle {
     /// but the one in front, which paints its own.
     required property color bandColor
     /// The strip's shared arithmetic (`TabMetrics`): what a tab costs, the seat its mark stands in, and how a short
-    /// name is eased. One object rather than a copy of each number, so the strip and the tab cannot disagree.
+    /// name is eased. One object, so the strip and the tab cannot disagree.
     required property var metrics
     /// The air this name is eased with, half of what it falls short by (`TabMetrics.titleEase`). Read off the label's
     /// own hint, which is the name at its natural width — the cap is a maximum on the item and does not move it.
@@ -42,20 +42,20 @@ Rectangle {
     /// input that cannot be injected, so the wash and the mark have to be answering a single question or the headless
     /// run proves nothing about either.
     ///
-    /// Written by the handler below rather than by the MouseArea that fills the tab: hover goes to the topmost item
+    /// Written by the handler below: hover goes to the topmost item
     /// that takes it, and the `✕` is a Control that takes its own, so the tab stopped being "under the hand" exactly
     /// when the hand arrived at the mark — which dropped the mark out from under it (rules-refs/app-ui.md 「行の
-    /// hover を `MouseArea` で取らない」; measured qmltestrunner: `pointed=false mark=0` with the pointer in the middle
+    /// hover は `HoverHandler`」; measured qmltestrunner: `pointed=false mark=0` with the pointer in the middle
     /// of the `✕`).
     property bool pointed: false
     /// Automation: whether the mark is out on this tab. Read off the mark itself — reporting what was asked of it would
     /// go on passing after the binding that draws it had come apart.
     readonly property real markShown: closeMark.opacity
-    /// Automation: how far this tab is drawn from the row it belongs to, read off the transform that carries it rather
-    /// than off what was asked of it — the same reason `markShown` is read off the mark (`PGG_AUTO_ACT=tab-hold`).
+    /// Automation: how far this tab is drawn from the row it belongs to, read off the transform that carries it
+    /// — the same reason `markShown` is read off the mark (`PGG_AUTO_ACT=tab-hold`).
     readonly property real shiftShown: heldShift.x
-    /// Automation: whether any of this name is still drawn — read off the halves the label came out with rather than
-    /// off the name the tab was handed, which is whole however little of it reaches the strip. A tab cut down to the
+    /// Automation: whether any of this name is still drawn — read off the halves the label came out with; the name
+    /// the tab was handed is whole however little of it reaches the strip. A tab cut down to the
     /// mark alone is a tab whose box came out under its own name, and the picture of one is a narrow tab with a mark
     /// in it — which is what a short name in a crowded strip looks like too (`TabProbe.tabNamesCrushed`).
     readonly property bool nameKept:
@@ -75,7 +75,7 @@ Rectangle {
     signal tabDragged(real sceneX)
     signal tabDropped()
     /// This tab has become the one in front, or has stopped being it. The strip's stand-in is drawn off whichever item
-    /// answers true (`TabPin`), and it is pushed rather than looked up: the item for a row the model has only just
+    /// answers true (`TabPin`), and it is pushed: the item for a row the model has only just
     /// gained arrives with the next layout, so a strip that went looking the moment the front changed would find
     /// nothing standing there (`TabStrip.middleClickTab` carries the same note).
     signal frontChanged(bool front)
@@ -90,7 +90,7 @@ Rectangle {
     // the tab it has not displaced yet.
     z: tabItem.held ? 1 : 0
     color: tabItem.current ? Theme.bgSelected : "transparent"
-    // Drawn where the hand has it rather than where the strip put it. A transform rather than an `x` of its own: the
+    // Drawn where the hand has it. A transform: the
     // view owns a delegate's place and writes it back at every layout, and this way the two never argue — the offset is
     // read from whatever place the row was given, so the tab stays under the hand across the very moves it is causing.
     transform: Translate {
@@ -102,7 +102,7 @@ Rectangle {
     // words out — and the headless run reaches them the same way it reaches the mark (`TabProbe.pointAtTab`).
     //
     // Nothing new comes out under a hand that is carrying: by then the hand is doing something else, and a box opening
-    // beside a tab in motion is not there to be read (同§「掴んだ手の下では新しく出さない」). Only the new one — a tip
+    // beside a tab in motion is not there to be read (同§「掴んだ手の下は空のまま」). Only the new one — a tip
     // already standing is the shared instance's to take down, and it keeps one up while the pointer is on the target
     // it came out of (`SharedToolTip.wanted`), which a tab under a carrying hand still is (P3-確認事項).
     ToolTip.visible: tabItem.pointed && !tabItem.held
@@ -130,8 +130,8 @@ Rectangle {
         /// less the further the drag goes.
         property real pressSceneX: 0
         property bool carrying: false
-        /// Where inside the tab the hand took hold. Taken at the press rather than at the threshold, so the tab travels
-        /// exactly as far as the hand did and not four pixels less.
+        /// Where inside the tab the hand took hold. Taken at the press, so the tab travels
+        /// exactly as far as the hand did.
         property real grabX: 0
         function letGo() {
             if (!tabMouse.carrying)
@@ -181,10 +181,10 @@ Rectangle {
     // dense row, and its step is the dense one (デザイン規約 §余白「高密度な行の内側のみ 4」; by design = the `spaceSm`
     // step it had was read as too much air on both sides of the name).
     //
-    // A short name's easing goes on either side of the **name** rather than at the tab's two edges: the mark keeps its
+    // A short name's easing goes on either side of the **name**: the mark keeps its
     // own step off the far edge whatever the name does, so what opens up is the room the name is set in (by design —
-    // the seat every short name was padded out to made a row of equal blanks). The cap the whole strip shares is not
-    // written here: the tab's own width is already measured off it, and this fills what that leaves.
+    // the seat every short name was padded out to made a row of equal blanks). The cap the whole strip shares is
+    // already in the tab's own width, and this fills what that leaves.
     //
     // **Cut in the middle, through `CutName`** (デザイン規約 §タブの所作): a repository is told apart by the end of its
     // name, and by both ends once a namesake has grown it into a path. That part is also what keeps every capped tab
@@ -200,8 +200,8 @@ Rectangle {
         anchors.rightMargin: tabItem.markRoom + tabItem.easeRight
         text: tabItem.title
         // The other half of the easing: a short name is set with its letters a little apart, so the air it is
-        // given belongs to the word rather than standing beside it. Off the letter count, never off the width —
-        // the width is what the air is computed from (`TabMetrics.titleTracking`).
+        // given belongs to the word. Off the letter count — the width is what the air
+        // is computed from (`TabMetrics.titleTracking`).
         letterSpacing: tabItem.metrics.titleTracking(tabItem.title.length)
         weight: tabItem.current ? Font.DemiBold : Font.Normal
         color: Theme.textPrimary
@@ -219,7 +219,7 @@ Rectangle {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         width: tabItem.metrics.markRoomFull + tabItem.fadeW
-        // The mark's own centre and the disc its wash paints, read off the mark rather than worked out again here —
+        // The mark's own centre and the disc its wash paints, read off the mark —
         // the two are the same circle or the name comes back on an edge the wash has not got.
         markX: titleFade.width - tabItem.metrics.markGap - tabItem.metrics.markSeat / 2
         markR: tabItem.metrics.markSeat / 2
@@ -228,7 +228,7 @@ Rectangle {
             ? Theme.bgSelected
             : (tabItem.pointed ? Qt.tint(tabItem.bandColor, Theme.bgHover) : tabItem.bandColor)
         // As strongly as the mark itself stands: what quietens the name is the mark being over it, so the two arrive
-        // and leave together. Read off the mark rather than asked of the same condition twice.
+        // and leave together. Read off the mark.
         opacity: closeMark.opacity
         // Nothing to quieten while this name still stops a whole step short of its mark — which a short one goes on
         // doing after the strip has taken the room back, by spending its eased air on that side (`easeRight`).
@@ -242,13 +242,13 @@ Rectangle {
         color: Theme.accent
         visible: tabItem.current
     }
-    // Shown on the tab in front and under the pointer (デザイン規約 §タブの所作). Dimmed rather than dropped: an item the
+    // Shown on the tab in front and under the pointer (デザイン規約 §タブの所作). Dimmed: an item the
     // layout has stopped seeing takes its width with it, and the tab would change size under the hand that came to
     // close it.
     //
-    // Stood against the tab's far edge rather than placed after the name: the room in front of it is the first thing a
+    // Stood against the tab's far edge: the room in front of it is the first thing a
     // crowded strip takes back (`TabStrip.settleTitleCap`), and a mark that moved with it would sit at a different
-    // distance from every tab's edge. Its two sides are seated off its ink rather than off its box
+    // distance from every tab's edge. Its two sides are seated off its ink
     // (`TabMetrics.markGap`), so all three gaps in a tab are the one step: the name from the near edge, the ink from
     // the tab's far one, and — where the fade above ends — the name from the ink.
     CloseToolButton {

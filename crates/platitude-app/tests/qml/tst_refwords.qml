@@ -6,9 +6,9 @@ import platitude.ui
 //
 // **Only a laid-out line can answer this.** The two things the escape owes are opposite: a run of spaces has to
 // survive a fold rich text takes from HTML, and a single space has to stay a place the line may break — one of the
-// fields this is drawn in wraps rather than cutting (`NoticeLine`), and a sentence pinned at every space breaks
-// through the middle of a word instead. Neither is visible in the markup itself, and no headless verb photographs the
-// empty column at the width where it wraps, so both are read off the same rich-text engine the fields use.
+// fields this is drawn in wraps (`NoticeLine`), and a sentence pinned at every space breaks through the middle
+// of a word. Neither is visible in the markup itself, and no headless verb photographs the empty column at the
+// width where it wraps, so both are read off the same rich-text engine the fields use.
 Item {
     id: root
     width: 400
@@ -58,7 +58,7 @@ Item {
         }
 
         // How many lines it takes is the machine's answer — this runs on a font database that is not the window's
-        // (verify-ui §Windows の罠), so what is asked is where the break landed and not how many there were.
+        // (verify-ui §Windows の罠), so what is asked is where the break landed.
         function test_the_coloured_line_breaks_where_the_plain_one_does() {
             verify(coloured.lineCount > 1)
             compare(firstLineOf(coloured), firstLineOf(plain))

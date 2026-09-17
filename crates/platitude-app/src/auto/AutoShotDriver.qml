@@ -38,7 +38,7 @@ Item {
     /// the report line, so a run cannot go green with this wait unwired.
     property int inkWaited: 0
     // Every PGG_AUTO_ACT run has one explicit completion edge. A verb that still relies on the old shot clock is a
-    // harness bug: the watchdog must expose it instead of taking a plausible picture of an intermediate state.
+    // harness bug: the watchdog exposes it, where a plausible picture of an intermediate state would hide it.
     readonly property bool causal: Harness.autoAct !== ""
 
     /// The window's picture is on disk, so the scene it came out of is the settled one: **the completion edge is often
@@ -47,8 +47,8 @@ Item {
     /// (`WindowCensus`), and this is still ahead of the quit, which waits on the parts.
     signal appPictured()
 
-    /// Whether the ending waits for the census to have walked. **A part like the other two**, because the walk is not
-    /// taken at the picture: it waits for the window to have stopped arriving, which is later than the verb's own edge
+    /// Whether the ending waits for the census to have walked. **A part like the other two**, because the walk waits
+    /// for the window to have stopped arriving, which is later than the verb's own edge
     /// as often as not (`WindowCensus`). Without the part the run quits out from under the walk on exactly the runs
     /// whose census would have been worth having.
     readonly property bool waitsForCensus: driver.causal
@@ -111,7 +111,7 @@ Item {
     // leaves the shot nothing to wait on -- the grab reads whatever frame happened to have reached the texture, which
     // for a popup opened in the turn that completed the verb is often none at all (observed: two of four concurrent
     // `commit-menu` runs photographed a blank overlay and passed, while the same verb run one at a time never did).
-    // Asked for one refresh instead, this is the edge that says the refresh landed: from here the texture holds what
+    // Asked for one refresh, this is the edge that says the refresh landed: from here the texture holds what
     // the overlay held when the shot was called for.
     Connections {
         target: driver.overlayMirror ? driver.overlayMirror.item : null
@@ -137,8 +137,8 @@ Item {
             // **What the write barrier was holding, if this run wanted a write at all.** `press=` names the input
             // the verb was waiting on, `input=` whether it has gone in, and `watch=` / `id=` are the tab's own word
             // — an `id=0` under `watch=armed` is a press still to land, under `watch=turned-down` a queue that took
-            // nothing, and neither is the same as a verb that never armed. Nothing here decides which: it says what
-            // was held, and the reading is the reader's.
+            // nothing, and neither is the same as a verb that never armed. It says what was held, and the reading
+            // is the reader's.
             console.warn("write state " + driver.writeState)
             Qt.quit()
         }
@@ -150,7 +150,7 @@ Item {
     }
 
     /// Refreshed texture in hand, the picture of the popups. `popups=` is the overlay's own count of what it was
-    /// holding: a blank overlay.png now means nothing was open, never a shot that outran the frame.
+    /// holding: a blank overlay.png now means nothing was open.
     function grabOverlay() {
         if (!driver.overlayAsked || driver.overlayGrabbed)
             return

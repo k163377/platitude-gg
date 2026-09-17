@@ -19,7 +19,7 @@ Rectangle {
     anchors.top: parent.top
     anchors.bottom: parent.bottom
     anchors.margins: holdFill.inset
-    // Never thinner than `holdFillMin` while it runs: proportional from zero, the first tenth of the hold is a
+    // At least `holdFillMin` wide while it runs: proportional from zero, the first tenth of the hold is a
     // sub-pixel sliver, so the press reads as not having taken and the whole gesture feels longer than it is
     // (デザイン規約 §進行中・長押しの定数).
     width: holdFill.progress > 0

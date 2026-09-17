@@ -3,11 +3,11 @@ use super::*;
 // A folder row is the only row held whole — no section's data arrives as
 // one. Every other row is answered field by field out of `Source`.
 //
-// **The fifteen `#[derive(QModelItem)]` allows bind this struct, not the
-// role table** — Qt is handed `Role::ALL` (`qmodel.rs`), so a role a
-// folder row has no field for is answered without one. What the derive
-// buys here is the second spelling of the names: the test at the foot of
-// `role.rs` holds these fields to the roles of the same numbers.
+// **The fifteen `#[derive(QModelItem)]` allows bind this struct** — Qt
+// is handed `Role::ALL` (`qmodel.rs`), so a role a folder row has no
+// field for is answered without one. What the derive buys here is the
+// second spelling of the names: the test at the foot of `role.rs` holds
+// these fields to the roles of the same numbers.
 #[derive(QModelItem, Default)]
 pub struct NavItem {
     /// Display text: the last path segment in tree mode, the full name in
@@ -18,7 +18,7 @@ pub struct NavItem {
     pub(super) full: String,
     pub(super) oid_hex: String,
     /// git's change code for a file row (`M`, `?`, `UU`). **A folder row
-    /// carries its fold state here instead** (`FOLDED`, empty when open) —
+    /// carries its fold state here** (`FOLDED`, empty when open) —
     /// the derive allows this struct fifteen fields and they are all
     /// spoken for, so the slot is shared. Reads are guarded by `folder`,
     /// as the other shared fields are (`bucket` carries a branch on a
@@ -50,9 +50,9 @@ pub struct NavItem {
     /// matching); until then PGG_FAKE_PR previews the look.
     pub(super) has_pr: bool,
     /// This file's pending change has something to say about its line
-    /// endings. A flag, not the sentence — the words belong to the one
-    /// row the pointer is on rather than to every row, so they are kept
-    /// once on the model instead (`pointEol`).
+    /// endings. A flag — the words belong to the one row the pointer
+    /// is on, so they are kept once on the model
+    /// (`pointEol`).
     pub(super) eol_mark: bool,
     pub(super) depth: i32,
     pub(super) folder: bool,
@@ -90,7 +90,7 @@ pub const PRUNABLE: &str = "PRUNABLE";
 /// What a **branch** row puts in the slot: another working copy has it
 /// checked out, so no move can land here (`BranchItem::held_elsewhere`).
 /// The same seat, and the same one question the WORKTREES rows answer —
-/// which is why the three share it rather than each finding a corner.
+/// which is why the three share it.
 pub const HELD: &str = "HELD";
 
 pub(super) fn fold_state(expanded: bool) -> String {

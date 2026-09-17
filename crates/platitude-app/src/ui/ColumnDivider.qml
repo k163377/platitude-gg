@@ -24,8 +24,8 @@ MouseArea {
     height: parent.height
     z: 2
     hoverEnabled: true
-    // The cursor never changes: it is the platform's splitter shape in both states, and a column that will not move
-    // says so with the badge instead (規約 §グラフ列は最も広い所のレーンまで). Swapping in a drawn arrow made the refusal read as a
+    // The cursor is the platform's splitter shape in both states, and a column that will not move
+    // says so with the badge (規約 §グラフ列は最も広い所のレーンまで). Swapping in a drawn arrow made the refusal read as a
     // different tool from the divider one column over.
     cursorShape: Qt.SplitHCursor
     preventStealing: true

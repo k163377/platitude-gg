@@ -6,17 +6,17 @@ use super::Press;
 /// One stash press that empties the working tree, from the press to the
 /// reading that shows the tree gone.
 ///
-/// **Two moments, and the second is not the write's answer.** git
-/// answering says the entry was made; what the page is waiting for is
-/// the status behind it, where the tree turns out to have nothing left
+/// **Two moments, and the second is the empty tree.** git answering
+/// says the entry was made; what the page is waiting for is the
+/// status behind it, where the tree turns out to have nothing left
 /// in it — and only then does whose doing that was matter at all.
-/// Somebody committing the same changes in a terminal empties the tree
-/// exactly the same way, and must not take a reader off the message they
-/// are still writing.
+/// Somebody committing the same changes in a terminal empties the
+/// tree exactly the same way, and leaves the reader over the message
+/// they are still writing.
 ///
-/// **Neither half is allowed to arrive first.** The answer and the
-/// status travel feeds of their own and are drained apart, so either can
-/// be the one already in hand. The answer is written down as it comes
+/// **Either half may arrive first.** The answer and the status travel
+/// feeds of their own and are drained apart, so either can be the one
+/// already in hand. The answer is written down as it comes
 /// and the tree is handed in as the page last read it ([`Self::taken`]),
 /// so whichever is second completes the pair — settled only from the
 /// status side, a press loses the tree that emptied before its answer

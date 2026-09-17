@@ -6,7 +6,7 @@ import platitude.ui
 // The hand that picks the diff's text out of its rows: a drag selects, a right-click asks for the menu, and a plain
 // click puts the selection down (デザイン規約 §diff の中身をコピーする).
 //
-// **It covers the code column and not the gutter, and it stops short of the list's own bar.** The two numbers and the
+// **It covers the code column, and stops short of the list's own bar.** The two numbers and the
 // seat between them are the row's own — the `+` a line puts out there has to keep taking presses — so this starts
 // where they end (`gutterW`); and the bar down the right edge is drawn over the rows, so a hand that ran to the frame
 // took every press on the trough and the bar could not be grabbed at all (`barRoom`, observed).
@@ -15,12 +15,12 @@ import platitude.ui
 // under its last row included (`rowAt`, 規約 §diff の中身をコピーする). The hunk headings are the one exception, and
 // they are one because something else is standing there.
 //
-// **It is laid over the list rather than declared inside it**, for two reasons that are the same reason twice: a
+// **It is laid over the list**, for two reasons that are the same reason twice: a
 // `Flickable` takes the grab away from its own children once a drag passes the threshold, and `reuseItems` builds a
 // scrolled-away row again from scratch. A hand that started on row 40 and is now dragging past the bottom of the
 // window would lose its grip both ways.
 //
-// It is a plain `MouseArea` and it is not `hoverEnabled`, which is what lets the rows underneath keep their own hover
+// It is a plain `MouseArea` with hover left to the rows underneath, which keep their own
 // — the `+` under the pointer, the lit hunk (デザイン規約 §diff の中のステージ; a `HoverHandler` here would take all of it,
 // measured).
 //
@@ -38,8 +38,8 @@ Item {
     /// How much of the right edge belongs to the list's own scroll bar, which is where the code column ends
     /// (`AppListView.barRoom` — the same strip the graph's stand-in gives back, `GraphHeadPin.barRoom`).
     required property real barRoom
-    /// How far the code has been sent sideways (`DiffCodeScroll.offset`) — a press lands on the character under it,
-    /// not on the one that would be there at rest.
+    /// How far the code has been sent sideways (`DiffCodeScroll.offset`) — a press lands on the character
+    /// under it.
     required property real codeX
     /// The line's own layout, asked where the press landed in it (`LineRuler`). The same ruler the wash is placed
     /// with, so the hit and the wash cannot disagree.
@@ -131,7 +131,7 @@ Item {
     /// last row a place a selection can start (規約 §diff の中身をコピーする「掴めるのは、誰も取らない所すべて」).
     /// Without it a press there reached nothing at all, which is the same dead corner the right pane's values had.
     ///
-    /// `originY` rather than zero: a list of rows with differing heights moves its own origin once it has been sent
+    /// `originY`: a list of rows with differing heights moves its own origin once it has been sent
     /// to its end (app-ui.md, `CommandsPane.clampY`). An empty list has no band at all — the clamp then answers above
     /// its own last row, `indexAt` finds nothing, and the press goes down to the list as it always did.
     function onRows(y) {
@@ -139,7 +139,7 @@ Item {
         const last = first + pick.view.contentHeight - 1
         return Math.max(first, Math.min(y, last))
     }
-    /// Which byte of that row's line an x of this item lands on, in two steps and never in one: the row's own layout
+    /// Which byte of that row's line an x of this item lands on, in two steps: the row's own layout
     /// says which place of the line is under the pointer (`LineRuler` — the only thing that knows where a line's
     /// characters are drawn), and the model says which byte of the file that place is (`DiffModel.sourceByteAt`).
     ///
@@ -165,7 +165,7 @@ Item {
     // ---- the ground under the last row ---------------------------------------------------------------------------
     /// Where the ground a file shorter than the frame leaves under its last row begins, in this item's own
     /// coordinates, and whether there is any of it at all. A sweep run against a diff that fills its frame would
-    /// prove nothing, so it says so rather than passing (verify-ui `diff-sweep`).
+    /// prove nothing, so it says so (verify-ui `diff-sweep`).
     readonly property real groundTop: Math.max(0, pick.view.originY + pick.view.contentHeight - pick.view.contentY)
     readonly property bool hasGround: pick.groundTop < pick.height - 2
     /// Automation: the gesture as a hand makes it — a press on that ground, and a drag up into the text. It enters the
@@ -211,8 +211,8 @@ Item {
              + " strip=" + Math.round(pick.barRoom)
     }
     /// Automation: a press on the very last pixel this hand covers, on the first row that takes one. What lies beyond
-    /// it is the bar's strip (`barRoom`), and this is the half that says the strip was given back to the bar and not
-    /// eaten out of the code: an edge that answers is an edge that stops in the right place
+    /// it is the bar's strip (`barRoom`), and this is the half that says the strip was given back to the bar:
+    /// an edge that answers is an edge that stops in the right place
     /// (`PGG_AUTO_ACT=diff-bar`). Nothing is left standing — a press that never moved selected nothing.
     function pressAtRightEdge() {
         for (let i = 0; i < pick.view.count; i++) {
@@ -241,9 +241,9 @@ Item {
         id: hand
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        // Not hoverEnabled: the rows below keep their own (see the note at the top).
+        // The rows below keep their own hover (see the note at the top).
         cursorShape: Qt.IBeamCursor
-        // The three above, and nothing beside them: what the hand does is written once, where a run enters it too.
+        // The three above only: what the hand does is written once, where a run enters it too.
         onPressed: mouse => { mouse.accepted = pick.takeAt(mouse.x, mouse.y, mouse.button) }
         onPositionChanged: mouse => pick.followAt(mouse.x, mouse.y)
         onReleased: pick.releaseText()

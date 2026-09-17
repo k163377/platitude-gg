@@ -7,8 +7,8 @@ import platitude
 import platitude.ui
 
 // The window's body, and the whole of what a headless picture is of (`AutoShotDriver.grabApp` grabs this item, so
-// anything drawn outside it is drawn outside every screenshot). Almost all of it is the column below; what is not
-// is the one mark that answers the pointer rather than a row of the window.
+// anything drawn outside it is drawn outside every screenshot). Almost all of it is the column below; the rest
+// is the one mark that answers the pointer.
 //
 // Where this item sits inside the window, and whether there is a body at all, stay at the seat (`Main`): the inset
 // it reaches back over is the window's to know.
@@ -37,7 +37,7 @@ Item {
     // ---- the floor the window may not be dragged under --------------------
     // Both halves of it are below — the band's and the page's — so the three numbers are measured here. What the
     // window does with them is the window's (`Main.minimumWidth` / `WindowShape.holdFloor`).
-    /// The page the floor is read off. Not `curPage`: with no tab open that is null while the window is showing the
+    /// The page the floor is read off. `curPage` is null with no tab open, while the window is showing the
     /// blank page, which has the same three panes with the same minimums.
     readonly property var floorPage: mainUi.curPage !== null ? mainUi.curPage : blankPage.item
     readonly property real floorWidth:
@@ -61,7 +61,7 @@ Item {
 
     // ---- the wait the hand is given ----------------------------------
     // The mark that stands beside the pointer while a write replays history (`WindowWaitRing`). Over everything
-    // and belonging to no pane, so its z and its fill are written here rather than carried inside.
+    // and belonging to no pane, so its z and its fill are written here.
     WindowWaitRing {
         id: waitRingSeat
         anchors.fill: parent

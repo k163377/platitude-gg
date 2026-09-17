@@ -46,9 +46,9 @@ pub struct DiffLineItem {
     /// `"col:width,col:width"`, empty where nothing is emphasised
     /// (see `encode::DiffRow`).
     emph: String,
-    /// One of git's conflict fences. Not the same thing as `side`
-    /// below: that says which side a line came from, this says the line
-    /// is not the file talking at all (see `encode::DiffRow`).
+    /// One of git's conflict fences: this says the line is a marker of
+    /// git's own, where `side` below says which side a line came from
+    /// (see `encode::DiffRow`).
     fence: bool,
     /// This line ends the file without a newline, on the side its own
     /// numbers name. git says it in a note of its own; the pane says it
@@ -61,8 +61,8 @@ pub struct DiffLineItem {
     /// Which of the read's patches the two above are counted within (-1
     /// where they name nothing) — hunks are numbered from zero inside
     /// each one, so it takes all three to reach a line. What the copy
-    /// reads a row's own source text back off, rather than keeping a
-    /// second copy of every line beside the drawn one (`selection`).
+    /// reads a row's own source text back off, with the drawn line the
+    /// only one kept (`selection`).
     patch: i32,
     /// The columns the reader's own selection covers on this row, in the
     /// same `"col:wides:width:wides"` spelling as `emph` — with `"*"` for
@@ -72,7 +72,7 @@ pub struct DiffLineItem {
     ///
     /// Empty on every row the plain `Copy` does not take: outside the
     /// selection, and on the removed lines and hunk headings inside it.
-    /// **The wash is the answer** — what is not washed is not copied
+    /// **The wash is the answer** — what is washed is what is copied
     /// (デザイン規約 §diff の中身をコピーする).
     sel: String,
     /// The side a combined diff's marker columns name — `"ours"` /
@@ -99,13 +99,13 @@ pub struct DiffModel {
     lines: Vec<DiffLineItem>,
     /// The largest line number the rows carry, on either side. The gutter
     /// is as wide as the widest number it will hold, so counting it is a
-    /// fact about the rows rather than something QML works out.
+    /// fact about the rows.
     widest_no: i32,
     /// The lines the pane measures for a first answer to how far sideways
-    /// the code may be sent, packed (`encode::widest_lines`). Lines and
-    /// not a number: the pane owns the font, and on the fallback a
-    /// Latin-only mono family hands a wide glyph to there is no arithmetic
-    /// over columns that arrives at what is drawn. Empty is a diff with
+    /// the code may be sent, packed (`encode::widest_lines`). Lines:
+    /// the pane owns the font, and on the fallback a Latin-only mono
+    /// family hands a wide glyph to there is no arithmetic over
+    /// columns that arrives at what is drawn. Empty is a diff with
     /// nowhere to go.
     widest_lines: String,
     /// Which reading of the rows the ones on screen are from — one up
@@ -131,7 +131,7 @@ pub struct DiffModel {
     is_combined: bool,
     /// git named the path unmerged and printed nothing else — one of the
     /// two sides is gone, so there is no third thing to compare. There are
-    /// no rows, and the absence is the answer rather than a failure.
+    /// no rows, and the absence is the answer.
     unmerged: bool,
     /// The path is a repository of its own sitting in the working copy.
     /// git will not open it, so there are no rows and never will be; what
@@ -159,8 +159,8 @@ pub struct DiffModel {
     preview_new_url: String,
     /// Whether the previewed image is a vector one (`image/svg+xml`).
     /// Which smoothing an upscale gets is the cell's choice, but what the
-    /// file is is the preview's own fact rather than something QML reads
-    /// back off the URL.
+    /// file is is the preview's own fact, said here once for the cell
+    /// to read.
     preview_vector: bool,
     /// Human-readable sizes ("" = the side does not exist).
     preview_old_size: String,
@@ -183,19 +183,19 @@ pub struct DiffModel {
     ending_ext: String,
     current_key: String,
     /// Which working copy the open diff was read from, empty for this
-    /// window's own tree. Beside the key rather than in it, because the
-    /// two are asked different questions: the key says which file an
-    /// answer is about (and a copy's file is the same file by that name),
-    /// this says whose it is — which is what settles a re-read's aim and
-    /// what the pane refuses every write over.
+    /// window's own tree. Beside the key, because the two are asked
+    /// different questions: the key says which file an answer is about
+    /// (and a copy's file is the same file by that name), this says whose
+    /// it is — which is what settles a re-read's aim and what the pane
+    /// refuses every write over.
     current_at: String,
     /// The rows of the diff on screen, kept so the colours — which arrive
     /// behind them — can be laid over the same lines without another read
     /// (`DiffMsg::Coloured`). Rebuilding all of them costs orders of
     /// magnitude less than colouring them did
     /// (ci/baseline/code-costs-windows-x64.md §着色), which is why the
-    /// colours can afford to redo the whole list rather than address rows
-    /// one at a time.
+    /// colours can afford to redo the whole list, every row of it, in
+    /// one pass.
     shown: Option<Arc<Vec<FilePatch>>>,
     /// What changed inside each shown row (`intraline`), kept beside
     /// `shown` for the same rebuilds.
@@ -206,8 +206,8 @@ pub struct DiffModel {
     /// The two ends of the reader's own selection of the text: a row and
     /// a byte offset into that row's source line. `from` is where the
     /// press landed and `to` is where the pointer has reached, so the
-    /// pair is in the order it was made rather than in reading order —
-    /// `taken()` sorts it. Whether the four mean anything at all is
+    /// pair is in the order it was made — `taken()` sorts it into
+    /// reading order. Whether the four mean anything at all is
     /// `sel_active`'s to say: a fresh model reads 0,0,0,0, which is a
     /// perfectly good empty selection on row 0 and no selection at all.
     sel_from_row: i32,
@@ -216,9 +216,9 @@ pub struct DiffModel {
     sel_to_at: i32,
     /// What the selection holds, published so the menu can leave out a
     /// row that would copy nothing (デザイン規約 §メニュー: 選べない行は消す).
-    /// Read off the rows as the selection settles rather than counted
-    /// again when the menu opens — the menu decides what it offers once,
-    /// as it opens, and these are what it decides from.
+    /// Read off the rows as the selection settles — the menu decides
+    /// what it offers once, as it opens, and these are what it decides
+    /// from.
     sel_active: bool,
     sel_has_new: bool,
     sel_removed: i32,

@@ -5,12 +5,12 @@ import platitude.ui
 // The beat between a hover card and the thing it hangs off: it holds the card up while the hand walks from one into the
 // other, and takes it down once the hand is out of both.
 //
-// **A beat, not a turn of the event loop.** A card opens flush under what raised it, so walking in takes the pointer
+// **A beat on a timer.** A card opens flush under what raised it, so walking in takes the pointer
 // off that thing on the way and walking back out puts it on again. The two hovers change in different frames and in no
 // fixed order, and `Qt.callLater` lands between them — the card shut under the hand that was reaching for it
 // (observed — 規約 §hover のツールチップ の罠 (3)).
 //
-// Not an item: it draws nothing and is placed nowhere. The owner keeps the card, opens it where it belongs, and hands
+// It draws nothing and is placed nowhere. The owner keeps the card, opens it where it belongs, and hands
 // it here to be closed.
 QtObject {
     id: keeper

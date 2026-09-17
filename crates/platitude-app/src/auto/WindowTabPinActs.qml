@@ -8,11 +8,11 @@ import platitude.ui
 /// read as a pair (`TabPin`). And the third way that travel is asked for — a repository opened into a strip standing
 /// somewhere else (デザイン規約 §タブの所作), which is the same arrival by another road.
 ///
-/// Its own file rather than more of `WindowTabActs`: that one is about what a hand does to a tab — carrying it,
+/// Its own file: `WindowTabActs` is about what a hand does to a tab — carrying it,
 /// closing it, measuring what the strip made of it — and this is about the one thing the strip draws when a tab is
 /// nowhere to be seen. Built by `WindowAutoActDriver`, which hands down the parts of the window these reach into.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing and is never
-// given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -41,17 +41,17 @@ Item {
     ///
     /// Every precondition here survives what the staging does to it, so all of them are read on every tick: nothing
     /// below closes a tab, empties the strip or takes the page down, and the one thing that does move — which tab is
-    /// in front — is waited for by name rather than assumed (規約 §UI 自動化の因果性).
+    /// in front — is waited for by name (規約 §UI 自動化の因果性).
     ///
     /// `verb` is the prefix the caller reports under, wanted only for the diagnostic the crowding wait writes: the
     /// three verbs staged here go quiet in the same place, and the line has to name which one did.
     function staged(front, verb) {
-        // Every row standing in the strip, not merely open: the stand-in is drawn off the item the view built for the
+        // Every row standing in the strip: the stand-in is drawn off the item the view built for the
         // tab in front, and a row the model has only just gained has none until the next layout.
         if (acts.pageRepeater.count < 2 || acts.tabProbe.tabItemCount() !== acts.pageRepeater.count)
             return false
-        // And the page under the strip settled, so what is photographed underneath is a repository rather than one
-        // still opening — the switch below builds a new page, and an unfinished one frames the same either way.
+        // And the page under the strip settled, so what is photographed underneath is a settled repository
+        // — the switch below builds a new page, and an unfinished one frames the same either way.
         const page = acts.window.curPage
         if (page === null || page.pageTab.state !== "open"
                 || !page.pageWt.loaded || page.pageGraph.finishCount === 0)
@@ -61,14 +61,14 @@ Item {
             acts.floorSet = true
             return false
         }
-        // A strip that fits has no edge for a stand-in to ride. The resize is what makes one, and the strip itself
-        // says when that has taken — no width of its own is waited on, because which width crowds a strip is the
-        // thing this cannot assume.
+        // A strip that fits has no edge for a stand-in to ride. The resize is what makes one, and what is
+        // waited on is the strip's own word, because which width crowds a strip is the thing this cannot
+        // assume.
         if (!acts.topBar.bandTabScrolls) {
             // A strip still uncrowded a tick after the floor took is one this staging cannot carry: the wait above has
-            // nothing left to wait for, and the watchdog that ends such a run names the verb rather than the band it
-            // was handed. Said once, and a tick late so the resize has laid out — the numbers the count has to be
-            // chosen against are the band's own, and they differ per OS (`tab-widths`).
+            // nothing left to wait for, and the watchdog that ends such a run names the verb. Said once,
+            // and a tick late so the resize has laid out — the numbers the count has to be chosen against
+            // are the band's own, and they differ per OS (`tab-widths`).
             if (acts.settling && !acts.told) {
                 acts.told = true
                 Harness.report(verb + " crowded=false tabs=" + acts.pageRepeater.count
@@ -100,7 +100,7 @@ Item {
     // tab that is — with the first one (the default) the strip is sent to its far end and the stand-in rides the left
     // edge; with the last, the other way about.
     //
-    // The picture holds the stand-in but not the rule behind it: a strip whose front tab is genuinely at the edge
+    // The picture holds the stand-in alone: a strip whose front tab is genuinely at the edge
     // frames exactly like one standing in for a tab that is nowhere on it, so `onScreen=false` has to be said out loud.
     SampleTimer {
         id: tabPinTimer
@@ -114,9 +114,9 @@ Item {
             // reading put between them is a reading the table would have to spell out to get past
             // (`verify/verbs.rs`). Which edge it took comes after, because only the default argument fixes it.
             //
-            // `kept=` stands in front of the pair rather than between them: the stand-in is dressed as the tab it
-            // stands for and drawn at that tab's width, so the one thing left for it to get wrong is what it says in
-            // that width — and a name cut away to the mark photographs as a short name would (`TabPin.nameKept`).
+            // `kept=` stands in front of the pair: the stand-in is dressed as the tab it stands for and drawn at
+            // that tab's width, so the one thing left for it to get wrong is what it says in that width — and a
+            // name cut away to the mark photographs as a short name would (`TabPin.nameKept`).
             // `crushed=` is the same question asked of the rows behind it, which no picture of this verb holds at all.
             Harness.report(
                 "tab_pin kept=" + acts.topBar.tabPinNameKept
@@ -135,7 +135,7 @@ Item {
     // PGG_AUTO_ACT=tab-pin-go: and the press that takes it away again. The strip travels until the row it stood for is
     // whole on screen, and the stand-in steps aside at the end of that travel.
     //
-    // Nothing here is a picture: a settled strip with its front tab in view is the same photograph whether it
+    // The report carries this: a settled strip with its front tab in view is the same photograph whether it
     // travelled there or was never sent away at all. `travelled=` is the strip having moved under the press —
     // `from=` and `run=` are the two ends of it — and `gone=` is the stand-in's own answer to having arrived.
     SampleTimer {
@@ -155,7 +155,7 @@ Item {
                 tabPinGoTimer.pressed = acts.topBar.pressTabPin()
                 return
             }
-            // The travel is quick rather than instant (`TabStrip.showFrontTab`), so what is waited for is its end:
+            // The travel takes a moment (`TabStrip.showFrontTab`), so what is waited for is its end:
             // a shot taken mid-flight holds a strip halfway to somewhere, which is neither answer.
             if (acts.topBar.tabRunTravelling || !acts.topBar.frontTabWhole || acts.topBar.tabPinShown)
                 return
@@ -183,7 +183,7 @@ Item {
     // end a tab opened now arrives at. The argument is the repository to open: one the strip has not got, built
     // beside the twelve it came up with, because everything handed to the run at startup is already in the strip.
     //
-    // No picture answers this one either: a strip standing on its newest tab frames the same whether it travelled
+    // The report answers this one too: a strip standing on its newest tab frames the same whether it travelled
     // there or was sitting on that end all along. `travelled=` is the band having moved under the ask, and
     // `arrived=` the tab it moved for being whole in the run at the end of it.
     SampleTimer {

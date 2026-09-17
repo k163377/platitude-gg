@@ -2,15 +2,15 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// ToolButton wearing the theme's flat hover wash in place of the style's own panel (デザイン規約 §色: ホバーは bgHover の重ね色).
+// ToolButton wearing the theme's flat hover wash (デザイン規約 §色: ホバーは bgHover の重ね色).
 //
-// Fusion's ButtonPanel is not a tint — it is a gradient face with a 2px radius, an outline and a second contrast line
+// Fusion's ButtonPanel is a gradient face with a 2px radius, an outline and a second contrast line
 // inside it, so a hovered tool button read as a raised box among rows, headers and rail cells that answer the same
 // pointer with a flat wash and nothing else. A checked one kept that box up whether or not anyone was pointing at it,
 // which is why the fold control in the sidebar's header band, and the eye that keeps tags out of the graph, both looked
 // like a different kind of control from everything beside them.
 //
-// The wash is the background rather than a child so it stays behind the icon a caller hands `contentItem`, and it keeps
+// The wash is the background so it stays behind the icon a caller hands `contentItem`, and it keeps
 // the panel's implicit 20 so no button changes size by being flattened.
 ToolButton {
     id: hoverToolButtonSelf
@@ -26,7 +26,7 @@ ToolButton {
     /// heading's two and every dialog's pair stopped lighting at all). So the rule lives in one place and the two
     /// backgrounds read it.
     ///
-    /// Pressed is a step up from hover rather than the style's darker face: with no panel under it, a wash that lifted
+    /// Pressed is a step up from hover: with no panel under it, a wash that lifted
     /// on press would leave the button answering a held finger with nothing.
     readonly property color washColor:
         !hoverToolButtonSelf.enabled ? "transparent"
@@ -35,16 +35,16 @@ ToolButton {
         : "transparent"
 
     /// Stands in for the pointer, which headless cannot inject (`NavItemDelegate.tipPointedAt` and its kin). Read
-    /// where `hovered` is read and nowhere else, so a run lights what a hand lights — wash and tip together, never one
-    /// without the other.
+    /// where `hovered` is read and nowhere else, so a run lights what a hand lights — wash and tip together, as
+    /// one.
     property bool pointedAt: false
     /// A hand is on this button, whichever of the two put it there.
     readonly property bool lit: hoverToolButtonSelf.hovered || hoverToolButtonSelf.pointedAt
     /// Automation: the tip this button raised is up. The attached tooltip waits out `tipDelayMs` before it stands, so
-    /// this is the one thing that says the words are on screen rather than merely asked for.
+    /// this is the one thing that says the words are on screen.
     readonly property bool tipShown: hoverToolButtonSelf.ToolTip.visible
 
-    // Said out loud rather than left to the platform. A Control with no ancestor claiming hover falls back to the
+    // Said out loud. A Control with no ancestor claiming hover falls back to the
     // theme's `useHoverEffects` hint, which the offscreen platform answers with false (measured with qmltestrunner: the
     // same scene washes for a `HoverHandler` and not for a ToolButton). The rows and cells beside these buttons use
     // handlers, which never ask — so leaving the hint to decide is what makes one control in a band answer the pointer
@@ -60,7 +60,7 @@ ToolButton {
     /// A word inside `tip` that is a place to go, and the name the page answers for it (`RepoPage.tipLinkAsked`).
     /// Both empty — the ordinary case — leaves the tip the plain sentence it is.
     ///
-    /// **The sentence itself is never spelled twice.** `tip` stays plain: it is what is measured, what a run reads
+    /// **The sentence itself is spelled once.** `tip` stays plain: it is what is measured, what a run reads
     /// back (`TopBar.fetchTipShown`), and what can hold a ref name or a path git printed without a `<` in it eating
     /// the rest of the line. The tooltip finds this word inside it and draws that run as an anchor, which is also
     /// where the anchor's colour has to be decided (`SharedToolTip`).

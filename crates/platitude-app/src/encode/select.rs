@@ -69,7 +69,7 @@ mod tests {
     #[test]
     fn a_row_with_no_hunk_selects_nothing() {
         // Rows outside any hunk (the binary-file note) carry -1, and
-        // staging one of those must not fall back to hunk zero.
+        // staging one of those selects nothing.
         assert!(hunk_selection(-1, -1).is_empty());
         assert!(hunk_selection(-1, 2).is_empty());
     }

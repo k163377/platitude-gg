@@ -9,24 +9,24 @@ import platitude.ui
 // `…`): the tabs are what that row is for, and a row of badge words beside them is the widest thing this app ever puts
 // there (デザイン規約 §ウィンドウの縁).
 //
-// A card rather than a `ToolTip`, for the reason `EolHoverCard` is one: a tooltip's ground is the Fusion default from
+// A card, for the reason `EolHoverCard` is one: a tooltip's ground is the Fusion default from
 // outside this theme, and what stands on it here is a badge whose whole meaning is its colour.
 //
 // Each row is one of the band's badges, with the one thing that badge had no room for beside it (規約 §hover
 // のツールチップ = ラベルに入らなかった 1 点だけを足す). The badges keep their own shapes — the frame and the fill are what says which of them
 // is the one that stops work — so this is the picture the band stands for, only stacked.
 //
-// **The sentences can be taken away, the badges cannot.** A `CardText` is what the right-hand half of every row is,
+// **The sentences can be taken away.** A `CardText` is what the right-hand half of every row is,
 // because the git version and the count of waiting files are things a reader wants in their hands. A badge is a mark
-// rather than a line of content — its word is the band's own, it is drawn to be recognised by colour and shape, and one
+// — its word is the band's own, it is drawn to be recognised by colour and shape, and one
 // of them is a button.
 //
-// Owned by the band rather than by the mark: a popup parented to something that can be laid out away takes the card
+// Owned by the band: a popup parented to something that can be laid out away takes the card
 // with it (app-ui.md).
 AppCard {
     id: stateCard
 
-    /// What the working tree is in the middle of, handed in rather than read: the card is a view, and the band is the
+    /// What the working tree is in the middle of, handed in: the card is a view, and the band is the
     /// one that knows which page is current (app-ui.md コンポーネント配線規約).
     property string opText: ""
     property string opAlso: ""
@@ -52,23 +52,23 @@ AppCard {
     /// What was said about the walk that gave up, where anybody said anything (`GraphModel.error`).
     property string staleWhy: ""
 
-    /// The one row that is also a way somewhere. The badge it replaced was pressable, and folding the band must not
-    /// cost the way back to the setup screen after "Not now" (規約 §identity).
+    /// The one row that is also a way somewhere. The badge it replaced was pressable, and folding the band keeps
+    /// the way back to the setup screen after "Not now" (規約 §identity).
     signal identityRequested()
 
     /// One width for the badge column, so the sentences beside them all start on the same line (the reset submenu's
-    /// chip column, same reasoning). Only the rows that stand are measured — a badge that is not drawn should not push
-    /// the column out.
+    /// chip column, same reasoning). Only the rows that stand are measured — the column is as wide as what
+    /// is drawn.
     readonly property real badgeRun: Math.max(stateCard.opShown ? opBadge.implicitWidth : 0,
                                                stateCard.conflictShown ? conflictBadge.implicitWidth : 0,
                                                stateCard.identityShown ? identityBadge.implicitWidth : 0,
                                                stateCard.staleShown ? staleBadge.implicitWidth : 0,
                                                stateCard.oldGitShown ? oldGitBadge.implicitWidth : 0)
 
-    /// Automation: which rows are standing, in band order. Read off the rows rather than off the flags above, so a row
+    /// Automation: which rows are standing, in band order. Read off the rows, so a row
     /// that is asked for and left out is not counted here.
     ///
-    /// **Standing is not yet drawn**: the layout gives a row its place a frame later, and this says nothing about
+    /// **Standing precedes drawn**: the layout gives a row its place a frame later, and this says nothing about
     /// that. `laidOut` is what says the card holds these — a reader who wants the picture's own answer waits for it
     /// first (`badges-hover` の `rows=`).
     function rowsLaidOut() {
@@ -117,7 +117,7 @@ AppCard {
         return bottom > 0 && Math.abs(rows.height - bottom) < 0.5
     }
 
-    // No `CloseOnPressOutside`: the pointer leaving is what closes this one (`BandStateGroup.settleStateCard`), and a
+    // Escape only: the pointer leaving is what closes this one (`BandStateGroup.settleStateCard`), and a
     // press outside is already on its way somewhere else.
     closePolicy: Popup.CloseOnEscape
     // The pointer leaving is what closes it, so the card has to see both halves of `AppCard.pointerInside` — the face
@@ -125,7 +125,7 @@ AppCard {
     tracksPointer: true
     contentPointed: contentHover.hovered
     // Every gap in this card is a place a selection can start (規約 §hover のツールチップ). The badges keep their own
-    // face: they are not content, and the pad lies under them (規約: バッジと印も対象外).
+    // face: the pad lies under them (規約: バッジと印も対象外).
     textContent: rows
 
     contentItem: ColumnLayout {
@@ -135,7 +135,7 @@ AppCard {
             id: contentHover
         }
 
-        // The stopped operation. Its own way out is a card in the working-tree pane rather than anything here, and
+        // The stopped operation. Its own way out is a card in the working-tree pane, and
         // where that sits is the one thing the badge could not say (規約 §進行中の操作から出る).
         RowLayout {
             id: opRow
@@ -160,8 +160,8 @@ AppCard {
                         font.pixelSize: Theme.fontSm
                         font.weight: Font.DemiBold
                     }
-                    // Bisect runs alongside rather than instead, so it is the one thing that can share this badge. What
-                    // goes between the two names is drawn, not typed — a middle dot would put a full-width cell inside
+                    // Bisect runs alongside, so it is the one thing that can share this badge. What
+                    // goes between the two names is drawn — a typed middle dot would put a full-width cell inside
                     // the badge (規約 §余白).
                     DotMark {
                         visible: stateCard.opAlso !== ""
@@ -222,7 +222,7 @@ AppCard {
             }
         }
 
-        // Nothing to attribute commits to. The row is pressable where the other two are not: this is the one state of
+        // Nothing to attribute commits to. The row is pressable: this is the one state of
         // the three the band can do something about on the spot.
         RowLayout {
             id: identityRow
@@ -269,7 +269,7 @@ AppCard {
             }
         }
 
-        // The graph is not this repository's history. **Which of the two ways it came to be so is the one thing the
+        // The graph and the repository disagree. **Which of the two ways it came to be so is the one thing the
         // badge could not say**, and it is what a reader needs to know here: rows are missing, or every row is there
         // and out of date. The two are the same position — nothing on screen may be acted on — so they share a badge
         // and part on this line.

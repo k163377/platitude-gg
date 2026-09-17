@@ -50,9 +50,9 @@ Item {
             return f.mapToItem(root, f.width * fx, f.height / 2)
         }
 
-        // The press answers with the control's one word instead of offering again. **First in the file on purpose**:
-        // the answer stands until the pointer leaves the plate, and this platform delivers no `hovered` to a
-        // `Control` at all, so nothing here can put the offer back once a press has taken it.
+        // The press answers with the control's one word. **First in the file on purpose**: the answer stands until
+        // the pointer leaves the plate, and this platform delivers no `hovered` to a `Control` at all, so nothing
+        // here can put the offer back once a press has taken it.
         //
         // **Only the words are asked here.** What a pointer would have seen — the open tip taking the new words —
         // is asked in the app, where a tip can be raised without one (verify-ui, `hash-tip`).
@@ -92,7 +92,7 @@ Item {
         }
 
         // Jitter inside the platform's own drag distance is still a click, or the plate would answer a shaky hand
-        // with a selection instead of the copy it asked for.
+        // with a selection where it asked for the copy.
         function test_d_a_press_that_barely_moves_is_still_a_click() {
             const p = pointIn("hash", 0.5)
             mousePress(root, p.x, p.y)

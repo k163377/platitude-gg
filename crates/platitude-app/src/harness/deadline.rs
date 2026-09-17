@@ -25,7 +25,7 @@
 //! (`xtask::verify::wedge`); the trail is what says where it stood.
 //!
 //! **The ceiling is a diagnosis and nothing else** (.claude/rules/core.md
-//! §非同期・並行テスト). What the thread finds is never a pass, and what it
+//! §非同期・並行テスト). What the thread finds is a failure, and what it
 //! writes names the limit it met: a station that stood still for the
 //! grace is a wedge; a station reached after the ceiling that had not
 //! stood the grace when the last look came is out of time, and whether
@@ -54,12 +54,12 @@ use std::time::{Duration, Instant};
 /// taken — the earliest a station reached at the ceiling can have stood
 /// it. One number on purpose: the grace and the wedge are one judgement.
 /// Well inside the grace the harness allows beyond the same ceiling
-/// (`xtask::verify::child`), so the process names its own death rather
-/// than being reaped without a word. The QML watchdog's clock starts
-/// later than this one's — at `begin()`, once the QML is loaded — so a
-/// run whose QML took longer than this to load is ended here, in the
-/// event loop, before its own watchdog fires; the account's `the loop
-/// last turned` is what tells that loop from one that stopped.
+/// (`xtask::verify::child`), so the process names its own death. The
+/// QML watchdog's clock starts later than this one's — at `begin()`,
+/// once the QML is loaded — so a run whose QML took longer than this to
+/// load is ended here, in the event loop, before its own watchdog
+/// fires; the account's `the loop last turned` is what tells that loop
+/// from one that stopped.
 const PAST_THE_CEILING: Duration = Duration::from_secs(10);
 
 /// How much longer a station reached after the ceiling is given to stand
@@ -75,7 +75,7 @@ const ONE_MORE_LOOK: Duration = Duration::from_secs(5);
 const LOOK_AGAIN: Duration = Duration::from_millis(250);
 
 /// What a process ended here exits with. A number of its own, so the
-/// harness can say what happened rather than only that it was not zero.
+/// harness can say what happened.
 pub(crate) const WEDGED: i32 = 97;
 
 /// What the report is left in, beside the pictures. Read by the harness
@@ -295,9 +295,9 @@ fn append(path: &Path, line: &str) -> std::io::Result<()> {
 /// Holds the process at one station for good, where a run asked to be
 /// stopped there (`PGG_FAULT_HANG`, `xtask::verify::faults`).
 ///
-/// **After the mark and never before it.** What a held run is for is the
-/// record: it has written the station it is held at by the time it stops,
-/// and whether the parent can read that back is the thing being checked.
+/// **After the mark.** What a held run is for is the record: it has
+/// written the station it is held at by the time it stops, and whether
+/// the parent can read that back is the thing being checked.
 #[cfg(feature = "automation")]
 fn hold_here(station: Station) {
     /// How long a held run sleeps between doing nothing at all. Only how
@@ -356,9 +356,9 @@ pub(crate) fn watch() {
     let shot_dir = knobs.shot_dir.clone();
     let ceiling = Duration::from_millis(ceiling);
     // The trail comes up before the thread and before the first station.
-    // Emptied rather than added to: a named `--shot-dir` outlives the run
-    // that made it (`xtask::verify::run`), and the last run's stations
-    // read as this one's.
+    // Emptied: a named `--shot-dir` outlives the run that made it
+    // (`xtask::verify::run`), and the last run's stations would
+    // otherwise read as this one's.
     if !shot_dir.is_empty() {
         let path = Path::new(&shot_dir).join(TRAIL_FILE);
         match std::fs::write(&path, "") {
@@ -427,12 +427,12 @@ struct Ended {
 ///
 /// A wedge is a station that stands still: the ending steps past the
 /// event loop are each bounded, so one still arriving at new ones is
-/// working, not stuck. Without the looks an ending still reaching new
-/// stations under load would be ended here as a wedge rather than by the
-/// harness a few seconds later — the same run, ended earlier and
-/// misnamed, which is a verdict this side has no business making. The
-/// looks are bounded by [`ONE_MORE_LOOK`] off the same clock as the
-/// sleep, so the harness's own reaping is always still behind them
+/// working. Without the looks an ending still reaching new stations
+/// under load would be ended here as a wedge rather than by the harness
+/// a few seconds later — the same run, ended earlier and misnamed,
+/// which is a verdict this side has no business making. The looks are
+/// bounded by [`ONE_MORE_LOOK`] off the same clock as the sleep, so the
+/// harness's own reaping is always still behind them
 /// (`xtask::verify::child`).
 fn hold_out(clock: Instant, ceiling: Duration) -> Ended {
     let first_look = ceiling + PAST_THE_CEILING;
@@ -440,18 +440,18 @@ fn hold_out(clock: Instant, ceiling: Duration) -> Ended {
     // A ceiling, and only a diagnosis: the run's own ceiling and the grace
     // past it, which names a run that has not ended — one that has takes
     // this thread with it.
-    // waits(ceiling): slept out rather than waited on, because a wedged process announces nothing —
-    // and what this reaches past the ceiling is only ever a failure
+    // waits(ceiling): slept out, because a wedged process announces nothing — and what this
+    // reaches past the ceiling is only ever a failure
     std::thread::sleep(first_look.saturating_sub(clock.elapsed()));
     loop {
         let now = clock.elapsed();
         let stood = Stood::unpack(STOOD.load(Ordering::Relaxed));
         match judge(now, now.saturating_sub(stood.reached), last_look) {
             Look::Ended(limit) => return Ended { limit, stood },
-            // Paced, not judged: a station is announced by nothing this
-            // thread can block on, so it is looked at again — never later
-            // than the last look, and the look is what decides.
-            // waits(paced): the loop ends on what a look found ([`judge`]), never on a count of these
+            // Paced: a station is announced by nothing this thread can
+            // block on, so it is looked at again — never later than the
+            // last look, and the look is what decides.
+            // waits(paced): the loop ends on what a look found ([`judge`]), and on that alone
             Look::Again(pace) => std::thread::sleep(pace),
         }
     }
@@ -490,9 +490,9 @@ fn end_it(clock: Instant, shot_dir: &str, ended: &Ended) {
 
 /// Ends the process with `code` and no teardown at all.
 ///
-/// **Never `std::process::exit` from here.** The thread this runs on is
-/// the one that outlived a wedge, and the wedged thread is still holding
-/// whatever it wedged on. On Windows `exit` is `ExitProcess`, which ends
+/// **Ended with `TerminateProcess`.** The thread this runs on is the one
+/// that outlived a wedge, and the wedged thread is still holding whatever
+/// it wedged on. On Windows `exit` is `ExitProcess`, which ends
 /// every other thread where it stands and then gives the loaded
 /// libraries their detach — where a destructor that waits on that lock
 /// waits for good, in a process with nothing left running to say so, and
@@ -547,9 +547,9 @@ unsafe extern "C" {
     fn _exit(code: i32) -> !;
 }
 
-/// The whole of what the process can still say about itself. One moment
-/// for the whole line, read as it is written rather than at the look: the
-/// loop may have reported since, and every number is against the same
+/// The whole of what the process can still say about itself. One
+/// moment for the whole line, read as it is written: the loop may
+/// have reported since, and every number is against the same
 /// clock.
 fn report(clock: Instant, shot_dir: &str, ended: &Ended) -> String {
     let now = clock.elapsed();
@@ -583,7 +583,7 @@ fn account(ended: &Ended, now: Duration, pid: u32, last_word: &str, pictures: &s
 /// What QML last reported, and how long ago — the last moment the event
 /// loop is known to have turned.
 ///
-/// **Never waits for the record.** A wedge holding the lock would take
+/// **Read if the lock is free.** A wedge holding the lock would take
 /// the report with it, and the report is the only thing left.
 fn last_word(now: Duration) -> String {
     match HEARD.try_lock().map(|held| held.clone()) {
@@ -599,7 +599,7 @@ fn last_word(now: Duration) -> String {
 
 /// How much of a report is worth carrying. The census names every
 /// component a run showed — four kilobytes of one line — and what is
-/// wanted here is which report it was, not what it said.
+/// wanted here is which report it was.
 const KEEP: usize = 160;
 
 /// Cuts a report to [`KEEP`], on a character boundary. The mark is ASCII:
@@ -613,8 +613,8 @@ fn clipped(message: &str) -> String {
     }
 }
 
-/// The pictures on disk when the process stopped, named rather than
-/// counted: a run wedged between the two grabs has one of a pair.
+/// The pictures on disk when the process stopped, named one by one: a
+/// run wedged between the two grabs has one of a pair.
 fn pictures(shot_dir: &str) -> String {
     if shot_dir.is_empty() {
         return "-".into();
@@ -836,8 +836,8 @@ mod tests {
         assert_eq!(cut.chars().count(), super::KEEP + 3);
     }
 
-    /// Cut on a character, never in the middle of one: a report naming a
-    /// branch or a path carries whatever the app spelled it with.
+    /// Cut on a character boundary: a report naming a branch or a path
+    /// carries whatever the app spelled it with.
     #[test]
     fn a_report_is_cut_between_characters() {
         let said = "報告".repeat(200);

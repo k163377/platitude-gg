@@ -31,7 +31,7 @@ QtObject {
     readonly property string commandsTitle: qsTr("GIT COMMANDS")
     /// The name the command log answers to inside a tooltip's markup (`CardText.linkAsked` → `RepoPage.tipLinkAsked`).
     ///
-    /// **Not translated and not a URL.** It never reaches a reader — it is the one word the writer of a tip and the
+    /// **A fixed spelling.** It never reaches a reader — it is the one word the writer of a tip and the
     /// page that reads it back have to spell the same, and a name that moved with the language would pair them only
     /// in the language it was written in. The scheme is this application's own so that nothing here can be mistaken
     /// for an address something else in the machine would open.
@@ -39,7 +39,7 @@ QtObject {
 
     /// The way out that writes nothing, as the three dialogs' foot says it. **Dialogs only**: what a dialog's way out
     /// puts away is the box itself, and the reader can see its edges. The plan takes the graph's whole seat with no
-    /// box to dismiss, so its own way out names what goes instead (`RebasePlanPane` — `Discard`).
+    /// box to dismiss, so its own way out names what goes (`RebasePlanPane` — `Discard`).
     readonly property string cancel: qsTr("Cancel")
 
     /// Why a menu row is out while it cannot be chosen (`AppMenuItem.blockedWhy` — デザイン規約 §無効: the line is the
@@ -48,15 +48,15 @@ QtObject {
     /// screen. Said here because the ref menu, the branch card, the tag card and the remote menu all have to say it
     /// the same way.
     ///
-    /// **What is running, not what git is.** Every command this window runs is a git one and the panel that holds
+    /// **What is running.** Every command this window runs is a git one and the panel that holds
     /// them is spelled `GIT COMMANDS`, so naming git here buys nothing — and it would not settle the one ambiguity
     /// there is, since the row the pointer is on wears a git command of its own on its chip. `running` is what
-    /// settles it. Short enough that the tip stands inside the menu it explains rather than wider than it.
+    /// settles it. Short enough that the tip stands inside the menu it explains.
     readonly property string otherCommandRunning: qsTr("Wait for the running command")
 
     /// Why the delete rows that reach a remote are out on a name whose two sides have drifted — the branch card's
-    /// pair and the tag card's say it with one voice (デザイン規約 §左メニューの所作 の削除の表). **The state, not the
-    /// way out**: what the reader would do about it is delete the reading from the row where it does stand, and that
+    /// pair and the tag card's say it with one voice (デザイン規約 §左メニューの所作 の削除の表). **The state**:
+    /// what the reader would do about it is delete the reading from the row where it does stand, and that
     /// row is on the screen already — a line that sent them there would be longer than the menu it explains.
     readonly property string remoteOnAnotherCommit: qsTr("The remote is on another commit")
 
@@ -65,7 +65,7 @@ QtObject {
     readonly property string badgeConflicts: qsTr("CONFLICTS")
     readonly property string badgeSetIdentity: qsTr("SET IDENTITY")
     readonly property string badgeOldGit: qsTr("OLD GIT")
-    /// **What is drawn is not this repository's history**, either way it came to be so: the walk gave up part-way
+    /// **What is drawn is out of date**, either way it came to be so: the walk gave up part-way
     /// through (some of it, or none), or every row landed and the rebuild that would have refreshed them did not. One
     /// word for the two, because a reader's position is the same in both — nothing on screen can be acted on as if it
     /// were current — and the card's line says which it was. Unlike the window cut nothing says how much is missing,
@@ -81,8 +81,8 @@ QtObject {
     }
 
     /// What to call a side git left nothing to name. Reached from a cherry-pick of a commit no branch can see, among
-    /// others. The names swap over during a rebase, so they are handed in from `WorkTreeModel` rather than worked out
-    /// here.
+    /// others. The names swap over during a rebase, so they are handed in from
+    /// `WorkTreeModel`.
     function ourSide(name) {
         return name !== "" ? name : qsTr("this branch")
     }
@@ -94,7 +94,7 @@ QtObject {
     /// the dialog the picker's answer raises, and the screen a tab that could not open shows — so the six they make
     /// between them are three sentences.
     ///
-    /// `other` is git having trouble of its own rather than an answer about the folder, and its line says only that
+    /// `other` is git having trouble of its own, and its line says only that
     /// much: what happened is git's to say, and the screen quotes it underneath.
     function openFailure(kind) {
         switch (kind) {
@@ -108,8 +108,8 @@ QtObject {
     /// (`avatar::AvatarRefusal`). `facts` carries the numbers the sentence takes, U+001F-joined in the order it
     /// takes them; `said` is the operating system's own line, for the two failures it made and empty for the rest.
     ///
-    /// **Five of the seven are this application's own refusals**, and their words belong here rather than in a Rust
-    /// string like every other word on screen (app-ui.md「Rust に文言を置かない」). The other two are the reverse
+    /// **Five of the seven are this application's own refusals**, and their words belong here, like every other
+    /// word on screen (app-ui.md「Rust に文言を置かない」). The other two are the reverse
     /// case: what the operating system said is carried across untouched, under a frame written here — the same
     /// division a report makes between the heading and whoever wrote the line under it (デザイン規約 §長さ).
     ///
@@ -176,8 +176,8 @@ QtObject {
     }
 
     /// The second line for the reports **nobody outside answered** — this end refused them itself, before git was
-    /// asked, so the words are ours and belong here rather than in a Rust string (app-ui.md「Rust に文言を置かない」).
-    /// Empty for the reports that quote somebody else; the page uses what came across instead.
+    /// asked, so the words are ours and belong here (app-ui.md「Rust に文言を置かない」).
+    /// Empty for the reports that quote somebody else; the page uses what came across.
     function writeReportedWhy(kind) {
         switch (kind) {
         case "stale-stage":
@@ -189,7 +189,7 @@ QtObject {
         case "half-rename":
             return qsTr("The new name was made; the old one is still there.")
         // The rewrites a fold or a drop is turned down for are said one door further in, because a second door
-        // reaches three of them. **Not a list of their kinds** — a second copy of that list is one a sixth
+        // reaches three of them. **Delegated whole** — a second copy of that list is one a sixth
         // refusal is added to on one side only, and the row menu would lose its second line without a word.
         // Everything else quoted somebody outside, and `rewriteRefusedWhy` answers those with the same empty
         // line this has always given them.
@@ -207,8 +207,8 @@ QtObject {
     /// gesture is over (`reportTone`, デザイン規約 §答えの要らない報せ).
     ///
     /// Each line says the one thing about the history that stopped it, in the words of what is on screen: rows,
-    /// branches and the commit under the pointer. Never `rebase` — nothing was run, and the reader chose a fold,
-    /// a drop or a plan rather than a rebase (デザイン規約 §用語表).
+    /// branches and the commit under the pointer. The words are a fold, a drop or a plan — never `rebase`, since
+    /// nothing was run (デザイン規約 §用語表).
     function rewriteRefusedWhy(kind) {
         switch (kind) {
         case "across-merge":
@@ -221,7 +221,7 @@ QtObject {
             return qsTr("The commit below this one is not in this clone. Replaying from here would cut the branch off from the rest of its history.")
         case "drop-all":
             return qsTr("This is the last commit, and a branch cannot be left with no history at all.")
-        // The two that are about right now rather than about the commits: something outside this window moved
+        // The two that are about right now: something outside this window moved
         // between the press and git. **One line each, like the five above** — the bar gives a report one
         // (`NoticeBar`, デザイン規約 §長さ), and a sentence that runs past it loses its end rather than wrapping.
         //
@@ -244,9 +244,9 @@ QtObject {
     ///    that has to be dealt with (a rename that fell between its halves).
     ///  - **`danger` — the gesture is over and what was asked for did not happen.** Every other report: by the time a
     ///    bar is down the press has been spent and the screen has moved on (the fetch landed, the diff was read again,
-    ///    the row came back), so pressing again is a new gesture rather than a correction of this one.
+    ///    the row came back), so pressing again is a new gesture.
     ///
-    /// **Never nothing**: a press that was turned down says so in colour, whoever turned it down.
+    /// **Always a colour**: a press turned down says so in colour, whoever turned it down.
     function reportTone(kind) {
         return kind === "rename" || kind === "half-rename" ? "warning" : "danger"
     }
@@ -273,10 +273,10 @@ QtObject {
     /// there is nothing to say, which is most of the time.
     ///
     /// Every branch is a **whole sentence**: the two estimated cases can only claim as far as the sample reached, so
-    /// the range is part of what is being said rather than a clause bolted on. Stitching fragments would also leave a
+    /// the range is part of what is being said. Stitching fragments would also leave a
     /// translator with half a sentence and no way to reorder it.
     ///
-    /// `LF` and `CRLF` are written plainly, not as code chips — the chip shape is lowercase monospace and an all-caps
+    /// `LF` and `CRLF` are written plainly — the chip shape is lowercase monospace and an all-caps
     /// abbreviation does not sit in it (デザイン規約 §git 用語のコード表記).
     function lineEndings(kind, from, to, lines, scope, ext) {
         switch (kind) {
@@ -315,15 +315,15 @@ QtObject {
 
     /// **A ref name inside a sentence**, spelled as the markup rich text reads: the name in the colour it wears
     /// everywhere else it is met, the rest of the line in whatever the line is drawn in (デザイン規約 §ref の種別
-    /// 「現在のブランチは、名前が出る場所すべてで textLink」). One field rather than three, so the line elides, measures and
+    /// 「現在のブランチは、名前が出る場所すべてで textLink」). One field, so the line elides, measures and
     /// is dragged over the way it did before a colour went into it.
     ///
-    /// **The seat is cut out of the sentence** rather than the name being looked for in the finished line: a branch
+    /// **The seat is cut out of the sentence**: a branch
     /// called `it` would otherwise be found in the first word of `into it`. A sentence with no seat in it gets no
     /// markup at all, and the caller falls back to its plain words.
     ///
     /// **Every piece is escaped on the way in.** The sentence is this application's, but the name is not — a branch
-    /// called `<b>` has to read as its name rather than vanish.
+    /// called `<b>` has to read as its name.
     function nameInSentence(sentence, name, tint) {
         const seat = sentence.indexOf("%1")
         if (seat < 0)
@@ -334,8 +334,8 @@ QtObject {
     }
     /// The same shape with a place to go where the colour was: the one word in the sentence a press can reach
     /// (`CardText.markup`). **The whole sentence comes in already said** — the plain spelling is the one that is
-    /// measured and read back (`HoverToolButton.tip`), so this finds the place inside it rather than being handed
-    /// the halves.
+    /// measured and read back (`HoverToolButton.tip`), so this finds the place inside
+    /// it.
     ///
     /// The tint rides inside the anchor because an anchor's ink is the document's own: neither `linkColor` nor
     /// `palette.link` reaches a `TextEdit` (both measured, `CardText`). The href is read by nobody but the page that
@@ -349,8 +349,8 @@ QtObject {
              + Words.inked(sentence.substring(seat + place.length))
     }
     /// Words as markup reads them. **Rich text folds a run of spaces the way HTML does** (`encode::markup`), so all
-    /// but the last space of a run is pinned — and **only those**: one of the two fields this is drawn in wraps rather
-    /// than cutting (`NoticeLine`), and a sentence pinned at every space has nowhere left to break, so it breaks
+    /// but the last space of a run is pinned — and **only those**: one of the two fields this is drawn in wraps
+    /// (`NoticeLine`), and a sentence pinned at every space has nowhere left to break, so it breaks
     /// through the middle of a word instead (measured, qmltestrunner `tst_refwords`).
     ///
     /// **A line break is spelled out as well.** Rich text folds a newline the way it folds spaces, and the one field

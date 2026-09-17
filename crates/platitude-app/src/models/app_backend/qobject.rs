@@ -11,13 +11,13 @@
 //! platform calls to `crate::winframe`, and the measurement to
 //! `crate::harness`.
 //!
-//! **The one thing left is not a split, it is a redesign**: `AppBackend`
-//! answers for two subjects — what git and the identity are doing, and
-//! what shape the window opened at — and the second could be a QObject of
-//! its own. That renames twenty slots in every QML file that calls them
-//! (the sixteen `start*` reads and the four `save*` writes that go with
-//! them), so it is a decision about the QML-facing object model and not
-//! something to do for a line count. Ask before starting it.
+//! **The one thing left is a redesign**: `AppBackend` answers for two
+//! subjects — what git and the identity are doing, and what shape the
+//! window opened at — and the second could be a QObject of its own. That
+//! renames twenty slots in every QML file that calls them (the sixteen
+//! `start*` reads and the four `save*` writes that go with them), so it
+//! is a decision about the QML-facing object model. Ask before starting
+//! it.
 
 use super::*;
 
@@ -149,9 +149,9 @@ impl AppBackend {
         Member = git_path_offers_restart,
         Notify = git_path_changed
     );
-    // `restartWanted` is read by the window rather than acted on here:
-    // `main` starts the successor, and it can only do that once the
-    // window is gone and the settings files have been let go of.
+    // `restartWanted` is read by the window: `main` starts the
+    // successor, and it can only do that once the window is gone and the
+    // settings files have been let go of.
     qproperty!(
         "restartWanted",
         Member = restart_wanted,
@@ -182,7 +182,7 @@ impl AppBackend {
     /// still queued or running (`Hub::writes_settled`). Asked when a
     /// close is requested, and sampled by the dialog that holds the
     /// window open while the answer is no (`QuitWaitDialog`) — a slot
-    /// over hub state, never bound (the recorded exception:
+    /// over hub state, asked anew (the recorded exception:
     /// rules-refs/app-ui.md の close ゲート項). Fails open on purpose: a
     /// missing hub means shutdown already owns the writes, and its join
     /// is the guarantee then.
@@ -214,7 +214,7 @@ impl AppBackend {
     pub(super) fn avatars_changed(&mut self);
 
     // The three below hand their bodies to `avatars.rs` (structure.md
-    // §分割 Qt): the slot has to be declared here, what it does does not.
+    // §分割 Qt): the slot is declared here, its body lives there.
     #[qslot]
     fn assign_avatar(&mut self, email: String, name: String, file_url: String) {
         self.file_avatar(&email, &name, &file_url);
@@ -232,7 +232,7 @@ impl AppBackend {
 
     // The two below hand their bodies to `persist.rs`, the way the avatar
     // slots hand theirs to `avatars.rs` (structure.md §分割 Qt): the slot
-    // has to be declared here, what it does does not.
+    // is declared here, its body lives there.
     #[qslot]
     fn set_auto_fetch_minutes(&mut self, minutes: i32) {
         self.apply_auto_fetch_minutes(minutes);
@@ -256,7 +256,7 @@ impl AppBackend {
     /// Records which git this computer runs — a path, or empty for
     /// whichever one `PATH` resolves — and asks that binary for its
     /// version. What it answers arrives on `gitPathState` and its three
-    /// neighbours; nothing is refused on the way in, because a path that
+    /// neighbours; every path is taken as written, because one that
     /// answers nothing is still what the reader wrote down.
     #[qslot]
     fn set_git_path(&mut self, path: String) {
@@ -328,21 +328,21 @@ impl AppBackend {
         crate::winframe::set_caption_strips([(tabs_x0, tabs_x1), (gap_x0, gap_x1)], bottom);
     }
 
-    /// Maximises the window or puts it back, through the platform rather
-    /// than through `visibility`. Qt maximises a frameless window by
-    /// resizing it, which leaves the platform with nothing to restore —
-    /// so the button did nothing while the band's double-click worked
+    /// Maximises the window or puts it back, through the platform. Qt
+    /// maximises a frameless window by resizing it, which leaves the
+    /// platform with nothing to restore — so the button did nothing
+    /// while the band's double-click worked
     /// (`winframe::set_maximized`).
     #[qslot]
     fn set_window_maximized(&self, maximized: bool) {
         crate::winframe::set_maximized(maximized);
     }
 
-    /// Puts the window down onto the taskbar, again through the platform
-    /// rather than through `visibility`: assigning `Minimized` tells Qt
-    /// the maximise is over too, and it clears the platform's
-    /// restore-to-maximised flag to match — so a maximised window came
-    /// back an ordinary one (`winframe::minimize`).
+    /// Puts the window down onto the taskbar, again through the
+    /// platform: assigning `Minimized` tells Qt the maximise is over
+    /// too, and it clears the platform's restore-to-maximised flag to
+    /// match — so a maximised window came back an ordinary one
+    /// (`winframe::minimize`).
     #[qslot]
     fn minimize_window(&self) {
         crate::winframe::minimize();
@@ -364,13 +364,13 @@ impl AppBackend {
 
     // -- window state -------------------------------------------------------
     //
-    // Read once as a page or the window is built, not bound: these are
-    // where something starts, and after that the UI owns the value. They
-    // are slots rather than properties for the same reason (規約 §QML
-    // バインディングはプロパティにしか反応しない — nothing here needs to
-    // react). Reading them off the hub rather than off a copy taken at
-    // startup is what makes a tab opened later pick up the layout that is
-    // in force now instead of the one the app launched with.
+    // Read once as a page or the window is built: these are where
+    // something starts, and after that the UI owns the value. They
+    // are slots for the same reason (規約 §QML
+    // バインディングはプロパティにしか反応しない — nothing here needs
+    // to react). Reading them off the hub is what makes a tab opened
+    // later pick up the layout that is in force now
+    // (`Hub::state`).
 
     #[qslot]
     fn start_window_x(&self) -> i32 {
@@ -461,11 +461,11 @@ impl AppBackend {
 
     /// The layout, from the one place that can see all of it. Reporting
     /// each value as it changes would write on every frame of a splitter
-    /// drag; the window says what it looks like on a timer instead, and
-    /// the hub only writes a file when that differs from what is in one.
+    /// drag; the window says what it looks like on a timer, and the hub
+    /// only writes a file when that differs from what is in one.
     ///
-    /// Three calls rather than one because the layout has more parts than
-    /// a Qt slot takes arguments. Each merges into what the hub holds.
+    /// Three calls, because the layout has more parts than a Qt slot
+    /// takes arguments. Each merges into what the hub holds.
     #[qslot]
     fn save_layout_sizes(
         &self,
@@ -536,10 +536,10 @@ impl AppBackend {
 
     /// Records `user.name` / `user.email` in the user's own configuration.
     ///
-    /// Global is deliberate: the answer is about the person, not one
-    /// project. Values are validated by the core (a line break would turn
-    /// the rest of the config file into another setting), and git's own
-    /// message comes back as `identityError`.
+    /// Global is deliberate: the answer is about the person. Values are
+    /// validated by the core (a line break would turn the rest of the
+    /// config file into another setting), and git's own message comes
+    /// back as `identityError`.
     #[qslot]
     fn save_identity(&mut self, name: String, email: String) {
         self.write_identity(name, email)

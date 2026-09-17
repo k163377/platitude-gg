@@ -9,7 +9,7 @@ import platitude.ui
 //
 // The leftover is real, and bigger than it looks: the elide gives a character back to *each* end at a time, so it can
 // stop as much as two characters short of what fits (measured, Yu Gothic UI `fontMd`, boxes 40..240: 1〜18px).
-// So it is moved twice. **The cut is worked out here rather than left to the elide**, one character at a time, until
+// So it is moved twice. **The cut is worked out here**, one character at a time, until
 // the name fills its column — 規約 §git 用語のコード表記「句は枠いっぱいまで使う — 余りを残して先に省略しない」, read on a
 // name. What is left after that is under one character, and it goes **into the cut**, where the mark already says
 // something was taken out. Neither edge of the column moves, and no row's ink stops short of it.
@@ -29,7 +29,7 @@ Item {
     property int weight: Font.Normal
     property real pixelSize: Theme.fontMd
     /// How far apart the letters are set — 0 everywhere but the tab strip, which opens a short name's tracking
-    /// (`TabMetrics.titleTracking`). It arrives here rather than on the drawn half alone because the cut is worked out
+    /// (`TabMetrics.titleTracking`). It arrives here, since the cut is worked out
     /// through these labels' own font: spacing set past the rulers would measure one name and draw a wider one.
     property real letterSpacing: 0
     /// Where the mark falls: `middle` for a name (told apart by both of its ends), `end` for a sentence (read from the
@@ -39,7 +39,7 @@ Item {
     /// The two halves that are drawn, and whether the mark stands between them — the output side, which is also how a
     /// caller asks whether this name was cut at all (`Text.truncated` has no meaning here: neither half is elided).
     ///
-    /// **Written by `relayout()` rather than bound.** Working the cut out means measuring candidate strings, and a
+    /// **Written by `relayout()`.** Working the cut out means measuring candidate strings, and a
     /// binding that writes to the ruler it reads would retrigger itself for ever.
     property string headText: ""
     property string tailText: ""
@@ -52,14 +52,14 @@ Item {
     function relayout() {
         const whole = cut.text
         // The whole name goes onto `measure` here, imperatively — written before any branch so the ruler behind
-        // `implicitWidth` never lags the text, and written by this handler rather than bound because a binding and
-        // this handler answer the same `textChanged` in an order nobody has written down. Owning the write is also
-        // what lets the fitness test below read `measure` instead of laying the whole name out a *second* time on
-        // `probe` — and a relayout whose text has not changed (a column drag, a window resize) lays it out no times:
-        // TextMetrics does nothing for a value it already holds.
+        // `implicitWidth` never lags the text, and written by this handler because a binding would answer the same
+        // `textChanged` in an order nobody has written down. Owning the write is also what lets the fitness test
+        // below read `measure`, so the whole name is laid out once — and a relayout whose text has not changed
+        // (a column drag, a window resize) lays it out no times: TextMetrics does nothing for a value it already
+        // holds.
         measure.font = headLabel.font
         measure.text = whole
-        // The column, read **after** that write and never before it. `implicitWidth` is this ruler's answer, so a
+        // The column, read **after** that write. `implicitWidth` is this ruler's answer, so a
         // caller that sizes the box off the name's own width — a tab is drawn as wide as what it is called
         // (`TabItemDelegate`) — moves the column from inside those two lines and re-enters this function on the way.
         // The nested run settles the name against the column it now has; read first, this one would lay its own
@@ -68,7 +68,7 @@ Item {
         // `PGG_AUTO_ACT=tab-widths`).
         const box = cut.width
         // No name, or no column yet — a delegate is built before the layout has given it one, and the labels below
-        // are anchored to the item rather than elided into it, so a name drawn against a box of nothing would be
+        // are anchored to the item, so a name drawn against a box of nothing would be
         // drawn in full over whatever the row keeps beside it.
         if (whole === "" || box <= 0) {
             cut.headText = ""
@@ -156,7 +156,7 @@ Item {
         }
         return n
     }
-    /// Where the elide put its mark. **Looked for rather than assumed** — `…` is a character a name may hold of its own
+    /// Where the elide put its mark. **Looked for** — `…` is a character a name may hold of its own
     /// (a stash is named by its message, 規約 §左メニューの所作), so the answer is the first mark that leaves a real head
     /// and a real tail of the name behind it.
     function cutPoint(whole, elided) {
@@ -220,7 +220,7 @@ Item {
         color: cut.color
         font: headLabel.font
         // In the middle of the cut. What the fill could not use is under one character, and halving it either side of
-        // the mark keeps it from reading as a space in the name. Never left of the head — a measure that came out a
+        // the mark keeps it from reading as a space in the name. Kept right of the head — a measure that came out a
         // hair wide would otherwise draw the mark over it.
         //
         // **A cut at the end puts it on the column's right edge instead**, which is the whole point of that mode: a

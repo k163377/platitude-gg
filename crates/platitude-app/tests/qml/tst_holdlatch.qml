@@ -77,7 +77,7 @@ Item {
 
     BandPushButton {
         id: band
-        // Clear of the plain button above: the mouse presses below are delivered by position, not by name.
+        // Clear of the plain button above: the mouse presses below are delivered by position.
         y: 48
         width: 160
         height: 32
@@ -127,7 +127,7 @@ Item {
 
         /// The other direction, which is the one that used to drop a press altogether: a plain press whose row turned
         /// into a held one before the release.
-        /// **The length is not the whole of the premise.** What a press is aimed at can be swapped out while the
+        /// **The premise holds the target as well.** What a press is aimed at can be swapped out while the
         /// length stays exactly where it was, and a fill that ran out over the new target would answer a question
         /// nobody asked.
         function test_a_hold_whose_target_went_raises_nothing() {
@@ -158,7 +158,7 @@ Item {
             compare(root.here.sent, 0, "and neither is the one it left, the press having been let go of elsewhere")
         }
 
-        /// **The destination is not the branch.** Two local branches can track one remote one, so a switch between
+        /// **The push sends the branch.** Two local branches can track one remote one, so a switch between
         /// them under the hand leaves `origin/main` on the button either way while the history about to be overwritten
         /// is another branch's (`PublishFlow.forcePush` sends `workTree.branch`).
         function test_a_band_hold_does_not_follow_a_branch_that_replaced_it() {
@@ -211,7 +211,7 @@ Item {
             compare(root.there.sent, 0)
         }
 
-        /// **A gesture is not over at the release.** A press that stopped short slides its fill back out, and an owner
+        /// **A gesture lasts past the release.** A press that stopped short slides its fill back out, and an owner
         /// latching something other than the length on `gesturing` has to hold through that slide — a row re-wording
         /// itself as the hand lifts is the same disagreement, half a beat later.
         function test_a_gesture_lasts_past_the_release_while_the_fill_slides_back() {
@@ -238,8 +238,8 @@ Item {
             drive.holdMs = 20
             drive.begin()
             drive.holdMs = 0
-            // The fill running out is the event, not a length of time: waited for by the animation's own end rather
-            // than by a clock (規約 §非同期・並行テスト).
+            // The fill running out is the event, waited for by the animation's own end
+            // (規約 §非同期・並行テスト).
             tryVerify(() => !drive.fill.running)
             compare(finishes.count, 0, "the hold ran out and said nothing")
         }
@@ -288,8 +288,7 @@ Item {
 
         /// And a hold that runs all the way through is answered **once**. The release still comes, and the same latch
         /// is what keeps it from falling through to the plain command beside the one the hold just ran — the reason
-        /// the click is judged from what the press was given (`ActionButton.clickWanted`) rather than from the length
-        /// standing at the release.
+        /// the click is judged from what the press was given (`ActionButton.clickWanted`).
         function test_a_hold_run_to_the_end_is_answered_once() {
             mousePress(button, 10, 10)
             tryVerify(() => holds.count === 1)
@@ -301,7 +300,7 @@ Item {
         /// **The hold's other hand** (デザイン規約 §長押し): focus the control and hold Space. The key is taken at
         /// the press against the live length and answered at the release against the one the press was given — a
         /// release judged by the new length would fall through to the control underneath, which reads it as a plain
-        /// press and runs the click a hold was being made instead of.
+        /// press and runs the command the hold stood in for.
         function test_a_key_held_when_the_answer_goes_reports_nothing() {
             button.holdMs = root.hold
             button.forceActiveFocus()
@@ -322,10 +321,10 @@ Item {
             compare(clicks.count, 0)
         }
 
-        /// **A `clicked()` raised with no press behind it still answers.** The band's own doors do exactly that, so
-        /// that a run presses what a hand presses rather than a copy of what the button would have decided
-        /// (`TopBar.stashNow` / `fetchNow`, verify-ui §壊れない動詞の実装) — and a latch that only ever reads a press
-        /// answers none of them, which took the stash verb's press out of the build entirely.
+        /// **A `clicked()` raised with no press behind it still answers.** The band's own doors do exactly that,
+        /// so that a run presses what a hand presses (`TopBar.stashNow` / `fetchNow`,
+        /// verify-ui §壊れない動詞の実装) — and a latch that only ever reads a press answers none of them, which
+        /// took the stash verb's press out of the build entirely.
         function test_a_click_raised_with_no_press_behind_it_still_answers() {
             button.holdMs = 0
             button.clicked()

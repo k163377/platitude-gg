@@ -66,8 +66,8 @@ pub struct WorkTreeModel {
     status_branch: String,
     /// Whether `upstream` / `ahead` / `behind` are about the branch the
     /// record names — the status they came with read HEAD on it. Between
-    /// a move of HEAD and the status behind it, the three are blank
-    /// rather than another branch's, and the push standing is closed.
+    /// a move of HEAD and the status behind it, the three are blank and
+    /// the push standing is closed.
     counts_settled: bool,
     /// What the last status said of its branch's standing, shown through
     /// the three below only while it is the branch HEAD is on (`settle`).
@@ -86,20 +86,20 @@ pub struct WorkTreeModel {
     /// (`branch.<branch>.pushRemote`), empty where it marks none. It beats
     /// the repository's `RepoTab.pushDefault`, so the toolbar's
     /// destination and standing both have to read it — it rides here
-    /// rather than on the tab because it belongs to the branch above,
-    /// and arrives with it.
+    /// because it belongs to the branch above, and arrives with
+    /// it.
     push_remote: String,
     op_text: String,
     /// The same operation in git's own spelling (`cherry-pick`), for the
-    /// one place a pill has to say the whole command rather than a word
-    /// on a badge (§git 用語のコード表記). Core answers it, so the pill
+    /// one place a pill has to say the whole command
+    /// (§git 用語のコード表記). Core answers it, so the pill
     /// and the exit card cannot come to name two different operations.
     op_command: String,
     /// The second name, when bisect is running alongside something else.
-    /// Two fields rather than one joined string: what goes between them
-    /// is a mark the showing side draws (規約 §余白), and `op_text` stays
-    /// empty exactly when nothing is running — which is what every
-    /// `opText === ""` test in the UI is asking.
+    /// Two fields: what goes between them is a mark the showing side
+    /// draws (規約 §余白), and `op_text` stays empty exactly when nothing
+    /// is running — which is what every `opText === ""` test in the UI
+    /// is asking.
     op_also: String,
     has_conflicts: bool,
     staged_count: i32,
@@ -119,14 +119,14 @@ pub struct WorkTreeModel {
     /// Whether the stopped operation takes `--skip` / `--quit`. A merge
     /// steps through nothing, so it has no commit to leave out and
     /// nowhere to stop stepping; a rebase, a cherry-pick and a revert all
-    /// do. Read from the operation itself rather than from the progress
-    /// count: only a rebase writes one, and a cherry-pick that steps
-    /// would look like a merge if the count were the test.
+    /// do. Read from the operation itself: only a rebase writes a
+    /// progress count, and a cherry-pick that steps would look like a
+    /// merge if the count were the test.
     op_stepping: bool,
     /// Whether the stopped operation is a merge. The one the commit box
     /// finishes, so the one whose box opens filled in — and told apart
-    /// from `op_text` because that is a word on screen, not a question
-    /// to branch on.
+    /// from `op_text` because that is a word on
+    /// screen.
     op_merging: bool,
     /// The message that merge is about to record, split the way the two
     /// boxes hold it. Empty unless a merge is standing.
@@ -134,7 +134,7 @@ pub struct WorkTreeModel {
     op_body: String,
     /// What to call each side of a conflict. **The two swap over during a
     /// rebase** (the commits being replayed are "theirs"), which is why
-    /// these are read from the operation rather than worked out here.
+    /// these are read from the operation.
     /// Empty where git left nothing to name a side by.
     side_ours: String,
     side_theirs: String,
@@ -145,13 +145,13 @@ pub struct WorkTreeModel {
     merge_tool: String,
     /// Staged files whose change says something about its line endings.
     /// A commit carries the index, so the working-tree side is not counted
-    /// here — it is a warning about the next `git add`, not this commit.
+    /// here — it is a warning about the next `git add`.
     eol_staged_count: i32,
     /// How many rows of each change kind the file list holds, for the
-    /// graph's uncommitted row to name (`status::Kinds`). Rows rather than
-    /// files, so the row's tally and the list below it cannot disagree —
-    /// and read off the status this model already has, so the row costs no
-    /// git of its own. Conflicts are already counted above.
+    /// graph's uncommitted row to name (`status::Kinds`). Rows, so the
+    /// row's tally and the list below it cannot disagree — and read off
+    /// the status this model already has, so the row costs no git of its
+    /// own. Conflicts are already counted above.
     wip_added: i32,
     wip_modified: i32,
     wip_deleted: i32,
@@ -188,9 +188,9 @@ pub struct WorkTreeModel {
     /// Bumped when a status moves any of the four bucket counts — what
     /// "somebody moved the tree" is read off, so a status that moved no
     /// count (the answer to this window's own poll) does not re-read an
-    /// open diff. Counts, not rows: a second line staged out of a file
-    /// already on both sides moves no row, and is exactly the change the
-    /// reader of this has to hear about.
+    /// open diff. Counts: a second line staged out of a file already on
+    /// both sides moves no row, and is exactly the change the reader of
+    /// this has to hear about.
     tree_revision: i32,
     /// Whether this status leaves the synthetic working-tree row standing
     /// at the head of the graph (`platitude_core::graph::wip_row_stands`).
@@ -386,8 +386,8 @@ impl WorkTreeModel {
         self.push_remote = push_remote;
         self.has_conflicts = status.has_conflicts();
         self.settle_op(&op_state, &op_message);
-        // One pass, not five: `-uall` lists every untracked file, so the
-        // list is as long as the working tree is dirty.
+        // One pass: `-uall` lists every untracked file, so the list is
+        // as long as the working tree is dirty.
         // Same pass, same source: the kinds are the letters the file rows
         // carry, so the graph row's tally is the list it sits above.
         let kinds = platitude_core::status::Kinds::of(&status);
@@ -450,8 +450,8 @@ impl WorkTreeModel {
         }
         // The counts are about the branch they were read with. A report
         // that moved HEAD to another branch lands ahead of the status
-        // read behind it, and until that status the three say nothing
-        // rather than the old branch's numbers under the new name.
+        // read behind it, and until that status the three say
+        // nothing.
         self.counts_settled = self.loaded && self.status_branch == self.branch;
         if self.counts_settled {
             self.upstream.clone_from(&self.status_upstream);
@@ -500,10 +500,10 @@ impl WorkTreeModel {
             i32::try_from(progress.current).unwrap_or(i32::MAX),
             i32::try_from(progress.total).unwrap_or(i32::MAX),
         );
-        // Both words, not just the first: everything else `settle_op`
-        // writes is derived from the one operation it names, but the
-        // second name is bisect's — which runs alongside rather than
-        // instead, and so can arrive while the first has not moved.
+        // Both words: everything else `settle_op` writes is derived from
+        // the one operation it names, but the second name is bisect's —
+        // which runs alongside, and so can arrive while the first has
+        // not moved.
         let said = (self.op_text.clone(), self.op_also.clone());
         self.settle_op(&op_state, "");
         let moved = (self.op_step, self.op_steps) != (step, steps)
@@ -514,8 +514,8 @@ impl WorkTreeModel {
 
     /// The operation banner's fields, off the op state in one place.
     ///
-    /// One name, not every flag that happens to be set: a rebase stopped
-    /// on a pick writes CHERRY_PICK_HEAD too, and joining the two said
+    /// One name: a rebase stopped on a pick writes CHERRY_PICK_HEAD
+    /// too, and joining the two said
     /// `REBASING · CHERRY-PICKING` for what is one rebase. Core already
     /// answers which operation is the live one — it is the same answer
     /// the continuations act on.
@@ -534,8 +534,8 @@ impl WorkTreeModel {
                 InProgress::Revert => "REVERTING",
             });
         }
-        // Bisect is not one of those — it runs alongside rather than
-        // instead, and it is the one thing here that can share the line.
+        // Bisect runs alongside, and it is the one thing here that can
+        // share the line.
         if op_state.bisecting {
             ops.push("BISECTING");
         }
@@ -640,7 +640,7 @@ mod tests {
     }
 
     /// Detached, the branch has no tip of its own: what opens on the
-    /// branch's commit opens on the newest row instead.
+    /// branch's commit opens on the newest row.
     #[test]
     fn detached_names_no_branch_tip() {
         let mut model = WorkTreeModel::default();
@@ -709,8 +709,8 @@ mod tests {
 
     /// The counts are about the branch they were read with. A move to
     /// another branch is reported ahead of the status behind it, and
-    /// until that status the standing is blank rather than the old
-    /// branch's under the new name.
+    /// until that status the standing is
+    /// blank.
     #[test]
     fn the_counts_are_the_branch_they_were_read_with() {
         let mut model = WorkTreeModel::default();

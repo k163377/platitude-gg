@@ -12,8 +12,8 @@ import platitude.ui
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -37,13 +37,13 @@ Item {
     readonly property var renderedBarrier: driver.barrierRendered
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "nav-rename-far") {
             // A box on a row the list had scrolled away from. The list has to bring it back (デザイン規約 §左メニューの所作)
             // — a name changing itself off screen is a name nobody agreed to. Entered on the folded rail's section
             // because that is the one list a run can scroll and read back through a single handle, and the row is
-            // named the way the menu names it (`beginRename`), not by clicking it.
+            // named the way the menu names it (`beginRename`).
             page.foldByHand(true)
             farTimer.start()
         } else if (act === "nav-rename-drop") {
@@ -86,7 +86,7 @@ Item {
             //
             // **The picture cannot judge this**: the answer is the frame's colour and a line that lives in a tooltip,
             // and a box that took the name frames the same as one that would not. `was=` is the name it is being
-            // weighed against, so a run that opened the box on the wrong row says so instead of passing.
+            // weighed against, so a run that opened the box on the wrong row says so.
             tagNameBoxTimer.begin(arg)
         } else if (act === "rename-remote" || act === "rename-remote-box"
                    || act === "rename-remote-go") {
@@ -117,7 +117,7 @@ Item {
             else
                 renameAskTimer.start()
         } else if (act === "nav-branch-box" || act === "nav-rename-box" || act === "nav-tag-box") {
-            // The two boxes the left menu opens on a row, left standing instead of submitted — the copy of the chip
+            // The two boxes the left menu opens on a row, left standing — the copy of the chip
             // column's box on the side with no lanes to grow into, and the rename box that shares the field with it.
             // The argument is `<section>:<ref>[:<幅>][:away]`: the width is what a hand would drag the pane's own bar
             // to, since what the box is drawn at is the row's share of it and the indent under a folder comes out of
@@ -135,9 +135,9 @@ Item {
         }
         return true
     }
-    // The box has to still be there when the picture is taken, and what proves it is the box's own state rather than
-    // the frame: a box that closed and a box that stayed open with a warning frame are two pixels apart. Waited on the
-    // refusal arriving rather than on the write barrier, since the words come back with the answer.
+    // The box has to still be there when the picture is taken, and what proves it is the box's own state:
+    // a box that closed and a box that stayed open with a warning frame are two pixels apart. Waited on the
+    // refusal arriving, since the words come back with the answer.
     SampleTimer {
         id: renameTakenTimer
         onTriggered: {
@@ -166,8 +166,8 @@ Item {
     // that refuses in silence carries it just as well; the sentence lives in the shared tooltip, which a binding on
     // the box raises (`NavNameBox`) and Qt can drop without a word — it reads the re-entry as a binding loop. So
     // `tip=` is taken **through the box** (`NavList.rowTipShown`), which is the read that weighs whose tip it is
-    // (`tests/qml/tst_tipowner.qml`), and `text=` is the instance saying what is written on it. The reason the model
-    // worked out is not reported: what it is worth is that the reader sees it, and `text=` is that same sentence
+    // (`tests/qml/tst_tipowner.qml`), and `text=` is the instance saying what is written on it. What the
+    // model's reason is worth is that the reader sees it, and `text=` is that same sentence
     // where the reader gets it.
     SampleTimer {
         id: tagNameBoxTimer
@@ -178,7 +178,7 @@ Item {
             tagNameBoxTimer.start()
         }
         onTriggered: {
-            // Asked again every beat: the row is a call, not a property, so a binding taken off it would hold the
+            // Asked again every beat: the row is a call, so a binding taken off it would hold the
             // answer the empty model gave (app-ui.md §測って決める値は押し出す).
             const was = tagsModel.nameAt(0)
             const row = tagsModel.rowOfName(was)
@@ -237,8 +237,8 @@ Item {
         }
     }
     // Where the move came to rest, and what the carry left in the stash list. The branch itself is the edge — the
-    // status pass after the move is what writes it — so a run that never landed waits out the watchdog rather than
-    // photographing the tree it started in.
+    // status pass after the move is what writes it — so a run that never landed waits out the
+    // watchdog.
     // The rename's own question, waited on for the same settle: a bar photographed before its words arrive is a red
     // line with nothing on it. The plain verb ends here — the write is "-go"'s half.
     SampleTimer {
@@ -405,7 +405,7 @@ Item {
             const drawn = list.rowBoxWidth(row)
             if (navNameBoxTimer.step === 1) {
                 // On the row, and built: a row the view has not laid out yet answers 0 for its box, the same as a row
-                // with no box on it. Whether the box then took the keyboard is reported rather than waited on — a box
+                // with no box on it. Whether the box then took the keyboard is reported — a box
                 // drawn where nothing can be typed is a real state, and one this picture would not tell from the
                 // other.
                 if (sidebarPane.editKey !== key || drawn <= 0)
@@ -418,7 +418,7 @@ Item {
                     return
                 }
             } else if (list.rowBoxShown(row)) {
-                // Walked past: what is waited for now is the box going. **Not the box's width** — a delegate the view
+                // Walked past: what is waited for now is the box going. **Read off `shown`** — a delegate the view
                 // did let go of answers 0 for everything, and waiting on that number again would wait for ever.
                 return
             }
@@ -445,7 +445,7 @@ Item {
         }
     }
     // PGG_AUTO_ACT=rename-box-out: the ways out of the name box, one route per run. **The claim is what the box and the
-    // gesture are left holding**, not how long nothing happened for: a wait still running is the whole of how a box
+    // gesture are left holding**: a wait still running is the whole of how a box
     // comes back by itself, so `armed=false` is what says it will not (observed — the box on a row clicked
     // again closed and reopened a window later).
     property int boxOutStep: 0
@@ -458,7 +458,7 @@ Item {
             if (!item)
                 return
             if (acts.boxOutStep === 0) {
-                // **The box is opened by the gesture itself, not by the page's own call.** A box put up any other way
+                // **The box is opened by the gesture itself.** A box put up any other way
                 // leaves the gesture with no memory of the row, and every way out then passes for free — which is how
                 // the blink survived a green run twice. What the reader did is two clicks, and
                 // the second one is what the way out has to be weighed against.

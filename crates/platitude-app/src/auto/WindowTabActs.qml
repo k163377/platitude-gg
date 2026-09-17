@@ -12,8 +12,8 @@ import platitude.ui
 ///
 /// Built by `WindowAutoActDriver`, which is what `Main` builds when a verb was given; what these verbs act
 /// on is handed down below, one property per part of the window they reach into.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing and is
-// never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -26,8 +26,8 @@ Item {
     required property Item mainUi
     required property Item gate
 
-    // What remains after a middle-click is the output under test. Wait for the tab-model count edge rather than
-    // allowing a fixed delay to stand in for it. The two tabs this verb needs are a precondition of the press and
+    // What remains after a middle-click is the output under test. Wait for the tab-model count edge.
+    // The two tabs this verb needs are a precondition of the press and
     // nothing else: read again after it, they turn the verb's own answer — one tab fewer — into a wait nothing can end.
     SampleTimer {
         id: middleCloseTimer
@@ -42,14 +42,14 @@ Item {
                 middleCloseTimer.beforeCount = pageRepeater.count
                 const at = Number(Harness.autoActArg)
                 middleCloseTimer.closedPath = tabProbe.tabPathAt(at)
-                // Latched on the strip's answer rather than on the asking: the press has to land on an item, and the
+                // Latched on the strip's answer: the press has to land on an item, and the
                 // row the model has just gained gets one with the layout.
                 middleCloseTimer.requested = topBar.middleClickTab(at)
                 return
             }
             // The strip is read back below, so it has to have caught up with the model before there is anything true to
-            // say about which repository went and which is still standing — and caught up means laid out, not
-            // counted: until the strip has responded to the row leaving, its items still answer by their old indices,
+            // say about which repository went and which is still standing — and caught up means laid
+            // out: until the strip has responded to the row leaving, its items still answer by their old indices,
             // and index 0 is the closed tab's own item (`TabProbe.settleStrip`).
             if (pageRepeater.count >= middleCloseTimer.beforeCount)
                 return
@@ -77,7 +77,7 @@ Item {
     }
 
     // What the strip is holding after a tab was carried across it. The order is the output, and it is read off the
-    // items rather than the model: the drag settles itself against where the tabs actually sit, so the walk is what
+    // items: the drag settles itself against where the tabs actually sit, so the walk is what
     // says the two agree. The tabs it needs are a precondition of the carry and are read in that branch alone —
     // afterwards, "the order is not the one it started as" is this verb's own answer.
     SampleTimer {
@@ -89,12 +89,12 @@ Item {
         property int to: 0
         onTriggered: {
             if (!tabDragTimer.requested) {
-                // Every row standing in the strip, not merely open: the carry measures against the tabs' own places,
+                // Every row standing in the strip: the carry measures against the tabs' own places,
                 // and a row the model has only just gained has none until the next layout.
                 if (pageRepeater.count < 2 || tabProbe.tabItemCount() !== pageRepeater.count)
                     return
-                // And the page under the strip settled, so that what is photographed underneath is a repository rather
-                // than one still opening. A precondition of the carry and read nowhere else: the carry moves to the tab
+                // And the page under the strip settled, so that what is photographed underneath is a settled
+                // repository. A precondition of the carry and read nowhere else: the carry moves to the tab
                 // it takes up, and a page that then has to open would turn this into a wait for something the verb
                 // itself caused.
                 const front = window.curPage
@@ -185,13 +185,13 @@ Item {
                     tabEdgeTimer.sized = true
                     return
                 }
-                // A strip that fits has no end to travel to. The resize is what makes one, and the strip itself says
-                // when that has taken — no width of its own is waited on, because which width crowds a strip is the
+                // A strip that fits has no end to travel to. The resize is what makes one, and what is waited on
+                // is the strip's own word, because which width crowds a strip is the
                 // thing this cannot assume.
                 if (!topBar.bandTabScrolls) {
                     // A strip still uncrowded a tick after the floor took is one this staging cannot carry: the wait
-                    // above has nothing left to wait for, and the watchdog that ends such a run names the verb rather
-                    // than the band it was handed. Said once, and a tick late so the resize has laid out — the numbers
+                    // above has nothing left to wait for, and the watchdog that ends such a run names the verb.
+                    // Said once, and a tick late so the resize has laid out — the numbers
                     // the count has to be chosen against are the band's own, and they differ per OS (`tab-widths`).
                     if (tabEdgeTimer.settling && !tabEdgeTimer.told) {
                         tabEdgeTimer.told = true
@@ -250,7 +250,7 @@ Item {
                 const row = carriedOpenTimer.carriedRow(page.pageGraph)
                 if (row < 0)
                     return
-                // Through the row itself: the item is the real handler's own, and a run that called the page instead
+                // Through the row itself: the item is the real handler's own, and a run that called the page
                 // would go green with the row's own decision never taken (verify-ui §壊れない動詞).
                 const item = page.pageGraphPane.view.itemAtIndex(row)
                 if (item === null)
@@ -277,7 +277,7 @@ Item {
         }
     }
 
-    // Reopening an existing path must select its tab without adding one.
+    // Reopening an existing path selects the tab it already has.
     SampleTimer {
         id: openAgainTimer
         running: Harness.autoAct === "open-again"
@@ -337,9 +337,9 @@ Item {
     // arrived there, come back and read what was kept. Each landing waits for the page it is about to read to be
     // whole, because a page still opening answers every question here the same way an emptied one does.
     //
-    // **The tab is what is waited on, not the row.** Rows renumber; `currentTabId` is the tab that is actually in
-    // front (`TabsModel::current_tab_id`), and comparing against it is what makes "the switch has happened" a fact
-    // rather than a guess. And the page read at each landing is a *different object* every time — the page in front is
+    // **The tab is what is waited on.** Rows renumber; `currentTabId` is the tab that is actually in
+    // front (`TabsModel::current_tab_id`), and comparing against it is what makes "the switch has happened" a fact.
+    // And the page read at each landing is a *different object* every time — the page in front is
     // built for the tab in front and taken down with it — so nothing here may be held across a landing but the words
     // themselves.
     SampleTimer {
@@ -418,7 +418,7 @@ Item {
         id: tabWidthActTimer
         running: Harness.autoAct === "tab-widths"
         onTriggered: {
-            // Every row standing in the strip, not merely open: both readings below walk the items the view built,
+            // Every row standing in the strip: both readings below walk the items the view built,
             // and a row the model has only just gained has none until the next layout — `widths=` would carry a 0
             // for it, and `crushed=` would answer for a strip it had not seen (規約 §UI 自動化の因果性).
             if (topBar.bandTabCount <= 0 || topBar.bandTabRun <= 0
@@ -442,7 +442,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=tab-mark: the argument is which tab the hand is on — one that is not in front, or the run says
+    // PGG_AUTO_ACT=tab-mark: the argument is which tab the hand is on — one of the others, or the run says
     // nothing the picture of any other verb does not already say.
     SampleTimer {
         id: tabMarkActTimer
@@ -490,7 +490,7 @@ Item {
                 return
             }
             const tip = mainUi.ToolTip.toolTip
-            // The tip is on a delay, so this waits it out rather than reading the moment after the hand landed.
+            // The tip is on a delay, so this waits it out.
             if (!tip.visible)
                 return
             stop()
@@ -513,7 +513,7 @@ Item {
     }
 
     // PGG_AUTO_ACT=solo: the harness holds the real lock on the config directory before starting this process, so the
-    // picture is of the mechanism and not of a flag that imitates it.
+    // picture is of the mechanism.
     SampleTimer {
         id: soloActTimer
         running: Harness.autoAct === "solo"

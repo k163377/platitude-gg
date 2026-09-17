@@ -1,4 +1,4 @@
-//! The cases for `rows`, beside it rather than in it
+//! The cases for `rows`, in a file of their own
 //! (.claude/rules/structure.md §分割).
 
 use platitude_core::highlight::DiffColors;

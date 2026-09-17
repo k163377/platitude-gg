@@ -4,9 +4,9 @@ import QtQuick
 import platitude
 import platitude.ui
 
-// The right-click on a working-tree file row. Every row here acts on the pane's chosen files, not on the one that was
-// clicked — the click chose it if nothing else was — so the pane is asked what they are rather than a second answer
-// being kept here.
+// The right-click on a working-tree file row. Every row here acts on the pane's chosen files — the click chose
+// the row if nothing else was — so the pane is asked what they are, and the answer lives
+// there.
 //
 // What the menu offers, and what the discard row would cost, are worked out once as it opens: the choice cannot change
 // while the menu is up, so the words the row says and the writes it runs are read off the same plan (デザイン規約 §メニュー).
@@ -28,7 +28,7 @@ Item {
     property string bucket: ""
     property string path: ""
     property bool canWrite: false
-    /// Whether git could stash at all. **Not a question about this row**: one unmerged path anywhere in the tree and
+    /// Whether git could stash at all. **A question about the tree**: one unmerged path anywhere in it and
     /// git refuses the whole command, named paths or not (measured — `error: could not write index`, and nothing is
     /// set aside), and a repository with no commit yet has nowhere to put one. The band's button reads the same word
     /// for the same reason (`BandStashButton`, `platitude_core::stash::standing`).
@@ -42,7 +42,7 @@ Item {
     signal mergeToolWanted()
     signal copyRequested(string text)
 
-    /// The card is on screen. A plain property rather than an alias — `visible` read from another file comes back
+    /// The card is on screen. A plain property — `visible` read from another file comes back
     /// stale (`RefusalBadge`) — and what the page reads to know that hover is behind a menu now (デザイン規約 §メニュー).
     readonly property bool showing: fileMenu.visible
 
@@ -60,8 +60,8 @@ Item {
         fileRowMenu.canWrite = fileRowMenu.repoTab.busyCount === 0
         fileRowMenu.canStash = fileRowMenu.canWrite && fileRowMenu.workTree.stashStanding === "ready"
         fileRowMenu.plan = fileRowMenu.planDiscard()
-        // Not `chosenCount` — that counts chosen keys, so a folder in the choice would put a file on the tag that no
-        // command is going to reach.
+        // Counted in rows, not `chosenCount`: a folder in the choice is a chosen key, and no command here
+        // is going to reach one.
         fileRowMenu.count = fileRowMenu.wipPane.chosenRows().length
         fileMenu.offer()
         fileRowMenu.offered(bucket)
@@ -103,7 +103,7 @@ Item {
             return qsTr("both sides")
         return ""
     }
-    /// Held, not asked (デザイン規約 §長押し).
+    /// Held (デザイン規約 §長押し).
     function discardChosenNow(plan) {
         if (!plan || plan.count === 0)
             return
@@ -149,7 +149,7 @@ Item {
 
     AppMenu {
         id: fileMenu
-        // Named by branch rather than `--ours` / `--theirs` — during a rebase those two swap over (デザイン規約 §conflict の
+        // Named by branch — during a rebase `--ours` / `--theirs` swap over (デザイン規約 §conflict の
         // ours / theirs). Plain clicks: a conflicted file has no settled version to lose.
         AppMenuItem {
             text: fileRowMenu.workTree.sideOurs !== ""
@@ -188,7 +188,7 @@ Item {
                 fileRowMenu.repoTab.stashPaths(fileRowMenu.wipPane.stashName)
             }
         }
-        // Held, not asked (デザイン規約 §長押し). On a file changed on both sides the two rows are the choice itself: the
+        // Held (デザイン規約 §長押し). On a file changed on both sides the two rows are the choice itself: the
         // unstaged one keeps what is staged, the staged one takes the lot.
         AppMenuItem {
             id: fileDiscardItem

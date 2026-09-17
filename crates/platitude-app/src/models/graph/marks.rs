@@ -2,11 +2,11 @@
 //! marks it left, the parenthood the lanes only picture, and the index
 //! a row is found by.
 //!
-//! **Beside the rows rather than on them.** `GraphRowItem` is at the
-//! fifteen fields `#[derive(QModelItem)]` allows, and nothing here is a
-//! role — it is asked for when a menu opens, the way the stash selector
-//! is (`publishedAt` / `rebaseRewritesPublished` / `reaches`). Kept in
-//! step with the rows at the three places they move: cleared in
+//! **Beside the rows.** `GraphRowItem` is at the fifteen fields
+//! `#[derive(QModelItem)]` allows, and nothing here is a role — it is
+//! asked for when a menu opens, the way the stash selector is
+//! (`publishedAt` / `rebaseRewritesPublished` / `reaches`). Kept in step
+//! with the rows at the three places they move: cleared in
 //! `reset_unnotified`, extended in `take_chunk`, rebuilt whole in
 //! `replace_walk`.
 
@@ -21,10 +21,10 @@ pub(super) struct RowMark {
     oid: Oid,
     published: bool,
     /// One past this row's last parent; the row before says where they
-    /// start, and the first row starts at zero. **A span rather than a
-    /// list per row** — the window is two allocations this way and two
-    /// thousand the other, and this is the part of the graph's cost that
-    /// grows with what somebody asks to see.
+    /// start, and the first row starts at zero. **A span** — the window
+    /// is two allocations this way and two thousand with a list per row,
+    /// and this is the part of the graph's cost that grows with what
+    /// somebody asks to see.
     parents_end: u32,
 }
 
@@ -73,12 +73,12 @@ impl GraphModel {
                 parents_end: self.parent_oids.len() as u32,
             });
         }
-        // Sorted once per chunk rather than kept in order per row: the
-        // walk lands in a handful of chunks, and sorting a window is
-        // nothing beside turning its rows into items. The stable sort,
-        // because it finds the runs already in order — everything before
-        // this chunk — and merges the chunk in, rather than sorting the
-        // whole window again per chunk.
+        // Sorted once per chunk: the walk lands in a
+        // handful of chunks, and sorting a window is nothing
+        // beside turning its rows into items. The stable sort,
+        // because it finds the runs already in order —
+        // everything before this chunk — and merges the chunk
+        // in.
         self.index.sort();
     }
 

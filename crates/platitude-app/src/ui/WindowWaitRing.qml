@@ -5,9 +5,9 @@ import platitude.ui
 
 // A write that replays history stands for seconds (`OperationKind::replays_history`), and for all of them the pointer is
 // the one thing the reader is looking at. The ring goes beside it, over everything, and belongs to no pane: it
-// answers the hand rather than whatever the hand happens to be over.
+// answers the hand.
 //
-// The sheet draws and nothing more — no handler of its own. Hover is taken by the item it is laid over, so a handler
+// The sheet draws and nothing more. Hover is taken by the item it is laid over, so a handler
 // here would put every row and cell below it out (規約 §QML 実装ルール); the pointer is read off the
 // handler the window declares over the whole of its content, which leaves its own subtree answering
 // (`PointerWatch`).
@@ -15,7 +15,7 @@ Item {
     id: waitSeat
 
     /// Where the pointer is (`PointerWatch`), and the page whose replay the mark is about — null while no tab is
-    /// open. Handed over rather than reached for: the window owns both.
+    /// open. Handed over: the window owns both.
     required property var hand
     required property var page
 
@@ -31,12 +31,12 @@ Item {
     readonly property point handAt: waitSeat.handStandIn.x >= 0
                                     ? waitSeat.handStandIn
                                     : Qt.point(waitSeat.hand.handX, waitSeat.hand.handY)
-    /// What the mark makes of it. Its own `spinning` rather than its `visible`, for the reason the other mark a
+    /// What the mark makes of it. Its own `spinning`, for the reason the other mark a
     /// pointer wears gives (`RefusalBadge`): read from another file `visible` comes back stale.
     readonly property bool ringShown: waitRing.spinning
 
     /// Automation (`PGG_AUTO_ACT=replay-running`): stands a hand at `x, y` in scene coordinates and leaves it there.
-    /// A function rather than a binding, so the map runs once against the geometry it is looking at (app-ui.md).
+    /// A function, so the map runs once against the geometry it is looking at (app-ui.md).
     function holdWaitHand(x, y) {
         waitSeat.handStandIn = waitSeat.mapFromItem(null, x, y)
     }

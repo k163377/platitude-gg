@@ -15,10 +15,10 @@ import platitude.ui
 //
 // **The words are here and the values are git's.** `core.autocrlf` takes three answers and the model hands them over
 // spelled the way git spells them; what a reader is shown is a sentence about what happens, because a setting's UI
-// wording is chosen by what the operation does rather than by the command's own name (CLAUDE.md 絶対制約). The two
+// wording is chosen by what the operation does (CLAUDE.md 絶対制約). The two
 // lists below are that translation and nothing more — the row a reader picks is the value at the same index.
 //
-// **`LF` and `CRLF` are plain text, not code chips** (規約 §改行コードの警告): a chip is lowercase monospace and an
+// **`LF` and `CRLF` are plain text** (規約 §改行コードの警告): a chip is lowercase monospace and an
 // all-caps abbreviation does not sit in one.
 ColumnLayout {
     id: field
@@ -26,7 +26,7 @@ ColumnLayout {
     /// What that repository's own configuration sets, in git's own spelling; empty for one that sets nothing.
     property string held: ""
     /// What git would use in the repository this chapter is about, in the same spelling. Empty is an answer of its
-    /// own here — nothing anywhere sets it — which is why the line below says it in words rather than showing a value.
+    /// own here — nothing anywhere sets it — which is why the line below says it in words.
     property string effective: ""
     /// A read has landed, so an empty chooser can be believed. Until then it looks exactly like a field nobody has
     /// filled in (規約 app-ui.md §「まだ答えが無い」と値 0 / false を分ける).
@@ -53,8 +53,8 @@ ColumnLayout {
     }
 
     /// The values, and the words for them, at matching indexes. The first row is the one that writes nothing — what
-    /// it gets you is the value above, rather than one of the three answers, so it is named for that and not for the
-    /// key it leaves out (the `inherited` the identity boxes use as a placeholder).
+    /// it gets you is the value above, so it is named for that
+    /// (the `inherited` the identity boxes use as a placeholder).
     readonly property var values: ["", "true", "input", "false"]
     readonly property var words: [
         qsTr("Inherited"),
@@ -66,7 +66,7 @@ ColumnLayout {
     /// that sets nothing of its own is the first row — so an unrecognised answer and an unset one land in the same
     /// place, which is where picking anything at all is the way out (`eol::setting::AutoCrlf::of_record`).
     readonly property int heldRow: Math.max(0, field.values.indexOf(field.held))
-    /// The whole sentence for what git is doing there now, one per answer rather than a phrase dropped into a frame:
+    /// The whole sentence for what git is doing there now, one per answer:
     /// a sentence assembled from pieces cannot be translated (規約 §改行コードの警告).
     readonly property string effectiveLine: {
         switch (field.effective) {
@@ -90,7 +90,7 @@ ColumnLayout {
         visible: text !== ""
         text: field.note
     }
-    // No caption over the chooser: the chapter's own heading already names it, and one control under a heading that
+    // The heading is the caption: the chapter's own heading already names it, and one control under a heading that
     // says the same word twice reads as two things (`MERGE EDITOR` is the same shape). A caption is for telling the
     // boxes of a chapter apart, which is why the identity keeps two.
     RowLayout {
@@ -107,7 +107,7 @@ ColumnLayout {
             // from there would be writing a value chosen without knowing what it replaces.
             enabled: field.ready && !field.busy
             model: field.words
-            // What git holds, until a pick reports one. Not a value the field keeps: every answer here comes back
+            // What git holds, until a pick reports one. Every answer here comes back
             // from the file it was written into, so the row showing is always one git named.
             wanted: field.ready ? field.words[field.heldRow] : ""
             onActivated: index => field.pick(index)
@@ -115,7 +115,7 @@ ColumnLayout {
     }
     // What the file the chooser is showing actually amounts to, which the chooser cannot say on its own: the value it
     // falls back to lives in a file this screen is not showing, and git resolves it through more than one of them.
-    // **This one stays under** — it is not what the setting is, it is where the setting has got to.
+    // **This one stays under** — it is where the setting has got to.
     HelpText {
         visible: field.ready
         text: field.effectiveLine

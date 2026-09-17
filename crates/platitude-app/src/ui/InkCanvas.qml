@@ -2,12 +2,12 @@ import QtQuick
 import platitude.ui
 
 // The `Canvas` every hand-drawn mark in this window is: it does its own drawing exactly as a bare one would, and says
-// whether it has been drawn yet (`Ink`). Written once here rather than at each mark, because what a picture of a
+// whether it has been drawn yet (`Ink`). Written once here, because what a picture of a
 // half-built scene loses is **the canvases and nothing else** — a name's text node is built in the polish that creates
 // its item, and a canvas cannot draw before the turn after (`Ink`).
 //
 // A mark owes its ink only while it could be in a picture at all. A canvas with no window — a menu nobody has opened —
-// or with no size never paints. Hidden marks (including a hidden parent) must not hold a picture either.
+// or with no size never paints. Hidden marks (including a hidden parent) owe nothing either.
 //
 // **`onPaint` stays the caller's**: a signal handler written in the file that uses this one replaces the handler here,
 // so the drawing is hung off `painted()`, which Qt emits after the caller's own has run.

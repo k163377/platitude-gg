@@ -21,7 +21,7 @@ impl AppBackend {
     }
 
     /// Sets how much history every graph opens with. Zero is the whole of
-    /// it: the screen's own box rather than a number anyone types.
+    /// it: what the screen's own box asks for.
     ///
     /// The floor is core's to apply (`session::log_limit`) — the field
     /// this writes is the one a hand-written `settings.toml` writes, so a
@@ -32,8 +32,8 @@ impl AppBackend {
             0 => None,
             count => Some(platitude_core::session::log_limit(count)),
         };
-        // Saturating rather than wrapping: `settings.toml` can hold a
-        // count no `i32` can, and the property is what the screen shows.
+        // Saturating: `settings.toml` can hold a count no `i32` can, and
+        // the property is what the screen shows.
         let commits = asked.map_or(0, |count| i32::try_from(count).unwrap_or(i32::MAX));
         if self.initial_commits == commits {
             return;
@@ -47,8 +47,8 @@ impl AppBackend {
     /// range is core's to apply (`process::concurrency`) — the field this
     /// writes is the one a hand-written `settings.toml` writes, so a
     /// range spelled out here as well would be a second answer to the
-    /// same question. Zero (the blank input) is the default rather than
-    /// a third meaning: no git at all is not something a box can ask for.
+    /// same question. Zero (the blank input) is the default: no git at
+    /// all is not something a box can ask for.
     pub(super) fn apply_git_concurrency(&mut self, concurrency: i32) {
         let asked = match concurrency.max(0).unsigned_abs() {
             0 => platitude_core::process::default_concurrency(),
@@ -82,9 +82,9 @@ impl AppBackend {
     /// The settings screen has just opened: the path it is about to show
     /// gets asked for its version.
     ///
-    /// Asked on every open rather than once, because the answer is about
-    /// a file on disk, which moves without anybody retyping the path — an
-    /// installer that replaced it, a stick that was unplugged.
+    /// Asked on every open, because the answer is about a file on disk,
+    /// which moves without anybody retyping the path — an installer that
+    /// replaced it, a stick that was unplugged.
     pub(super) fn begin_git_path_screen(&mut self) {
         let path = self.git_path.clone();
         self.begin_git_path_check(path);
@@ -100,7 +100,7 @@ impl AppBackend {
     ///
     /// The air is taken off here as well as on the way out of the file
     /// (`settings::toml::text`), so that the box and the file agree
-    /// before the first save rather than after it.
+    /// before the first save.
     pub(super) fn apply_git_path(&mut self, path: &str) {
         let path = path.trim();
         if self.git_path == path {
@@ -119,8 +119,8 @@ impl AppBackend {
     /// the version coming back — because the offer is what both the
     /// button's shape and the warning beside it are drawn from.
     pub(super) fn settle_restart_offer(&mut self) {
-        // **Which binary, not which spelling** — the answer's own word on
-        // it (`AppMsg::GitPathProbed::names_the_run`), which is only as
+        // **The binary itself** — the answer's own word on it
+        // (`AppMsg::GitPathProbed::names_the_run`), which is only as
         // current as the state beside it: a box rewritten since is
         // "checking", and offers nothing until its own answer is in.
         self.git_path_offers_restart = !self.restart_wanted
@@ -152,7 +152,7 @@ impl AppBackend {
             hub.set_window_state(platitude_core::settings::WindowState {
                 // A maximized window reports the size of the screen. Keeping
                 // the last unmaximized one is what lets restoring down go
-                // back to a window rather than to a full screen.
+                // back to the window it was.
                 x: if maximized { previous.x } else { Some(x) },
                 y: if maximized { previous.y } else { Some(y) },
                 width: if maximized { previous.width } else { width },
@@ -181,9 +181,9 @@ impl AppBackend {
         });
     }
 
-    /// The log's own flag never reaches the store: it is held here for
-    /// the length of the run, so the tab arriving finds what the tab
-    /// leaving was showing and the next launch finds nothing
+    /// The log's own flag stays in memory: it is held here for the
+    /// length of the run, so the tab arriving finds what the tab leaving
+    /// was showing and the next launch finds nothing
     /// ([`AppBackend::commands_shown`]).
     pub(super) fn write_layout_flags(
         &mut self,

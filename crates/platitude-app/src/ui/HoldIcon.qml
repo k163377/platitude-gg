@@ -8,7 +8,7 @@ import platitude.ui
 // It is what lets the words go back to naming the operation and nothing else: the row says `Delete`, and the mark ahead
 // of it says how.
 //
-// Its own component rather than another NavIcon kind: NavIcon repaints only when its kind or its tint changes, and this
+// Its own component: NavIcon repaints only when its kind or its tint changes, and this
 // one is repainted some thirty times over a single press.
 InkCanvas {
     id: holdIcon
@@ -20,8 +20,8 @@ InkCanvas {
     property color tint: Theme.textPrimary
 
     // Smaller than the words it stands next to, and drawn at the same weight relative to its own box as NavIcon is to a
-    // full-sized one — the stroke is scaled with the grid rather than kept at its absolute width, which at this size
-    // would read as a bold ring around a small hole. The sector loses detail at the small end; that is the trade for a
+    // full-sized one — the stroke is scaled with the grid; at its absolute width it would at this size
+    // read as a bold ring around a small hole. The sector loses detail at the small end; that is the trade for a
     // mark that sits in a sentence without shouting over it.
     width: Theme.iconSm
     height: Theme.iconSm
@@ -52,7 +52,7 @@ InkCanvas {
             ctx.stroke()
             return
         }
-        // Filled from twelve o'clock, clockwise. No minimum sweep of its own: the frame beside it starts at
+        // Filled from twelve o'clock, clockwise. Proportional from zero: the frame beside it starts at
         // `holdFillMin`, so there is no moment here that has to carry the report alone (デザイン規約 §進行中・長押しの定数).
         ctx.beginPath()
         ctx.moveTo(cx, cy)

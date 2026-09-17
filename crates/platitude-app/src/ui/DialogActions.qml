@@ -10,8 +10,8 @@ import platitude.ui
 // that only ends itself does not borrow the colour they carry. What says
 // it cannot be pressed is the word, which takes the disabled step
 // (`ActionButton.fg`). A dialog that has nothing to undo offers no way
-// out and says so by leaving `cancelText` empty rather than by drawing a
-// button that promises to put something back.
+// out and says so by leaving `cancelText` empty; a button there would
+// promise to put something back.
 RowLayout {
     id: actions
 

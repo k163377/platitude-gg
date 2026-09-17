@@ -10,8 +10,8 @@ import platitude.ui
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -35,7 +35,7 @@ Item {
     readonly property var writeBarrier: driver.barrierWrite
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "switch") {
             page.switchTo("branch", arg, arg)
@@ -48,7 +48,7 @@ Item {
             moveAskTimer.start()
         } else if (act === "ask-over-notice") {
             // **The two bars standing at the same time**, which is the one arrangement where Escape has to belong to
-            // one of them rather than to both (デザイン規約 §答えの要らない報せ). The report goes up first because that is the
+            // one of them (デザイン規約 §答えの要らない報せ). The report goes up first because that is the
             // order a hand reaches it in: raising a question leaves a standing report exactly where it is
             // (`RepoPage.startRowAsk`). Raised through the page's own door the way `report-tone` is — **which** report
             // it is proves nothing here and the thirteen report verbs prove it already; the pair is the subject.
@@ -56,7 +56,7 @@ Item {
             askOverNoticeTimer.ref = arg === "" ? "origin/main" : arg
             askOverNoticeTimer.start()
         } else if (act === "ask-sweep") {
-            // The same question `move-ask` raises, swept instead of photographed: what a bar names is a branch, a
+            // The same question `move-ask` raises, swept: what a bar names is a branch, a
             // remote or the folder another working copy is holding, and while it stands over the list it is the only
             // place any of those is written (規約 §右のペインの字は掴める). Raised down the road a hand takes for the
             // reason that verb gives, and waited on at `AskBar.settled` for the same one — a bar still on its way down
@@ -68,8 +68,8 @@ Item {
             // and core answers a write before the rebuild it asks for (`AfterWrite::Graph`), so that verb's picture is
             // of the branch being left and of the stash count before the carry touched it.
             //
-            // The argument is `<branch>[:<stashes>]`, and the count is there because **the branch is not the last
-            // thing to arrive**: the stash list is read on its own after the move, so a run that stopped at the branch
+            // The argument is `<branch>[:<stashes>]`, and the count is there because **the stash list is the last
+            // to arrive**: it is read on its own after the move, so a run that stopped at the branch
             // photographed a carry whose entry was not in the list yet (observed — the row reached the graph after
             // the shot had been taken).
             const landing = arg.split(":")
@@ -83,9 +83,9 @@ Item {
             // The question a move raises when something is in its way, and the gesture that answers it. **One road for
             // all three shapes** — an operation standing, an unmerged index with none, and a branch another working
             // copy has out — because the press is the same press; only the bar differs, and the verbs are separate so
-            // each shape can be claimed on its own. Entered by the ref row's own road (`switchToRef`) rather than by
-            // `switchTo`, so the run proves the gate sits where a hand arrives and not only on the last call before
-            // the write. The argument is `<branch>[:<stashes>]`, the count meaning what it does for `switch-lands`.
+            // each shape can be claimed on its own. Entered by the ref row's own road (`switchToRef`), so the run
+            // proves the gate sits where a hand arrives. The argument is `<branch>[:<stashes>]`, the count meaning
+            // what it does for `switch-lands`.
             const leave = arg.split(":")
             switchStoppedTimer.go = act.endsWith("-go")
             switchStoppedLandedTimer.stashes = leave.length > 1 ? Number(leave[1]) : -1
@@ -101,14 +101,14 @@ Item {
             switchTwiceTimer.branch = repoTab.localNameFor(arg)
             switchTwiceTimer.writesBefore = repoTab.writeSeq
             page.switchToRef("R", arg)
-            // The road's own answer to the second press, not a copy of its condition: `switchToRef` says whether the
+            // The road's own answer to the second press: `switchToRef` says whether the
             // press did anything, and a build with no gate says it did.
             switchTwiceTimer.held = page.switchToRef("R", arg) === false
             switchTwiceTimer.start()
         } else if (act === "rename-local-upstream") {
             // The question about carrying the name over comes back only when git says the local rename landed — the
-            // write's own answer is what raises the bar, so the completion is the bar settling, not the write barrier
-            // (a shot taken there catches a bar whose words are written and whose height is still nothing).
+            // write's own answer is what raises the bar, so the completion is the bar settling
+            // (a shot at the write barrier catches a bar whose words are written and whose height is still nothing).
             const local = workTree.branch
             sidebarPane.beginRename("branch", local, local)
             sidebarPane.submitEdit(arg)
@@ -122,14 +122,14 @@ Item {
             upstreamAskTimer.wantName = want.length > 1 ? want[1] : ""
             upstreamAskTimer.answers = act === "set-upstream-go"
             upstreamAskTimer.typed = false
-            // Through the row itself rather than the page's function, so a build where that row stopped reaching the
-            // question waits here instead of passing.
+            // Through the row itself, so a build where that row stopped reaching the
+            // question waits here.
             page.openRefMenu("branch", on, on, branchesModel.oidOfName(on))
             refMenu.openSub(refBranchCard)
             refUpstreamItem.triggered()
             upstreamAskTimer.start()
         } else if (act === "switch-mark") {
-            // The mark the `switch` row wears when the press ahead of it raises a question rather than moving. The
+            // The mark the `switch` row wears when the press ahead of it raises a question. The
             // argument is `<branch>:asks` or `<branch>:plain` — **the row is the same row either way**, and a 16px
             // mark in a full window is not something the picture answers (verify-ui §目視).
             const want = arg.split(":")
@@ -185,8 +185,8 @@ Item {
         function naming(ask, notice) {
             return ask && notice ? "both" : ask ? "question" : notice ? "notice" : "none"
         }
-        /// A bar between its two ends: neither all the way down nor all the way back up. Nothing about a bar may be
-        /// read there — a run that read one mid-flight would be reading a frame nobody sees.
+        /// A bar between its two ends: neither all the way down nor all the way back up. A bar is read at
+        /// one of its ends — a run that read one mid-flight would be reading a frame nobody sees.
         function moving(card) {
             return !card.settled && !card.shut
         }
@@ -212,8 +212,8 @@ Item {
                 const askEsc = graphPane.askCard.escapes
                 const noticeEsc = page.noticeCard.escapes
                 askOverNoticeTimer.holds = askOverNoticeTimer.naming(askEsc, noticeEsc)
-                // Through the body Escape itself runs, and through **whichever bar is holding it** rather than the
-                // one this run expects to: a build that handed Escape to the other bar has to be judged on what that
+                // Through the body Escape itself runs, and through **whichever bar is holding it**: a build that
+                // handed Escape to the other bar has to be judged on what that
                 // bar then did. A build that handed it to neither presses nothing, and the two below say so.
                 if (askEsc)
                     graphPane.askCard.dismiss()
@@ -275,7 +275,7 @@ Item {
             // `log=` on all three of these: a move that git refused would raise the command log
             // (§git が言ったことを読む場所), and a red panel under a press that had a way out on screen is the thing
             // this whole road exists to stop. A shut panel and a panel that was never
-            // raised are the same picture, which is why it is said rather than shown.
+            // raised are the same picture, which is why it is said.
             Harness.report("switch_landed branch=" + workTree.branch
                               + " stashes=" + stashesModel.total
                               + " wanted=" + switchLandsTimer.stashes
@@ -284,7 +284,7 @@ Item {
             driver.complete()
         }
     }
-    // The same landing, reached by two presses instead of one. **The claim is `held=`** — the second press turned
+    // The same landing, reached by two presses. **The claim is `held=`** — the second press turned
     // away — because the two builds frame alike: the branch is the branch either way, and what the ungated one adds
     // is a refused `switch --create` in a panel nobody opened.
     SampleTimer {
@@ -305,8 +305,8 @@ Item {
             driver.complete()
         }
     }
-    // The bar that comes down instead of the move — waited on all the way down (`AskBar.settled`), not at the label
-    // that starts it: the 200ms opening is 200ms of red line with no words in it, and that is what the first run of
+    // The bar that stops the move — waited on all the way down (`AskBar.settled`):
+    // the 200ms opening is 200ms of red line with no words in it, and that is what the first run of
     // this verb photographed.
     SampleTimer {
         id: switchStoppedTimer
@@ -338,7 +338,7 @@ Item {
             switchStoppedLandedTimer.start()
         }
     }
-    // Where the answer put the reader, and what it left in the stash list. **The write's own answer is not the edge**
+    // Where the answer put the reader, and what it left in the stash list. **The edge is past the write's answer**
     // — it lands before the rebuild it asks for (core `AfterWrite::Graph`), so a run that read the branch there would
     // photograph the one it was leaving; and the stash list is read after that again (`switch-lands`), which is why
     // the count comes from the argument and is waited for.

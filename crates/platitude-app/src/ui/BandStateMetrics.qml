@@ -6,7 +6,7 @@ import platitude.ui
 
 /// What each of the band's state badges would like to be drawn at, measured off labels that are never drawn.
 ///
-/// **The badges in the band cannot also be what the cap is measured from.** A `RowLayout` that is not being laid out
+/// **The cap is measured here, off items nothing lays out.** A `RowLayout` that is not being laid out
 /// reports the width it had when it last was, and the row of badges goes away the moment the group folds — so a cap
 /// read from there makes the fold one that nothing comes back from (measured, `cap=32` with a 1440-wide window,
 /// and no width would bring the words back).
@@ -43,15 +43,15 @@ Item {
     readonly property int oldGitW: Math.ceil(mOldGit.implicitWidth) + 2 * Theme.spaceXs
     readonly property int staleW: Math.ceil(mStale.implicitWidth) + 2 * Theme.spaceXs
 
-    /// The narrowest a badge is drawn with words in it. Settled by `settleMinW` rather than bound: `advanceWidth` is a
+    /// The narrowest a badge is drawn with words in it. Settled by `settleMinW`: `advanceWidth` is a
     /// method and takes no binding dependency, so a binding on it holds whatever the *default* font measured
     /// (app-ui.md 「FontMetrics.advanceWidth も同じ側」).
     ///
-    /// Counted in `n`s, never in `averageCharacterWidth` (`TabMetrics.titleMinW` and `GraphColumnMetrics.chipNameMinW`
-    /// for the same reason): that is the **font's** average, and every family named for this UI carries Japanese, so it
-    /// answers with a full-width figure no operation is spelled in — and a different one per platform
-    /// (rules-refs/app-ui.md carries the measurement). A floor read off it moves with the font rather than with the
-    /// letters, and where it runs wide it folds the words away in a band that still had room for them.
+    /// Counted in `n`s (`TabMetrics.titleMinW` and `GraphColumnMetrics.chipNameMinW`
+    /// for the same reason): `averageCharacterWidth` is the **font's** average, and every family named for this UI
+    /// carries Japanese, so it answers with a full-width figure no operation is spelled in — and a different one per
+    /// platform (rules-refs/app-ui.md carries the measurement). A floor read off it moves with the font,
+    /// and where it runs wide it folds the words away in a band that still had room for them.
     property real minW: 0
     function settleMinW() {
         metrics.minW = Math.ceil(stateFont.advanceWidth("…") + metrics.minChars * stateFont.advanceWidth("n"))

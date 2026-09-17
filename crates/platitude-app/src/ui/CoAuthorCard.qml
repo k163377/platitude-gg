@@ -8,7 +8,7 @@ import platitude.ui
 // The people a commit message credits beside its author, one to a row. The date line shows the first of them and counts
 // the rest; this is where the rest are read, along with the address that tells two people of the same name apart.
 //
-// A popup rather than an item under the row for the same reason the ref list is one: anything declared inside the
+// A popup, for the same reason the ref list is one: anything declared inside the
 // card's column would be clipped by the pane and painted under the list below it.
 AppCard {
     id: mateCard
@@ -23,11 +23,11 @@ AppCard {
         ? mateCard.maxWidth - 2 * mateCard.padding - 2 * Theme.spaceSm : Number.MAX_VALUE
 
     padding: Theme.spaceXs
-    // Nothing stands between the underlined stretch and this: the pointer has to be able to walk down into it without
+    // The card sits against the underlined stretch: the pointer has to be able to walk down into it without
     // leaving both.
     margins: 0
     // The pointer walks into this one and reads it. The rows here accept no hover today; giving `AppCard` both halves
-    // is what keeps that an implementation detail rather than a load-bearing fact.
+    // is what keeps that an implementation detail.
     tracksPointer: true
     contentPointed: contentHover.hovered
     // Every gap in this card is a place a selection can start — the inset the rows keep, the step under a name, the
@@ -45,20 +45,20 @@ AppCard {
             delegate: Item {
                 id: mateRow
                 required property string modelData
-                // Name, address, identicon code — three fields always, so an address-less trailer is indexed, not
-                // counted.
+                // Name, address, identicon code — three fields always, so an address-less trailer is indexed by
+                // position.
                 readonly property var parts: mateRow.modelData.split(String.fromCharCode(30))
                 readonly property bool hasAddress: mateRow.parts[1] !== ""
 
-                // Laid out from the start, never on hover: showing the address only under the pointer changed the row's
+                // Laid out from the start: showing the address only under the pointer changed the row's
                 // own size, so the row moved out from under the hand that asked for it and the card shut
-                // (observed). Nothing that a hover reveals may resize what is being hovered.
+                // (observed). What a hover reveals keeps the size of what is being hovered.
                 //
-                // On a second line rather than beside the name: side by side makes every row as wide as a name and an
+                // On a second line: side by side makes every row as wide as a name and an
                 // address end to end, and height is what this card has to spare — width is what it has to ask the
                 // window for.
                 //
-                // **Both wrap rather than being cut**, and for the same reason the height was always the side that gave:
+                // **Both wrap**, and for the same reason the height was always the side that gave:
                 // this card is where the names and addresses the date line could not fit are read in full and taken
                 // away (規約 §hover のツールチップ).
                 readonly property real headHeight: Math.max(Theme.rowHeight, rowContent.implicitHeight)

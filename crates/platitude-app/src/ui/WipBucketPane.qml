@@ -8,17 +8,17 @@ import platitude.ui
 // One bucket of the working tree, as a list of its own: the heading pinned to the top and the files under it,
 // scrolling inside whatever share of the pane the bucket was given (デザイン規約 §その他の操作).
 //
-// **The heading stands whether or not the bucket has rows**, because it is part of the frame rather than something the
-// rows put there: an emptied bucket goes on saying where its files went and where the next one will land, and nothing
-// grows in under the hand at the next `+`. That is also why it does not scroll away with the files — `Stage all` is
-// about the whole bucket, and a bucket you have scrolled into is exactly when you want it.
+// **The heading stands whether or not the bucket has rows**, because it is part of the frame: an emptied bucket
+// goes on saying where its files went and where the next one will land, and nothing grows in under the hand at
+// the next `+`. That is also why it stays put as the files scroll — `Stage all` is about the whole bucket, and a
+// bucket you have scrolled into is exactly when you want it.
 ColumnLayout {
     id: bucketPane
 
     /// Which bucket this is: `conflicts` / `unstaged` / `staged`.
     required property string section
     /// The pane this is one bucket of — where the choice, the stage marks and the signals live, all of which are the
-    /// whole pane's rather than one bucket's (a Ctrl-click reaches across the buckets, and so does a walk).
+    /// whole pane's (a Ctrl-click reaches across the buckets, and so does a walk).
     required property var pane
     required property var repoTab
     required property var workTree
@@ -38,8 +38,8 @@ ColumnLayout {
     /// shares the space out by (`WipPane.roomFor`).
     readonly property int rows: bucketPane.model.shownRows
     readonly property real wants: bucketPane.rows * Theme.rowHeight
-    /// The heading's own height, which is not the bucket's to give: it stands whatever the bucket was given. The token
-    /// rather than the heading's own measure — the pane works out from this how much room there is to hand out, and
+    /// The heading's own height: it stands whatever the bucket was given. The token
+    /// — the pane works out from this how much room there is to hand out, and
     /// measuring an item whose height comes from that answer would be reading the answer back out of its question.
     readonly property real headHeight: Theme.rowHeight
 
@@ -63,7 +63,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         model: bucketPane.model
-        // The pane's own bar, in place of the style's one `AppListView` hands the graph, the diff and the log.
+        // The pane's own bar (`AppListView` hands the style's one to the graph, the diff and the log).
         verticalBar: PaneScrollBar {}
         // Qt's own key navigation moves `currentIndex` and tells nobody; the arrows are answered by the pane's walk,
         // which crosses from this bucket's list into the next one's (規約 §diff のファイル一覧).
@@ -82,7 +82,7 @@ ColumnLayout {
             pointedEolPath: bucketPane.pane.pointedEolPath
             onEolPointed: (path, on) => bucketPane.pane.pointEol(on ? path : "")
             onFileClicked: (bucket, path, origPath, modifiers) => {
-                // Choosing rows is not reading one: only a plain click moves the diff. Either way the press landed in
+                // Only a plain click moves the diff. Either way the press landed in
                 // this list, so this is where the keyboard is (規約 §diff のファイル一覧).
                 bucketList.forceActiveFocus()
                 if (bucketPane.pane.applyClick(bucket, path, modifiers))

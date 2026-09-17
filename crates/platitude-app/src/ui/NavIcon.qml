@@ -38,7 +38,7 @@ InkCanvas {
         case "terminal": return 10
         // The two commit rings, each 1.7 either side of its own centre (4.5 and 11.5); the elbow stands inside them.
         case "pr": return 10.4
-        // The three lobes as drawn: the left one reaches 1.7 and the right one 14.6. **Not centred in its box** —
+        // The three lobes as drawn: the left one reaches 1.7 and the right one 14.6. **Off centre in its box** —
         // which is why this kind answers `inkRightGrid` as well.
         case "remote": return 12.9
         // The two rings, each 1.8 either side of its own centre (5 and 11): 3.2 to 12.8, stem and curve inside that.
@@ -55,19 +55,19 @@ InkCanvas {
     /// that are actually turned need an entry — the rest answer with their sideways figure.
     readonly property real inkTallGrid: {
         switch (icon.kind) {
-        // Stood on end, what spans sideways is the pair of barbs (5.2..10.8 of the grid), not the shaft.
+        // Stood on end, what spans sideways is the pair of barbs (5.2..10.8 of the grid).
         case "arrow": return 5.6
         default: return icon.inkGrid
         }
     }
-    /// Where that ink stands in the grid, rather than how much of it there is: the far edge going right, and the near
-    /// edge going down. A mark centred in a row never needs these; one set against a corner does (`SignatureMark`).
+    /// Where that ink stands in the grid: the far edge going right, and the near edge going down. A mark centred in
+    /// a row never needs these; one set against a corner does (`SignatureMark`).
     readonly property real inkRightGrid: {
         switch (icon.kind) {
         // The tick's high end, and the dot the stem hangs over (8 ± its own radius).
         case "check": return 12.5
         case "bang": return 9
-        // Square in its box, so this is `inkGrid`'s far end — the tab that seats it asks this rather than the span.
+        // Square in its box, so this is `inkGrid`'s far end — the tab that seats it asks this.
         case "close": return 11.5
         // The far ring and the far lobe: the badge a chip wears is set against the frame's right, so both kinds that
         // stand in that slot answer here.
@@ -112,10 +112,10 @@ InkCanvas {
         // the cloud and the pull request; a file row's mark follows the change).
         ctx.lineJoin = "miter"
         if (icon.kind === "branch") {
-            // **A line stops on the ring it runs into, never inside it.** The cap that hangs off an end and the half
-            // of the ring's own line are both half the weight, so an end laid on the ring's circle reaches the hole's
-            // edge and no further — at `iconSm` as at `iconXl`, since the weight does not scale with the grid. Drawn
-            // to the node's centre instead, the line crosses the ring and stands in the hole as a spike.
+            // **A line stops on the ring it runs into.** The cap that hangs off an end and the half of the ring's own
+            // line are both half the weight, so an end laid on the ring's circle reaches the hole's edge and no
+            // further — at `iconSm` as at `iconXl`, since the weight does not scale with the grid. Drawn to the
+            // node's centre instead, the line crosses the ring and stands in the hole as a spike.
             ctx.beginPath()
             ctx.moveTo(5 * s, 5.3 * s)
             ctx.lineTo(5 * s, 10.7 * s)
@@ -233,8 +233,8 @@ InkCanvas {
         } else if (icon.kind === "copyicon") {
             // The corner takes 1 of the grid — a seventh of the sheet's side, and a coordinate, so it shrinks with
             // the drawing while the line does not (`stroke` above) and the mark keeps its proportion at every size.
-            // **No more than a seventh**: rounded by half again that, a sheet of seven is a blob, and what a reader
-            // tells apart here is two squares lying on each other. Paths rather than `strokeRect`, which has no
+            // **A seventh at most**: rounded by half again that, a sheet of seven is a blob, and what a reader
+            // tells apart here is two squares lying on each other. Paths, since `strokeRect` has no
             // radius to give.
             for (const sheet of [[5.5, 3.5], [3.5, 5.5]]) {
                 ctx.beginPath()
@@ -312,9 +312,9 @@ InkCanvas {
             ctx.arc(8 * s, 6.2 * s, 1.2 * s, 0, 2 * Math.PI)
             ctx.fill()
         } else if (icon.kind === "lock") {
-            // A padlock, shut. Drawn rather than borrowed from a symbol font for the reason `eye` is — U+1F512 is in
-            // none of the families the chain names. **The shackle keeps its legs**: an arc that lands straight on the
-            // body's top edge merges with it at the size a row wears this, and reads as a box with a lid.
+            // A padlock, shut. Drawn here, for the reason `eye` is — U+1F512 is in none of the families the chain
+            // names. **The shackle keeps its legs**: an arc that lands straight on the body's top edge merges with
+            // it at the size a row wears this, and reads as a box with a lid.
             ctx.beginPath()
             ctx.moveTo(5.6 * s, 8.2 * s)
             ctx.lineTo(5.6 * s, 6.8 * s)
@@ -342,8 +342,8 @@ InkCanvas {
             ctx.lineTo(6 * s, 12 * s)
             ctx.stroke()
         } else if (icon.kind === "chevrons") {
-            // The pair that moves a pane's edge, drawn rather than typed: a text guillemet sits on the lowercase band,
-            // so centring its line box leaves the ink low in the button.
+            // The pair that moves a pane's edge, drawn: a text guillemet sits on the lowercase band, so centring its
+            // line box leaves the ink low in the button.
             ctx.lineJoin = "round"
             for (const x of [4, 9]) {
                 ctx.beginPath()
@@ -353,9 +353,9 @@ InkCanvas {
                 ctx.stroke()
             }
         } else if (icon.kind === "terminal") {
-            // The shell prompt the command log is read at, drawn rather than typed: in the mono family it sat in a
-            // line's own box, low and a third the weight of the marks it stands among. The chevron is `chevron`'s own
-            // geometry moved left to make room for the cursor, so the two read as one hand at the same seat.
+            // The shell prompt the command log is read at, drawn: in the mono family it sat in a line's own box,
+            // low and a third the weight of the marks it stands among. The chevron is `chevron`'s own geometry
+            // moved left to make room for the cursor, so the two read as one hand at the same seat.
             ctx.lineJoin = "round"
             ctx.beginPath()
             ctx.moveTo(3 * s, 4 * s)
@@ -367,9 +367,9 @@ InkCanvas {
             ctx.lineTo(13 * s, 12 * s)
             ctx.stroke()
         } else if (icon.kind === "grip") {
-            // The corner a box is pulled by, drawn as the two rules every browser puts there. The pair of chevrons one
-            // mark over also moves an edge, but by being pressed rather than dragged. Inset like `close`, since
-            // diagonals read heavier than bars of the same span, and hung off the lower-right corner.
+            // The corner a box is pulled by, drawn as the two rules every browser puts there. The pair of chevrons
+            // one mark over also moves an edge, by being pressed. Inset like `close`, since diagonals read heavier
+            // than bars of the same span, and hung off the lower-right corner.
             ctx.beginPath()
             ctx.moveTo(12 * s, 6 * s)
             ctx.lineTo(6 * s, 12 * s)
@@ -425,8 +425,8 @@ InkCanvas {
         } else if (icon.kind === "window-maximize") {
             ctx.strokeRect(3.5 * s, 3.5 * s, 9 * s, 9 * s)
         } else if (icon.kind === "window-restore") {
-            // Front pane, then the far corner of the one behind it — an outline rather than a second full square, so
-            // the two do not read as a single grid at this size.
+            // Front pane, then the far corner of the one behind it — an outline, so the two still read as two at
+            // this size.
             ctx.strokeRect(3.5 * s, 5.5 * s, 7 * s, 7 * s)
             ctx.beginPath()
             ctx.moveTo(5.5 * s, 5.5 * s)
@@ -436,8 +436,8 @@ InkCanvas {
             ctx.lineTo(10.5 * s, 10.5 * s)
             ctx.stroke()
         } else if (icon.kind === "eye" || icon.kind === "eye-off") {
-            // Lens and pupil — the visibility mark every layer list has used since Photoshop. Drawn rather than
-            // borrowed from a symbol font: U+2691 and U+1F441 are in none of the families the chain names.
+            // Lens and pupil — the visibility mark every layer list has used since Photoshop. Drawn here: U+2691
+            // and U+1F441 are in none of the families the chain names.
             ctx.beginPath()
             ctx.moveTo(2.5 * s, 8 * s)
             ctx.quadraticCurveTo(8 * s, 2 * s, 13.5 * s, 8 * s)
@@ -457,18 +457,18 @@ InkCanvas {
                 ctx.stroke()
             }
         } else if (icon.kind === "no") {
-            // Worn beside a cursor, not in a row: the barred circle that says the thing under the hand will not take
-            // the gesture (規約 §グラフ列は最も広い所のレーンまで). Only the badge — the shape it hangs off is the platform's
-            // own cursor, left where it is.
+            // Worn beside a cursor: the barred circle that says the thing under the hand will not take the gesture
+            // (規約 §グラフ列は最も広い所のレーンまで). Only the badge — the shape it hangs off is the platform's own
+            // cursor, left where it is.
             ctx.beginPath()
             ctx.arc(8 * s, 8 * s, 5.5 * s, 0, 2 * Math.PI)
             ctx.moveTo(4.11 * s, 4.11 * s)
             ctx.lineTo(11.89 * s, 11.89 * s)
             ctx.stroke()
         } else if (icon.kind === "no-entry") {
-            // The same ring `no` wears with the bar laid flat instead of struck across: the road sign, which is what
-            // says "this ends here" rather than "your hand will not be taken" (規約 §行末の改行が無いこと). Both are one
-            // diameter of the same circle, so the two read as the same hand at different angles.
+            // The same ring `no` wears with the bar laid flat: the road sign, which says "this ends here"
+            // (規約 §行末の改行が無いこと). Both are one diameter of the same circle, so the two read as the same hand
+            // at different angles.
             ctx.beginPath()
             ctx.arc(8 * s, 8 * s, 5.5 * s, 0, 2 * Math.PI)
             ctx.moveTo(2.5 * s, 8 * s)

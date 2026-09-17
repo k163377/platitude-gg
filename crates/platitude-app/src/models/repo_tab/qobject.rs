@@ -78,7 +78,7 @@ impl RepoTab {
     // The rows a delete has taken off the screen, one name per list, for
     // the lists and the chips to draw without (デザイン規約
     // §消す操作は先に画面から消す). When they go and when they come back is
-    // `ops::StandIn`'s — QML is handed the picture, not the decision.
+    // `ops::StandIn`'s — QML is handed the picture.
     qproperty!("goneBranch", Member = gone_branch, Notify = changed);
     qproperty!("goneRemote", Member = gone_remote, Notify = changed);
     qproperty!("goneTag", Member = gone_tag, Notify = changed);
@@ -136,12 +136,12 @@ impl RepoTab {
     qproperty!("writeSeq", Member = write_seq, Notify = changed);
     // Where the editor's own commit answered in this notify, or -1 — the
     // press wrote its id down and the drain hands the answer back here,
-    // so nothing on the page has to hold an id across the bridge or read
-    // anything into which answer came last (`ops::Press`).
+    // so the page reads it where it stands, whatever order the
+    // answers came in (`ops::Press`).
     qproperty!("commitAnswer", Member = commit_answer, Notify = changed);
     // …and where the stash press that took the working tree away
-    // answered. Its other wait — the tree itself — is asked for rather
-    // than watched (`takeStashLanding`).
+    // answered. Its other wait — the tree itself — is asked for
+    // (`takeStashLanding`).
     qproperty!("stashAnswer", Member = stash_answer, Notify = changed);
     // …and where the toolbar's push answered, with the branch that press
     // was sent for: a refusal is remembered per branch, and the word
@@ -158,12 +158,12 @@ impl RepoTab {
     qproperty!("refPushAnswer", Member = ref_push_answer, Notify = changed);
     qproperty!("refPushTarget", Member = ref_push_target, Notify = changed);
     // What is left over, classified in drain::settle_write — the page
-    // reads meanings, never op names (app-ui.md). These describe the last
-    // answer of this notify **nobody was waiting for by name**: a drain
-    // can carry several answers, and one that went to an owner is read
-    // where that owner holds it rather than here. What a reader waiting
-    // for one particular answer asks instead is `writeAnswerCount` and
-    // the nine beside it.
+    // reads meanings (app-ui.md). These describe the last answer of
+    // this notify **nobody was waiting for by name**: a drain can
+    // carry several answers, and one that went to an owner is read
+    // where that owner holds it. What a reader waiting for one
+    // particular answer asks is `writeAnswerCount` and the nine
+    // beside it.
     qproperty!("writeRefused", Member = write_refused, Notify = changed);
     qproperty!(
         "writeStaleDiff",
@@ -179,7 +179,7 @@ impl RepoTab {
     qproperty!("writeBranchOp", Member = write_branch_op, Notify = changed);
     qproperty!("writeFetched", Member = write_fetched, Notify = changed);
     // What a write that did not happen has to say for itself — the page
-    // makes a notice out of these rather than an error
+    // makes a notice out of these
     // (デザイン規約 §答えの要らない報せ).
     qproperty!(
         "writeReportKind",
@@ -256,9 +256,9 @@ impl RepoTab {
     /// (`RepoTab::write_answers`). Zero on a notify raised by anything
     /// else, which is most of them.
     ///
-    /// Read one field at a time the way the remotes are, rather than
-    /// packed into a string: a decode in QML would be data handling, and
-    /// that belongs on this side of the bridge (app-ui.md).
+    /// Read one field at a time the way the remotes are: a decode in
+    /// QML would be data handling, and that belongs on this side of
+    /// the bridge (app-ui.md).
     #[qslot]
     fn write_answer_count(&self) -> i32 {
         i32::try_from(self.write_answers.len()).unwrap_or(i32::MAX)
@@ -306,8 +306,8 @@ impl RepoTab {
 
     /// Whether anybody pressed for that one, or it is a fetch the page
     /// made on its own (`asked_for` — the same set the write ids move
-    /// by). A run reading answers one by one asks this rather than
-    /// matching the word `writeAnswerOp` gives it.
+    /// by). A run reading answers one by one asks this; the word
+    /// `writeAnswerOp` gives it speaks for the op.
     #[qslot]
     fn write_answer_asked(&self, index: i32) -> bool {
         self.write_answer_at(index)
@@ -317,10 +317,10 @@ impl RepoTab {
     /// **The next write this tab is asked to make is the one to wait for**
     /// (`write_watch`).
     ///
-    /// A slot and not a property because arming is a thing done, at a
-    /// moment: whoever calls this is about to put an input in, and the ask
-    /// that input produces is the one kept — which is the only way the id
-    /// is anybody's in particular. A run never holds the number.
+    /// A slot because arming is a thing done, at a moment: whoever calls
+    /// this is about to put an input in, and the ask that input produces
+    /// is the one kept — which is the only way the id is anybody's in
+    /// particular. The watch keeps the number.
     #[qslot]
     pub(crate) fn watch_next_write(&mut self, what: String) -> String {
         self.write_watch.arm(&what).unwrap_or_default()
@@ -328,7 +328,7 @@ impl RepoTab {
 
     /// The input this run put in has gone. **From here the run is waiting
     /// on that write**, however it waits — the shared barrier or a sampler
-    /// of its own, which is not this side's business and never was.
+    /// of its own, which is the run's own business.
     #[qslot]
     pub(crate) fn write_input_went(&mut self) {
         self.write_watch.input_went();
@@ -372,9 +372,9 @@ impl RepoTab {
     /// boundaries behind it: git answered it, and everything it
     /// invalidated has been read again and published.
     ///
-    /// **Matched by id, never compared.** Another write somebody asked for
-    /// moves every count and every flag and still leaves this false,
-    /// whichever way round the two were numbered (`write_watch`).
+    /// **Matched by id.** Another write somebody asked for moves every
+    /// count and every flag and still leaves this false, whichever way
+    /// round the two were numbered (`write_watch`).
     #[qslot]
     pub(crate) fn wrote_through(&self) -> bool {
         self.write_watch.through()
@@ -409,8 +409,8 @@ impl RepoTab {
     }
 
     /// git's own words for that refusal, empty where it landed. Read off
-    /// the answer rather than `lastWriteError`, which is whichever answer
-    /// came last in the drain.
+    /// the answer itself — `lastWriteError` is whichever answer came
+    /// last in the drain.
     #[qslot]
     fn write_answer_error(&self, index: i32) -> String {
         self.write_answer_at(index)
@@ -432,10 +432,10 @@ impl RepoTab {
     /// is git's plain refusal and the command log's news
     /// (デザイン規約 §答えの要らない報せ).
     ///
-    /// **Read off the answer, not off the group**, because a report is
-    /// the answer's own: a drain carrying two refusals would otherwise
-    /// leave only the later one's words, and the earlier press would
-    /// report whatever the other write was turned down for.
+    /// **Read off the answer**, because a report is the answer's own: a
+    /// drain carrying two refusals would otherwise leave only the later
+    /// one's words, and the earlier press would report whatever the
+    /// other write was turned down for.
     #[qslot]
     fn write_answer_report_kind(&self, index: i32) -> String {
         self.write_answer_at(index)
@@ -459,8 +459,8 @@ impl RepoTab {
             .unwrap_or_default()
     }
 
-    /// Whoever said no, in their own words — carried across rather than
-    /// interpreted, the way `lastWriteError` is.
+    /// Whoever said no, in their own words — carried across as they
+    /// came, the way `lastWriteError` is.
     #[qslot]
     fn write_answer_report_reason(&self, index: i32) -> String {
         self.write_answer_at(index)
@@ -471,9 +471,9 @@ impl RepoTab {
     /// Local branch name a remote-tracking ref would take: the ref with
     /// its remote's prefix removed.
     ///
-    /// Matched against the configured remotes rather than cut at the first
-    /// slash — a remote may be named `my/fork`, and the longest matching
-    /// prefix is the right one.
+    /// Matched against the configured remotes — a remote may be
+    /// named `my/fork`, and the longest matching prefix is the
+    /// right one.
     #[qslot]
     fn local_name_for(&self, remote_ref: String) -> String {
         self.local_name_of(remote_ref)
@@ -517,9 +517,9 @@ impl RepoTab {
         Hub::with(|hub| hub.hold_draft(id, draft));
     }
 
-    // Read back one field at a time rather than as one packed string: a
-    // decode in QML would be data handling, which belongs on this side of
-    // the bridge (app-ui.md).
+    // Read back one field at a time: a decode in QML would be data
+    // handling, which belongs on this side of the bridge
+    // (app-ui.md).
     #[qslot]
     fn draft_subject(&self) -> String {
         Hub::with(|hub| hub.draft(self.tab_id).subject).unwrap_or_default()
@@ -548,7 +548,7 @@ impl RepoTab {
 
     /// The tick the page runs while it is on screen: refs + status, and a
     /// graph rebuild only when one of them moved. Ticks that arrive while
-    /// the session is busy are dropped there, not queued.
+    /// the session is busy are dropped there.
     #[qslot]
     fn refresh_poll(&mut self) {
         self.with_session(|s| s.refresh_poll());
@@ -568,8 +568,8 @@ impl RepoTab {
     }
 
     /// What the other copies are carrying, on a slower tick of its own —
-    /// a whole `status` per copy, so it is neither on the page's tick nor
-    /// on the worktree pass (`RepoSession::refresh_carried`).
+    /// a whole `status` per copy, which is why the tick is its own
+    /// (`RepoSession::refresh_carried`).
     #[qslot]
     fn refresh_carried(&mut self) {
         self.with_session(|s| s.refresh_carried());
@@ -580,8 +580,8 @@ impl RepoTab {
     /// tick while it stands open.
     ///
     /// Apart from the tick above, which keeps every copy's tallies
-    /// current: this is one copy's file list, and it has to be up when
-    /// the pane opens rather than at the next tick.
+    /// current: this is one copy's file list, and it has to be up the
+    /// moment the pane opens.
     #[qslot]
     fn read_carried_status(&mut self, path: String, name: String) {
         self.with_session(|s| s.read_carried_status(path, name));
@@ -659,7 +659,7 @@ impl RepoTab {
     /// anything is written; the answer lands on `discardCount` /
     /// `discardOnly`. Rows arrive as `<bucket>:<path>` — the key the
     /// pane's choice already speaks — because which row was chosen is
-    /// the choice's to say, not status's (`ops_stage::chosen_row`).
+    /// the choice's to say (`ops_stage::chosen_row`).
     #[qslot]
     fn plan_discard(&mut self) {
         self.plan_discard_rows();
@@ -697,7 +697,7 @@ impl RepoTab {
     /// the user clicked. `kind` is the diff-key prefix (`unstaged` /
     /// `staged` / `untracked`); a negative `line` takes the whole hunk.
     /// Answers whether a write went out (see [`Self::stage_chosen`]) —
-    /// the caller's wait is armed by this answer, not by the asking.
+    /// the caller's wait is armed by this answer.
     ///
     /// A staged diff is unstaged by the same call — the direction follows
     /// from which side the file is being looked at.
@@ -752,8 +752,8 @@ impl RepoTab {
 
     /// `leaving` says the reader has already agreed to undo the operation
     /// standing in the move's way — git refuses every move while one
-    /// stands, so that agreement travels with the move rather than
-    /// running ahead of it (デザイン規約 §進行中の操作から出る).
+    /// stands, so that agreement travels with the move
+    /// (デザイン規約 §進行中の操作から出る).
     #[qslot]
     fn checkout_branch(&mut self, name: String, leaving: bool) {
         let target = platitude_core::branch::CheckoutTarget::Branch { name };
@@ -815,10 +815,10 @@ impl RepoTab {
     }
 
     /// Records the remote branch `branch` is measured against. The two
-    /// halves the question was answered with are joined here rather than
-    /// in QML: what git is given is the full remote-tracking refname,
-    /// the one spelling a local branch of the same name cannot make
-    /// ambiguous (`branch::set_upstream`).
+    /// halves the question was answered with are joined here: what git
+    /// is given is the full remote-tracking refname, the one spelling
+    /// a local branch of the same name cannot make ambiguous
+    /// (`branch::set_upstream`).
     #[qslot]
     fn set_upstream(&mut self, branch: String, remote: String, remote_branch: String) {
         if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
@@ -828,8 +828,8 @@ impl RepoTab {
         self.ask_session(|s| s.set_upstream(branch.clone(), upstream.clone()));
     }
 
-    /// Puts a lightweight tag on `commit` (HEAD when empty). Never
-    /// forced: a name already taken is git's to refuse.
+    /// Puts a lightweight tag on `commit` (HEAD when empty). Always
+    /// plain: a name already taken is git's to refuse.
     #[qslot]
     fn create_tag(&mut self, name: String, commit: String) {
         self.ask_session(|s| s.create_tag(name.clone(), commit.clone()));
@@ -877,8 +877,8 @@ impl RepoTab {
         self.ask_session(|s| s.rename_stash(selector.clone(), message.clone()));
     }
 
-    /// `git stash push -u` over the whole working tree, on the press —
-    /// the button asks nothing first (デザイン規約 §変更を退避する).
+    /// `git stash push -u` over the whole working tree, straight off the
+    /// press (デザイン規約 §変更を退避する).
     ///
     /// `message` is what the commit box already had in it, so the entry
     /// arrives named without anything being asked; empty names it the way
@@ -924,9 +924,9 @@ impl RepoTab {
 
     /// One of the sidebar's lists has drawn a reading. What that proves
     /// about a delete out at the press is the tab's to decide
-    /// (`ops_delete::note_listing_drawn`) — this is the page saying only
-    /// that a list has caught up, and not which one: every row answers
-    /// off the list that draws it.
+    /// (`ops_delete::note_listing_drawn`) — this is the page saying
+    /// only that a list has caught up: every row answers off the list
+    /// that draws it.
     #[qslot]
     fn listing_drawn(&mut self) {
         self.note_listing_drawn();
@@ -942,9 +942,9 @@ impl RepoTab {
     /// is a tree emptying nothing will ever account for
     /// (`ops::StashOut`, `ops::DiffReread`).
     ///
-    /// **The counts' own number, not HEAD's** (`WorkTreeModel.statusSeq`)
-    /// — a report of HEAD arrives on its own as well, carrying no counts
-    /// at all, and read as one of these it would speak for a tree it
+    /// **The counts' own number** (`WorkTreeModel.statusSeq`) — a report
+    /// of HEAD arrives on its own as well, carrying no counts at all,
+    /// and read as one of these it would speak for a tree it
     /// never saw.
     #[qslot]
     fn note_tree_read(&mut self, seen: i32, emptied: bool) {
@@ -963,8 +963,8 @@ impl RepoTab {
     /// completes it. It answers only once both are in, so the side that
     /// arrives first asks and gets nothing.
     ///
-    /// **Asked, not watched.** The question has an answer only at the
-    /// moment the page is acting on a tree, and asking it is what ends
+    /// **Asked, and asking spends it.** The question has an answer
+    /// only at the moment the page is acting on a tree, and asking ends
     /// the wait, so there is nothing here for a binding to follow.
     #[qslot]
     fn take_stash_landing(&mut self) -> bool {
@@ -990,8 +990,8 @@ impl RepoTab {
     /// spends the re-read where it does.
     ///
     /// Measured against the tree as this tab last had it written down
-    /// (`noteTreeRead`), so the two never disagree about which status is
-    /// in hand. **Asked, not watched**, like the stash's landing.
+    /// (`noteTreeRead`), so the two agree about which status is
+    /// in hand. **Asked**, like the stash's landing.
     #[qslot]
     fn take_diff_read(&mut self) -> bool {
         self.diff_reread_taken()
@@ -1009,7 +1009,7 @@ impl RepoTab {
     /// `"lease"` / `"force"`; `lease_expect` pins the remote commit the
     /// user actually saw. `branch` is what the button is sending, as the
     /// page shows it — written down with the id the press is accepted
-    /// under, so the answer comes back to this branch and no other
+    /// under, so the answer comes back to this branch
     /// (`ops::PushOut`).
     #[qslot]
     fn push_current(&mut self, branch: String, force: String, lease_expect: String) {
@@ -1075,8 +1075,8 @@ impl RepoTab {
     }
 
     /// Asks what a push under this branch name would meet on that remote.
-    /// Reaches the network, so it is asked while the question stands and
-    /// not on a poll. The answer arrives as `remoteBranchAsked` /
+    /// Reaches the network, so it is asked while the question stands.
+    /// The answer arrives as `remoteBranchAsked` /
     /// `remoteBranchState`.
     #[qslot]
     fn check_remote_branch(&mut self, remote: String, branch: String) {
@@ -1123,7 +1123,7 @@ impl RepoTab {
 
     /// Renames a branch on a remote. git has none, so core pushes the new
     /// name and deletes the old — the UI holds the answer down first,
-    /// because the old name is destroyed rather than moved.
+    /// because the old name is destroyed.
     #[qslot]
     fn rename_remote_branch(&mut self, remote: String, from: String, to: String) {
         let row = format!("{remote}/{from}");
@@ -1140,8 +1140,8 @@ impl RepoTab {
 
     /// `git branch --delete` (`-D` under `force`) and then
     /// `git push <remote> --delete`, as one queued write: the local half
-    /// refuses first where it refuses at all, and then the remote is
-    /// never touched.
+    /// refuses first where it refuses at all, leaving the remote
+    /// as it was.
     #[qslot]
     fn delete_branch_everywhere(
         &mut self,
@@ -1167,8 +1167,8 @@ impl RepoTab {
 
     /// `git rebase <upstream>`; an empty `onto` uses `upstream` as the base.
     ///
-    /// There is no autostash knob to pass: uncommitted work is carried
-    /// across by core, the same way every other rewrite here carries it
+    /// Uncommitted work is carried across by core, the same way every
+    /// other rewrite here carries it
     /// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
     #[qslot]
     fn rebase(&mut self, upstream: String, onto: String, update_refs: bool) {
@@ -1235,9 +1235,9 @@ impl RepoTab {
     /// Opens the chosen conflicted paths in the configured merge tool, the
     /// same path-set route the rest of the file menu takes.
     ///
-    /// Named paths only, never "all of them": git walks a bare `mergetool`
-    /// one file at a time and the whole walk holds the write queue, so an
-    /// unnamed launch would block every other write for as many tool
+    /// Named paths only: git walks a bare `mergetool` one file at a
+    /// time and the whole walk holds the write queue, so an unnamed
+    /// launch would block every other write for as many tool
     /// sessions as there are conflicts.
     #[qslot]
     fn open_mergetool(&mut self) {
@@ -1275,7 +1275,7 @@ impl RepoTab {
 
     /// Records `user.name` / `user.email`. `global` writes the user's own
     /// configuration, which is the right default for a first-run prompt:
-    /// the answer is about the person, not the project.
+    /// the answer is about the person.
     #[qslot]
     fn set_identity(&mut self, name: String, email: String, global: bool) {
         self.write_identity(name, email, global)

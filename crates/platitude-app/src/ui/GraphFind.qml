@@ -6,7 +6,7 @@ import platitude.ui
 // The find card over the graph, and what a query does to the view.
 //
 // The rows are marked in Rust (`GraphModel.setFind`), which is also where the rule about what a typed line matches
-// lives (`platitude-core::find`). Nothing here decides anything about the query; this end moves the viewport and reads
+// lives (`platitude-core::find`). This end moves the viewport and reads
 // the count back.
 FindBar {
     id: find
@@ -21,11 +21,11 @@ FindBar {
     signal landed(string oidHex)
 
     /// Something is being looked for — which is not the same as something being found. The one thing that lets a row
-    /// dim, and it takes the query rather than the count: with a query and no answers, every row really is "not one of
+    /// dim, and it takes the query: with a query and no answers, every row really is "not one of
     /// them", so the whole graph goes down.
     readonly property bool findOn: find.open && find.graphModel.searching
-    /// The newest row is one of the answers, so the graph steps out from under the card (規約 §コミットを探す). No separate "is
-    /// the tree clean" test is needed: the working-tree row is not a commit and never matches, so a dirty tree answers
+    /// The newest row is one of the answers, so the graph steps out from under the card (規約 §コミットを探す). The
+    /// working-tree row is not a commit and never matches, so a dirty tree answers
     /// false here by itself.
     readonly property bool findClears: find.open && find.graphModel.firstMatched
 
@@ -36,7 +36,7 @@ FindBar {
             return
         find.raise()
         // The card comes back up holding what was last typed into it, and the marks came off when it went away — so the
-        // search is run again rather than waiting for a key that may never come.
+        // search is run again.
         find.runFind()
     }
     /// A press landed somewhere else (`RepoPage.releasePressedAway`), at `scenePos`. A card with nothing in it goes
@@ -44,7 +44,7 @@ FindBar {
     /// with a query in it stays: the query is the only thing there would be to lose, and `✕` and Escape are both one
     /// gesture away (規約 §コミットを探す).
     ///
-    /// "Nothing was typed" is the model's answer rather than a second reading of the box: whitespace alone is not a
+    /// "Nothing was typed" is the model's answer: whitespace alone is not a
     /// query, and which rule that is belongs in one place (`platitude-core::find`).
     function dropIfEmpty(scenePos) {
         if (!find.open || find.graphModel.searching || find.holds(scenePos))
@@ -77,12 +77,12 @@ FindBar {
     }
 
     loaded: find.graphModel.rowTotal
-    // Bound, not assigned when a key is pressed: a background refresh re-marks the rows without anybody typing
-    // (app-ui.md §QML バインディングはプロパティにしか反応しない), and the count has to be the rows' count rather than the last
-    // keystroke's.
+    // Bound: a background refresh re-marks the rows without anybody typing
+    // (app-ui.md §QML バインディングはプロパティにしか反応しない), and the count has to be the rows'
+    // count.
     matches: find.graphModel.matchCount
     atMatch: find.graphModel.matchCount > 0 ? find.graphModel.matchOrdinal(find.view.currentIndex) : 0
-    // "There is a query" is the model's answer, not a second reading of the text here: what counts as a query at all
+    // "There is a query" is the model's answer: what counts as a query at all
     // (whitespace does not) is `platitude-core::find`'s rule and belongs in one place.
     refused: find.open && find.graphModel.searching && find.graphModel.matchCount === 0
     refusedTip: find.graphModel.truncated

@@ -1,11 +1,11 @@
 import QtQuick
 import platitude.ui
 
-// The one turning mark the window has: the drawn ring, never Fusion's
-// `BusyIndicator` (規約 §進行中・長押しの定数).
+// The one turning mark the window has: the drawn ring
+// (規約 §進行中・長押しの定数).
 //
 // It is drawn exactly while it turns — a ring standing still says nothing
-// an empty space does not — so callers write one condition, not two.
+// an empty space does not — so callers write one condition.
 NavIcon {
     id: ring
 
@@ -24,7 +24,7 @@ NavIcon {
     // drains models.
     //
     // Held still wherever the window has been (`Motion.stilled`) — a turning ring photographs differently every time
-    // and no two runs of the same verb produce the same PNG. Built in rather than left to the caller: this is the
+    // and no two runs of the same verb produce the same PNG. Built in: this is the
     // fourth ring, and the guard is what the third one forgot.
     RotationAnimator on rotation {
         running: ring.spinning && !Motion.stilled

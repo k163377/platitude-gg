@@ -43,8 +43,8 @@ pub(super) fn with_flag(pick: impl Fn(&platitude_core::settings::LayoutState) ->
 
 /// Whether one sidebar section comes up open. A name nothing was saved
 /// for opens: a section added later has no line in anybody's state file,
-/// and closed-because-unheard-of is not what a first sight of it should
-/// be.
+/// and a first sight of it should be an open
+/// one.
 pub(super) fn section_open(name: &str) -> bool {
     with_flag(|l| match name {
         "branches" => l.sections.branches,

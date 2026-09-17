@@ -6,10 +6,10 @@ import platitude.ui
 
 /// The two screenshot hooks that hang off `PGG_AUTO_IDENTITY`, and nothing else.
 ///
-/// A file of its own because these are the only harness hooks that are **not** verbs: they run with no
+/// A file of its own because these are the only harness hooks with no verb: they run with no
 /// `PGG_AUTO_ACT` at all — a picture of the identity question is a picture of a window nobody has asked to do
-/// anything — so they are built off their own knob rather than beside the verbs (`WindowHarness`).
-// An `Item` only because that is what the harness's children are; it draws nothing and is never given a size.
+/// anything — so they are built off their own knob (`WindowHarness`).
+// An `Item` only because that is what the harness's children are; it is a sizeless holder.
 Item {
     id: hooks
 

@@ -109,8 +109,8 @@ fn settled(kind: K, error: &str) -> RepoTab {
 }
 
 /// Whether the answer this tab took last left a commit at the tip. Read
-/// off the answer because that is where it is kept — a landing is waited
-/// for by answer, never off a property the next one rewrites
+/// off the answer because that is where it is kept — a landing is
+/// waited for by answer, and each keeps its own
 /// (`WriteAnswer::at_tip`).
 fn at_tip(tab: &RepoTab) -> bool {
     tab.write_answers.last().is_some_and(|a| a.at_tip)
@@ -186,7 +186,7 @@ fn push_pressed() -> RepoTab {
 // back in one drain. The answer is handed to the press by id, with the
 // branch it was sent for and git's own words for that one — and the
 // fetch is what is left over for the group, so the page's leftover
-// branch reads a fetch that landed, not a push that was refused.
+// branch reads a fetch that landed.
 #[test]
 fn a_push_answer_is_handed_to_the_press_that_sent_it_with_its_branch_and_words() {
     let mut tab = push_pressed();
@@ -264,8 +264,8 @@ fn two_pushes_in_a_row_are_answered_by_id_and_neither_twice() {
 
 // A push nobody here pressed for — one a page that has since gone sent —
 // has no press waiting: its answer falls to the group like any other
-// nobody named. **Both owners are empty here**, which is what makes this
-// the leftover case rather than the ref row's own (below).
+// nobody named. **Both owners are empty here**, which is what makes
+// this the leftover case (the ref row's own is below).
 #[test]
 fn a_push_nobody_here_pressed_for_falls_to_the_group() {
     let mut tab = RepoTab::default();
@@ -332,8 +332,8 @@ fn a_landed_reword_carries_the_saved_message() {
     assert!(!settled(K::Reword, "fatal: bad revision").write_reworded);
 }
 
-/// The far side keeping a branch is a report, not a failure of this
-/// window's — the page reads these four and says so in its own words
+/// The far side keeping a branch is a report — the page reads these
+/// four and says so in its own words
 /// (`Words.writeReported`).
 #[test]
 fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
@@ -364,8 +364,8 @@ fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
     assert_eq!(tab.write_report_reason, "");
 }
 
-/// A push that was sending rather than removing says so, since that
-/// is the whole of what the sentence turns on.
+/// A push that was sending says so, since that is the whole of what
+/// the sentence turns on.
 #[test]
 fn a_refused_send_is_told_apart_from_a_refused_delete() {
     let mut tab = RepoTab::default();
@@ -436,7 +436,7 @@ fn every_answer_rewrites_the_whole_group() {
     let mut tab = RepoTab::default();
     tab.settle_write(1, K::Reword, String::new(), None, 0, 0);
     assert!(tab.write_reworded);
-    // Not a fetch: a failed fetch raises `fetch_first_failed`, and a
+    // A checkout: a failed fetch raises `fetch_first_failed`, and a
     // signal needs the proxy no unit test has.
     tab.settle_write(
         1,
@@ -538,8 +538,8 @@ fn each_answer_carries_the_seq_it_was_counted_at() {
     assert_eq!(seqs, [before + 1, before + 2]);
 }
 
-// The tip landing is waited for by meaning rather than by name, and the
-// answer carrying it is not the one the group is left describing.
+// The tip landing is waited for by meaning, and the answer carrying
+// it is not the one the group is left describing.
 #[test]
 fn a_landing_at_the_tip_is_found_in_the_list_a_fetch_answered_over() {
     let mut tab = RepoTab::default();
@@ -573,8 +573,8 @@ fn a_landing_at_the_tip_is_found_in_the_list_a_fetch_answered_over() {
     assert_eq!(landed, [K::Merge]);
 }
 
-// A drain that brought no write answer says so, rather than leaving the
-// last one's list standing for a second notify to read over again.
+// A drain that brought no write answer says so, and the last one's
+// list goes down with it.
 #[test]
 fn a_drain_with_no_write_answer_publishes_none() {
     let mut tab = RepoTab::default();
@@ -768,7 +768,7 @@ fn an_answer_is_found_by_the_id_its_press_was_given_whatever_came_in_between() {
 }
 
 // The same two answers the other way round: the id is what finds the
-// answer, not its place in the list.
+// answer, wherever it stands.
 #[test]
 fn the_id_finds_the_answer_wherever_it_stands_in_the_list() {
     let mut tab = RepoTab::default();
@@ -778,9 +778,9 @@ fn the_id_finds_the_answer_wherever_it_stands_in_the_list() {
     assert!(tab.write_answer_at(0).is_some_and(|a| a.failed));
 }
 
-// The list is this notify's and no other: a notify raised from
-// somewhere else carries no answers, and the one before it must not be
-// read a second time.
+// The list is this notify's alone: a notify raised from somewhere
+// else carries no answers, and the one before it went down with its
+// own notify.
 #[test]
 fn a_notify_that_carried_no_answer_says_so() {
     let mut tab = RepoTab::default();
@@ -800,8 +800,8 @@ fn a_notify_that_carried_no_answer_says_so() {
 // ---- the editor's commit, found by the id its press was given --------
 
 /// The id the queue took the editor's commit under, and one it gave
-/// somebody else. What these tests are about is that the editor's answer
-/// is found by the number rather than by its turn.
+/// somebody else. What these tests are about is that the editor's
+/// answer is found by the number.
 const OURS: u64 = 7;
 const SOMEBODY_ELSE: u64 = 8;
 
@@ -1072,10 +1072,10 @@ fn a_tree_read_empty_before_the_answer_still_lands_the_press() {
 fn a_landing_owed_in_the_drain_that_refuses_somebody_elses_write() {
     let mut tab = tree_stashed();
     tab.tree_was_read(FENCE, EMPTIED);
-    // A push rather than a fetch: a failed fetch raises
-    // `fetch_first_failed`, and a signal needs the proxy no unit test
-    // has. Which write it was changes nothing — the group's branch ends
-    // the page's answer on any refusal it is left describing.
+    // A push: a failed fetch raises `fetch_first_failed`, and a
+    // signal needs the proxy no unit test has. Which write it was
+    // changes nothing — the group's branch ends the page's answer
+    // on any refusal it is left describing.
     tab.absorb(vec![
         fenced(OURS, K::Stash, ""),
         answered(SOMEBODY_ELSE, K::Push, "! [rejected]"),
@@ -1143,8 +1143,8 @@ fn the_boundaries_reach_the_watch_and_nothing_else_opens_it() {
 }
 
 /// **An ask that was numbered first and queued second**: the run's own
-/// write carries the *lower* id and finishes *last*, and the barrier opens
-/// on it and on nothing before it.
+/// write carries the *lower* id and finishes *last*, and the barrier
+/// opens on it alone.
 ///
 /// This is the arrangement the identity comparison exists for.
 /// `OperationId::next()` and the queue's own lock are not the same moment
@@ -1219,11 +1219,11 @@ fn a_run_with_no_write_of_its_own_never_passes() {
 /// **What the run reads to hold its own contract**: the stage and the id
 /// are the whole of it, and the tab refuses nothing.
 ///
-/// Arming over a write still out is a breach when the run had pressed for
-/// that write and not otherwise — what the watch is carrying is as often
-/// as not one nobody pressed for (the read a menu makes on its way open),
-/// and only the run knows which. So the tab answers where it stands and
-/// leaves the judgement upstairs (`AutoActDriver.beginWrite`).
+/// Arming over a write still out is a breach where the run had pressed
+/// for that write — what the watch is carrying is as often as not one
+/// nobody pressed for (the read a menu makes on its way open), and only
+/// the run knows which. So the tab answers where it stands and leaves
+/// the judgement upstairs (`AutoActDriver.beginWrite`).
 #[test]
 fn the_tab_says_where_the_watch_stands_and_judges_nothing() {
     let mut tab = watching(OURS);

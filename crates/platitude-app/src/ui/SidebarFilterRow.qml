@@ -8,7 +8,7 @@ import platitude.ui
 // The sidebar's header band: a frameless filter that takes all the
 // width left over, and the fold control at the end of it. It is the band
 // the other panes' headers line up with, so it takes the header height,
-// and the hairline that closes it is the band's rather than the input's
+// and the hairline that closes it is the band's
 // (it runs on under the button).
 Item {
     id: filterRow
@@ -41,8 +41,8 @@ Item {
             background: null
         }
         // The whole block is the button: the reach is the band's
-        // full height, not a mark's worth of it. The rail's band
-        // is the same block with the mark pointing back.
+        // full height. The rail's band is the same block with the
+        // mark pointing back.
         FoldBlock {
             Layout.fillHeight: true
             Layout.preferredWidth: Theme.headerHeight

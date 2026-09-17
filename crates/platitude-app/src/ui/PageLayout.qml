@@ -6,7 +6,7 @@ import platitude.ui
 // ---- what a page is laid out at, and what the next launch gets back --
 // The three sizes a reader can drag, the sections they can fold, and the floor under all of it. Held apart from the
 // page because they answer one question between them — what this tab looks like when it is opened again — and because
-// the window asks the page for the floor rather than for any of the panes.
+// the window asks the page for the floor.
 //
 // Nothing is drawn here, so this is a `QtObject`: it hosts no item that would want a size (rules-refs/structure.md
 // §描かないホスト).
@@ -18,10 +18,10 @@ QtObject {
     required property Item page
 
     required property SidebarPane sidebarPane
-    /// The right-hand seat: the working-tree pane and the commit details share it, and `SplitView` measures the seat
-    /// rather than either.
+    /// The right-hand seat: the working-tree pane and the commit details share it, and `SplitView` measures the
+    /// seat.
     required property Item rightPane
-    /// The log's seat in the vertical split, not the panel: the panel is built into it only while the log is up, and
+    /// The log's seat in the vertical split: the panel is built into it only while the log is up, and
     /// the height the split is asked for belongs to the seat either way (`RepoPage.commandsSeat`).
     required property Item commandsSeat
     required property GraphPane graphPane
@@ -33,7 +33,7 @@ QtObject {
     required property DetailsModel detailsModel
 
     /// The layout this page starts with: what the window is set to now, which after a restart is what the last session
-    /// left. Read once rather than bound — from here on the splitters own these, and a binding would fight the drag
+    /// left. Read once — from here on the splitters own these, and a binding would fight the drag
     /// (規約 §左メニューを畳む). Whether the log is up is the one of them the file does not hold: it follows the reader
     /// from tab to tab like the rest, and a new launch finds it down (`AppBackend::commands_shown`).
     function applySavedLayout() {
@@ -57,7 +57,7 @@ QtObject {
         if (layout.page.blank)
             return
         layout.repoTab.setTagsShown(AppBackend.startTagsShown())
-        // The page's, not the pane's: the choice holds for the lists of another working copy as well, and those are
+        // The page's: the choice holds for the lists of another working copy as well, and those are
         // the page's to hand the pane (`RepoPage.setWipTreeView`).
         layout.page.setWipTreeView(AppBackend.startWipTree())
         layout.detailsModel.setTreeView(AppBackend.startDetailsTree())
@@ -76,18 +76,18 @@ QtObject {
     readonly property int commandsMinHeight: 120
     /// Whether the working-tree pane has anything below its own fold — the editor, the commit button and a stopped
     /// operation's exit card keep their heights by construction, so in a short pane they are reached by scrolling
-    /// rather than not at all (`window-floor wip`).
+    /// (`window-floor wip`).
     readonly property bool wipBlockScrolls: layout.wipPane.blockScrolls
     /// …and how far the commit-details pane runs past its own bottom, which is the same question asked of the other
     /// half of this seat.
     readonly property real detailsOverHeight: layout.detailsPane.contentOverHeight
 
     /// The middle column's floor. The graph gives up its own columns first — the chips, then the lanes
-    /// (`GraphPane.contentMinW`) — and stops where all three of them would stop saying anything. Never under what a
+    /// (`GraphPane.contentMinW`) — and stops where all three of them would stop saying anything. At least what a
     /// side pane may be, so that three columns still read as three at the floor.
     readonly property real centreMinWidth: Math.max(layout.graphPane.contentMinW, layout.sidebarPane.minOpenWidth)
     /// What the folded list costs is the rail, so folding lowers this and unfolding raises it — and a window standing
-    /// at the old floor is grown by the new one rather than cutting the list off (Main).
+    /// at the old floor is grown by the new one (Main).
     readonly property real floorWidth:
         (layout.page.sidebarCollapsed ? Theme.railWidth : layout.sidebarPane.minOpenWidth)
         + Theme.splitterWidth + layout.centreMinWidth + Theme.splitterWidth + layout.rightMinWidth
@@ -104,13 +104,13 @@ QtObject {
         layout.panesMinHeight
         + (layout.page.commandsOpen ? Theme.splitterWidth + layout.commandsMinHeight : 0)
 
-    /// Assigned, not bound — a drag writes the same attached property and would be gone after the first one (規約
+    /// Assigned — a drag writes the same attached property and a binding would be gone after the first one (規約
     /// §左メニューを畳む).
     function setDetailsWidth(w) {
         layout.rightPane.SplitView.preferredWidth = w
     }
     /// The same, for the left menu: what a hand dragging its bar would leave. An ask narrower than the list's own
-    /// floor comes back at the floor by the splitter's arithmetic, not by a second copy of it here. Only the headless
+    /// floor comes back at the floor by the splitter's arithmetic. Only the headless
     /// state check calls this; a person drags.
     function setSidebarWidth(w) {
         layout.sidebarPane.SplitView.preferredWidth = w
@@ -123,21 +123,21 @@ QtObject {
         layout.graphPane.graphColWManual = lanes
     }
 
-    /// Hands the window's layout over to be remembered. Pulled on a timer by the window rather than pushed as each
-    /// value changes: a splitter drag moves a width on every frame, and the point is to write what it settled on.
+    /// Hands the window's layout over to be remembered. Pulled on a timer by the window: a splitter drag moves a
+    /// width on every frame, and the point is to write what it settled on.
     function reportLayout() {
         AppBackend.saveLayoutSizes(
             // While the list is folded its width is the rail's; the width it goes back to is the one worth keeping.
             layout.page.sidebarCollapsed ? layout.sidebarPane.openWidth : layout.sidebarPane.width,
             layout.rightPane.width,
-            // The height it asks for, open or closed — not the one it was laid out at. A drag writes this same
+            // The height it asks for, open or closed. A drag writes this same
             // property, so what a hand set is here; what a short window squeezed it to is not (the same rule the folded
-            // list keeps: a size nobody chose is not a size to come back to. Measured before the window had a floor:
+            // list keeps: only a chosen size is one to come back to. Measured before the window had a floor:
             // opening the log in a 420px window wrote 168 over the 280 that had been asked for, and every launch after
             // came back to the smaller one).
             layout.commandsSeat.SplitView.preferredHeight,
-            // The dragged values, not the widths on screen: a column that nobody has moved reports -1 and goes on
-            // following the default rather than freezing today's number into the file.
+            // The dragged values: a column that nobody has moved reports -1 and goes on
+            // following the default.
             layout.graphPane.labelWManual, layout.graphPane.graphColWManual)
         AppBackend.saveLayoutFlags(layout.page.sidebarCollapsed,
                                    layout.page.commandsOpen,

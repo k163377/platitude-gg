@@ -1,11 +1,11 @@
 use super::*;
 
-// A list model that answers by value rather than by reference: `data()`
-// computes the field a role asks for, where `QListModel::get` would have
-// handed out a borrow of a stored `NavItem` and so forced every row to
-// exist. Nothing here is a tree — `parent` is always invalid and rows hang
-// off the root — but `QAbstractItemModel` is the base that lets a row be
-// answered instead of held (and the one CXX-Qt expects, via
+// A list model that answers by value: `data()` computes the field a
+// role asks for, where `QListModel::get` would have handed out a
+// borrow of a stored `NavItem` and so forced every row to exist.
+// Nothing here is a tree — `parent` is always invalid and rows hang
+// off the root — but `QAbstractItemModel` is the base that lets a row
+// be answered (and the one CXX-Qt expects, via
 // `QAbstractListModel`).
 impl QAbstractItemModel for NavSectionModel {
     fn index(&self, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex {

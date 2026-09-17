@@ -22,8 +22,8 @@ mod tree;
 
 // Every field is `pub(super)` because the rows are also what
 // `details_tests` builds a commit out of: the tests sit beside the model
-// rather than in it (.claude/rules/structure.md), and `models` is as far as
-// the widening reaches.
+// (.claude/rules/structure.md), and `models` is as far as the widening
+// reaches.
 #[derive(QModelItem, Default, Clone)]
 pub struct FileItem {
     pub(super) change: String,
@@ -81,9 +81,9 @@ pub struct DetailsModel {
     committer_avatar_url: String,
     /// Whether the commit was put here by somebody other than its author,
     /// and whether that happened at another moment than it was written.
-    /// Both are answered here rather than in QML: the address is what
-    /// tells two people apart (デザイン規約 §アバターを与える), and the
-    /// card that reads these must not carry a second copy of that rule.
+    /// Both are answered here: the address is what tells two people
+    /// apart (デザイン規約 §アバターを与える), and that rule lives here
+    /// alone.
     committer_differs: bool,
     commit_time_differs: bool,
     committer_time: i64,
@@ -95,9 +95,9 @@ pub struct DetailsModel {
     /// what is being read, which is every other pane in this file.
     selection_count: i32,
     comparing: bool,
-    /// Whether the files below a choice are its own answer. **"No answer
-    /// yet" is not "no files"**: a read that failed leaves the list empty
-    /// with nothing loading, which is the same shape as a choice whose
+    /// Whether the files below a choice are its own answer. **Read it
+    /// before the list**: a read that failed leaves the list empty with
+    /// nothing loading, which is the same shape as a choice whose
     /// commits changed nothing (規約 §UI 自動化の因果性).
     selection_loaded: bool,
     /// The two ends of a comparison, oldest first — what the header
@@ -183,9 +183,9 @@ impl DetailsModel {
     }
 
     /// Empties everything that describes one commit. What a choice of
-    /// several holds is not a commit — it has no author, no message and
-    /// no hash — so the card above the file list has to go rather than
-    /// stand there still wearing the last one read.
+    /// several holds is not a commit — it has no author, no message
+    /// and no hash — so the card above the file list goes with the
+    /// commit it described.
     pub(super) fn clear_commit(&mut self) {
         self.sha_hex.clear();
         self.sha8.clear();

@@ -5,10 +5,10 @@ import platitude.ui
 // A line a card puts out to be read, in a field the reader can take away with them: pressed, dragged over and copied
 // like any other text in this window (規約 §hover のツールチップ「出したものは持ち帰れる」).
 //
-// **A `TextEdit` rather than a `Label`**, because selecting is a text field's doing and a Label has none of it. What
+// **A `TextEdit`**, because selecting is a text field's doing and a Label has none of it. What
 // that costs is `elide`, which `TextEdit` has no property for — so **this part wraps and the caller caps the width**.
 // That is the answer the cards want anyway: every field a card shows is a name being shown *because* the row it came
-// from had already cut it (規約 §hover のツールチップ「名前は文ではないので 1 行に収めない」), and a name cut a second
+// from had already cut it (規約 §hover のツールチップ「名前は折り返して全文を出す」), and a name cut a second
 // time in the place it went to be read is a name nobody can read anywhere.
 //
 // **Two ways in, the pair the right pane's values carry.** Where the pointer is on the words they answer their own
@@ -34,7 +34,7 @@ Item {
     property color color: Theme.textPrimary
     /// The word the pointer is on, empty when it is on none of them, and the press on it.
     ///
-    /// **An anchor rather than a rule drawn under a Label** (`CommitHoverCard`'s note is the other shape): that note
+    /// **An anchor** (`CommitHoverCard`'s note is the other shape): that note
     /// is a whole line and this one is a run of glyphs inside a sentence, and only the field knows where that run
     /// begins and ends. What the field draws for it is the word underlined — **and in whatever colour the markup
     /// gave it**, since an anchor's ink is the document's: `linkColor` belongs to `Text` and this is a `TextEdit`
@@ -44,7 +44,7 @@ Item {
     signal linkAsked(string href)
     property real pixelSize: Theme.fontMd
     property int weight: Font.Normal
-    /// Spelled in git's own family rather than the window's — a path git printed, a hash (規約 §git 用語のコード表記).
+    /// Spelled in git's own family — a path git printed, a hash (規約 §git 用語のコード表記).
     /// The pair `LineText` carries, and chosen by name for the same reason: a family handed in from a caller would
     /// skip the per-OS fallback Theme resolves (規約 §QML 実装ルール).
     property bool mono: false
@@ -54,7 +54,7 @@ Item {
     /// How tall the field may grow before the rest is left behind, as a height. 0 = no cap, which is every one-line
     /// field. Spent in whole lines all the same — see `capLines`.
     property real capHeight: 0
-    /// The same cap said in lines, for a caller who means a number of lines rather than a share of the room there is.
+    /// The same cap said in lines, for a caller who means a number of lines.
     /// Wins over `capHeight` when both are set; 0 = not asked for.
     property int capRows: 0
     /// The card this stands on, for the mark's own ground: the mark is drawn over the last line it cuts, and needs
@@ -69,9 +69,9 @@ Item {
     readonly property real lineHeight: field.lineCount > 0 ? field.contentHeight / field.lineCount : 0
     /// How many whole lines the cap leaves room for — **a cap is always spent in whole lines**. A height taken at its
     /// word lands inside a line and leaves a row of glyphs cut through the waist, with the mark floating beside it on a
-    /// baseline of its own: not a message that stops, one that broke. Rounded down to the line
-    /// below, the field ends the way an elide ends — a whole last line with the mark standing on its tail. Never less
-    /// than one: a cap shorter than a line still has to show the line it is cutting, or all that is left is a blank
+    /// baseline of its own: a message that broke. Rounded down to the line
+    /// below, the field ends the way an elide ends — a whole last line with the mark standing on its tail. One line
+    /// at the least: a cap shorter than a line still has to show the line it is cutting, or all that is left is a blank
     /// strip with a mark on it.
     readonly property int capLines: cardText.capRows > 0
                                     ? cardText.capRows
@@ -116,14 +116,14 @@ Item {
     }
 
     // ---- driven from outside ----------------------------------------
-    // For a gesture that began in the card's own air rather than on these words: the pad under the card hands it down
+    // For a gesture that began in the card's own air: the pad under the card hands it down
     // in its own coordinates and the field turns it into characters (`SweepPad`, the pair `LineText` carries for the
     // right pane). The anchor is set once, where the drag began, and every move reads from there — the same shape the
     // field's own drag has.
     /// Where the gesture started, in characters.
     property int grabAnchor: 0
     /// A point in another item's coordinates, brought inside this field's own box. **Both axes are clamped**: a field
-    /// asked for a position outside its box answers about the line rather than about the column, so a sweep that
+    /// asked for a position outside its box answers about the line alone, so a sweep that
     /// arrived from the padding beside it picked the same character at both ends of its drag and came away with
     /// nothing (`LineText.onLine`, the same measurement).
     function inBox(item, x, y) {
@@ -145,7 +145,7 @@ Item {
         field.select(cardText.grabAnchor, field.positionAt(p.x, p.y))
     }
 
-    /// The width the words want with nothing to wrap them — measured off a ruler rather than off the field, because
+    /// The width the words want with nothing to wrap them — measured off a ruler, because
     /// **the field's own `implicitWidth` follows its `width` once it wraps**, and a natural width read from there is a
     /// binding standing on its own answer (規約 §QML 実装ルール). Rounded up: a layout hands an item the whole pixel
     /// below a fractional width, and a line asking for 79.28 given 79 wraps against a box meant to hold it.
@@ -169,7 +169,7 @@ Item {
         id: field
         width: cardText.width
         text: cardText.markup !== "" ? cardText.markup : cardText.text
-        // Pinned, not left to `AutoText`. What these fields carry is git's own words as often as this application's,
+        // Pinned. What these fields carry is git's own words as often as this application's,
         // and AutoText decides by guessing whether a string looks like markup — a branch called `<b>` would vanish.
         // The one line that is markup says so because a caller built it and escaped everything that went into it.
         textFormat: cardText.markup !== "" ? TextEdit.RichText : TextEdit.PlainText
@@ -180,14 +180,14 @@ Item {
         font.weight: cardText.weight
         horizontalAlignment: cardText.horizontalAlignment
         wrapMode: Text.Wrap
-        // Read, not written: the card is a view of a commit, a file or a person, and none of them is edited from here.
+        // Read only: the card is a view of a commit, a file or a person, and none of them is edited from here.
         readOnly: true
         // `selectByKeyboard` is false by default on a read-only field, and `Ctrl+A` goes with it — the one gesture a
         // reader who wants the whole line reaches for first.
         selectByMouse: true
         selectByKeyboard: true
-        // **Never `persistentSelection`.** There is one selection in this window, and it belongs to whatever the caret
-        // is in — a card holding several of these would otherwise stay lit in every line the reader had swept, and so
+        // **One selection in this window, and it belongs to whatever the caret is in.**
+        // A card holding several of these would otherwise stay lit in every line the reader had swept, and so
         // would the pane behind it (observed, on the pane's own fields). It was kept for the camera, and
         // the camera never needed it: a field that has not taken focus answers `selectedText` after `selectAll()` all
         // the same, which is the whole of what `tip-copy` reads (measured, qmltestrunner `tst_twofields`).
@@ -202,8 +202,8 @@ Item {
     }
 
     // What the cap left behind, on the tail of the last line the cap kept — where an elide puts it. On the card's own
-    // ground rather than over the words: the line runs on under this, and a mark read through a sentence is not a mark.
-    // The band is a line tall so the mark sits on that line's own baseline rather than beside it.
+    // ground: the line runs on under this, and a mark read through a sentence is not a mark.
+    // The band is a line tall so the mark sits on that line's own baseline.
     Rectangle {
         visible: cardText.clipped
         color: cardText.ground

@@ -7,19 +7,19 @@ import platitude.ui
 // added image shows a single full-width After cell and a deleted one a single Before.
 //
 // Scaling: 1:1 when the natural size fits, a fixed integer zoom for small images (zoomFor — independent of the window),
-// and fit-to-frame shrinking as the final cap, so a tiny window never overflows and never picks a different zoom, it
+// and fit-to-frame shrinking as the final cap, so a tiny window keeps its zoom and
 // only shrinks.
 ColumnLayout {
     id: previewCell
     /// The side's own word — `Before` / `After`. The size stands beside it with a drawn dot between them, so this cell
-    /// composes its own line rather than being handed one already spelled.
+    /// composes its own line.
     required property string caption
     /// A `file:` URL — the working-tree file itself, or the file core wrote the blob to — stamped with the read it was
     /// made at, so a file that moved under the pane comes back as a source that changed (`DiffModel.previewOldUrl`).
     required property string url
     required property string sizeText
-    /// Whether the image is a vector one — the model's word (`DiffModel.previewVector`), not something read back off
-    /// the URL. SVG rasters scale smoothly, pixel rasters must not.
+    /// Whether the image is a vector one — the model's word (`DiffModel.previewVector`).
+    /// SVG rasters scale smoothly, pixel rasters stay crisp.
     required property bool isVector
     /// Automation: the decode is asynchronous, so a read that has settled is not yet a picture on screen. `settled`
     /// is the decoder's answer either way, `shown` the picture being there.
@@ -28,8 +28,8 @@ ColumnLayout {
     visible: sizeText !== ""
     spacing: Theme.spaceXs
 
-    // Image-preview zoom steps: a small image draws at a fixed integer scale picked from its natural size (never from
-    // the window), then fit-to-frame shrinking still wins when space runs out. Small icons land in a readable 128-256px
+    // Image-preview zoom steps: a small image draws at a fixed integer scale picked from its natural size alone,
+    // then fit-to-frame shrinking still wins when space runs out. Small icons land in a readable 128-256px
     // band.
     function zoomFor(maxSide) {
         if (maxSide <= 0)
@@ -76,7 +76,7 @@ ColumnLayout {
         readonly property real naturalH: previewImage.implicitHeight
         readonly property real fitScale: naturalW > 0 && naturalH > 0 && innerW > 0 && innerH > 0
             ? Math.min(innerW / naturalW, innerH / naturalH) : 1
-        // Shrink freely; enlarge only in whole steps, never past the frame and never more than the size-picked zoom.
+        // Shrink freely; enlarge only in whole steps, within the frame and up to the size-picked zoom.
         readonly property real displayScale: fitScale < 1
             ? fitScale
             : Math.max(1, Math.min(previewCell.zoomFor(Math.max(naturalW, naturalH)), Math.floor(fitScale)))
@@ -91,7 +91,7 @@ ColumnLayout {
             // Decoded once, held by this item alone, and let go with the URL: a closed pane keeps no picture in the
             // pixmap cache.
             cache: false
-            // No sourceSize: it does not cap decoding, it *rescales* rasters to the given size (a 16px icon came back
+            // Decoded at natural size: `sourceSize` *rescales* rasters to the given size (a 16px icon came back
             // blurry at screen width). Integer upscales stay crisp (pixel art); shrinking and vector rasters smooth.
             smooth: previewFrame.displayScale < 1 || previewCell.isVector
             mipmap: true

@@ -9,7 +9,7 @@ import platitude.ui
 // rows and the ones the right pane lists under a choice
 // (デザイン規約 §複数のコミットを選ぶ); the chip's list is the graph's alone.
 //
-// Held here rather than in the rows: delegates are recycled out from under
+// Held here: delegates are recycled out from under
 // an open popup (each of the two says so for itself). Held together
 // because only one of them is ever out, and that rule has to be decided
 // somewhere both can be seen (デザイン規約 §hover のツールチップ).
@@ -32,7 +32,7 @@ Item {
     ///
     /// The chip's list is the exception, and it is `menuStanding` above
     /// that holds it: a ref menu raised from one of its rows is standing
-    /// *on* the list, not over it.
+    /// *on* the list.
     required property bool hoverBlocked
 
     /// The pointer is on the row, or on the chip whose list is up (or is
@@ -43,7 +43,7 @@ Item {
     /// The chip the open list hangs off (null when none). The graph's rows
     /// read it back through `GraphPane.chipListAnchor`, so a hand that
     /// walked down into the list and comes back to that chip re-holds it
-    /// instead of sitting out the opening rest again.
+    /// at once; the opening rest was already served.
     property var refListAnchor: null
     /// The commit whose card is out (empty when none). The graph's rows
     /// read it back through `GraphPane.rowCardOid`, so the row the card
@@ -96,8 +96,8 @@ Item {
 
     anchors.fill: parent
 
-    /// A menu went up over whatever was resting: the card goes now rather
-    /// than in a beat's time, the same as when the chip's list takes over.
+    /// A menu went up over whatever was resting: the card goes now,
+    /// the same as when the chip's list takes over.
     onHoverBlockedChanged: {
         if (host.hoverBlocked)
             host.closeRowCard()
@@ -109,7 +109,7 @@ Item {
         // **Already out, of this very commit** — the hand walked down into the card and came back to the row it came
         // off. What is being asked for is the hold, and the hold is the whole of what is given: the seat below comes
         // off the pointer, so working it out again slides the card sideways under a hand that only went back where it
-        // started (P3-確認事項, observed). **By the commit and by the card, not by the row**: delegates travel, and a
+        // started (P3-確認事項, observed). **By the commit and by the card**: delegates travel, and a
         // card that has closed has no commit of its own left (`rowCard.onClosed`), so a second look at the same row
         // after it went opens properly.
         if (rowCard.opened && host.rowCardOid === row.oid_hex) {
@@ -121,7 +121,7 @@ Item {
         rowCard.author = row.author
         rowCard.atime = row.atime
         rowCard.mates = row.co_authors
-        // Under the pointer, not under the row: a row is as wide as the
+        // Under the pointer: a row is as wide as the
         // pane, so its left edge is nowhere near the hand. **Worked out
         // first**, since the bounds below are the room left under it.
         const at = row.mapToItem(host, row.pointerX, row.height)
@@ -130,11 +130,11 @@ Item {
         // **What the card is for depends on what the row already showed.** A graph row carries the whole subject, so
         // the card is a glance at the body and offers the way to the rest; a row of a choice carries one cut line, so
         // the card is where the message is read and holds none of it back — and offers nothing, a door out of it
-        // being a door out of what the reader was picking (デザイン規約 §複数のコミットを選ぶ). Assigned rather than
-        // bound: the card is one object serving two lists, and a binding would have to name both.
+        // being a door out of what the reader was picking (デザイン規約 §複数のコミットを選ぶ). Assigned:
+        // the card is one object serving two lists, and a binding would have to name both.
         const whole = row.wholeMessage === true
-        // **Bounded by the room there is either way.** What "holds nothing back" buys is a paragraph limit lifted,
-        // not a card taller than the screen — uncapped, a five thousand byte body drew a slab the height of the
+        // **Bounded by the room there is either way.** What "holds nothing back" buys is a paragraph limit lifted
+        // — uncapped, a five thousand byte body drew a slab the height of the
         // window over the very list it was opened from (measured `--preset edges`). The room is what lies under the
         // row, all of it: a card that stops short of the floor is holding back for no reason a reader can see. The
         // subject takes a quarter of it and the body the rest, less the three rows the author, the date and the
@@ -154,7 +154,7 @@ Item {
     function settleRowCard() {
         rowCardKeep.settle()
     }
-    /// Down now, not in a beat's time: what makes way for the chip's list
+    /// Down now: what makes way for the chip's list
     /// has to be gone before it is drawn, or the two overlap for as long
     /// as the wait.
     function closeRowCard() {
@@ -182,7 +182,7 @@ Item {
         // — it would be drawn over the list the chip is opening.
         host.closeRowCard()
         refList.records = records
-        // Never narrower than the chip it is covering (see the property).
+        // At least as wide as the chip it is covering (see the property).
         refList.minRowWidth = anchor.width
         // What is left of the page from the chip's own left edge, less
         // what stands outside a row's names on the far side — the bar's
@@ -220,7 +220,7 @@ Item {
         host.refListWanted = false
         host.settleRefList()
     }
-    /// Down now, not in a beat's time — the same as the row's card, and
+    /// Down now — the same as the row's card, and
     /// for the same reason: what takes this card's place is drawn on the
     /// ground it is standing on (the name box opens in the chip column
     /// this covers), and the two would overlap for as long as the wait.
@@ -263,13 +263,13 @@ Item {
             host.refListAnchor = null
             host.refListOid = ""
             host.refListRow = -1
-            // **Which row was clicked last is not forgotten here.** The card is a window onto rows that stay on
+            // **Which row was clicked last stays remembered here.** The card is a window onto rows that stay on
             // screen, wearing the mark a second click is aimed at — unlike the folded rail's peek, which takes its
             // rows away with it and has to forget them (app-ui.md). The memory is the graph's, and so is the row.
         }
     }
     // A ref menu standing on one of the list's rows keeps the list up
-    // under it: the hand went into the menu, not away, and closing the
+    // under it: the hand went into the menu, and closing the
     // list would pull the ground out from what it right-clicked. The
     // menu's own close settles this again (`RepoPage.onDismissed`).
     HoverCardHost {
@@ -296,10 +296,10 @@ Item {
             host.rowCardOid = ""
             host.rowCardRow = -1
         }
-        // **Read before the close, never after**: closing is what clears
+        // **Read before the close**: closing is what clears
         // the pair above, so a card that took its own commit down with it
-        // would send the page looking for nothing. Down now rather than
-        // in a beat's time — what the press leads to is behind this card.
+        // would send the page looking for nothing. Down now —
+        // what the press leads to is behind this card.
         onMessageAsked: {
             const oidHex = host.rowCardOid
             const atRow = host.rowCardRow

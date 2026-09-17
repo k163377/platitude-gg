@@ -90,7 +90,7 @@ pub fn label_name_of(record: &str) -> &str {
 /// The ref kind a chip record's letter names, in the word the menus
 /// branch on. The HEAD marker, the worktree marker (and anything
 /// unrecognised) answer `""`: they name no ref, so there is nothing to
-/// act on — a working copy is opened from its own row, not from a chip.
+/// act on — a working copy is opened from its own row.
 pub fn label_kind_word(record: &str) -> &'static str {
     match record.as_bytes().first() {
         Some(b'L') => "branch",
@@ -101,9 +101,9 @@ pub fn label_kind_word(record: &str) -> &'static str {
 }
 
 /// A chip's identity inside a gone set: its kind letter and the name on
-/// it. The flag digits between the two say how the chip is drawn, not
-/// which ref it is — and a tag may share a name with a branch, so the
-/// letter stays.
+/// it. The flag digits between the two say how the chip is drawn, and a
+/// tag may share a name with a branch, so the letter stays part of the
+/// key.
 pub fn label_key(record: &str) -> String {
     let mut key = String::with_capacity(1 + record.len().saturating_sub(FLAGS + 1));
     key.push_str(record.get(..1).unwrap_or(""));
@@ -284,8 +284,8 @@ mod tests {
     }
 
     /// The PR digit answers the set the caller passed — only a local
-    /// branch wears it, and only when named. The set is an argument so
-    /// this is a fact about the inputs, not about the process environment.
+    /// branch wears it, and only when named. The set is an argument, so
+    /// this test is a fact about its inputs alone.
     #[test]
     fn the_pr_digit_answers_the_named_branches() {
         let branch = |text: &str, kind| RefLabel {

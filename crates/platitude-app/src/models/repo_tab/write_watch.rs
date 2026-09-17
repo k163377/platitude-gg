@@ -1,9 +1,9 @@
 //! The one write a run is waiting for, kept by the id its own ask was
 //! given.
 //!
-//! **Why a watch and not a number to compare.** Every event about a write
-//! carries an id, and none of them says which is *yours*; the id that does
-//! is the one [`RepoSession::write`] hands back to the caller that asked.
+//! **Why a watch.** Every event about a write carries an id, and none of
+//! them says which is *yours*; the id that does is the one
+//! [`RepoSession::write`] hands back to the caller that asked.
 //! So the ask keeps it here, inside the call that returns it
 //! (`RepoTab::ask_session`), and every question afterwards is equality
 //! against that one id. **Ids are not a sequence**: a caller can be
@@ -11,11 +11,11 @@
 //! equality and nothing else), so `>=` would let somebody else's answer
 //! stand in for this one.
 //!
-//! **Why the tab keeps it rather than the caller.** The caller is a press
-//! on the product's own input path, which answers nothing — the harness
-//! presses a button, not a function. The tab is where that press lands and
-//! where the answers come back, and it lives on one thread, so the arm,
-//! the ask and the read are a single uninterrupted stretch.
+//! **Why the tab keeps it.** The caller is a press on the product's own
+//! input path, which answers nothing — the harness presses a button.
+//! The tab is where that press lands and where the answers come back,
+//! and it lives on one thread, so the arm, the ask and the read are a
+//! single uninterrupted stretch.
 //!
 //! **Two halves, and the contract is the join.** [`WatchedWrite`] is the
 //! id: which write, and how far along. [`WriteWatch`] adds what the run
@@ -26,9 +26,9 @@
 //! itself), and giving *that* up for the press about to be made is
 //! ordinary; giving up one the run is waiting out is the breach.
 //!
-//! **Neither half is a timer.** A verb that waits from a sampler of its
-//! own is waiting exactly as much as one waiting on the shared barrier,
-//! so nothing here reads whether any particular timer is running.
+//! **Waiting is waiting, whatever does it.** A verb that waits from a
+//! sampler of its own is waiting exactly as much as one waiting on the
+//! shared barrier, so what this side reads is ids and stages.
 //!
 //! **A breach is the end of the run.** Once said, the contract refuses to
 //! be armed again and refuses to let the run complete: a run that could
@@ -45,8 +45,8 @@ pub(super) enum WatchedWrite {
     /// The next write this tab is asked to make is the one to keep.
     ///
     /// `turned_down` is an ask the queue took nothing for — the session is
-    /// closed. **Not the same as no ask at all**, which is a press that
-    /// has not gone in yet, and which the watch cannot see.
+    /// closed. A press that has not gone in yet is a different
+    /// state, and one the watch cannot see.
     Armed { turned_down: bool },
     /// That ask was taken under this id, and these are the two boundaries
     /// behind it (`session::write` の三境界).
@@ -60,7 +60,7 @@ pub(super) enum WatchedWrite {
 impl WatchedWrite {
     /// **The next ask is the one to keep.**
     ///
-    /// Always allowed, and **the contract is not this file's to hold**:
+    /// Always allowed, and **the contract is the run's to hold**:
     /// what the watch is carrying may be a write nobody pressed for — the
     /// read a menu asks for on its way open, the fetch a refused push
     /// asks for itself — and throwing that over for the press about to be
@@ -164,8 +164,8 @@ enum Stage {
     #[default]
     Dispatched,
     /// Armed, and the input this run means to put in has not gone in yet:
-    /// a sampler still looking for its row, a hold running out, a question
-    /// still standing. **Not a missing id** — nothing has been asked for.
+    /// a sampler still looking for its row, a hold running out, a
+    /// question still standing. **Nothing has been asked for yet.**
     Input,
     /// The input went in. **From here the run is waiting**, however it
     /// waits — the shared barrier or a sampler of its own.
@@ -174,8 +174,8 @@ enum Stage {
     Broken,
 }
 
-/// A verb broke the contract. Words rather than a code: they go into a
-/// failure line with the verb's name beside them.
+/// A verb broke the contract. Words, which go into a failure line
+/// with the verb's name beside them.
 pub(super) type Breach = String;
 
 /// The one write a run is waiting for, and what the run has said about it.
@@ -287,7 +287,7 @@ impl WriteWatch {
         self.held.settled(id);
     }
     /// Whether the write being waited for is through both boundaries —
-    /// **and the run is not broken**, which no answer can mend.
+    /// **and the contract holds**: a breach is past mending.
     pub(super) fn through(&self) -> bool {
         self.stage != Stage::Broken && self.held.through()
     }
@@ -412,7 +412,7 @@ mod watched_write_tests {
     /// press the verb actually makes — and what it gives up is as often
     /// as not a write nobody pressed for: the read a menu asks for on its
     /// way open, the fetch a refused push asks for itself. Whether giving
-    /// it up is a mistake is the run's question, not this one's
+    /// it up is a mistake is the run's question
     /// (measured: refusing it here failed six tag verbs in the container,
     /// on a read of their own menu that the host had already settled).
     #[test]
@@ -477,8 +477,8 @@ mod contract_tests {
 
     /// **Waiting is waiting, whatever is doing it.** The shared barrier is
     /// one sampler among several — `line-back` waits from its own, and
-    /// stages three writes through it — so nothing here reads whether any
-    /// particular timer is running. Before this, the guard did, and a
+    /// stages three writes through it — so what this side reads is ids
+    /// and stages. Before this, the guard read the timer, and a
     /// verb waiting from its own timer could have its unfinished id thrown
     /// away with no word said (reported, reproduced).
     #[test]
@@ -514,7 +514,7 @@ mod contract_tests {
         assert_eq!(watch.run_stage(), "input");
     }
 
-    /// **A write nobody announced a press for is not being waited out.**
+    /// **A write is waited out only where the run announced a press.**
     /// What the watch carries is as often as not the read a menu makes on
     /// its way open; giving that up for the press about to be made is the
     /// ordinary thing (measured: refusing it failed six tag verbs in the
@@ -549,10 +549,10 @@ mod contract_tests {
         assert!(!watch.broken());
     }
 
-    /// **A broken run stays broken.** Arming again is refused rather than
-    /// starting it over — a run that could re-arm would go on to
-    /// photograph a page its broken write never reached (reported,
-    /// reproduced).
+    /// **A broken run stays broken.** Arming again is
+    /// refused: a run that could re-arm would go on to
+    /// photograph a page its broken write never reached
+    /// (reported, reproduced).
     #[test]
     fn a_broken_run_cannot_be_armed_again() {
         let mut watch = waiting();

@@ -9,11 +9,11 @@ use super::*;
 
 impl AppBackend {
     /// Files a picture against an address. `file_url` comes from the
-    /// picker, so it arrives as a URL rather than a path.
+    /// picker, so it arrives as a URL.
     ///
     /// Writes at once. There is no Save on the card this is reached from
     /// and no Cancel to undo it — the gesture that takes one away is a
-    /// hold instead (デザイン規約 §長押し).
+    /// hold (デザイン規約 §長押し).
     pub(super) fn file_avatar(&mut self, email: &str, name: &str, file_url: &str) {
         let source = crate::urlpath::file_url_to_path(file_url);
         let refused = Hub::with(|hub| hub.assign_avatar(email, name, &source)).flatten();

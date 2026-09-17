@@ -24,8 +24,8 @@ Item {
         // A held place outlives the swap it was taken for when the next write goes out inside the restore's own layout
         // beat — the rows land, the marks wake, and a hand (or `line-run`) presses again before the timer below has
         // fired. At that moment the view is standing in the reset-to-top the swap left it in, so capturing again would
-        // keep the top as "the place"; the reader's place is the one already held. The pending restore is stopped
-        // rather than raced: the next swap's own restore finishes the story.
+        // keep the top as "the place"; the reader's place is the one already held. The pending restore is stopped —
+        // the next swap's own restore finishes the story.
         placeTimer.stop()
         if (place.heldY < 0)
             place.heldY = place.view.contentY

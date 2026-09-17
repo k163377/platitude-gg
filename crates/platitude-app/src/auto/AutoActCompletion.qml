@@ -52,16 +52,16 @@ QtObject {
                 "commands-fail", "commands-clear",
                 "fetch-recover", "fetch-recover-held",
                 "fetch-fail", "fetch-resume"].indexOf(act) >= 0
-            // A double-click on a tag writes nothing: it opens the box for a name instead (デザイン規約 §左メニューの所作),
-            // and a run held at the write barrier for one waits out the watchdog in silence.
+            // A double-click on a tag opens the box for a name (デザイン規約 §左メニューの所作), and a run held
+            // at the write barrier for one waits out the watchdog in silence.
             && !(act === "nav-dbl" && Harness.autoActArg.startsWith("tag:"))
             // The bare form opens the menu's hold row and stops there; only the `go` argument carries the
             // hold through to a write, so a bare run held at the write barrier would wait out the watchdog.
             && !(act === "delete-stash-row" && Harness.autoActArg !== "go")
     }
 
-    /// Whether this verb's picture is of the page the status behind its write leaves, rather than of the page the
-    /// write's answer arrives on.
+    /// Whether this verb's picture is of the page the status behind its write leaves — the later of the two
+    /// pages a write reaches.
     ///
     /// **The two are different pages, and which one a run reaches is the machine's to decide.** core answers a
     /// write before it publishes the status that write invalidated (`session::write::run_write`), so at the answer
@@ -87,7 +87,7 @@ QtObject {
                 "diff-select", "diff-copy", "diff-menu", "diff-copy-removed", "diff-sweep",
                 "diff-band-sweep", "diff-bar", "diff-blank", "diff-escape",
                 "preview", "preview-unstaged", "preview-staged", "preview-close",
-                // The write barrier is behind these, not in front of them: five land on the working tree's own
+                // The write barrier is behind these: five land on the working tree's own
                 // row, which the graph pass after the write is what puts there, and the last has to read the
                 // commit it just made.
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
@@ -120,11 +120,11 @@ QtObject {
                 // The three that take the branch back. Their landing is the branch arriving on the commit that was
                 // asked for **and** the working tree the mode left behind, and those two are published together
                 // after the answer (`session::write::run_write` joins them) — so the write barrier stands in front
-                // of the claim, not behind it, and the two owners race. `--hard` is the one that loses: it is
+                // of the claim, and the two owners race. `--hard` is the one that loses: it is
                 // judged on a tree the barrier photographs before the reset wrote over it.
                 "reset-soft", "reset-mixed", "reset-hard",
                 // Both wait for the readings that decide the push row's shape, and the second runs its press from
-                // there — so the barrier is behind the wait rather than in front of it.
+                // there — so the barrier is behind the wait.
                 "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both", "tag-refused",
                 "nav-add-remote", "push-default", "push-target", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
@@ -146,24 +146,24 @@ QtObject {
                 "rename-taken",
                 "delete-blocked-tip", "switch-stopped", "switch-lands",
                 // The write barrier is in front of this one's claim: the second press is turned away before any
-                // write is made, so the answer to the first is not what the run is waiting for.
+                // write is made, so the run's subject is past the answer to the first.
                 "switch-remote-twice",
-                // Stops at its question, so the ask bar settling is the completion — a write
-                // never comes (the write half is "-go", which stays a write act above).
+                // Stops at its question, so the ask bar settling is the completion — the write is
+                // the "-go" half, which stays a write act above.
                 "rename-remote", "set-upstream",
                 // A write does come, but the subject is the question its answer raises,
                 // so the bar settling is the completion (the bar takes 200ms to come down).
                 "rename-local-upstream",
-                // The write barrier is behind this one: the question is answered from the timer, not before it.
+                // The write barrier is behind this one: the question is answered from the timer, after it.
                 "set-upstream-go",
                 "move-ask", "ask-sweep", "switch-conflicted", "switch-held", "switch-mark",
                 // Nothing is written for this one either: a report raised through the page's door and a question
                 // raised over it, and the completion is both bars having stopped moving after the press.
                 "ask-over-notice",
-                // The write barrier is behind these, not in front of them: the commands that clear the way and the
+                // The write barrier is behind these: the commands that clear the way and the
                 // move they carry only start once the question standing in the graph has been answered.
                 "switch-stopped-go", "switch-conflicted-go", "delete-branch-early", "delete-branch-early-far",
-                // Deliberately not a write act: what it photographs is the moment before the answer.
+                // Deferred by design: what it photographs is the moment before the answer.
                 "delete-gone",
                 // The list has to be up before one of its rows can be pressed, and the menu up before the report can
                 // say the list stayed — one sampler owns the whole of it.
@@ -222,11 +222,11 @@ QtObject {
                 // turn once the plan stands, and it writes nothing.
                 "plan-fold-carry",
                 // And the key pressed on that same face, which arrives through the same feed: what Escape does to
-                // the plan is read once the rows are there, not while the read is still out.
+                // the plan is read once the rows are there.
                 "plan-escape", "plan-escape-held",
                 // The opening face and the running replay, each held from an edge of its own and each finished by
-                // the sampler that took that edge. Deliberately not write acts: the first writes nothing at all, and
-                // what the second photographs is the middle of the write rather than its answer — held at the write
+                // the sampler that took that edge. Deferred by design: the first writes nothing at all, and
+                // what the second photographs is the middle of the write — held at the write
                 // barrier it would wait for the very thing that takes its picture away.
                 "plan-loading", "replay-running",
                 // The three about the right pane's boxes end in the same sampler: the plan arrives through the feed,
@@ -244,18 +244,18 @@ QtObject {
                 "avatar-rest", "avatar-hover", "avatar-tip",
                 "find", "find-next", "find-prev", "find-drop",
                 // These flows are completed by Main/WindowAutoActDriver. Some still begin here (picker, command
-                // failure, recovery), but the page must never photograph their intermediate state before the
+                // failure, recovery), but the page photographs them only once the
                 // window-level predicate has answered.
                 "open-fetches",
                 "open-picker", "commands-clear", "fetch-recover", "fetch-recover-held",
                 "clone-dialog", "clone-go", "clone-refused",
                 "open-not-a-repo", "open-bare", "open-not-a-repo-retry",
                 "open-not-a-repo-cancel", "open-dialog-sweep", "open-fail-tab",
-                // Not write acts, though both commit: `quit-waits` photographs the moment before the held write's
+                // Deferred, though both commit: `quit-waits` photographs the moment before the held write's
                 // answer, and `quit-locked` waits the landing out in its own sampler — a write barrier in front of
                 // either would hold the shot for an answer the verb is about the absence of.
                 "quit-waits", "quit-locked",
-                // The same wait over a save the hub holds rather than a session's write: photographed with the
+                // The same wait over a save the hub holds: photographed with the
                 // save still held, and the exit that joins it is the run's own, after the picture.
                 "quit-save-held",
                 "open-fail-tab-bare", "open-fail-tab-log", "open-fail-sweep", "identity",

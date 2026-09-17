@@ -6,7 +6,7 @@ import platitude.ui
 
 /// What the page's own wiring says it did, written out as report lines.
 ///
-/// Each of these is an **edge**, not a state: the question bar carries no name to read the branch back off, the row
+/// Each of these is an **edge**: the question bar carries no name to read the branch back off, the row
 /// that is being stood in for looks the same as one nothing was asked about, and git's answer to a write is one
 /// message wide. None of them can be recovered by reading the page a moment later, so the page says so with a
 /// signal apiece and the line is written from here — where the whole of it can be left out of a build. The held
@@ -14,7 +14,7 @@ import platitude.ui
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given: the same guard every one of these
 /// lines carried when the page still wrote them itself.
-// An `Item` only because that is what the driver's children are; it draws nothing and is never given a size.
+// An `Item` only because that is what the driver's children are; it is a sizeless holder.
 Item {
     id: reports
 
@@ -37,9 +37,9 @@ Item {
     }
 
     /// A row is being stood in for while git is asked to delete it, and which one — read off what the window is
-    /// actually drawing without (`ops::StandIn`, through `RepoTab`) rather than off the press, so the line says a row
-    /// left the screen and not merely that something was asked for. One name per list, and a delete touches at most
-    /// one of each, so the four edges never say the same row twice.
+    /// actually drawing without (`ops::StandIn`, through `RepoTab`), so the line says a row
+    /// left the screen. One name per list, and a delete touches at most
+    /// one of each, so a row is named once.
     readonly property string goneBranch: reports.repoTab.goneBranch
     readonly property string goneRemote: reports.repoTab.goneRemote
     readonly property string goneTag: reports.repoTab.goneTag
@@ -81,7 +81,7 @@ Item {
 
     Connections {
         target: reports.diffRowMenu
-        // `shown` is the card's own answer, not the conditions behind it: a card that refused to open because it had
+        // `shown` is the card's own answer: a card that refused to open because it had
         // nothing to put in it is the one failure a picture of an empty overlay cannot tell from a card nobody asked
         // for.
         function onOffered(shown) {

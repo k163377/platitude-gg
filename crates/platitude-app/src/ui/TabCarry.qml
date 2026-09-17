@@ -7,10 +7,10 @@ import platitude.ui
 // (デザイン規約 §タブの所作). The strip owns the tabs and says what a press means; this owns the gesture between the
 // taking up and the setting down.
 //
-// Not the strip's own for the reason `MiddleAutoScroll` is not the graph's: the hand and the thing it moves are
+// Its own file for the reason `MiddleAutoScroll` has one: the hand and the thing it moves are
 // separate questions, and only one of them is about how a tab is drawn.
 //
-// An `Item` rather than a `QtObject` because the drift below is a `Timer` and needs somewhere to stand; it draws
+// An `Item` because the drift below is a `Timer` and needs somewhere to stand; it draws
 // nothing and is never given a size.
 Item {
     id: carry
@@ -21,7 +21,7 @@ Item {
     required property var tabsModel
 
     /// The tab in hand: which one it is, where inside it the hand took hold, and where its left edge has been carried
-    /// to in the strip's own coordinates. Held by id rather than by position — the order changes under a drag, and the
+    /// to in the strip's own coordinates. Held by id — the order changes under a drag, and the
     /// row the hand is on is the one thing about it that does not (デザイン規約 §タブの所作).
     property int heldId: -1
     property real heldGrabX: 0
@@ -44,11 +44,11 @@ Item {
         carry.heldX = tab.x
     }
 
-    /// The hand, moved to `sceneX` with a tab in it. Scene coordinates in, the strip's own out: the tab is drawn where
-    /// the hand is rather than where the row sits, so its own coordinates cannot say where the pointer got to.
+    /// The hand, moved to `sceneX` with a tab in it. Scene coordinates in, the strip's own out: the tab is drawn
+    /// where the hand is, so its own coordinates cannot say where the pointer got to.
     ///
     /// The run — what is on screen — is as far as a tab can be put. Past either end of it the tab stays at the edge and
-    /// the strip travels underneath instead (`driftRun`), which is the only way a tab reaches a place that is not on
+    /// the strip travels underneath (`driftRun`), which is the only way a tab reaches a place that is not on
     /// screen when the carry starts.
     function carryTab(index, sceneX) {
         const tab = carry.view.itemAtIndex(index)
@@ -77,7 +77,7 @@ Item {
         carry.carryTab(at, carry.heldSceneX)
     }
 
-    /// Where the tab in hand sits right now, or -1 with nothing in hand. Walked rather than remembered: the carry is
+    /// Where the tab in hand sits right now, or -1 with nothing in hand. Walked: the carry is
     /// what changes it.
     function heldIndex() {
         for (let i = 0; i < carry.view.count; i++) {
@@ -96,7 +96,7 @@ Item {
         if (!tab)
             return index
         // The strip is the whole of the run: a tab carried past either end stops there, the way everything else that
-        // scrolls here stops (デザイン規約 §QML 実装ルール). Nothing is torn off into a window of its own.
+        // scrolls here stops (デザイン規約 §QML 実装ルール). A tab stays in the strip.
         carry.heldX = Math.max(0, Math.min(left, carry.view.contentWidth - tab.width))
         let at = index
         // Bounded by the strip itself: each step passes one tab, so nothing can be passed more often than there are
@@ -106,8 +106,8 @@ Item {
             if (next === at)
                 break
             at = next
-            // That step changed the order, so the places the next comparison reads have to be the ones the view has
-            // just given the tabs rather than the ones they are leaving.
+            // That step changed the order, so the places the next comparison reads have to be the ones the view
+            // has just given the tabs.
             carry.view.forceLayout()
         }
         return at
@@ -115,7 +115,7 @@ Item {
 
     /// One neighbour, passed or not: the carried tab changes places with whichever side it has taken half of.
     ///
-    /// The leading edge against the neighbour's middle, rather than middle against middle. Tabs are of different widths
+    /// The leading edge against the neighbour's middle. Tabs are of different widths
     /// — middles agree only where they are of one width, and a wide tab held against the end of the strip never reaches
     /// a narrow last tab's middle at all, which would leave the last place unreachable by hand.
     function stepOrder(at) {

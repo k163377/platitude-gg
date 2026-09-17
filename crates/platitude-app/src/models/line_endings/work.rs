@@ -5,9 +5,9 @@ use platitude_core::eol::setting::{self, AutoCrlf, ConfigScope};
 use super::*;
 
 impl LineEndingsModel {
-    /// Attaches the feed on the first question rather than at startup: a
-    /// window whose reader never opens this chapter never has one to hear
-    /// (the same shape `RepoConfigModel` uses).
+    /// Attaches the feed on the first question: a window whose reader
+    /// never opens this chapter never has one to hear (the same shape
+    /// `RepoConfigModel` uses).
     fn listen(&mut self) {
         if self.attached {
             return;
@@ -22,9 +22,9 @@ impl LineEndingsModel {
         self.repo_path = path;
         self.state = "reading".into();
         self.error = String::new();
-        // Emptied rather than left standing: this is another repository's
-        // value, and a field still holding it would be offering to write
-        // one repository's setting into another.
+        // Emptied: this is another repository's value, and a field still
+        // holding it would be offering to write one repository's setting
+        // into another.
         self.held = String::new();
         self.effective = String::new();
         // A write still out belongs to that repository too — its answer
@@ -50,11 +50,11 @@ impl LineEndingsModel {
     /// Asks git what that repository's own file sets, and what git would
     /// use there.
     ///
-    /// Two reads rather than one: the effective level cannot say which of
-    /// its records came out of that repository's own file
-    /// (`config::get_regexp_at`), and both halves of the chapter need an
-    /// answer — the field holds the override, the line under it names what
-    /// git is doing right now.
+    /// Two reads: the effective level cannot say which of its records
+    /// came out of that repository's own file (`config::get_regexp_at`),
+    /// and both halves of the chapter need an answer — the field holds
+    /// the override, the line under it names what git is doing right
+    /// now.
     fn ask(&mut self) {
         self.listen();
         let feed = Arc::clone(&self.feed);
@@ -118,9 +118,9 @@ impl LineEndingsModel {
                 let written =
                     setting::set(&executor, &workdir, ConfigScope::Local, wanted, &cancel).await;
                 let msg = match written {
-                    // What git answers, not what was picked: the write
-                    // reads itself back, so a value that did not land
-                    // shows here rather than passing for a finished one.
+                    // What git answers: the write reads itself
+                    // back, so a value that did not land shows
+                    // here.
                     Ok(written) => EolMsg::Written {
                         path,
                         error: written.message,
@@ -159,8 +159,8 @@ impl LineEndingsModel {
                         continue;
                     }
                     // Only a read the screen asked for takes the last
-                    // words down with it. **The read that follows a pick
-                    // must not**: that one is this model's own doing
+                    // words down with it. **A read after a pick keeps
+                    // them**: that one is this model's own doing
                     // (`refresh`), and the words standing are git's account
                     // of why the pick did not land (the shape
                     // `RepoConfigModel` keeps for the identity pair).

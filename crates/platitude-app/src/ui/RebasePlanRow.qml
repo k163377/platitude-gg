@@ -59,9 +59,9 @@ Item {
             else if (!rowArea.dragging)
                 planRow.list.rowPicked(planRow.index, planRow.oid_hex)
         }
-        // Both ends of the drag are told to the model, because the fold rule is held at the release rather than at
-        // every crossing (RebasePlanModel::end_move). `dragging` itself is not put down here — the click that follows a
-        // release reads it to know the press was a drag and not a selection; the next press is what clears it.
+        // Both ends of the drag are told to the model, because the fold rule is held at the release
+        // (RebasePlanModel::end_move). `dragging` is cleared by the next press — the click that follows a release
+        // reads it to know the press was a drag.
         onReleased: mouse => {
             if (mouse.button === Qt.LeftButton && rowArea.dragging && planRow.list !== null)
                 planRow.list.moveEnded()

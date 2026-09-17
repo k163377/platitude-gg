@@ -4,14 +4,14 @@ import QtQuick.Layouts
 import platitude.ui
 
 // What the upstream question asks back: which remote, and which branch on it this one is measured against (デザイン規約
-// §ブランチが測られる相手を決める). It stands inside the question's bar, which is why it is built from a `Component` rather than
-// placed anywhere itself.
+// §ブランチが測られる相手を決める). It stands inside the question's bar, which is why it is built from a
+// `Component`.
 //
-// **Both halves are answered rather than guessed**, which is the whole reason the row asks instead of acting: nothing
+// **Both halves are answered**, which is the whole reason the row asks: nothing
 // local says which of a remote's branches this one belongs with, and a wrong guess is a branch quietly measured
 // against somebody else's work.
 //
-// **The name is typed, never picked from a list**. A list of what the remote already carries
+// **The name is typed**. A list of what the remote already carries
 // would put picked names and typed ones in one box, and the two are not the same answer — a picked row is whatever
 // happened to be fetched, which is not what the reader came to say.
 ColumnLayout {
@@ -61,7 +61,7 @@ ColumnLayout {
             color: Theme.textMuted
             font.pixelSize: Theme.fontMd
         }
-        // Never a placeholder: the question opens on a name, and an empty box would read as though there were nothing
+        // The question opens on a name: an empty box would read as though there were nothing
         // to point at.
         SlimField {
             id: upstreamBranchField

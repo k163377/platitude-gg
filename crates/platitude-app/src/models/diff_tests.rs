@@ -1,5 +1,5 @@
-//! Every case here drives `wanted`, so they sit together rather than
-//! beside the model whose slots none of them names.
+//! Every case here drives `wanted`, so they sit together in a file of
+//! their own.
 
 use std::sync::Arc;
 

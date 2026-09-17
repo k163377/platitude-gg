@@ -36,7 +36,7 @@ enum EolMsg {
     Read {
         /// The path the read was asked about, carried back so an answer
         /// for a repository the reader has already moved off can be
-        /// dropped rather than shown under the new name.
+        /// dropped.
         path: String,
         held: String,
         effective: String,
@@ -53,9 +53,9 @@ pub struct LineEndingsModel {
     /// repository whose own file they are about. Empty until the screen
     /// has named one, which is what `"idle"` below says.
     repo_path: String,
-    /// "idle" | "reading" | "ready" | "error" — the read's, not the
-    /// write's. A pick leaves the field standing and says how it went in
-    /// the line under it.
+    /// "idle" | "reading" | "ready" | "error" — the read's. A pick
+    /// leaves the field standing and says how it went in the line under
+    /// it.
     state: String,
     /// What that file sets, spelled the way git spells it
     /// (`eol::setting::AutoCrlf`); empty for a repository that sets

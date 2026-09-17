@@ -6,8 +6,8 @@ use super::testkit::*;
 use super::*;
 
 /// The pair the sticky stand-in draws (`HeadPinRow`) comes off the
-/// snapshot by name, so it and the row it stands for can never say
-/// different numbers — and it keeps them where the row itself is gone,
+/// snapshot by name, so it and the row it stands for always say the
+/// same numbers — and it keeps them where the row itself is gone,
 /// which is exactly when the stand-in is the one on screen.
 #[test]
 fn the_stand_in_takes_its_counts_off_the_row_it_stands_for() {
@@ -33,7 +33,7 @@ fn the_stand_in_takes_its_counts_off_the_row_it_stands_for() {
 
     // A filter takes the row away and the stand-in takes a seat of its
     // own (`HeadPinRow.seated`) — with its pair, because it is read off
-    // the snapshot rather than off the arranged rows.
+    // the snapshot.
     model.filter = "feature".to_string();
     model.arrange();
     assert_eq!(model.head_row, -1);

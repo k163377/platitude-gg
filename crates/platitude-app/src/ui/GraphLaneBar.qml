@@ -7,7 +7,7 @@ import platitude.ui
 /// It lies over the lanes of the last row, so it comes out only while the hand is in the pane, and stays out for as long
 /// as it is being dragged, wherever that has taken the pointer (デザイン規約 §グラフを横へ送る). **This is the one bar in
 /// the window that still comes and goes** — the others are always drawn once they have somewhere to go, and say the
-/// difference in brightness (`AutoScrollBar`), but this one is laid over a row of history rather than beside it, so
+/// difference in brightness (`AutoScrollBar`), but this one is laid over a row of history, so
 /// standing when nobody is sending the lanes would cost a row of the graph.
 ///
 /// Within that, it keeps the same two steps of ink as every other bar: dim while the hand is merely in the pane, full

@@ -8,8 +8,8 @@ use super::*;
 #[qobject(ConvertToCamelCase, NoQmlElement)]
 impl RepoConfigModel {
     // The repository being shown, as the strip spells it. Written by
-    // `look()` rather than assigned: the read that follows is what makes
-    // the rest of these mean anything.
+    // `look()`: the read that follows is what makes the rest of these
+    // mean anything.
     qproperty!("repoPath", Member = repo_path, Notify = changed);
     // "idle" | "reading" | "ready" | "error". The screen waits for
     // `"ready"` before it believes an empty box means "not set here" — a
@@ -33,8 +33,8 @@ impl RepoConfigModel {
     // out of a screen that has only been read.
     qproperty!("writeUnsaved", Member = write_unsaved, Notify = changed);
     // Which half git now reports as what was asked for. The pair is not
-    // atomic (core.md), so a half-written override has to show as one
-    // rather than pass for a finished pair.
+    // atomic (core.md), so a half-written override has to show as
+    // one.
     qproperty!(
         "writeNameSaved",
         Member = write_name_saved,
@@ -61,7 +61,7 @@ impl RepoConfigModel {
 
     /// Writes the pair into the repository on screen. An empty box asks
     /// for that key to be taken out, which is how an override is given
-    /// back rather than replaced.
+    /// back.
     #[qslot]
     fn save(&mut self, name: String, email: String) {
         self.write_repo(name, email)

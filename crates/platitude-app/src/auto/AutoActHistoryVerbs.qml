@@ -10,8 +10,8 @@ import platitude.ui
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -42,7 +42,7 @@ Item {
     readonly property var writeBarrier: driver.barrierWrite
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "squash" || act === "fold-across-merge" || act === "fold-off-branch"
                 || act === "fold-first-commit" || act === "fold-unfetched-base") {
@@ -127,8 +127,8 @@ Item {
                               + " can_move=" + commitMenuState.menuCanMoveBranch)
         } else if (act === "drop-commit" || act === "drop-commit-go" || act === "drop-stops"
                    || act === "drop-last-commit") {
-            // The plan is built by object name, the way a graph row hands one over — a symbolic name is not what this
-            // takes.
+            // The plan is built by object name, the way a graph row hands one
+            // over.
             page.openRowMenu(driver.autoActOid(arg))
             Harness.report("drop_row " + dropCommitItem.code
                               + " " + dropCommitItem.text
@@ -200,7 +200,7 @@ Item {
                     // A replay that stopped part-way answers in the working tree like the other three: no commit
                     // was written, and the badge, the exit card and the conflicted rows are where the press ends
                     // (規約 §未コミット変更がある状態で履歴を書き換える の着地表). The third of them answers nowhere: its
-                    // subject is the screen *while* git is out, so it is caught on the way rather than at a landing.
+                    // subject is the screen *while* git is out, so it is caught on the way.
                     if (act === "rebase-stops") {
                         opStoppedTimer.begin(false)
                     } else if (act === "replay-running") {
@@ -256,9 +256,9 @@ Item {
     // What only exists while git is out: the badge counting the steps out of git's own file, the doors the page holds
     // down, and the ring beside the hand. Every other rebase verb photographs a landing.
     //
-    // **Nothing is pressed here.** The page runs the count's own tick for as long as a replay is out
+    // **This only watches.** The page runs the count's own tick for as long as a replay is out
     // (`Metrics.opProgressMs`), so this waits for the number the way a reader does — and a build whose tick never
-    // started, or never reached the badge, waits out the watchdog rather than being carried by the run.
+    // started, or never reached the badge, waits out the watchdog.
     //
     // Then the face is **held** — `RepoPage.autoReplayHeld`, the same latch `doors-held` takes, because the two runs
     // photograph one state from two sides. The write answers before the reads it invalidated, so a run that only
@@ -276,10 +276,10 @@ Item {
             // Where the hand would have been: over the pane the replay is rewriting, and clear of the rows' own ink
             // — a sixteen-pixel ring laid over a subject line cannot be judged at all. Hover cannot be injected, so
             // the run writes the one answer the mark reads (`Main.holdWaitHand`); offscreen's own hand sits at the
-            // window's origin, which is a corner rather than a place worth photographing a mark in.
+            // window's origin, which is a corner.
             const seat = graphPane.mapToItem(null, graphPane.width / 6, graphPane.height / 3)
             win.holdWaitHand(seat.x, seat.y)
-            // `counted` rather than the numbers: the step is whatever git had reached, and what is being claimed is
+            // `counted` alone: the step is whatever git had reached, and what is being claimed is
             // that the badge is counting a range out at all.
             const counted = workTree.opStep > 0 && workTree.opStep <= workTree.opSteps
                             && workTree.opSteps > 1
@@ -321,7 +321,7 @@ Item {
                 if (repoTab.busyCount !== 0 || workTree.opText === "" || !workTree.wipRowStands
                         || graphModel.loading || !page.pageLanding)
                     return
-                // **The pass is asked for rather than waited for.** What ordinarily brings the next one is this
+                // **The pass is asked for.** What ordinarily brings the next one is this
                 // window's own row appearing, and the hold is what takes that away — a stopped replay moves no
                 // branch, so nothing else asks either (measured: the run sat at the pass it opened with while the
                 // press answered, the operation stood and the landing waited). Asked here, it lands with every
@@ -333,10 +333,10 @@ Item {
                 stoppedLandingTimer.owedAt = graphModel.finishCount
                 return
             }
-            // That pass, named by what it left standing: it leads with **a neighbour copy's** row rather than ours
+            // That pass, named by what it left standing: it leads with **a neighbour copy's** row
             // (`GraphModel.carriedTop` — the copy the preset stands where this replay stops, so the row it draws is
             // the one the landing would take). A pass with no all-zero row on top puts nothing in front of the
-            // misreading, so it is not the one this reads.
+            // misreading, so this reads past it.
             if (!stoppedLandingTimer.read) {
                 if (graphModel.loading || graphModel.finishCount <= stoppedLandingTimer.owedAt
                         || graphModel.wipRow || !graphModel.carriedTop)
@@ -358,8 +358,8 @@ Item {
                               + " wip=" + page.wipShown
                               + " copy=" + (page.carriedPath !== "")
                               + " op=" + workTree.opText
-                              // The row the landing lit, not the one the page was standing on before it: this
-                              // landing moves the highlight without activating a row (`tryPendingWipSelect`).
+                              // The row the landing lit: this landing moves the highlight without
+                              // activating a row (`tryPendingWipSelect`).
                               + " lit=" + graphPane.view.currentIndex)
             driver.complete()
         }
@@ -370,8 +370,8 @@ Item {
     // half: a row can be selected and still be somewhere nobody can see.
     SampleTimer {
         id: tipLandedTimer
-        /// The name this run's own write answered by, taken from the answer that carried it rather than read back
-        /// at the report — **every** answer rewrites the group it comes from (`RepoTab::settle_write`), so a fetch
+        /// The name this run's own write answered by, taken from the answer that carried
+        /// it — **every** answer rewrites the group it comes from (`RepoTab::settle_write`), so a fetch
         /// settling while the landing is still being waited out takes it away again. The counter having moved says
         /// only that *an* answer arrived; a fetch's answer moves it too.
         ///
@@ -414,20 +414,20 @@ Item {
             driver.complete()
         }
     }
-    /// The answer `tipLandedTimer` waits on, taken on the notify rather than on the sampling beat: two answers inside
+    /// The answer `tipLandedTimer` waits on, taken on the notify: two answers inside
     /// one beat would leave only the later one to be read, and it is the earlier one that says the write was this
-    /// run's (app-ui.md §UI 自動化の因果性 — 一瞬だけ立つ状態は signal で観測して latch する). The *rise* of
-    /// `busyCount` is deliberately not waited for anywhere in this chain: a write that begins and ends between two
-    /// looks never shows one, and requiring it wedges the run instead (`writeSeqBefore`).
+    /// run's (app-ui.md §UI 自動化の因果性 — 一瞬だけ立つ状態は signal で観測して latch する). The chain waits on
+    /// `writeSeqBefore`: a write that begins and ends between two looks never shows a *rise* of
+    /// `busyCount`, and requiring it wedges the run.
     ///
-    /// **And out of the answers that notify carried rather than off the group they leave behind**: one drain empties
+    /// **And out of the answers that notify carried**: one drain empties
     /// the whole queue and notifies once (`RepoTab::write_answers`), so an answer arriving behind this one — the
     /// interval's own fetch, most often — leaves the group describing itself, with the landing nowhere on it.
     ///
     /// `writeAnswerAtTip` is the bridge's own word for "landed, did not stop part-way, and answers at the tip" — the
-    /// op names are turned into meanings on that side of it (`RepoTab::settle_write`), not branched on here. A
-    /// fetch's answer, a refusal and a stop all leave the arm down, and the run walks into its watchdog rather than
-    /// photographing a repository nothing happened to.
+    /// op names are turned into meanings on that side of it (`RepoTab::settle_write`). A
+    /// fetch's answer, a refusal and a stop all leave the arm down, and the run walks into its
+    /// watchdog.
     Connections {
         target: driver.repoTab
         function onWriteSeqChanged() {
@@ -450,9 +450,9 @@ Item {
             }
         }
     }
-    // Where taking the branch back leaves the reader. Not `tipLandedTimer`: a reset writes no commit, so there is no
+    // Where taking the branch back leaves the reader. A reset writes no commit, so there is no
     // answer "at the tip" to arm on — what it does is move the name, and **the name arriving on the commit that was
-    // asked for is the whole claim**. Waited for by identity rather than by a counter: the write answers before the
+    // asked for is the whole claim**. Waited for by identity: the write answers before the
     // refs it invalidated are published (`session::write::run_write`), so a run that stopped at the write barrier
     // photographs the branch where it stood — which is the picture a build that never reset takes too.
     //
@@ -463,8 +463,8 @@ Item {
     // tree cannot pass as one that cleared it.
     SampleTimer {
         id: resetLandedTimer
-        /// The commit the branch was sent back to, and which flag sent it. Both are the run's own words rather than
-        /// anything read back afterwards: what is being checked is that git did what this verb asked.
+        /// The commit the branch was sent back to, and which flag sent it. Both are the run's own
+        /// words: what is being checked is that git did what this verb asked.
         property string target: ""
         property string mode: ""
         /// The number the reset's own answer named for the first report of HEAD after it (`writeAnswerHeadSeq`),
@@ -490,7 +490,7 @@ Item {
             if (row < 0 || !driver.cardSettled)
                 return
             resetLandedTimer.stop()
-            // No field here says "it moved": the wait above is that claim, and a build whose reset never landed
+            // The wait above is that claim, and a build whose reset never landed
             // never reaches this line at all (it walks into the watchdog). A `moved=true` read back off the same
             // condition could not be false, and a field that cannot be false is one nobody can judge on.
             Harness.report(
@@ -516,8 +516,8 @@ Item {
                 + " conflicts=" + (workTree.conflictCount > 0)
                 + " error=" + (repoTab.lastError !== "")
                 + " log=" + page.commandsOpen
-                // The box opened holding what the merge is about to record, and the card is not offering a second
-                // door onto the button under it.
+                // The box opened holding what the merge is about to record, and the button under it
+                // keeps its one door.
                 + " msg=" + (workTree.opSubject !== "" && wipPane.subjectText === workTree.opSubject)
                 + " cont=" + wipPane.offersOpExit("--continue")
                 + " op=" + workTree.opText
@@ -529,12 +529,12 @@ Item {
     // for the four that step: the same press with no new commit at the tip to land on, answered by the working tree.
     // What the picture cannot hold is the same pair — that nothing wrote a red line over an ordinary conflict, and
     // that the command log stayed down — plus the row the merge does not have: these keep `--continue`, because for
-    // them it is a step onward and not the commit somebody is writing (規約 §進行中の操作から出る).
+    // them it is a step onward (規約 §進行中の操作から出る).
     SampleTimer {
         id: opStoppedTimer
         // Whether a carry is part of this landing. The stash section is refreshed *after* the graph, so reading it
         // at the write barrier answers 0 for a tree whose work is sitting in an entry — and where the entry is the
-        // whole claim, that is the answer arriving too early rather than the truth.
+        // whole claim, that is the answer arriving too early.
         property bool carried: false
         function begin(withStash) {
             opStoppedTimer.carried = withStash

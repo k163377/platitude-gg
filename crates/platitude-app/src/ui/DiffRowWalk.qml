@@ -16,11 +16,11 @@ Item {
     /// The hand has arrived in this pane — it sent the rows with the wheel, or pressed something in them — and the
     /// keyboard comes with it (デザイン規約 §diff を上下に送る).
     ///
-    /// **Not on arriving.** The press that opened this diff landed in the file list, so that is where the hand was, and
+    /// **By the hand.** The press that opened this diff landed in the file list, so that is where the hand was, and
     /// until it moves on the arrows are that list's (規約 §diff のファイル一覧). Automation comes in by the same door: a wheel
     /// cannot be injected any more than a keystroke can (verify-ui).
     ///
-    /// Refused to a list that is not on screen: an image-only preview hands its space to the picture and draws no rows.
+    /// Given only to a list on screen: an image-only preview hands its space to the picture and draws no rows.
     /// Focus on something invisible is the hole the graph closed from the other side — Qt keeps active focus there and
     /// the keys go on arriving.
     function handArrived() {
@@ -31,9 +31,9 @@ Item {
     /// come through here — a headless run cannot inject a keystroke, so the step has to be callable as well as
     /// pressable (verify-ui).
     ///
-    /// The view is what moves, not a selection: nothing in this pane follows a lit row, and the "selection" it does own
-    /// is the set of lines the next write carries, which the arrows must not touch (デザイン規約 §diff を上下に送る). Answering
-    /// `false` at either end is how it stops rather than wraps — the key goes unaccepted there.
+    /// The view is what moves: nothing in this pane follows a lit row, and the "selection" it does own
+    /// is the set of lines the next write carries, which the arrows leave alone (デザイン規約 §diff を上下に送る). Answering
+    /// `false` at either end is how it stops — the key goes unaccepted there.
     function stepRows(delta) {
         if (!walk.visible || !walk.view.visible || walk.view.count === 0)
             return false
@@ -47,7 +47,7 @@ Item {
     readonly property bool atEnd: walk.view.contentY >= walk.view.maxY - 0.5
 
     // Let go on the way out — the rule the graph is already keeping (規約 §矢印で履歴を辿る「画面から退いたペインはキーボードを手放す」): a pane
-    // swapped off the screen that keeps focus goes on answering arrows nobody can see. Nothing on the way in: the hand
+    // swapped off the screen that keeps focus goes on answering arrows nobody can see. On the way in, the hand
     // has to come here for the keyboard to (`handArrived`).
     onVisibleChanged: {
         if (!walk.visible)

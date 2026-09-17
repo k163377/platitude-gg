@@ -8,8 +8,8 @@ import platitude.ui
 MenuItem {
     id: menuItem
 
-    /// Whether this row is on offer for the thing the menu was opened on — false where it cannot be chosen, and then it
-    /// is not drawn at all rather than greyed (デザイン規約 §メニュー).
+    /// Whether this row is on offer for the thing the menu was opened on — false where it cannot be chosen, and then
+    /// the row goes (デザイン規約 §メニュー).
     ///
     /// Kept apart from `visible`, which it drives, because `visible` cannot be *asked*: a menu's list releases the rows
     /// it is not showing and turns their visibility off behind the binding, so every row of a closed menu reads as
@@ -21,28 +21,28 @@ MenuItem {
     /// that says what it costs, the same shape the amend editor uses.
     property string note: ""
 
-    /// A git term said in git's own spelling — lowercase, mono, on a faint chip — instead of dressed up as a sentence
-    /// word (デザイン 規約 §git 用語のコード表記). Never translated: it is the command, not a phrase about it. It sits ahead of
+    /// A git term said in git's own spelling — lowercase, mono, on a faint chip
+    /// (デザイン 規約 §git 用語のコード表記). Left untranslated: it is the command itself. It sits ahead of
     /// `text`, which carries whatever of the sentence is left ("this file"), often nothing.
     property string code: ""
     /// **A ref name inside the row's words**, and the sentence with the name's own seat left in it ("into %1"). The
-    /// name is drawn in the colour it wears everywhere else it is met rather than in the row's: these sentences take
+    /// name is drawn in the colour it wears everywhere else it is met: these sentences take
     /// one name and it is always the branch the working tree is on (`merge` into main, `rebase` main onto it, `reset`
     /// main here), and that name is `textLink` wherever it appears — the left pane's row, the chip, the hover card
     /// (デザイン規約 §ref の種別「現在のブランチは、名前が出る場所すべてで textLink」).
     ///
-    /// The seat is cut out of the sentence rather than the name being looked for in the finished line: a branch called
+    /// The seat is cut out of the sentence: a branch called
     /// `it` would otherwise be found in the first word of `into it`.
     property string refSentence: ""
     property string refName: ""
     text: menuItem.refSentence !== "" ? menuItem.refSentence.arg(menuItem.refName) : ""
-    /// The mark a row wears instead of a chip, and its colour: the `NavIcon` kind of the thing the rows behind this one
+    /// The mark a row wears, and its colour: the `NavIcon` kind of the thing the rows behind this one
     /// act on (デザイン規約 §メニュー の入れ子). Only the rows that open a submenu carry one — a row that runs a command says
     /// which by its chip, and a row that opens a card of them has no command to name.
     ///
     /// **A row with a mark is the sidebar's section band, in a menu**: the mark where the rows start their words, its
     /// own word a hair behind it, spelled the way a section spells its name. The word is out of the chip column
-    /// entirely — this row names the card below it rather than taking a turn in the table.
+    /// entirely — this row names the card below it.
     property string markKind: ""
     property color markTint: Theme.textSecondary
     readonly property bool heads: menuItem.markKind !== ""
@@ -53,10 +53,10 @@ MenuItem {
     /// and a row that names a card asks for nothing either, standing outside the column.
     readonly property real codeColSeat: menuItem.code !== "" ? codeLabel.implicitWidth : 0
 
-    /// Whether the row's words bid their whole width from the menu. Off for a row whose text is data rather than
-    /// sentence — the name a delete row re-states: it bids at most the seat a ref name gets in the graph (`labelColW`),
+    /// Whether the row's words bid their whole width from the menu. Off for a row whose text is data — the name a
+    /// delete row re-states: it bids at most the seat a ref name gets in the graph (`labelColW`),
     /// elides past that into the hover that already says the whole line, and stretches further only into width the
-    /// other rows have paid for (デザイン規約 §メニュー). A floor rather than nothing: a sparse menu at `menuMinW` with a wide
+    /// other rows have paid for (デザイン規約 §メニュー). A floor: a sparse menu at `menuMinW` with a wide
     /// frozen chip column otherwise leaves the name zero width.
     property bool growsForText: true
 
@@ -65,8 +65,8 @@ MenuItem {
     /// fixed table that says nothing about why it is out is worse than no row at all (デザイン規約 §メニュー の削除の表). Presses and
     /// holds do nothing.
     property string blockedReason: ""
-    /// The same, said once for the whole menu (`AppMenu.heldReason`) — read off the menu the way `holdIndent` is. **A
-    /// row that names a card is left out of it**: what is held is what the card holds, and the rows in there carry the
+    /// The same, said once for the whole menu (`AppMenu.heldReason`) — read off the menu the way `holdIndent` is.
+    /// **Only the rows that act read it**: what is held is what the card holds, and the rows in there carry the
     /// line themselves (the card sets its own `heldReason`).
     readonly property string menuHeldReason:
         menuItem.subMenu ? ""
@@ -80,16 +80,16 @@ MenuItem {
     /// never reached the row photographs a row without one (verify-ui §hover の絵の撮り方).
     property bool tipForced: false
 
-    /// Held rather than clicked, for a row that would otherwise have to raise a question of its own (デザイン規約 §長押し). Zero
+    /// Held, for a row that would otherwise have to raise a question of its own (デザイン規約 §長押し). Zero
     /// is an ordinary row. A hold row reports no click at all — the press is taken before the button behind it can see
     /// it, which is also what keeps the menu from closing under the hold.
     ///
-    /// The row says so with the mark ahead of its words, not in them: the menu leaves the same seat for it on every
+    /// The row says so with the mark ahead of its words: the menu leaves the same seat for it on every
     /// row, so a held row reads down the same column as the rest (`AppMenu.holdIndent`).
     property int holdMs: 0
-    /// Whether pressing this row raises a question instead of doing what it says — a `!` in the mark's seat, which is
-    /// the row's one place for "read this before you press" (デザイン規約 §進行中の操作から出る). Never both this and a
-    /// hold: the hold is how a row that acts is confirmed, and a row that asks is confirmed on the bar it raises.
+    /// Whether pressing this row raises a question — a `!` in the mark's seat, which is
+    /// the row's one place for "read this before you press" (デザイン規約 §進行中の操作から出る). A row asks or holds:
+    /// the hold is how a row that acts is confirmed, and a row that asks is confirmed on the bar it raises.
     property bool asks: false
     /// How far into the hold the press has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
@@ -111,10 +111,10 @@ MenuItem {
     }
     readonly property bool holding: menuItem.holdProgress > 0
 
-    /// A row that runs on a click but leaves the menu standing, for the one thing here that git answers rather than
-    /// this app: `branch -d` refuses while the branch holds commits nothing else does, and the refusal is the question
+    /// A row that runs on a click but leaves the menu standing, for the one thing here that git answers:
+    /// `branch -d` refuses while the branch holds commits nothing else does, and the refusal is the question
     /// worth asking (デザイン規約 §左メニューの所作). The menu has to outlive the click for that answer to have somewhere to land —
-    /// the row turns into a held one where the hand already is, instead of a bar coming down over the graph.
+    /// the row turns into a held one where the hand already is.
     property bool staysOpen: false
     /// Clicked, on a row that stays open. `triggered` never fires for one: the press is taken before the button behind
     /// it can see it, which is what keeps the menu up.
@@ -127,12 +127,12 @@ MenuItem {
 
     padding: Theme.spaceSm
 
-    /// Where a card's name starts its mark — **the mark's ink, not its box**. Shifted left by exactly the seat the
+    /// Where a card's name starts its mark — **the mark's ink**. Shifted left by exactly the seat the
     /// menu leaves for the hold ring and the `!`: where there is one the mark stands in it, where there is none it
     /// starts on the same x the other rows start their words.
     readonly property real markX: Theme.spaceSm - menuItem.holdIndent
 
-    // A row that names a card carries its whole name in the padding, seated **to the mark's ink and not its box**:
+    // A row that names a card carries its whole name in the padding, seated **to the mark's ink**:
     // `spaceXs` of air behind the ink and no more, with the box's own air on either side not spent a second time. The
     // same seat the copy mark takes beside a hash and the face takes beside a name (`HashPlate`, `CommitAuthorRow` —
     // デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
@@ -150,7 +150,7 @@ MenuItem {
                    + (menuItem.note !== "" ? noteLabel.implicitWidth + Theme.spaceSm : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
-    // The words do not say the gesture, so this is where it is left for a reader who cannot see the mark.
+    // The gesture is said here, for a reader who cannot see the mark.
     Accessible.description: menuItem.holdMs > 0 ? Words.holdToActivate : ""
 
     // The one colour every word in the row follows, so the chip cannot disagree with the sentence it sits in. A held
@@ -166,10 +166,10 @@ MenuItem {
     readonly property color refColor: !menuItem.enabled || menuItem.blocked || menuItem.armedMs > 0
                                       ? menuItem.wordColor : Theme.textLink
     /// Those words as the markup `Text.StyledText` reads: the sentence in the row's colour, the name in its own. One
-    /// label rather than three, so the line elides, measures and hovers the way every other row's does.
+    /// label, so the line elides, measures and hovers the way every other row's does.
     ///
-    /// **Every piece is escaped on the way in.** The sentence is this app's, but the name is not — a branch called
-    /// `<b>` has to read as its name rather than vanish. Spaces go as `&nbsp;` for the reason a diff line's do
+    /// **Every piece is escaped on the way in.** The sentence is this app's and the name is the repository's — a
+    /// branch called `<b>` has to read as its name. Spaces go as `&nbsp;` for the reason a diff line's do
     /// (`encode::markup`): rich text folds a run of them the way HTML does.
     readonly property string refWords: {
         const seat = menuItem.refSentence.indexOf("%1")
@@ -191,10 +191,9 @@ MenuItem {
     ToolTip.text: menuItem.blocked ? menuItem.blockedWhy
                 : menuItem.code !== "" ? menuItem.code + " " + menuItem.text : menuItem.text
 
-    // The mark, inside the padding the whole menu carries for it rather than in the row's layout: it stands against the
-    // card's own padding with nothing but air to its left, and the words follow at the distance `holdIndent` sets — not
-    // at that distance plus the layout's gap (デザイン規約 §長押し). A row of the menu that is not held leaves the same space
-    // empty, so the column of first letters holds.
+    // The mark, inside the padding the whole menu carries for it: it stands against the card's own padding with nothing
+    // but air to its left, and the words follow at the distance `holdIndent` sets (デザイン規約 §長押し). A row of the menu that
+    // is not held leaves the same space empty, so the column of first letters holds.
     HoldIcon {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
@@ -203,15 +202,13 @@ MenuItem {
         tint: menuItem.wordColor
         visible: menuItem.armedMs > 0
     }
-    // **The other thing that can stand in that seat**: this row does not do what it says on its own — it raises a
-    // question first. A row cannot be both (a question is not answered by holding the row that raises it), so the two
-    // share the seat rather than crowding it (デザイン規約 §進行中の操作から出る).
+    // **The other thing that can stand in that seat**: this row raises a question first. A row is one or the other (a
+    // question is not answered by holding the row that raises it), so the two share the seat (デザイン規約 §進行中の操作から出る).
     //
-    // **It is not drawn the way the ring is, though — it is drawn the way every other `!` in this app is**: raised by
-    // a gap and half a gap into the word's own bearing, hanging off the words rather than sitting centred in a column
-    // of its own (`ActionButtonLabel`, `NameCell`, the toolbar's `push -f`). A mark that reads the same wherever it is
-    // met is the whole point of having one shape for it. At the head of the row because the
-    // words run to the right of it — the same end `ActionButtonLabel` puts it on for a phrase.
+    // **It is drawn the way every other `!` in this app is**: raised by a gap and half a gap into the word's own
+    // bearing, hanging off the words (`ActionButtonLabel`, `NameCell`, the toolbar's `push -f`). A mark that reads the
+    // same wherever it is met is the whole point of having one shape for it. At the head of the row because the words
+    // run to the right of it — the same end `ActionButtonLabel` puts it on for a phrase.
     NavIcon {
         x: Theme.spaceXs / 2
         anchors.verticalCenter: parent.verticalCenter
@@ -220,13 +217,13 @@ MenuItem {
         tint: Theme.warning
         width: Theme.iconSm
         height: Theme.iconSm
-        // Not on a row that cannot be pressed at all: the mark says "read this before you press", and there is no
+        // Only on a row that can be pressed: the mark says "read this before you press", and there is no
         // press to read it before — what the row has to say then is the line under the pointer (`blockedWhy`).
         visible: menuItem.asks && menuItem.armedMs <= 0 && !menuItem.blocked
     }
-    // The kind's own mark, standing where the row begins. Out in the card's padding rather than in the row's layout
-    // for the same reason the ring is: the word behind it has to sit against the mark, not against the mark plus the
-    // layout's gap. What is put at `markX` is the **ink**, so the box hangs half its own air either side of that —
+    // The kind's own mark, standing where the row begins. Out in the card's padding
+    // for the same reason the ring is: the word behind it has to sit against the mark.
+    // What is put at `markX` is the **ink**, so the box hangs half its own air either side of that —
     // air that is already the card's padding on the left and the word's gap on the right, and would otherwise be
     // spent twice.
     NavIcon {
@@ -265,13 +262,13 @@ MenuItem {
             Rectangle {
                 anchors.left: codeLabel.left
                 anchors.right: codeLabel.right
-                // The word's own step rather than the label's height, which is the mono family's line box — the one
+                // The word's own step — the label's height is the mono family's line box, the one
                 // part of this dress each OS settles differently (`ActionButtonLabel` carries the measurements). Here
                 // it also has a line of its own to keep to: the row's words are set in the UI family, and a ground
                 // taking the mono box stands taller than the sentence it is a word of.
                 anchors.verticalCenter: codeLabel.verticalCenter
                 height: codeLabel.font.pixelSize + Theme.spaceXs / 2
-                // Half a gap of tint outside the glyphs, not a whole one: a chip that follows the hold mark would
+                // Half a gap of tint outside the glyphs: a chip that follows the hold mark would
                 // otherwise reach back far enough to sit against it, and the row would read as one run of ink with no
                 // air between the two things it is saying.
                 anchors.leftMargin: -Theme.spaceXs / 2
@@ -300,15 +297,15 @@ MenuItem {
             Layout.fillWidth: true
             // The row's own words, or the same line spelled as markup where one of them is a name in a colour of its
             // own (`refWords`). What the row *says* is `text` either way — the tooltip and the reader who cannot see
-            // it are handed the sentence, never the markup.
+            // it are handed the sentence.
             text: menuItem.refWords !== "" ? menuItem.refWords : menuItem.text
-            // Written out rather than taken as a group, so the one row that changes its weight can (a group assignment
+            // Written out, so the one row that changes its weight can (a group assignment
             // and a `font.weight` on the same Label is "already assigned").
             font.family: Theme.uiFamily
             font.pixelSize: menuItem.font.pixelSize
-            // Pinned, not left to `AutoText`. Rows carry text nobody here chose — branch names, paths, commit subjects
+            // Pinned. Rows carry text nobody here chose — branch names, paths, commit subjects
             // — plus one deliberate placeholder in angle brackets, and AutoText decides by guessing whether a string
-            // looks like markup. A branch called `<b>` should read as its name, not vanish. The one line that is
+            // looks like markup. A branch called `<b>` reads as its name. The one line that is
             // markup says so because this file wrote it, and escaped everything that went into it.
             textFormat: menuItem.refWords !== "" ? Text.StyledText : Text.PlainText
             elide: Text.ElideRight
@@ -346,8 +343,8 @@ MenuItem {
         }
         // Under the hand, a row that names a card is underlined in its mark's colour, right across the card. The wash
         // says *where the hand is* — every row gets that — and this says **what is about to open**, which is the one
-        // thing this row does that no other row does (デザイン規約 §メニュー の入れ子). Across the whole row rather than
-        // under the word: it is the card below that is being named, not the two words themselves.
+        // thing this row does that no other row does (デザイン規約 §メニュー の入れ子). Across the whole row:
+        // it is the card below that is being named.
         Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right

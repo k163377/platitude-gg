@@ -55,8 +55,8 @@ impl DiffModel {
     /// keeps the reader's place takes it off a view that is still standing
     /// where they left it (`DiffScrollPlace`).
     ///
-    /// **Nothing on the other end may call back into this model.** It goes
-    /// out from inside `drain`, which is holding the borrow.
+    /// **Return without calling back into this model.** It goes out from
+    /// inside `drain`, which is holding the borrow.
     #[qsignal]
     fn rows_replacing(&mut self);
 
@@ -184,7 +184,7 @@ impl DiffModel {
     /// Asks whether the working-tree file on screen still reads the way it
     /// did — the page's tick, while a diff of one is open.
     ///
-    /// Not a request: nothing is put down and nothing is said to be
+    /// An ask only: nothing is put down and nothing is said to be
     /// loading, because most ticks find the file where they left it and
     /// core answers those with silence (`RepoSession::refresh_diff`). A
     /// tick for some other file is not this pane's, and one that arrives
@@ -192,8 +192,8 @@ impl DiffModel {
     ///
     /// Answers whether a read went out, which is all this side of it can
     /// be asked: the usual answer to the read itself is silence, so the
-    /// automation reads the ask (`diff-tick`) rather than waiting for a
-    /// reply that a file nobody touched never sends.
+    /// automation reads the ask (`diff-tick`) and takes that for its
+    /// answer.
     #[qslot]
     fn refresh_work_tree(&mut self, bucket: String, path: String, orig_path: String) -> bool {
         // A diff read from another copy is re-read on the copies' tick
@@ -226,8 +226,8 @@ impl DiffModel {
 
     // ---- the reader's own selection of the text --------------------
     // The pane brings a row and a place along it; everything after that is
-    // read off the patches, because the file's own bytes are here and not
-    // there (`selection`).
+    // read off the patches, because the file's own bytes are here
+    // (`selection`).
 
     /// Which byte of row `row`'s line the place `at` of it stands on —
     /// `at` counted in the units the row's own layout counts a place in
@@ -242,11 +242,11 @@ impl DiffModel {
 
     /// A press landed: the selection starts here and holds nothing yet.
     ///
-    /// The three published counts ride `changed`, the way every other
-    /// property of this model does — and it is said here rather than
-    /// inside the selection itself, so that the four ways in cost one
-    /// signal each and a drag that has not left the character it is on
-    /// costs none.
+    /// The three published counts ride `changed`, the way
+    /// every other property of this model does — and it is
+    /// said here, so that the four ways in cost one signal
+    /// each and a drag that has not left the character it is
+    /// on costs none.
     #[qslot]
     fn begin_select(&mut self, row: i32, at: i32) {
         if self.start_select(row, at) {
@@ -343,15 +343,15 @@ impl DiffModel {
             return;
         }
         let carries_rows = mine.iter().any(|m| matches!(m, DiffMsg::Loaded { .. }));
-        // Held for the two marks below rather than taken at the first of
-        // them: one says when the rows arrived and the other when they
-        // are in the model, and between them is what this call costs.
+        // Held for the two marks below: one says when the rows arrived
+        // and the other when they are in the model, and between them is
+        // what this call costs.
         // **Only a batch carrying rows takes it** — the colours behind a
         // diff are a second message about a read already answered.
         let asked = carries_rows.then(|| self.requested_at.take()).flatten();
         // Before the first of them is applied, and only where there is a
-        // place to lose: rows arriving for a file with none on screen are
-        // a pane opening, not a reader being moved.
+        // place to lose: rows arriving for a file with none on screen
+        // are a pane opening.
         if !self.lines.is_empty() && carries_rows {
             self.rows_replacing();
         }
@@ -403,8 +403,8 @@ impl DiffModel {
                 } => {
                     // Only the colours the diff ends on set the flag: a
                     // deep diff's quick first answer is a stand-in, and
-                    // anything waiting for "the colours" must not latch
-                    // a shot of the interim (app-ui.md §UI 自動化の因果性).
+                    // anything waiting for "the colours" waits for
+                    // these (app-ui.md §UI 自動化の因果性).
                     if settled {
                         self.coloured = true;
                     }

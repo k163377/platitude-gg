@@ -7,8 +7,8 @@ import platitude.ui
 //
 // The name says who; the card under it says which address that is, and — only when they are two — who put the commit
 // here and when (デザイン規約 §author の hover). The co-author credit follows the same shape, so the pane has one way of
-// naming a person rather than two. The cards themselves stay with the pane: they open in pane coordinates and must not
-// scroll away with the block this row sits on, so this row raises the anchor point and the pane opens the card there.
+// naming a person. The cards themselves stay with the pane: they open in pane coordinates and stay put
+// as the block this row sits on scrolls, so this row raises the anchor point and the pane opens the card there.
 // **An `Item` around the row**, because the hand a range selection is taken with lies under everything it draws and a
 // layout would give that hand a place in the line (`SweepRoom`, 規約 §右のペインの字は掴める).
 Item {
@@ -34,17 +34,17 @@ Item {
     /// injected.
     property bool avatarPointedAt: false
     property bool signaturePointedAt: false
-    /// The pane's width: the credit line's share is half of it, and the pane, not this row, is what the splitter sizes.
+    /// The pane's width: the credit line's share is half of it, and the pane is what the splitter sizes.
     property real paneWidth: 0
     /// The cards' own hover, fed back in: walking down into a card takes the pointer off the stretch that opened it,
-    /// and the two must not fight over it.
+    /// and the two are read as one.
     property bool mateCardInside: false
     property bool authorCardInside: false
 
     // ---- co-authors -------------------------------------------------
     // Packed by encode::encode_co_authors; unpacked here the way the graph rows unpack their chips. A commit object
     // holds one author, so everyone else arrives as a `Co-authored-by` trailer and is shown as what it is: a line the
-    // message credits, under the author rather than beside them (デザイン規約 §co-author).
+    // message credits, under the author (デザイン規約 §co-author).
     readonly property var coAuthorRecords: coBlock.records
     /// Whether the pointer is on the underlined stretch. The real hover and the automation hook write this same one, so
     /// a run cannot go green with the hover unwired.
@@ -72,7 +72,7 @@ Item {
     signal parentClicked(string oidHex)
     /// Open the card at this anchor (row coordinates), or start the settle beat that closes it. Raised whenever the lit
     /// state turns, which covers the real hover and the automation stand-in alike — the anchor is computed at the
-    /// moment it is asked for, never bound (the answer only matters then).
+    /// moment it is asked for (the answer only matters then).
     signal openMateRequested(point at)
     signal settleMateRequested()
     signal openAuthorRequested(point at)
@@ -92,7 +92,7 @@ Item {
     /// Automation: a drag cannot be injected, so a run picks a field out the way `Ctrl+A` does and reads back what it
     /// holds — the same pair `tip-copy` uses to prove a tooltip is a field (verify-ui). The name is the field's own,
     /// so a value still drawn as a label reports nothing. The clipboard itself is left alone: writing to it would be
-    /// testing Qt rather than this pane.
+    /// testing Qt.
     function selectValue(which) {
         if (which === "author")
             authorLabel.selectAll()
@@ -155,7 +155,7 @@ Item {
 
     // ---- and what a run needs, on top of that (verify-ui) -------------
     /// The field that draws one value, the slack a hand reaches for it through, and how far that value's line runs —
-    /// **the whole band, not the words' own height**, because the air above and below a value is the row's too and a
+    /// **the whole band**, because the air above and below a value is the row's too and a
     /// hand that did not answer there is what the reader ran into.
     function fieldFor(which) {
         if (which === "author")
@@ -203,7 +203,7 @@ Item {
     function valueGrabs(which) { const f = authorRow.fieldFor(which); return !!f && f.grabs }
     /// The plate's own gesture, entered where its hand enters it — a run has no pointer to press or drag with
     /// (`HashPlate`). The tap is what puts the whole hash on the clipboard; the drag is what leaves the shown one
-    /// picked out instead.
+    /// picked out.
     function tapHash() { hashPlate.tapAt("hash") }
     function dragHash() { hashPlate.dragAcross("hash") }
     function hashHandStands() { return hashPlate.handStands("hash") }
@@ -220,7 +220,7 @@ Item {
     function sweptField() { return sweepHand.endedOn }
     function sweptCaret() { return sweepHand.caretLanded }
     function sweptTrace() { return sweepHand.trace }
-    /// What the pane is drawing at that value, read off the model rather than off the field: the two have to agree for
+    /// What the pane is drawing at that value, read off the model: the two have to agree for
     /// a run to pass.
     function shownValue(which) {
         if (which === "author")
@@ -261,12 +261,12 @@ Item {
         id: rowContent
         anchors.fill: parent
 
-        // The pane's own inset, not the default step: the face stands `spaceXs` off the pane's edge, so a wider gap on its
+        // The pane's own inset: the face stands `spaceXs` off the pane's edge, so a wider gap on its
         // other side reads as the name having been pushed away from a face that is where it belongs (デザイン規約 §余白 —
         // 行内の詰め).
         spacing: Theme.spaceXs
 
-        // The face here carries the pen and nothing else: this row shows the name, and the name is what the signature is
+        // The face here carries only the pen: this row shows the name, and the name is what the signature is
         // hung off (デザイン規約 §署名の表示). The editor's face wears the mark in its corner because out there no name is
         // written.
         AvatarButton {
@@ -289,15 +289,15 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceXs
-                // A field rather than a label: the name is the first thing a reader takes off this pane, and here it is
+                // A field: the name is the first thing a reader takes off this pane, and here it is
                 // taken the way any other text in this window is — by dragging over it (規約 §右のペインの字は掴める). A
                 // field has no `elide`, so a name too long for the row is clipped with a mark and read in full in the card
                 // the hover below opens.
                 LineText {
                     id: authorLabel
                     text: authorRow.details.authorName
-                    // Grows no further than the name itself, so the mark sits against the name rather than being pushed
-                    // across to the hash — and shrinks, with the name eliding, when a long one would otherwise crowd the
+                    // Capped at the name's own width, so the mark sits against the name
+                    // — and shrinks, with the name eliding, when a long one would otherwise crowd the
                     // mark out. **Rounded up**: a natural width lands on a fraction of a pixel as often as not, and the
                     // layout hands the item the whole pixel below it, which is a ceiling one hair under the name's own
                     // width — the name then elides against a rule meant to fit it (app-ui.md §自然幅の上限は切り上げる).
@@ -313,28 +313,28 @@ Item {
                         visible: authorLabel.text !== ""
                         color: authorRow.authorLit ? Theme.textPrimary : Theme.borderStrong
                     }
-                    // A handler, not a `MouseArea`: handlers are passive, so the card it opens keeps its own hover (規約
+                    // A handler: handlers are passive, so the card it opens keeps its own hover (規約
                     // §hover のツールチップ).
                     HoverHandler {
                         id: authorHover
                         onHoveredChanged: authorRow.showAuthor(authorHover.hovered)
                     }
                 }
-                // The shoulder every `!` in this app stands on: raised to the top of the name's own line rather than set
-                // level with it, and pulled half a gap in, so it reads as part of the name instead of as the next column
+                // The shoulder every `!` in this app stands on: raised to the top of the name's own line and pulled
+                // half a gap in, so it reads as part of the name
                 // (`NameCell`, `AppMenuItem`, the toolbar's `push -f` — デザイン規約 §git 用語のコード表記).
                 //
-                // Both distances are measured to the **ink**, never to the box (§余白): the tick's ink starts 3.5 of its
+                // Both distances are measured to the **ink** (§余白): the tick's ink starts 3.5 of its
                 // grid in and the bang's 7, so a seat written to the box would stand a broken signature two and a half
                 // pixels further off the name than a good one. The right-hand air comes off the same way, so what follows
-                // is a gap from the mark rather than from where the mark's square happens to end.
+                // is a gap from the mark.
                 SignatureMark {
                     id: sigMark
                     kind: authorRow.signatureKind
                     code: authorRow.signatureCode
                     signer: authorRow.signatureSigner
                     pointedAt: authorRow.signaturePointedAt
-                    // A mark beside a word carries the letters' weight, not a badge's (`NavIcon.stroke`).
+                    // A mark beside a word carries the letters' weight (`NavIcon.stroke`).
                     stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
                     Layout.alignment: Qt.AlignTop
                     Layout.leftMargin: -(Theme.spaceXs / 2 + sigMark.inkAirLeft)
@@ -375,7 +375,7 @@ Item {
                     // Half the pane, the share the hover card gives the same line out of the graph pane. The date holds the
                     // left of this row; this is the rest.
                     nameWidth: authorRow.paneWidth / 2
-                    // Grows no further than the names themselves, and gives way when the row cannot hold them -- the rule
+                    // Capped at the names' own width, and gives way when the row cannot hold them -- the rule
                     // the author's name above already follows, rounding up with it. Without the pair this line is Fixed,
                     // and a Fixed item is a floor the layout cannot go under: the row then lays out at its own width and
                     // every box in the pane, sized to fill it, paints past the window's edge (measured at 483 against a

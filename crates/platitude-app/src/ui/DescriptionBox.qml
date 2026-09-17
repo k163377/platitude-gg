@@ -7,7 +7,7 @@ import platitude.ui
 // is in it, and the one box in the app that can be pulled taller by the grip in its corner: a description worth reading
 // is routinely longer than the room it is given, while a summary that long is an accident.
 //
-// It does not decide its own height. The summary and this box are two halves of one block whose height is fixed, so
+// Its height comes from the layout. The summary and this box are two halves of one block whose height is fixed, so
 // this half is simply what the layout hands it once the summary has taken its lines — which is why the pair keeps the
 // same total whether the summary runs to one line or three, and why nothing here can disagree with what the pane drew.
 //
@@ -25,7 +25,7 @@ Rectangle {
     property alias text: area.text
     property alias readOnly: area.readOnly
     property alias placeholderText: area.placeholderText
-    /// What the box paints — read by the smoke hooks, which report the painted side rather than the input side (see
+    /// What the box paints — read by the smoke hooks, which report the painted side (see
     /// app-ui.md).
     readonly property color textColor: area.color
     readonly property bool focused: area.activeFocus
@@ -34,26 +34,26 @@ Rectangle {
     readonly property alias bar: textBar
     readonly property real textAt: textView.contentItem ? textView.contentItem.contentY : 0
 
-    /// What the pane has allotted this box at rest, before any pull. The box does not work this out for itself: the
+    /// What the pane has allotted this box at rest, before any pull. The pane works it out: the
     /// summary above it and this box are laid out inside one block of a single height (デザイン規約 §コミットメッセージの 2 つの枠), so
-    /// what is left for this half is the pane's answer, not this box's.
+    /// what is left for this half is the pane's answer.
     property real restHeight: Theme.messageMaxHeight
     /// How much taller than that the hand has pulled it. The pane adds this to the block it lays out, so this box's own
-    /// height is always simply what the layout handed it — there is no second opinion about the height here that could
-    /// drift from the pane's.
+    /// height is always simply what the layout handed it — the pane's is the only opinion about the height
+    /// here.
     ///
-    /// A plain property, never a binding: `setBoxHeight` assigns to it, and a JS assignment ends a QML binding for
+    /// A plain property: `setBoxHeight` assigns to it, and a JS assignment ends a QML binding for
     /// good, so a height expressed as a binding would silently stop tracking the pane the first time anything wrote
     /// through it.
     property real extra: 0
     /// What the text would take if nothing held it in.
     readonly property real wants: area.implicitHeight + Theme.spaceSm
-    /// What the box was actually given. Read back off the layout rather than recomputed, so nothing downstream can
+    /// What the box was actually given. Read back off the layout, so nothing downstream can
     /// disagree with what is on the screen.
     readonly property real boxHeight: box.height
-    /// The ceiling a pull can reach: its own text, and never more than the pane has left to lend.
+    /// The ceiling a pull can reach: its own text, capped at what the pane has left to lend.
     readonly property real ceiling: Math.min(Math.max(box.wants, box.restHeight), box.height + box.room)
-    /// Reported for the smoke hooks, which read a height rather than the offset that produces it.
+    /// Reported for the smoke hooks, which read a height.
     readonly property real cap: box.restHeight + box.extra
     /// Offered exactly while the box is what stands between the reader and the rest of the text — and it keeps standing
     /// there once the text is out, because putting the box back is the same grip.
@@ -61,14 +61,14 @@ Rectangle {
         box.wants > box.height + Theme.borderWidth && (box.room > 0 || box.extra > 0) || box.extra > 0
 
     /// The one place the pull is recorded. The drag and the smoke hook both come through here, so neither can reach a
-    /// height the other is refused. Stored as the offset from the pane's own allotment, so a commit whose summary needs
-    /// another line moves the box with it instead of leaving the pull standing at an absolute height that no longer
-    /// means anything.
+    /// height the other is refused. Stored as the offset from the pane's own allotment, so a commit whose summary
+    /// needs another line moves the box with it, and the pull keeps meaning what the hand
+    /// asked for.
     function setBoxHeight(want) {
         box.extra = Math.max(0, Math.min(want - box.restHeight, box.wants - box.restHeight, box.extra + box.room))
     }
     /// Where a pull leaves the ceiling, and what it asked for on the way. The drag and the smoke hooks all come through
-    /// here, so the clamp and the refusal below are one answer rather than two kept in step.
+    /// here, so the clamp and the refusal below are one answer.
     function pullTo(want) {
         box.unpin()
         box.askedHeight = want
@@ -106,7 +106,7 @@ Rectangle {
     /// Held at the top until the reader moves it themselves. A single assignment is not enough: the scroll to the caret
     /// happens when the text lays itself out, which is after this returns, and how long after depends on how much text
     /// there is — one message came back to the top and the next one, measured in the same run, did not (`contentY=560`
-    /// on a 994-byte body). Pinning states the intent instead of racing it.
+    /// on a 994-byte body). Pinning states the intent.
     property bool pinnedTop: false
     /// Whatever the reader does to the text is the end of the pin: a wheel over it, a caret put in it, or a pull on its
     /// corner.
@@ -153,12 +153,12 @@ Rectangle {
         // writes this every move, so it is always the hand; a hook that wrote it beforehand would leave the badge at
         // the corner the grip has since left (the picture then shows it stranded halfway up the box).
         //
-        // Off `boxHeight`, which settles with the clamp, rather than off the grip, which is anchored and moves on the
+        // Off `boxHeight`, which settles with the clamp — the grip is anchored and moves on the
         // next layout.
         box.gripPoint = box.mapToItem(null, box.width - grip.width / 2, box.boxHeight - grip.height / 2
         + (down ? over : -over))
     }
-    // The badge itself is not drawn here. A pull that has run out has the hand somewhere outside this box — below it
+    // The badge belongs to the page. A pull that has run out has the hand somewhere outside this box — below it
     // for the ceiling, above it for the floor — and a badge parented to the box lands outside its own parent, where it
     // is composited with the box among the pane's children: under the author card, under the file list (observed).
     // The page draws the one badge in a layer over everything, and this only says where the hand is and whether it
@@ -169,12 +169,12 @@ Rectangle {
     /// Without this the box is a hole in the pane behind it: a wheel over it is answered by text that will not move,
     /// and the box covers most of what it stands on, so the surface underneath cannot be reached by wheel at all.
     signal wheelPastEnd(real pixels)
-    /// Escape was pressed while the caret was in here. What that costs is the text's, not the box's, so whoever owns
+    /// Escape was pressed while the caret was in here. What that costs is the text's, so whoever owns
     /// the text decides (`MessageEditor`).
     signal escaped()
-    /// The wheel is taken here rather than left to the flickable under the text, because a flickable at its end keeps
-    /// the event and says nothing. One notch is the same `wheelRows` every list in this application moves by, counted
-    /// in lines instead of rows.
+    /// The wheel is taken here, because a flickable at its end keeps the event and says nothing.
+    /// One notch is the same `wheelRows` every list in this application moves by, counted
+    /// in lines.
     readonly property real wheelStep: Metrics.wheelRows * Theme.fontMdLine
     function rollBy(dy) {
         box.unpin()
@@ -188,9 +188,9 @@ Rectangle {
         }
         box.wheelPastEnd(pixels)
     }
-    /// Smoke hook: the caret in the box, the way a click puts it there. Not `focus()` -- Item already has a `focus`
-    /// property, and the name resolves to that one, so the call is a TypeError at the point it is made rather than at
-    /// the point it is written.
+    /// Smoke hook: the caret in the box, the way a click puts it there. Called `takeCaret` -- Item already has a
+    /// `focus` property, and the name `focus()` resolves to that one, so the call is a TypeError at the point it is
+    /// made.
     function takeCaret() {
         box.unpin()
         area.forceActiveFocus()
@@ -199,7 +199,7 @@ Rectangle {
     function dropCaret() {
         area.focus = false
     }
-    // The pane gives its room back rather than letting its own column run under its edge — the accident the shared cap
+    // The pane takes its room back before its own column runs under its edge — the accident the shared cap
     // was put there to stop, and one no screenshot shows.
     onOwedChanged: {
         if (box.owed > 0)
@@ -218,7 +218,7 @@ Rectangle {
     }
 
     // The pane lays this box out inside a block of one fixed height, and this half takes whatever the summary above it
-    // did not (デザイン規約 §コミットメッセージの 2 つの枠). Filling rather than asking for a height is the whole point: the two boxes are
+    // did not (デザイン規約 §コミットメッセージの 2 つの枠). Filling is the whole point: the two boxes are
     // split by the layout from a single number, so no arithmetic here has to agree with any arithmetic there.
     Layout.fillWidth: true
     Layout.fillHeight: true
@@ -239,18 +239,18 @@ Rectangle {
         id: textView
         anchors.fill: parent
         // One value on all four sides, the bar's side included — no gutter is taken for it, so the words run under the
-        // thumb the way the graph's messages do, and the text stands between two equal margins. **Not narrower on the
-        // right**: taken to the frame's own line the text reads as stuck to it, which is the answer the graph's right
-        // edge already gives (by design — デザイン規約 §余白).
+        // thumb the way the graph's messages do, and the text stands between two equal margins. **The right
+        // included**: taken to the frame's own line the text reads as stuck to it, which is the answer the graph's
+        // right edge already gives (by design — デザイン規約 §余白).
         anchors.margins: Theme.spaceXs
-        // **No sideways bar at all.** The words wrap, so there is never anything to send that way — but the style
+        // **Upright only.** The words wrap, so there is never anything to send that way — but the style
         // hands every `ScrollView` one regardless, and an `AsNeeded` bar with `size` at 1 is laid out and left
         // *visible*: a 10px strip across the foot of the viewport that takes every press landing on it. On a
         // one-line summary that is the whole lower half of the box, answering nothing (qmltestrunner measured,
         // `tst_messageband`: `ScrollBar[0,9 312x10] orient=1 policy=0 size=1.00` under a click that focused nothing).
         // The vertical one is `AutoScrollBar`, which is drawn only where it has somewhere to go.
         //
-        // **Turned off, not taken away.** Handed `null`, the style's own upright bar is left reading
+        // **Turned off.** Handed `null`, the style's own upright bar is left reading
         // `control.ScrollBar.horizontal.active` off nothing — one `TypeError` per box on every start (Fusion
         // `ScrollView.qml:22`). `AlwaysOff` is answered with `visible: false`, and an invisible bar takes no
         // press, which is all this line was ever for (`tst_messageband`).
@@ -259,7 +259,7 @@ Rectangle {
         // comes with it** — it is laid out at `x 0 y 0` at its own implicit 10x10, which draws a dot in the box's top
         // corner (qmltestrunner measured, ; the same bar on a plain `Flickable` gets `x 267 h 112` for free). So
         // the three numbers are written here, and the flickable it answers for is named (`AutoScrollBar.view`), since
-        // the bar is parented to the view rather than to the flickable inside it. `MessageEditor` puts the same block
+        // the bar is parented to the view and the flickable sits inside it. `MessageEditor` puts the same block
         // over the summary box.
         ScrollBar.vertical: AutoScrollBar {
             id: textBar
@@ -287,7 +287,7 @@ Rectangle {
                 box.escaped()
                 event.accepted = true
             }
-            // Dimmer than the summary while it is being read -- that pair is the message's own hierarchy -- but never
+            // Dimmer than the summary while it is being read -- that pair is the message's own hierarchy -- and lit
             // while it is being written: text under a caret is what the eye is on, and secondary is the shade this
             // theme spends on what the eye is not on. Read-only does not count as writing it: a stash and a commit off
             // this line take a caret for selecting, and nothing typed there would land.
@@ -297,7 +297,7 @@ Rectangle {
             // A caret put in the text by hand is the reader taking the box over, so the top stops being held for them
             // (`pinnedTop`).
             onActiveFocusChanged: if (area.activeFocus) box.unpin()
-            // On the text rather than on the flickable: a handler here is offered the wheel before the flickable under
+            // On the text: a handler here is offered the wheel before the flickable under
             // it decides to keep it, which is the whole point (`rollBy`).
             WheelHandler {
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
@@ -305,8 +305,8 @@ Rectangle {
             }
         }
     }
-    // Declared after the ScrollView, so the corner belongs to the grip rather than to the last few pixels of the
-    // scrollbar. Hit area and ink are the one 16 square: the mark hangs off its lower-right, which puts the ink on the
+    // Declared after the ScrollView, so the corner belongs to the grip. Hit area and ink are the one 16 square: the
+    // mark hangs off its lower-right, which puts the ink on the
     // same inset the text keeps from the frame.
     MouseArea {
         id: grip
@@ -316,8 +316,8 @@ Rectangle {
         width: Theme.iconMd
         height: Theme.iconMd
         hoverEnabled: true
-        // Down is the only way this goes, so the cursor says so rather than promising the corner drag a browser's box
-        // takes.
+        // Down is the only way this goes, so the cursor says so. A browser's corner drag is a different
+        // promise.
         cursorShape: Qt.SizeVerCursor
         /// Where the pull started, in the pane's own coordinates — the grip itself travels with the edge it is moving.
         property real fromY: 0
@@ -338,7 +338,7 @@ Rectangle {
         NavIcon {
             anchors.fill: parent
             kind: "grip"
-            // A structural line at rest, since what it marks is an edge and not a word; the pointer brings it up to the
+            // A structural line at rest, since what it marks is an edge; the pointer brings it up to the
             // shade the pane spends on things being read.
             tint: grip.containsMouse || grip.pressed ? Theme.textSecondary : Theme.borderStrong
         }

@@ -26,8 +26,8 @@ Item {
     required property int depth
     required property bool folder
     required property bool eol_mark
-    /// The path the line-ending card is out for, handed down by the pane — the model keeps the words once rather than
-    /// on every row, and the card's own close is what clears it (`WipPane`). A row reads it to know the card standing
+    /// The path the line-ending card is out for, handed down by the pane — the model keeps the words once, and the
+    /// card's own close is what clears it (`WipPane`). A row reads it to know the card standing
     /// is **its** card (`eolCardOut`).
     property string pointedEolPath: ""
     /// How far a local branch stands from its upstream, as of the last fetch. Zero on every other kind of row, and on
@@ -39,17 +39,17 @@ Item {
     /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed
     /// (PGG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
-    /// Whether the pointer is on this row. Written by the handler below rather than by the `MouseArea` that fills the
-    /// row: hover goes to the topmost item that takes it, and the stage `+` is a `Control` that takes its own, so the
-    /// row stopped being "under the hand" exactly when the hand arrived at the mark (rules-refs/app-ui.md 「行の hover
-    /// を `MouseArea` で取らない」; measured qmltestrunner: `containsMouse=false` with the pointer in the middle of the `+`,
-    /// which took the row's wash out from under the hand reaching for it and closed its line-ending card).
+    /// Whether the pointer is on this row. Written by the handler below: hover goes to the topmost item that takes
+    /// it, and the stage `+` is a `Control` that takes its own, so the row stopped being "under the hand" exactly
+    /// when the hand arrived at the mark (rules-refs/app-ui.md 「行の hover は `HoverHandler`」; measured
+    /// qmltestrunner: `containsMouse=false` with the pointer in the middle of the `+`, which took the row's wash out
+    /// from under the hand reaching for it and closed its line-ending card).
     property bool pointed: false
     /// A right-click menu of the page's is standing over this list.
     property bool menuStanding: false
     property string kindHint: "branch"
-    /// The remote this repository sends pushes to, empty where none is marked (`RepoTab.pushDefault`). Handed down
-    /// rather than read here: one answer for the whole list, and a delegate is recycled row to row.
+    /// The remote this repository sends pushes to, empty where none is marked (`RepoTab.pushDefault`). Handed down:
+    /// one answer for the whole list, and a delegate is recycled row to row.
     property string markedRemote: ""
     /// The configured remote names, so a folder row can tell whether it stands for a remote or only for the shape of
     /// the names below it. Both exist in this section: a remote called `my/fork` puts a plain `my` folder above its
@@ -64,11 +64,11 @@ Item {
     property real listWidth: 200
     /// Where this row's ink begins, and how far each fold of the names steps it in. Handed down because the left panel
     /// sets its rows in from the pane's edge by the room its own bar takes at the other one, so a row stands between
-    /// two equal margins rather than hard against the frame (`NavList` — デザイン規約 §余白); the working tree's file list
-    /// keeps the pane's inner margin it shares with a commit's own list (`FileRowDelegate`). **Two values and not
-    /// one**: a list is free to start its rows on one step and fold them on another, and the file lists do (the pane's
-    /// inner margin, then a group's step). The left panel is the one that asks for the same value twice, so that a
-    /// name at any depth stands on the grid its own left margin sets.
+    /// two equal margins (`NavList` — デザイン規約 §余白); the working tree's file list keeps the pane's inner margin it
+    /// shares with a commit's own list (`FileRowDelegate`). **Two values**: a list is free to start its rows on one
+    /// step and fold them on another, and the file lists do (the pane's inner margin, then a group's step). The left
+    /// panel is the one that asks for the same value twice, so that a name at any depth stands on the grid its own
+    /// left margin sets.
     property int rowInset: Theme.spaceXs
     property int nestStep: Theme.spaceMd
     /// Where an open name box is drawn, and where the list showing this row sits in it: where its rows begin, where
@@ -89,7 +89,7 @@ Item {
     /// so that what one press moves is seen before it is pressed (デザイン規約 §その他の操作).
     property bool stagePeer: false
     /// What each side of a conflict is called. **The two swap over during a rebase**, so they are handed down from the
-    /// model rather than worked out here (`WorkTreeModel.sideOurs` / `sideTheirs`); empty where git left nothing to
+    /// model (`WorkTreeModel.sideOurs` / `sideTheirs`); empty where git left nothing to
     /// name a side by.
     property string sideOurs: ""
     property string sideTheirs: ""
@@ -145,7 +145,7 @@ Item {
     /// `name` is what the row shows, `full` what git knows it by (a stash shows a message and answers to a selector).
     signal refMenuRequested(string name, string full, string oidHex)
     /// Right-click on the row a remote itself stands on — the only folder row in this list that has anything behind it
-    /// (デザイン規約 §左メニューの所作). Its own signal because what opens is a different menu: a remote is configuration, not a ref.
+    /// (デザイン規約 §左メニューの所作). Its own signal because what opens is a different menu: a remote is configuration.
     signal remoteMenuRequested(string name)
     /// Right-click on a working-tree file row, for the same reason. Undoing a rename takes both of its names, but the
     /// menu reads them off the chosen rows (`orig_path`), so the row itself is enough.
@@ -177,18 +177,18 @@ Item {
         // where the pointer was standing (`tipPointedAt`).
         visible: navRow.pointed || navRow.tipPointedAt
     }
-    // No mark: nothing asks a question about a row in this list any more. What one of these rows takes away is held
-    // down on the menu row that names it, and that menu is standing over the row while it is held (デザイン規約 §長押し).
-    // The ink of the row, one column after another (`NavRowBody`). Handed the row itself rather than its fields — a
-    // delegate is recycled, and mirroring them here would double every binding it pays on reuse.
+    // Nothing asks a question about a row in this list any more. What one of these rows takes away is held down on
+    // the menu row that names it, and that menu is standing over the row while it is held (デザイン規約 §長押し).
+    // The ink of the row, one column after another (`NavRowBody`). Handed the row itself — a delegate is recycled,
+    // and mirroring them here would double every binding it pays on reuse.
     NavRowBody {
         id: rowLayout
         anchors.fill: parent
         anchors.leftMargin: navRow.rowInset + navRow.depth * navRow.nestStep
-        // Not padding: the gutter the list's own scroll bar is drawn in. This row ends in a right-aligned column (the
-        // branch a worktree has out) and the bar is drawn over it, so the row stops where the bar's ink begins. Both
-        // lists that show these rows are a pane's own — the left panel's and the working tree's — so they ask for the
-        // one gutter that bar takes (デザイン規約 §QML 実装ルール の摘みの項).
+        // The gutter the list's own scroll bar is drawn in. This row ends in a right-aligned column (the branch a
+        // worktree has out) and the bar is drawn over it, so the row stops where the bar's ink begins. Both lists
+        // that show these rows are a pane's own — the left panel's and the working tree's — so they ask for the one
+        // gutter that bar takes (デザイン規約 §QML 実装ルール の摘みの項).
         anchors.rightMargin: Theme.navBarGutter
         row: navRow
     }
@@ -225,9 +225,9 @@ Item {
             onCancelled: navRow.editCancelled()
         }
     }
-    // Rows whose name can be changed from here. A remote branch is one of them even though git has no rename over there
-    // — core builds the rename out of a push and a delete, and the bar asks before it runs. A folder is not: it is the
-    // shape of the names below it, not a name.
+    // Rows whose name can be changed from here. A remote branch is one of them even though git has no rename over
+    // there — core builds the rename out of a push and a delete, and the bar asks before it runs. A folder is left
+    // out: it is the shape of the names below it.
     readonly property bool nameable: !navRow.folder
         && (navRow.kindHint === "branch" || navRow.kindHint === "tag"
             || navRow.kindHint === "stash" || navRow.kindHint === "remote")
@@ -252,19 +252,19 @@ Item {
     readonly property bool editBoxShown: editSeat.item ? editSeat.item.visible : false
     readonly property string editBoxAt: editSeat.item ? editSeat.item.cameOut : ""
     /// Whether the one shared tooltip is standing **on this row's box** — the reason a refused name gives, which is
-    /// said nowhere else (`NavNameBox`). Taken off the box's own attached read rather than off the instance, because
-    /// that is the one that weighs the instance's target against this item (`tests/qml/tst_tipowner.qml`); the
-    /// instance's own `visible` would answer the same for anybody's tip. The shape `SignatureMark.tipShown` and
-    /// `MessageEditor.summaryTipShown` already carry.
+    /// said nowhere else (`NavNameBox`). Taken off the box's own attached read, because that is the one that weighs
+    /// the instance's target against this item (`tests/qml/tst_tipowner.qml`); the instance's own `visible` would
+    /// answer the same for anybody's tip. The shape `SignatureMark.tipShown` and `MessageEditor.summaryTipShown`
+    /// already carry.
     readonly property bool editTipShown: editSeat.item ? editSeat.item.ToolTip.visible : false
     /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
-    /// the row itself rather than at a copy of what the row would have decided (PGG_AUTO_ACT=nav-reclick).
+    /// the row itself (PGG_AUTO_ACT=nav-reclick).
     function leftClick(modifiers, held) {
-        // The second click of a double-click is not a click of its own: the first one already did what a click does,
-        // and the gesture is the double.
+        // The second click of a double-click belongs to the double: the first one already did what a click
+        // does.
         //
-        // What a second click on this row would name is read now rather than when the wait runs out: by then this
-        // delegate may be showing another row's name (`ReclickGesture`).
+        // What a second click on this row would name is read now: by the time the wait runs out this delegate may
+        // be showing another row's name (`ReclickGesture`).
         if (navRow.reclick
                 && !navRow.reclick.click(navRow.rowKey,
                                          navRow.nameable ? navRow.renameNames() : null,
@@ -308,12 +308,12 @@ Item {
     // The row that carries the mark tells the model it is the one being read, so the sentence can be built for it
     // alone. The row itself has no field left to hold it (`NavItem::eol_mark`).
     //
-    // **On a rest, the same one every other hover in this app opens after** (規約 §hover のツールチップ「通りすがりでは
-    // 開かない」): these rows stand in a list, and a hand crossing it passes over every marked one on the way. **The
-    // letting go is not on a rest** — what the pointer has left is not what a beat is for, and the card keeps its own
+    // **On a rest, the same one every other hover in this app opens after** (規約 §hover のツールチップ「手が止まって
+    // から開く」): these rows stand in a list, and a hand crossing it passes over every marked one on the way. **The
+    // letting go is at once** — what the pointer has left is not what a beat is for, and the card keeps its own
     // (`WipPane.pointEol`).
     //
-    // **The hand that comes back from the card is not asked again** (規約「出ているものの的へ戻る手は待たせない」): the
+    // **The hand coming back from the card is answered at once** (規約「出ているものの的へ戻る手は即通す」): the
     // card opens off the row's own bottom edge, so reading it takes the pointer off the row and returning puts it back.
     // Rested on a second time, the card would go at `hoverKeepMs` and come back at `tipDelayMs` — a blink that
     // punishes the ordinary way of reading what the row put out.
@@ -392,8 +392,8 @@ Item {
         onHoveredChanged: navRow.stageHovered(
             navRow.bucket, navRow.full !== "" ? navRow.full : navRow.name,
             stageButton.hovered)
-        // On a conflicted row the same `git add` means something else: it does not move a change into the staging area,
-        // it tells git the conflict has been dealt with. The word says that rather than the command's other job (デザイン規約
+        // On a conflicted row the same `git add` means something else: it tells git the conflict has been dealt
+        // with, and the word on this button says so (デザイン規約
         // §diff の中のステージ).
         tip: navRow.bucket === "conflicts" ? qsTr("Mark resolved")
              : navRow.bucket === "staged" ? qsTr("Unstage file")
@@ -406,12 +406,12 @@ Item {
     }
     // Hover says the name in full — the one thing the row itself cannot show (デザイン規約 §hover のツールチップ). What a row
     // shows is a part of it: a leaf folded into its folders shows the last segment, and a name wider than the pane
-    // shows a middle-elided one. Nothing is added to the name — where the row leads is what the section and the
-    // gesture already say. A stash is the same rule read on what it is named by: the row *is* the message, so the
-    // message in full is its name, and the selector (`stash@{0}`) is not something anybody hovers to learn.
+    // shows a middle-elided one. The name alone — where the row leads is what the section and the gesture already
+    // say. A stash is the same rule read on what it is named by: the row *is* the message, so the message in full is
+    // its name, and the selector (`stash@{0}`) is not something anybody hovers to learn.
     readonly property string hoverText: {
         const full = navRow.fullName
-        // The one folder row that is a thing rather than a shape says what it is for when it holds the mark. The role
+        // The one folder row that is a thing in itself says what it is for when it holds the mark. The role
         // leads and the name follows it (デザイン規約 §hover のツールチップ: 結論から 1 行 — the same shape a working copy's row
         // says its state in), and `origin` is the word git gives the role (§リモートを書き留める).
         if (navRow.pushesHere)
@@ -438,8 +438,8 @@ Item {
             return full
         // A row carrying the line-ending mark has a card of its own, which names the path as its first line — two
         // things opening off one pointer would sit on top of each other (規約 §hover のツールチップ「1 つのポインタが
-        // 開けるものは 1 つ」). **The mark is the test, not whether that card is out**: both open after the same rest, so
-        // a row that asked "is my card up yet?" would raise a tip in the turn before it was.
+        // 開けるものは 1 つ」). **The mark is the test**: both open after the same rest, so a row that asked "is my
+        // card up yet?" would raise a tip in the turn before it was.
         if (navRow.eol_mark)
             return ""
         // What is left is a file row: hover says the path, whatever the row shows and however wide the pane is
@@ -455,7 +455,7 @@ Item {
     /// pointer is on no row" — without the guard every pooled row claims the shared tooltip, and the one row actually
     /// pointed at never gets it (the instance is one per window).
     readonly property bool tipPointedAt: navRow.pointedTipRow >= 0 && navRow.pointedTipRow === navRow.index
-    // Not behind a standing menu: the pointer is in the menu, and a tip that comes out now is drawn over the rows the
+    // Held down while a menu stands: the pointer is in the menu, and a tip coming out now lands on the rows the
     // hand is reading (デザイン規約 §メニュー).
     ToolTip.visible: (navRow.pointed || navRow.tipPointedAt) && !navRow.editing && !navRow.menuStanding
                      && navRow.hoverText !== ""

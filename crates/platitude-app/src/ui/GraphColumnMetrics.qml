@@ -25,15 +25,15 @@ QtObject {
         font.family: Theme.uiFamily
         font.pixelSize: Theme.fontChip
     }
-    /// The cut mark's own advance. Measured by a TextMetrics rather than asked of `chipFont`: `advanceWidth()` is a
+    /// The cut mark's own advance. Measured by a TextMetrics: `advanceWidth()` is a
     /// method, so a binding on it takes no dependency, settles once, and settles on the default font — before the
     /// family above has arrived (app-ui.md). `TextMetrics.advanceWidth` is a property, and follows.
     readonly property TextMetrics chipCutInk: TextMetrics {
         font: metrics.chipFont.font
         text: "…"
     }
-    /// What one of the characters the floor keeps costs. A letter, measured, and never
-    /// `chipFont.averageCharacterWidth`: that is the **font's** average, and every family named for this UI carries
+    /// What one of the characters the floor keeps costs. A letter, measured:
+    /// `chipFont.averageCharacterWidth` is the **font's** average, and every family named for this UI carries
     /// Japanese, so it answers with a full-width figure no ref name is written in — and a different one per platform
     /// (rules-refs/app-ui.md carries the measurement). A floor read off it moves with the font rather than with the
     /// letters: wide, it holds a column open past what it is keeping there; narrow, it hands out fewer characters than
@@ -44,24 +44,24 @@ QtObject {
         text: "n"
     }
     /// How much of a name the chip column keeps at its narrowest: the first characters and the mark that says the rest
-    /// was cut. **Characters, not pixels**, for the reason the tab titles' floor is one (規約 §ウィンドウの縁) — the same
+    /// was cut. **Characters**, for the reason the tab titles' floor is one (規約 §ウィンドウの縁) — the same
     /// count costs a different number of pixels in each platform's UI font and at every scaling, so the length comes
     /// out of the font. Three of them, the same count a tab keeps.
     readonly property int labelMinChars: 3
     readonly property real chipNameMinW: Math.ceil(chipCutInk.advanceWidth
         + labelMinChars * chipLetterInk.advanceWidth)
     /// The mark a chip wears when another working copy holds the branch, kept here only to be priced. **A seat is the
-    /// mark's ink, not its box** (規約 §余白), and how much of the 16-grid a kind fills is the icon's own knowledge —
-    /// `NavIcon.inkGrid` says the caller cannot carry that number — so the width comes off a mark rather than out of
-    /// the tokens. It draws nothing: `inkWidth` is arithmetic on the kind, the size and the stroke, and answers the
+    /// mark's ink** (規約 §余白), and how much of the 16-grid a kind fills is the icon's own knowledge —
+    /// `NavIcon.inkGrid` says the caller cannot carry that number — so the width comes off a mark.
+    /// It draws nothing: `inkWidth` is arithmetic on the kind, the size and the stroke, and answers the
     /// same 7.5 with no scene around it (measured, qmltestrunner: no window, no warning).
     readonly property NavIcon chipHeldMark: NavIcon {
         kind: "tree"
         width: Theme.iconSm
         height: Theme.iconSm
     }
-    /// The badge at the chip's other end, priced the same way and for the same reason. **The cloud, not the pull
-    /// request**: the two share one slot (`RefChip.hasBadge`) so only one of them is ever drawn, and the floor takes
+    /// The badge at the chip's other end, priced the same way and for the same reason. **The
+    /// cloud**: the two share one slot (`RefChip.hasBadge`) so only one of them is ever drawn, and the floor takes
     /// the wider — 12.9 of the grid against the PR mark's 10.4.
     readonly property NavIcon chipBadgeMark: NavIcon {
         kind: "remote"
@@ -69,11 +69,11 @@ QtObject {
         height: Theme.iconSm
     }
     /// The fan of sheets behind the card, asked of the stack itself the way the two marks are asked of icons: how many
-    /// sheets there can be is the number of colours a record can wear, which is the stack's own arithmetic and not a
-    /// number this file may keep a second copy of. It draws nothing — nothing is handed to it.
+    /// sheets there can be is the number of colours a record can wear, which is the stack's own
+    /// arithmetic. It draws nothing — nothing is handed to it.
     readonly property RefChipStack chipFan: RefChipStack {}
     /// The count of the names the card is not showing (`RefChip`'s `+N`), at the widest the floor prices it: two
-    /// digits. **Measured off a label rather than a `TextMetrics`** — the metrics come out a few pixels tighter than
+    /// digits. **Measured off a label** — the metrics come out a few pixels tighter than
     /// the label the words are actually set in, and a floor measured tight is a floor that still elides (the name
     /// box's own floor is measured this way for the same reason, `GraphRowChips.nameBoxMinW`). It draws nothing.
     ///
@@ -82,7 +82,7 @@ QtObject {
     /// measures its own count off the label that draws it (`RefChip.countW`), so the marks and the badge keep their
     /// seats and the extra digit comes out of the name, which is the one term this floor is a promise about.
     ///
-    /// **The family is named rather than inherited**, the way `chipFont` above names it: every label in the app takes
+    /// **The family is named**, the way `chipFont` above names it: every label in the app takes
     /// it from the window (`Main`), and nothing here has a window over it.
     readonly property Label chipCountInk: Label {
         text: "+99"
@@ -94,8 +94,8 @@ QtObject {
     /// padding on either side. **Each one is a term the card takes off the name**, so each one is here, and a floor
     /// measured on the bare chip leaves the row that wears them with nothing but the cut mark (measured).
     ///
-    /// **The marks come and go and the floor still counts them all**: a column may not be narrowed to a width that
-    /// would crush the chip that turns up in it later. The worst-dressed chip is a branch another working copy holds
+    /// **The marks come and go and the floor still counts them all**: a column stays wide enough for the chip that
+    /// turns up in it later. The worst-dressed chip is a branch another working copy holds
     /// that is also on a remote, on a commit some other ref names too — measured at `fontChip` in Yu Gothic UI, the
     /// held mark alone is 9.5 of the 31 the floor keeps for a name, so a floor that leaves it out gives
     /// `feature/topic-a` one character where three were promised (measured).
@@ -115,8 +115,8 @@ QtObject {
     // show that there is a message (規約 §グラフ列は最も広い所のレーンまで).
     readonly property real labelColWMin: chipNameMinW + chipFurnitureW + Theme.spaceSm
     readonly property real labelColWMax: Math.max(labelColWMin, paneW - graphColWMin - Metrics.messageMinW)
-    // The chip column does not give when the pane narrows — the lanes do (`graphColWMax`), and the window's floor holds
-    // this one's width in reserve (規約 §窓の床). Squeezing it is ruled out: a column narrower than a chip draws a
+    // The lanes are what gives when the pane narrows (`graphColWMax`), and the window's floor holds
+    // this column's width in reserve (規約 §窓の床). Squeezing it is ruled out: a column narrower than a chip draws a
     // crushed one, and a column that follows the pane changes width whenever the left menu folds, which is a thing
     // moving on screen that nobody asked to move (observed — all three reported symptoms traced here).
     //
@@ -140,13 +140,13 @@ QtObject {
     // centre a border inside the node's edge, outline half in half out — mirrors what **GraphLaneCell's canvases**
     // draw. The ceiling lands that edge on a whole pixel; the tick stands `spaceSm` past the column's edge (the subject
     // column's own margin), so that much comes back off the width. The faces are not cut on the way down: their clipper
-    // leans the same `spaceSm` past the column (the cell), so the floor is where ink meets ink, not where the clip ran
-    // out. One place, so the display, the divider's clamp and the question of whether there is a drag in it at all
+    // leans the same `spaceSm` past the column (the cell), so the floor is where ink meets ink.
+    // One place, so the display, the divider's clamp and the question of whether there is a drag in it at all
     // agree.
     readonly property real graphColWMin: Math.ceil(Metrics.laneInset + Metrics.laneW / 2
         + Metrics.nodeIcon / 2 - 2 * Theme.borderWidth + (Theme.iconSm + Theme.borderWidth) / 2)
         - Theme.spaceSm
-    // How far the divider may be pulled: as wide as the lanes ever get, and no wider — a column past the last lane is
+    // How far the divider may be pulled: as wide as the lanes ever get — a column past the last lane is
     // emptiness taken from the message column. A narrow window stops it earlier still, where the message column would
     // stop showing that a message is there (規約 §グラフ列は最も広い所のレーンまで).
     readonly property real graphColWMax: Math.max(graphColWMin,

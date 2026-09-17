@@ -4,7 +4,7 @@ import QtQuick
 
 // How far the diff reaches sideways, in the only unit that answers: pixels a row was actually laid out in.
 //
-// **A row's own layout is the truth here, and a count of columns cannot stand in for it.** A wide glyph is two columns
+// **A row's own layout is the truth here.** A wide glyph is two columns
 // and whatever the fallback carrying it advances (measured on Windows at `fontCode`, against 8px for the font's own
 // columns: `日` 13, `の` 11, `。` 9, `「` 7, an emoji 18), and a combining mark is a character the walk counts and a
 // glyph the font draws nothing for. So the model's pick of the longest lines (`encode::widest_lines`, measured by
@@ -13,13 +13,13 @@ import QtQuick
 //
 // Three rules hold this together, and each of them is a bug that was shipped:
 //
-//  - **a width belongs to a row and a generation, not to a running maximum.** Holding the largest number ever seen
+//  - **a width belongs to a row and a generation.** Holding the largest number ever seen
 //    latched a width measured mid-update and never gave it back. Here every width is filed under its row, so a second
 //    look at the same row replaces the first — down as well as up — and a generation the rows have left is dropped
 //    whole.
 //  - **what is filed is what a row was drawn at.** The rows are one format now (`markup::styled`), so a row is never
 //    measured with its own `<font …>` tags counted as text, and a row is never asked before its text is set.
-//  - **a width nobody has measured yet is not a width of zero.** Between one reading of a file and the next there is a
+//  - **an unmeasured width keeps the last one.** Between one reading of a file and the next there is a
 //    moment with no answer in hand; publishing it as zero would clamp the reader's place back to the left edge, so
 //    what was standing goes on standing until something has been measured.
 QtObject {
@@ -29,7 +29,7 @@ QtObject {
     /// old one: the rows may be a different file, or the same file with lines gone.
     required property int rowsGen
     /// What the lines the model picked came to, measured (`DiffTextMetrics.codeW`), and 0 while none of them has been
-    /// laid out — which is not the same as a diff with nowhere to go.
+    /// laid out — which means "nothing measured yet".
     required property real measured
     /// The file on screen. The same one read again keeps the width it was reading at; a different one starts over,
     /// the way the place along it does (`DiffCodeScroll.file`).

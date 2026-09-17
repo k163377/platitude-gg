@@ -3,7 +3,7 @@ import platitude
 import platitude.ui
 
 /// Each model change must reach a frame before the next action.
-/// The animation duration is a sampling window, never a readiness delay.
+/// The animation duration is a sampling window.
 Item {
     id: driver
 
@@ -106,7 +106,7 @@ Item {
         if (oid !== "")
             row = graphModel.rowOf(oid)
         else if (PerfProbe.selection === "first") {
-            // The newest commit, which is neither the working tree's row nor a stash written over the tip
+            // The newest commit, past the working tree's row and any stash over the tip
             // (`GraphModel.newestCommitRow` — the same rule the page's default and `PageAutoStart` ask).
             row = graphModel.newestCommitRow()
         }
@@ -376,10 +376,10 @@ Item {
         from: driver.graphPane.view.originY
         to: from + Math.max(0, Math.min(3000 * Theme.graphRowHeight,
                                       driver.graphPane.view.contentHeight - driver.graphPane.view.height))
-        // The scroll the frame rate is read over: a window of measurement, not of waiting. Nothing passes because it
-        // elapsed — `onFinished` reads how far the view actually travelled and whether it was on screen, and fails
-        // the run when either says no (規約 §UI 自動化の因果性: 非因果の終了境界も成功条件にしない).
-        // waits(measured): the length of the sample, judged by what the scroll did rather than by having ended
+        // The scroll the frame rate is read over: a window of measurement. `onFinished` reads how far
+        // the view actually travelled and whether it was on screen, and fails
+        // the run when either says no (規約 §UI 自動化の因果性: 成功条件も因果だけ).
+        // waits(measured): the length of the sample, judged by what the scroll did
         duration: 12000
         onFinished: {
             driver.reportViewport("end")

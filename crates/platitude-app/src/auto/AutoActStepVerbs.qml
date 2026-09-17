@@ -5,13 +5,13 @@ import platitude
 import platitude.ui
 
 /// Walking the lists with the arrow keys — the graph, the changed files, the diff — and the folds the walk runs
-/// into. Each of these reads where it arrived rather than how far it asked to go.
+/// into. Each of these reads where it arrived.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -31,7 +31,7 @@ Item {
     readonly property var wipPane: driver.wipPane
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "graph-step" || act === "graph-step-edge"
             || act === "graph-step-far" || act === "graph-step-named"
@@ -62,8 +62,8 @@ Item {
                    || act === "wip-step"
                    || act === "changes-shut" || act === "wip-shut") {
             // The file list's arrows: one file per press, the light and the diff moving together (規約 §diff のファイル一覧).
-            // `-edge` walks further than the list is long, so the last presses are refused and it stops rather than
-            // wrapping. The argument is the file to start on — `<bucket>:<path>` for the working tree's list, where a
+            // `-edge` walks further than the list is long, so the last presses are refused and it stops at the
+            // end. The argument is the file to start on — `<bucket>:<path>` for the working tree's list, where a
             // file changed on both sides has a row under each.
             //
             // The two `-shut` verbs walk nowhere: they stop on the row's second click, where both lists are left
@@ -94,14 +94,14 @@ Item {
             // first row of the list, which is also the one the picture can hold: a folder struck shut below the fold
             // frames exactly like one left open.
             page.activateRow(workTree.branchOid !== "" ? workTree.branchOid : graphModel.oidAt(0))
-            // Said rather than assumed: the tree is the list's resting look, but a run that inherited the paths view
+            // Said outright: the tree is the list's resting look, but a run that inherited the paths view
             // would wait out the watchdog looking for a folder row that flat paths never put there.
             detailsModel.setTreeView(true)
             changesFoldTimer.path = arg === "" ? "assets/icons" : arg
             changesFoldTimer.reopen = act === "changes-unfold"
             changesFoldTimer.begin()
         } else if (act === "diff-step" || act === "diff-step-edge") {
-            // Moves the view, not a selection (規約 §diff を上下に送る). Rides the 320x240 seed: no demo file's diff is longer
+            // Moves the view (規約 §diff を上下に送る). Rides the 320x240 seed: no demo file's diff is longer
             // than a default window, and even there the room below the fold is two rows (measured) — which is why
             // the plain walk is one row.
             page.showWip()
@@ -239,9 +239,9 @@ Item {
             graphHoldRepeat.start()
         }
     }
-    // The repeats. Waited on the settle being gone rather than on a count of beats (app-ui.md §UI 自動化の因果性) —
+    // The repeats. Waited on the settle being gone (app-ui.md §UI 自動化の因果性) —
     // that is the edge a real keyboard's first repeat always arrives behind. They go in one tick once it has: what is
-    // being proven is that a repeat is not read, not how fast one arrives.
+    // being proven is that a repeat is not read.
     SampleTimer {
         id: graphHoldRepeat
         onTriggered: {
@@ -278,7 +278,7 @@ Item {
             driver.complete()
         }
     }
-    /// How many commits the walk has asked for since the hold verb set off. Taken on the signal rather than sampled:
+    /// How many commits the walk has asked for since the hold verb set off. Taken on the signal:
     /// the asks this verb is about are the ones that come and go inside a beat (app-ui.md §UI 自動化の因果性).
     property int holdReads: 0
     Connections {
@@ -288,12 +288,12 @@ Item {
     // The file list's arrows: the light and the diff move together, one file per press (規約 §diff のファイル一覧). Two things
     // have to be real for this to say anything, so both go through the door a hand goes through:
     //
-    // - the click. The row's own signal is raised by name, not the pane's handler — the handler is where the keyboard
+    // - the click. The row's own signal is raised by name — the handler is where the keyboard
     // is handed to the list, and calling past it would leave `focused=` proving nothing (the same reason `nav-peek`
-    // strikes the cell and not `SidebarPane`). - the step, which enters at `stepFile` where `Keys.onDownPressed`
+    // strikes the cell). - the step, which enters at `stepFile` where `Keys.onDownPressed`
     // enters. A keystroke cannot be injected (verify-ui).
     //
-    // Nothing here reaches for the keyboard, and that is the point: the diff opened without taking it, so an arrow
+    // The keyboard is left where it was, and that is the point: the diff opened without taking it, so an arrow
     // still belongs to the list.
     SampleTimer {
         id: fileStepTimer
@@ -306,7 +306,7 @@ Item {
         /// The file clicked, and the bucket its row sits in (empty for the commit's list, whose files sit in none).
         property string bucket: ""
         property string path: ""
-        /// Whether the click has gone out, so the tick that follows is waiting for the diff rather than for the row.
+        /// Whether the click has gone out, so the tick that follows is waiting for the diff.
         property bool clicked: false
         property bool stopped: false
         /// Whether the run clicks the same row a second time and stops there, which shuts the diff it opened
@@ -331,8 +331,8 @@ Item {
                                 worktreeModel.origOf(fileStepTimer.path),
                                 Qt.NoModifier)
             else
-                // The row's own press, with the row's own reading of its model in it: handed the path from beside it
-                // instead, this goes green on a row that reads nothing at all (verify-ui §壊れない動詞).
+                // The row's own press, with the row's own reading of its model in it: handed the path from beside
+                // it, this goes green on a row that reads nothing at all (verify-ui §壊れない動詞).
                 row.press()
             return true
         }
@@ -363,8 +363,8 @@ Item {
                     fileStepTimer.walkNow()
                     return
                 }
-                // The second click, on the row already being read. **Not before the read has landed** — a diff shut
-                // while it was still coming would be a run about a race rather than about the reader's second click.
+                // The second click, on the row already being read. **Once the read has landed** — a diff shut
+                // while it was still coming would be a run about a race.
                 if (!fileStepTimer.closed && diffPane.diffSettled())
                     fileStepTimer.closed = fileStepTimer.strike()
                 return
@@ -376,10 +376,10 @@ Item {
             }
         }
     }
-    // What each list is left lighting with nothing being read — the two used to disagree here and now do not
-    // (デザイン規約 §diff のファイル一覧). **`lit=` is the whole claim** and it is read off the rectangles rather than off
-    // the condition behind them (`litPath`), so a run whose light was only ever in the model says `lit=false`.
-    // `open=false` is what makes the answer that list's own rather than a diff still standing over it.
+    // What each list is left lighting with nothing being read — the two agree here now
+    // (デザイン規約 §diff のファイル一覧). **`lit=` is the whole claim** and it is read off the rectangles
+    // (`litPath`), so a run whose light was only ever in the model says `lit=false`.
+    // `open=false` is what makes the answer that list's own.
     SampleTimer {
         id: fileShutReport
         onTriggered: {
@@ -387,8 +387,8 @@ Item {
                 return
             fileShutReport.stop()
             const walk = fileStepTimer.walk
-            // The three the judgement reads stand together and in this order: a `must_say` is a stretch of the line
-            // rather than a set of fields (`verify::verbs`), and each list's answer is all three at once.
+            // The three the judgement reads stand together and in this order: a `must_say` is a stretch of the
+            // line (`verify::verbs`), and each list's answer is all three at once.
             Harness.report(
                 "file_shut path=" + fileStepTimer.path
                 + " pane=" + fileStepTimer.pane
@@ -428,8 +428,8 @@ Item {
     // own signal, where a click lands — the pane's handler is what carries it to the model, and calling past it would
     // leave the report proving nothing.
     //
-    // The two lists that draw a fold arrow keep the answer in different fields (`NameCell.folded`), so `turn=` is read
-    // off the icon rather than off either flag: a run that read the flag back would go green with the arrow unwired,
+    // The two lists that draw a fold arrow keep the answer in different fields (`NameCell.folded`), so `turn=` is
+    // read off the icon: a run that read the flag back would go green with the arrow unwired,
     // which is exactly the shape this verb was cut for.
     SampleTimer {
         id: changesFoldTimer
@@ -445,7 +445,7 @@ Item {
             changesFoldTimer.struck = 0
             changesFoldTimer.start()
         }
-        /// The folder row for this directory, once the list has built it. Not `FileRowWalk.rowFor`, which answers by
+        /// The folder row for this directory, once the list has built it. Walked: `FileRowWalk.rowFor` answers by
         /// `walkKey` — the name a folder deliberately has none of.
         function folderRow() {
             const view = detailsPane.filesWalk.view
@@ -467,7 +467,7 @@ Item {
                 // The commit's own files first, and **read only here**: a read landing after a strike puts the rows
                 // back with every fold choice cleared (`DetailsModel::set_files`), so the row swings open under a wait
                 // that then never ends (observed — 1 run in a handful reached the watchdog in silence).
-                // Read every tick instead, and the verb's own answer would break its own precondition.
+                // Read every tick, and the verb's own answer would break its own precondition.
                 if (detailsModel.loading || detailsModel.shaHex !== page.selectedOid)
                     return
                 changesFoldTimer.struck++
@@ -490,7 +490,7 @@ Item {
     // (`DiffPane.handArrived`) — the diff does not take the keyboard by appearing, so without that the arrows are still
     // the file list's and `focused=` would be false for the right reason (規約 §diff を上下に送る).
     //
-    // The wait is for the view, not for the model. `diffSettled()` says the rows arrived; it says nothing about the
+    // The wait is for the view. `diffSettled()` says the rows arrived; it says nothing about the
     // list having laid them out, and a list whose `contentHeight` is still zero clamps every step to where it already
     // was — the walk then reads exactly like a diff with nothing to scroll (measured, 1 run in 3 came through with
     // `contentHeight` 0 at the step and 216 by the time it was reported). So what is waited for is the output the step

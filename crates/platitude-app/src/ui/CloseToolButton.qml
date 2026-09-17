@@ -8,7 +8,7 @@ import platitude.ui
 HoverToolButton {
     id: closeButton
 
-    /// How big a target this is, which is not how big the mark is drawn. The default is the seat every `✕` in the
+    /// How big a target this is (the mark's own size is `markSize`). The default is the seat every `✕` in the
     /// window stands in; a caller with room around it hands in a larger one, and **the wash stays `iconLg`**
     /// (規約 §当たり判定 「広げるのは判定だけ」) — a mark whose paint grew with its seat would read as a box.
     property real seat: Theme.iconLg
@@ -17,17 +17,17 @@ HoverToolButton {
     /// that goes with it — at `iconSm` the mark reads as too weak for the screen it closes (observed).
     property real markSize: Theme.iconSm
     /// What the mark is drawn in. A `✕` is normally the quiet ink; a caller whose way out is carrying a warning
-    /// says so here rather than drawing its own mark (`SettingsDialog`).
+    /// says so here (`SettingsDialog`).
     property color tone: Theme.textSecondary
     /// A press was made and turned down, and the next one goes through. The seat carries a ground of the tone's own
-    /// dimmed step so the mark reads as *changed* rather than merely coloured — colour alone is one signal, and a
+    /// dimmed step so the mark reads as *changed* — colour alone is one signal, and a
     /// press that did nothing needs to be answered by something (規約 §暗く落とした段).
     property bool armed: false
 
     padding: 0
     implicitWidth: closeButton.seat
     implicitHeight: closeButton.seat
-    // The seat grows around the wash rather than with it. `Control` shrinks the background by its insets and leaves
+    // The seat grows around the wash. `Control` shrinks the background by its insets and leaves
     // the item its own size, so the hand gets the whole seat and the paint stays where it was (after
     // `TabItemDelegate`, which does the same subtraction the other way round).
     topInset: (closeButton.seat - Theme.iconLg) / 2
@@ -38,12 +38,12 @@ HoverToolButton {
     // what is drawn inside it is a disc on the mark — the ink is a `✕`, which has no corners for a box to belong to,
     // and a rounded square around it reads as a button someone drew a frame for.
     //
-    // Drawn rather than a `Rectangle` with a radius, because the rim is carried out: full strength across the disc,
+    // Drawn, because the rim is carried out: full strength across the disc,
     // then down to the dimmed step of itself at the edge (§暗く落とした段). A hard rim on a wash this faint is a ring —
     // the one line the eye finds first in a band that has no other — and the same softness is what lets the quiet the
     // name goes into meet it without a seam (`TabTitleFade`).
     //
-    // The armed ground goes under the style's own wash rather than replacing it, so a hand resting on an armed mark
+    // The armed ground goes under the style's own wash, so a hand resting on an armed mark
     // still lights it (`HoverToolButton.washColor` is what paints on top).
     background: Item {
         implicitWidth: Theme.iconLg

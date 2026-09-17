@@ -27,7 +27,7 @@ ColumnLayout {
     signal commitDropRequested(string oidHex)
     /// The place the two lists divide while a choice is up: the pane, less the band each of them stands under.
     readonly property real listRoom: Math.max(0, detailsPane.height - 2 * Theme.headerHeight)
-    /// Whether the pane is showing a choice rather than one commit. **Read off the model, not off the records** — the
+    /// Whether the pane is showing a choice of commits. **Read off the model** — the
     /// model is what the file list below answers to, and the two must turn over together.
     readonly property bool choosing: detailsPane.details.selectionCount > 1
     /// Takes `GraphModel.chosenRows` apart. Rows are `\u{1d}`-separated and their cells `\u{1c}` — the outer pair,
@@ -52,8 +52,8 @@ ColumnLayout {
     property bool busy: false
     // Why the boxes are read-only, in one line ("" when they are not).
     property string editBlocked: ""
-    // A remote already has this commit: the save row says so rather than
-    // asking (デザイン規約「push 済みの範囲は尋ねずに言う」).
+    // A remote already has this commit: the save row says so
+    // (デザイン規約「push 済みの範囲はタグで言うだけ」).
     property bool published: false
     // What git makes of the signature: "" (unsigned, or not answered yet),
     // "verified", "signed" or "bad". The code behind it is git's own `%G?`,
@@ -66,13 +66,13 @@ ColumnLayout {
     /// git keeps the author and replaces the committer.
     property int committerFace: -1
     property string committerFaceUrl: ""
-    /// The boxes are a rebase plan's `reword` input right now — the save row wears that verb instead of the amend's
-    /// command, since nothing runs on the press (`RepoPage.planReword`).
+    /// The boxes are a rebase plan's `reword` input right now — the save row wears that verb,
+    /// since nothing runs on the press (`RepoPage.planReword`).
     property bool intoPlan: false
     /// The plan's stored reword for one commit, so a row revisited opens on
-    /// its draft rather than on the message it is replacing — the boxes
-    /// filled from the commit would offer to save the original back over
-    /// the draft. Empty oid while no plan holds one.
+    /// its draft — the boxes filled from the commit would offer to save
+    /// the original back over the draft. Empty oid while no plan holds
+    /// one.
     property string planDraftOid: ""
     property string planDraftSubject: ""
     property string planDraftBody: ""
@@ -117,8 +117,8 @@ ColumnLayout {
     }
 
     signal fileActivated(string path, string origPath)
-    /// The arrows walked onto another file. Not what a click raises: a click on the file already open closes the diff,
-    /// and holding Down must not (規約 §diff のファイル一覧).
+    /// The arrows walked onto another file. A signal of its own: a click on the file already open closes the diff,
+    /// and holding Down walks on (規約 §diff のファイル一覧).
     signal fileWalked(string path, string origPath)
     signal parentClicked(string oidHex)
     signal copyRequested(string text)
@@ -129,8 +129,8 @@ ColumnLayout {
     signal popStashRequested(string selector)
     signal messageSubmitted(string oidHex, string subject, string body)
 
-    // ---- message editor state: the boxes are filled by hand rather than
-    // bound, since typing would break a binding for good and the next
+    // ---- message editor state: the boxes are filled by hand, since
+    // typing would break a binding for good and the next
     // commit would land in a box that no longer listens.
     property string baseOid: ""
     property string baseSubject: ""
@@ -141,8 +141,8 @@ ColumnLayout {
                                      || block.bodyText !== detailsPane.baseBody
     readonly property bool messageDirty: detailsPane.editable && detailsPane.boxMoved
     /// Whether a plan is holding a typed reword for the very commit on
-    /// screen: what the boxes have to show instead of the commit's own
-    /// message, since the message would offer to save the original back
+    /// screen: what the boxes have to show, since the commit's own
+    /// message would offer to save the original back
     /// over the draft.
     readonly property bool planHoldsDraft: detailsPane.details.shaHex !== ""
         && detailsPane.details.shaHex === detailsPane.planDraftOid
@@ -176,11 +176,11 @@ ColumnLayout {
         // a plan stands would otherwise leave the text marked as typed under it.
         detailsPane.boxFromPlan = drafted
     }
-    /// Whose the text standing in the boxes is — a question about where it was typed, not about what it says.
+    /// Whose the text standing in the boxes is — a question about where it was typed.
     /// Everything written while the plan is routing these boxes is that row's `reword` input, saved into the plan
     /// or not; everything else was typed into the plain amend, on a commit the plan never moved the pane off.
     property bool boxFromPlan: false
-    /// The boxes took a character. Latched, not derived: what decides it is the state the text was written in, and
+    /// The boxes took a character. Latched: what decides it is the state the text was written in, and
     /// by the time a closing plan asks, that state is gone.
     function noteTyping() {
         if (detailsPane.intoPlan)
@@ -222,8 +222,8 @@ ColumnLayout {
         detailsPane.baseBody = block.bodyText
     }
     function submitMessage() {
-        // Nothing changed is nothing to do: the button stands from the moment someone is writing rather than from the
-        // moment the text differs (`MessageActionsRow.editing`), so this press is ordinary, not a mistake.
+        // Nothing changed is nothing to do: the button stands from the moment someone is writing
+        // (`MessageActionsRow.editing`), so this press is ordinary.
         if (!detailsPane.editable || !detailsPane.messageDirty || block.subjectText.trim() === "")
             return
         detailsPane.messageSubmitted(detailsPane.details.shaHex, block.subjectText, block.bodyText)
@@ -236,7 +236,7 @@ ColumnLayout {
         block.setTexts(subject, body)
     }
     /// Smoke hook: what the boxes are holding. `boxMoved` says the text left
-    /// its resting point, never whose text stands there instead.
+    /// its resting point.
     readonly property alias boxSubject: block.subjectText
 
     /// A reader was sent here from somewhere that could not hold the whole
@@ -276,8 +276,8 @@ ColumnLayout {
     // thing here that gives.
     /// How much of the pane the block between the two bands may take: all of
     /// it but the list's own band and the two rows that keep a list a list.
-    /// Past this the block scrolls rather than running out of the pane's
-    /// bottom (規約 §窓の床).
+    /// Past this the block scrolls and the pane's bottom holds
+    /// (規約 §窓の床).
     readonly property real blockRoom: Math.max(0, detailsPane.height - Theme.headerHeight
         - (changesBand.visible ? changesBand.height : 0) - 2 * Theme.rowHeight)
     // -- smoke hooks and readouts, said under the pane's name because the
@@ -345,8 +345,8 @@ ColumnLayout {
     spacing: 0
 
     // The pane's band: `COMMIT`, or — while the selected row is a stash — what that stash is and what can be done
-    // with it (`StashActionsBand`). Exactly one stands and both are `headerHeight`, so `blockRoom` reads the token
-    // rather than either: a layout gives a hidden child no height, so whichever is down would answer 0.
+    // with it (`StashActionsBand`). Exactly one stands and both are `headerHeight`, so `blockRoom` reads the token:
+    // a layout gives a hidden child no height, so whichever is down would answer 0.
     // **The band is what says how the files below were read.** Three or more commits are listed as themselves and the
     // list under them is what they all changed; exactly two are being compared, and the list is what differs between
     // them (デザイン規約 §複数のコミットを選ぶ). Those are different questions with the same answer shape, so the word
@@ -363,7 +363,7 @@ ColumnLayout {
         onApplyRequested: selector => detailsPane.applyStashRequested(selector)
         onPopRequested: selector => detailsPane.popStashRequested(selector)
     }
-    // The commits a choice holds. **No highlight, and the only press is the one that drops a commit**: they are picked
+    // The commits a choice holds. **A picture, and the only press is the one that drops a commit**: they are picked
     // in the graph, and a second place the choice appeared to be made is a second place it could disagree with itself.
     AppListView {
         id: chosenList
@@ -373,13 +373,13 @@ ColumnLayout {
         // (規約 §バケツごとの一覧): **an equal share each, and whatever the other one cannot use on top**. A choice of
         // forty commits over one file leaves the file list a row and this one the rest.
         //
-        // What the file list wants is read off its own content rather than counted in rows — the tree view adds
+        // What the file list wants is read off its own content — the tree view adds
         // folder rows, so a count of files is not its height. **What this list wants is counted**: a view's own
         // content height is zero for the frame its model is being replaced in, and a share worked out from that hands
         // the whole pane to the list below for one frame, which is a flash every time a commit joins or leaves the
         // choice. The rows here are one line each, so a count is the same answer and it is there before the view is.
         //
-        // **The margin above the first row is counted with them**: it is the view's own rather than a row's, and a
+        // **The margin above the first row is counted with them**: it is the view's own, and a
         // view standing short of its own content scrolls with nothing down there to reach.
         Layout.preferredHeight: detailsPane.choosing
             ? Math.min(chosenList.topMargin + detailsPane.chosenCommits.length * Theme.rowHeight,
@@ -460,11 +460,11 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         model: detailsPane.details
-        // The pane's own bar, in place of the style's one `AppListView` hands the graph, the diff and the log.
+        // The pane's own bar — the style's is what `AppListView` hands the graph, the diff and the log.
         verticalBar: PaneScrollBar {}
-        // Qt's own key navigation moves `currentIndex` and tells nobody; the
-        // arrows are answered here instead, where they move the file being
-        // read (規約 §diff のファイル一覧).
+        // The arrows are answered here, where they move the file being read:
+        // Qt's own key navigation moves `currentIndex` and tells
+        // nobody (規約 §diff のファイル一覧).
         keyNavigationEnabled: false
         Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1, event.isAutoRepeat)
         Keys.onDownPressed: event => event.accepted = fileWalk.stepFile(1, event.isAutoRepeat)

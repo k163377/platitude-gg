@@ -65,18 +65,18 @@ fn main() {
     let (store, held_elsewhere, lock) = claim_store(Build {
         tree: &tree,
         debug: cfg!(debug_assertions),
-        // Asked of the harness, not of the environment: a build without
-        // one is never driven, so no `PGG_*` variable left in somebody's
-        // shell can take their settings away.
+        // Asked of the harness: a build without one is never driven, so
+        // no `PGG_*` variable left in somebody's shell can take their
+        // settings away.
         driven: harness::knobs().automated,
     });
     Hub::install(runtime, store, held_elsewhere);
 
     let mut app = QApp::new();
-    // The slug, not the product name `Platitude GG`: nothing shows this to a
-    // person (the window title is QML's, and the one Qt-built dialog names
-    // itself), while two machines read it verbatim — QStandardPaths joins it
-    // into `~/.cache/<name>/`, and the xcb plugin makes it the WM_CLASS
+    // The slug: nothing shows this to a person (the window title is
+    // QML's, and the one Qt-built dialog names itself), while two
+    // machines read it verbatim — QStandardPaths joins it into
+    // `~/.cache/<name>/`, and the xcb plugin makes it the WM_CLASS
     // class. A name with a space in it there buys nothing and costs a
     // desktop-file match.
     app.application_name("platitude-gg");
@@ -364,7 +364,7 @@ fn main() {
 /// window, which is worse than the restart not happening, but there is
 /// nothing on screen left to say it to.
 fn start_again() {
-    // **Never under a harness.** A driven run inherits its own automation
+    // **Undriven runs only.** A driven run inherits its own automation
     // in the environment it would hand on (.claude/rules/app-ui.md §UI
     // 自動化の因果性 — a harness does not pass its state to a child), so
     // the successor would replay the verb, hold the run's own settings
@@ -399,8 +399,8 @@ fn start_again() {
 ///   and the window says which directory it did not get;
 /// * the lock could not be asked for at all (a redirected profile, a
 ///   network share, a filesystem that does not answer) — the run carries
-///   on with the files. A lock nobody can take must never be the reason a
-///   window will not open.
+///   on with the files, and the window opens on them as it always
+///   does.
 fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings::Lock>) {
     let store = Store::discover(build);
     match store.claim() {
@@ -428,7 +428,7 @@ fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings:
 
 /// stderr logging; level via `PGG_LOG` (error/warn/info/debug/trace).
 ///
-/// **Never coloured.** This stream is read by machines — `xtask perf`
+/// **Plain text.** This stream is read by machines — `xtask perf`
 /// takes the interaction and startup numbers out of it, `xtask verify-ui`
 /// decides pass or fail on it — and the escapes go around the field name
 /// and the `=`, so `first_chunk_ms=317` reaches a reader as
@@ -437,11 +437,11 @@ fn claim_store(build: Build) -> (Store, String, Option<platitude_core::settings:
 /// a pipe gets the escapes, so a run that looks clean under a shell
 /// redirect still loses its numbers when xtask spawns it.
 ///
-/// **A log line nobody can receive is not a reason to end the process.**
-/// Which is the whole of why the stream is [`logsink`] rather than
-/// `std::io::stderr`: the writer there answers `Ok` however the write
-/// went, so the subscriber never reaches for the `eprintln!` that panics
-/// on a stderr that has just failed.
+/// **A log line nobody can receive leaves the process running.**
+/// Which is the whole of why the stream is [`logsink`]: the writer
+/// there answers `Ok` however the write went, so the subscriber
+/// never reaches for the `eprintln!` that panics on a stderr that
+/// has just failed.
 ///
 /// `log_internal_errors` is off for the same hazard by a second road —
 /// nothing can reach those `eprintln!`s through a writer that does not

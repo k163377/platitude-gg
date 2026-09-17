@@ -4,10 +4,10 @@ import platitude.ui
 
 // What a row inside a nested card leans on when it takes the whole menu down: Qt's own `Menu.dismiss()` walks up
 // from the menu it was called on and closes every level (`QQuickMenu::dismiss`). The product's cards call it and
-// nothing else — no `closeRequested` back to the menu they hang off, no child-then-parent `close()` pair — so the
-// fact is pinned here, where a Qt that changed it would go red before the app did (app-ui.md §メニューを閉じるのは自分).
+// nothing else, so the fact is pinned here, where a Qt that changed it would go red before the app did
+// (app-ui.md §メニューを閉じるのは自分).
 //
-// `AppMenu` rather than a bare `Menu`: the card's title row is built by the host's `delegate`, and `openSub` is
+// `AppMenu` throughout: the card's title row is built by the host's `delegate`, and `openSub` is
 // the automation's own way into a card, so what is measured is the shape the app actually opens.
 Item {
     id: root

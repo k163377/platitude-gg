@@ -17,15 +17,15 @@ TextField {
     /// reader has to answer before anything else.
     property color focusTone: Theme.borderFocus
     /// How wide this box would have to be for what is in it to stand without scrolling — what is typed plus both
-    /// insets. What a layout asks where this box is the one that may take the room it needs (`PublishForm`); the
-    /// text itself is never cut here, so a box narrower than this scrolls rather than losing anything.
+    /// insets. What a layout asks where this box is the one that may take the room it needs (`PublishForm`); a box
+    /// narrower than this scrolls, so the text keeps all of itself.
     readonly property real wantedWidth: slim.contentWidth + slim.leftPadding + slim.rightPadding
     implicitHeight: Theme.iconLg
     font.pixelSize: Theme.fontMd
     // The one value every box in this application keeps between its frame and its words — the pane's own inset, which
-    // is what the message frames already stand their text on (デザイン規約 §余白). Neither side is the odd one out: a box is
+    // is what the message frames already stand their text on (デザイン規約 §余白). The same on both sides: a box is
     // read the same way wherever it stands, so the frame around a name in the graph and the frame around a description
-    // in the panel hold their text at the same distance. **Not `spaceSm`** — that was never chosen, only carried over
+    // in the panel hold their text at the same distance. **`spaceXs`** — `spaceSm` was never chosen, only inherited
     // when these primitives were lifted out of `Main.qml`, and it puts the app's smallest boxes on a wider step than
     // the pane they sit in.
     leftPadding: Theme.spaceXs

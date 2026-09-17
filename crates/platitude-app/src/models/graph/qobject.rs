@@ -44,12 +44,12 @@ impl GraphModel {
     qproperty!("wipRow", Member = wip_row, Notify = stats_changed);
     qproperty!("carriedTop", Member = carried_top, Notify = stats_changed);
     qproperty!("resetCount", Member = reset_count, Notify = stats_changed);
-    // How many loaded rows the find bar's line is in. A property rather
-    // than the return of the slot that sets the query: a background
-    // refresh re-marks the rows without anybody typing, and a binding is
-    // the only thing that hears about that (app-ui.md §QML バインディング
-    // はプロパティにしか反応しない). Doc comments do not go on
-    // `qproperty!` — the macro rejects attributes.
+    // How many loaded rows the find bar's line is in. A property: a
+    // background refresh re-marks the rows without anybody typing,
+    // and a binding is the only thing that hears about that
+    // (app-ui.md §QML バインディングはプロパティにしか反応しない).
+    // Doc comments do not go on `qproperty!` — the macro rejects
+    // attributes.
     qproperty!("matchCount", Member = match_count, Notify = stats_changed);
     // Whether a search is on, and whether the newest row answers it. Both
     // properties for the same reason `matchCount` is.
@@ -190,7 +190,7 @@ impl GraphModel {
     }
 
     /// Row index of a commit (sidebar jump); -1 when absent. Through the
-    /// id index (`marks::row_at`), not a scan of the window.
+    /// id index (`marks::row_at`), in a binary search.
     #[qslot]
     fn row_of(&self, oid_hex: String) -> i32 {
         self.row_of_hex(&oid_hex).map_or(-1, |i| i as i32)
@@ -200,10 +200,10 @@ impl GraphModel {
     /// order and joined by `\u{1f}` — the commits a Shift click over the
     /// graph reaches.
     ///
-    /// **One crossing, not one per row.** A range is as long as the hand
-    /// dragged it and can be the whole loaded window; asking the bridge
-    /// for each row's id in turn would put a walk of the history on a
-    /// click (CLAUDE.md §性能予算).
+    /// **One crossing.** A range is as long as the hand dragged it and
+    /// can be the whole loaded window; asking the bridge for each row's
+    /// id in turn would put a walk of the history on a click
+    /// (CLAUDE.md §性能予算).
     #[qslot]
     fn oids_between(&self, from: i32, to: i32) -> String {
         let (lo, hi) = if from <= to { (from, to) } else { (to, from) };
@@ -224,15 +224,15 @@ impl GraphModel {
     /// order** — what a choice comes back as after a background pass
     /// rewrote the rows.
     ///
-    /// A choice is held by id rather than by row because the rows move;
-    /// what the rows answer is whether the commit is still one of them.
+    /// A choice is held by id, because the rows move; what the rows
+    /// answer is whether the commit is still one of them.
     /// Through the id index, and in one crossing for the reason
     /// [`Self::oids_between`] is.
     ///
-    /// **The order is this graph's, not the order they were pressed in.**
-    /// Both readings behind a choice depend on it: a comparison is
-    /// measured from the older end, and a merged file list gives a path
-    /// the status of the newest commit to have touched it
+    /// **The order is this graph's — walk order.** Both readings behind
+    /// a choice depend on it: a comparison is measured from the older
+    /// end, and a merged file list gives a path the status of the newest
+    /// commit to have touched it
     /// (`details::union_files`).
     #[qslot]
     fn present_oids(&self, packed: String) -> String {
@@ -263,8 +263,8 @@ impl GraphModel {
     ///
     /// **The order handed in is the order handed back**, and what hands it
     /// in is [`Self::present_oids`] — so the reader sees the commits
-    /// listed in the order they are stacked in, not the order they were
-    /// pressed in.
+    /// listed in the order they are stacked in, whatever order the
+    /// presses came in.
     ///
     /// One lookup per chosen commit, through the id index: filtering the
     /// loaded rows for the handful named here would put a walk of the
@@ -310,14 +310,14 @@ impl GraphModel {
     /// its six tallies, comma-separated in the order the row draws them,
     /// or empty for every other row.
     ///
-    /// **Off the row by index, not off the view.** The view has one set
-    /// of tallies and they are this window's own; a row that read them
-    /// there would say this tree's numbers on somebody else's row
-    /// (observed, three rows saying one set). And not a field on the item
-    /// either — fifteen is the ceiling the model macro allows, and every
-    /// one of them is spent (`GraphRowItem`). **Empty is the answer that
-    /// says "not one of those rows"**, so a carried row always writes all
-    /// six even when a number is zero.
+    /// **Off the row by index.** The view has one set of tallies and they
+    /// are this window's own; a row that read them there would say this
+    /// tree's numbers on somebody else's row (observed, three rows saying
+    /// one set). They live in a map beside the items — fifteen is the
+    /// ceiling the model macro allows, and every one of them is spent
+    /// (`GraphRowItem`). **Empty is the answer that says "not one of
+    /// those rows"**, so a carried row always writes all six even when a
+    /// number is zero.
     #[qslot]
     fn carried_tally(&self, row: i32) -> String {
         usize::try_from(row)
@@ -353,13 +353,13 @@ impl GraphModel {
     /// Which row a working copy's uncommitted work stands on now, or -1
     /// where it stands on none.
     ///
-    /// **The address of one of these rows is the copy, not the id.** Every
-    /// one of them carries git's all-zero id — that spelling means "there
-    /// is no object here" and is as true of a copy's row as of this
-    /// window's own — so a pane opened on one is followed across a rebuild
-    /// by the path it is about (`RepoPage.settleCarriedAfterPass`), and
-    /// the answer is also how the page hears that the copy has gone clean
-    /// and its row with it.
+    /// **The address of one of these rows is the copy.** Every one of
+    /// them carries git's all-zero id — that spelling means "there is no
+    /// object here" and is as true of a copy's row as of this window's
+    /// own — so a pane opened on one is followed across a rebuild by the
+    /// path it is about (`RepoPage.settleCarriedAfterPass`), and the
+    /// answer is also how the page hears that the copy has gone clean and
+    /// its row with it.
     #[qslot]
     fn carried_row_of(&self, path: String) -> i32 {
         self.carried
@@ -381,11 +381,11 @@ impl GraphModel {
     /// Whether a remote already has this commit — what the "this rewrites
     /// published history" warnings read.
     ///
-    /// **Asked of the row, not of git.** The walk that drew the row worked
-    /// it out on the way past (`session::published`), so a menu opening on
-    /// the row has its answer in the same frame; a `git rev-list` would
-    /// land after the card was already on screen and move its edge out
-    /// from under the hand (デザイン規約 §メニュー).
+    /// **Asked of the row.** The walk that drew the row worked it out on
+    /// the way past (`session::published`), so a menu opening on the row
+    /// has its answer in the same frame; a `git rev-list` would land
+    /// after the card was already on screen and move its edge out from
+    /// under the hand (デザイン規約 §メニュー).
     ///
     /// False for a commit no row carries. The walk is a window
     /// (`--max-count`) and this is the answer for what is drawn — which is
@@ -402,10 +402,10 @@ impl GraphModel {
     /// already has — the `rewrites pushed commits` note the ref menu's
     /// `rebase` row wears.
     ///
-    /// **The range asked of the rows, not of git.** `<ref>..HEAD` is a
-    /// set rather than one commit, so no single row's mark answers it
-    /// (`publishedAt` above) — but the rows are the walk's own order and
-    /// carry its marks, which is everything the question needs
+    /// **The range asked of the rows.** `<ref>..HEAD` is a set, so no
+    /// single row's mark answers it (`publishedAt` above) — but the
+    /// rows are the walk's own order and carry its marks, which is
+    /// everything the question needs
     /// (`publish::range_rewrites_published`). Two `git rev-list` runs
     /// would land after the card was on screen and grow the widest row,
     /// taking its right edge out from under the hand
@@ -414,8 +414,8 @@ impl GraphModel {
     /// `head` is handed in by the asker off the one record
     /// (`WorkTreeModel.headOid`), so the range this answers for is the
     /// one the rebase would replay, and the same HEAD the rest of the
-    /// card is about — not the row a chip happens to mark, and not a
-    /// copy of the record that could be a drain behind it.
+    /// card is about — the record's own value, in the frame the card
+    /// is drawn in.
     #[qslot]
     fn rebase_rewrites_published(&self, onto_oid_hex: String, head_oid_hex: String) -> bool {
         let (Ok(onto), Ok(head)) = (
@@ -435,10 +435,10 @@ impl GraphModel {
     /// otherwise (`head_hex`, the one record's — empty before the first
     /// read).
     ///
-    /// So the delete row wears `-D` as the menu opens instead of a
-    /// process later. Empty is not `no`: it sends the menu to git for the
-    /// slow answer (`RepoTab.checkBranchDelete`), the way a tip or a
-    /// reference older than the window has to be answered.
+    /// So the delete row wears `-D` as the menu opens. Empty sends the
+    /// menu to git for the slow answer (`RepoTab.checkBranchDelete`),
+    /// the way a tip or a reference older than the window has to be
+    /// answered.
     #[qslot]
     fn branch_delete_merged(
         &self,
@@ -467,10 +467,10 @@ impl GraphModel {
     /// graph palette; -1 when no row on screen carries that name.
     ///
     /// What it is for: a conflicted file's diff paints each side in the
-    /// colour its branch already has in the graph, so the pane borrows an
-    /// answer rather than inventing a second one. -1 is a real answer —
-    /// the walk is a window (`--max-count`), and a branch outside it has
-    /// no colour to borrow.
+    /// colour its branch already has in the graph, so the pane borrows
+    /// that one answer. -1 is a real answer — the walk is a window
+    /// (`--max-count`), and a branch outside it has no colour to
+    /// borrow.
     #[qslot]
     fn color_of_ref(&self, name: String) -> i32 {
         if name.is_empty() {
@@ -484,7 +484,7 @@ impl GraphModel {
 
     /// The colour each side of a conflict is drawn in — the graph's answer
     /// where it has one, a stable one off the name where it does not, and
-    /// never the same on both sides
+    /// always apart
     /// (`encode::conflict_side_colors` decides; these two only pick a half
     /// out of its answer, since a slot cannot hand back a pair).
     #[qslot]
@@ -535,10 +535,10 @@ impl GraphModel {
     /// `\u{1f}`. A prefill (the badge's own author) goes first and its
     /// address is not repeated below.
     ///
-    /// What the card offers instead of asking somebody to type an
-    /// address: the people whose commits are on screen are the people
-    /// whose faces are worth setting. Read when the card opens, off rows
-    /// already in memory — no git runs for it.
+    /// What the card offers: the people whose commits are on screen
+    /// are the people whose faces are worth setting. Read when the
+    /// card opens, off rows already in memory — no git runs for
+    /// it.
     #[qslot]
     fn author_choices(&self, prefill_name: String, prefill_email: String) -> String {
         let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();

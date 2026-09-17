@@ -5,7 +5,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// What the diff pane says about the file itself rather than about any line in it: the conflict with only one side left,
+// What the diff pane says about the file itself: the conflict with only one side left,
 // which branch each colour is, the line endings, the size of a binary, the diff that came back empty — and the picture
 // that stands in for a file no rows can show.
 //
@@ -64,14 +64,13 @@ ColumnLayout {
         theirsColor: notices.theirsColor
         nameCap: notices.nameCap
     }
-    // -- line endings: one line for the file, never a mark per row. A CR is invisible and has nowhere inside a line to
-    //    sit, and the mixed case is already saying how many lines it is about. It does not ask anything and does not
-    //    hold anything up — `warning` because it is a change that carries past this machine, not because something is
-    //    wrong here (デザイン規約 §状態の 3 段).
+    // -- line endings: one line for the file. A CR is invisible and has nowhere inside a line to sit, and the mixed
+    //    case is already saying how many lines it is about. It is a statement and nothing else — `warning` because it
+    //    is a change that carries past this machine (デザイン規約 §状態の 3 段).
     Label {
         visible: notices.diffModel.endingKind !== ""
-        // The binary notice's seat, down to the margins: both are one line about the file rather than about anything in
-        // it.
+        // The binary notice's seat, down to the margins: both are one line about the
+        // file itself.
         Layout.margins: Theme.spaceSm
         Layout.fillWidth: true
         elide: Text.ElideRight
@@ -93,7 +92,7 @@ ColumnLayout {
     }
     // -- a git repository of its own, sitting in the working copy. git will not open it, so there is no patch here and
     //    never will be. The line names the thing and says which commit it stands on — the same commit staging the row
-    //    would record (core `details::embedded`). **What that costs is git's to say**, not this line's: the warning and
+    //    would record (core `details::embedded`). **What that costs is git's to say**: the warning and
     //    the hint land in the command log the moment the row is staged (デザイン規約 §作業コピーの中の別リポジトリ / §長さ). The
     //    binary notice's seat and voice, like the others here.
     Label {
@@ -108,9 +107,9 @@ ColumnLayout {
     }
     // -- a diff whose body is empty. git prints headers and no hunks for a rename that changed nothing, for a mode-only
     //    change and for an empty file added, and a pane that answers all three with a blank frame reads as one that
-    //    failed to load. The binary notice's seat and voice: one line about the file rather than about anything in it.
+    //    failed to load. The binary notice's seat and voice: one line about the file itself.
     //
-    //    Said the same way for all three rather than naming the rename: what the pane knows is that there is nothing to
+    //    Said the same way for all three: what the pane knows is that there is nothing to
     //    show, and git is not asked a second question to find out why.
     Label {
         visible: notices.rowCount === 0 && !notices.diffModel.loading && !notices.diffModel.isBinary

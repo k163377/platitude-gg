@@ -8,7 +8,7 @@ import platitude.ui
 ///
 /// The style's own bar stays where the reader is over the words themselves: the graph, the diff, and the text boxes
 /// inside the right panel. **A box being typed into keeps the style's bar** — it is the one place a bar is inside the
-/// content rather than at a pane's edge.
+/// content.
 ///
 /// **Its three states climb the palette from the ground it stands on**: `bgElevated` idle over a pane, the one
 /// step there is between a pane's ground and the lines it divides itself with; `borderDefault` while the view is being
@@ -18,17 +18,17 @@ import platitude.ui
 /// **Only the idle step is the ground's to move** (`idleColor`): the other two are frames, and a frame is the same
 /// ink wherever it is drawn.
 ///
-/// Three things it does not take from the style's bar:
+/// Three things it settles its own way:
 ///
-///  - **it does not float.** The style's handle stops a step short of the edge, which leaves it reading as part of the
-///    content it is drawn over rather than as the pane's own edge.
-///  - **it is not see-through.** The colour the eye reads through a translucent thumb is a blend with whatever passes
+///  - **it meets the edge.** The style's handle stops a step short of the edge, which leaves it reading as part of the
+///    content it is drawn over.
+///  - **it is opaque.** The colour the eye reads through a translucent thumb is a blend with whatever passes
 ///    underneath, so it changes as the view scrolls — measured over the pane's ground, over a selected row and over
 ///    body text, one thumb read as three colours. The gutter already keeps ink from under this bar, so there is
 ///    nothing to read through it, and what it paints is a named colour, flat.
-///  - **it does not stop short of the ends.** The style keeps a step of padding at both ends of the track, so a view
-///    scrolled hard against its top frame left the slab hanging a step below it. Only the far
-///    side keeps its step, where it is grabbing room rather than a gap: the box stays wider than the ink.
+///  - **it runs to the ends.** The style keeps a step of padding at both ends of the track, so a view scrolled hard
+///    against its top frame left the slab hanging a step below it. Only the far side keeps its step, where it is
+///    grabbing room: the box stays wider than the ink.
 AutoScrollBar {
     id: paneBar
 
@@ -39,7 +39,7 @@ AutoScrollBar {
     /// `#0F172A`). That screen hands in the next step up instead (デザイン規約 §ペインのスクロールバー).
     property color idleColor: Theme.bgElevated
 
-    // Named colours, not a share of one (above).
+    // Named colours (above).
     dimsItself: false
 
     /// What the slab is painting, for a run to read back — the painted side, so a cut binding cannot read as green
@@ -53,8 +53,8 @@ AutoScrollBar {
         id: slab
         implicitWidth: Theme.navBarReach
         implicitHeight: Theme.navBarReach
-        // Round on the free side only: a slab rounded on all four corners reads as floating over the pane rather than
-        // as belonging to its edge, and the ends have to meet the frames square to sit against them.
+        // Round on the free side only: a slab rounded on all four corners reads as floating over the pane, and
+        // the ends have to meet the frames square to sit against them.
         radius: Theme.radiusSm
         topRightRadius: 0
         bottomRightRadius: 0

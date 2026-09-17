@@ -7,13 +7,13 @@ import platitude.ui
 
 // Right pane, another working copy's uncommitted work: whose it is, what it is holding, and the one door into it.
 //
-// **Built on the commit pane, not on the WIP one** (デザイン規約 §別の作業コピーを読む). What a reader can do with a
+// **Built on the commit pane** (デザイン規約 §別の作業コピーを読む). What a reader can do with a
 // commit and with somebody else's changes is the same thing — read them — so the shape is the same: a heading, a
 // block saying whose, `CHANGES (n)`, and one flat list. The WIP pane's own furniture is all about the next commit
 // *here* (three buckets for an index this window cannot move, a message, a button that records it), and a copy of it
 // with every control switched off is a pane that describes a thing nobody can do.
 //
-// **One list, not three.** The split into conflicted / unstaged / staged is the index's, and the index is that
+// **One list.** The split into conflicted / unstaged / staged is the index's, and the index is that
 // copy's. Told apart here, a file edited and then edited again stands twice under two headings that name two halves
 // of an act nobody reading can take part in (`models::nav::Bucket::Whole` folds them to one row per path).
 ColumnLayout {
@@ -23,11 +23,11 @@ ColumnLayout {
     required property string copyName
     /// Its changed files, folded to one row per path (`NavSectionModel` on the `whole` run).
     required property var files
-    /// Which of them the middle pane is reading, handed down by the page — one copy here rather than one per row.
+    /// Which of them the middle pane is reading, handed down by the page — one copy here.
     ///
     /// **Both halves, because a row is found by the pair.** The rows of this one list still carry the side their
     /// bytes are on (`Bucket::routing_of`), which is what the walk matches a row by — so the bucket the page opened
-    /// the file with is what has to come down here, not the name of the run the rows are shown in.
+    /// the file with is what has to come down here.
     property string readBucket: ""
     property string readPath: ""
     /// A right-click menu of the page's is standing over this pane.
@@ -37,7 +37,7 @@ ColumnLayout {
     /// (`Bucket::routing_of`) — the reader never chose it.
     signal fileActivated(string bucket, string path, string origPath)
     signal fileWalked(string bucket, string path, string origPath)
-    /// Tree or flat paths. The page applies it, because the choice is the pane's rather than one list's
+    /// Tree or flat paths. The page applies it, because the choice is the pane's
     /// (`RepoPage.setWipTreeView`).
     signal treeViewChosen(bool tree)
 
@@ -52,7 +52,7 @@ ColumnLayout {
     property bool namePointedAt: false
     /// The same stand-in for a file row's own hover, which says the whole path (`FileRowDelegate.pointedTipRow`).
     /// -1 points at no row. **This list needs one of its own**: the pointer cannot be injected, and the path a row
-    /// names is the one thing in it the row works out rather than shows — a folder row here is handed a fold key
+    /// names is the one thing in it the row works out — a folder row here is handed a fold key
     /// beside its path, and the two are one field in the list this row was written for.
     property int pointedTipRow: -1
     /// How much of this pane's bottom edge is left bare for the corner text the page hangs there. **This pane lends
@@ -74,7 +74,7 @@ ColumnLayout {
         onLanded: (bucket, path, origPath) => carriedPane.fileWalked(bucket, path, origPath)
     }
 
-    // Whose copy this is, and nothing else. **The caption names the copy rather than the changes**: the band under it
+    // Whose copy this is, and nothing else. **The caption names the copy**: the band under it
     // says what they are, and a reader arriving at two bands has to be told which tree they belong to before being
     // told how many there are.
     Rectangle {
@@ -93,11 +93,11 @@ ColumnLayout {
                 font.weight: Font.DemiBold
                 color: Theme.textSecondary
             }
-            // **A dot rather than a preposition**, which is the device this window already separates a caption from
+            // **A dot**, which is the device this window already separates a caption from
             // its value with (`DiffPaneHeader`). `on` is git's own word for the branch a tree is on (`On branch
             // main`), and what follows here is the copy's own folder name — a reader told `WORKING COPY ON topic`
-            // would look for a branch called topic. Nothing else fits either: the copy is not *from* that name, it
-            // *is* it, which is apposition and takes no preposition at all.
+            // would look for a branch called topic. The copy *is* that name, which is apposition
+            // and takes no preposition at all.
             DotMark { tint: Theme.textSecondary }
             // The same mark the copy's chip and its sidebar row wear — one印 for one idea (規約 §ref の種別).
             NavIcon {
@@ -108,7 +108,7 @@ ColumnLayout {
                 Layout.alignment: Qt.AlignVCenter
             }
             // **Cut in the middle, whole on the hover** (規約 §hover のツールチップ): a copy can be called anything and
-            // the right pane's floor is 300px, so a long name loses its middle rather than the ends it is told apart
+            // the right pane's floor is 300px, so a long name loses its middle and keeps the ends it is told apart
             // by. The hover is the only place the whole of it is, which is why the seat under it takes a pointer.
             Item {
                 id: nameSeat
@@ -145,9 +145,9 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.fillHeight: true
         model: carriedPane.files
-        // The pane's own bar, in place of the style's one (`DetailsPane` does the same).
+        // The pane's own bar (`DetailsPane` does the same).
         verticalBar: PaneScrollBar {}
-        // Qt's own key navigation moves `currentIndex` and tells nobody; the arrows are answered by the walk above.
+        // The arrows are answered by the walk above: Qt's own key navigation moves `currentIndex` and tells nobody.
         keyNavigationEnabled: false
         Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1, event.isAutoRepeat)
         Keys.onDownPressed: event => event.accepted = fileWalk.stepFile(1, event.isAutoRepeat)
@@ -158,7 +158,7 @@ ColumnLayout {
             menuStanding: carriedPane.menuStanding
             pointedTipRow: carriedPane.pointedTipRow
             readPath: carriedPane.readPath
-            // **What a row cannot read off this model under the commit list's names.** These rows are a
+            // **The names this model answers to.** These rows are a
             // `NavSectionModel`'s, which spells the whole path `full`, packs a folder's fold into the change code,
             // and is the only one of the two that carries a bucket at all (`models::nav::Role`) — and a role asked
             // for under a name the model does not answer comes back empty without a word said about it.

@@ -83,7 +83,7 @@ Flickable {
     /// description box's own scrolling swallowed it and the block would not go down).
     function rollBlock(pixels) {
         const max = Math.max(0, block.contentHeight - block.height)
-        // Taken away, not added: `pixels` is how far the wheel wanted the content to travel, and content
+        // Taken away: `pixels` is how far the wheel wanted the content to travel, and content
         // travels against `contentY` — the same subtraction the box makes on its own text. Added, the block
         // went the other way, which is a wheel that scrolls up and drags the surface down under it.
         block.contentY = Math.max(0, Math.min(max, block.contentY - pixels))
@@ -122,12 +122,12 @@ Flickable {
                 blockHeight: blockCol.implicitHeight
                 onWheelPastEnd: pixels => block.rollBlock(pixels)
             }
-            // Amend replaces the newest commit instead of adding one, so it starts from that commit's message
-            // rather than an empty editor.
+            // Amend replaces the newest commit, so it starts from that commit's
+            // message.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceXs
-                // Nothing to amend before the first commit: the row goes rather than standing down, since a
+                // Nothing to amend before the first commit: the row goes, since a
                 // repository with no history has no "last commit" the reader is being kept from.
                 visible: block.workTree.headOid !== ""
                 AppCheckBox {
@@ -137,7 +137,7 @@ Flickable {
                     onToggled: block.amendToggled(checked)
                 }
                 Item { Layout.fillWidth: true }
-                // Said, not asked: rewriting a pushed commit is undone by a switch or a reset, so the amend goes
+                // Said: rewriting a pushed commit is undone by a switch or a reset, so the amend goes
                 // ahead and this tag is all the warning it gets.
                 Label {
                     visible: block.amending && block.headPublished
@@ -176,10 +176,9 @@ Flickable {
                               .arg(block.repoTab.headAuthorName)
                               .arg(block.repoTab.headAuthorEmail)
             }
-            // The framed button the rest of the app uses, at the size this pane needs. Its frame, its tone and
-            // its `!` are the ones the toolbar's buttons already wear, so the state this button can be in is
-            // said in the vocabulary someone has read elsewhere — rather than in a filled face that only this
-            // one button has.
+            // The framed button the rest of the app uses, at the size this pane needs. Its frame, its tone and its `!`
+            // are the ones the toolbar's buttons already wear, so the state this button can be in is said in the
+            // vocabulary someone has read elsewhere.
             ActionButton {
                 id: commitButton
                 Layout.fillWidth: true
@@ -197,14 +196,14 @@ Flickable {
                 // The other side a resting pointer's card can change under: the frame and the `!` are bindings and
                 // follow this on their own, the card has to be asked (`settleCommitCard`).
                 onEolWarnedChanged: block.cardAsked()
-                // **No mark beside the word.** The label already names the command and the branch it lands on,
+                // **The word alone.** The label already names the command and the branch it lands on,
                 // which is two things to read; a tick in front of them says nothing a reader did not already
                 // have, and the one mark this button does need — the `!` — has to stand out from it.
                 centred: true
                 // **The word stays plain in both states.** A coloured word is what `Remove` and a stopped fetch
                 // wear, and both of those are held rather than clicked; this one is a click either way, and
                 // borrowing their colour for the word would borrow the gesture with it. The frame and the mark
-                // carry the state instead.
+                // carry the state.
                 tone: Theme.textPrimary
                 // **The frame goes with the words.** A toolbar button is measured to its content, so a frame
                 // left bright around dimmed words still reads as a small live thing; one this wide reads as a
@@ -232,7 +231,7 @@ Flickable {
                 phraseFace: block.repoTab.authorAvatar
                 phraseFaceUrl: block.repoTab.authorAvatarUrl
                 phraseMates: block.mateCount
-                // A tick on that face when signing is on, never the green one: green is git's word that a
+                // A tick on that face when signing is on, in the quiet ink: green is git's word that a
                 // signature held, and nothing has been signed yet (規約 §署名の表示). What it is worth saying
                 // is that a press may put a passphrase prompt on screen — the passphrase is the agent's, and a
                 // commit that stops there has no reason on screen for having stopped.
@@ -243,8 +242,8 @@ Flickable {
                                     : block.repoTab.signingFormat === "x509"
                                       ? qsTr("Signed with your x509 certificate")
                                       : qsTr("Signed with your gpg key")
-                // **What goes, and where it lands.** The count is of files rather than of anything git would
-                // call a change: it is the number the list above is showing, so the button and the list agree
+                // **What goes, and where it lands.** The count is of files:
+                // it is the number the list above is showing, so the button and the list agree
                 // without the reader converting between them. An amend with nothing staged is a message-only
                 // rewrite and says so by naming no count at all.
                 // The count stands apart from the words so the words can give way without taking it: how many
@@ -262,7 +261,7 @@ Flickable {
                 // A file still waiting on a decision stops it: git will not write a commit over an index that
                 // holds unmerged paths, whatever is staged beside them (デザイン規約 §可否・警告の出し場所).
                 //
-                // **A stopped merge asks for neither of the other two.** It carries its own message, so an
+                // **A stopped merge presses on its own.** It carries its own message, so an
                 // empty box is not an empty commit message; and a merge whose resolution records nothing at
                 // all still has to be finished, so nothing staged is not nothing to do — git writes the empty
                 // merge commit either way (measured, 2.55). This seat is the whole way out of a merge
@@ -279,7 +278,7 @@ Flickable {
                 // it; the decision stays the reader's.
                 onActivated: block.commitClicked()
                 // Why it cannot be pressed. The other thing this button has to say — that the index carries a
-                // line-ending change — is said by the card `settleCommitCard` opens instead, and the two cannot
+                // line-ending change — is said by the card `settleCommitCard` opens, and the two cannot
                 // both be true: the warning wants a button that can be pressed.
                 ToolTip.visible: commitHover.containsMouse && !enabled
                 ToolTip.delay: Metrics.tipDelayMs
@@ -299,7 +298,7 @@ Flickable {
                 }
             }
             // The way out of a stopped operation, under the button that finishes things (`OpExitCard`) — the file
-            // list moves down to make room for it rather than the rows covering the list.
+            // list moves down to make room for it.
             OpExitCard {
                 id: opExitCard
                 Layout.fillWidth: true

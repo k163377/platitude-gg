@@ -29,7 +29,7 @@ Item {
     property real dividerAsked: 0
     property real labelAsked: 0
     /// Whether a drag is under way. The hooks' own flags ride beside the real presses because a press is no more
-    /// injectable than hover is (verify-ui) — and they ride here rather than inside the refusals, so each refusal stays
+    /// injectable than hover is (verify-ui) — and they ride here, so each refusal stays
     /// one expression that both roads reach.
     readonly property bool dividerDragging: graphDivider.pressed || dividers.dividerHeld
     readonly property bool labelDragging: labelDivider.pressed || dividers.labelHeld
@@ -42,7 +42,7 @@ Item {
     /// Held apart from hover on purpose: at either bound the column still moves the other way, so a badge worn merely
     /// for standing there would say "this does not move" about a divider that does.
     ///
-    /// Bindings, not something set and taken back down: letting go ends the ask, and a badge left on screen by a
+    /// Bindings: letting go ends the ask, and a badge left on screen by a
     /// teardown nobody ran is exactly the failure a hand would see and a run could not.
     readonly property bool dividerRefused: dividers.dividerDragging
         && dividers.outOfRange(dividers.dividerAsked, dividers.columns.graphColWMin, dividers.columns.graphColWMax)
@@ -55,28 +55,28 @@ Item {
     /// answers on hover — there is nothing to try. A column at a bound answers only the drag that tried, because it
     /// still moves the other way.
     ///
-    /// The badge is not drawn here: a drag carries the hand out past the pane, and a badge parented to it would be
+    /// The badge is the page's: a drag carries the hand out past the pane, and a badge parented to it would be
     /// composited among the page's panes rather than over them. The page owns the one badge.
     readonly property bool refused: dividers.dividerRefused || dividers.labelRefused
         || (dividers.columns.graphColWFixed && dividers.dividerPointed)
     readonly property point refusedAt: dividers.labelRefused ? dividers.labelPoint : dividers.dividerPoint
     /// Where each boundary stands, and whether its hover line is wanted — the pane draws those two lines and reports
-    /// what they came to, since they belong under the list rather than in here.
+    /// what they came to, since they belong under the list.
     readonly property alias labelX: labelDivider.x
     readonly property alias graphDividerX: graphDivider.x
-    /// Reads this item's own property rather than the MouseArea's hover, so the automation hook can raise the line too
+    /// Reads this item's own property, so the automation hook can raise the line too
     /// — hover cannot be injected, and a line nothing can prove is a line nothing checks (app-ui.md).
     readonly property bool labelLineWanted: dividers.labelPointed || labelDivider.pressed
     /// The line says "this moves". A column with one width does not, so it stays out and the cursor speaks instead (規約
     /// §グラフ列は最も広い所のレーンまで).
     readonly property bool graphLineWanted: !dividers.columns.graphColWFixed
         && (dividers.dividerPointed || graphDivider.pressed)
-    /// What is drawn, not what was asked for: the automation hook reports the divider itself, so a column that cannot
+    /// What is drawn: the automation hook reports the divider itself, so a column that cannot
     /// be resized but still promises a drag cannot pass.
     readonly property alias graphDividerShown: graphDivider.visible
 
     /// Where a drag on the graph divider leaves the column, and what it asked for on the way. The handler and the
-    /// automation hook both come through here, so the clamp is one answer rather than two kept in step — and the
+    /// automation hook both come through here, so the clamp is one answer — and the
     /// refusal above reads the ask, so it is one too.
     function dragDividerTo(px) {
         if (dividers.columns.graphColWFixed)
@@ -102,7 +102,7 @@ Item {
         return asked > ceiling + Theme.splitterWidth || asked < floor - Theme.splitterWidth
     }
     /// Automation: the pointer resting on the graph divider, at its middle (`PGG_AUTO_ACT=graph-divider`). Where that is
-    /// stays here rather than in the hook — one answer, not a second one to keep in step.
+    /// stays here — one answer to keep in step.
     function restDividerPointer(inside) {
         dividers.dividerPointed = inside
         if (inside)

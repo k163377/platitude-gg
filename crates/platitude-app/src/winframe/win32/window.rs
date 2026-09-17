@@ -59,10 +59,10 @@ thread_local! {
     static COMMAND: Cell<usize> = const { Cell::new(0) };
 }
 
-/// Runs for every top-level window the thread owns. Posted rather
-/// than sent: this arrives from a QML slot, and the platform's own
-/// handling of it wants a turn of the message loop rather than a
-/// call from inside one.
+/// Runs for every top-level window the thread owns.
+/// Posted: this arrives from a QML slot, and the
+/// platform's own handling of it wants a turn of the
+/// message loop.
 extern "system" fn command_one(window: *mut c_void, _param: isize) -> i32 {
     // SAFETY: `window` is live for the callback and both calls only
     // read it or post to it.
@@ -94,7 +94,7 @@ pub(crate) fn fit_to_work_area(screen: &str) -> bool {
 /// answers to it — a first run with no saved place, and a monitor
 /// unplugged since the run that wrote one.
 ///
-/// **A name rather than a point.** Qt's coordinates are its own: with
+/// **The name is what crosses.** Qt's coordinates are its own: with
 /// two monitors at different scale factors the number a window reports
 /// is not the number Windows would take, so a point handed across would
 /// pick the wrong monitor exactly where the mixed-DPI desktop needs it
@@ -152,8 +152,8 @@ extern "system" fn named_one(
 
 thread_local! {
     /// Whether the fit had anything to do, for the caller to pass on:
-    /// a window that was just moved is not one to measure the frame
-    /// slop against (`WindowShape.settleTimer`).
+    /// the frame slop is measured on a window that stayed where it
+    /// was (`WindowShape.settleTimer`).
     static MOVED: Cell<bool> = const { Cell::new(false) };
     /// The work area the walk is fitting to, or `None` to take each
     /// window's own nearest monitor.
@@ -164,9 +164,9 @@ thread_local! {
     static FOUND: Cell<Option<Rect>> = const { Cell::new(None) };
 }
 
-/// Runs for every top-level window the thread owns. A maximised one
-/// is left alone: where it sits is the platform's arrangement, not a
-/// remembered shape.
+/// Runs for every top-level window the thread owns. A maximised
+/// one is left alone: where it sits is the platform's own
+/// arrangement.
 extern "system" fn fit_one(window: *mut c_void, _param: isize) -> i32 {
     // SAFETY: `window` is live for the callback; both calls only read.
     let skip = unsafe { IsWindowVisible(window) == 0 || IsZoomed(window) != 0 };
@@ -186,8 +186,8 @@ extern "system" fn fit_one(window: *mut c_void, _param: isize) -> i32 {
     };
     // The monitor the saved place named, where it named one that is
     // still here. Otherwise the window's own nearest, which is what a
-    // first run and an unplugged monitor both want: somewhere on the
-    // desktop rather than off it.
+    // first run and an unplugged monitor both want: somewhere on
+    // the desktop.
     let work = match HOME.get() {
         Some(work) => work,
         None if known => info.work,
@@ -219,8 +219,8 @@ extern "system" fn fit_one(window: *mut c_void, _param: isize) -> i32 {
         "the remembered window did not fit its screen"
     );
     MOVED.set(true);
-    // SAFETY: as above. Nothing but the geometry changes — the window
-    // keeps its place in the stack and does not take focus.
+    // SAFETY: as above. Only the geometry changes — the window keeps
+    // its place in the stack and the focus stays put.
     unsafe {
         SetWindowPos(
             window,
@@ -246,8 +246,8 @@ pub(crate) fn keep_system_gestures() {
 /// Runs for every top-level window the thread owns. Windows that
 /// already carry the bits are left alone.
 extern "system" fn allow_one(window: *mut c_void, _param: isize) -> i32 {
-    // Not `WS_CAPTION`, though the window menu's Move and Size want
-    // it: with the non-client area still there, saying the window has
+    // `WS_CAPTION` is out: the window menu's Move and Size want it,
+    // but with the non-client area still there, saying the window has
     // a caption is saying the platform may draw one over the band.
     let wanted = WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU | WS_THICKFRAME;
     // SAFETY: `window` is live for the length of this callback, and
@@ -256,8 +256,8 @@ extern "system" fn allow_one(window: *mut c_void, _param: isize) -> i32 {
     if style == 0 || style & wanted == wanted {
         return 1;
     }
-    // SAFETY: as above. The reposition moves and resizes nothing; it
-    // is how Windows is told to read the style again.
+    // SAFETY: as above. The reposition is how Windows is told to read
+    // the style again; the flags hold it still.
     unsafe {
         SetWindowLongW(window, GWL_STYLE, style | wanted);
         SetWindowPos(

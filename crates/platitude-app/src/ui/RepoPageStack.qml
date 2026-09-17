@@ -20,8 +20,8 @@ import platitude.ui
 // The loader keeps its row's place whether or not it has a page, so the strip and everything counting tabs still see
 // one item per tab.
 //
-// The root is the layout itself rather than something wrapping one: what stands in the window's column is a
-// `StackLayout` either way, and its `Layout.*` stay where they are read (rules-refs/structure.md §分割の各論).
+// The root is the layout itself: what stands in the window's column is a
+// `StackLayout`, and its `Layout.*` stay where they are read (rules-refs/structure.md §分割の各論).
 StackLayout {
     id: stack
 
@@ -39,7 +39,7 @@ StackLayout {
 
     /// The page in front — what the window's toolbar acts on, and null while no tab is.
     ///
-    /// Reached through that tab's loader, and `item` is *read* rather than looked up once, so the binding follows the
+    /// Reached through that tab's loader, and `item` is *read* live, so the binding follows the
     /// loader in and out: a switch moves the strip and builds the new page in two separate steps, and only a
     /// dependency on `item` sees the second one.
     readonly property var curPage: stack.pageAt(stack.tabsModel.currentIndex)
@@ -78,7 +78,7 @@ StackLayout {
             // delegate's context, so what it needs is read off this loader by id.
             required property int index
             required property int tab_id
-            // Which *tab* is in front, not which row: a row closed to the left of this one, or a tab carried past it,
+            // Which *tab* is in front: a row closed to the left of this one, or a tab carried past it,
             // renumbers `index` before `currentIndex` catches up, and a page taken down and rebuilt in that gap comes
             // back to a session that is already open and will not read itself again (`TabsModel::current_tab_id`).
             active: seat.tab_id === stack.tabsModel.currentTabId

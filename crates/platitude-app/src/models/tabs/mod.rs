@@ -35,29 +35,29 @@ pub struct TabsModel {
     ///
     /// The window builds a page for the tab in front and takes it down
     /// when that tab stops being in front (`Main.qml`), and that has to
-    /// key off the tab rather than the row: a row closed to the left of
-    /// the front one, or a tab carried across the strip, renumbers rows
-    /// under a `currentIndex` that has not moved yet. Read off the row,
-    /// the two disagree for as long as it takes both to settle, and the
-    /// page in front is destroyed and rebuilt for nothing — with its
-    /// session left open behind it, so the rebuilt page has an already
-    /// opened repository that will not read itself again (measured: the
-    /// graph stayed empty and `middle-close` waited out its watchdog).
+    /// key off the tab: a row closed to the left of the front one, or a
+    /// tab carried across the strip, renumbers rows under a
+    /// `currentIndex` that has not moved yet. Read off the row, the two
+    /// disagree for as long as it takes both to settle, and the page in
+    /// front is destroyed and rebuilt for nothing — with its session
+    /// left open behind it, so the rebuilt page has an already opened
+    /// repository that will not read itself again (measured: the graph
+    /// stayed empty and `middle-close` waited out its watchdog).
     current_tab_id: i32,
-    /// The strip as a list rather than as rows: one record per tab, the
-    /// name it is shown by and then its work tree path, packed the way
-    /// every other list QML unpacks itself is.
+    /// The strip as a list: one record per tab, the name it is shown by
+    /// and then its work tree path, packed the way every other list QML
+    /// unpacks itself is.
     ///
-    /// For the readers that want the whole strip at once rather than a
-    /// row at a time — the settings screen's repository chooser, which
-    /// offers exactly the repositories standing in the strip and calls
-    /// each of them what the tab does. A view can walk the rows; a list
-    /// bound to a property cannot, and a name a reader picked has to lead
-    /// back to a path.
+    /// For the readers that want the whole strip at once — the settings
+    /// screen's repository chooser, which offers exactly the
+    /// repositories standing in the strip and calls each of them what
+    /// the tab does. A view can walk the rows; a list bound to a
+    /// property cannot, and a name a reader picked has to lead back to
+    /// a path.
     open_repos: String,
     /// Answers about folders the picker handed over. Attached on the
-    /// first question rather than at startup: a window that never opens
-    /// the picker never has one to hear.
+    /// first question: a window that never opens the picker never has
+    /// one to hear.
     picks: Arc<Feed<PickMsg>>,
     attached: bool,
 }

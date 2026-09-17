@@ -18,8 +18,8 @@ impl NavSectionModel {
                     Role::Bucket => Value::Said(&item.bucket),
                     Role::Group => Value::Said(&item.group),
                     Role::OrigPath => Value::Said(&item.orig_path),
-                    // A folder's rename slot carries its own path, never
-                    // a rename source.
+                    // A folder's rename slot holds its path, so the
+                    // name slot is empty.
                     Role::OrigName => Value::Said(""),
                     Role::IsHead => Value::Flag(item.is_head),
                     Role::HasRemote => Value::Flag(item.has_remote),
@@ -182,7 +182,7 @@ impl NavSectionModel {
 
 /// A count as the role table carries it. Roles are `i32`, so a branch
 /// standing further from its upstream than that draws the largest number
-/// there is rather than wrapping to a negative one.
+/// there is.
 pub(super) fn counted(commits: u32) -> i32 {
     i32::try_from(commits).unwrap_or(i32::MAX)
 }

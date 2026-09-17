@@ -2,7 +2,7 @@
 //! `Text.StyledText` reads, and — either side of that — where a byte of a
 //! line stands in the line the row was laid out from, and back.
 //!
-//! **Places, never pixels.** Two panes read a press and place a wash on
+//! **Places throughout.** Two panes read a press and place a wash on
 //! their rows, and both ask the row's own layout where a place is drawn
 //! (`LineRuler`); what crosses into here is the place. Which places a line
 //! has depends only on how the row spells it, so there are two rules and
@@ -105,12 +105,12 @@ fn spelled_units(ch: char, col: usize) -> usize {
     }
 }
 
-/// The same count for a line drawn as itself rather than as markup: the
-/// command log's three columns are the characters they hold, set in a
-/// plain `Label` (`CommandRowDelegate`), so **a tab there is one character
-/// and one place** — the layout draws it at its own stop and the ruler
-/// reading that layout counts it once. Nothing about a line is escaped on
-/// the way to a plain row, so nothing here has a column to carry.
+/// The same count for a line drawn as itself: the command log's three
+/// columns are the characters they hold, set in a plain `Label`
+/// (`CommandRowDelegate`), so **a tab there is one character and one
+/// place** — the layout draws it at its own stop and the ruler reading
+/// that layout counts it once. Nothing about a line is escaped on the way
+/// to a plain row, so nothing here has a column to carry.
 fn plain_units(ch: char, _col: usize) -> usize {
     ch.len_utf16()
 }
@@ -119,13 +119,13 @@ fn plain_units(ch: char, _col: usize) -> usize {
 /// reader's own selection) fall in the line as the row spells it:
 /// `"from:len,…"` in UTF-16 units, empty where there is nothing.
 ///
-/// **Places, not pixels, and not columns.** What turns a place into an x is
-/// the row's own layout and only that — a column is not a width and no
-/// arithmetic makes it one (`DiffTextMetrics`), and a combining mark is a
-/// character this walk counts and a glyph the font draws nothing for. The
-/// pane asks the layout where these places are drawn (`LineRuler`),
-/// which is the same layout the reader's press is read against, so the
-/// wash and the hit cannot disagree.
+/// **Places, and places alone.** What turns a place into an x is the row's
+/// own layout and only that — a column is not a width and no arithmetic
+/// makes it one (`DiffTextMetrics`), and a combining mark is a character
+/// this walk counts and a glyph the font draws nothing for. The pane asks
+/// the layout where these places are drawn (`LineRuler`), which is the
+/// same layout the reader's press is read against, so the wash and the hit
+/// cannot disagree.
 pub fn spelled_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
     places_of(text, ranges, spelled_units)
 }

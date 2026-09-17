@@ -104,7 +104,7 @@ Flickable {
     /// leaves the block unreachable by wheel.
     function rollBlock(pixels) {
         const max = Math.max(0, block.contentHeight - block.height)
-        // Taken away, not added: content travels against `contentY`.
+        // Taken away: content travels against `contentY`.
         block.contentY = Math.max(0, Math.min(max, block.contentY - pixels))
     }
 
@@ -125,7 +125,7 @@ Flickable {
         // its own frame, and flush against the header band the two borders
         // read as one welded block, so band → summary → description →
         // author → band is one even rhythm (デザイン規約 §余白). The right
-        // is the exception and is not padding: it is the gutter this
+        // is the exception: it is the gutter this
         // block's scroll bar is drawn in, and anything short of it draws
         // the bar over the boxes' frame and the parent hash's tail.
         ColumnLayout {
@@ -175,7 +175,7 @@ Flickable {
                 blockRoom: block.blockRoom
                 blockHeight: blockCol.implicitHeight
                 onWheelPastEnd: pixels => block.rollBlock(pixels)
-                // Escape drops the draft and puts the commit's own message back. Nothing asks: the reader said so
+                // Escape drops the draft and puts the commit's own message back, unasked — the reader said so
                 // (デザイン規約 §コミットメッセージの 2 つの枠).
                 onEscaped: block.escaped()
             }

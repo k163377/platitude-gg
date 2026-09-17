@@ -12,8 +12,8 @@ import platitude.ui
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -52,13 +52,13 @@ Item {
     readonly property var writeBarrier: driver.barrierWrite
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "delete-branch" || act === "delete-branch-go" || act === "delete-branch-refused") {
             // On a branch git refuses, the row turns into the held force-delete, which "-go" then runs to its end and
-            // "-refused" stands still and reads. **The card goes up and the row is pressed from the sampler rather
-            // than from here** (`deleteRowTimer`): nothing is deleted while a write is running, and the page drops a
-            // request made then instead of queueing it (`RepoPage.deleteRow`) — so a press put in a tick early goes
+            // "-refused" stands still and reads. **The card goes up and the row is pressed from the
+            // sampler** (`deleteRowTimer`): nothing is deleted while a write is running, and the page drops a
+            // request made then (`RepoPage.deleteRow`) — so a press put in a tick early goes
             // nowhere, and every one of these waits out the watchdog on a write nobody made.
             //
             // The plain one is finished by the write barrier `dispatchFinished` puts up, which reads nothing until
@@ -72,7 +72,7 @@ Item {
             // The row and its chip leave at the press, and git is asked behind them (デザイン規約 §消す操作は先に画面から
             // 消す). **A tag, because git refuses no tag delete** — the branch's own half of the rule is the row coming
             // *back* from a refusal, which `delete-branch-refused` photographs. The page is asked to hold the
-            // in-between open for the shot before the press rather than off it (`RepoPage.holdGoneRows`); a demo
+            // in-between open for the shot before the press (`RepoPage.holdGoneRows`); a demo
             // repository answers before a picture can be grabbed.
             page.holdGoneRows = true
             page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
@@ -83,16 +83,16 @@ Item {
             // The other end of `delete-gone`: that one holds the in-between open, and this one waits for it to be
             // over. **The screen cannot say which it is** — a row gone because the list no longer carries it draws
             // exactly like a row the window is drawing without, so the claim is the pair `stood=` / `chips=` read
-            // either side of the wait, and the run is judged on the line rather than on the picture.
+            // either side of the wait, and the run is judged on the line.
             //
             // What it fails on is the stand-in that never lets go: the rows come off at the press and the listing
-            // that takes them away for good is measured, not counted (`ops::StandIn`), so a delete measured against
+            // that takes them away for good is measured (`ops::StandIn`), so a delete measured against
             // a number no listing can reach would leave the gone set standing and this sampler waiting out the
             // ceiling. **A tag**, for the reason `delete-gone` takes one: git refuses no tag delete, so the run
-            // never lands in the branch that puts rows back instead.
+            // never lands in the branch that puts rows back.
             page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
             refMenu.openSub(refTagCard)
-            // The hold's end is the press, and the latch is read there rather than sampled for: the stand-in can be
+            // The hold's end is the press, and the latch is read there: the stand-in can be
             // let go inside one tick on a demo repository (app-ui.md §UI 自動化の因果性 — 一瞬だけ立つ状態).
             driver.beginWrite(act)
             refTagDeleteItem.held.connect(stoodDownTimer.pressed)
@@ -128,8 +128,8 @@ Item {
             // The hold's end is the press the write barrier is armed on (`holdToEnd`).
             if (act === "delete-remote-go" || act === "remote-refused")
                 driver.holdToEnd(refDeleteItem)
-            // The far side keeps the branch (`--preset protected`): what comes back is a report rather than a
-            // failure, and the bar it comes down in is what this one photographs.
+            // The far side keeps the branch (`--preset protected`): what comes back is a report, and the bar it
+            // comes down in is what this one photographs.
             if (act === "remote-refused")
                 driver.barrierNotice.start()
         } else if (act === "delete-force") {
@@ -145,8 +145,8 @@ Item {
             driver.beginWrite(act)
             chipDeleteTimer.start()
         } else if (act === "chip-menu") {
-            // The chip's own entrance. **It raises the row's menu, aimed at that name** — there is no second menu on
-            // the other side of the chip column any more (デザイン規約 §グラフ行の右クリック). Only the kind letter
+            // The chip's own entrance. **It raises the row's menu, aimed at that name** — the chip
+            // and the rest of the row share one menu (デザイン規約 §グラフ行の右クリック). Only the kind letter
             // and the name of the record are read.
             page.openRowMenu(branchesModel.oidOfName(arg), "L00000" + arg)
             chipMenuTimer.start()
@@ -155,7 +155,7 @@ Item {
                              "L10010" + workTree.branch)
             chipMenuTimer.start()
         } else if (act === "delete-blocked-tip") {
-            // Forced rather than hovered: the pointer cannot be put on a row from here, and this writes to the property
+            // Forced: the pointer cannot be put on a row from here, and this writes to the property
             // the real hover writes to. The argument names the branch, because the delete row is out for more than one
             // reason: without one it is the branch you are standing on, with one it is a branch another working copy
             // has checked out (the flags say which, and the current branch is the only chip that carries them).
@@ -179,7 +179,7 @@ Item {
             Harness.report("menu_highlight index=" + refMenu.currentIndex)
         } else if (act === "delete-branch-early" || act === "delete-branch-early-far") {
             // The early answer dresses the delete row before any click; the argument picks which half is on show.
-            // **The card goes up from the sampler rather than from here** — what it is about has to be true at the
+            // **The card goes up from the sampler** — what it is about has to be true at the
             // moment it opens, and this is the one tick nobody chose (`earlyDeleteTimer`).
             //
             // One branch for the two because which of the card's two roads answers is not this side's to arrange:
@@ -194,7 +194,7 @@ Item {
             sidebarPane.submitEdit(arg)
         } else if (act === "create-tag") {
             // The graph's road, all the way through: the commit menu's row opens the box in the chip column, and what
-            // is typed there is what git is finally spawned with. Nothing about it is a shortcut — the row is the one
+            // is typed there is what git is finally spawned with. The row is the one
             // the pointer would press, and the submit is the field's own.
             //
             // The row under HEAD's, counted the way `commit-menu` counts it: the rows above HEAD are whatever else the
@@ -238,10 +238,10 @@ Item {
         return true
     }
     /// Says whether the delete this run asked for went out, and reports it either way. **The input's own answer**
-    /// (`RepoPage.deleteRowAsked`) rather than a second reading of what would have stopped it: a run that latched on
+    /// (`RepoPage.deleteRowAsked`): a run that latched on
     /// a press the page dropped waits on a write nobody made, which is the watchdog's whole ceiling in silence. The
     /// caller finishes the run where it stands on a false answer, and this line is what fails it
-    /// (`verify/verbs/nav.rs`). `busy=` is read after the press rather than before, so it says whether the count rose
+    /// (`verify/verbs/nav.rs`). `busy=` is read after the press, so it says whether the count rose
     /// under it; the row's own two say whether a reader would have had that press at all.
     function deleteRowLanded(row) {
         Harness.report("delete_row asked=" + page.deleteRowAsked
@@ -250,8 +250,8 @@ Item {
                           + " blocked=" + (row.blockedReason !== ""))
         return page.deleteRowAsked
     }
-    // The delete asked of the left pane's card. **The card goes up and the row is pressed here rather than at the
-    // dispatch**: the delete row is only in the card while nothing is running (`offers::ref_menu`) and the page drops
+    // The delete asked of the left pane's card. **The card goes up and the row is pressed here**:
+    // the delete row is only in the card while nothing is running (`offers::ref_menu`) and the page drops
     // a request made then on the same terms (`RepoPage.deleteRow`), so a tick early is a press that goes nowhere.
     SampleTimer {
         id: deleteRowTimer
@@ -270,7 +270,7 @@ Item {
             refMenu.openSub(refBranchCard)
             if (!acts.deleteRowLanded(refDeleteItem)) {
                 // Nothing went out, so nothing is coming to wait for: the tail is never started and the run says
-                // where it stands rather than spending the ceiling on a write nobody made.
+                // where it stands.
                 driver.complete()
                 return
             }
@@ -317,7 +317,7 @@ Item {
             if (!refMenu.opened && !commitMenu.opened)
                 return
             chipMenuTimer.stop()
-            // `ref=` is the menu that must **not** come up: the chip and the rest of the row are one target now, and a
+            // `ref=` is the menu that stays down: the chip and the rest of the row are one target now, and a
             // second menu on the chip's side is the very split this entrance was joined to end.
             Harness.report("chip_menu ref=" + refMenu.opened
                                        + " commit=" + commitMenu.opened
@@ -344,8 +344,8 @@ Item {
             renderedBarrier.begin()
         }
     }
-    /// The commit the run asked for the tag on, so the report can say the tag landed on that one rather than on
-    /// wherever HEAD happened to be.
+    /// The commit the run asked for the tag on, so the report can say the tag landed on that
+    /// one.
     property string createTagOid: ""
     /// Which row of the delete table `delete-blocked-tip` is holding a tooltip open on.
     property var blockedTipRow: null
@@ -355,7 +355,7 @@ Item {
     // apart by nothing but that reading, so the report spells it out: a picture of `push` and a picture of
     // `push --force` differ by five glyphs in a card that is otherwise identical.
     //
-    // **`want` is what the run is waiting for, not what it asserts.** The drifted side needs the remotes read
+    // **`want` is what the run is waiting for.** The drifted side needs the remotes read
     // (`ls-remote --tags` is the only carrier — core.md タグのリモート状態), and that read lands well after the fetch it
     // rides out with; waiting on the fetch alone photographs the plain row and calls it the forced one.
     SampleTimer {
@@ -413,15 +413,15 @@ Item {
                               + " local_del=" + refTagDeleteItem.offered
                               + " remote_del=" + refRemoteTagDeleteItem.offered
                               + " both_del=" + refTagBothDeleteItem.offered
-                              // Which of the two that reach the remote are standing but out. A word rather than a
-                              // flag apiece: `none` is a claim of its own, and a run asserting it cannot be matched
+                              // Which of the two that reach the remote are standing but out. One
+                              // word: `none` is a claim of its own, and a run asserting it cannot be matched
                               // by the line that names them.
                               + " blocked=" + (outRows.length === 0 ? "none" : outRows.join(","))
                               + " tag_here=" + refTagHereItem.offered
                               + " push=" + refPushTagItem.offered
                               + " code=" + refPushTagItem.code
                               + " held=" + (refPushTagItem.holdMs > 0)
-                              // The model's own reading (the same one ready() polls) — not a page id: the driver's
+                              // The model's own reading (the same one ready() polls): the driver's
                               // property list is this family's whole reach (`AutoActDriver`).
                               + " lease=" + tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote)
                               + " text=" + refPushTagItem.text)
@@ -459,9 +459,9 @@ Item {
             writeBarrier.start()
         }
     }
-    // A tag delete, judged on the sidebar it leaves rather than on the write that made it. The name's own reading is
-    // the edge: gone from both sides it answers nothing at all, gone from the remote alone it drops back to `here`.
-    // **A count would not do** — the remote half of a name held on both sides takes no row away.
+    // A tag delete, judged on the sidebar it leaves. The name's own reading is the edge: gone from both sides it
+    // answers nothing at all, gone from the remote alone it drops back to `here` — the remote half of a name held on
+    // both sides takes no row away.
     SampleTimer {
         id: tagGoneTimer
         property string tag: ""
@@ -481,7 +481,7 @@ Item {
             renderedBarrier.begin()
         }
     }
-    // Waits on the early answer, not on a refusal: nothing here writes.
+    // Waits on the early answer: nothing here writes.
     SampleTimer {
         id: earlyDeleteTimer
         /// Whether the card is up on the branch yet. While it is not, every tick is the input's own branch and
@@ -492,8 +492,8 @@ Item {
             if (!earlyDeleteTimer.cardUp) {
                 // **The precondition is read here and nowhere else** (app-ui.md §UI 自動化の因果性): the delete row is
                 // only in the card while nothing is running (`offers::ref_menu`), and the card works its answers out
-                // once as it opens — put up a tick early it asks nobody and is never asked again, which spends the
-                // watchdog's 120 seconds in silence instead of failing on a line anyone can read.
+                // once as it opens — put up a tick early it asks nobody and is never asked again, which spends
+                // the watchdog's 120 seconds in silence.
                 if (repoTab.busyCount !== 0)
                     return
                 earlyDeleteTimer.cardUp = true
@@ -502,8 +502,8 @@ Item {
                 if (refBranchCard.deleteAsked)
                     return
                 // The input says it did not land, so nothing is coming to latch on: the branch names no commit, or
-                // its delete is out (the branch the tree is on, one another working copy holds). Reported in facts
-                // rather than in the row's own sentence — `must_say` never matches a non-ASCII line on Windows
+                // its delete is out (the branch the tree is on, one another working copy holds). Reported in
+                // facts — `must_say` never matches a non-ASCII line on Windows
                 // (verify-ui §Windows での実行・デバッグの罠), and the em dash is in every one of them.
                 earlyDeleteTimer.stop()
                 Harness.report("delete_early asked=false"
@@ -523,7 +523,7 @@ Item {
             earlyDeleteTimer.stop()
             // The two sides say the same three words, so a line can be read without knowing which one spoke —
             // `unknown` is git's alone (the rows only answer where they can), and it is what a run whose reads fell
-            // over says instead of going quiet until the watchdog.
+            // over says.
             Harness.report("delete_early asked=true"
                                        + " from=" + (fromRows ? "rows" : "git")
                                        + " merged=" + (fromRows ? (refBranchCard.deleteMerged ? "yes" : "no")
@@ -534,7 +534,7 @@ Item {
             driver.complete()
         }
     }
-    // The delete git took, asked from the graph row. Judged rather than photographed: the menu that stayed up for a
+    // The delete git took, asked from the graph row. Judged: the menu that stayed up for a
     // refusal has to go once none is coming, and a closed card is the same picture as a card nobody opened. `code=`
     // is what tells a landing from a refusal — a turned-down delete leaves the row wearing `branch -D`.
     SampleTimer {
@@ -551,7 +551,7 @@ Item {
                 const arg = Harness.autoActArg
                 page.openRowMenu(branchesModel.oidOfName(arg), "L00000" + arg)
                 commitMenu.openSub(commitBranchCard)
-                // The row's own press: a stays-open row is picked rather than triggered (`AppMenuItem.picked`).
+                // The row's own press: a stays-open row is picked (`AppMenuItem.picked`).
                 commitDeleteItem.picked()
                 if (!acts.deleteRowLanded(commitDeleteItem)) {
                     chipDeleteTimer.stop()
@@ -585,7 +585,7 @@ Item {
             driver.complete()
         }
     }
-    // The row taken away ahead of git's answer. **Waited on the list, not on the write** — being ahead of the write
+    // The row taken away ahead of git's answer. **Waited on the list** — being ahead of the write
     // is the whole of what this photographs, so a barrier here would wait out the very state it is about.
     SampleTimer {
         id: goneRowTimer
@@ -600,8 +600,8 @@ Item {
             driver.complete()
         }
     }
-    // …and the row let go of again, which is the half no picture holds. **Waited on the gone set, not on the
-    // write**: the write answers before the listing that takes the row away for good is even asked for, so a
+    // …and the row let go of again, which is the half no picture holds. **Waited on the gone
+    // set**: the write answers before the listing that takes the row away for good is even asked for, so a
     // barrier on the answer would report the middle of the operation as its end.
     SampleTimer {
         id: stoodDownTimer
@@ -616,7 +616,7 @@ Item {
         onTriggered: {
             if (!driver.wroteAndSettled())
                 return
-            // The answer is not the end of it: the rows stay off the screen until a listing that looked after the
+            // The rows stay off the screen until a listing that looked after the
             // write has been drawn, and this is that listing arriving (`ops::StandIn`).
             if (graphModel.goneChips !== "")
                 return

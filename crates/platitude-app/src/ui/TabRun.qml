@@ -6,7 +6,7 @@ import QtQuick
 // somewhere. The strip owns the tabs and says what a press means, the hand owns the carry (`TabCarry`); this owns the
 // one thing that moves the strip with nothing in hand.
 //
-// Not the strip's own for the reason the hand is not: laying tabs out and moving the row they are laid out in are
+// Its own file for the reason the hand has one: laying tabs out and moving the row they are laid out in are
 // separate questions. A `QtObject` — nothing here draws, and nothing here needs a child of its own.
 QtObject {
     id: tabRun
@@ -53,7 +53,7 @@ QtObject {
         return tabRun.clamp(to)
     }
 
-    /// The strip, travelled until `tab` is whole in the run. Quick rather than instant (デザイン規約 §アニメーション の
+    /// The strip, travelled until `tab` is whole in the run. Quick (デザイン規約 §アニメーション の
     /// 200ms): a strip that jumps leaves the reader working out which way it went and how far, which is the question
     /// the press was asking. Answers false when there is nowhere to go.
     function showTab(tab) {
@@ -69,7 +69,7 @@ QtObject {
         return true
     }
 
-    /// The same landing, arrived at rather than travelled to — what a strip that has stood nowhere yet does with the
+    /// The same landing, arrived at — what a strip that has stood nowhere yet does with the
     /// tab it is handed (デザイン規約 §タブの所作). A travel is read against where the strip was, and a strip coming up
     /// has no such place, so the 200ms would be saying nothing to nobody.
     function landOn(tab) {
@@ -84,7 +84,7 @@ QtObject {
     }
 
     /// Automation: the strip, sent to whichever end of the run leaves `tab` off screen (`PGG_AUTO_ACT=tab-pin`). The
-    /// far end, not the near one — the near one would leave the tab standing in the run, and a stand-in that never
+    /// far end — the near one would leave the tab standing in the run, and a stand-in that never
     /// stood is what that verb is there to catch. A strip that fits has no end to send it to and answers false.
     function sendAway(tab) {
         const room = Math.max(0, tabRun.view.contentWidth - tabRun.view.width)

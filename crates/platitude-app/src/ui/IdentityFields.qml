@@ -60,7 +60,7 @@ ColumnLayout {
     /// The line over the boxes. The default says how far the write reaches, for the gate, which has nothing above it
     /// that does; the settings screen's warning already says it, so there the line only names the two keys.
     ///
-    /// **Over them, not under.** It is about the pair — both boxes and the Save beside them — and a sentence set
+    /// **Over them.** It is about the pair — both boxes and the Save beside them — and a sentence set
     /// after the second box reads as belonging to that box alone (observed). The rule it follows is the one the
     /// group and category sentences already do: **what a thing is goes before it, what a thing currently amounts to
     /// goes after** (`errorText` below, and the settings screen's effective-value lines).
@@ -71,7 +71,7 @@ ColumnLayout {
 
     /// A person typed in one of the boxes.
     ///
-    /// **Not `nameText`/`emailText` changing.** `TextField.textEdited` is not emitted when the text is set in code, so
+    /// **From `TextField.textEdited`**, which is not emitted when the text is set in code, so
     /// this stays quiet while `load()` fills the boxes — which is the whole use for it: a caller that guards a reload
     /// on "has the reader touched this" would otherwise be told yes by its own reload (the same distinction
     /// `AppCombo.wanted` documents, and for the same reason).
@@ -82,7 +82,7 @@ ColumnLayout {
     /// differ from it without anybody having touched them — which `dirty` would otherwise call unsaved work and the
     /// way out would stop for (measured: the way-out verb wedged on exactly this).
     property bool touched: false
-    // **Through `Connections`, not an `onEdited` here.** A handler written in a component's own body is replaced
+    // **Through `Connections`.** A handler written in a component's own body is replaced
     // outright by one a caller writes at the instantiation, and one caller does (`SettingsRepoPane`) — so the
     // component's own bookkeeping would quietly stop happening in exactly the chapter that has the most of it.
     Connections {
@@ -128,9 +128,9 @@ ColumnLayout {
                 placeholderText: fields.namePlaceholder
                 onAccepted: fields.submitted()
                 onTextEdited: fields.edited()
-                // Not validation — these are the characters git drops when it builds an author line, and keeping
-                // them out stops the configuration from disagreeing with what commits show. Everything else is the
-                // user's business.
+                // These are the characters git drops when it builds an author line, and keeping
+                // them out stops the configuration from disagreeing with what commits show. Everything else is
+                // the user's business.
                 validator: RegularExpressionValidator {
                     regularExpression: /[^<>\r\n]*/
                 }
@@ -168,10 +168,10 @@ ColumnLayout {
             }
         }
     }
-    // **The one thing on the settings screen that is not written as it is finished with**, said where it is true
-    // rather than in a band at the foot of the screen (規約 §可否・警告の出し場所 — the warning goes where the
+    // **The one edit on the settings screen that waits for a Save**, said where it is true
+    // (規約 §可否・警告の出し場所 — the warning goes where the
     // operation is). The Save that answers it is the next thing under this line, which is the whole reason the way
-    // out puts the reader here rather than asking them a question somewhere else (`SettingsDialog.escapeOut`).
+    // out puts the reader here (`SettingsDialog.escapeOut`).
     Label {
         Layout.fillWidth: true
         visible: fields.dirty

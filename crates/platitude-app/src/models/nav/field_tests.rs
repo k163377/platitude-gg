@@ -69,7 +69,7 @@ fn a_drifted_tag_answers_for_the_remote_the_push_would_go_to() {
         "no remote carries the name at all"
     );
     // The row is decided as the menu opens, so a half-formed question
-    // has to answer "no drift" rather than the first entry in the run.
+    // has to answer "no drift".
     assert_eq!(model.remote_tag_drift("v1.0".into(), String::new()), "");
     assert_eq!(model.remote_tag_drift(String::new(), "origin".into()), "");
 }
@@ -104,9 +104,9 @@ fn a_tag_row_says_which_sides_its_name_stands_on() {
     assert_eq!(model.tag_sides("v-here".into()), "here");
     assert_eq!(model.tag_sides("v-both".into()), "both");
     assert_eq!(model.tag_sides("v-theirs".into()), "remote");
-    // **Not `here`.** A name no row carries has to be told from one that
-    // is only local, or a section still loading would offer the everyday
-    // delete on a tag nobody has (`tag_named` answers `None`, not a tag).
+    // **Empty.** A name no row carries has to be told from one that is
+    // only local, or a section still loading would offer the everyday
+    // delete on a tag nobody has (`tag_named` answers `None`).
     assert_eq!(model.tag_sides("v-nobody".into()), "");
     assert_eq!(model.tag_sides(String::new()), "");
 }
@@ -137,7 +137,7 @@ fn a_file_row_reads_out_of_the_status() {
         )
     );
     // Untracked routes as itself and shows in the unstaged run —
-    // among the unstaged files by name, not after them.
+    // among the unstaged files by name.
     assert_eq!(
         row(1),
         (
@@ -234,7 +234,7 @@ fn the_short_sections_read_out_of_what_arrived() {
 
 /// The seat a worktree row opens with, and the words behind it — both
 /// out of slots the row shares with the other kinds, so a change to
-/// either would draw the wrong mark rather than fail (`item::LOCKED`).
+/// either would draw the wrong mark (`item::LOCKED`).
 #[test]
 fn a_worktree_row_wears_the_state_of_its_checkout() {
     let entry = |path: &str, locked: bool, reason: &str, prunable: bool| {
@@ -382,10 +382,10 @@ fn the_worktree_holding_a_branch_answers_for_every_other_copy() {
         "C:\\work\\other"
     );
     // The copy this window is in refuses nothing — moving onto the
-    // branch it already has out is a no-op, not a refusal.
+    // branch it already has out is a no-op.
     assert_eq!(model.worktree_holding("main".to_string()), "");
     assert_eq!(model.worktree_holding("nobody".to_string()), "");
-    // A detached row names no branch, and the empty string must not
-    // find it.
+    // A detached row names no branch, and the empty string finds
+    // nothing.
     assert_eq!(model.worktree_holding(String::new()), "");
 }

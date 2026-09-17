@@ -13,7 +13,7 @@ ActionButton {
     /// The waiting visual, held up by the band past the push that raised it (`TopBar.holdPushBusy`).
     property bool busyLatched: false
     readonly property string mode: pushButton.curPage !== null ? pushButton.curPage.pushState : "closed"
-    /// The last go at sending this branch came back refused. No stopped step past it: nothing sends on its own
+    /// The last go at sending this branch came back refused. It ends there: nothing sends on its own
     /// to be stopped (デザイン規約 §リモートへ送る).
     readonly property bool failed: pushButton.curPage !== null && pushButton.curPage.pushFailed
     /// The standings where an overwrite is the only send there is, and so the shape the button takes. `behind` stands
@@ -25,8 +25,8 @@ ActionButton {
     /// (デザイン規約 §長押し). `mode` follows the fetch that runs behind every press, so it moves under a hand that is
     /// already holding: read live, the word said `push -f` and the release ran a plain `push`, or the other way
     /// about. Everything the shape decides — the word, the two colours, the length and what the release runs — reads
-    /// this one (`ActionButton.armedMs`), and a press whose shape went is dropped rather than answered with the other
-    /// command (`HoldDriver.stale`).
+    /// this one (`ActionButton.armedMs`), and a press whose shape went is dropped
+    /// (`HoldDriver.stale`).
     readonly property bool shownForce: pushButton.armedMs > 0
     /// The frame's warning colour, for either of the two things that call for it: what an overwrite would do,
     /// and what the last go did. The word takes it for only one of them (below).
@@ -39,10 +39,10 @@ ActionButton {
     // took (デザイン規約 §リモートへ送る).
     text: pushButton.shownForce ? "push -f" : "push"
     code: true
-    // The overwrite colours its word; the refusal does not — only one of them changes what the press costs
-    // (デザイン規約 §長押し — 警告の色は語ではなく枠と印が持つ).
+    // Only the overwrite colours its word — it is the one that changes what the press costs
+    // (デザイン規約 §長押し — 警告の色は枠と印が持つ).
     tone: pushButton.shownForce ? Theme.warning : Theme.textPrimary
-    // The ring and the frame keep the warning through the wait, a step down. The word does not follow them: it
+    // The ring and the frame keep the warning through the wait, a step down. The word
     // takes the disabled step, which is the one way a word says "not now" (デザイン規約 §暗く落とした段 / §無効).
     toneDim: pushButton.warned ? Theme.warningDim : Theme.textMuted
     frameColor: pushButton.warned ? Theme.warning : "transparent"
@@ -56,7 +56,7 @@ ActionButton {
     // remotes arm the same 500ms — while the press is now aimed at another repository's branch, which is what the
     // release would overwrite (measured, `tst_holdlatch`).
     //
-    // **The destination alone does not say which branch it is.** What a push sends is the branch the working tree is
+    // **The branch is named as well as the destination.** What a push sends is the branch the working tree is
     // on (`PublishFlow.forcePush` → `workTree.branch`), and two local branches can track one remote one: switching
     // between them leaves the destination reading `origin/main` either way, and the hold began on the other branch's
     // history. Which of the two commands it is needs no saying here — that is the length. The joiner is a colon

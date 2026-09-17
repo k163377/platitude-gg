@@ -19,13 +19,13 @@ Item {
     /// only it can see all four of them.
     required property var refusalSource
 
-    /// What is drawn, not what was asked for — the one badge's own `shown`
+    /// What is drawn — the one badge's own `shown`
     /// (`RefusalBadge`, on why not its `visible`).
     readonly property alias shown: refusalBadge.shown
 
     /// The hand, every time it moves. The page settles what it means: the
     /// `PointHandler` and the automation hook both go through that one
-    /// answer rather than two kept in step.
+    /// answer.
     signal pointMoved(real sceneX, real sceneY)
 
     anchors.fill: parent

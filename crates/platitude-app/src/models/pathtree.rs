@@ -13,8 +13,8 @@ pub(super) struct DirNode<T> {
     files: Vec<T>,
 }
 
-// Written out rather than derived: a directory is empty whatever the leaf
-// is, and `#[derive(Default)]` would ask the leaf to have one too.
+// Written out: a directory is empty whatever the leaf is, and
+// `#[derive(Default)]` would ask the leaf to have one too.
 impl<T> Default for DirNode<T> {
     fn default() -> Self {
         Self {
@@ -36,8 +36,8 @@ impl<T> DirNode<T> {
     /// directory it will not open that way — a repository of its own
     /// inside the working copy, whose files belong to that repository and
     /// so stay one entry even under `-uall` (`status::load`). The last `/`
-    /// therefore stays on the row's own name rather than opening a folder
-    /// with a nameless row under it.
+    /// therefore stays on the row's own
+    /// name.
     pub(super) fn insert(&mut self, path: &str, make: impl FnOnce(usize) -> T) {
         let mut node = self;
         let mut rest = path.strip_suffix('/').unwrap_or(path);

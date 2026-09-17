@@ -10,7 +10,7 @@
 // Headless-ish automation:
 //   PGG_SPIKE_AUTOBENCH=items|canvas|shape|all  -> run scroll benchmark, print fps, quit
 //   PGG_SPIKE_AUTOLOG=<repo path>               -> stream git log, print timings, quit
-//   PGG_SPIKE_TOPO=0                            -> use default order instead of --topo-order
+//   PGG_SPIKE_TOPO=0                            -> use the default commit order
 
 // HashMap must be in scope: the QModelItem derive expands to unhygienic code
 // that names `HashMap` directly.

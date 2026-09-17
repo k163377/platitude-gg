@@ -29,12 +29,12 @@ Item {
     /// (measured), and the details pane's date row runs past its column the same way. The owner passes its share, the
     /// way the card passes one for the message.
     property real nameWidth: 0
-    /// Write them all out instead, and offer nothing: no face, no rule, no card. For a holder wide enough to name
-    /// everybody, where the addresses are a pane away rather than a hover away.
+    /// Write them all out instead: the names alone. For a holder wide enough to name
+    /// everybody, where the addresses are a pane away.
     property bool plain: false
     /// The pointer entered or left the underlined stretch.
     signal pointerChanged(bool inside)
-    /// What the cut mark is drawn on, since the names are a field that clips rather than a label that elides
+    /// What the cut mark is drawn on, since the names are a field that clips
     /// (`LineText`): the pane's ground here, a card's ground where a card holds this line.
     property color ground: Theme.bgBase
     /// The names did not fit what the holder gave them. Nothing is drawn differently for it — the mark already says
@@ -78,7 +78,7 @@ Item {
             height: Theme.iconMd
             Layout.alignment: Qt.AlignVCenter
         }
-        // A field rather than a label: what this line credits is a person, and a person's name is something the reader
+        // A field: what this line credits is a person, and a person's name is something the reader
         // takes away (規約 §右のペインの字は掴める). A field has no `elide`, so the cut is a clip with a mark on the
         // holder's ground — the names in full are one hover away in the card either holder opens.
         LineText {

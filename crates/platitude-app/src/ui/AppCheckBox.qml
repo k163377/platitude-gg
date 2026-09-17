@@ -2,15 +2,15 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// Drawn from tokens rather than left to Fusion, for the reason `AppCombo` and `AppMenu` are: Fusion builds the
+// Drawn from tokens, for the reason `AppCombo` and `AppMenu` are: Fusion builds the
 // indicator out of the palette's own two darkest roles — the ground is `palette.base` (`bgBase`, the same colour as
 // the pane behind it) and the frame is that ground darkened again, which on this theme lands under `#010409`. Both
 // disappear, so an unchecked box is a word with nothing in front of it and a checked one is a tick floating in the
 // air.
 //
 // The frame is the one buttons and input fields already wear (`borderDefault`, デザイン規約 §色) at the field's own corner,
-// so a box reads as a thing to press rather than as a mark; checked, it fills with `accent` and carries the family's
-// own `check`. Disabled follows the palette table of §無効 without going through the palette: `highlight` → `accentMuted`
+// so a box reads as a thing to press; checked, it fills with `accent` and carries the family's
+// own `check`. Disabled follows the palette table of §無効 in tokens: `highlight` → `accentMuted`
 // for the face and `highlightedText` → `textMuted` for the tick.
 CheckBox {
     id: appCheck

@@ -12,7 +12,7 @@ import platitude.ui
 // An ordinary commit is one block and nothing else: the same shape a co-author gets in `CoAuthorCard`, because it is
 // the same fact (a person, a face, an address). Nothing marks the ordinary case (デザイン規約 §状態).
 //
-// A popup rather than an item under the name for the reason the ref list and the co-author card are: anything declared
+// A popup, for the reason the ref list and the co-author card are: anything declared
 // inside the pane's column would be clipped by it and painted under the list below.
 AppCard {
     id: authorCard
@@ -33,8 +33,8 @@ AppCard {
     property bool timeDiffers: false
     /// How wide this card may stand. Neither a name nor an address has a length worth trusting — an address may be
     /// 254 characters — and a popup clamps its *position* to the window, never its width, so without a cap a long one
-    /// simply runs off the edge; what is over the cap wraps. **The owner measures the room against the window**, not
-    /// against the pane the card opens over (`DetailsAuthorCards.takeRoom`).
+    /// simply runs off the edge; what is over the cap wraps. **The owner measures the room against the window**
+    /// (`DetailsAuthorCards.takeRoom`).
     property real maxWidth: 0
     /// What is left of it for a row's own words, once the frame's padding and the blocks' inset are out.
     readonly property real rowCap: authorCard.maxWidth > 0
@@ -45,8 +45,8 @@ AppCard {
     readonly property bool actsShown: authorCard.committerDiffers || authorCard.timeDiffers
     readonly property string wroteWord: qsTr("authored")
     readonly property string putWord: qsTr("committed")
-    // The stamps line up under one another, so the two moments can be compared at a glance rather than read
-    // (`AppMenu.codeColW` shares a column the same way). Measured off labels rather than `TextMetrics`, which comes out
+    // The stamps line up under one another, so the two moments can be compared at a glance
+    // (`AppMenu.codeColW` shares a column the same way). Measured off labels — `TextMetrics` comes out
     // a few pixels short of what a Label actually takes.
     readonly property real wordColW: Math.max(wroteMetric.implicitWidth, putMetric.implicitWidth)
     CardText {
@@ -63,18 +63,18 @@ AppCard {
     }
 
     padding: Theme.spaceXs
-    // Nothing stands between the underlined name and this: the pointer has to be able to walk down into it without
+    // The card sits against the underlined name: the pointer has to be able to walk down into it without
     // leaving both.
     margins: 0
     // The pointer walks into this one and reads it. The blocks here accept no hover today; giving `AppCard` both halves
-    // is what keeps that an implementation detail rather than a load-bearing fact.
+    // is what keeps that an implementation detail.
     tracksPointer: true
     contentPointed: contentHover.hovered
     // Every gap in this card is a place a selection can start — the inset the blocks keep, the step under a name, the
     // room beside a stamp (規約 §hover のツールチップ).
     textContent: cardBody
 
-    /// One person: face, name, address, and the moment their part happened. Laid out from the start, never on hover —
+    /// One person: face, name, address, and the moment their part happened. Laid out from the start —
     /// see `CoAuthorCard` for what moves when a hover resizes its own target.
     component PersonBlock: Item {
         id: block
@@ -82,7 +82,7 @@ AppCard {
         required property string address
         required property int face
         required property string faceUrl
-        /// What this person did, and when. Empty word = the line is not drawn, which is the ordinary commit's whole
+        /// What this person did, and when. Empty word drops the line, which is the ordinary commit's whole
         /// story.
         required property string word
         required property string stamp
@@ -94,7 +94,7 @@ AppCard {
         readonly property real textLeft: Theme.spaceSm + Theme.iconMd + Theme.spaceXs
         readonly property real textCap: block.cap - Theme.iconMd - Theme.spaceXs
         /// How tall the face-and-name line came out. A row's worth ordinarily; more when a name longer than the cap
-        /// wrapped into a second line — **and it wraps rather than being cut**, because this card is where a name that
+        /// wrapped into a second line — **and it wraps**, because this card is where a name that
         /// the pane's own row had to cut goes to be read in full and taken away (規約 §hover のツールチップ).
         readonly property real headHeight: Math.max(Theme.rowHeight, rowContent.implicitHeight)
 
@@ -186,8 +186,8 @@ AppCard {
             wordWidth: authorCard.wordColW
             cap: authorCard.rowCap
         }
-        // The same commit, put here later by the same hand: one person, two moments. The line belongs under them rather
-        // than in a block of its own — there is nobody else to name.
+        // The same commit, put here later by the same hand: one person, two moments. The line belongs under them
+        // — there is nobody else to name.
         Item {
             visible: authorCard.timeDiffers && !authorCard.committerDiffers
             implicitWidth: lateAct.x - Theme.spaceSm + lateAct.width + 2 * Theme.spaceSm

@@ -40,9 +40,8 @@ Item {
         identityDismissed = true
     }
 
-    // Opened and closed from the state above rather than by binding `visible`: Escape closes a popup imperatively,
-    // which would overwrite such a binding and leave the state unable to open it again. Every close answers the
-    // state, so the two stay in step.
+    // Opened and closed from the state above: Escape closes a popup imperatively, which would overwrite a `visible`
+    // binding and leave the state unable to open it again. Every close answers the state, so the two stay in step.
     IdentityDialog {
         id: identityDialog
         onDismissed: identityGate.dismissIdentity()

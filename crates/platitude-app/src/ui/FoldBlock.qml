@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The control that folds the left menu to its icons and puts it back. A block at the end of the pane's header band
-// rather than a mark floating in it: it has nothing to do with the filter it stands next to, and on the same bare
+// The control that folds the left menu to its icons and puts it back. A block at the end of the pane's header
+// band: it has nothing to do with the filter it stands next to, and on the same bare
 // ground it read as part of the input. The whole block takes the click, so the reach is the band's full height.
 //
 // It says nothing on hover. Every other icon-only control in the window carries a tooltip, but this one names itself
@@ -28,7 +28,7 @@ Rectangle {
         // all wash without a corner of their own.
         washRadius: 0
         Accessible.name: block.folds ? qsTr("Fold the list to its icons") : qsTr("Unfold the list")
-        // Carried in a box of its own rather than sized by the button: the mark stands beside the sections' icons on
+        // Carried in a box of its own: the mark stands beside the sections' icons on
         // the folded rail and has to be the same weight and the same 20 as they are.
         contentItem: Item {
             NavIcon {

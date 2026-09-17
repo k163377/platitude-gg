@@ -11,10 +11,10 @@
 /// arrives afterwards saying the tree moved. Read as news, it asks for
 /// the very file that was just read.
 ///
-/// **Which status is that one is a stamp, not a count.** The answer
-/// names the smallest number the first report of HEAD after its write
-/// can carry (`WriteAnswer::head_seq`), and counts standing beside a
-/// report at or above it were read after the write. A count of answers
+/// **Which status is that one is a stamp.** The answer names the
+/// smallest number the first report of HEAD after its write can carry
+/// (`WriteAnswer::head_seq`), and counts standing beside a report at
+/// or above it were read after the write. A count of answers
 /// cannot say this: another write answering in between moves every
 /// counter without saying anything about which tree the status in hand
 /// describes, and a read already in flight when the write ended arrives
@@ -23,7 +23,7 @@
 /// **The status can arrive first.** The answer and the status travel
 /// feeds of their own and are drained apart, so the one the re-read
 /// would have answered for may be already applied by the time the page
-/// reads the file. Nothing is left standing then ([`Self::read_after`]
+/// reads the file. The read is spent at once ([`Self::read_after`]
 /// is handed the newest status for exactly this): what the wait was for
 /// has been and gone, and the next status to move the tree is somebody
 /// else's change — suppressed, it would leave their edit unread on
@@ -42,12 +42,12 @@ impl DiffReread {
     /// the first report whose counts can speak for it; `seen` is the
     /// report the counts on screen last stood beside.
     ///
-    /// **Nothing is left standing where that status has already been
-    /// applied** — it read the file once itself, and the next status is
-    /// news. Nor where the write named no report at all: there is
-    /// nothing to measure a status against, so the one behind it reads
-    /// the file once more rather than skipping a read nobody can prove
-    /// was already made.
+    /// **The read is spent where that status has already
+    /// been applied** — it read the file once itself, and
+    /// the next status is news. Spent too where the
+    /// write named no report at all: there is nothing to
+    /// measure a status against, so the one behind it reads
+    /// the file once more.
     pub fn read_after(&mut self, after: u64, seen: u64) {
         self.after = if after == 0 || seen >= after {
             0

@@ -171,14 +171,14 @@ impl RepoTab {
                 } => {
                     if running {
                         self.busy_count += 1;
-                        // A command that fails inside a write is not the
-                        // write's answer, and only that answer knows what
-                        // to make of it (`write_running`).
+                        // Only the write's own answer knows what to make
+                        // of a command that fails inside it
+                        // (`write_running`).
                         self.write_running = true;
                         self.replaying = kind.replays_history();
                         // The word the band reads (`busyOp`), made here
-                        // and nowhere earlier: what the bridge carries is
-                        // the kind itself.
+                        // from the kind: the kind itself is what the
+                        // bridge carries.
                         self.busy_op = kind.label().to_string();
                         // Whatever the last write left standing, this one
                         // has not stopped yet.
@@ -238,8 +238,8 @@ impl RepoTab {
     ///
     /// The op names are turned into meanings here, on this side of the
     /// bridge, so the page sequences the screen — reload the diff, arm a
-    /// landing, put taken rows back — without ever branching on git
-    /// vocabulary (app-ui.md: no business logic in QML).
+    /// landing, put taken rows back — off meanings alone
+    /// (app-ui.md: no business logic in QML).
     ///
     /// **Where those meanings go is decided by the id.** A press that
     /// wrote its id down at the time is waiting for this one answer and
@@ -265,13 +265,13 @@ impl RepoTab {
             self.replaying = false;
         }
         self.write_running = self.busy_count > 0;
-        // Who said no and what about — the halves the notice is made of.
-        // **The kind is named here**, on this side of the bridge, so the
-        // page picks its sentence without ever branching on core's types
-        // or on git vocabulary (app-ui.md: no business logic in QML).
-        // It rides the answer below rather than standing beside the
-        // group: a report is the answer's own, and a drain can bring
-        // several.
+        // Who said no and what about — the halves the notice is
+        // made of. **The kind is named here**, on this side of the
+        // bridge, so the page picks its sentence off meanings alone
+        // (app-ui.md: no business logic in QML). It rides the answer
+        // below: a report is the answer's own, and a drain can bring
+        // several of them, so each one carries the report it was
+        // refused with.
         let reported = report.is_some();
         let (report_kind, remote, name, reason) = match report {
             Some(report) => (
@@ -301,22 +301,22 @@ impl RepoTab {
             ),
             None => (String::new(), String::new(), String::new(), String::new()),
         };
-        // A fetch the user asked for counts the same way the timer's do:
-        // what the button says is about fetching, not about who started
-        // it.
+        // A fetch the user asked for counts the same way the
+        // timer's do: what the button says is about fetching,
+        // whoever asked.
         if kind == OperationKind::Fetch {
             self.fetch_settled(&error, true);
         }
         let landed = error.is_empty();
-        // The rows a delete took off the screen, answered by name rather
-        // than by turn: what answered in between is somebody else's, and
-        // this is the only thing that puts them back. `reads_from` goes
-        // with it — the listings that take the rows away for good are
-        // measured against it, not counted (`ops_delete::delete_answered`).
+        // The rows a delete took off the screen, answered by name:
+        // what answered in between is somebody else's, and this is
+        // the only thing that puts them back. `reads_from` goes
+        // with it — the listings that take the rows away for good
+        // are measured against it (`ops_delete::delete_answered`).
         self.delete_answered(id, !landed, reads_from);
-        // Stopped part-way is not a landing: there is no commit at the
-        // tip to go to, and the answer to the press is the working tree
-        // (`last_write_stopped`, raised by the message before this one).
+        // Stopped part-way answers with the working tree: there is no
+        // commit at the tip to go to (`last_write_stopped`, raised by
+        // the message before this one).
         let at_tip = landed
             && !self.last_write_stopped
             && matches!(
@@ -325,8 +325,8 @@ impl RepoTab {
             );
         self.write_seq += 1;
         // The middle of the write's three boundaries, for whoever is
-        // waiting on this one by the id its own ask was given. Matched,
-        // never compared: the ids are not a sequence (`write_watch`).
+        // waiting on this one by the id its own ask was given. Matched
+        // by equality: the ids are not a sequence (`write_watch`).
         self.write_watch.answered(id);
         // The answer as it came, kept whole: this is what an owner is
         // handed and what every reader waiting for one write by name
@@ -384,8 +384,8 @@ impl RepoTab {
     }
 
     /// The picture QML is handed of what the editor's commit is waiting
-    /// for — a copy, so a binding reads a plain member and never the
-    /// owner (`ops_delete::stand_in` keeps the delete's four the same
+    /// for — a copy, so a binding reads a plain member
+    /// (`ops_delete::stand_in` keeps the delete's four the same
     /// way).
     fn read_commit_out(&mut self) {
         self.commit_answer = self
@@ -396,7 +396,7 @@ impl RepoTab {
     }
 
     /// The same for the stash press that took the working tree away.
-    /// **The tree it is waiting for is not copied out** — that answer
+    /// **The tree it is waiting for is asked for** — that answer
     /// exists only at the moment the page acts on a tree, and asking
     /// spends it (`takeStashLanding`).
     fn read_stash_out(&mut self) {
@@ -434,9 +434,9 @@ impl RepoTab {
     ///
     /// Every such answer rewrites the whole of it, so nothing stays armed
     /// for a later write to trip over; the drain puts it down again at
-    /// its top ([`Self::clear_write_group`]), so a notify carrying none
-    /// of these says so rather than leaving the last one up to be read a
-    /// second time.
+    /// its top ([`Self::clear_write_group`]), so a notify carrying
+    /// none of these says so and the last one goes down with the
+    /// drain that carried it.
     fn fold_into_group(&mut self, kind: OperationKind, landed: bool, at: usize) {
         // A landed write moved what the two sides hold; a refused stage,
         // unstage or discard was refused *because* the rows on screen

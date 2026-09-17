@@ -8,8 +8,8 @@ import platitude.ui
 // nothing else — the rest of git's configuration is not what the reader was stopped for, and it is a click away in
 // the settings screen's git chapter (`SettingsDialog`), which is where an identity that is already set is edited.
 //
-// A card rather than the settings screen's full window: this is a question waiting for an answer, not a screen to
-// read. The owner decides when to open and close it (the dialog reports dismissal); "Not now" leaves the app fully
+// A card: this is a question waiting for an answer. The owner decides when to open and close it (the dialog
+// reports dismissal); "Not now" leaves the app fully
 // usable — reading a repository needs no identity.
 AppDialog {
     id: identityDialog
@@ -19,7 +19,7 @@ AppDialog {
     onClosed: identityDialog.dismissed()
 
     // A write is in flight that this dialog asked for. Only then does a finished write close it — the notification is
-    // shared with the startup check, which must not close the dialog under the user.
+    // shared with the startup check, whose answer leaves the dialog standing.
     property bool saving: false
 
     function submit() {

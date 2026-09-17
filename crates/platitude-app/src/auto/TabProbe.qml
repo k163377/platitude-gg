@@ -4,9 +4,9 @@ import QtQuick
 
 // What the headless run is allowed to ask of the strip: what the tabs came out as, and the one input a run has no
 // pointer for. Every answer is read off the items the view actually built — the output side, so a binding that came
-// apart answers with what is on screen rather than with what was asked for (rules-refs/app-ui.md).
+// apart answers with what is on screen (rules-refs/app-ui.md).
 //
-// Not the strip's own for the reason the hand is not (`TabCarry`): the strip is about laying tabs out, and this is
+// Its own file, the way the hand's is (`TabCarry`): the strip is about laying tabs out, and this is
 // about reporting on them. A `QtObject`: nothing here draws, and nothing here needs a child.
 QtObject {
     id: probe
@@ -46,7 +46,7 @@ QtObject {
         return false
     }
 
-    /// The paths rather than the titles — every demo repository is called the same thing, and a strip of one name
+    /// The paths — every demo repository is called the same thing, and a strip of one name
     /// proves nothing.
     function tabPaths() {
         let paths = []
@@ -58,8 +58,8 @@ QtObject {
         return paths.join(",")
     }
 
-    /// The name each tab came out with, in the order they sit in (`PGG_AUTO_ACT=tab-name`). Read off the tabs rather
-    /// than off the model: what the strip settled on is only worth anything where it is what the strip is drawing.
+    /// The name each tab came out with, in the order they sit in (`PGG_AUTO_ACT=tab-name`). Read off the tabs:
+    /// what the strip settled on is only worth anything where it is what the strip is drawing.
     function tabTitles() {
         let names = []
         for (let i = 0; i < probe.view.count; i++) {
@@ -86,9 +86,9 @@ QtObject {
     }
 
     /// How many tabs are drawing none of their own name — the mark standing where the name was
-    /// (`TabItemDelegate.nameKept`). Nothing but zero is a layout the strip is allowed to reach: it hands the run out
-    /// down to a floor of three characters at each end and scrolls rather than cut past it
-    /// (`TabStrip.settleTitleCap`). Counted rather than looked at, because the picture of a crushed name and the
+    /// (`TabItemDelegate.nameKept`). Zero is the one layout the strip is allowed to reach: it hands the run out
+    /// down to a floor of three characters at each end and scrolls past it
+    /// (`TabStrip.settleTitleCap`). Counted, because the picture of a crushed name and the
     /// picture of a short one are the same narrow tab with a mark in it.
     function tabNamesCrushed() {
         let n = 0

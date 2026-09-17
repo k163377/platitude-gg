@@ -3,11 +3,11 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // The same frame at the height buttons and combo boxes use: for form
-// input rather than the toolbar's slim filters.
+// input.
 TextField {
     id: form
 
-    /// The value is chosen rather than typed: no caret, and nothing a key can add — but **the ground stays**
+    /// The value is chosen: no caret, and nothing a key can add — but **the ground stays**
     /// (規約 §選ぶ欄と打つ欄 の例外). Taking it away is what §選ぶ欄と打つ欄 asks for, and in a form row it reads as
     /// the wrong thing entirely: with grounded boxes above and below, the one without a ground looks *disabled*
     /// rather than choosable. The disabled signal is the louder of the two, so the ground stays and what the box

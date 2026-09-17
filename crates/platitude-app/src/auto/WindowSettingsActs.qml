@@ -10,17 +10,17 @@ import platitude.ui
 /// A file of its own because these are the verbs that reach into one dialog and nothing else — every one of them
 /// wants `settingsDialog` and none of them wants a tab, a page or the band. Built by `WindowAutoActDriver` beside
 /// `WindowDialogActs`, which keeps the ones that reach into the rest of the window.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing and is
-// never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
     required property var window
     required property var settingsDialog
 
-    /// The three panes the screen is made of, named once here rather than
-    /// spelled out at every question below. The screen hands over the two
-    /// it holds and the git one hands over the third (`SettingsDialog`).
+    /// The three panes the screen is made of, named once here. The screen
+    /// hands over the two it holds and the git one hands over the third
+    /// (`SettingsDialog`).
     readonly property var appPane: acts.settingsDialog.autoAppPane
     readonly property var gitPane: acts.settingsDialog.autoGitPane
     readonly property var repoPane: acts.settingsDialog.autoGitPane.autoRepoPane
@@ -113,8 +113,8 @@ Item {
             // editor on it answers with an empty list — and an empty list is a card with nothing to drop, which
             // closes itself (`AppCombo.hasList`). Neither the `opened` the settled verb waits for nor the loading
             // edge behind it can come after that, so a run that went on waiting would spend the whole watchdog in
-            // silence and be read as a wedge. Said instead, and finished: the run fails on its own report line in
-            // the seconds the stock-take takes, naming the machine rather than the wiring.
+            // silence and be read as a wedge. Said and finished: the run fails on its own report line in
+            // the seconds the stock-take takes, naming the machine.
             if (acts.toolsCameBack && acts.gitPane.toolChoices.length === 0) {
                 stop()
                 acts.reportTool()
@@ -137,11 +137,11 @@ Item {
 
     // PGG_AUTO_ACT=settings-repo / settings-repo-pick: the git category's `REPOSITORY OVERRIDE` group, landed on the
     // repository the reader is looking at, and with the chooser's list down. The argument picks a row of the strip for
-    // the run that wants a repository other than the front one — through the same call a pick from the list makes,
-    // not by writing the model's path (規約 §UI 自動化の因果性).
+    // the run that wants a repository other than the front one — through the same call a pick from the list makes
+    // (規約 §UI 自動化の因果性).
     //
-    // Waited on: the read git answers with (`state === "ready"`), and the list's own `opened`. Not the category, which
-    // is what the run set on the way in.
+    // Waited on: the read git answers with (`state === "ready"`), and the list's own `opened`. The category is what
+    // the run set on the way in.
     SampleTimer {
         id: repoSettingsTimer
         running: Harness.autoAct === "settings-repo" || Harness.autoAct === "settings-repo-pick"
@@ -154,13 +154,13 @@ Item {
             }
             if (!repoSettingsTimer.acted) {
                 // A repository has to be there to pick before anything is asked of it, and the strip's rows arrive
-                // with the window rather than with the screen.
+                // with the window.
                 if (acts.repoPane.autoRepoRows === 0)
                     return
                 // **The screen has to be showing one repository before another is picked.** The screen lands on the
                 // one the reader is in as it opens (`SettingsDialog.onOpened`), and waiting for that read makes the
-                // argument below a *switch* — boxes already carrying values, replaced by another repository's —
-                // rather than a first look that happens to name a row. The two are not the same road.
+                // argument below a *switch* — boxes already carrying values, replaced by another
+                // repository's.
                 if (!acts.repoPane.autoRepoReady)
                     return
                 if (Harness.autoActArg !== ""
@@ -191,13 +191,13 @@ Item {
     // itself, and the line says which of the four it was.
     //
     // Typed through the box's own door (`SettingsAppPane.autoTypeGitPath` = text, then the edit being finished with),
-    // never by writing `AppBackend.gitPath` — that would photograph the wiring cut (規約 §UI 自動化の因果性). Writing
+    // so the wiring is in the picture (規約 §UI 自動化の因果性). Writing
     // the settings file is this run's to do: `verify::run` gives every run a config directory of its own, so what is
-    // written here is the harness's own value and not the machine's (同 §).
+    // written here is the harness's own value (同 §).
     SampleTimer {
         id: gitPathTimer
         running: Harness.autoAct === "settings-git-path"
-        /// The path has been typed. The run with no argument never types, and photographs what the screen opened on.
+        /// The path has been typed. The run with no argument photographs what the screen opened on.
         property bool acted: false
         onTriggered: {
             if (!settingsDialog.opened) {
@@ -236,7 +236,7 @@ Item {
     // own answer is reported, in both units, and the line is what is judged.
     //
     // Typed through the pane's own door (`SettingsAppPane.autoTypeProcesses` = text, then the edit being finished
-    // with), never by writing the properties — that would photograph the wiring cut (規約 §UI 自動化の因果性).
+    // with), so the wiring is in the picture (規約 §UI 自動化の因果性).
     SampleTimer {
         id: processesTimer
         running: Harness.autoAct === "settings-processes"
@@ -262,9 +262,9 @@ Item {
     // PGG_AUTO_ACT=settings-git-leave: the way out taken over a git waiting to be applied, and turned down. The path
     // typed is the second git this run was staged with (`--other-git`), which is what the way out has to run into.
     //
-    // **Neither half is a picture.** A screen that stayed is drawn exactly like one nobody asked to close, and the
+    // **Both halves are said.** A screen that stayed is drawn exactly like one nobody asked to close, and the
     // `✕` turning is a shape a run has to be told about — so the line says that the way out was taken, that the
-    // screen is still up, and that what is holding it is the offer rather than an unsaved identity.
+    // screen is still up, and that what is holding it is the offer.
     SampleTimer {
         id: gitLeaveTimer
         running: Harness.autoAct === "settings-git-leave"
@@ -304,8 +304,8 @@ Item {
     //
     // **It is the only level there is.** The screen writes `core.autocrlf` into the repository somebody picked and
     // nowhere else (規約 §設定の画面), which happens to be the only file a run may write anyway — the machine's own
-    // configuration belongs to whoever is sitting at it, not to the run
-    // (規約 §UI 自動化の因果性 「harness は … その harness が所有する値だけを設定する」).
+    // configuration belongs to whoever is sitting at it
+    // (規約 §UI 自動化の因果性 「harness の環境は … 所有する値だけを設定する」).
     //
     // Waited on: the read that fills the chooser (a pick before it would be picking against an empty field), then the
     // read that *follows* the write — the write's own `busy` falls before that one lands, so a run that stopped at it
@@ -323,8 +323,8 @@ Item {
                 return
             }
             if (!endingsTimer.acted) {
-                // A repository has to be there to write into, and the strip's rows arrive with the window rather
-                // than with the screen.
+                // A repository has to be there to write into, and the strip's rows arrive with the
+                // window.
                 if (acts.repoPane.autoRepoRows === 0 || !acts.repoPane.autoEndingsReady)
                     return
                 if (!acts.repoPane.autoPickEnding(endingsTimer.wanted))
@@ -335,18 +335,18 @@ Item {
                     || acts.repoPane.autoEndingHeld !== endingsTimer.wanted)
                 return
             endingsTimer.stop()
-            // Last, so the picture holds the chapter that was written into rather than the one the screen rests on.
+            // Last, so the picture holds the chapter that was written into.
             settingsDialog.autoShowChapterFoot()
             Harness.report("line_endings " + acts.repoPane.endingsTally())
             window.finishAutoAct()
         }
     }
 
-    // PGG_AUTO_ACT=settings-switch: the rail, which is the one way between the categories that is not a door into
-    // the screen. Opened on the application category and pressed onto the other through the row's own handler
+    // PGG_AUTO_ACT=settings-switch: the rail, which is the one way between the categories from inside the screen.
+    // Opened on the application category and pressed onto the other through the row's own handler
     // (`SettingsDialog.autoTapCategory`), because every other settings verb sets the category before the screen is up
-    // and would leave a dead rail green. What the report reads back is the chapters, not `category` — that is the
-    // input side, and a run that read it would be reporting its own press.
+    // and would leave a dead rail green. What the report reads back is the chapters — `category` is
+    // the input side, and a run that read it would be reporting its own press.
     SampleTimer {
         id: categorySwitchTimer
         running: Harness.autoAct === "settings-switch"
@@ -380,10 +380,10 @@ Item {
     // PGG_AUTO_ACT=settings-escape: the way out the screen owns, taken through the same function the `✕` and the
     // Escape shortcut are one line onto (`SettingsDialog.escapeOut`). **A picture cannot answer this one** — a
     // window with no settings screen over it is drawn exactly like one where the screen never opened — so what is
-    // judged is the pair of states in the report, not the shot.
+    // judged is the pair of states in the report.
     //
-    // What it does not prove is that the key reaches the shortcut; nothing headless can post one (規約 §UI 自動化の
-    // 因果性 — the harness has no keyboard). It proves the road is there and ends where it says it does.
+    // It proves the road is there and ends where it says it does. The key reaching the shortcut is beyond a
+    // harness with no keyboard (規約 §UI 自動化の因果性).
     SampleTimer {
         id: escapeTimer
         running: Harness.autoAct === "settings-escape"
@@ -392,13 +392,13 @@ Item {
         onTriggered: {
             if (!escapeTimer.wasOpen) {
                 if (!settingsDialog.opened) {
-                    // The argument names the category, because the way out is not the same road from both: the git
+                    // The argument names the category, because the way out is a different road from each: the git
                     // one has the two chapters a Save stands in front of, and its reads land after the screen is up.
                     settingsDialog.openAt(Harness.autoActArg === "" ? "app" : Harness.autoActArg)
                     return
                 }
-                // Nothing may be counted as unsaved before git has answered for the boxes — a run that pressed the
-                // way out mid-read would be photographing the read rather than the way out.
+                // Unsaved is counted only after git has answered for the boxes — a run that pressed the
+                // way out mid-read would be photographing the read.
                 if (settingsDialog.category === "git" && !acts.repoPane.autoRepoReady)
                     return
                 escapeTimer.wasOpen = true
@@ -424,7 +424,7 @@ Item {
     // press — and what has to be true afterwards is that the screen is **still there**, with the question standing
     // in its foot.
     //
-    // **Neither half is a picture.** A screen that stayed is drawn like one that was never asked to go, and a foot
+    // **Both halves are said.** A screen that stayed is drawn like one that was never asked to go, and a foot
     // carrying the question is drawn like a foot carrying anything else until it is read.
     SampleTimer {
         id: leaveTimer
@@ -460,7 +460,7 @@ Item {
     // The same card's avatar half, whose four shots the page opens and this finishes. Each waits on what its own verb
     // produced: the row the store answered the filing with and the picture inside it, that row's `lit`, the candidate
     // list's `opened`, and — for the removal — the row leaving the store on the far side of a hold that runs at its own
-    // length (`Metrics.holdMs`). Nothing here reads a clock.
+    // length (`Metrics.holdMs`). Each wait is on a state.
     SampleTimer {
         id: avatarCardTimer
         running: Harness.autoAct === "avatar-settings" || Harness.autoAct === "avatar-row-lit"

@@ -64,14 +64,14 @@ impl RepoTab {
         self.with_session(|s| s.check_branch_delete(branch.clone()));
     }
 
-    /// `git push <remote> <local>:<remote_branch>`, named to a ref row
-    /// rather than to the toolbar.
+    /// `git push <remote> <local>:<remote_branch>`, named to a ref
+    /// row.
     ///
     /// **Nothing on screen reaches this yet** (`pushBranch` has no caller
     /// in `ui/`): what a ref row sends today is the two `push --delete`s
-    /// and the rename. It is answered by id all the same, so a door added
-    /// to it arrives with the refusal already going to the press that
-    /// made it rather than to whatever else the drain carried
+    /// and the rename. It is answered by id all the same, so a door
+    /// added to it arrives with the refusal already going to the press
+    /// that made it
     /// (`ops::PushOut`, P3-確認事項).
     pub(super) fn branch_push(
         &mut self,

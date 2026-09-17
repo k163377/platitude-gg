@@ -7,7 +7,7 @@ import platitude.ui
 
 // The folded sidebar's one open section, and the bookkeeping that says
 // when it is open. Which one it is, and whether it still has the
-// pointer, are held here rather than on a cell: the cell is left behind
+// pointer, are held here: the cell is left behind
 // the moment the pointer walks into what it opened.
 AppCard {
     id: peek
@@ -63,7 +63,7 @@ AppCard {
     /// back — the hover cannot, because the pointer has not moved and so
     /// nothing about it has changed.
     function toggleAt(kind, top) {
-        // Asked of `kind` rather than the popup: on the way out it is
+        // Asked of `kind`: on the way out the popup is
         // still visible, and a click that arrived then would close what it
         // was meant to open.
         if (peek.kind === kind)
@@ -92,7 +92,7 @@ AppCard {
     // running out, a click on the cell that opened it, Escape from
     // inside it.
     //
-    // `aboutToHide` rather than `closed`: `kind` has to be clear before
+    // `aboutToHide`: `kind` has to be clear before
     // the next click can arrive, and the popup is still visible for as
     // long as it takes to go — `toggleAt` reads `kind` for exactly that
     // reason.
@@ -156,8 +156,8 @@ AppCard {
     x: peek.paneW
     y: peek.top
     width: peek.listW
-    // As tall as it has rows, and never past the foot of the pane it
-    // comes out of. It never opens with no rows at all — a cell
+    // As tall as it has rows, at most to the foot of the pane it
+    // comes out of. It always has rows — a cell
     // holding a zero does not open (NavRail).
     height: Math.min(Theme.headerHeight + peekList.count * Theme.rowHeight + Theme.borderWidth,
                      Math.max(0, peek.paneH - peek.top))
@@ -167,11 +167,11 @@ AppCard {
     // whose pointer is already inside it.
     closePolicy: Popup.CloseOnEscape
 
-    // It keeps the list's own ground rather than a menu's: what is in
+    // It keeps the list's own ground: what is in
     // it is the sidebar, and the header band would be lost against
     // `bgElevated`. The frame is what floats it (規約 §メニュー), and
-    // there is no rounding on a panel that starts flush against the
-    // rail.
+    // a panel that starts flush against the rail keeps square
+    // corners.
     faceColor: Theme.bgSurface
     faceRadius: 0
 
@@ -185,8 +185,8 @@ AppCard {
             // its top or bottom edge — is an exit no cell is told
             // about, and without this it raises no event at all.
             //
-            // The card's own `contentPointed`, written rather than
-            // bound: the smoke hooks write the same one, so a headless
+            // The card's own `contentPointed`, written:
+            // the smoke hooks write the same one, so a headless
             // run and a real pointer come to a single answer (the same
             // shape as the diff's hunk hover — 規約 §diff の中のステージ).
             onHoveredChanged: peek.contentPointed = peekHover.hovered

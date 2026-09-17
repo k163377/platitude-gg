@@ -20,11 +20,11 @@ ActionButton {
 
     /// What the button does when it is pressed, and the state of the timer in the brackets after it.
     ///
-    /// **The count is branched on rather than marked.** `minute(s)` is a mark for the reader to work out, so the two
+    /// **The count is branched on.** `minute(s)` is a mark for the reader to work out, so the two
     /// readings are two whole sentences. The number stays in both — a sentence with no number in it reads like a
-    /// thing that was decided rather than a thing that can be set. **`off` is the setting's own word**, the one its
+    /// thing that was decided. **`off` is the setting's own word**, the one its
     /// empty field shows as a placeholder (`SettingsAppPane`); `disabled` is what this window calls a control that
-    /// cannot be pressed (§無効), which this is not.
+    /// cannot be pressed (§無効), and this one can.
     function fetchLine() {
         if (AppBackend.autoFetchMinutes <= 0)
             return qsTr("Fetch all remotes (automatic fetching off)")
@@ -39,14 +39,14 @@ ActionButton {
     }
     /// What the failures add, on a line of their own. Empty while there are none.
     ///
-    /// **git's own words are not in it.** They are a paragraph, not a clause, and the panel that holds them puts
-    /// itself up on the first failure by itself (§git が言ったことを読む場所) — so the line names that panel instead,
+    /// **git's own words stay in their panel.** They are a paragraph, and the panel that holds them puts
+    /// itself up on the first failure by itself (§git が言ったことを読む場所) — so the line names that panel,
     /// in the word the panel's own heading wears (`Words.commandsTitle`), and that word is the place a press goes.
     ///
     /// **`%1` is the place**, so what is said about going there stays outside it and can be worded per language
     /// (`Words.placeInSentence`, the shape a ref name in a sentence already had).
     ///
-    /// No pair for `failures`: the step that counts them does not exist under three (`FETCH_FAILURES_BEFORE_STOP`).
+    /// One form for `failures`: the step that counts them starts at three (`FETCH_FAILURES_BEFORE_STOP`).
     /// `%n` still carries the number, so a language that cuts its counts somewhere other than English does has its
     /// forms.
     function tipNote() {
@@ -60,11 +60,11 @@ ActionButton {
     kind: "fetch"
     text: fetchButton.stopped ? qsTr("Resume") : "fetch"
     code: !fetchButton.stopped
-    // The stopped step steps back rather than up: nothing is lost by starting the timer again, so the word and the
+    // The stopped step steps back: nothing is lost by starting the timer again, so the word and the
     // icon go to `textSecondary` together and come up to full under a hand (デザイン規約 §リモートから取り込む). Every
-    // other step keeps the plain word — what failed is said by the mark (§長押し — 警告の色は語ではなく枠と印が持つ).
+    // other step keeps the plain word — what failed is said by the mark (§長押し — 警告の色は枠と印が持つ).
     tone: fetchButton.stopped && !fetchButton.lit ? Theme.textSecondary : Theme.textPrimary
-    // Read off the state rather than off `tone`: through the wait the word takes the disabled step like any word
+    // Read off the state: through the wait the word takes the disabled step like any word
     // that cannot be pressed, and the ring, the mark and the frame where there is one are what still say this is
     // the fetch that has been failing (デザイン規約 §暗く落とした段).
     toneDim: fetchButton.fails > 0 ? Theme.warningDim : Theme.textMuted
@@ -74,7 +74,7 @@ ActionButton {
     alert: fetchButton.fails > 0
     alertTone: Theme.warning
     // `Resume` is the wording the shared box is measured for, so it is the one with no air of its own to stand the
-    // mark in: one gap back puts the mark inside the frame rather than against it (デザイン規約 §リモートから取り込む
+    // mark in: one gap back puts the mark inside the frame (デザイン規約 §リモートから取り込む
     // — 箱を勝ち取った語の `!`).
     alertTight: fetchButton.stopped
     // Whoever asked for it, the network shows here: a fetch on the timer turns the button the way a clicked one
@@ -88,7 +88,7 @@ ActionButton {
     tip: {
         if (fetchButton.curPage === null)
             return ""
-        // Nothing under a pointer that cannot press this. What the button would do is not news while it cannot
+        // Empty under a pointer that cannot press this. What the button would do is not news while it cannot
         // be done, and both states that grey it out are already said elsewhere on screen: REMOTES counts 0 in
         // the left menu, and another git command running is on this band (デザイン規約 §無効 — ボタンの無効は
         // ツールチップを持たない). Said out loud because a disabled control still takes hover and still opens its
@@ -97,13 +97,13 @@ ActionButton {
             return ""
         // **One line for what the button does, and a second only where something else has to be told.** The one
         // sentence rule is about the function (デザイン規約 §hover のツールチップ) — the brackets carry whatever that
-        // sentence could not — and a run of failures is not part of the function: it is why the button is wearing a
+        // sentence could not — and a run of failures is why the button is wearing a
         // mark, and the brackets are spoken for.
         //
-        // Pruning is not said on the first line: `fetch` is the command's own word for what it does to branches that
-        // are gone, and a second clause for something the first one already means is the clause to drop.
+        // `fetch` is the command's own word for what it does to branches that are gone, so pruning is left to it —
+        // a second clause for something the first one already means is the clause to drop.
         //
-        // **The first line does not move while the timer is still going.** A fetch that failed did not stop it — it
+        // **The first line holds while the timer is still going.** A fetch that failed did not stop it — it
         // will go again on the interval that line names — so what a run of failures adds is the second line and
         // nothing else. Without it the mark on the button has nothing behind it to read.
         const note = fetchButton.tipNote()

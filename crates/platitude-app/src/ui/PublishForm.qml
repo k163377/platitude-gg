@@ -4,8 +4,8 @@ import QtQuick.Layouts
 import platitude.ui
 
 // What the first push's question asks back: where the branch goes, and what it is called when it gets there (デザイン規約
-// §はじめてリモートへ送る). It stands inside the question's bar, which is why it is built from a `Component` rather than placed
-// anywhere itself.
+// §はじめてリモートへ送る). It stands inside the question's bar, which is why it is built from a
+// `Component`.
 ColumnLayout {
     id: publishForm
 
@@ -35,13 +35,13 @@ ColumnLayout {
         /// What the two boxes have to share: the bar less the `/` and the gaps beside it.
         readonly property real room: publishForm.width - slash.width - 2 * askRow.spacing
         /// **What is being typed has the first claim on it** (デザイン規約 §レイアウト初期値): it is the half a reader
-        /// is writing and reading back at the caret, so the room it needs comes off the destination rather than the
-        /// other way about — up to everything but the destination's floor, and never below its own.
+        /// is writing and reading back at the caret, so the room it needs comes off the destination — up to
+        /// everything but the destination's floor, and at least its own.
         readonly property real nameWidth:
             Math.min(Math.max(Metrics.askFieldMinW, publishBranchField.wantedWidth),
                      Math.max(Metrics.askFieldMinW, askRow.room - Metrics.askFieldMinW))
-        /// And the destination takes what is left. **Ceilings on both and not just floors**, because a layout hands a
-        /// box the width it asked for and lets the row overflow rather than taking a neighbour under its minimum —
+        /// And the destination takes what is left. **Ceilings on both**, because a layout hands a
+        /// box the width it asked for and lets the row overflow —
         /// so without them one long box pushed the other off the end of the bar (observed).
         readonly property real remoteCeiling: Math.max(Metrics.askFieldMinW, askRow.room - askRow.nameWidth)
         // **The destination takes the room its name needs out of what the name left** (デザイン規約 §レイアウト初期値):
@@ -66,7 +66,7 @@ ColumnLayout {
             color: Theme.textMuted
             font.pixelSize: Theme.fontMd
         }
-        // Never a placeholder: an empty box would read as though there were nothing to send.
+        // The box holds the name: empty, it would read as though there were nothing to send.
         //
         // **This is the box that asks first, and the box the slack goes to** — the one a caret is in. What it needs
         // is taken off the destination down to the floor they share (`remoteCeiling`); past that the text scrolls

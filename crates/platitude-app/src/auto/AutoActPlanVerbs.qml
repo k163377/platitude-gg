@@ -6,13 +6,13 @@ import platitude.ui
 
 /// The interactive-rebase plan: opening one over a row, dressing its rows with verbs, running it, the
 /// stop a run asks for, and what the right pane's boxes do while a plan owns them or just after one lets
-/// go. The walks over the boxes are chains rather than branches, so the dispatch below starts them by
-/// name instead of answering for them.
+/// go. The walks over the boxes are chains, so the dispatch below starts them by
+/// name.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -33,7 +33,7 @@ Item {
     readonly property var renderedBarrier: driver.barrierRendered
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "rebase-plan" || act === "rebase-plan-run" || act === "rebase-edit-stop"
             || act === "rebase-edit-stop-out" || act === "plan-reword-verb"
@@ -91,10 +91,10 @@ Item {
     // ---- the face the press puts up before any of that -----------------
     // The pane in the graph's seat with nothing in it but the mode's one word, `Discard` and the turning mark. The face
     // is **held** from the edge that raised it (`RepoPage.planLoadHeld`): the rows arrive through the feed and can
-    // land while the asynchronous grab is still out, and the picture would then be of the plan rather than of the
-    // wait for it (verify-ui スキル §中間状態は実 edge を latch する).
+    // land while the asynchronous grab is still out, and the picture would then be of the
+    // plan (verify-ui スキル §中間状態は実 edge を latch する).
     //
-    // **The edge is caught on the model's own signal, not sampled.** `open()` raises `loading` inside the dispatch
+    // **The edge is caught on the model's own signal.** `open()` raises `loading` inside the dispatch
     // and the answer to a five-commit range can be back before the next tick, so a sampler looking for it would find
     // a state that had already gone and wait out the watchdog in silence.
     Connections {
@@ -108,7 +108,7 @@ Item {
             page.planLoadHeld = true
         }
     }
-    // Completed a turn later and off the page's own answer rather than in the callback that pressed
+    // Completed a turn later and off the page's own answer
     // (app-ui.md §UI 自動化の因果性). Nothing in the line can be read off the picture: an empty pane photographs the same
     // whether a read is out, was refused, or was never asked for.
     SampleTimer {
@@ -194,9 +194,9 @@ Item {
                 // The reorder as a hand makes it: a fold taken up, carried down over the oldest place — where no
                 // fold can stand — and set back down where it started. Driven through the list's own functions,
                 // which are the ones the row's `MouseArea` calls (`RebasePlanRow`), so the two brackets the fold
-                // rule waits on are under test rather than assumed.
+                // rule waits on are under test.
                 //
-                // **Nothing here is timed.** A move is answered inside the call, so the whole trip is one turn —
+                // A move is answered inside the call, so the whole trip is one turn —
                 // and that is the point: the demotion used to land on the way through, at a moment no sampler
                 // could have caught either.
                 //
@@ -239,8 +239,8 @@ Item {
         /// The run's own answer, picked out of the answers that notify carried the way `tipLandedTimer.answeredOp`
         /// is — the fetch the freeze leaves running rewrites the answer group with every answer of its own, so a
         /// beat that reads the sampled name can find a fetch's where the rebase's stood (same measured failure).
-        /// One-way and by name: a fetch answering *first* must not take the arm, so only the rebase's answer sets
-        /// it, and what it said about stopping and failing is taken in the same breath.
+        /// One-way and by name: only the rebase's answer sets it, whichever answered first,
+        /// and what it said about stopping and failing is taken in the same breath.
         property string answeredOp: ""
         property bool answeredStopped: false
         property bool answeredError: false
@@ -268,10 +268,10 @@ Item {
             renderedBarrier.begin()
         }
     }
-    /// **Read out of the answers the notify carried, not off the group they leave behind.** One drain empties the
+    /// **Read out of the answers the notify carried.** One drain empties the
     /// whole queue and notifies once (`RepoTab::write_answers`), so the fetch coming back behind the run arrives in
     /// the same beat and the group is left describing *it* — the name this is waiting for was never on screen for a
-    /// moment, and the run walks into its watchdog instead. Each answer keeps its own stop and refusal, so the two
+    /// moment, and the run walks into its watchdog. Each answer keeps its own stop and refusal, so the two
     /// read here are the rebase's.
     Connections {
         target: driver.repoTab
@@ -404,8 +404,8 @@ Item {
                     renderedBarrier.begin()
                     return
                 }
-                // Whether a remote already has this commit is HEAD's own answer, kept beside HEAD rather than asked
-                // on the edge of typing (`WorkTreeModel.headPublished`) — so the plan that stood over the boxes
+                // Whether a remote already has this commit is HEAD's own answer, kept beside
+                // HEAD (`WorkTreeModel.headPublished`) — so the plan that stood over the boxes
                 // cannot have spent it. Type again, and read the warning back with the boxes dirty.
                 detailsPane.setMessageText(planRewordTimer.retyped, "")
                 planRewordTimer.stage = "retyped"
@@ -439,11 +439,11 @@ Item {
         /// What is typed into the boxes: neither the commit's own message nor anything a plan would put there.
         readonly property string typed: "typed by hand"
         /// Whether the boxes are resting on the commit's own message, which is where the closed plan has to leave
-        /// them — that is what makes what is standing in them unsaved rather than already written.
+        /// them — that is what makes what is standing in them unsaved.
         readonly property bool restored: detailsPane.baseSubject === detailsModel.messageSubject
                                          && detailsPane.baseBody === detailsModel.messageBody
         /// What `Discard` was wearing when it was pressed, read while the plan still stands. False is the claim: this
-        /// text is not the plan's to take, so the press costs nothing and the button must not say it does
+        /// text is not the plan's to take, so the press costs nothing and the button says so
         /// (`RepoPage.planDiscards`). The dressed side is a picture — `plan-fold-carry` stands on a plan with a verb
         /// set and photographs it.
         property bool guard: false
@@ -503,7 +503,7 @@ Item {
     // take the model's own row with it; the base's hash — a walk *out* of it, which has no row on this screen to land
     // on; and a file row, which used to read a diff into the pane the plan is standing on.
     //
-    // **Not one of the four is in the picture.** The row highlight reads `page.selectedOid`, so a model left behind
+    // **All four are in the report.** The row highlight reads `page.selectedOid`, so a model left behind
     // photographs exactly like one that followed; a diff opened under the plan is drawn nowhere at all; and where the
     // middle lands after `Discard` is the whole of the last claim.
     SampleTimer {
@@ -553,7 +553,7 @@ Item {
                 return
             }
             if (planHeldTimer.stage === "walked") {
-                // Both halves of the walk down, waited for rather than read straight back: the page's half goes the
+                // Both halves of the walk down, waited for: the page's half goes the
                 // long way round through `activateRow` and the details it asks for.
                 if (page.selectedOid !== planHeldTimer.wantOid || !planHeldTimer.paneSettled)
                     return
@@ -570,7 +570,7 @@ Item {
                 const row = planHeldTimer.fileRow()
                 if (!row || !planHeldTimer.paneSettled)
                     return
-                // The row's own press rather than the pane's signal: the door being held is at the far end of it
+                // The row's own press: the door being held is at the far end of it
                 // (`RepoPage.openDiff`), and the run has to arrive through everything in between. `diffShown` is
                 // written inside that call, so an unheld door is already open by the next line.
                 row.press()

@@ -8,7 +8,7 @@ import platitude.ui
 //
 // **Drawn outside the list its row is in.** What the box holds is the whole of what it is for — the question while
 // nothing has been typed, the name it opened with while something has — and a box too narrow to show it asks nothing
-// (デザイン規約 §グラフ行のダブルクリック「箱はプレースホルダを切らない」). This side of the window has no lane to spill into, so it
+// (デザイン規約 §グラフ行のダブルクリック「箱のプレースホルダは全文」). This side of the window has no lane to spill into, so it
 // spills out of the pane and over the graph: head held where the name's head was, growing the one way, and out only
 // while a hand is on it — the one direction the chip's card opens in.
 SlimField {
@@ -19,11 +19,11 @@ SlimField {
     /// going spare.
     required property Item row
     required property Item seat
-    /// Where the box is drawn. **Not the list** — a list clips, and this one is allowed past the pane's edge. Not the
-    /// column the sections are laid out in either: a layout lays out whatever is parented into it, and a box put there
-    /// is given the column's own next row (measured: it landed at the foot of the pane). What that column fills lays
-    /// nothing out and clips nothing. Nothing at all keeps the box in its seat, which is the answer for a surface
-    /// where reaching out of it would reach out of a floating panel.
+    /// Where the box is drawn: what the sections' column fills, which lays nothing out and clips nothing.
+    /// Nothing at all keeps the box in its seat, which is the answer for a surface where reaching out of it
+    /// would reach out of a floating panel. A list clips, and a layout hands a box parented into it the
+    /// column's own next row — measured, it landed at the foot of the pane, a whole column away from the
+    /// row it belongs to.
     property Item drawnIn: null
     /// Where the list's rows begin in that layer, where the list itself begins, and how tall it is — handed down so
     /// that a scroll carries the box with the row it belongs to, and so that a row carried out of the list takes the
@@ -39,13 +39,13 @@ SlimField {
     property string carried: ""
     property string refusedWhy: ""
     /// What kind of ref this box is naming, so the frame can say it
-    /// (`SlimField.focusTone` — §ref の種別: 枠 = 種別). The row's kind
-    /// rather than the mode alone: a tag is being named whether it is
-    /// being made or renamed.
+    /// (`SlimField.focusTone` — §ref の種別: 枠 = 種別). The row's kind,
+    /// since a tag is being named whether it is being made or
+    /// renamed.
     property string namesKind: ""
 
-    /// Typed into, accepted, walked away from. **Not `accepted`** — that name is the field's own, for Enter landing in
-    /// it, and this one is what the row does about it.
+    /// Typed into, accepted, walked away from. **`submitted`** — `accepted` is the field's own, for Enter
+    /// landing in it, and this one is what the row does about it.
     signal typed(string text)
     signal submitted(string text)
     signal cancelled()
@@ -54,17 +54,17 @@ SlimField {
     readonly property real rowTop: box.rowsY + box.row.y
     readonly property bool rowInView: box.rowTop >= box.rowsTop
         && box.rowTop + box.row.height <= box.rowsTop + box.rowsHeight
-    /// What the box has to be able to show. Latched when it opens rather than followed as it is typed into: a box
-    /// whose right edge walks out from under the caret is one nobody can aim at, and what it opens holding is the
-    /// reason it opens wide (app-ui.md §測って決める値は押し出す).
+    /// What the box has to be able to show. Latched when it opens: a box whose right edge walks out from under the
+    /// caret is one nobody can aim at, and what it opens holding is the reason it opens wide
+    /// (app-ui.md §測って決める値は押し出す).
     property string inkText: ""
     readonly property real wantWidth:
         Math.ceil(ink.implicitWidth) + box.leftPadding + box.rightPadding
 
     // The box carries the name into itself when it opens, and again when a scrolled-off row is built anew — the
-    // delegate is recycled and the text is not its to keep. Watched here rather than from the row: the row's own
-    // handler for the same change can run before this one's binding has caught up, and a box that read `editing`
-    // false there came up with nothing in it and no keyboard (measured).
+    // delegate is recycled and the text is not its to keep. Watched here: the row's own handler for the same change
+    // can run before this one's binding has caught up, and a box that read `editing` false there came up with
+    // nothing in it and no keyboard (measured).
     onEditingChanged: box.takeFocus()
     Component.onCompleted: box.takeFocus()
     function takeFocus() {
@@ -78,23 +78,23 @@ SlimField {
         box.forceActiveFocus()
     }
 
-    /// Whether the box is drawn out in the layer rather than in its seat.
+    /// Whether the box is drawn out in the layer.
     ///
-    /// **Not switched on `editing`.** Standing the box out only while its row is the one being typed into would spare
-    /// the layer the boxes of the rows that are not — but an item that changes parent loses the keyboard, and the
-    /// change lands either side of the hand-off that gives it (measured: `focused=false`). What the layer holds is one
-    /// box per row the view has actually built, which is what fits on screen and a little either side.
+    /// **The layer holds one box per row the view has actually built**, which is what fits on screen and a little
+    /// either side. Standing a box out only while its row is the one being typed into would spare the layer the
+    /// rest — but an item that changes parent loses the keyboard, and the change lands either side of the hand-off
+    /// that gives it (measured: `focused=false`).
     readonly property bool out: box.drawnIn !== null
     parent: box.out ? box.drawnIn : box.seat
     // Out of the layer with the row that carries it: a box left standing where its row has scrolled away is a box over
     // the graph belonging to nothing.
     visible: box.editing && (!box.out || box.rowInView)
     // The head, which is where the name's head was: the row's indent, the seat, and the way between them — all of it
-    // the row's own layout has worked out already, so it is read off the seat rather than added up again.
+    // the row's own layout has worked out already, so it is read off the seat.
     x: box.out ? box.rowsX + box.seat.x : 0
     y: (box.out ? box.rowsY + box.row.y : 0) + (box.row.height - box.height) / 2
-    // Never narrower than the seat, and never so far out that it runs off the window (the cap the cards take, デザイン規約
-    // §メニュー). Held to the seat where there is no layer to grow into.
+    // At least the seat's width, and inside the window's edge (the cap the cards take, デザイン規約 §メニュー). Held to
+    // the seat where there is no layer to grow into.
     //
     // The window's own width is the measure because **the layer is the left menu, and the left menu begins at the
     // window's left edge** — it is the first pane of the row of them, so `x` here is a window coordinate.
@@ -116,12 +116,12 @@ SlimField {
     Keys.onEscapePressed: box.cancelled()
     // Why Enter did nothing, and the only place it is said (規約 §hover のツールチップ).
     //
-    // **Asked of the box being on screen, not of the keyboard.** The box gives the keyboard up and takes it back as it
-    // is carried out of its seat (the `parent` above), and that hand-off lands inside this binding's own write — Qt
-    // reads the re-entry as a binding loop and drops the update, leaving what the reader is told to whatever asks
-    // next (measured on both OSes, every run of `rename-tag-box` / `rename-remote-box`). Nothing is given up by asking
-    // it this way: a box is on screen only while its row is the one being typed into, and the keyboard is in it for
-    // all of that but the hand-off itself.
+    // **Asked of the box being on screen.** The box gives the keyboard up and takes it back as it is carried out of
+    // its seat (the `parent` above), and that hand-off lands inside this binding's own write — Qt reads the re-entry
+    // as a binding loop and drops the update, leaving what the reader is told to whatever asks next (measured on
+    // both OSes, every run of `rename-tag-box` / `rename-remote-box`). Nothing is given up by asking it this way: a
+    // box is on screen only while its row is the one being typed into, and the keyboard is in it for all of that but
+    // the hand-off itself.
     ToolTip.visible: box.refused && box.visible && box.refusedWhy !== ""
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: box.refusedWhy
@@ -134,8 +134,8 @@ SlimField {
         + " row=" + Math.round(box.rowTop) + " list=" + Math.round(box.rowsTop)
         + "+" + Math.round(box.rowsHeight) + " out=" + box.out
 
-    // The box's floor, measured. Never drawn — it stands in for what the field lays out inside itself, which cannot be
-    // measured before the box being measured for has a width (`GraphRowChips` measures its own the same way).
+    // The box's floor, measured and hidden — it stands in for what the field lays out inside itself, which cannot
+    // be measured before the box being measured for has a width (`GraphRowChips` measures its own the same way).
     Label {
         id: ink
         visible: false

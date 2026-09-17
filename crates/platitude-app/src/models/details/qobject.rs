@@ -105,8 +105,8 @@ impl DetailsModel {
     /// `compare` picks which question is being asked: two commits are
     /// read as what differs between them, three or more as what all of
     /// them changed (デザイン規約 §複数のコミットを選ぶ). The header is
-    /// settled here rather than when the files land, so the pane turns
-    /// over with the press instead of a round trip later.
+    /// settled here, so the pane turns over with the press that
+    /// asked.
     #[qslot]
     fn request_selection(&mut self, packed: String, compare: bool) {
         let mut oids = Vec::new();
@@ -121,8 +121,8 @@ impl DetailsModel {
             return;
         }
         self.clear_commit();
-        // **The last commit's files go with it** — but one choice's do
-        // not go when another choice replaces it. Left standing, a
+        // **The last commit's files go with it** — and one choice's
+        // stay while another choice replaces it. Left standing, a
         // commit's files would sit under a band naming several; emptied
         // between two choices, the list under this one collapses and the
         // pane below it takes the whole place for the length of a round
@@ -140,7 +140,7 @@ impl DetailsModel {
         if compare {
             // Oldest first — the side a comparison is measured from.
             // Whole ids: what reads these is the patch behind a row of
-            // the list (`DiffModel::request_range_file`), not a caption.
+            // the list (`DiffModel::request_range_file`).
             self.compare_from = oids.last().map(Oid::to_hex).unwrap_or_default();
             self.compare_to = oids.first().map(Oid::to_hex).unwrap_or_default();
         }
@@ -207,9 +207,9 @@ impl DetailsModel {
         if hex != self.requested {
             return; // stale response for a previous selection
         }
-        // Held for the two marks rather than taken at the first of them:
-        // one says when the answer arrived and the other when it is in the
-        // model, and between them is what this call costs.
+        // Held for the two marks: one says when the answer arrived and
+        // the other when it is in the model, and between them is what
+        // this call costs.
         let asked = self.requested_at.take();
         if let Some(t0) = &asked {
             // Data arrival only; PagePerfDriver separately observes a frame.
@@ -288,8 +288,8 @@ impl DetailsModel {
 
     /// The changed file `way` steps from `path` among the rows this list
     /// shows, as `<row>\u{1e}<bucket>\u{1e}<path>`. Empty where the walk has
-    /// nowhere left to go — which is how the arrows stop at the ends rather
-    /// than wrapping — and empty where the path is not shown at all
+    /// nowhere left to go — which is how the arrows stop at the ends —
+    /// and empty where the path is not shown at all
     /// (デザイン規約 §diff のファイル一覧).
     ///
     /// Only the sign of `way` is read: one press is one file.
@@ -327,8 +327,8 @@ impl DetailsModel {
 
     /// Where a renamed file came from, by path — whole, the way a diff wants
     /// it (a rename's diff is read by naming both of its sides). The row's
-    /// own `orig_path` is the same answer; this is for the callers holding a
-    /// path and not a row.
+    /// own `orig_path` is the same answer; this is for the callers holding
+    /// a path.
     #[qslot]
     pub(super) fn orig_of(&self, path: String) -> String {
         self.raw_files

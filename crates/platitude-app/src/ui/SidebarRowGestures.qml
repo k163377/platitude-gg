@@ -3,7 +3,7 @@ import platitude
 import platitude.ui
 
 // The sidebar's row gestures: which row was clicked last, and which one has a name box open in it. Held beside the
-// lists rather than inside one — only one row at a time is either, whichever section it sits in, and both have to
+// lists — only one row at a time is either, whichever section it sits in, and both have to
 // outlive the delegates that show them (デザイン規約 §左メニューの所作).
 QtObject {
     id: gestures
@@ -22,7 +22,7 @@ QtObject {
     /// and they go on working (デザイン規約 §消す操作は先に画面から消す: 消すのは行だけで、周りは止めない).
     property bool held: false
 
-    /// The two clicks a row answers with one gesture — one for the sidebar, not one per row (`ReclickGesture`): a
+    /// The two clicks a row answers with one gesture — one for the sidebar (`ReclickGesture`): a
     /// delegate is recycled the moment its row scrolls off, and both the memory and the wait have to outlive it.
     /// What the wait was aimed at is read at the click (`p`), because by the time it runs out the row may be showing
     /// another name.
@@ -33,7 +33,7 @@ QtObject {
     property alias activeKey: gestures.reclick.activeKey
     /// The name this row is typed and renamed by. A stash is named by its message and known to git by its selector;
     /// everything else answers to the name it shows. A remote branch is typed without the remote it is on —
-    /// `origin/` is where the branch lives, not part of its name.
+    /// `origin/` is where the branch lives.
     function typedName(kind, id, name) {
         return kind === "stash" ? name
              : kind === "remote" ? gestures.remoteBranchHalf(id) : id
@@ -53,7 +53,7 @@ QtObject {
     function remoteBranchHalf(id) {
         return GitFacts.branchOfRef(id, gestures.repoTab.remoteNames)
     }
-    /// A name the remote already carries. Refused here rather than left to git: a plain push to a name that exists
+    /// A name the remote already carries. Refused here: a plain push to a name that exists
     /// fast-forwards it and reports success, so somebody else's branch would move instead of this one being renamed.
     /// Only ever a rename's rule: the box for a new branch's name opens on a remote row too, and what it makes is a
     /// local branch — a name the remote happens to carry is no answer to that.
@@ -61,14 +61,14 @@ QtObject {
         && gestures.editText.trim() !== ""
         && gestures.remotesModel.oidOfName(gestures.editRemote + "/" + gestures.editText.trim()) !== ""
     /// A box that opened empty and is still empty: the one for a new branch's name, before a word has been put in it.
-    /// **Not a refusal.** The frame answers for what was typed (デザイン規約 §可否・警告の出し場所), and nothing has been —
+    /// **Still open.** The frame answers for what was typed (デザイン規約 §可否・警告の出し場所), and nothing has been —
     /// a box that comes up already turned down is turning down the reader's arrival. A rename rubbed out to nothing is
     /// the other thing: a name was there and has been taken away, which git would refuse.
     readonly property bool editUnanswered:
         (gestures.editMode === "branch" || gestures.editMode === "tag")
         && gestures.editText.trim() === ""
-    /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free text, not a
-    /// ref name).
+    /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free
+    /// text).
     readonly property bool editRefused: gestures.editKey !== "" && !gestures.editUnanswered
         && (gestures.editTaken
             || gestures.editCaseOnly
@@ -78,10 +78,10 @@ QtObject {
                  : GitFacts.validRefName(gestures.editText)))
     /// Only the letters' case differs from the name the row already carries. **git writes a ref as a file**, so on a
     /// case-insensitive disk the new name lands on the old one's and both are gone — core refuses it outright
-    /// (`tag::rename`), and asking here is what puts the answer in the box the name was typed into instead of in a log
-    /// with nothing in it (デザイン規約 §答えの要らない報せ, by design).
+    /// (`tag::rename`), and asking here is what puts the answer in the box the name was typed into
+    /// (デザイン規約 §答えの要らない報せ, by design).
     ///
-    /// **`tag` is the kind here, not the mode** — the mode says which of the box's three questions is being asked
+    /// **`tag` is the kind here** — the mode says which of the box's three questions is being asked
     /// (`rename` / `branch` / `tag`), and this is only about the one that renames something that is already there.
     readonly property bool editCaseOnly:
         gestures.editKind === "tag" && gestures.editMode === "rename"
@@ -108,8 +108,8 @@ QtObject {
         // in a write, and a box that opened while the doors are held would take a name nothing can be done with.
         if (gestures.held)
             return
-        // The box opens where the row is — folded, that is the section standing beside the rail, and the list is not
-        // put back for it (デザイン規約 §左メニューを畳む: a click in a peek does not undo the fold, which would take the
+        // The box opens where the row is — folded, that is the section standing beside the rail, and the list stays
+        // folded (デザイン規約 §左メニューを畳む: a click in a peek keeps the fold — undoing it would take the
         // diff it was made for down). The hover that raised that section no longer decides how long it stands: the box
         // holds it open, the way a menu does (`pinned`).
         gestures.editKind = kind
@@ -200,7 +200,7 @@ QtObject {
     /// Double-click: where the row leads (デザイン規約 §左メニューの所作).
     function activateRow(kind, name, full, oidHex) {
         // The two of these that write: a switch, and the box a tag's row opens for a new branch's name. **A worktree
-        // row is not one of them** — opening another working copy in a tab writes nothing in this one, and going
+        // row goes through** — opening another working copy in a tab writes nothing in this one, and going
         // somewhere else to read while a rewrite runs is exactly what the hold is meant to leave alone
         // (デザイン規約 §左メニューの所作 の replay の段).
         if (gestures.held && kind !== "worktree")
@@ -213,9 +213,9 @@ QtObject {
         else if (kind === "worktree")
             gestures.host.worktreeActivated(full)
         else if (kind === "tag")
-            // A tag is a mark, not somewhere to carry on from: the row offers the one thing that would make it one.
+            // A tag is a mark: the row offers the one thing that would make it somewhere to carry on from.
             gestures.startEdit(kind, "tag:" + id, "branch", id, oidHex, "")
-        // A stash is not a place to stand, and a folder is not a row.
+        // A stash is a shelf, and a folder a heading: both stay put.
     }
     /// The menu's way into the same box, for anyone who does not know the gesture or cannot aim two separate clicks at
     /// one row.

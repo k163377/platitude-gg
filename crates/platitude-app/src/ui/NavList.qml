@@ -11,16 +11,16 @@ AppListView {
     property bool expanded: true
     property string kindHint: "branch"
     /// REMOTES only: the configured remotes as the model packs them, and which of them this repository sends pushes
-    /// to. Unpacked once here rather than by each caller — the rows are recycled, so neither answer can be theirs to
-    /// keep, and one list is one split (デザイン規約 §その他の操作).
+    /// to. Unpacked once here — the rows are recycled, so neither answer can be theirs to keep, and one list is one
+    /// split (デザイン規約 §その他の操作).
     property string remotesPacked: ""
     property string markedRemote: ""
     readonly property var remoteNames:
         navList.remotesPacked === "" ? [] : navList.remotesPacked.split(String.fromCharCode(31))
-    /// This list holds whatever height the panel it is in has over its rows, instead of staying content-sized. Only the
-    /// one section the folded rail opens beside itself wants that — it is alone in its panel, so the spare height has
-    /// nowhere else to go. In the sidebar proper the ground at the foot of the column takes it, and no section
-    /// stretches (SidebarPane).
+    /// This list holds whatever height the panel it is in has over its rows. Only the one section the folded rail
+    /// opens beside itself wants that — it is alone in its panel, so the spare height has nowhere else to go. In the
+    /// sidebar proper the ground at the foot of the column takes it, and no section stretches
+    /// (SidebarPane).
     property bool stretch: false
     /// The sidebar, which owns the row gestures: which row was clicked last and which is being typed into outlive both
     /// the delegates and this list, and only one row at a time is either, whichever section it sits in. A list with
@@ -33,9 +33,9 @@ AppListView {
     /// Where a row's open name box is drawn — outside this list, which clips, because the box is allowed past the
     /// pane's edge when what is in it does not fit (`NavItemDelegate`).
     ///
-    /// **Two out, not one.** One out is the column the sections are laid out in, and a layout lays out whatever is
-    /// parented into it — a box put there is given the column's own next row (measured: it landed at the foot of the
-    /// pane). Two out is what that column fills, which lays nothing out and clips nothing.
+    /// **Two out.** One out is the column the sections are laid out in, and a layout lays out whatever is parented
+    /// into it — a box put there is given the column's own next row (measured: it landed at the foot of the pane).
+    /// Two out is what that column fills, which lays nothing out and clips nothing.
     ///
     /// A list whose rows cannot be typed into is left with none: the working tree's file lists have no gestures, so
     /// no row of theirs ever opens a box, and naming a layer for them would only say where a box that never comes
@@ -61,7 +61,7 @@ AppListView {
     /// The box has opened on a row: if it is one of this section's, bring it into view. A row can be typed into
     /// without having been clicked — the current branch's sticky row raises the same menu while the real row is
     /// scrolled off (`HeadPinRow`) — and a name changing itself somewhere off screen is a name nobody agreed to.
-    /// Watched rather than told: only the gestures know when a box opens, and every list they reach is one of these.
+    /// Watched: only the gestures know when a box opens, and every list they reach is one of these.
     Connections {
         target: navList.gestures
         function onEditKeyChanged() {
@@ -69,7 +69,7 @@ AppListView {
             const head = navList.kindHint + ":"
             if (!key.startsWith(head))
                 return
-            // What is on show, so a row behind a filter or a closed folder answers -1 rather than a stranger's place.
+            // What is on show, so a row behind a filter or a closed folder answers -1.
             const row = navList.sectionModel.rowOfName(key.substring(head.length))
             if (row >= 0)
                 navList.positionViewAtIndex(row, ListView.Contain)
@@ -130,10 +130,10 @@ AppListView {
         return row ? row.editTipShown : false
     }
     /// What the pointed row itself would say, and what it is called (PGG_AUTO_ACT=nav-tip). The row decides and the
-    /// shared instance shows, so the two are read apart: a row with nothing to say never reaches the instance. Read off
-    /// `hoverText` and not the attached `ToolTip.visible` — **that one reads back the instance's own state**, so during
-    /// the delay a row that does speak answers false. An empty name says the view has not built that row yet — the same
-    /// miss `clickRow` reports as false.
+    /// shared instance shows, so the two are read apart: a row with nothing to say never reaches the instance. Read
+    /// off `hoverText` — **the attached `ToolTip.visible` reads back the instance's own state**, so during the delay
+    /// a row that does speak answers false. An empty name says the view has not built that row yet — the same miss
+    /// `clickRow` reports as false.
     function rowTipWords(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.hoverText : ""
@@ -151,8 +151,8 @@ AppListView {
         return row ? row.oid_hex : ""
     }
     /// Where the list has actually scrolled to, and how a run puts a row out of sight to begin with. Read off
-    /// `contentY` rather than off a delegate: a row scrolled away has none, and "there is no delegate" is also what a
-    /// list that has not been built yet says.
+    /// `contentY`: a row scrolled away has no delegate, and "there is no delegate" is also what a list that has not
+    /// been built yet says.
     function rowInView(index) {
         const top = index * Theme.rowHeight
         return top >= navList.contentY && top + Theme.rowHeight <= navList.contentY + navList.height
@@ -160,9 +160,9 @@ AppListView {
     function scrollToEnd() {
         navList.contentY = Math.max(0, navList.contentHeight - navList.height)
     }
-    /// A few rows on, which is how a run puts a row just out of sight (PGG_AUTO_ACT=nav-branch-box:away). Not to the
-    /// end: past the view's own cache the delegate is gone, and a box that went with it proves nothing about the one
-    /// rule being read — that a box whose row has left the list goes with it.
+    /// A few rows on, which is how a run puts a row just out of sight (PGG_AUTO_ACT=nav-branch-box:away). A few,
+    /// because past the view's own cache the delegate is gone, and a box that went with it proves nothing about the
+    /// one rule being read — that a box whose row has left the list goes with it.
     function scrollRows(rows) {
         navList.contentY = Math.min(Math.max(0, navList.contentHeight - navList.height),
                                     navList.contentY + rows * Theme.rowHeight)
@@ -173,8 +173,8 @@ AppListView {
     Layout.fillHeight: expanded
     // A section closes on a hairline of ground — just enough to keep its last row off the next header band. Anything
     // thicker reads as a blank row belonging to the section. A top margin is a seat given to something standing over
-    // the rows rather than spare height, so the section asks for it on top of them (`NavSections` / `HeadPinRow`);
-    // every other list here has none and adds nothing.
+    // the rows, so the section asks for it on top of them (`NavSections` / `HeadPinRow`); every other list here has
+    // none and adds nothing.
     Layout.maximumHeight: !expanded ? 0
                           : stretch ? Number.POSITIVE_INFINITY
                           : count * Theme.rowHeight + navList.topMargin + Theme.borderWidth
@@ -185,7 +185,7 @@ AppListView {
         id: row
         listWidth: navList.width
         // Both margins of the panel are the one the bar asks for at the right edge, so the rows sit between equal
-        // sides instead of hard against the left frame; the folds step in by that same value
+        // sides; the folds step in by that same value
         // (`NavItemDelegate.rowInset` / デザイン規約 §余白 の左メニューの行の項).
         rowInset: Theme.spaceSm
         nestStep: Theme.spaceSm
@@ -201,8 +201,8 @@ AppListView {
         pointedTipRow: navList.pointedTipRow
         rowKey: navList.gestures ? navList.keyOf(full, name) : ""
         activeKey: navList.gestures ? navList.gestures.activeKey : ""
-        // The gesture itself, not a copy of what it holds: the wait a second click opens has to outlive this row, and
-        // a list whose rows cannot be typed into has none (`ReclickGesture`).
+        // The gesture itself: the wait a second click opens has to outlive this row, and a list whose rows cannot be
+        // typed into has none (`ReclickGesture`).
         reclick: navList.gestures ? navList.gestures.reclick : null
         editKey: navList.gestures ? navList.gestures.editKey : ""
         menuStanding: navList.gestures ? navList.gestures.menuOpen : false

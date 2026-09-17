@@ -10,22 +10,22 @@ import platitude.ui
 // Rust test reaches it (that side maps bytes to places and back, `encode::markup`), and the headless screenshots
 // cannot judge it either — a wash a few pixels off the characters it names photographs like one on them.
 //
-// **The expected place is taken from a second instrument, never from the one under test**: the ruler is a `TextEdit`
-// reading the row's markup through `QTextDocument`; every case here is held against a `TextInput` carrying the
-// characters that markup stands for, which is a different QML type on Qt's other text path, and against the `Label`
-// the rows are actually drawn in. A ruler that agreed only with itself would pass on any rule at all.
+// **The expected place is taken from a second instrument**: the ruler is a `TextEdit` reading the row's markup
+// through `QTextDocument`; every case here is held against a `TextInput` carrying the characters that markup
+// stands for, which is a different QML type on Qt's other text path, and against the `Label` the rows are
+// actually drawn in. A ruler that agreed only with itself would pass on any rule at all.
 //
 // **`cargo xtask qmltest` runs this on `-platform offscreen`, where the answer is easier than the real one** —
 // offscreen resolves every full-width glyph through one font at one advance, so a run there cannot speak for how a
-// real window advances them (rules-refs/app-ui.md). So what is judged here is the *agreement* rather than any
-// particular number, which is a claim both platforms can carry; the numbers themselves are read by running
-// `qmltestrunner` on this file without `-platform offscreen`.
+// real window advances them (rules-refs/app-ui.md). So what is judged here is the *agreement*, which is a claim
+// both platforms can carry; the numbers themselves are read by running `qmltestrunner` on this file without
+// `-platform offscreen`.
 Item {
     id: root
     width: 600
     height: 200
 
-    /// Lines built from code points rather than written out: these are rulers, not words (`DiffTextMetrics`).
+    /// Lines built from code points: these are rulers (`DiffTextMetrics`).
     readonly property string acute: String.fromCharCode(0x301)
     readonly property string combining: ("e" + root.acute).repeat(40)
     readonly property string cjk: (String.fromCharCode(0x306e) + String.fromCharCode(0x65e5)
@@ -50,7 +50,7 @@ Item {
         }
         return out
     }
-    /// One line's markup cut into the pieces the theme's runs would wrap, without cutting an entity in half —
+    /// One line's markup cut into the pieces the theme's runs would wrap, every entity kept whole —
     /// `&nbsp;` is one character of the drawn line and five of this string.
     function pieces(markup) {
         const out = []
@@ -126,8 +126,8 @@ Item {
             ]
         }
 
-        /// Puts one line on all three and waits for them to settle on one width. **Never read at a moment of this
-        /// test's choosing**: a `Text` answers at the family's own advance until the fallback carrying the other
+        /// Puts one line on all three and waits for them to settle on one width. **The line names the moment it
+        /// is read at**: a `Text` answers at the family's own advance until the fallback carrying the other
         /// glyphs is resolved, and a rendered frame is not something a test window is promised
         /// (`waitForRendering` answers false on a real platform, `tst_diffreach`). What is waited for is the two
         /// sides agreeing, which is only true once both have settled.
@@ -177,7 +177,7 @@ Item {
                 compare(ruler.placeAt(markup, false, ink + past), spelled.length,
                         "the blank " + past + "px past the line")
             }
-            // And the end is where the line was drawn to, not where a count of its characters would put it.
+            // And the end is where the line was drawn to.
             compare(ruler.xOf(spelled.length), ink)
         }
 
@@ -195,8 +195,8 @@ Item {
             verify(inside > 4 && inside < spelled.length, "a press between them named place " + inside)
         }
 
-        /// A run is one rectangle where the line reads one way, and it is the run's own two places — not a prefix
-        /// measured on its own, which is a different layout of a different string.
+        /// A run is one rectangle where the line reads one way, and it is the run's own two places, both read
+        /// off the layout of the whole line.
         function test_a_run_is_the_rectangle_between_its_two_places_data() { return lines() }
 
         function test_a_run_is_the_rectangle_between_its_two_places(data) {
@@ -257,8 +257,8 @@ Item {
 
         /// A row is handed its line and the runs on it one property at a time (`DiffRowDelegate`), so between the
         /// two a run stands against a line that has none of its places — most often the line the row before was
-        /// drawn from, over a blank line. **That run is not this line's**: it washes nothing, and the places past
-        /// the end are never put to the layout (each one is a rectangle at nowhere and a warning from Qt).
+        /// drawn from, over a blank line. **Such a run washes nothing**, and the places past the end stay out
+        /// of the layout (each one would be a rectangle at nowhere and a warning from Qt).
         function test_a_run_the_line_has_no_places_for_washes_nothing() {
             compare(ruler.rectsOf("", false, "0:33").length, 0)
             compare(ruler.rectsOf(root.markupOf("abc"), false, "0:33").length, 0)
@@ -272,7 +272,7 @@ Item {
         /// the same x and would wash nothing at all, which is the failure this is here to stop.
         function test_a_run_across_a_word_that_reads_the_other_way_still_covers_its_places() {
             // Four letters of an alphabet that reads the other way, between Latin ones. Built from code points:
-            // this is a fixture and not a word (`DiffTextMetrics`).
+            // this is a fixture (`DiffTextMetrics`).
             const rtl = String.fromCharCode(0x05d0, 0x05d1, 0x05d2, 0x05d3)
             const line = "abc " + rtl + " def"
             const markup = root.markupOf(line)
@@ -296,8 +296,8 @@ Item {
             }
         }
 
-        /// And the pieces are merged rather than laid one on another: a run of a line that reads one way comes back
-        /// as one rectangle even when it is walked.
+        /// And the pieces are merged: a run of a line that reads one way comes back as one rectangle even when
+        /// it is walked.
         function test_the_pieces_that_touch_are_one_rectangle() {
             const line = "let value = compute(4);"
             shown(line)

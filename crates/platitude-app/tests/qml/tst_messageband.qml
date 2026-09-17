@@ -4,7 +4,7 @@ import QtTest
 import platitude.ui
 
 // The two message boxes are surfaces a click drops a caret on (デザイン規約 §コミットメッセージの 2 つの枠), and the
-// box is the whole of what the frame encloses. **Twice now it has not been**, and neither strip could be seen: the
+// box is the whole of what the frame encloses. **Twice a strip has taken it**, and neither could be seen: the
 // inset the view is held off the frame by, which nothing stood in until `SweepBand`, and the sideways bar the style
 // hands every `ScrollView` whether or not it has anywhere to go. Both are questions about how Qt hands a press to an
 // item tree, which is what this file is for (規約 §右のペインの字は掴める).
@@ -22,8 +22,8 @@ Item {
     }
 
     // The boxes' own shape, with the real hand under the real inset: a frame, a view held off it by `spaceXs`, and
-    // the words inside the view. Here rather than through `MessageEditor`, because what these ask about is the text's
-    // selection, which the pair reports nothing of.
+    // the words inside the view. Built here, because what these ask about is the text's selection, which the
+    // pair reports nothing of.
     Component {
         id: box
         Rectangle {
@@ -87,9 +87,9 @@ Item {
             return editor
         }
 
-        /// **The sideways bar is refused by policy, never by `null`** (`DescriptionBox`) — what `null` leaves behind
-        /// is a `TypeError` per box on every start, which no screenshot and no press can see, so it is caught here
-        /// rather than by the sweeps below.
+        /// **The sideways bar is refused by policy** (`DescriptionBox`) — what `null` leaves behind is a
+        /// `TypeError` per box on every start, which no screenshot and no press can see, so it is caught
+        /// here.
         function test_a_refused_sideways_bar_says_nothing() {
             failOnWarning(/Cannot read property 'active' of null/)
             makePair()
@@ -99,9 +99,9 @@ Item {
         }
 
         /// **The whole of the summary frame drops a caret in the summary** — the words, the band around them, and
-        /// the four corners. Swept on a grid rather than aimed at named points: what has gone wrong here twice is a
-        /// strip nobody could see (the inset the view leaves, and the style's sideways bar), and a run that names
-        /// its points is a run that walks over one (`details-sweep`, the same rule).
+        /// the four corners. Swept on a grid: what has gone wrong here twice is a strip nobody could see (the
+        /// inset the view leaves, and the style's sideways bar), and a run that names its points is a run that
+        /// walks over one (`details-sweep`, the same rule).
         function test_the_whole_summary_frame_lands_a_caret() {
             const editor = makePair()
             const top = editor.summaryNeed

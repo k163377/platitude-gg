@@ -49,8 +49,8 @@ ColumnLayout {
     /// as the commit's.
     ///
     /// **Only where that row was the whole of the choice.** Several rows lit is a choice a press acts on, and a diff
-    /// standing over one of them never put the rest up; clearing them would throw away a walk over the rows that was
-    /// made for staging or discarding rather than for reading.
+    /// standing over one of them never put the rest up; clearing them would throw away a walk over the rows that
+    /// was made for staging or discarding.
     onReadKeyChanged: {
         if (wipPane.readKey === "" && wipPane.soleChosen !== "" && wipPane.soleChosen === wipPane.wasRead)
             wipPane.clearChoice()
@@ -78,14 +78,14 @@ ColumnLayout {
     signal amendToggled(bool on)
     signal commitClicked()
     signal fileActivated(string bucket, string path, string origPath)
-    /// The arrows walked onto another file. Not the signal a click raises: a click on the file already open closes the
-    /// diff, and holding Down must not (規約 §diff のファイル一覧).
+    /// The arrows walked onto another file. A signal of its own: a click on the file already open closes the
+    /// diff, and holding Down keeps it open (規約 §diff のファイル一覧).
     signal fileWalked(string bucket, string path, string origPath)
     /// Right-click on a file row; the page owns the menu because delegates are recycled out from under an open popup.
     signal fileMenuRequested(string bucket, string path)
 
     /// Tree or flat paths, for the whole pane. One choice, three lists: the toggle in the header band is about how the
-    /// working tree is shown, not about one bucket of it.
+    /// working tree is shown.
     /// **The page applies it**, because the choice outlives this pane: the pane another working copy's changes are
     /// read in has the same toggle, and a reader who chose paths here expects paths there (`RepoPage.setWipTreeView`).
     signal treeViewChosen(bool tree)
@@ -122,7 +122,7 @@ ColumnLayout {
     /// Rows above the unstaged bucket, which is what turns a row number spanning the pane into one of a bucket's own.
     readonly property int conflictRows: conflictsBucket.visible ? conflictsBucket.rows : 0
     /// What the buckets take before a single file row is shown: a heading each, and the hairline of ground between one
-    /// bucket and the next. Neither is a bucket's to give up, so neither is in the room they share.
+    /// bucket and the next. Both stand whatever happens, so neither is in the room they share.
     readonly property real bucketFrame:
         wipPane.bucketPanes.length * Theme.rowHeight
         + (wipPane.bucketPanes.length - 1) * Theme.borderWidth
@@ -186,7 +186,7 @@ ColumnLayout {
     /// separate lists and one choice: a Ctrl-click reaches from one into the next, so every walk over the rows walks
     /// the lot of them.
     ///
-    /// **Asked of the models, not of the delegates.** A view builds delegates for the rows it is showing and no
+    /// **Asked of the models.** A view builds delegates for the rows it is showing and no
     /// others, so a walk over them answers for the viewport instead of the list — a discard or a stash would take
     /// whatever part of the choice happened to be on screen and drop the rest without saying so
     /// (`NavSectionModel::file_key`).
@@ -227,7 +227,7 @@ ColumnLayout {
     }
     /// The delegate at a place in the rows, for the two things a delegate is the only answer to: the automation's
     /// clicks, and placing a card against the row it belongs to. Null for a row the view has not built — every walk
-    /// over the choice itself goes through [`keyAt`] instead.
+    /// over the choice itself goes through [`keyAt`].
     function rowAt(index) {
         const standing = wipPane.bucketPanes
         let at = index
@@ -282,8 +282,8 @@ ColumnLayout {
         wipPane.chosenCount = 0
         wipPane.anchorRow = -1
     }
-    /// Applies a click to the choice. Returns whether the diff should follow it: adding to a choice is about the
-    /// choice, not about which file is being read.
+    /// Applies a click to the choice. Returns whether the diff should follow it: adding to a choice is about
+    /// the choice.
     function applyClick(bucket, path, modifiers) {
         const key = bucket + ":" + path
         const row = wipPane.rowIndexOf(key)
@@ -315,7 +315,7 @@ ColumnLayout {
     }
     /// Where in the pane's numbering a key sits; -1 for a row no bucket is showing.
     ///
-    /// **Each bucket is asked once**, rather than every row being asked for its key: this runs on every click, and a
+    /// **Each bucket is asked once**: this runs on every click, and a
     /// tree with thousands of changed files would otherwise cross the bridge once per row to find the one that was
     /// just pressed. A `<bucket>:<path>` shows in exactly one run — untracked files are shown among the unstaged, and
     /// a file changed on both sides has a different bucket in each — so the first bucket that owns it is the answer
@@ -366,7 +366,7 @@ ColumnLayout {
     /// it directly, the same way it writes `showStageTools` — hover cannot be injected.
     function pointEol(path) {
         if (path === "") {
-            // Not taken down here: the hand that let go of the mark may be walking into the card to read the path out
+            // Kept up here: the hand that let go of the mark may be walking into the card to read the path out
             // of it, and the card holds still for a beat while that settles (`eolKeep`). The pointed row is left
             // standing with it — the mark that opened the card stays lit for as long as the card does
             // (規約 §hover のツールチップ).
@@ -375,7 +375,7 @@ ColumnLayout {
             return
         }
         wipPane.worktreeModel.pointEol(path)
-        // Under the row rather than under the pointer: these rows are a pane wide at most, so the two are never far
+        // Under the row: these rows are a pane wide at most, so the two are never far
         // apart, and a card placed from the row lands in the same place whether a pointer or the automation named it.
         const row = wipPane.rowFor(path)
         if (row === null)
@@ -392,7 +392,7 @@ ColumnLayout {
     /// Puts the commit button's card out without a pointer, the way the rows' is put out — hover cannot be injected.
     property bool pointAtCommit: false
     onPointAtCommitChanged: wipPane.settleCommitCard()
-    /// **The pointer is not the only thing that moves.** This is placed by a function rather than by a binding — a card
+    /// **The warning moves too.** This is placed by a function — a card
     /// above its anchor needs a measured height, so it cannot be one — and a function only runs when something calls
     /// it. Called on the pointer's edges alone, it answers for the state the pane was in when the pointer arrived, and
     /// a pointer that arrives first is the ordinary case: someone presses `Stage all` and moves to the button while the
@@ -405,7 +405,7 @@ ColumnLayout {
     }
     function settleCommitCard() {
         if (!commitBlock.commitWarned || !(commitBlock.commitPointed || wipPane.pointAtCommit)) {
-            // The card the button put out settles rather than closing, for the reason the rows' does: the hand may be
+            // The card the button put out settles, for the reason the rows' does: the hand may be
             // walking into it (`pointEol`).
             if (eolCard.path === "") {
                 wipPane.eolAsked = false
@@ -414,7 +414,7 @@ ColumnLayout {
             return
         }
         // No one file to name: the button speaks for the whole index, and so has to hold for all four cases at once.
-        // **Not "change"** — only one of them is a change. A new file has nothing to have changed from, a mixed one is
+        // **"problems"** — only one of them is a change. A new file has nothing to have changed from, a mixed one is
         // a file disagreeing with itself, and a file that never had an ending has only gained its first.
         //
         // **`may`, and it is doing work.** Two of the four are read off a sample of the neighbouring files, so the app
@@ -424,7 +424,7 @@ ColumnLayout {
         eolCard.notice = wipPane.workTree.eolStagedCount === 1
             ? qsTr("1 staged file may have line-ending problems")
             : qsTr("%1 staged files may have line-ending problems").arg(wipPane.workTree.eolStagedCount)
-        // Above the button, not under it: the button is pinned to the pane's bottom edge, so under it is off the
+        // Above the button: the button is pinned to the pane's bottom edge, so under it is off the
         // window (measured — the card's own top hairline was the last row of pixels in the shot).
         const at = commitBlock.commitSeat.mapToItem(wipPane, 0, 0)
         eolCard.x = at.x
@@ -433,14 +433,14 @@ ColumnLayout {
         wipPane.eolAsked = true
         eolCard.open()
     }
-    // The one card both hovers open: only one pointer, so only one of them is ever out. Owned here rather than by a
-    // row, which is recycled the moment it scrolls off (app-ui.md).
+    // The one card both hovers open: only one pointer, so only one of them is ever out. Owned here: a row is
+    // recycled the moment it scrolls off (app-ui.md).
     EolHoverCard {
         id: eolCard
         /// What the card hangs off, in pane coordinates, and which side of it the card is on.
         property real anchorY: 0
         property bool above: false
-        /// **Bound, not assigned.** A popup handed its text is not its final height in that same frame (規約 §hover
+        /// **Bound.** A popup handed its text is not its final height in that same frame (規約 §hover
         /// のツールチップ 「出す前に採寸する」), and a card placed *above* its anchor needs that height to be placed at
         /// all — assigned, it would open one card-height too low every time.
         ///
@@ -532,7 +532,7 @@ ColumnLayout {
     }
 
     // ---- the bucket headings, as the scene has them ------------------
-    // Read off the headings themselves rather than off the conditions that put them there: an emptied bucket keeps its
+    // Read off the headings themselves: an emptied bucket keeps its
     // heading, and the whole of that claim is whether the heading is in the scene (app-ui.md §UI 自動化の因果性).
     /// Whether a bucket has a heading on screen at all.
     function bucketHeaded(section) {
@@ -574,13 +574,13 @@ ColumnLayout {
     /// Whether the boxes are standing empty over one, which is the state that presses with nothing typed. Both boxes:
     /// a description with no summary is not "empty", and git would write a commit whose first line is blank.
     ///
-    /// **Never in amend mode.** A merge's message belongs to the commit the merge is about to make, not to the one
-    /// before it — and `git commit --amend` under `MERGE_HEAD` replaces that earlier commit with a merge commit,
+    /// **Outside amend mode.** A merge's message belongs to the commit the merge is about to make —
+    /// and `git commit --amend` under `MERGE_HEAD` replaces that earlier commit with a merge commit,
     /// leaving what was there in the reflog alone. An amend goes on asking for a summary of its own.
     readonly property bool onStandingMessage:
         !wipPane.amending && wipPane.standingSubject !== ""
         && commitBlock.subjectText.trim() === "" && commitBlock.bodyText.trim() === ""
-    /// What a press would record. Read by the page rather than the boxes themselves, so the fallback is decided once.
+    /// What a press would record. Read by the page, so the fallback is decided once.
     readonly property string outgoingSubject:
         wipPane.onStandingMessage ? wipPane.standingSubject : commitBlock.subjectText
     readonly property string outgoingBody:
@@ -589,13 +589,13 @@ ColumnLayout {
     /// The label a stash made now would take: the summary already standing in the box, when git would have it as one
     /// (デザイン規約 §変更を退避する). Empty means the entry goes unnamed, which is what git writes its own `WIP on …` for.
     ///
-    /// **The typed line only, never a merge's own sentence.** That sentence is about the commit the merge is going to
-    /// make, not a name the reader gave these changes — and it reaches the box two ways, as `outgoingSubject`'s
+    /// **The typed line only.** That sentence is about the commit the merge is going to
+    /// make — and it reaches the box two ways, as `outgoingSubject`'s
     /// fallback under an empty one *and as text*, put there by `absorbOpMessage` so the press can read it. So it is
-    /// held against the standing message rather than against emptiness: a stash pressed over a stopped merge is a
+    /// held against the standing message: a stash pressed over a stopped merge is a
     /// stash of the work, and the entry git names itself says more about it than a merge that no longer exists
     /// (measured, the press takes `MERGE_HEAD` with it). One word typed over it makes it the reader's again.
-    /// **And never in amend mode**, where the box is holding the message of a commit that already exists
+    /// **And outside amend mode**, where the box is holding the message of a commit that already exists
     /// (`absorbHeadMessage`) — a stash called after it would be naming someone else's work.
     ///
     /// The text is not taken away by the write that reads it: the boxes are the one thing here that cannot be read
@@ -640,8 +640,8 @@ ColumnLayout {
     // the only thing that gives, and the checkboxes, the commit button and the exit card keep their own height by
     // construction, so two rows of list is the whole of the bound (デザイン規約 §コミットメッセージの 2 つの枠).
     /// How much of the pane the block under the list may take: all of it but the two rows that keep a list a list — the
-    /// same bound the grip stops at (デザイン規約 §コミットメッセージの 2 つの枠). Past this the block scrolls rather than running out of
-    /// the pane's bottom.
+    /// same bound the grip stops at (デザイン規約 §コミットメッセージの 2 つの枠). Past this the block
+    /// scrolls.
     ///
     /// The buckets' own frame comes off first: a heading is not one of the two rows, and left in, a pane squeezed to
     /// the window's floor would keep nothing but headings — two places named and no file under either of them.
@@ -673,8 +673,8 @@ ColumnLayout {
     readonly property bool descKeeps: commitBlock.descKeeps
     /// How much of the pane's bottom edge is left bare, for the corner text the page hangs there to step aside by.
     /// Nothing is: the commit block is pinned to that edge and is never empty — a summary box stands there on a clean
-    /// tree with nothing to commit. So this pane never lends the corner a seat, and the version it names is read off
-    /// the commit-details pane instead (`DetailsPane.bottomRoom`).
+    /// tree with nothing to commit. So this pane never lends the corner a seat, and the version it names is read
+    /// off the commit-details pane (`DetailsPane.bottomRoom`).
     readonly property real bottomRoom: 0
 
     spacing: 0
@@ -715,15 +715,15 @@ ColumnLayout {
     // The files first, and the editor under them (デザイン規約 §コミットメッセージの 2 つの枠): what is being
     // committed is read before what it will be called, and the button that does it is the last thing on the way down.
     //
-    // **One list per bucket, not one list of every bucket** (デザイン規約 §その他の操作): stacked end to end, a working
+    // **One list per bucket** (デザイン規約 §その他の操作): stacked end to end, a working
     // tree with seventy unstaged files pushes the staged ones off the bottom of the pane, and the side a commit is
     // actually made of is the side nobody can see. Each bucket scrolls inside a share of its own, and the shares are
     // the pane's to hand out (`bucketSeats`).
     //
-    // No question bar over these lists: what a file row throws away is held down on the menu row that names it, where
+    // What a file row throws away is held down on the menu row that names it, where
     // the hand already is (デザイン規約 §長押し).
     //
-    // Placed rather than laid out: what each bucket gets is worked out from the room they stand in, and a layout that
+    // Placed: what each bucket gets is worked out from the room they stand in, and a layout that
     // sized itself from its children would be reading that answer back out of its own question.
     Item {
         id: buckets

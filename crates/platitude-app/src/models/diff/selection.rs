@@ -2,22 +2,22 @@
 //! each row draws of it, and what it hands the clipboard
 //! (デザイン規約 §diff の中身をコピーする).
 //!
-//! **It lives here rather than in the pane** for one reason: which bytes
-//! of a line the clipboard should get is a question about the file's own
-//! text — and the file's own text is here, on `shown`. The pane hands over
-//! a row and a place along it; everything after that is read off the
+//! **It lives here** for one reason: which bytes of a line the
+//! clipboard should get is a question about the file's own text — and
+//! the file's own text is here, on `shown`. The pane hands over a row
+//! and a place along it; everything after that is read off the
 //! patches.
 //!
-//! **A place, not a pixel.** Where a line's characters are drawn is known
-//! only to the layout that drew them, so the pane asks the row itself
-//! (`LineRuler`) and brings back a place in the line as the row spells
-//! it; this side turns that into a byte and back
-//! (`encode::markup::source_byte` / `spelled_ranges`). Nothing here
-//! measures a font, and no count of columns stands in for one.
+//! **A place.** Where a line's characters are drawn is known only to the
+//! layout that drew them, so the pane asks the row itself (`LineRuler`)
+//! and brings back a place in the line as the row spells it; this side
+//! turns that into a byte and back (`encode::markup::source_byte` /
+//! `spelled_ranges`). Nothing here measures a font, and no count of
+//! columns stands in for one.
 //!
 //! Two more things follow and are worth saying once:
 //!
-//!  - **the copy never comes from what is drawn.** A coloured row's `text`
+//!  - **the copy comes from the file's bytes.** A coloured row's `text`
 //!    is markup whose spaces are `&nbsp;` and whose tabs have already been
 //!    spelled out as the columns they reach (`encode::markup`), so a copy
 //!    taken off the screen would paste indentation made of spaces and
@@ -196,8 +196,8 @@ impl DiffModel {
     ///
     /// **Only the ends are revisited when both spans stand.** A row inside
     /// both the old selection and the new one is washed end to end in each,
-    /// so a drag across six thousand rows walks the two moving edges rather
-    /// than the whole file on every mouse move.
+    /// so a drag across six thousand rows walks only the two moving
+    /// edges.
     fn lay_wash(&mut self, before: Option<Span>, after: Option<Span>) {
         let mut ranges = match (before, after) {
             (None, None) => return,
@@ -296,7 +296,7 @@ impl DiffModel {
     }
 
     /// Recounts what the selection holds, so the menu can be assembled
-    /// from properties rather than from a walk it does itself.
+    /// from properties alone.
     fn settle_counts(&mut self) {
         let mut takes = 0usize;
         let mut inked = false;
@@ -354,9 +354,9 @@ impl DiffModel {
 
     /// The removed lines the selection reaches over, whole.
     ///
-    /// Whole and not cut: they carry no wash, so there is nothing on
-    /// screen that could say which part of one was meant — the same answer
-    /// GitKraken gives (デザイン規約 §diff の中身をコピーする).
+    /// Whole: they carry no wash, so there is nothing on screen that
+    /// could say which part of one was meant — the same answer GitKraken
+    /// gives (デザイン規約 §diff の中身をコピーする).
     pub(super) fn copied_removed(&self) -> String {
         let mut out = String::new();
         let mut first_line = true;

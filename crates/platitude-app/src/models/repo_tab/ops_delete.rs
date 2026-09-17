@@ -3,12 +3,12 @@
 //!
 //! **Request, wait and put-down in one place.** Every press here asks the
 //! session and, with the id it comes back with, writes down what the press
-//! took away — so a press can never be written without the rows it moves,
-//! and the rows can never be moved without an answer coming for them. What
-//! the waiting *means* is `ops::StandIn`'s, which knows nothing of Qt or
-//! git and is where the transitions are tested (`ops::stand_in_tests`);
-//! this file is the wiring: git on one side, the properties QML draws
-//! from on the other.
+//! took away — so every press is written with the rows it moves, and
+//! every row that moves has an answer coming for it. What the waiting
+//! *means* is `ops::StandIn`'s, which knows nothing of Qt or git and is
+//! where the transitions are tested (`ops::stand_in_tests`); this file
+//! is the wiring: git on one side, the properties QML draws from on the
+//! other.
 
 use super::*;
 
@@ -25,8 +25,8 @@ impl RepoTab {
         let accepted = asked.map(platitude_core::OperationId::as_u64);
         if !force && self.arm_branch_delete(&name, accepted) {
             // QML is told the last answer is gone, so a delete of a
-            // re-made branch of the same name reads its own answer as a
-            // change rather than as the old one standing.
+            // re-made branch of the same name reads its own answer as
+            // a change.
             self.changed();
         }
         self.took_away(&[(Row::Branch, &name)], asked);
@@ -82,7 +82,7 @@ impl RepoTab {
     /// the row it was about, so git's answer to **that** press is what
     /// the page reports (`ops::PushOut`).
     ///
-    /// **The rows coming back is not the whole of the answer.** The
+    /// **The answer carries more than the rows coming back.** The
     /// delete's own owner puts those back either way; what only the
     /// refusal carries is why, and a refusal folded into the group is one
     /// a fetch answering in the same drain takes over.
@@ -117,11 +117,11 @@ impl RepoTab {
     /// neither is deleted (measured — `remote::delete_remote_tag`).
     ///
     /// `row_goes` is whether the sidebar's row leaves with the remote
-    /// copy: a name only the remote had has nothing left here to keep a
-    /// row, while one this repository holds too keeps its row and loses
-    /// only the badge (`RefTagMenu`). Which of the two it is, is the row's
-    /// own reading and not something this end can work out from a remote
-    /// and a name.
+    /// copy: a name only the remote had has nothing left here to keep
+    /// a row, while one this repository holds too keeps its row and
+    /// loses only the badge (`RefTagMenu`). Which of the two it is,
+    /// is the row's own reading, which is why it travels with
+    /// the press.
     pub(super) fn remote_tag_delete(&mut self, remote: String, tag: String, row_goes: bool) {
         let asked = self.ask_session(|s| s.delete_remote_tag(remote.clone(), tag.clone()));
         self.ref_push_asked(
@@ -133,8 +133,8 @@ impl RepoTab {
     }
 
     /// `git tag --delete` and then the remote's copy, as one queued
-    /// write: the local half first, so a pair that stops part-way never
-    /// leaves the name gone from the remote and still in the sidebar.
+    /// write: the local half first, so a pair that stops part-way
+    /// leaves the name only on the remote.
     pub(super) fn tag_delete_everywhere(&mut self, tag: String, remote: String) {
         let asked = self.ask_session(|s| s.delete_tag_everywhere(tag.clone(), remote.clone()));
         self.ref_push_asked(
@@ -144,8 +144,8 @@ impl RepoTab {
         self.took_away(&[(Row::Tag, &tag)], asked);
     }
 
-    /// `git stash drop` (destructive). A dropped entry has no chip: it is
-    /// a row of the graph rather than a name on one, and a row only leaves
+    /// `git stash drop` (destructive). A dropped entry has no chip: a
+    /// chip is a name on a row, and a stash is the row, leaving
     /// with the walk.
     pub(super) fn stash_drop(&mut self, selector: String) {
         let asked = self.ask_session(|s| s.stash_drop(selector.clone()));
@@ -159,16 +159,16 @@ impl RepoTab {
     /// until a reading below proves them gone. An answer that is not this
     /// delete's own moves nothing (`ops::StandIn`).
     pub(super) fn delete_answered(&mut self, id: u64, failed: bool, reads_from: u64) {
-        // No notify of its own: this runs inside the drain, which raises
-        // one for the whole batch once it is absorbed (`take_feed`). One
-        // raised here would let the page read a half-drained tab.
+        // The drain notifies once the whole batch is absorbed
+        // (`take_feed`), and this runs inside it. One raised here would
+        // let the page read a half-drained tab.
         self.stand_in(|gone| gone.answered(id, failed, reads_from));
     }
 
     /// A list has drawn a reading, so the rows are asked again whether
     /// the lists that draw them have caught up — and the ones that can go
-    /// are drawn back in. **Which list said so is not passed on**: every
-    /// row answers off its own, so naming one could only name it wrongly
+    /// are drawn back in. **Every row answers off its own list**, so
+    /// naming the one that said so could only name it wrongly
     /// (`ops::StandIn::look_again`).
     pub(super) fn note_listing_drawn(&mut self) {
         if self.stand_in(StandIn::look_again) {
@@ -179,12 +179,12 @@ impl RepoTab {
     /// Takes the picture of whatever this tab is already standing in for,
     /// without moving anything (`attach_feed`).
     ///
-    /// **A page does not start the operation again — it joins one.** The
-    /// machine is the hub's and outlives whichever component draws it, so
-    /// a page built over a tab with a delete still out has to be told
-    /// what that is; without this the four properties would say nothing
-    /// while the owner said otherwise, and the first reading to arrive
-    /// would hide rows on their way back rather than putting them down.
+    /// **A page joins the operation already out.** The machine is the
+    /// hub's and outlives whichever component draws it, so a page built
+    /// over a tab with a delete still out has to be told what that is;
+    /// without this the four properties would say nothing while the
+    /// owner said otherwise, and the first reading to arrive would hide
+    /// rows on their way back.
     pub(super) fn read_stand_in(&mut self) {
         self.stand_in(|_| {});
     }

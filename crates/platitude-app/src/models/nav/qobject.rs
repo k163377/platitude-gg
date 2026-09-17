@@ -115,7 +115,7 @@ impl NavSectionModel {
     /// Wires this instance to one section's data feed. `section`:
     /// `branches` / `remotes` / `worktrees` / `stashes` / `tags`. The
     /// working tree's changed files come through [`Self::attach_worktree`]
-    /// instead — that section is a list per bucket run, not one list.
+    /// — that section is a list per bucket run.
     #[qslot]
     fn attach_section(&mut self, tab_id: i32, section: String) {
         self.attach_section_feed(tab_id, section);
@@ -134,10 +134,10 @@ impl NavSectionModel {
     }
 
     /// Wires this instance to **another** working copy's changed files.
-    /// One list rather than three runs: the split those three stand for
-    /// is the index's, and nothing here can move that copy's index. A
-    /// feed of its own all the same — this window's own status goes on
-    /// arriving on its own tick while these rows are on screen.
+    /// One list: the split the three runs stand for is the index's, and
+    /// nothing here can move that copy's index. A feed of its own all the
+    /// same — this window's own status goes on arriving on its own tick
+    /// while these rows are on screen.
     #[qslot]
     fn attach_carried(&mut self, tab_id: i32) {
         self.attach_carried_feed(tab_id);
@@ -213,7 +213,7 @@ impl NavSectionModel {
     ///
     /// The ref sections answer through the snapshot's name index
     /// (`Source::branch_named` / `tag_named`) — a menu opening over a
-    /// row must not walk fifty thousand rows for it. The rest are
+    /// row is one lookup into fifty thousand rows. The rest are
     /// short lists and answer the general way.
     #[qslot]
     pub(super) fn oid_of_name(&self, name: String) -> String {
@@ -253,7 +253,7 @@ impl NavSectionModel {
     /// **the reference point `branch --delete` measures the tip against**
     /// (`BranchItem::upstream_oid`); empty where the branch has none or
     /// the ref it names is not there, which is where git measures against
-    /// HEAD instead. What the branch card puts to the graph's rows as the
+    /// HEAD. What the branch card puts to the graph's rows as the
     /// menu opens (`GraphModel.reaches`).
     #[qslot]
     fn upstream_oid_of(&self, name: String) -> String {
@@ -285,11 +285,11 @@ impl NavSectionModel {
     /// (`platitude_core::offers::TagSides`).
     ///
     /// **A tag has no namespace**, so one row carries both sides of a
-    /// name held here and over there, and the rows that act on it are not
-    /// the same rows: `tag --delete` needs a local one, `push --delete` a
-    /// remote one. The row cannot say this on its own, and neither half
-    /// alone answers it — `only_remote` is what the sidebar draws, and a
-    /// name only a remote has is the one row of TAGS that no local ref
+    /// name held here and over there, and the rows that act on it are
+    /// two: `tag --delete` needs a local one, `push --delete` a remote
+    /// one. The row cannot say this on its own, and neither half alone
+    /// answers it — `only_remote` is what the sidebar draws, and a name
+    /// only a remote has is the one row of TAGS that no local ref
     /// points at.
     #[qslot]
     pub(super) fn tag_sides(&self, name: String) -> String {
@@ -315,7 +315,7 @@ impl NavSectionModel {
     /// **What decides the shape of the menu's push row**, and it has to
     /// be answerable as the menu opens: a plain push to a name the remote
     /// already has elsewhere is refused outright, so the row comes up as
-    /// the leased overwrite instead and this is the commit the lease is
+    /// the leased overwrite and this is the commit the lease is
     /// pinned to (デザイン規約 §相手の履歴を置き換える). Asked of the tags
     /// section, the only one holding the readings.
     #[qslot]
@@ -334,8 +334,8 @@ impl NavSectionModel {
     /// …` and `error: cannot delete branch 'feat' used by worktree at …`
     /// (measured). It refuses that whether or not the worktree is
     /// **locked**: a lock stops `worktree remove` and `worktree move`,
-    /// which is a different question, so the rows that would try ask this
-    /// one and not the lock.
+    /// which is a different question, so the rows that would try ask
+    /// this one.
     ///
     /// Asked of the worktrees section, the only one holding the list —
     /// and held to it, because a file row keeps its bucket name in the
@@ -376,8 +376,8 @@ impl NavSectionModel {
     /// `stash@{0}` and the row shows the entry's message — and this is
     /// how a pop reads that message while the entry is still there.
     ///
-    /// Asked of every entry, not of the rows on show: a filter typed into
-    /// the sidebar does not stop the graph's own menu from popping one.
+    /// Asked of every entry: a filter typed into the sidebar does not
+    /// stop the graph's own menu from popping one.
     #[qslot]
     fn name_of_full(&self, full: String) -> String {
         self.told(Role::Full, &full, Role::Name)
@@ -393,10 +393,10 @@ impl NavSectionModel {
     /// The two stage letters git reports for a working-tree path (`UU`,
     /// `DU`, …); empty for any path that is not in this section.
     ///
-    /// The diff pane asks for it by path because that is all it holds: it
-    /// is handed a file, not the row the file came from, and a conflict
-    /// git prints no patch for is a pane with nothing to say unless it can
-    /// name what the two sides did.
+    /// The diff pane asks for it by path because that is all it holds:
+    /// it is handed a file, and a conflict git prints no patch for is a
+    /// pane with nothing to say unless it can name what the two sides
+    /// did.
     #[qslot]
     pub(super) fn change_of(&self, path: String) -> String {
         self.told(Role::Full, &path, Role::Change)
@@ -453,9 +453,9 @@ impl NavSectionModel {
     /// destination alone — which git reads as a file appearing out of
     /// nowhere.
     ///
-    /// The first row of that path that names a source, not the first row
-    /// of that path: a file renamed and then edited again has a row on
-    /// each side, and only the staged one knows where it came from.
+    /// The first row of that path that names a source: a file renamed
+    /// and then edited again has a row on each side, and only the staged
+    /// one knows where it came from.
     #[qslot]
     fn orig_of(&self, path: String) -> String {
         self.orig_path_of(&path)

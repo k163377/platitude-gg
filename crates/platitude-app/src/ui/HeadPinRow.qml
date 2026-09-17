@@ -8,13 +8,13 @@ import platitude.ui
 // The current branch never leaves the viewport: while its own row is scrolled off, this stand-in rides the edge the row
 // went out of, and it steps aside the moment the row itself is on screen — so the sidebar never shows the branch twice.
 // A branch a filter or a folded folder hides has no row at all, so there is no edge to ride: the stand-in takes a place
-// of its own at the head of the list (`seated`) rather than covering the first row that is there.
+// of its own at the head of the list (`seated`).
 //
-// **A detached HEAD is not stood in for at all.** There is no branch to keep on screen, and the words for one are not
+// **A detached HEAD is said elsewhere.** There is no branch to keep on screen, and the words for one are not
 // a name; where HEAD is standing is said by the graph's pin, by the WORKTREES row and by the commit button's own
 // wording (デザイン規約 §左メニューの所作).
 //
-// Whoever uses this has to adopt it onto the list itself (`parent:`), not declare it inside: a Flickable's declared
+// Whoever uses this has to adopt it onto the list itself (`parent:`): a Flickable's declared
 // children are taken by its content item and scroll away with it (app-ui.md).
 Rectangle {
     id: headPin
@@ -36,7 +36,7 @@ Rectangle {
     readonly property real rowTop: headPin.branchesModel.headRow * Theme.rowHeight
     /// The branch is there but its row is not — a filter or a folded folder is holding it. Nothing to ride above, so
     /// this asks for a row of its own and the list begins one row lower (`NavSections` reads it for `topMargin`).
-    /// **Asks, not takes**: a list with no rows at all keeps its hairline and grants nothing, so this stays true while
+    /// **Asks for it**: a list with no rows at all keeps its hairline and grants nothing, so this stays true while
     /// the seat is refused and what is drawn is the 1px of it the shut section leaves. Read off the model alone: the
     /// list's own height answers to this, so reading its geometry back would be a loop, and a list with a top margin
     /// rests at a negative `contentY` — the edges below cannot be asked in that state.
@@ -48,7 +48,7 @@ Rectangle {
     visible: headPin.branchesModel.headName !== "" && (headPin.rowAbove || headPin.rowBelow)
     height: Theme.rowHeight
     y: headPin.rowAbove ? 0 : headPin.viewHeight - height
-    // Dressed as the row it stands for, down to the margins: the current branch's own highlight, not a header band.
+    // Dressed as the row it stands for, down to the margins: the current branch's own highlight.
     color: Theme.accentMuted
     Rectangle {
         anchors.fill: parent
@@ -69,7 +69,7 @@ Rectangle {
         spacing: Theme.spaceXs
         // The rows' mark slot, left empty: the stand-in has no mark of its own, but its name has to begin in the same
         // column as the rows it rides above — so it takes their seat, which is the one a fold arrow and a state mark
-        // stand in (`NameCell.seatSize` on a list with no change codes in it — the ink of an `iconSm` mark, not its box).
+        // stand in (`NameCell.seatSize` on a list with no change codes in it — the ink of an `iconSm` mark).
         Item {
             Layout.preferredWidth: Theme.iconXs
             Layout.preferredHeight: Theme.iconXs
@@ -84,7 +84,7 @@ Rectangle {
         }
         // Dressed as the row it stands for, down to where the pair comes from: the same listing the row draws it
         // out of, read off the snapshot by name (`drain::settle_head_marks`), so the stand-in and the row cannot
-        // say different numbers. **Not the status read's pair** (`workTree.ahead`) — those are held back until a
+        // say different numbers. **The status read's pair waits** (`workTree.ahead`) — it is held back until a
         // status has been read on the branch HEAD is on (`WorkTreeModel.countsSettled`), which is the moment after
         // a switch when this stand-in is the one on screen. The seat is empty wherever there is nothing to count:
         // level with the upstream, or no upstream to measure against.

@@ -10,8 +10,8 @@ import platitude.ui
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -32,7 +32,7 @@ Item {
     readonly property var renderedBarrier: driver.barrierRendered
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "stage-all" || act === "unstage-all" || act === "resolve-all") {
             page.showWip()
@@ -44,8 +44,8 @@ Item {
             page.showWip()
             fileRowsTimer.start()
         } else if (act === "open-fetches") {
-            // Nothing is pressed here: the fetch the opening fires is the whole verb, and the argument is how many rows
-            // the graph holds once it has landed.
+            // The fetch the opening fires is the whole verb, and the argument is how many rows the graph holds
+            // once it has landed.
             acts.openFetchRows = Math.max(1, Number(arg))
             openFetchTimer.start()
         } else {
@@ -57,8 +57,8 @@ Item {
     // directions are one verb because the claim is that they are symmetrical: a bucket that has just been emptied keeps
     // its heading, whichever bucket it was (デザイン規約 §その他の操作).
     //
-    // The heading is pressed rather than the slot behind it called, and what is read back is the list's own children —
-    // a band bound to nothing would still be counted by the condition that asks for it.
+    // The heading itself is pressed, and what is read back is the list's own children — a band bound to nothing
+    // would still be counted by the condition that asks for it.
     SampleTimer {
         id: bucketAllTimer
         /// Which bucket is being emptied, and whether the press went in.
@@ -236,12 +236,12 @@ Item {
     SampleTimer {
         id: openFetchTimer
         onTriggered: {
-            // A state to sample, not a length of time to wait: rows only reach the count after the fetch has landed and
-            // the graph has been rebuilt over it, and a run where that never happens has nothing to report.
+            // A state to sample: rows only reach the count after the fetch has landed and the graph has been rebuilt
+            // over it, and a run where that never happens has nothing to report.
             //
             // The tab's own word for "the fetch is over" is waited for as well, so the count read below is the settled
-            // one and the picture holds a button at rest rather than one caught mid-absorption. Never having seen it
-            // turn is allowed: the fetch can be over before this page exists (§通信中(リング)と起動直後の狙い方).
+            // one and the picture holds a button at rest. Seeing it turn is optional: the fetch can be over
+            // before this page exists (§通信中(リング)と起動直後の狙い方).
             //
             // The refs the fetch brought back are a feed of their own and land after the rows do, so the count alone
             // would picture a graph that has fetched beside a sidebar that has not. `headBehind` is the sidebar's end

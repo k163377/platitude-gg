@@ -11,7 +11,7 @@ import QtQuick
 /// a rule that stops at the working tree, the refs and the graph calls a run settled while the changed-file list is
 /// on its way, and `FileRowDelegate` is then in the census of the run whose list arrived first and out of the next.
 ///
-/// **`finishCount` counts passes, and the first one is not the last word.** The opening starts the log walk before
+/// **`finishCount` counts passes, and the last one is the word.** The opening starts the log walk before
 /// the first status has been read, so whether that walk carries the working-tree row is a race the status wins about
 /// half the time; when it loses, the status asks for a rebuild and the row — with `WipTallyRow` on it — arrives a
 /// pass later. What settles it is the rows agreeing with the status: the graph says what it holds (`GraphModel.wipRow`)
@@ -27,8 +27,8 @@ import QtQuick
 /// which is why the term is needed at all (`AutoActCompletion.owesStatus` says what the two pages cost). The
 /// photograph is still the verb's own moment; what this holds is the walk, which says so (`WindowCensus.waited`).
 ///
-/// **The question is whether rows are still on their way, not whether the repository opened.** A tab that was never
-/// given a path (`open-picker`) and one whose path was refused (`open-not-a-repo`) are both done: nothing is coming,
+/// **The question is whether rows are still on their way.** A tab still at the picker
+/// (`open-picker`) and one whose path was refused (`open-not-a-repo`) are both done: nothing is coming,
 /// so a run on either has the whole of what its verb shows. Answering no for those would hold the run open until the
 /// watchdog.
 QtObject {

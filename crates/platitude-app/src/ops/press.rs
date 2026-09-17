@@ -4,28 +4,28 @@
 /// and **where that write's own answer stands** in the notify that
 /// carried it.
 ///
-/// **By id, never by turn.** One drain empties the whole queue and
-/// notifies once (`RepoTab::write_answers`), so a notify can carry
-/// several answers — the fetch running behind a press comes back in the
-/// middle of it. A property every answer rewrites is left describing
-/// whichever finished last, and read that way a commit that landed never
-/// empties the editor, a delete git took never closes the card that
-/// stayed up for it, and a stash that refused is never reported. All of
-/// them are silence rather than a wrong answer, which is why none of
+/// **By id alone.** One drain empties the whole queue and notifies
+/// once (`RepoTab::write_answers`), so a notify can carry several
+/// answers — the fetch running behind a press comes back in the
+/// middle of it. A property every answer rewrites is left
+/// describing whichever finished last, and read that way a commit
+/// that landed never empties the editor, a delete git took never
+/// closes the card that stayed up for it, and a stash that refused
+/// is never reported. All of them are silence, which is why none of
 /// them shows up as a failure anywhere.
 ///
-/// **The answer's place is the notify's own.** It is put down at the top
-/// of every drain ([`Self::new_notify`]), so a page that finds nothing
-/// here finds nothing rather than the last drain's answer a second time
-/// — which is the whole of what "the press is answered once" rests on.
+/// **The answer's place is the notify's own.** It is put down
+/// at the top of every drain ([`Self::new_notify`]), so what a
+/// page reads here is this drain's own — which is the whole of
+/// what "the press is answered once" rests on.
 ///
-/// **What git said is not kept here.** It is on the answer itself, where
-/// every reader waiting for its own write reads it
-/// (`RepoTab::write_answer_at`); this holds the one thing the answer
-/// cannot say, which is whose press it was. What a press needs to
-/// remember beyond that is the owner's, and the owners hold one of these
-/// (`StashOut`, `BranchDeleteOut`) — the editor's commit needs nothing
-/// beyond it and is one.
+/// **What git said is on the answer itself**, where every
+/// reader waiting for its own write reads it
+/// (`RepoTab::write_answer_at`); this holds the one thing
+/// the answer cannot say, which is whose press it was.
+/// What a press needs to remember beyond that is the
+/// owner's, and the owners hold one of these (`StashOut`,
+/// `BranchDeleteOut`) — the editor's commit is a bare one.
 #[derive(Debug, Default)]
 pub struct Press {
     /// The write this press is waiting on, as the bridge carries an

@@ -17,9 +17,9 @@ pub(super) struct ReadTicket {
 }
 
 impl RepoConfigModel {
-    /// Attaches the feed on the first question rather than at startup: a
-    /// window whose reader never opens this category never has one to
-    /// hear (the same shape `TabsModel` uses for the picker's answers).
+    /// Attaches the feed on the first question: a window whose reader
+    /// never opens this category never has one to hear (the same shape
+    /// `TabsModel` uses for the picker's answers).
     fn listen(&mut self) {
         if self.attached {
             return;
@@ -41,12 +41,12 @@ impl RepoConfigModel {
     /// Turns the screen to `path` and numbers the read that will fill it.
     /// `None` for no path at all.
     ///
-    /// The values are emptied rather than left standing: these are
-    /// another repository's, and boxes still holding them would be
-    /// offering to write one repository's identity into another. The
-    /// marks belong to the save that put them there, and that save was
-    /// about the repository being left — as is any save still out, whose
-    /// answer is dropped by number rather than waited for
+    /// The values are emptied: these are another repository's, and
+    /// boxes still holding them would be offering to write one
+    /// repository's identity into another. The marks belong to the
+    /// save that put them there, and that save was about the
+    /// repository being left — as is any save still out, whose
+    /// answer is dropped by number
     /// ([`Self::absorb`]).
     pub(super) fn look_at(&mut self, path: String) -> Option<ReadTicket> {
         if path.is_empty() {
@@ -80,8 +80,8 @@ impl RepoConfigModel {
 
     /// The next read's place, and the end of the one before it: the ask
     /// after a read cancels that read, so one still waiting for a slot
-    /// never spawns and one already running is stopped rather than left
-    /// to answer a question nobody is asking.
+    /// never spawns and one already running is
+    /// stopped.
     fn next_read(&mut self, path: String) -> ReadTicket {
         self.retire_read();
         let cancel = CancellationToken::new();
@@ -114,11 +114,11 @@ impl RepoConfigModel {
     /// Asks git what `path` sets for itself, and what it would use there,
     /// under the ticket's number and token.
     ///
-    /// Two reads rather than one: the effective level cannot say which of
-    /// its records came out of this repository's own file
-    /// (`config::get_regexp_local`), and both halves of the screen need an
-    /// answer — the boxes hold the override, the line under them names
-    /// what a commit would carry.
+    /// Two reads: the effective level cannot say which of its records
+    /// came out of this repository's own file
+    /// (`config::get_regexp_local`), and both halves of the screen need
+    /// an answer — the boxes hold the override, the line under them
+    /// names what a commit would carry.
     fn spawn_read(&mut self, ticket: ReadTicket) {
         self.listen();
         let feed = Arc::clone(&self.feed);
@@ -179,12 +179,12 @@ impl RepoConfigModel {
         self.changed();
         let feed = Arc::clone(&self.feed);
         let path = self.repo_path.clone();
-        // Held by the hub rather than spawned bare: the screen and the tab
-        // it is about can both go, and the window cannot close over a
-        // `git config` half way through its pair (`hub::saves`).
+        // Held by the hub: the screen and the tab it is about can both
+        // go, and the window cannot close over a `git config` half way
+        // through its pair (`hub::saves`).
         let spawned = Hub::with(|hub| {
-            // On the save's handle, not the reads': a `git config` is a
-            // local write, waited out rather than killed at a budget
+            // On the save's handle: a `git config` is a local
+            // write, waited out
             // (`Hub::save_executor`).
             let executor = hub.save_executor();
             hub.spawn_save(async move {
@@ -195,9 +195,9 @@ impl RepoConfigModel {
                 )
                 .await;
                 let msg = match written {
-                    // What git answers, not what was typed: the write
-                    // reads itself back, so a half that did not land shows
-                    // here rather than passing for a finished pair.
+                    // What git answers: the write reads itself back, so
+                    // a half that did not land shows
+                    // here.
                     Ok(written) => ConfigMsg::Written {
                         save,
                         path,
@@ -227,7 +227,7 @@ impl RepoConfigModel {
 
     /// Accepts a save and numbers it, or refuses one: a save is already
     /// out, or no repository is named. The marks describe the save that
-    /// is starting, not the last one.
+    /// is starting.
     pub(super) fn begin_save(&mut self) -> Option<u64> {
         if self.save_pending.is_some() || self.repo_path.is_empty() {
             return None;
@@ -255,14 +255,14 @@ impl RepoConfigModel {
     /// landed, whole or half, and what the boxes should say is what git
     /// holds now.
     ///
-    /// **By number, never by path.** A read answers the ask standing
-    /// (`read_generation`) and nothing older: the reader who went A → B →
-    /// A is waiting on the third ask, and the first one's answer about
-    /// the same path is a picture of A from before B. A save answers the
-    /// save out and nothing else: one asked for before the screen turned
-    /// away, or before a second save, is nobody's now. And the read that
-    /// follows a landed save is a new ask, so a read from before the
-    /// save cannot land on the boxes the save just changed.
+    /// **By number.** A read answers the ask standing (`read_generation`)
+    /// and nothing older: the reader who went A → B → A is waiting on the
+    /// third ask, and the first one's answer about the same path is a
+    /// picture of A from before B. A save answers the save out and
+    /// nothing else: one asked for before the screen turned away, or
+    /// before a second save, is nobody's now. And the read that follows a
+    /// landed save is a new ask, so a read from before the save cannot
+    /// land on the boxes the save just changed.
     pub(super) fn absorb(&mut self, batch: Vec<ConfigMsg>) -> bool {
         let mut reread = false;
         for msg in batch {
@@ -296,7 +296,7 @@ impl RepoConfigModel {
                     ..
                 } => {
                     // Only a read the screen asked for takes the last words
-                    // down with it. **The read that follows a save must not**:
+                    // down with it. **A read after a save keeps them**:
                     // that one is this model's own doing (`refresh`), and the
                     // words standing are git's account of why the save did
                     // not land — cleared here, they would be on screen for as

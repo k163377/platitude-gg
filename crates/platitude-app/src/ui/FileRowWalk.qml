@@ -39,7 +39,7 @@ Item {
     /// held key runs (the reading catches up when the hand comes off — `noteStep`).
     property string atBucket: ""
     property string atPath: ""
-    /// Where the next walk sets off from: **the file being read, and nothing else** (デザイン規約 §diff のファイル一覧).
+    /// Where the next walk sets off from: **the file being read** (デザイン規約 §diff のファイル一覧).
     /// Empty with no diff up, and then the arrows move no file — there is no row for a step to be a step from, and the
     /// arrows are not how a first one is opened. Both lists answer the same way because both lights mean the same
     /// thing: the working tree's goes with the reading it was opened by, so no list is left lighting a row the arrows
@@ -55,7 +55,7 @@ Item {
     /// The arrows moved onto another file. Raised on every press: the light in the list follows the key at the key's
     /// own rate.
     signal stepped(string bucket, string path)
-    /// Read this file. Raised where the run set off and once the hand has come off the key — **never once per press**:
+    /// Read this file. Raised where the run set off and once the hand has come off the key — **twice in a run**:
     /// a step carries a `git diff` with it, and a held arrow repeats faster than that (規約 §diff のファイル一覧, the same beat
     /// as §矢印で履歴を辿る).
     signal landed(string bucket, string path, string origPath)
@@ -64,11 +64,11 @@ Item {
     /// through here — a headless run cannot inject a keystroke, so the step has to be callable as well as pressable
     /// (verify-ui).
     ///
-    /// Refused while the list is off screen: the two file lists swap with each other, and one nobody can see must not
-    /// answer arrows (規約 §矢印で履歴を辿る「画面から退いたペインはキーボードを手放す」). Refused as well with nothing being read
+    /// Refused while the list is off screen: the two file lists swap with each other, and the arrows belong to the
+    /// one on screen (規約 §矢印で履歴を辿る「画面から退いたペインはキーボードを手放す」). Refused as well with nothing being read
     /// (`fromKey`) — there is no row for a step to be a step from, and the arrows are not how a first one is opened.
     ///
-    /// Answering `false` at either end is how it stops rather than wraps: the model has nowhere to send it and the key
+    /// Answering `false` at either end is how it stops: the model has nowhere to send it and the key
     /// goes unaccepted.
     ///
     /// `held` says the key was already down when this step arrived (`KeyEvent.isAutoRepeat`); it changes nothing about
@@ -81,7 +81,7 @@ Item {
             return false
         let record = walk.sides[side].model.stepFile(walk.atBucket, walk.atPath, way)
         // Out of this bucket's list and into the next one's: the heading between them is something walking goes past
-        // rather than stops at (規約 §diff のファイル一覧), and so is a bucket holding no files at all.
+        // (規約 §diff のファイル一覧), and so is a bucket holding no files at all.
         while (record === "") {
             side += way < 0 ? -1 : 1
             if (side < 0 || side >= walk.sides.length)
@@ -95,17 +95,16 @@ Item {
         walk.atBucket = record.substring(first + 1, second)
         walk.atPath = record.substring(second + 1)
         // As little as will do — the row stepped onto is brought inside the viewport and nothing else moves. Asked of
-        // the view rather than worked out from a row height: a file list has folder rows in it that a walk goes past,
-        // so the arithmetic the graph's walk does would land on the wrong pixel here. No centring case either: a file
-        // list holds no reading position of its own to protect, and the lit row is where the hand just pressed (規約
-        // §diff のファイル一覧).
+        // the view: a file list has folder rows in it that a walk goes past, so the arithmetic the graph's walk does
+        // would land on the wrong pixel here. Uncentred: a file list holds no reading position of its own to protect,
+        // and the lit row is where the hand just pressed (規約 §diff のファイル一覧).
         walk.sides[side].view.positionViewAtIndex(Number(record.substring(0, first)), ListView.Contain)
         walk.stepped(walk.atBucket, walk.atPath)
         walk.noteStep(held)
         return true
     }
-    /// Automation: the name of the row the list is painting as lit, read off the rectangle rather than off the
-    /// condition behind it (verify-ui). The first of them where several are lit — a walk stands on one, but the working
+    /// Automation: the name of the row the list is painting as lit, read off the rectangle
+    /// (verify-ui). The first of them where several are lit — a walk stands on one, but the working
     /// tree's list can have a whole Ctrl-clicked choice up.
     function litPath() {
         for (let side = 0; side < walk.sides.length; side++) {
@@ -122,7 +121,7 @@ Item {
     /// list whose only light is the reading wears exactly one while a file is open and none while none is, and a list
     /// lighting all of its rows still answers `litPath` with the right name at the top (verify-ui).
     ///
-    /// **Asked of `litNow`, not of the key above.** That key is the row's own path, which is the very thing such a
+    /// **Asked of `litNow`.** That key above is the row's own path, which is the very thing such a
     /// list has failed to read — counted through it, a wholly lit list comes to none (observed).
     function litRows() {
         let lit = 0

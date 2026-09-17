@@ -2,14 +2,14 @@
 //! press, git's answer, and the list that draws the reading proving the
 //! row gone.
 //!
-//! No Qt and no repository: the transitions are the application's own,
-//! and this is the whole of what decides them.
+//! Plain Rust: the transitions are the application's own, and
+//! this is the whole of what decides them.
 
 use super::*;
 
-/// The id the queue is pretending to have accepted a press under. Any two
-/// different numbers would do — what the tests below are about is that
-/// the answer is found by this number rather than by its turn.
+/// The id the queue is pretending to have accepted a press under.
+/// Any two different numbers would do — what the tests below are
+/// about is that the answer is found by this number.
 const OURS: u64 = 7;
 const SOMEBODY_ELSE: u64 = 8;
 
@@ -20,8 +20,8 @@ const IN_FLIGHT: u64 = 40;
 const FENCE: u64 = 41;
 const AFTERWARDS: u64 = 42;
 
-/// Every list has drawn a reading taken at `at` — for the tests that are
-/// not about which list got there first.
+/// Every list has drawn a reading taken at `at` — for the tests
+/// that take every list as caught up.
 fn every_list_drew(gone: &mut StandIn, at: u64) {
     for row in [Row::Branch, Row::Remote, Row::Tag, Row::Stash] {
         gone.listing_applied(row, at);
@@ -116,12 +116,12 @@ fn a_landing_leaves_the_row_away_until_the_refs_arrive() {
     assert_eq!(gone.rows(), &Rows::default());
 }
 
-// **The reading that answers is the one that looked after the write, not
-// the one that arrived after it.** A refs pass already in flight when the
-// write ended is applied under its own stamp, and taken as proof it would
-// put the row straight back under the hand that had just taken it away —
-// which counting arrivals cannot prevent, since the answer and the
-// listing travel feeds of their own.
+// **The reading that answers is the one that looked after the
+// write.** A refs pass already in flight when the write ended
+// is applied under its own stamp, and taken as proof it would
+// put the row straight back under the hand that had just taken
+// it away — which counting arrivals cannot prevent, since the
+// answer and the listing travel feeds of their own.
 #[test]
 fn a_listing_that_looked_before_the_write_ended_answers_for_nothing() {
     let mut gone = branch_landed();
@@ -145,8 +145,8 @@ fn a_listing_stamped_at_the_fence_is_the_writes_own() {
     assert_eq!(gone.rows(), &Rows::default());
 }
 
-// **A section answers for its own row and no other.** The three refs
-// sections are handed one snapshot and draw it on three separate turns,
+// **A section answers for its own row alone.** The three refs sections
+// are handed one snapshot and draw it on three separate turns,
 // so the branches section catching up says nothing about what the tags
 // section is still showing — folded into one newest-applied, it would
 // put a deleted tag back on screen for as long as that section took.
@@ -168,8 +168,8 @@ fn a_section_that_has_caught_up_answers_only_for_its_own_row() {
 }
 
 // The composite's two rows are two lists, and they catch up in whatever
-// order the two drains fall in. Each goes as its own list reaches it, and
-// neither waits on the other.
+// order the two drains fall in. Each goes as its own list reaches it,
+// free of the other.
 #[test]
 fn the_composite_goes_one_row_at_a_time_as_its_lists_catch_up() {
     let mut gone = composite_landed();
@@ -209,10 +209,10 @@ fn a_reading_that_arrives_before_the_answer_answers_for_nothing() {
     assert_eq!(gone.rows().branch, "feature/x");
 }
 
-// …but it is not thrown away. The answer and the listing reach this type
-// in no fixed order, and whichever comes second completes the pair: a
-// listing applied while the answer was still in the other feed is the
-// same proof it would have been a moment later.
+// …but it is kept. The answer and the listing reach this type in
+// no fixed order, and whichever comes second completes the pair: a
+// listing applied while the answer was still in the other feed is
+// the same proof it would have been a moment later.
 #[test]
 fn a_listing_already_in_hand_settles_the_answer_that_follows_it() {
     let mut gone = branch_asked();
@@ -231,9 +231,9 @@ fn a_stash_listing_in_hand_settles_the_answer_that_follows_it() {
     assert_eq!(gone.rows(), &Rows::default());
 }
 
-// The stash listing is asked for after the graph is rebuilt rather than
-// beside the refs, so a dropped entry read off the refs' arrival would be
-// back on screen for the whole of the rebuild.
+// The stash listing is asked for after the graph is rebuilt,
+// so a dropped entry read off the refs' arrival would be back
+// on screen for the whole of the rebuild.
 #[test]
 fn the_stash_waits_for_its_own_listing() {
     let mut gone = StandIn::default();
@@ -249,8 +249,8 @@ fn the_stash_waits_for_its_own_listing() {
     assert_eq!(gone.rows(), &Rows::default());
 }
 
-// …and it is measured by its own stamp: the stash pass that was in flight
-// when the write ended is no more the delete's answer than the refs one.
+// …and it is measured by its own stamp: the stash pass that was in
+// flight when the write ended answers for nothing, as the refs one does.
 #[test]
 fn a_stash_listing_from_before_the_write_answers_for_nothing() {
     let mut gone = StandIn::default();
@@ -293,8 +293,8 @@ fn an_answer_under_a_spent_id_moves_nothing() {
 
 // The one window where two deletes are on screen at once: the first has
 // answered, its listing has not arrived, and the second is pressed. The
-// second takes the wait over — one key per list — and neither row is put
-// back by a landing.
+// second takes the wait over — one key per list — and a landing
+// leaves both rows away.
 #[test]
 fn a_second_press_takes_the_wait_over_without_putting_the_first_back() {
     let mut gone = branch_landed();
@@ -310,9 +310,9 @@ fn a_second_press_takes_the_wait_over_without_putting_the_first_back() {
     assert_eq!(gone.rows(), &Rows::default());
 }
 
-// Nothing is coming: the session that owed the answer has been let go, so
-// the rows are put back rather than left standing for an answer that will
-// never arrive.
+// Nothing is coming: the session that owed the answer
+// has been let go, so the rows are put back and the
+// wait goes with them.
 #[test]
 fn letting_the_session_go_puts_every_row_back() {
     let mut gone = branch_asked();
@@ -332,8 +332,8 @@ fn letting_the_session_go_puts_every_row_back() {
 // nobody has read, and the row would come back while git was still being
 // asked to delete it.
 //
-// The numbers here are the shape of the bug, not a measurement: a long
-// session leaves a high stamp behind, and a fresh one starts at 1.
+// The numbers here are the shape of the bug: a long session
+// leaves a high stamp behind, and a fresh one starts at 1.
 #[test]
 fn a_reading_drawn_under_the_session_before_answers_for_nothing() {
     let mut gone = StandIn::default();
@@ -357,10 +357,10 @@ fn a_reading_drawn_under_the_session_before_answers_for_nothing() {
     assert_eq!(gone.rows(), &Rows::default());
 }
 
-// The other half of that split: a delete ending is **not** a session
-// ending, and what the lists have drawn is theirs rather than the
-// delete's. Thrown away with each delete, the next one in the same
-// session would wait for a listing it had already been given.
+// The other half of that split: a delete ending leaves what
+// the lists have drawn alone, because it is theirs. Thrown
+// away with each delete, the next one in the same session
+// would wait for a listing it had already been given.
 #[test]
 fn a_delete_ending_leaves_what_the_lists_have_drawn_alone() {
     let mut gone = branch_landed();
@@ -375,9 +375,9 @@ fn a_delete_ending_leaves_what_the_lists_have_drawn_alone() {
     assert_eq!(gone.rows(), &Rows::default());
 }
 
-// A row with no name stands nothing in — the empty string is what a list
-// is told when it is to put everything back, so writing one in would read
-// as "put them back" rather than as "take this one away".
+// A row with no name stands nothing in — the empty string
+// is what a list is told when it is to put everything back,
+// so writing one in would read as "put them back".
 #[test]
 fn an_unnamed_row_stands_nothing_in() {
     let mut gone = StandIn::default();

@@ -68,7 +68,7 @@ Rectangle {
         }
         Item { Layout.fillWidth: true }
         // The whole-bucket button's own seat, taken over for as long as the tool holds the queue. The words stay —
-        // nothing else in view names the tool being waited on — and the ring says it is still running. No `…`: that is
+        // nothing else in view names the tool being waited on — and the ring says it is still running. `…` is
         // the word for a question standing,
         // and progress is the ring's job (規約 §進行中・長押しの定数).
         //
@@ -91,8 +91,8 @@ Rectangle {
             // (規約 §conflict を外部ツールへ渡す). Nothing is lost by standing down — that wait holds the write queue
             // until the tool is closed, so a press taken here would sit behind it with nothing to show.
             visible: !bucketHeader.waitingForTool
-            // An empty bucket has nothing to move, and this heading stands even then (§無効 — what cannot be pressed says
-            // so where it stands, rather than leaving its seat).
+            // An empty bucket has nothing to move, and this heading stands even then (§無効 — what cannot be pressed
+            // says so where it stands).
             enabled: bucketHeader.count > 0
             // The same `git add` is a different act on a conflicted file, so the word is the row's own word carried up
             // to the bucket's scope (規約 §diff の中のステージ — the ending names the scope).
@@ -116,7 +116,7 @@ Rectangle {
                 if (bucketHeader.section === "staged")
                     bucketHeader.repoTab.unstageAll()
                 else if (bucketHeader.section === "conflicts")
-                    // Not `stageAll()`: the unstaged bucket beside this one is not part of what this band names.
+                    // This band names this bucket alone; `stageAll()` would reach the unstaged one beside it.
                     bucketHeader.repoTab.stageConflicted()
                 else
                     bucketHeader.repoTab.stageAll()

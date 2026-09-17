@@ -81,10 +81,10 @@ impl Value<'_> {
 
 /// The roles a delegate reads a row by — **this model's own table**, put
 /// on the wire by its `role_names()` and dispatched by its `data()`
-/// (`qmodel.rs`). Qt is never handed `NavItem`'s derived table, so
-/// `#[derive(QModelItem)]`'s fifteen fields are **not a ceiling on the
-/// roles**: that one binds what a folder row carries whole, and a role
-/// past the end of those fields is answered for a made row without one.
+/// (`qmodel.rs`). Qt is handed this one, so the roles **run past
+/// `#[derive(QModelItem)]`'s fifteen fields**: that derive binds what a
+/// folder row carries whole, and a role past the end of those fields is
+/// answered for a made row without one.
 ///
 /// The numbers are the order declared below, and `NavItem`'s fields come
 /// first so the derive covers the head of the table. The test at the foot
@@ -121,9 +121,9 @@ impl Role {
     /// row carries a field for (the test at the foot of this file holds
     /// that head of the table together).
     ///
-    /// A branch's upstream is not a role: no delegate asks for it, and
-    /// the menus that do ask by name (`upstream_of` / `upstream_drifted`)
-    /// read the snapshot's own row through its index.
+    /// A branch's upstream is read by name: no delegate asks for it, and
+    /// the menus that do (`upstream_of` / `upstream_drifted`) read the
+    /// snapshot's own row through its index.
     pub(super) const ALL: [Self; 17] = [
         Self::Name,
         Self::Full,
@@ -182,9 +182,9 @@ mod tests {
     /// The names the delegate asks by and the numbers `data` is called
     /// with come from two places; a role that answers under the wrong one
     /// draws an empty row and reports nothing, so they are pinned here.
-    /// `NavItem` covers the head of the table rather than all of it — a
-    /// role no folder row has a field for is answered without one — so
-    /// the two are held together as far as the fields run.
+    /// `NavItem` covers the head of the table — a role no folder row has
+    /// a field for is answered without one — so the two are held together
+    /// as far as the fields run.
     #[test]
     fn every_field_of_a_made_row_is_the_role_of_the_same_number() {
         let handed = <NavItem as QModelItem>::role_names();

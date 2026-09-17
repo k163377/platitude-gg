@@ -8,14 +8,14 @@ import platitude.ui
 // What a pending file's row says about its line endings when the pointer rests on it: the path the tree view cut its
 // name down from, and the same sentence the diff pane puts above the hunks.
 //
-// A card rather than a `ToolTip`, for the reason `CommitHoverCard` is one: a tooltip holds one string in one
+// A card, for the reason `CommitHoverCard` is one: a tooltip holds one string in one
 // colour, and this has two lines of which only the second is warning-coloured. The ground is no longer the reason —
 // tooltips stand on this same card now (`SharedToolTip`).
 //
-// It answers and offers nothing. Whoever wants the lines themselves opens the diff, which is one click away on the row
+// It is a card to read. Whoever wants the lines themselves opens the diff, which is one click away on the row
 // the card came from.
 //
-// Owned by the pane, not the row: rows are recycled the moment they scroll off, and a popup parented to one goes
+// Owned by the pane: rows are recycled the moment they scroll off, and a popup parented to a row goes
 // with it (app-ui.md).
 AppCard {
     id: eolCard
@@ -41,7 +41,7 @@ AppCard {
         // The path first: someone who cannot see which file this is about has lost more than the notice gives them. The
         // commit button's card has no one file to name and leaves this out.
         //
-        // **It wraps rather than being cut.** The row it came from is where the name was cut down; a card that cuts it
+        // **It wraps.** The row it came from is where the name was cut down; a card that cuts it
         // again is a card the path cannot be read out of, let alone copied (規約 §hover のツールチップ).
         CardText {
             visible: eolCard.path !== ""

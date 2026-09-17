@@ -12,8 +12,8 @@ use super::*;
 //
 // **Fifteen fields is the ceiling** — `#[derive(QModelItem)]` refuses a
 // sixteenth. Anything the rows need that QML never reads belongs on the
-// way in rather than here: the lane count each row needs is taken off
-// the `LogRow` while the item is built (`max_lanes`).
+// way in: the lane count each row needs is taken off the `LogRow` while
+// the item is built (`max_lanes`).
 #[derive(QModelItem, Default, Clone, PartialEq)]
 pub struct GraphRowItem {
     pub(super) oid_hex: String,
@@ -28,8 +28,8 @@ pub struct GraphRowItem {
     pub(super) node_color: i32,
     pub(super) avatar: i32,
     /// A `file:` URL when this author has a picture, empty otherwise —
-    /// resolved here rather than in QML so a delegate coming back from
-    /// the reuse pool has the answer already in its row.
+    /// resolved here, so a delegate coming back from the reuse pool has
+    /// the answer already in its row.
     pub(super) avatar_url: String,
     /// Packed `Co-authored-by` records (see `encode::encode_co_authors`) —
     /// the first draws the badge on the node, all of them are named in

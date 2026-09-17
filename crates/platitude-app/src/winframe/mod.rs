@@ -7,8 +7,8 @@
 //! transparent, so whatever sits behind the window shows through them.
 //! And a window that carries no icon of its own is given the shell's
 //! generic one. Qt exposes a switch for none of it, so this is the single
-//! place the app speaks Win32 directly instead of taking a dependency
-//! for a handful of signatures.
+//! place the app speaks Win32 directly, over the handful of signatures
+//! it declares itself.
 //!
 //! On the other two platforms nothing here runs.
 

@@ -9,7 +9,7 @@ import platitude.ui
 /// for is a picture with something in every pane, and a measurement with a selection to time.
 ///
 /// Each one drives the page through the same door a hand goes through — `showWip` / `activateRow` / `toggleDiff` — so
-/// what they exercise is the page's own wiring rather than a second copy of it.
+/// what they exercise is the page's own wiring.
 Item {
     id: start
 
@@ -21,7 +21,7 @@ Item {
     required property var graphPane
 
     /// The page's own default selection stays out of the way while one of the two below is picking: it would land
-    /// first and be photographed instead (`RepoPage.rowPickedElsewhere`). A `Binding` rather than an assignment,
+    /// first and be photographed (`RepoPage.rowPickedElsewhere`). A `Binding`,
     /// because the page is handed over before it has read the property once.
     Binding {
         target: start.page
@@ -50,8 +50,8 @@ Item {
         function onStatsChanged() {
             if (start.selected || start.graphModel.rowTotal === 0)
                 return
-            // **The newest commit, not the newest row.** A dirty working tree puts the WIP row on top, and selecting
-            // that one shows the pending changes instead of a commit — no details are asked for, so a measurement that
+            // **The newest commit.** A dirty working tree puts the WIP row on top, and selecting
+            // that one shows the pending changes — no details are asked for, so a measurement that
             // reads the interaction budget off this hook measures nothing and says so (`xtask perf`'s `missing`). Every
             // demo repository is dirty, and a stash written after the tip stands over it in the same way without being
             // a commit of the history to photograph. The rule is the model's, so the page's own default and the perf

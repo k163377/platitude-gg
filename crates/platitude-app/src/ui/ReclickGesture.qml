@@ -9,10 +9,10 @@ import QtQuick.Controls.Fusion
 // names a graph chip unstacks. A surface that worked the wait out for itself would be a second answer to "how long is
 // a double-click", and the whole of the gesture is that answer.
 //
-// **One of these per surface, never one per row.** What was clicked last, the wait a second click opened, and what
-// that click was aimed at all outlive the row they were made on: the graph pools its delegates on every pass, and a
-// wait that travelled with the row would either go down with it (nothing happens, and nothing says why) or come back
-// on a recycled row and name whatever commit that row is now showing. Only one target can be waiting at a time, which
+// **One of these per surface.** What was clicked last, the wait a second click opened, and what that click was
+// aimed at all outlive the row they were made on: the graph pools its delegates on every pass, and a wait that
+// travelled with the row would either go down with it (nothing happens, and nothing says why) or come back on a
+// recycled row and name whatever commit that row is now showing. Only one target can be waiting at a time, which
 // is exactly what one of these holds.
 QtObject {
     id: gesture
@@ -22,7 +22,7 @@ QtObject {
     property string activeKey: ""
     /// The target of the wait now running, and what that click was aimed at — the caller's own value, handed back
     /// untouched when the wait runs out (a chip record for the graph, the row's own fields for the sidebar).
-    /// **Read at the click, not when the wait ends**: by then the row may be showing something else.
+    /// **Read at the click**: by the time the wait ends the row may be showing something else.
     property string armedKey: ""
     property var armedNames: null
 
@@ -32,9 +32,9 @@ QtObject {
     /// Whether the window a click opened is still running, and whether a given target is holding the wait the name box
     /// opens after. What a headless run reads to put its second click in as a second (app-ui.md §UI 自動化の因果性).
     ///
-    /// **`guarded` is the surface's window, not a target's**: only a click on the target the window belongs to is
-    /// dropped (see `click`), so a run waiting on this waits a little longer than it strictly has to — which is the
-    /// safe way round for a run.
+    /// **`guarded` is the surface's window**: only a click on the target the window belongs to is dropped (see
+    /// `click`), so a run waiting on this waits a little longer than it strictly has to — which is the safe way
+    /// round for a run.
     readonly property bool guarded: doubleGuard.running
     /// Whether any target is waiting. What the surface holds still while it runs: a wait is a beat with nothing to
     /// show for it, and anything that opened or closed under it would be the answer to a different question
@@ -55,8 +55,8 @@ QtObject {
     function click(key, names, held) {
         // The second click of a double-click, dropped — **but only on the target the first one landed on**. One of
         // these serves a whole surface, so a guard that answered for all of it would swallow the second of two quick
-        // clicks on *different* rows, which is a hand reading down a list rather than a double-click on anything
-        // (the per-row timers this replaced could not make that mistake).
+        // clicks on *different* rows, which is a hand reading down a list (the per-row timers this replaced could
+        // not make that mistake).
         if (doubleGuard.running && key === gesture.activeKey)
             return false
         const window = Application.styleHints.mouseDoubleClickInterval
@@ -69,9 +69,9 @@ QtObject {
             gesture.armedKey = key
             gesture.armedNames = names
             // **Qt measures the double-click press to press, and this is the release.** What is left to wait for is
-            // the rest of that window, not another whole one — the time the button was down has already gone by, and
-            // a press that comes after the window is no longer a double-click whatever this does. A button held
-            // longer than the window leaves nothing to wait for at all.
+            // the rest of that window — the time the button was down has already gone by, and a press that comes
+            // after the window is no longer a double-click whatever this does. A button held longer than the window
+            // leaves nothing to wait for at all.
             renameTimer.interval = Math.max(1, window - (held === undefined ? 0 : held))
             renameTimer.start()
         }

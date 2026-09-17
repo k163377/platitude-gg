@@ -11,9 +11,9 @@ import platitude.ui
 // **Nothing here failed and nothing is being asked.** The far side turned a write down under a rule of its own — a
 // protected branch, a hook — and the whole answer is what it said for itself: this end could not have known beforehand
 // and cannot do anything about it now. So the bar wears no state colour, the heading says what did not happen, and the
-// line under it is the far side's own words, quoted rather than rewritten.
+// line under it is the far side's own words, quoted.
 //
-// One report stands at a time, above whatever question is standing: both push the history down rather than covering it.
+// One report stands at a time, above whatever question is standing: both push the history down.
 Rectangle {
     id: bar
 
@@ -24,13 +24,13 @@ Rectangle {
     property string detail: ""
     /// Which state, if any, this report is in — `danger` / `warning` / empty (`Words.reportTone`).
     property string tone: ""
-    /// Whether the report stands. **Not the words**: they stay put while the bar goes back up, since the bar is on
+    /// Whether the report stands. **The words stay put** while the bar goes back up, since the bar is on
     /// screen for the whole 200ms it spends going (`AskBar.open` carries the same rule and the reason).
     property bool open: false
     /// Whether the report hands Escape over to something standing above it. **Two enabled `StandardKey.Cancel`
     /// shortcuts in one window fire neither** (`tests/qml/tst_escape.qml`) — not one winning, both dying — and this
-    /// bar and the ask bar can stand at the same time, so one of them has to give way. **Which one is not decided
-    /// here**: the order lives in the single place the two meet (`RepoPage`), and this is how the bar that gives way
+    /// bar and the ask bar can stand at the same time, so one of them has to give way. **Which one is decided in
+    /// the single place the two meet** (`RepoPage`), and this is how the bar that gives way
     /// is told (デザイン規約 §答えの要らない報せ).
     property bool yieldsEscape: false
 
@@ -60,14 +60,14 @@ Rectangle {
     // halves, and matches the boxes at the other end of the same axis (`SlimField.refused`).
     //
     // **The line is the whole of it**: the heading and the words under it stay in their own colours, the same way a
-    // warned button keeps its word (§長押し「警告の色は語ではなく枠と印が持つ」).
+    // warned button keeps its word (§長押し「警告の色は枠と印が持つ」).
     BandRule {
         color: bar.tone === "danger" ? Theme.danger
              : bar.tone === "warning" ? Theme.warning
              : Theme.borderSubtle
     }
 
-    // Opening hands the pill the focus, so the keyboard's way out needs no hunting for. A tick later, not now: the
+    // Opening hands the pill the focus, so the keyboard's way out needs no hunting for. A tick later: the
     // gesture that ran the write is still being delivered, and what it lands on takes the focus back if the pill
     // claims it first (`AskBar`).
     onOpenChanged: if (bar.open) {
@@ -116,8 +116,8 @@ Rectangle {
             border.color: Theme.borderDefault
             border.width: Theme.borderWidth
             activeFocusOnTab: true
-            // Closed, it leaves the tab order by going disabled rather than by dropping `activeFocusOnTab` — Qt
-            // refuses to clear that on the item holding the focus, and warns (`AskBar`).
+            // Closed, it leaves the tab order by going disabled — Qt refuses to clear `activeFocusOnTab`
+            // on the item holding the focus, and warns (`AskBar`).
             enabled: bar.open
             Accessible.role: Accessible.Button
             Accessible.name: okWord.text
@@ -152,7 +152,7 @@ Rectangle {
                 anchors.fill: parent
                 hoverEnabled: true
                 onPressed: okPill.tookAPress = true
-                // `released` inside the pill rather than `clicked`, the same as the ask bar's: Qt stops emitting
+                // `released` inside the pill, the same as the ask bar's: Qt stops emitting
                 // `clicked` once its press-and-hold timer has gone off, so a pill held down would answer nothing.
                 onReleased: if (containsMouse) bar.dismiss()
             }
@@ -164,14 +164,14 @@ Rectangle {
             }
         }
     }
-    // Escape says the same thing as the pill: read, take it away. Heard as a shortcut rather than as a key handler,
+    // Escape says the same thing as the pill: read, take it away. Heard as a shortcut,
     // because the focus may have been taken back by the list underneath (`AskBar`).
     //
     // **And it is the half of the pair that gives way** (`yieldsEscape`): a question standing over this report is what
     // the reader is being asked for, and this is only news.
     Shortcut {
         id: escapeKey
-        // `sequences` rather than `sequence`: Cancel is more than one key on some platforms, and binding the single
+        // `sequences`: Cancel is more than one key on some platforms, and binding the single
         // form takes only the first of them (Qt warns about exactly this).
         sequences: [StandardKey.Cancel]
         enabled: bar.open && !bar.yieldsEscape

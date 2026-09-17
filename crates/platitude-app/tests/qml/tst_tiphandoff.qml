@@ -23,8 +23,8 @@ Item {
         hand: hand
     }
 
-    // Apart rather than touching, so the box one row puts out never covers the other: what is being asked here is
-    // where the pointer went, and a box in the way would answer for it.
+    // Set apart, so the box one row puts out never covers the other: what is being asked here is where the
+    // pointer went, and a box in the way would answer for it.
     Item {
         id: rowA
         y: 120
@@ -67,7 +67,7 @@ Item {
 
         // The rest before a box is the question "was that a hand going past, or one that meant it?", and every target
         // is asked it — the hand-over to a neighbour is the one case Qt would answer for free
-        // (規約 §hover のツールチップ「隣の的への即時の移し替えは不採用」).
+        // (規約 §hover のツールチップ「隣の的へは箱を下ろしてから移る」).
         function test_a_the_next_row_is_asked_the_question_too() {
             const tip = shared.sharedTip
             mouseMove(root, 150, middleOf(rowA))
@@ -81,7 +81,7 @@ Item {
             compare(tip.parent, rowB, "on the row the hand is on now")
         }
 
-        // And the hand that never left is not asked twice (規約「出ているものの的へ戻る手は待たせない」). The target's
+        // And the hand that never left is not asked twice (規約「出ているものの的へ戻る手は即通す」). The target's
         // binding falls the instant the pointer steps off it, which is also the instant a hand reaching for the box
         // has left the row, so the fall is not taken at its word.
         function test_b_the_row_the_box_is_out_on_is_not() {

@@ -3,7 +3,7 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// One row of the stopped operation's card: `AppMenuItem`'s row, standing in a pane instead of dropping out of a menu.
+// One row of the stopped operation's card: `AppMenuItem`'s row, standing in a pane.
 //
 // The vocabulary has to be the menu's exactly — the chip in git's own spelling, the sentence saying what it costs, the
 // mark ahead of a row that is held (デザイン規約 §git 用語のコード表記, §長押し). A person who has learnt the reset submenu reads this
@@ -18,13 +18,13 @@ Item {
     /// A short tag said after the words, the way a menu row says one (`AppMenuItem.note`). The row still runs — this is
     /// what it costs, or in the one case here what it does not.
     property string note: ""
-    /// Held rather than clicked, for a row that takes something away. Zero is an ordinary row.
+    /// Held, for a row that takes something away. Zero is an ordinary row.
     property int holdMs: 0
     /// How far into the hold the press has got, 0 to 1.
     readonly property alias holdProgress: holdDrive.progress
     /// **The length the press under way was given** (`HoldDriver.armedMs`), which is the live one while no press is
-    /// under way. A card whose tag is worked out from the same answer the length is reads this too, so the row does
-    /// not re-word itself under a hand that is already on it (デザイン規約 §長押し).
+    /// under way. A card whose tag is worked out from the same answer the length is reads this too, so the row keeps
+    /// its wording under a hand that is already on it (デザイン規約 §長押し).
     readonly property alias armedMs: holdDrive.armedMs
     property color holdTone: Theme.danger
     property bool enabled: true
@@ -55,7 +55,7 @@ Item {
     Accessible.description: opRow.holdMs > 0 ? Words.holdToActivate : ""
 
     // A row says its whole line when the pane has narrowed enough to cut it, the way a menu row does — the elision is
-    // the pane running out of width, not the row having less to say (`AppMenuItem`).
+    // the pane running out of width (`AppMenuItem`).
     ToolTip.visible: rowHover.containsMouse && rowLabel.truncated
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: opRow.code + " " + opRow.text
@@ -146,7 +146,7 @@ Item {
         onReleased: mouse => {
             // Against the length **this press** was given, and nothing at all where what decided it has moved since
             // (`HoldDriver.armedMs` / `stale`): the free `--skip` and the one that takes a commit away are the same
-            // row with two gestures, and git answering mid-press must not turn one into the other
+            // row with two gestures, and git answering mid-press leaves the gesture as it began
             // (デザイン規約 §長押し).
             const plain = holdDrive.armedMs <= 0 && !holdDrive.stale
                     && mouse.x >= 0 && mouse.y >= 0 && mouse.x <= width && mouse.y <= height

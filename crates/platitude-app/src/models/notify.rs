@@ -45,14 +45,14 @@ pub(crate) use impl_extend_notified;
 
 /// One row changing places, with one begin/endMoveRows pair around it.
 ///
-/// Not a remove followed by an insert: that takes the view's delegate
-/// down and builds another one, and the row being moved is the one under
-/// the hand (`TabStrip`). A move leaves the item standing and only tells
-/// the view where it went.
+/// A move leaves the item standing and only tells the view where it
+/// went. A remove followed by an insert takes the view's delegate down
+/// and builds another one, and the row being moved is the one under the
+/// hand (`TabStrip`).
 ///
 /// `to` is where the row ends up once it has left `from` — the ordinary
 /// reading of a move, and the one the caller can check against its own
-/// list afterwards. Qt asks instead for the row the item is inserted
+/// list afterwards. Qt asks for the row the item is inserted
 /// **before** while the list still holds it in both places, which is one
 /// further along when the row travels right.
 macro_rules! impl_move_notified {
@@ -133,7 +133,7 @@ pub(crate) use impl_notify_runs;
 /// Callers walk their rows in ascending order, so a run is one unbroken
 /// stretch of changed rows and costs one `dataChanged`: a list where every
 /// row moved is one notification, and one where every other row moved is
-/// one per island rather than one per row.
+/// one per island.
 pub(crate) fn push_run(runs: &mut Vec<(usize, usize)>, i: usize) {
     match runs.last_mut() {
         Some((_, last)) if *last + 1 == i => *last = i,

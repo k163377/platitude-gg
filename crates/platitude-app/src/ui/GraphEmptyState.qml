@@ -15,17 +15,17 @@ Item {
     required property bool blank
     /// The work tree behind the pane — read for the one state this screen has of its own.
     required property var workTree
-    /// A repository is open and has no commits yet. Not `blank`'s other half: a window with nothing in it and a
-    /// repository with nothing in it are two different screens.
+    /// A repository is open and has no commits yet. A screen apart from `blank`: a window with nothing in it and a
+    /// repository with nothing in it are two screens.
     readonly property bool unborn: !emptyState.blank && emptyState.workTree.unborn
     /// The line under the heading, held with the branch's seat still open in it: the name is drawn in the colour it
-    /// wears everywhere else and the sentence in the screen's own, so the two are cut apart at `%1` rather than the
-    /// name being looked for in the finished line (`Words.nameInSentence`, デザイン規約 §ref の種別).
+    /// wears everywhere else and the sentence in the screen's own, so the two are cut apart at `%1`
+    /// (`Words.nameInSentence`, デザイン規約 §ref の種別).
     readonly property string firstCommitLine: qsTr("The first commit will start %1")
 
     signal openRepositoryRequested()
 
-    // First load, before any row exists. The drawn ring, not Fusion's BusyIndicator — the window has one turning mark
+    // First load, before any row exists. The drawn ring — the window has one turning mark
     // and this is it (規約 §進行中・長押しの定数).
     SpinnerIcon {
         anchors.centerIn: parent
@@ -33,22 +33,22 @@ Item {
         height: Theme.iconLg
         spinning: emptyState.graphModel.loading && emptyState.graphModel.rowTotal === 0
     }
-    // **A walk that gave up is not said here** — a screen that fills the whole pane would paint the sentence across
+    // **A walk that gave up is the band's** — a screen that fills the whole pane would paint the sentence across
     // the rows a part-finished walk has already drawn. It is one state, so it is said in one place: the band's
     // `STALE GRAPH` badge, with whatever was said about it in the card behind it (`BandStateGroup`, by design).
     // A badge is in view wherever the reader is standing, which the middle of a five-hundred-row column is not.
-    // A repository with no history yet. Told in the middle of the column that will hold it, not under the working-tree
-    // row: the history has not stopped somewhere (the window cut's footer says that, where it stops) — there is none,
-    // so the whole column is what the words are about. Nothing to do here that the app can do, so no button under
-    // them: the one thing that moves this on is putting files in the folder, and the row above already appears when
+    // A repository with no history yet. Told in the middle of the column that will hold
+    // it: the history has not stopped somewhere (the window cut's footer says that, where it stops) — there is none,
+    // so the whole column is what the words are about. The one thing that moves this on is putting files in the
+    // folder, which the app cannot do, so the words stand alone: the row above already appears when
     // they are there.
     Column {
         anchors.centerIn: parent
         visible: emptyState.unborn
         spacing: Theme.spaceLg
         Label {
-            // 規約 §タイポグラフィ「画面を占める状態メッセージの見出し」. Not the app name's step — that one is the app's own
-            // (空の窓 / git ゲート), and this screen is a repository's state rather than a window with nothing in it.
+            // 規約 §タイポグラフィ「画面を占める状態メッセージの見出し」. The app name's step is the app's own
+            // (空の窓 / git ゲート), and this screen is a repository's state.
             text: qsTr("No commits yet")
             font.pixelSize: Theme.fontLg
             font.weight: Font.DemiBold

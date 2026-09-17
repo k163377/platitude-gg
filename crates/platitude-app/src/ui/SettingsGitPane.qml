@@ -6,34 +6,34 @@ import platitude.ui
 
 // The settings screen's `Git` category: everything this app writes into git's own configuration, in the two groups
 // git itself keeps it in (規約 §設定の画面). A file of its own because it is the half of the screen that talks to git
-// — it asks git what it would launch, hands git the identity, and nothing in it is Platitude GG's to keep.
+// — it asks git what it would launch, hands git the identity, and everything in it is git's to keep.
 //
-// **The groups are how far a value reaches, not what it is.** `GLOBAL` is what git reads everywhere on this computer;
+// **The groups are how far a value reaches.** `GLOBAL` is what git reads everywhere on this computer;
 // `REPOSITORY OVERRIDE` is what the repository picked below writes into its own file, standing over the first. Only
 // the identity is asked at both levels. The merge editor is `GLOBAL`'s alone (`conflict::set_merge_tool`: which
-// editor someone reaches for is a property of their desk), and the line endings are the repository's alone — **this
-// app does not write `core.autocrlf` outside a repository somebody picked**, because the machine's own configuration
-// is not an application's to rewrite (規約 §設定の画面).
+// editor someone reaches for is a property of their desk), and the line endings are the repository's alone —
+// **`core.autocrlf` is written only into a repository somebody picked**, because the machine's own configuration
+// is the person's to set (規約 §設定の画面).
 //
-// The pair is not symmetric on purpose: the second group is not a peer of the first, it sits on top of it, and the
+// The pair is lopsided on purpose: the second group sits on top of the first, and the
 // word `override` is what says so (規約 §設定の画面).
 ColumnLayout {
     id: pane
 
-    /// The tab git is read through. The settings are global; "what would git launch here" is not.
+    /// The tab git is read through. Settings are global; "what git launches here" is this tab's.
     property var curPage: null
     /// The strip, for the group that writes into one repository (`SettingsRepoPane`).
     required property TabsModel tabsModel
     /// This category is the one on screen, and the screen is open. What the slow candidate read waits for — a reader
     /// who opened the application category never asked for it.
     property bool showing: false
-    /// The screen is open, whichever category it is on. **What the boxes follow git by** — not `showing`: git can
+    /// The screen is open, whichever category it is on. **What the boxes follow git by**: git can
     /// answer while the reader is in the other category (a status refresh names the tool wherever something is
     /// conflicted), and a box that stopped following there would be written back on close as though the reader had
     /// emptied it (`applyTool`).
     property bool screenOpen: false
 
-    /// Enter in the tool box. The way out belongs to the screen, so it is asked for rather than taken.
+    /// Enter in the tool box. The way out belongs to the screen, so it is asked for.
     signal accepted()
 
     // Asking is the showing category's; forgetting the latch is the closing screen's, so that neither the open edge's
@@ -56,7 +56,7 @@ ColumnLayout {
     property bool toolTouched: false
     /// Keeps the box's turning indicator up past the read that raised it. Written from outside and false wherever
     /// nobody wrote it: the read can be over before a picture of the wait has been grabbed. Put down by the screen
-    /// closing (`onShowingChanged`) rather than by whoever raised it, so that neither of the open edge's two handlers
+    /// closing (`onShowingChanged`), so that neither of the open edge's two handlers
     /// nor their order can take away what the other just put there.
     property bool holdToolLoading: false
     /// The candidate list is down, and nothing is outstanding on the tool read. What a run waits on, either side of
@@ -76,7 +76,7 @@ ColumnLayout {
         pane.toolsAsked()
     }
     /// git has just been asked both questions. An automation-only exposure, the same one `GraphPane.view` is
-    /// (app-ui.md): whether the read is still out is already on [`toolsSettled`], but *this instant* is not — the
+    /// (app-ui.md): whether the read is still out is on [`toolsSettled`]; *this instant* is this signal — the
     /// answer can land before anything that reads the pane runs again.
     signal toolsAsked()
 
@@ -88,8 +88,8 @@ ColumnLayout {
         if (pane.curPage && toolField.wanted !== pane.mergeTool)
             pane.curPage.pageTab.setMergeTool(toolField.wanted)
     }
-    /// Puts the box back to what git says, for the screen that just opened. The latch is not this one's to clear —
-    /// it belongs to the closing screen (`onShowingChanged`), because this runs off the same edge that raises it.
+    /// Puts the box back to what git says, for the screen that just opened. The latch belongs to the closing
+    /// screen (`onShowingChanged`), because this runs off the same edge that raises it.
     function loadTool() {
         toolField.wanted = pane.mergeTool
         pane.toolTouched = false
@@ -112,7 +112,7 @@ ColumnLayout {
              + " choices=" + pane.toolChoices.length
     }
     onMergeToolChanged: {
-        // `screenOpen`, not `showing`: see the property. A box that stopped following in the other category would be
+        // `screenOpen`: see the property. A box that stopped following in the other category would be
         // carrying a value git has already moved past, and `applyTool` would write it back on the way out.
         if (pane.screenOpen && !pane.toolTouched) {
             toolField.wanted = pane.mergeTool
@@ -122,7 +122,7 @@ ColumnLayout {
 
     // ---- the identity ----------------------------------------------------
     // Nothing here waits on the answer. The gate keeps a `saving` flag because a landed save is what closes it; this
-    // screen was not opened to answer that one question, so it stays standing either way and the marks the fields
+    // screen is open for more than that one question, so it stays standing either way and the marks the fields
     // carry are the whole of what a save has to say here (`IdentityFields`).
     function loadIdentity() {
         identityFields.load()
@@ -140,8 +140,8 @@ ColumnLayout {
     // ---- what the way out has to stop for -------------------------------
     /// How many identity chapters are holding an edit git has not been given. **The only thing on this screen a
     /// reader can lose by leaving** — every other field writes as it is finished with, and these two keep a Save
-    /// because git cannot be handed both of their keys at once (規約 §設定の画面). Counted rather than answered
-    /// yes/no so the question can say which of the two it is about.
+    /// because git cannot be handed both of their keys at once (規約 §設定の画面). Counted so the question can
+    /// say which of the two it is about.
     readonly property int unsavedIdentities: (identityFields.dirty ? 1 : 0) + (repoPane.unsaved ? 1 : 0)
     /// Which group the question is about, for its sentence. Both is possible; the word then names neither.
     readonly property bool unsavedIsGlobal: identityFields.dirty
@@ -153,8 +153,8 @@ ColumnLayout {
             return identitySection
         return repoPane.unsaved ? repoPane.identityItem() : null
     }
-    /// Puts both back to what git holds, for the reader who said to leave them behind. The way out runs this rather
-    /// than just closing, so a screen opened again does not come back still holding the edit that was discarded.
+    /// Puts both back to what git holds, for the reader who said to leave them behind. The way out runs this, so a
+    /// screen opened again comes back to what git holds.
     function dropUnsavedIdentities() {
         identityFields.load()
         repoPane.reloadIdentity()
@@ -175,11 +175,11 @@ ColumnLayout {
     SettingsGroup {
         caption: qsTr("GLOBAL")
 
-        // Where this group's values live, said before its chapters rather than in a line at the foot — and said in
+        // Where this group's values live, said before its chapters — and said in
         // `warning`, because a write here reaches outside this window (規約 §状態 / §設定の画面). Both chapters
         // write with `--global` (`identity` / `conflict` in core), so what is being replaced is the configuration
-        // every repository on this account is read through — the one kind of reach the state colours are for. Not
-        // `fontSm`: the application category's line is help text, this one is the warning.
+        // every repository on this account is read through — the one kind of reach the state colours are for. Full
+        // size: the application category's line is help text, this one is the warning.
         Label {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
@@ -198,8 +198,8 @@ ColumnLayout {
                 onSubmitted: pane.submitIdentity()
             }
             // The two keys cannot be written in one go (core.md), so this chapter keeps the button that asks for
-            // them. Everything else on the screen writes as it is finished with, which is why the screen itself has
-            // no button that writes — its only way out is the `✕`.
+            // them. Everything else on the screen writes as it is finished with, which is why the screen's only
+            // way out is the `✕`.
             DialogActions {
                 id: identityActions
                 acceptKind: "check"
@@ -212,7 +212,7 @@ ColumnLayout {
         SettingsSection {
             caption: qsTr("MERGE EDITOR")
             HelpText {
-                // Named rather than picked from a list: the only way to enumerate them is `git mergetool
+                // Typed by name: the only way to enumerate them is `git mergetool
                 // --tool-help`, whose output is laid out for a person to read.
                 text: qsTr("Which tool opens a conflicted file. It must not need a console — this app gives git none, so vimdiff and its kind cannot run. Stored by git as merge.guitool.")
             }

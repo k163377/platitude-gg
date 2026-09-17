@@ -17,8 +17,8 @@ Item {
 
     /// The chip's records, in the order it reads them out (see the row).
     required property var records
-    /// How wide the column is. The chip and the box are laid out from it rather than from `width`, which a layout
-    /// settles a frame later.
+    /// How wide the column is. The chip and the box are laid out from it, since a layout settles
+    /// `width` a frame later.
     required property real columnWidth
     /// This chip has taken a second click and is waiting out the double-click window (`RefChip.waiting`).
     required property bool waiting
@@ -29,7 +29,7 @@ Item {
     required property bool naming
     required property string namingMode
     /// What a rename box is naming ("branch" / "remote" / "tag"), for the frame to say the kind the way the chip it
-    /// stands in for does (§ref の種別: 枠 = 種別). Empty while the box is making a name rather than changing one.
+    /// stands in for does (§ref の種別: 枠 = 種別). Empty while the box is making a name.
     required property string namingKind
     /// Whether what is typed can be accepted, and the one line that says why not. Both the page's answer — the row
     /// only draws it (§可否・警告の出し場所: the frame says so where the typing is, the reason waits in the tooltip).
@@ -44,7 +44,7 @@ Item {
     /// The front card itself — what a stacked one is unstacked under.
     readonly property alias chipItem: rowStack.chipItem
     /// The mark as the chip is actually wearing it, for the run that photographs the wait (`RefChip.waiting`) — read
-    /// off the chip rather than off what was asked of it, which would be green with the binding cut.
+    /// off the chip, since what was asked of it would be green with the binding cut.
     readonly property alias chipWaiting: rowStack.chipWaiting
     /// What the name box came out to — the column, or its own floor where that is wider. The row reads it for the
     /// ground the box is standing on, and a headless run (`PGG_AUTO_ACT=name-box`) to say which of the two it got.
@@ -58,9 +58,9 @@ Item {
     /// Whether there is a name in this column at all — the whole of what the row needs to divide itself
     /// (`GraphRowDelegate.partAt`).
     ///
-    /// **Not "which chip is under this point".** The row divides on this column's own edge rather than on the chip's
-    /// frame, so the geometry belongs to the row, which is where the column's width already lives. A frame eighteen
-    /// pixels tall in a row of twenty-eight is a boundary nobody can see.
+    /// **The row divides on this column's own edge**, so the geometry belongs to the row, which is
+    /// where the column's width already lives. A frame eighteen pixels tall in a row of
+    /// twenty-eight is a boundary nobody can see.
     ///
     /// **Every chip answers, stacked or not**: a chip with one name on it is cut to the column
     /// just the same, and a name that cannot be read is a name that cannot be read — the reason a stack unfolds is the
@@ -70,8 +70,8 @@ Item {
     /// What the box opened holding, kept on the column so the box can be handed it whichever lands first — the ask,
     /// or the box itself (`focusBox`).
     property string askedText: ""
-    /// Carries the box on from whatever the last delegate to hold it was left with. `text` comes off the view, not off
-    /// this column: this delegate is recycled the moment the row scrolls off.
+    /// Carries the box on from whatever the last delegate to hold it was left with. `text` comes off the view:
+    /// this delegate is recycled the moment the row scrolls off.
     ///
     /// **A rename opens with the name in it, selected whole** (デザイン規約 §左メニューの所作) — the box is the name's own seat,
     /// so what it comes up holding is what is being changed, and typing over it is the first thing a hand does. The
@@ -107,8 +107,8 @@ Item {
         // **Built on every row and hidden where there is no name — unlike the box beside it.** A chip stands on one
         // row in three, and rows are recycled as the graph scrolls: built only where there is a name, the chip was
         // built and torn down on every recycling that crossed that line, and the working set over one scroll of the
-        // window came out tens of megabytes *higher* than with a chip built once per delegate — the churn's own heap,
-        // not the chip's (ci/baseline/code-costs-windows-x64.md §メモリの形). The box is different: nobody is naming
+        // window came out tens of megabytes *higher* than with a chip built once per delegate — the churn's own
+        // heap (ci/baseline/code-costs-windows-x64.md §メモリの形). The box is different: nobody is naming
         // a row while the graph scrolls.
         visible: chipColumn.records.length > 0 && !chipColumn.naming
         anchors.right: parent.right
@@ -120,11 +120,11 @@ Item {
         records: chipColumn.records
         waiting: chipColumn.waiting
         unstacked: chipColumn.listOpen
-        // The names the chip cannot fit are read in the card, not squeezed here.
+        // The names the chip cannot fit are read in the card.
         maxWidth: chipColumn.columnWidth - Theme.spaceSm
     }
     // A row with nothing to move to answers the double-click with the one thing that would give it something: a name.
-    // The question is asked where the chips would be, not over the window (デザイン規約: 表示の切り替えで足りるならダイアログを出さない).
+    // The question is asked where the chips would be (デザイン規約: 表示の切り替えで足りるならそれで済ませる).
     Loader {
         id: nameSeat
         active: chipColumn.naming
@@ -152,7 +152,7 @@ Item {
             readonly property real nameBoxMinW:
                 Math.ceil(placeholderInk.implicitWidth) + nameField.leftPadding + nameField.rightPadding
             /// What the box has to be able to show: the question where it is asking one, the name where it opened
-            /// holding one. **Latched as the box opens rather than followed as it is typed into** — a box whose right
+            /// holding one. **Latched as the box opens** — a box whose right
             /// edge walks out from under the caret is one nobody can aim at (`NavNameBox` measures its own the same
             /// way).
             property string inkText: ""
@@ -163,7 +163,7 @@ Item {
             width: Math.max(chipColumn.columnWidth - 2 * Theme.spaceXs, nameField.nameBoxMinW)
             // The frame says which kind is being named — the same rule the chip this box turns into follows
             // (§ref の種別: 枠 = 種別). A branch's colour is the focus ring's own value, so only the tag has one to say, and
-            // a rename is told by the kind it is changing rather than by the mode.
+            // a rename is told by the kind it is changing.
             focusTone: (chipColumn.namingMode === "rename" ? chipColumn.namingKind : chipColumn.namingMode) === "tag"
                        ? Theme.refTag : Theme.borderFocus
             // A rename has none: what the box is for is the name it opened holding (§左メニューの所作), and a question
@@ -181,7 +181,7 @@ Item {
                 if (!chipColumn.namingRefused)
                     chipColumn.namingSubmitted(nameField.text.trim())
             }
-            // Held on the view, not here: this delegate is recycled the moment the row scrolls off, and half a name
+            // Held on the view: this delegate is recycled the moment the row scrolls off, and half a name
             // is still worth not losing.
             onTextEdited: chipColumn.namingEdited(nameField.text)
             Keys.onEscapePressed: chipColumn.namingCancelled()

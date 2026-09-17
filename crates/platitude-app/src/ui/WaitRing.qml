@@ -18,7 +18,7 @@ SpinnerIcon {
 
     width: Theme.iconMd
     height: Theme.iconMd
-    // The corner and the offset are `RefusalBadge`'s single decision, followed rather than restated: the two marks a
+    // The corner and the offset are `RefusalBadge`'s single decision, followed: the two marks a
     // pointer can be wearing have to sit in the same place, or the second reads as something else standing nearby.
     // And out of that corner where there is no room for it, for the reason that badge gives — a window's edge leaves
     // the corner outside, and half a ring reads as a broken one.

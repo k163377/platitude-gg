@@ -10,7 +10,7 @@ import platitude.ui
 // the same thing in the same words wherever the pane put it.
 //
 // It takes the ground those three seats are on (`bgElevated`) and answers the pointer with the wash they answer with,
-// and nothing else: no corner, no frame, no fill of its own for being open. What says the state is the mark
+// and that is the whole of its dress. What says the state is the mark
 // (デザイン規約 §git が言ったことを読む場所 — 通常 / 実行中 / 直近が失敗 / 開いている間).
 Rectangle {
     id: toggle
@@ -21,14 +21,14 @@ Rectangle {
     /// rail, where no section carries a name either.
     property bool captioned: false
     /// Whether the seat closes itself off from what stands above it — the hairline the rail's own head block draws
-    /// under itself. False in the panel's band, where the seat is part of that band rather than under it.
+    /// under itself. False in the panel's band, where the seat is part of that band.
     property bool ruled: true
     /// The step the mark is drawn at, which is the one whatever it stands among is drawn at: the sections' own marks
     /// where it stands beside a name (`iconMd`), and the fold control's where it stands alone at the end of the rail
     /// (`iconLg` — that block is what this one is read against down there, by design. デザイン規約 §寸法).
     property real markSize: Theme.iconMd
 
-    /// The log this tab is filling. Asked of the log rather than of the page: closing a tab takes the page's models
+    /// The log this tab is filling. Asked of the log: closing a tab takes the page's models
     /// down while the page itself is still standing, so `curPage !== null` is true for a beat after there is nothing
     /// left to read off it.
     readonly property var log: toggle.curPage !== null ? toggle.curPage.pageCommands : null
@@ -43,7 +43,7 @@ Rectangle {
 
     /// Where the mark stands and where the name begins — a section's row without the fold arrow's column, which is
     /// what this row has no use for. Written as the sum of the
-    /// steps rather than as numbers, so the row moves with the pane's own inset when that moves.
+    /// steps, so the row moves with the pane's own inset when that moves.
     readonly property real markX: Theme.spaceXs
     readonly property real captionX: toggle.markX + Theme.iconMd + Theme.spaceXs
 
@@ -57,7 +57,7 @@ Rectangle {
     // and the log's own band are `bgElevated`, and this row is read against them. In the
     // log's band it repaints the value that band already carries, so the row reads the same there with no case for it.
     color: Theme.bgElevated
-    // The wash goes over that ground rather than instead of it — `bgHover` is a white at 8% and has nothing of its own
+    // The wash goes over that ground — `bgHover` is a white at 8% and has nothing of its own
     // to sit on (`NavHeader` layers the same two).
     Rectangle {
         anchors.fill: parent
@@ -87,8 +87,8 @@ Rectangle {
               : toggle.open ? Theme.textPrimary
               : Theme.textMuted
     }
-    // The same name the panel's own band carries, so the two doors into the log do not name it differently. It goes
-    // red with the mark rather than staying grey beside it: a section's band moves its mark and its caption together,
+    // The same name the panel's own band carries, so the two doors into the log name it alike. It goes
+    // red with the mark: a section's band moves its mark and its caption together,
     // and one red glyph in a column of words is not what a failure looks like here (規約 §無効 is the same shape).
     Label {
         id: commandsName

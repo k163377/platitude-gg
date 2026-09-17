@@ -18,10 +18,10 @@ pub struct DiffRow {
     /// (`markup::styled`), whatever the theme had to say about it — a
     /// heading, a line of a language nobody has rules for and a coloured
     /// line are all one format, so a row's format never changes under it
-    /// and every walk of the line stops in the same columns. The line
-    /// itself is not kept beside it: the source is where a copy comes
-    /// from (`models::diff::selection`), and holding both doubles what a
-    /// long diff costs.
+    /// and every walk of the line stops in the same columns. Only the
+    /// markup is kept: the source is where a copy comes from
+    /// (`models::diff::selection`), and holding both doubles what a long
+    /// diff costs.
     pub text: String,
     /// Where what changed inside this row falls in the line as the row
     /// spells it — `"from:len,…"` in the UTF-16 units a place is counted
@@ -29,10 +29,10 @@ pub struct DiffRow {
     /// (`platitude_core::intraline`, laid out by [`spelled_ranges`]). The
     /// pane asks the row's own layout where those places are drawn
     /// (`LineRuler`) and lays the stronger wash there
-    /// (デザイン規約 §シンタックスハイライト). **Places and not columns**: a
-    /// column is not a width — the fallback carrying a wide glyph is not
-    /// monospaced, and a combining mark is a place the layout counts and
-    /// draws nothing for.
+    /// (デザイン規約 §シンタックスハイライト). **Places**: a column is not a
+    /// width, since the fallback carrying a wide glyph is not monospaced,
+    /// and a combining mark is a place the layout counts and draws
+    /// nothing for.
     pub emph: String,
     /// One of git's conflict fences (`<<<<<<<` / `|||||||` / `=======` /
     /// `>>>>>>>`); the pane drops its voice for these
@@ -40,7 +40,7 @@ pub struct DiffRow {
     pub fence: bool,
     /// This line is the last of its side and ends without a newline —
     /// git's `\ No newline at end of file`, folded onto the row it is
-    /// about instead of standing as a row of its own
+    /// about and drawn as a mark at the end of it
     /// (デザイン規約 §行末の改行が無いこと). The note is never on both
     /// sides of one line at once: git prints one per side, after that
     /// side's own last line, so the row it lands on already says which
@@ -56,8 +56,8 @@ pub struct DiffRow {
     /// where they name nothing). Hunks are numbered from zero inside each
     /// patch, so this is what makes the pair above an address: the
     /// selection reads a row's own source line back off
-    /// `patches[patch].hunks[hunk].lines[line]` rather than keeping a
-    /// second copy of the text (`DiffModel::source_line`).
+    /// `patches[patch].hunks[hunk].lines[line]`
+    /// (`DiffModel::source_line`).
     pub patch: i32,
     /// One marker column per side of a combined diff (`" +"`, `"++"`,
     /// `"- "`), empty on every ordinary row. Which side a line came from
@@ -74,11 +74,11 @@ pub struct DiffRow {
 /// of these — its lines still exist on the old side, and a part of them
 /// can still be staged.
 ///
-/// The new side has to be named, not merely inferred from a missing old
-/// one: a patch that carries no `diff --git` header at all parses with
-/// both sides empty ([`platitude_core::parse::diff::parse_patch`]
-/// synthesizes the file entry), and that is a diff whose shape is unknown
-/// rather than one that is known to be new.
+/// The new side has to be named: a patch that carries no `diff --git`
+/// header at all parses with both sides empty
+/// ([`platitude_core::parse::diff::parse_patch`] synthesizes the file
+/// entry), and a diff of unknown shape is a different thing from one
+/// known to be new.
 pub fn is_new_file(patches: &[FilePatch]) -> bool {
     !patches.is_empty()
         && patches.iter().all(|p| {
@@ -185,11 +185,11 @@ pub fn flatten_patches(
                 markers: String::new(),
             });
             for (line_index, line) in hunk.lines.iter().enumerate() {
-                // git's note about the line above it rather than a line
-                // of the file, so it rides that row instead of taking one
-                // (デザイン規約 §行末の改行が無いこと). A note with no line
-                // in front of it is git talking about nothing: there is
-                // no row to carry it and none is invented.
+                // git's note about the line above it, so it rides
+                // that row (デザイン規約 §行末の改行が無いこと). A
+                // note with no line in front of it is git talking
+                // about nothing: there is no row to carry it and
+                // none is invented.
                 if line.kind == DiffLineKind::NoNewline {
                     if let Some(row) = rows.last_mut()
                         && row.kind != "hunk"

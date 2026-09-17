@@ -7,17 +7,17 @@
 //!   heap are live. Qt allocates through C++ `operator new` and never
 //!   through Rust's `GlobalAlloc`, so the line between "the data this
 //!   application built" and "the toolkit under it" falls out of this
-//!   number exactly rather than by apportionment;
+//!   number exactly;
 //! * **the registry** attributes bytes *inside* that number to the models
 //!   holding them. Each model reports its own footprint as it changes;
-//!   the report sums them, and prints what is left over as a remainder
-//!   rather than pretending the named parts are everything.
+//!   the report sums them, and prints what is left over as a signed
+//!   remainder.
 //!
 //! Off unless asked for, and a shipped build cannot be asked. The counting
 //! is behind the `memprobe` feature, and the per-model walks need that
 //! feature *and* `PGG_MEM_REPORT=1` (`harness::knobs`, the crate's only
-//! reader of one) — they are O(rows), and a measurement must not pay for
-//! itself on every drain of a normal run.
+//! reader of one) — they are O(rows), so a normal run's drains pay
+//! nothing for them.
 //!
 //! The process's allocator is chosen here too, because there is only one
 //! `#[global_allocator]` slot and the counter has to sit in front of
@@ -26,15 +26,15 @@
 //! **The report half is reached from one place** — the slot on
 //! `harness::singleton::Harness` — and that type is not compiled into a
 //! build without the harness, so nothing there calls any of it. `allow`
-//! rather than `expect`: the test at the foot keeps some of the same names
-//! live whenever tests are compiled, and an expectation that goes
-//! unfulfilled is a warning of its own.
+//! here: the test at the foot keeps some of the same names live whenever
+//! tests are compiled, and an expectation that goes unfulfilled is a
+//! warning of its own.
 #![cfg_attr(not(feature = "automation"), allow(dead_code))]
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
-// Only the counting half reads a counter, and a build without it must not
-// carry an import nothing uses.
+// Only the counting half reads a counter, so the import is behind the
+// same feature.
 #[cfg(feature = "memprobe")]
 use std::sync::atomic::Ordering;
 
@@ -87,8 +87,8 @@ mod counting {
     pub(super) static COUNTS: [AtomicUsize; 32] = [const { AtomicUsize::new(0) }; 32];
 
     pub(super) fn class_of(size: usize) -> usize {
-        // Saturated, not wrapped: a 2^31-byte-and-up allocation belongs in
-        // the top bucket, not relabelled as a small one.
+        // Saturated: a 2^31-byte-and-up allocation is filed in the top
+        // bucket, with the rest of the big ones.
         ((usize::BITS - size.leading_zeros()) as usize).min(31)
     }
 
@@ -220,8 +220,8 @@ pub fn size_classes() -> String {
 /// against are half a report; and the run has to have asked
 /// (`PGG_MEM_REPORT=1`, through `harness::knobs`, which is the only place
 /// in the crate that reads one). A shipped build has neither, and the
-/// `cfg!` is what takes the walk out of it rather than a flag that
-/// happens to be off.
+/// `cfg!` is what takes the walk out of it, gone before the
+/// process starts.
 pub fn enabled() -> bool {
     cfg!(feature = "memprobe") && super::knobs().mem_report
 }
@@ -229,9 +229,9 @@ pub fn enabled() -> bool {
 /// What each model last reported, keyed by kind and tab. Sorted, so two
 /// reports of the same shape read the same way down the line.
 ///
-/// A value rather than a bare static so a test can file into a registry
-/// of its own; the process keeps one ([`REGISTRY`]) for the real models,
-/// reached through the free functions below.
+/// A value, so a test can file into a registry of its own; the process
+/// keeps one ([`REGISTRY`]) for the real models, reached through the
+/// free functions below.
 pub struct Registry(Mutex<BTreeMap<(String, i32), (usize, usize)>>);
 
 impl Registry {
@@ -304,9 +304,9 @@ pub fn model_parts() -> Vec<(String, usize, usize)> {
 
 /// One report line for where the run has got to, gathered and written.
 ///
-/// The hub is read here rather than at the QML slot that asks: the slot's
-/// whole part in this is being on the Qt main thread, which is where the
-/// sessions live, so the moment is its business and the reading is not
+/// The hub is read here: the slot's whole part in this is being on the
+/// Qt main thread, which is where the sessions live, so the moment is
+/// the slot's business and the reading is this function's
 /// (`AppBackend::note_memory`). Off unless the run asked for it.
 pub(crate) fn note_now(label: &str) {
     if !enabled() {
@@ -348,8 +348,8 @@ pub fn report(label: &str, session_parts: &[Part], waiting: &str) {
         named,
         // Negative when the same `Arc` is counted on both sides — the refs
         // snapshot is held by the session and by every sidebar section —
-        // so it is a signed remainder rather than a subtraction that
-        // cannot be trusted to stay positive.
+        // so it is a signed remainder: under zero is the double count,
+        // over it is what nothing named.
         unattributed = live.map_or(0i64, |l| l as i64 - named as i64),
         models = rendered_models,
         session = platitude_core::mem::render(session_parts),

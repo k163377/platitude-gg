@@ -10,8 +10,8 @@ import platitude.ui
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -29,7 +29,7 @@ Item {
     readonly property var renderedBarrier: driver.barrierRendered
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "details-failure") {
             driver.completionDeferred = true
@@ -37,7 +37,7 @@ Item {
             detailsFailure.start()
         } else if (act === "details-select" || act === "details-select-away") {
             // `<value>` or `<value>:<row>` — the graph row defaults to the top one, since what this is about is the
-            // pane rather than which commit is in it. `-away` takes two values instead, `<first>+<then>`, and is
+            // pane. `-away` takes two values, `<first>+<then>`, and is
             // about the first one letting go.
             const away = act === "details-select-away"
             const plus = arg.indexOf("+")
@@ -55,7 +55,7 @@ Item {
             hashTipTimer.start()
         } else if (act === "details-hand") {
             // The plate's own two gestures, on the graph row the argument names (the top one by default — what this
-            // is about is the plate rather than which commit is in it).
+            // is about is the plate).
             page.activateRow(graphModel.oidAt(arg === "" ? 0 : Number(arg)))
             detailsHandTimer.start()
         } else if (act === "details-sweep") {
@@ -85,7 +85,7 @@ Item {
             // number. `--preset edges` holds the wall.
             //
             // **A run that named no row keeps the one the page opened on** — the newest commit of the current
-            // branch. Not `Number("")`, which is 0: row 0 is the working tree's wherever the tree is dirty, and
+            // branch (`Number("")` is 0): row 0 is the working tree's wherever the tree is dirty, and
             // both presets this verb is pointed at are (`basic`, `edges`). Landing there puts the WIP pane in
             // front and empties the selection, so the card below can never settle and the run says nothing at all
             // until the watchdog — a whole ceiling of `cardSettled=false` with no report of any kind, on both OSes
@@ -110,7 +110,7 @@ Item {
                 page.commandsOpen = true
                 splitRefuseTimer.start()
             } else if (arg === "desc-max" || arg === "desc-min") {
-                // Row 1, not row 0: row 0 of every preset is the uncommitted row, and landing on it puts the working
+                // Row 1: row 0 of every preset is the uncommitted row, and landing on it puts the working
                 // tree in the right-hand pane — the box this pulls on would be off screen.
                 page.activateRow(graphModel.oidAt(1))
                 descGrowTimer.pane = detailsPane
@@ -202,11 +202,11 @@ Item {
     /// a run cannot inject (verify-ui §hover の絵の撮り方). Whether the words a control offers change at all is asked
     /// where a pointer can be made (qmltestrunner `tst_hashplate`); this is the other half, in the app.
     ///
-    /// **Neither claim spells the words.** Both compare what is on screen against what the control says it is
+    /// **Both claims compare** what is on screen against what the control says it is
     /// offering, so a run stays green through a translation and red through a tip that kept the old sentence.
     SampleTimer {
         id: hashTipTimer
-        /// Whether the press goes in ahead of the tip rather than into one already standing.
+        /// Whether the press goes in ahead of the tip.
         property bool counting: false
         property bool asked: false
         /// What the tip was carrying when the press landed — empty in the `-counting` run, which is that run's
@@ -233,8 +233,8 @@ Item {
                 return
             hashTipTimer.stop()
             if (hashTipTimer.counting) {
-                // **The tip that follows carries the word the control has now**, not the one it had when the pointer
-                // arrived — which is what the attached property hands over unless the answer re-arms it.
+                // **The tip that follows carries the word the control has now** — the attached property hands over
+                // the one it had when the pointer arrived unless the answer re-arms it.
                 Harness.report("hash_tip_counting counting=" + (hashTipTimer.was === "")
                                   + " said=" + (up === row.hashTipWords())
                                   + " now=" + up)
@@ -253,7 +253,7 @@ Item {
     }
 
     /// The plate's own gesture: a press that lets go where it landed copies the whole hash, and a press that travels
-    /// leaves the shown one picked out instead (規約 §右のペインの字は掴める). **Four claims, and no picture answers
+    /// leaves the shown one picked out (規約 §右のペインの字は掴める). **Four claims, and no picture answers
     /// any of them** — the clipboard is not on screen, and a plate that copied on both gestures frames exactly like
     /// one that told them apart.
     ///
@@ -294,7 +294,7 @@ Item {
             // And the drag before it has let go: a plate that kept the wash would be copying out from under a
             // selection nobody is making any more, which is the plate reading as still dragged.
             const letGo = row.selectedValue("hash") === ""
-            // `hand=` is the half a gesture cannot say for itself: the run enters functions rather than the pointer,
+            // `hand=` is the half a gesture cannot say for itself: the run enters functions directly,
             // so a hand taken out, disabled or shrunk would answer every one of them and never see a press.
             Harness.report("details_hand acted=" + acted + " held=" + held + " quiet=" + quiet
                               + " let=" + letGo
@@ -303,7 +303,7 @@ Item {
         }
     }
 
-    /// The range selection, taken from the gaps around the values rather than from the values themselves
+    /// The range selection, taken from the gaps around the values
     /// (規約 §右のペインの字は掴める). **Four claims in one line, and each answers something the others cannot**: the
     /// sweep reaches the value from every corner of the gap (`reach`), the keyboard went with it so `Ctrl+C` will
     /// land (`caret`), the words answer their own press wherever nothing stands over them (`grabs`), and a press on
@@ -335,7 +335,7 @@ Item {
             }
             detailsSweepTimer.stop()
             const want = detailsPane.valueRow.shownValue(which)
-            // **Every corner of the gap, not just its middle.** A reach that only worked level with the words is the
+            // **Every corner of the gap.** A reach that only worked level with the words is the
             // fault this shipped with, and the middle is the one place that hides it.
             let reach = 0
             let tries = 0
@@ -405,7 +405,7 @@ Item {
             + " pane=" + Math.round(detailsPane.width)
             // The other axis rides along unjudged, the way `edge=` does in `window_fill`: how far the column runs past
             // the pane's own bottom is what says whether this pane needs a scroll of its own, and the answer depends on
-            // the window, not on this verb.
+            // the window.
             + " overH=" + Math.round(detailsPane.contentOverHeight)
             + " paneH=" + Math.round(detailsPane.height))
             driver.complete()
@@ -414,7 +414,7 @@ Item {
     // The rows have to arrive, and the list be laid out with them, before what they leave bare is worth measuring.
     SampleTimer {
         id: cornerTimer
-        // `shown=` is the label's own visibility, not the room that decided it: reporting what was asked for would go
+        // `shown=` is the label's own visibility: reporting the room that decided it would go
         // green with the binding cut.
         onTriggered: {
             if (gitCorner.parent === null || gitCorner.width <= 0)
@@ -432,7 +432,7 @@ Item {
     // before there is a ceiling to pull on.
     SampleTimer {
         id: descGrowTimer
-        // Pulled past everything, so where it stops is the bound itself rather than a number this verb chose.
+        // Pulled past everything, so where it stops is the bound itself.
         readonly property int pull: 1000
         /// Which pane's box to pull. The two carry the same box and hooks under the same names, so this verb is written
         /// once.
@@ -443,7 +443,7 @@ Item {
         property bool squeeze: false
         property int frameBefore: 0
         /// Which end this run is carrying the grip past, or empty for the ordinary pull. Same wait and same box — the
-        /// difference is that the grip is in hand, so the box answers instead of just stopping (規約 §掴める境界は答える).
+        /// difference is that the grip is in hand, so the box answers (規約 §掴める境界は答える).
         property string refuse: ""
         onTriggered: {
             if (descGrowTimer.pane.width <= 0 || descGrowTimer.pane.height <= 0 || descGrowTimer.pane.descCap <= 0)

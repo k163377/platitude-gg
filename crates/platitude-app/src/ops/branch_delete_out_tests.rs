@@ -1,8 +1,8 @@
 //! Which answer the standing card's delete is, and what the card is
 //! left holding at each of its moments.
 //!
-//! No Qt and no repository: whose press an answer was, and what a card
-//! does with it, are the application's own questions.
+//! Plain Rust: whose press an answer was, and what a card does
+//! with it, are the application's own questions.
 
 use super::*;
 
@@ -34,9 +34,9 @@ fn a_delete_git_refused_names_the_branch_for_the_row_to_turn_on() {
     assert_eq!(out.landed(), "");
 }
 
-// A refusal somebody outside made is the report's to say: nothing about
-// the name was turned down, so there is nothing for the row to morph
-// into and the words go to the bar instead.
+// A refusal somebody outside made is the report's to say: the
+// refusal is the far side's, so there is nothing for the row to
+// morph into and the words go to the bar.
 #[test]
 fn a_refusal_with_something_to_report_turns_no_row() {
     let mut out = pressed();

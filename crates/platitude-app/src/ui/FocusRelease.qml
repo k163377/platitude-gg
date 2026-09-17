@@ -17,8 +17,8 @@ Item {
 
     // Required: the margin below is read while this is built, and an unset window would fail it once in silence.
     required property var window
-    /// Where the keyboard goes when a caret is walked away from. **Not the window's content item**, which is above
-    /// every page rather than inside one: a key is delivered to whatever holds the focus and then up its parents only,
+    /// Where the keyboard goes when a caret is walked away from. **The page**, since the content item is above
+    /// every page: a key is delivered to whatever holds the focus and then up its parents only,
     /// so focus resting there leaves the page's own Escape handler off the chain and the one gesture that puts a
     /// standing thing away stops working until the next press that takes the keyboard back
     /// (`RepoPage.escapePressed`, `tests/qml/tst_escape.qml`). Null falls back to the content item — a window with no

@@ -4,13 +4,13 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The tab in front never leaves the strip: while its own row is scrolled off the run, this stand-in rides the edge the
-// row went out of, and it steps aside the moment that row is whole on screen — so the strip never shows one tab twice
+// The tab in front always stands in the strip: while its own row is scrolled off the run, this stand-in rides the edge
+// the row went out of, and it steps aside the moment that row is whole on screen — so the strip shows one tab once
 // (デザイン規約 §タブの所作). The sidebar answers the same question about the current branch in the same shape
 // (`HeadPinRow`), and the graph does about the commit HEAD stands on (`GraphHeadPin`).
 //
-// Whoever uses this stands it beside the list rather than declaring it inside: a Flickable's declared children are
-// taken by its content item and travel with the scroll, which is the one thing a stand-in may not do.
+// Whoever uses this stands it beside the list: a Flickable's declared children are
+// taken by its content item and travel with the scroll, and a stand-in has to stay put.
 Rectangle {
     id: tabPin
 
@@ -39,7 +39,7 @@ Rectangle {
     property real stripHeight: 0
 
     /// Where the pointer's arrival is written down, in the shape the tabs already use (`TabItemDelegate.pointed`).
-    /// The tip below reads this rather than the handler, so the seat a headless run would write to reach it is cut
+    /// The tip below reads this, so the seat a headless run would write to reach it is cut
     /// before there is a verb that wants it — hover is the one input no run can make, and a tip wired to a handler
     /// has to be rewired before it can ever be photographed (verify-ui スキル §hover の絵の撮り方).
     property bool pointed: false
@@ -59,14 +59,14 @@ Rectangle {
     /// What is left of the run on the side this faces into, and how far the dark holds over it. **The three characters
     /// the name is already given under the mark** (`TabMetrics.fadeChars`): the strip measures its dissolves in
     /// letters, and a band holding two lengths of one reads as two materials (デザイン規約 §タブの所作).
-    /// Never past the far end of the run — the ☰ and the `+` stand the other side of those, and nothing here clips.
+    /// Held inside the run — the ☰ and the `+` stand the other side of those, and nothing here clips.
     readonly property real dissolveRoom: tabPin.rideLeft
         ? tabPin.runX + tabPin.runWidth - (tabPin.x + tabPin.width)
         : tabPin.x - tabPin.runX
     readonly property real dissolveW: Math.max(0, Math.min(tabPin.fadeW, tabPin.dissolveRoom))
     /// What the run beside the tab is taken down to: the window's own floor, a step under the band the tabs are drawn
-    /// on (デザイン規約 §背景). And that same floor at none of itself, which is what it lets go to — **not
-    /// `transparent`**, which is a transparent black and takes the ramp out through a colour the strip has not got
+    /// on (デザイン規約 §背景). And that same floor at none of itself, which is what it lets go to —
+    /// `transparent` is a transparent black and would take the ramp out through a colour the strip has not got
     /// (`TabTitleFade`; §色).
     readonly property color deepGround: Theme.bgBase
     readonly property color deepGone:
@@ -95,14 +95,14 @@ Rectangle {
     visible: tabPin.frontTab !== null && !tabPin.carrying && (tabPin.rideLeft || tabPin.rideRight)
     width: tabPin.seatWidth
     height: tabPin.stripHeight
-    // Never before the run begins: the ☰ is the other side of that edge, and nothing in this file clips. The strip
+    // Starting at the run's edge: the ☰ is the other side of that edge, and nothing in this file clips. The strip
     // hands the run out among the names before it lets one tab past the width of it (`TabStrip.settleTitleCap`), so
     // this only holds for a layout that has already gone wrong — and it goes wrong towards the edge the stand-in
-    // takes when the row leaves the other way, rather than over a mark that has nothing to do with tabs.
+    // takes when the row leaves the other way.
     x: tabPin.rideLeft ? tabPin.runX
                        : Math.max(tabPin.runX, tabPin.runX + tabPin.runWidth - tabPin.width)
     // Dressed as the tab it stands for: the tab in front's own ground, its underline below, its weight in the name.
-    // Opaque, because the strip runs underneath. **No line down the side it runs under** — the sidebar's stand-in
+    // Opaque, because the strip runs underneath. **The edge it runs under is bare** — the sidebar's stand-in
     // draws one because its ground and its rows' are a step apart, and here the two are different things entirely
     // (a filled tab against transparent ones). A rule in the band would be the strongest ink in it for as long as the
     // strip is scrolled, which is the reason the graph's stand-in has none either (規約 §グラフの中で HEAD を見失わない).
@@ -131,23 +131,23 @@ Rectangle {
     }
     // Where the strip goes under it. An opaque edge cuts whichever tab is beneath it in two — a name broken mid-word,
     // or the two pixels of one that read as a tab with no padding at all — and this tab's ground cannot say otherwise:
-    // a filled tab against transparent ones says which of them is on top, not that the one underneath carries on.
+    // a filled tab against transparent ones says which of them is on top.
     // **So the run beside the tab is taken down**: the floor stands against the tab's edge and lets go over three
     // characters, so a tab travelling under this one sinks past the strip's ground into the dark and comes back out of
     // it (デザイン規約 §タブの所作). The graph's stand-in lays the same thing downwards, and a step in the tab
     // underneath would say "it ended here" (§省略の表し方).
     //
-    // **No blue leaves the tab — not as a spread and not as a ramp.** The whole of a tab is what a press is aimed at
+    // **The blue ends at the tab's edge.** The whole of a tab is what a press is aimed at
     // (§タブの所作「閉じる的はタブ全体」), and the tab's own ground is what says where that is, so blue on the far side
     // of the edge puts the target's edge where the reader cannot find it. What is outside is dark, and only dark.
-    // **The dark is a token rather than a new one** (`bgBase`, the floor everything in the window stands on;
-    // §暗く落とした段「新しい暗さを発明しない」).
+    // **The dark is a token** (`bgBase`, the floor everything in the window stands on;
+    // §暗く落とした段「暗さはこの 45% だけ」).
     //
     // **Only the edge that faces the run.** The other one stands on the list's own clip, and no tab is drawn past it.
-    // **Outside the tab's box, never into it**: the face is drawn at the width the strip handed that tab
-    // (§タブの所作「幅を測り直さない」), and the floor laid inside it would be a hole in the tab. That is also what
+    // **Outside the tab's box**: the face is drawn at the width the strip handed that tab
+    // (§タブの所作「今描かれている幅」), and the floor laid inside it would be a hole in the tab. That is also what
     // keeps it clear of the quiet under the mark (`pinFade`) — one hides this tab's own tail, the other the tabs behind
-    // it, and they meet at the edge rather than lie over each other. Outside the box is outside the press and the hover
+    // it, and they meet at the edge. Outside the box is outside the press and the hover
     // as well (both are the item's own), so what is under the dissolve is a tab of the strip's, answering for itself.
     Rectangle {
         id: pinDissolve
@@ -175,7 +175,7 @@ Rectangle {
         weight: Font.DemiBold
         color: Theme.textPrimary
     }
-    // The name goes quiet under the mark on the same terms the rows do. One ground rather than the rows' two: this one
+    // The name goes quiet under the mark on the same terms the rows do. One ground: this one
     // is always the tab in front, so what is behind its name is its own.
     TabTitleFade {
         id: pinFade

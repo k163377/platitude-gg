@@ -16,7 +16,7 @@ impl Default for RepoTab {
             // Placeholder until the page's restore writes the saved flag
             // (`PageLayout.applySavedLayout`); the session takes the same
             // saved flag at open (`Hub::ensure_open`), so the eye and the
-            // walk cannot start apart however the two writes land.
+            // walk start together however the two writes land.
             tags_shown: true,
             busy_count: 0,
             busy_op: String::new(),
@@ -43,8 +43,8 @@ impl Default for RepoTab {
             author_email: String::new(),
             author_avatar: 0,
             author_avatar_url: String::new(),
-            // Assumed fine until the check says otherwise, so nothing
-            // flashes a warning during startup.
+            // Assumed fine until the check says otherwise, so startup
+            // stays quiet.
             identity_ready: true,
             signs_commits: false,
             signing_format: String::new(),
@@ -126,7 +126,7 @@ impl RepoTab {
     /// no session to ask or the session took nothing (it is closed).
     ///
     /// **An id is a promise of an answer**, so whoever waits for one waits
-    /// on this and nothing else: the page holding it across the bridge
+    /// on this alone: the page holding it across the bridge
     /// (`RepoPage.pendingPopId`), the rows a delete took off the screen
     /// (`ops::StandIn`), and the run whose picture is of what the write
     /// left, which the watch keeps it for (`write_watch`) — **inside this
@@ -189,16 +189,16 @@ impl RepoTab {
     ///
     /// `announce` is whether this one may raise the command log. The
     /// fetch an opening fires may not: it still counts — the button
-    /// speaks for fetching, not for who asked — but a machine that is
+    /// speaks for fetching, whoever asked — but a machine that is
     /// offline would otherwise have the panel thrown up at it every time
     /// a tab opened (デザイン規約 §リモートから取り込む).
     pub(super) fn fetch_settled(&mut self, error: &str, announce: bool) {
         if error.is_empty() {
             self.fetch_failures = 0;
             self.fetch_log_raised = false;
-            // The header line is state, not history: a fetch that has
-            // just landed makes "fetch cannot reach the remote" untrue,
-            // and red kept up over that would contradict the button that
+            // The header line is state: a fetch that has just landed
+            // makes "fetch cannot reach the remote" untrue, and red
+            // kept up over that would contradict the button that
             // is already back to normal (デザイン規約 §リモートから取り込む
             // 「成功が 1 回入れば数は 0 に戻る」— its command-log side).
             // Rows are left alone: history stays until a reader clears it.
@@ -211,9 +211,9 @@ impl RepoTab {
         self.fetch_failures += 1;
         if announce && !self.fetch_log_raised {
             // The panel reads this; the ones after it are the same news.
-            // Counted from the first failure that may speak rather than
-            // from the first failure outright, so a quiet opening fetch
-            // does not use up the run's one telling.
+            // Counted from the first failure that may speak, so a
+            // quiet opening fetch leaves the run's one telling
+            // where it is.
             self.fetch_log_raised = true;
             self.last_error = error.to_string();
             self.last_error_from_fetch = true;
@@ -250,8 +250,8 @@ impl RepoTab {
     /// amend has authorship to take over (`--reset-author`).
     ///
     /// git refuses to commit with an empty `user.name`, so a HEAD that is
-    /// really there always has one: an empty name is "no HEAD read yet"
-    /// rather than an identity to compare against.
+    /// really there always has one: an empty name is "no HEAD read
+    /// yet".
     pub(super) fn compare_head_author(&mut self) {
         self.head_author_differs = !self.head_author_name.is_empty()
             && (self.head_author_name != self.author_name
@@ -290,9 +290,9 @@ impl RepoTab {
     ///
     /// **The press writes down the id it was accepted under** — the one
     /// thing the answer cannot say for itself is whose press it was, and
-    /// the editor is emptied by its own answer and no other
-    /// (`ops::Press`). Asked and written down together, so a commit
-    /// can never be sent without the wait that receives it.
+    /// the editor is emptied by its own answer alone
+    /// (`ops::Press`). Asked and written down together, so every commit
+    /// goes out with the wait that receives it.
     pub(super) fn commit_from_fields(
         &mut self,
         subject: String,

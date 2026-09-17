@@ -133,9 +133,9 @@ Item {
             }
         }
 
-        /// The rule said as a sentence: a panel is the fetch's while the last move that could have taken it is a
-        /// failure that found it shut. `fetch-open` is not one of those — it neither takes a held panel nor claims
-        /// one that was never held.
+        /// The rule said as a sentence: a panel is the fetch's while the last move that could have taken
+        /// it is a failure that found it shut. `fetch-open` leaves the hold exactly as it found it,
+        /// held or free.
         function shouldComeDown(sequence) {
             let held = false
             for (let i = 0; i < sequence.length; i++) {

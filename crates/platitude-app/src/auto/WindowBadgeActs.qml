@@ -10,8 +10,8 @@ import platitude.ui
 /// Built by `WindowAutoActDriver` beside `WindowBandActs`, and split from it for length alone. Each verb stands
 /// itself up on its own `running:`, so nothing dispatches into this file — it answers for the verbs it names and
 /// no others (rules-refs/structure.md 窓側の自動化).
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing and is
-// never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -26,7 +26,7 @@ Item {
     // be asked for again when the row answers. `badges-hover` puts the pointer down on a group the band has long since
     // placed and passes whether that second asking exists or not.
     //
-    // Written in the completion handler rather than on a tick because that is what puts it early: this harness is
+    // Written in the completion handler because that is what puts it early: this harness is
     // built inside the window's own completion (`WindowHarness.screensUp`), and the row that places the group lays out
     // after it. Nothing else about the run differs — the guards, the report and the judgement below are shared.
     Component.onCompleted: {
@@ -43,7 +43,7 @@ Item {
         running: Harness.autoAct === "badges"
                  || Harness.autoAct === "badges-hover"
                  || Harness.autoAct === "badges-hover-early"
-        /// Whether this run's report is of the card rather than of the band behind it. The two hover verbs differ in
+        /// Whether this run's report is of the card or of the band behind it. The two hover verbs differ in
         /// when the pointer goes down and in nothing after that.
         readonly property bool wantsCard: Harness.autoAct === "badges-hover"
                                           || Harness.autoAct === "badges-hover-early"
@@ -59,8 +59,8 @@ Item {
             // The strip is the other half of what the band is short of (デザイン規約 §ウィンドウの縁), so a run that named a
             // count is not standing on its own fixture until the strip has every one of them: a group measured beside
             // three of the six tabs asked for is a measurement of a band nobody ran. Read off the strip's own count
-            // rather than off the tabs having loaded — the pages come up in their own time, and the run the band
-            // shares out is settled by the rows.
+            // — the pages come up in their own time, and the run the band shares out is settled by the
+            // rows.
             const words = Harness.autoActArg.split(":")
             const wantedTabs = parseInt(words[1])
             if (!isNaN(wantedTabs) && topBar.bandTabCount !== wantedTabs)
@@ -82,7 +82,7 @@ Item {
                 return
             } else if (!badgesActTimer.sizeRequested && !isNaN(wantedW) && wantedW > 0) {
                 // Which width brings on which of the group's three shapes is a question about the installed fonts, so
-                // the run names the number and the report says the shape. Not held at the floor: the third shape sits
+                // the run names the number and the report says the shape. Taken below the floor: the third shape sits
                 // below what a hand can drag to today, and a shape nothing can photograph is a shape nobody can check.
                 badgesActTimer.requestedWidth = wantedW
                 window.width = badgesActTimer.requestedWidth
@@ -105,8 +105,8 @@ Item {
             acts.reportBadges()
         }
     }
-    /// Which rule painted the folded group's mark (規約 §状態: 色は最も 重い状態が決める). Read off the band's own colour, not off the
-    /// conditions — recomputing the rule here would agree with itself whatever the band did.
+    /// Which rule painted the folded group's mark (規約 §状態: 色は最も 重い状態が決める). Read off the band's own colour
+    /// — recomputing the rule here would agree with itself whatever the band did.
     readonly property string stateTint: Qt.colorEqual(topBar.stateMarkColor, Theme.danger) ? "danger" : "warning"
     /// `fits=` leads, and the three badges are judged with it: a run where one never stood photographs a band that was
     /// never crowded.
@@ -158,12 +158,12 @@ Item {
                 return
             const graph = page.pageGraph
             if (!staleActTimer.faultArmed) {
-                // Not before a pass has landed: the fault has to be raised over a graph that was whole, or what the
-                // badge is standing for is the opening rather than the failure (規約 §前提条件を完了判定に混ぜない).
+                // Only after a pass has landed: the fault has to be raised over a graph that was whole, or the badge
+                // stands for the opening (規約 §前提条件は入力を出す枝で読む).
                 if (graph.loading || graph.finishCount <= 0 || graph.rowTotal <= 0)
                     return
-                // **And whole means nothing is on its way to rebuild it.** The fault stands in time but not across
-                // pass kinds, so a status landing after the arm flips the working-tree row and asks for a rebuild —
+                // **And whole means nothing is on its way to rebuild it.** The fault stands in time, within one
+                // pass kind, so a status landing after the arm flips the working-tree row and asks for a rebuild —
                 // an off-screen *swap* pass — which undoes each verb in its own direction: the stream fault does
                 // not touch a swap, so `graph-stopped`'s emptied column is walked full again, and the swap fault
                 // fails that rebuild, so `graph-stale` freezes the pass with no working-tree row on it. The picture
@@ -213,8 +213,8 @@ Item {
             const graph = page.pageGraph
             if (!wipLandingTimer.read) {
                 // The raced pass, named by what it left standing: the status has said this tree is dirty, a pass
-                // has finished, and the row that pass holds is **a neighbour copy's** rather than ours
-                // (`GraphModel.carriedTop`). Asked for rather than hoped for: a pass carrying no all-zero row at
+                // has finished, and the row that pass holds is **a neighbour copy's**
+                // (`GraphModel.carriedTop`). Waited for: a pass carrying no all-zero row at
                 // all is one the plain reading of row 0 answers correctly too, so latching on that would let this
                 // verb pass without ever putting the misreading in front of the page.
                 if (!page.pageWt.loaded || !page.pageWt.wipRowStands
@@ -264,7 +264,7 @@ Item {
         window.finishAutoAct()
     }
 
-    // PGG_AUTO_ACT=old-git / old-git-card / old-git-fold. Nothing here stages the state — the run is handed a git that
+    // PGG_AUTO_ACT=old-git / old-git-card / old-git-fold. The run is handed a git that
     // answers `--version` with an older number (`verify-ui --old-git`), so the badge is answering a real reading of a
     // real program.
     SampleTimer {
@@ -306,9 +306,9 @@ Item {
                               !== oldGitActTimer.requestedWidth)))
                 return
             // The pointer goes down on a tick of its own, and whether the card came up is read on the next one — this
-            // verb's whole report is that reading. A pointer that went down before the version badge did is not a card
-            // that never opens: a stand-in pointer is answered again when the badge arrives and when the row places
-            // the group (`BandStateGroup.standInAsking`).
+            // verb's whole report is that reading. A pointer that went down before the version badge did is
+            // answered again when the badge arrives and when the row places the group
+            // (`BandStateGroup.standInAsking`).
             if (Harness.autoAct === "old-git-card" && !stateRequested) {
                 topBar.statePointedAt = true
                 stateRequested = true

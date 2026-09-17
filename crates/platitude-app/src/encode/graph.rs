@@ -41,8 +41,8 @@ fn fnv1a(text: &str) -> u32 {
 }
 
 /// Deterministic identicon code for an author (GitHub-style 5x5 pattern,
-/// generated locally — fetching real avatars would violate the
-/// no-network-except-git constraint).
+/// generated locally — git's own commands are the only network this
+/// app has).
 ///
 /// Layout: bits 0..15 = left 3 columns of a 5x5 grid (row-major, mirrored
 /// to the right by the renderer), bits 15..18 = palette index (0..8).
@@ -59,12 +59,12 @@ pub fn avatar_code(author: &str) -> i32 {
 /// The palette indices a conflict's two sides are drawn with, given what
 /// the graph could lend (`-1` = nothing) and what each side is called.
 ///
-/// The two must never come out the same. The graph's answer is kept
-/// wherever it has one; a side it has none for takes a stable colour off
-/// its own name, so the same conflict reopens in the same colours. If the
-/// two still land together, ours keeps its colour and theirs moves on by
-/// one (during a rebase ours is the upstream — `conflict::sides()` has
-/// already sorted out which is which).
+/// The two always come out apart. The graph's answer is kept wherever it
+/// has one; a side it has none for takes a stable colour off its own name,
+/// so the same conflict reopens in the same colours. If the two still land
+/// together, ours keeps its colour and theirs moves on by one (during a
+/// rebase ours is the upstream — `conflict::sides()` has already sorted
+/// out which is which).
 pub fn conflict_side_colors(ours: (i32, &str), theirs: (i32, &str)) -> (i32, i32) {
     let size = i32::try_from(platitude_core::graph::GRAPH_PALETTE_SIZE).unwrap_or(8);
     let borrowed_or_named = |(color, name): (i32, &str)| -> i32 {

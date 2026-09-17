@@ -27,7 +27,7 @@ RowLayout {
         // Nothing between the mark and its number: the seat below is the ink's width, so what the eye measures is
         // already the mark's own air (デザイン規約 §余白).
         spacing: 0
-        // The seat is the ink, not the box. Drawn to the box, `!` would stand five pixels from its own number while `+`
+        // The seat is the ink. Drawn to the box, `!` would stand five pixels from its own number while `+`
         // stood two, and neither would belong to it.
         Item {
             Layout.preferredWidth: tallyMark.inkWidth
@@ -36,7 +36,7 @@ RowLayout {
                 id: tallyMark
                 anchors.centerIn: parent
                 change: tally.code
-                // A step under `iconSm`: this mark stands beside a digit of its own rather than beside a word, and at
+                // A step under `iconSm`: this mark stands beside a digit of its own, and at
                 // `iconSm` it measured 8px against the digit's 6 (規約 §寸法).
                 width: Theme.iconXs
                 height: Theme.iconXs

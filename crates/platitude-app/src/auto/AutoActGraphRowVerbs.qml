@@ -12,8 +12,8 @@ import platitude.ui
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing
-// and is never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -50,7 +50,7 @@ Item {
     }
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
-    /// and the first to know a verb runs it — no verb is named by two of them (`AutoActDriver`).
+    /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "row-part") {
             // Where the row divides, asked at a point along it. Hover cannot be injected, so this writes the one
@@ -65,7 +65,7 @@ Item {
             rowPartTimer.start()
         } else if (act === "list-menu") {
             // The stacked list, and then the right-click on one of its rows: the row's own menu, aimed at the name
-            // that was pressed rather than at the one the chip draws (デザイン規約 §グラフ行の右クリック). The
+            // that was pressed (デザイン規約 §グラフ行の右クリック). The
             // argument is `<行>[:<カードの行>]`, the same shape `graph-reclick-list` takes.
             const at = arg.split(":")
             refListOpenTimer.row = at[0] === "" ? 0 : Number(at[0])
@@ -91,8 +91,8 @@ Item {
         } else if (act === "ref-list-choose") {
             // A held click put in at a row of that list: the card's rows are the graph's row, so Ctrl there moves the
             // choice the way the row does and never reaches the name box or the switch (デザイン規約 §複数のコミットを
-            // 選ぶ). The argument is `<行>[:<カードの行>]`, the same shape `ref-list-lit` takes; the row has to be one
-            // that is not the commit already read — a held press on that one takes nothing out of a choice of one.
+            // 選ぶ). The argument is `<行>[:<カードの行>]`, the same shape `ref-list-lit` takes; the row has to be
+            // a commit other than the one read — a held press on that one takes nothing out of a choice of one.
             const held = arg.split(":")
             refListOpenTimer.row = held[0] === "" ? 1 : Number(held[0])
             refListOpenTimer.cards = false
@@ -100,7 +100,7 @@ Item {
             refListOpenTimer.start()
         } else if (act === "row-card" || act === "card-sweep") {
             // Hover cannot be injected, so this enters where the row's delay timer would. **The sweep's own default is
-            // row 1, not row 0**: the presets it runs on carry a dirty working tree, whose row stands at the top and
+            // row 1**: the presets it runs on carry a dirty working tree, whose row stands at the top and
             // opens a card with no commit in it (measured — `subject` empty, the stamp `1970-01-01`).
             const at = act === "card-sweep" && arg === "" ? 1 : Number(arg)
             const hovered = graphPane.view.itemAtIndex(at)
@@ -115,9 +115,9 @@ Item {
         } else if (act === "row-card-return") {
             // The hand that walked down into the card and came back to the row it came off. **Entered at the row's
             // own pointer property**, which is the one thing a real pointer writes here (`onPositionChanged` /
-            // `onContainsMouseChanged` write nothing else), so the run goes through `settlePointed` rather than past
-            // it — the door `row-card` uses is one step further in and cannot see this at all.
-            // **Row 1 by default, not row 0**: the presets this runs on carry a dirty working tree, whose row stands
+            // `onContainsMouseChanged` write nothing else), so the run goes through `settlePointed`
+            // — the door `row-card` uses is one step further in and cannot see this at all.
+            // **Row 1 by default**: the presets this runs on carry a dirty working tree, whose row stands
             // at the top and has no card at all (`GraphRowDelegate.partAt` answers nothing for it).
             cardReturnTimer.row = arg === "" ? 1 : Number(arg)
             cardReturnTimer.start()
@@ -131,7 +131,7 @@ Item {
             cardMessageTimer.asked = false
             cardMessageTimer.start()
         } else if (act === "card-note-lit") {
-            // The same note with the hand resting on it instead. Written at the property a real pointer writes —
+            // The same note with the hand resting on it. Written at the property a real pointer writes —
             // hover cannot be injected (verify-ui スキル §hover の絵の撮り方) — and read back off the paint.
             cardNoteTimer.row = arg === "" ? 0 : Number(arg)
             cardNoteTimer.pointed = false
@@ -147,7 +147,7 @@ Item {
             menuHoverTimer.asked = false
             menuHoverTimer.start()
         } else if (act === "graph-choose-dbl") {
-            // **The gesture a choice must not turn into.** Toggling a row out of the choice and back in, quickly, is
+            // **The gesture a choice tells apart.** Toggling a row out of the choice and back in, quickly, is
             // two presses at one spot — which Qt hands over as a double-click, modifier and all (measured,
             // `tst_moddblclick`). On the other side of the plain double-click is `switch`, so the row has to tell the
             // two apart (デザイン規約 §複数のコミットを選ぶ). The argument is the rows, as `graph-choose` takes them.
@@ -159,8 +159,8 @@ Item {
             chooseTimer.after = "dbl"
             chooseTimer.start()
         } else if (act === "graph-choose-diff") {
-            // What a row of the merged file list opens: **each chosen commit's own patch of that file, stacked** —
-            // not one diff across the span (デザイン規約 §複数のコミットを選ぶ). The argument is the path, the rows being
+            // What a row of the merged file list opens: **each chosen commit's own patch of that file,
+            // stacked** (デザイン規約 §複数のコミットを選ぶ). The argument is the path, the rows being
             // fixed at three that share one file (`--preset basic`'s `src/topic.txt`, touched by two of them).
             chooseTimer.sweeps = false
             chooseTimer.rows = [3, 5, 6]
@@ -218,7 +218,7 @@ Item {
             reclickGraphTimer.marks = act === "graph-reclick-mark"
             reclickGraphTimer.points = act === "graph-reclick-still"
             // The submit is ticks away; the watch is armed here and catches the ask whenever it comes
-            // (`AutoActDriver.beginWrite`), so what it waits on in between is the input and not a missing id.
+            // (`AutoActDriver.beginWrite`), so what it waits on in between is the input.
             if (act === "graph-rename")
                 driver.beginWrite("graph-rename")
             reclickGraphTimer.start()
@@ -245,14 +245,14 @@ Item {
         id: chooseTimer
         /// The rows pressed, in order. The first press is the plain one.
         property var rows: []
-        /// Whether the presses after the first sweep a range (Shift) rather than take one row each (Ctrl).
+        /// Whether the presses after the first sweep a range (Shift) or take one row each (Ctrl).
         property bool sweeps: false
         property int step: 0
         /// The commit the plain press landed on, so the report can say what is read stayed on it while the choice grew.
         property string readOid: ""
         /// What to do once the choice is standing, all of it handed to `chosenRowTimer`: `said` rests on a row of the
         /// list the pane put up, `sweep` drags a value out of one, `drop` takes a commit back out of the choice from
-        /// there, `diff` opens a file of the merged list, `dbl` tries the gesture a choice must not turn into. `""`
+        /// there, `diff` opens a file of the merged list, `dbl` tries the gesture a choice tells apart. `""`
         /// stops at the choice itself.
         property string after: ""
         /// The file `graph-choose-diff` opens out of the merged list.
@@ -292,7 +292,7 @@ Item {
             }
             // Every press is in. **Four things have to land, and each is on the output side**: the page's tally, the
             // highlight the rows drew of it (a choice nothing draws is a number in a property), the pane on the right
-            // having answered *for this choice* — `selectionLoaded` rather than `!loading`, because a read that
+            // having answered *for this choice* — `selectionLoaded`, because a read that
             // failed also stops loading and leaves an empty list, which is the same shape as a choice of commits that
             // changed nothing — and the list of commits having laid its rows out, since what is asked about that
             // list below is a measurement and an unlaid-out view answers 0 to every one (規約 §UI 自動化の因果性).
@@ -324,7 +324,7 @@ Item {
     // Everything that goes on from a standing choice (`chooseTimer.after`): the card a rest opens over one of the
     // listed commits, the drag a reader takes its words away with, the press that drops one, the file the merged list
     // opens, and the gesture the graph's rows have to turn down. Each goes in at the thing that answers it — the row's
-    // own functions, the pad under its words, the page's diff opener — rather than at a copy of what they decide.
+    // own functions, the pad under its words, the page's diff opener.
     SampleTimer {
         id: chosenRowTimer
         /// How far the drop has got: the plain press, the held one, then the wait for the pane to answer for what is
@@ -353,8 +353,8 @@ Item {
                 chosenRowTimer.dropStep = 2
                 return
             }
-            // The choice is one smaller and the pane has answered for what is left — `selectionLoaded` rather than
-            // `!loading`, the same readiness the presses themselves waited on (規約 §UI 自動化の因果性).
+            // The choice is one smaller and the pane has answered for what is left —
+            // `selectionLoaded`, the same readiness the presses themselves waited on (規約 §UI 自動化の因果性).
             if (page.chosenCount !== chooseTimer.wanted() - 1 || !detailsModel.selectionLoaded)
                 return
             chosenRowTimer.stop()
@@ -432,7 +432,7 @@ Item {
                 return
             }
             chosenRowTimer.stop()
-            // **From every corner of the row's air, not from one point in it.** A reach that works from the middle
+            // **From every corner of the row's air.** A reach that works from the middle
             // and nowhere else is the fault this kind of row ships with, and the pad says the whole of it in one line
             // (`SweepPad.sweepAir` — the same sentence `card-sweep` reads).
             Harness.report("chosen_sweep " + row.sweep.sweepAir(9, ""))
@@ -539,7 +539,7 @@ Item {
             if (!refList.pointRow(refListOpenTimer.litRow))
                 return
             listLitTimer.stop()
-            // **`lit=` is read back off the row**, not off what was written into it: the wash is one shade over the
+            // **`lit=` is read back off the row**: the wash is one shade over the
             // card's own ground, so a row that never took the answer frames the same as one that did. `nowhere=` is
             // the half that says which kind of row this was — a row with nowhere to go is the one whose wash the
             // colour of its name cannot stand in for, so a picture of a row that leads somewhere proves nothing.
@@ -567,7 +567,7 @@ Item {
         /// The row the hand rests on, leaves and comes back to.
         property int row: 0
         /// Where the card stood the first time, and the pointer that put it there. The second rest is made at a
-        /// different x on purpose: the seat is the pointer's, so a card that is opened again rather than held moves,
+        /// different x on purpose: the seat is the pointer's, so a card that is opened again moves,
         /// and a run that came back to the same x could not tell the two apart.
         property real seat: 0
         property real firstX: 0
@@ -586,7 +586,7 @@ Item {
             // The hand walks off the row into the card, and back onto the row a little further along. **Read in the
             // same turn as the return**: everything from the pointer to the hold is one synchronous stretch, so what
             // the beat would have done to a card nobody re-held is not something this has to wait to find out — the
-            // hold is either back before the beat can start or it is not (規約 §前提条件を完了判定に混ぜない).
+            // hold is either back before the beat can start or it is not (規約 §前提条件は入力を出す枝で読む).
             at.pointerRowX = -1
             at.pointerRowX = cardReturnTimer.firstX * 2
             Harness.report(
@@ -601,7 +601,7 @@ Item {
     SampleTimer {
         id: rowCardTimer
         /// The row the card was asked of, so the report can ask it back whether it is still lit. Read off the row
-        /// rather than off the host that wrote it — the whole point is that the row got the answer.
+        /// — the whole point is that the row got the answer.
         property int row: 0
         onTriggered: {
             if (!rowCard.opened && !refList.opened)
@@ -623,14 +623,14 @@ Item {
     }
     // The press on that card's note, and where it leaves the reader. Two beats: the card has to be up and holding a
     // message it had to cut before the note is anywhere on screen, and the pane it sends them to answers a request
-    // that goes out at the press — so the picture is of the arrival, not of the press.
+    // that goes out at the press — so the picture is of the arrival.
     SampleTimer {
         id: cardMessageTimer
         property int row: 0
         property bool asked: false
         /// Whether the run carries on and puts the mark away again with Escape. **Entered where the key handler's
-        /// own body is** (`RepoPage.escapePressed`); that the key reaches that handler at all is Qt's business and is
-        /// held by `tests/qml/tst_escape.qml`, not by this.
+        /// own body is** (`RepoPage.escapePressed`); that the key reaches that handler at all is Qt's business and
+        /// is held by `tests/qml/tst_escape.qml`.
         property bool escapes: false
         /// Which commit the press was of, kept because the card takes its own copy down with it.
         property string oidHex: ""
@@ -675,7 +675,7 @@ Item {
             driver.complete()
         }
     }
-    // The hand resting on that note rather than pressing it. **Two beats for the same reason the press has one**: the
+    // The hand resting on that note. **Two beats for the same reason the press has one**: the
     // note only stands under a message the card had to cut, and a card fills its fields in after it is opened — so the
     // rest goes in once the note is there, and the answer is read on a later sample, off the paint.
     SampleTimer {
@@ -750,8 +750,8 @@ Item {
         property real x: 0
         property bool probed: false
     }
-    // Waits for either card, not the expected one: a boundary that moved opens the other, and waiting for the right
-    // answer would spend the watchdog finding that out. The verb is judged on `agrees`, not on how long it took.
+    // Waits for either card: a boundary that moved opens the other, and waiting for the right
+    // answer would spend the watchdog finding that out. The verb is judged on `agrees`.
     SampleTimer {
         id: rowPartTimer
         onTriggered: {
@@ -815,8 +815,8 @@ Item {
     // before a second one counts as a second (app-ui.md §UI 自動化の因果性).
     property bool reclickGraphArmed: false
     property int reclickGraphStep: 0
-    /// When the second click went in, so the report can say how long the box made the reader wait. **Not a success
-    /// condition** — the wait is the double-click window and the sampler reads through it (app-ui.md §UI 自動化の因果性);
+    /// When the second click went in, so the report can say how long the box made the reader wait. **A diagnosis**
+    /// — the wait is the double-click window and the sampler reads through it (app-ui.md §UI 自動化の因果性);
     /// it is here because a lag is the one thing about this gesture a picture cannot show.
     property real reclickGraphAt: 0
     SampleTimer {
@@ -826,10 +826,10 @@ Item {
         /// (`graph-rename`); empty for the one that stops at the box.
         property string name: ""
         /// Whether the run scrolls the history away between the second click and the box. **The delegate is pooled by
-        /// that scroll**, which is what the gesture must not be carried by (`ReclickGesture`) — and the box that
+        /// that scroll**, which the gesture survives (`ReclickGesture`) — and the box that
         /// opens has to be sent back into view.
         property bool scrolls: false
-        /// Whether the run ends inside the wait, on the mark the chip wears while it runs, instead of at the box.
+        /// Whether the run ends inside the wait, on the mark the chip wears while it runs.
         property bool marks: false
         /// Whether the pointer is rested on the chip first, so the card it opens has a rest running under the wait —
         /// what the gesture has to hold still.
@@ -856,15 +856,15 @@ Item {
                 // waits(measured): the origin of the `wait=` below, which the report prints and nothing here reads
                 acts.reclickGraphAt = Date.now()
                 item.leftClick(0)
-                // Read where it is set, not where it lapses: the wait is short and the box is what it turns into.
+                // Read where it is set: the wait is short and the box is what it turns into.
                 acts.reclickGraphArmed = item.renameArmed
                 // The history walks away under the wait: the row that was clicked is pooled, and what was armed on it
                 // has to survive that. Far enough that the row is well outside the view's own buffer.
                 if (reclickGraphTimer.scrolls)
                     graphPane.view.positionViewAtIndex(reclickGraphTimer.row + 200, ListView.Beginning)
                 if (reclickGraphTimer.marks) {
-                    // **The mark is what the reader has to see during the wait**, so this run ends inside it rather
-                    // than at the box. Read off the chip itself (`RefChip.waiting`), because a picture taken a beat
+                    // **The mark is what the reader has to see during the wait**, so this run ends inside
+                    // it. Read off the chip itself (`RefChip.waiting`), because a picture taken a beat
                     // late frames the box instead and would say nothing either way.
                     reclickGraphTimer.stop()
                     Harness.report(
@@ -903,7 +903,7 @@ Item {
                 // plain one for nothing having moved it.
                 + " shown=" + graphPane.rowOnScreen(reclickGraphTimer.row)
                 // How long the box took, against the window it is waiting out. The sampler's own beat is in the
-                // difference, so this is read as "about the window", not to the millisecond.
+                // difference, so this is read as "about the window".
                 // waits(measured): printed beside the window it is read against, and judged by nothing
                 + " wait=" + (Date.now() - acts.reclickGraphAt)
                 + " window=" + Application.styleHints.mouseDoubleClickInterval)
@@ -971,7 +971,7 @@ Item {
         id: reclickListTimer
         property int row: 0
         property int card: 0
-        /// Whether this run is the double-click that moves rather than the two clicks that name.
+        /// Whether this run is the double-click that moves or the two clicks that name.
         property bool picks: false
         /// Whether the two clicks are put in at **different surfaces** — the first at the row, the second at the card
         /// its chip opens into. That is what a reader does without knowing it: the card comes up on the chip's own

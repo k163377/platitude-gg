@@ -5,9 +5,9 @@ import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
-// Ctrl+F over the graph: a card that hangs from the top-right corner of the list, over it rather than above it.
+// Ctrl+F over the graph: a card that hangs from the top-right corner of the list, over it.
 //
-// Not the shape a standing question takes (デザイン規約 §可否・警告の出し場所). A question pushes the rows down because what is being
+// A shape of its own (デザイン規約 §可否・警告の出し場所). A question pushes the rows down because what is being
 // judged has to stay in sight; a search has no target row yet, covers a corner nobody is reading, and is gone the
 // moment it is dismissed. Every browser puts it here, and that is the gesture people arrive with.
 Rectangle {
@@ -19,7 +19,7 @@ Rectangle {
     /// the key that opens this card cannot be pressed from there, and neither can the letters.
     property alias query: field.text
     /// How many rows the query matched, and which of them the view is on. Both stay at zero while nothing is doing the
-    /// matching, and the count keeps its place empty rather than saying "0 / 0".
+    /// matching, and the count keeps its place empty.
     property int matches: 0
     property int atMatch: 0
     /// Rows loaded, which is the largest either half of the count can be. The count's place is held at that width for
@@ -54,7 +54,7 @@ Rectangle {
         findBar.open = false
         findBar.dismissed()
     }
-    /// The same card going down because the hand went somewhere else, rather than because it was sent away. Nobody is
+    /// The same card going down because the hand went somewhere else. Nobody is
     /// told, so nothing is handed the keyboard on the way out: the press that landed elsewhere has its own claim on it,
     /// and a card grabbing it here would take the caret out of the box that press just landed in.
     function dropAway() {
@@ -83,7 +83,7 @@ Rectangle {
     // own minimum: a window too narrow to hold both is a window where the bar has to stay usable, and the rows it
     // covers are covered from the right, tail first.
     //
-    // Both terms are built from what the parts *want*, never from what the card currently is: a width that reads its
+    // Both terms are built from what the parts *want*: a width that reads its
     // own width back through a child's `Layout.maximumWidth` is a loop, and Qt settles it by leaving the card at its
     // minimum (measured — the box stopped growing at 160 however long the query got).
     implicitWidth: Math.max(findBar.minWidth, Math.min(findRow.wantedWidth + 2 * Theme.spaceSm, findBar.maxWidth))
@@ -118,8 +118,8 @@ Rectangle {
             (findBar.matches > 0 ? widest.implicitWidth + findRow.spacing : 0)
             + closeButton.implicitWidth + findRow.spacing
 
-        // The fixed width the design document gives a search box (§レイアウト初期値), which here is its floor rather than its
-        // width.
+        // The fixed width the design document gives a search box (§レイアウト初期値), which here is
+        // its floor.
         readonly property real fieldMinWidth: 160
 
         SlimField {
@@ -148,14 +148,14 @@ Rectangle {
         }
         Label {
             id: count
-            // Gone rather than blank when there is nothing to count — a Layout skips an invisible item and its spacing
+            // Gone when there is nothing to count — a Layout skips an invisible item and its spacing
             // with it, so the box grows into the whole of the seat.
             visible: findBar.matches > 0
             text: qsTr("%1 / %2").arg(findBar.atMatch).arg(findBar.matches)
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSm
-            // Held open at the widest it could ever be here, and read from the right so the numbers grow away from the
-            // box rather than into it.
+            // Held open at the widest it could ever be here, and read from the right so the numbers grow away from
+            // the box.
             Layout.preferredWidth: widest.implicitWidth
             horizontalAlignment: Text.AlignRight
             Label {

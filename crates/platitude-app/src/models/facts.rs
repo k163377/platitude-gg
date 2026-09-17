@@ -50,10 +50,10 @@ impl GitFacts {
     /// What a chip record answers to across the two places it is drawn:
     /// its kind letter and its name, without the flag digits between
     /// them (`encode::label_key`). **The flags are how the chip is
-    /// drawn, not which ref it is** — a background pass that learns the
-    /// branch now has a remote rewrites the record and would lose a
-    /// gesture keyed on the whole of it, and the row and the card its
-    /// chip unfolds into have to agree on what "the same target" means
+    /// drawn** — a background pass that learns the branch now has a
+    /// remote rewrites the record and would lose a gesture keyed on the
+    /// whole of it, and the row and the card its chip unfolds into have
+    /// to agree on what "the same target" means
     /// (デザイン規約 §グラフ行のダブルクリック).
     #[qslot]
     fn record_key(&self, record: String) -> String {
@@ -102,8 +102,8 @@ impl GitFacts {
     /// What a push of the current branch can do
     /// (`platitude_core::remote::push_standing`), in the word
     /// `PublishFlow.pushState` branches on. The tab-lifecycle half of
-    /// "closed" stays the caller's: this answers for the repository, not
-    /// for whether a page is open on it.
+    /// "closed" stays the caller's: this answers for the repository
+    /// alone.
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn push_standing(
@@ -139,11 +139,11 @@ impl GitFacts {
     /// (`platitude_core::remote::push_target`), spelled as the label shows
     /// it. Empty where there is no branch to send or nowhere to send it.
     ///
-    /// Asked rather than worked out in QML: the order the two marks and
-    /// the upstream are weighed in is git's, and the send
-    /// (`remote::plan_current_push`) reads it off the same table. A second
-    /// spelling of it in a binding is how the label came to name the
-    /// remote a branch tracks while the push went to the one it marks.
+    /// Asked of core: the order the two marks and the upstream are
+    /// weighed in is git's, and the send (`remote::plan_current_push`)
+    /// reads it off the same table. A second spelling of it in a binding
+    /// is how the label came to name the remote a branch tracks while
+    /// the push went to the one it marks.
     #[qslot]
     fn push_target(
         &self,
@@ -247,9 +247,9 @@ impl GitFacts {
     /// `RepoPage.messageEdit` branches on: `amend` where typing lands,
     /// `stash` / `not-head` / `standing` where it does not and the box
     /// has a reason to give, `""` where there is no message on screen.
-    /// **Asked as a binding, not frozen like the menus' answers** — the
-    /// boxes stand open while the repository moves under them, so a
-    /// commit that stops being HEAD's has to stop taking typing.
+    /// **Asked as a binding, live** — the boxes stand open while the
+    /// repository moves under them, so a commit that stops being HEAD's
+    /// has to stop taking typing.
     // The parameter row mirrors the core rule one-for-one; folding it
     // into a struct would put a QML-invisible shape between the two.
     #[qslot]
@@ -382,7 +382,7 @@ impl GitFacts {
     }
 
     /// The same question for a stash's label, which is free text on one
-    /// line rather than a ref name.
+    /// line of its own.
     #[qslot]
     fn valid_stash_message(&self, message: String) -> bool {
         platitude_core::stash::is_valid_message(&message)

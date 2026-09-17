@@ -16,7 +16,7 @@ Rectangle {
     // Whether it is the staged side (flips the affordance wording).
     property bool staged: false
     /// Whether the file is one git stopped on. `git add` still runs, but what it means there is "this is dealt with",
-    /// not "this goes in the next commit", and the words follow that.
+    /// and the words follow that.
     property bool conflicted: false
     /// The two stage letters git reports for this file (`UU`, `DU`, …) and what each side is called — only a conflicted
     /// one has them. On the conflicts git prints no patch for, they are the whole of what the pane can say.
@@ -24,7 +24,7 @@ Rectangle {
     property string sideOurs: ""
     property string sideTheirs: ""
     /// The colour each side is drawn in, as an index into `Theme.graphLane` — the graph's own lane colour for that
-    /// branch where it has one, and never the same on both sides (`encode::conflict_side_colors` decides both).
+    /// branch where it has one, and always two different ones (`encode::conflict_side_colors` decides both).
     property int sideColorOurs: -1
     property int sideColorTheirs: -1
     // A write is running: staging buttons disable.
@@ -53,7 +53,7 @@ Rectangle {
     readonly property bool combined: diffPane.diffModel.isCombined
     /// Whether the two sides are being told apart by colour. Always, on a conflicted file: the graph does not always
     /// have two colours to lend (a branch outside the walk's window has none, and the palette cycles), and where it
-    /// falls short the pair is completed rather than dropped (`encode::conflict_side_colors`).
+    /// falls short the pair is completed (`encode::conflict_side_colors`).
     readonly property bool sidesTold: diffPane.combined && diffPane.sideColorOurs >= 0 && diffPane.sideColorTheirs >= 0
     function sideColor(side) {
         const index = side === "ours" ? diffPane.sideColorOurs : diffPane.sideColorTheirs
@@ -92,17 +92,17 @@ Rectangle {
     }
     /// Where the pointer is, and whether it is in this pane at all.
     ///
-    /// **The rows do not answer for themselves.** Every write rebuilds the list under the hand, and a freshly built
+    /// **The pane answers for the rows.** Every write rebuilds the list under the hand, and a freshly built
     /// item is not hovered until the mouse moves again (Qt delivers hover on movement), so the mark would stay away
     /// after a press and the next line could not be staged without waggling the mouse first. The pane works out which
-    /// row the pointer is over instead, and writes the same pair of properties the automation writes.
+    /// row the pointer is over, and writes the same pair of properties the automation writes.
     ///
-    /// **On the pane, not on an overlay**: a handler laid over the rows takes their hover away entirely.
+    /// **On the pane**: a handler laid over the rows takes their hover away entirely.
     HoverHandler {
         id: panePointer
         onPointChanged: diffPane.settlePointedRow()
-        // Leaving takes the mark with it. Said here rather than in `settlePointedRow`, which a headless run must not
-        // reach: there the pointer never arrives and never leaves, and the row the automation named has to stand.
+        // Leaving takes the mark with it. Said here, so the row a run named stands: in `settlePointedRow`
+        // the pointer never arrives and never leaves.
         onHoveredChanged: {
             if (panePointer.hovered)
                 diffPane.settlePointedRow()
@@ -114,14 +114,14 @@ Rectangle {
     // `PointHandler` because it is the one handler specified to take only passive grabs — the buttons, the bars and the
     // rows' own marks all keep working underneath (`Main.qml`'s window watcher is one for the same reason).
     //
-    // **On a sheet in front of everything, not on the pane itself** (規約 §画面全体の入力観測). Press delivery stops at the
+    // **On a sheet in front of everything** (規約 §画面全体の入力観測). Press delivery stops at the
     // first item that accepts, and a handler beneath that item never hears the press — so on the pane this heard
     // nothing at all: the list is a `Flickable` and takes every press on the rows, and the hand that picks the text
     // takes the rest. The keyboard came by wheel and by nothing else, which left `Ctrl+C` over a selection going
     // wherever the reader had pressed last (measured, qmltestrunner: with the handler under the hand, a press-and-drag
     // over the rows left `activeFocus=false` and the copy key unanswered; over it, both stand).
     //
-    // The rows keep their hover under it, unlike the sheet the pane's `HoverHandler` may not go on: a bare `Item`
+    // The rows keep their hover under it, where a `HoverHandler` would take it: a bare `Item`
     // answers no pointer at all, so nothing below it loses one (measured the same way — the pane's own handler and a
     // row's both still stand).
     Item {
@@ -138,7 +138,7 @@ Rectangle {
     }
     /// Automation: whether that sheet is still in front of everything this pane draws. A run cannot inject a press
     /// (verify-ui), so this is the half of "a selection you can take away" a headless drag can be asked for — where
-    /// the door stands, read off the pane's own children rather than off the line that places it.
+    /// the door stands, read off the pane's own children.
     ///
     /// **Strictly above, and a tie reads as false.** `childAt` cannot answer this: it walks the children in the order
     /// they were declared and never looks at `z` at all (measured, qmltestrunner — the last-declared sibling comes
@@ -193,8 +193,8 @@ Rectangle {
     /// Automation only: the list itself, for a run that reads where the view stands (as `GraphPane.view` is).
     readonly property alias view: diffList
 
-    /// Throw one hunk away. Offered on the unstaged side only — the staged side unstages first. No question comes
-    /// before it: the heading's own button is held down (デザイン規約 §その他の操作).
+    /// Throw one hunk away. Offered on the unstaged side only — the staged side unstages first. The heading's own
+    /// button is held down, and the hold is the consent (デザイン規約 §その他の操作).
     signal discardHunkRequested(int hunk)
 
     /// Automation: hold the heading's discard button to its end, on the first hunk — the one every smoke run acts on.
@@ -233,7 +233,7 @@ Rectangle {
     /// worked out from that same width, so a reach measured past the end of every line agrees with itself all the way
     /// down and shows only as room left over past the last character at the far end of a send (verify-ui,
     /// `code-grow`). Rows the list has not built answer nothing, which is what makes this a question about the rows on
-    /// screen rather than about the file.
+    /// screen.
     function codeInkRight() {
         let right = 0
         for (let i = 0; i < diffList.count; i++) {
@@ -267,7 +267,7 @@ Rectangle {
         textPick.dragText(toRow, toAt)
         textPick.releaseText()
     }
-    /// Automation: the hand itself, for the runs that go in through the pixels rather than through a row number — the
+    /// Automation: the hand itself, for the runs that go in through the pixels — the
     /// ground under the last row is a place only a coordinate can name (`PGG_AUTO_ACT=diff-sweep`). Handed over whole,
     /// the way the view is: four forwards here would be four more lines of this file saying nothing.
     readonly property alias textHand: textPick
@@ -356,7 +356,7 @@ Rectangle {
         partial: diffPane.partial
     }
     /// Where a place in a row's line is drawn, and which place a point of it is over — asked of the line itself, laid
-    /// out. One for the pane and not one per row: the answer belongs to the line, so a ruler that has just been
+    /// out. One for the pane: the answer belongs to the line, so a ruler that has just been
     /// handed one answers about it in the same statement (`LineRuler`).
     LineRuler {
         id: lineRuler
@@ -396,9 +396,9 @@ Rectangle {
             onStageFileRequested: diffPane.stageFileRequested()
             onCloseRequested: diffPane.closeRequested()
         }
-        // No question bar here: the only thing this pane throws away is a hunk, and that is held down on the hunk's own
-        // heading (デザイン規約 §その他の操作). What follows is what the pane has to say about the file rather than about
-        // any line in it — and the picture that stands in for one no rows can show.
+        // The only thing this pane throws away is a hunk, and that is held down on the hunk's own
+        // heading (デザイン規約 §その他の操作). What follows is what the pane has to say about the file
+        // itself — and the picture that stands in for one no rows can show.
         DiffFileNotices {
             id: fileNotices
             Layout.fillWidth: true
@@ -417,12 +417,12 @@ Rectangle {
             id: diffList
             Layout.fillWidth: true
             Layout.fillHeight: true
-            // The strip the sideways bar stands on, below the last row rather than over it (`DiffCodeScroll.barRoom`).
+            // The strip the sideways bar stands on, below the last row (`DiffCodeScroll.barRoom`).
             // A file with nowhere sideways to go has no bar and gets the strip back.
             Layout.bottomMargin: codeScroll.barRoom
             model: diffPane.diffModel
             // The rows the write asked for have landed: put the view back where it was reading, and work out which of
-            // the new rows the pointer is over. Not the empty half of the swap — a reset shows up here as zero first.
+            // the new rows the pointer is over. The filled half only — a reset shows up here as zero first.
             onCountChanged: {
                 if (count > 0) {
                     diffPane.restoreScroll()
@@ -439,10 +439,10 @@ Rectangle {
             function clampY(y) {
                 return Math.max(0, Math.min(y, diffList.maxY))
             }
-            // Qt's own key navigation moves `currentIndex` and tells nobody, and would scroll the view to a selection
-            // nothing here follows; the arrows are answered below, where they move the view (規約 §diff を上下に送る).
+            // The arrows are answered below, where they move the view (規約 §diff を上下に送る): Qt's own key navigation
+            // moves `currentIndex` and tells nobody, and would scroll to a selection nothing here follows.
             keyNavigationEnabled: false
-            // The one key this pane answers that is not a step. `StandardKey` rather than a spelling of our own, so the
+            // The one key this pane answers that is not a step. `StandardKey`, so the
             // platform's idea of copy is what is matched. Declared before the two below because the general handler is
             // offered every key first; the arrows carry on to their own handlers whenever this one leaves it alone.
             Keys.onPressed: event => {
@@ -510,7 +510,7 @@ Rectangle {
         onMenuWanted: diffPane.codeMenuRequested()
     }
     // The hand that sends the rows sideways and up and down, and the bar that says how far there is to go. Declared
-    // after the body so it stands over the rows, and beside the list rather than inside it (`DiffCodeScroll` says why).
+    // after the body so it stands over the rows, and beside the list (`DiffCodeScroll` says why).
     DiffCodeScroll {
         id: codeScroll
         anchors.fill: parent
@@ -518,7 +518,7 @@ Rectangle {
         paneHovered: panePointer.hovered
         file: diffPane.diffModel.title
         // The ink the rows and the picked lines came to, plus the room this pane holds past the last character of the
-        // longest one — the one gap that is the pane's and not a line's.
+        // longest one — the one gap that is the pane's own.
         codeWidth: reachTally.width > 0 ? reachTally.width + Theme.spaceSm : 0
         roomWidth: Math.max(0, diffList.width - metrics.gutterW)
     }

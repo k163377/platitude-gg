@@ -12,27 +12,27 @@ import platitude.ui
 // headless screenshots cannot judge it either — a wash a few pixels off the characters it names photographs like one
 // on them.
 //
-// **The expected place is taken from a second instrument, never from the one under test**: the ruler is a `TextEdit`
-// reading the column through `QTextDocument`; every case here is held against a `TextInput` carrying the same
-// characters, which is a different QML type on Qt's other text path, and against the `Label` the rows are actually
-// drawn in. A ruler that agreed only with itself would pass on any rule at all.
+// **The expected place is taken from a second instrument**: the ruler is a `TextEdit` reading the column through
+// `QTextDocument`; every case here is held against a `TextInput` carrying the same characters, which is a different
+// QML type on Qt's other text path, and against the `Label` the rows are actually drawn in. A ruler that agreed
+// only with itself would pass on any rule at all.
 //
 // **The log's columns are plain and the diff's rows are markup**, which is the one thing this fixes that
-// `tst_diffhit.qml` does not: the ruler is set in `TextEdit.PlainText` at `fontSm`, and the rows name the same
-// format rather than leaving Qt to guess it from what a command happens to hold (`CommandRowDelegate`). The last
-// test measures what naming it buys — the same column read as markup is a different column.
+// `tst_diffhit.qml` does not: the ruler is set in `TextEdit.PlainText` at `fontSm`, and the rows name that
+// same format (`CommandRowDelegate`). The last test measures what naming it buys — the same column read
+// as markup is a different column.
 //
 // **`cargo xtask qmltest` runs this on `-platform offscreen`, where the answer is easier than the real one** —
 // offscreen resolves every full-width glyph through one font at one advance, so a run there cannot speak for how a
-// real window advances them (rules-refs/app-ui.md). So what is judged here is the *agreement* rather than any
-// particular number, which is a claim both platforms can carry; the numbers themselves are read by running
-// `qmltestrunner` on this file without `-platform offscreen`.
+// real window advances them (rules-refs/app-ui.md). So what is judged here is the *agreement*, which is a claim
+// both platforms can carry; the numbers themselves are read by running `qmltestrunner` on this file without
+// `-platform offscreen`.
 Item {
     id: root
     width: 600
     height: 200
 
-    /// Columns built from code points rather than written out: these are rulers, not words (`DiffTextMetrics`).
+    /// Columns built from code points: these are rulers (`DiffTextMetrics`).
     readonly property string acute: String.fromCharCode(0x301)
     readonly property string kanji: String.fromCharCode(0x65e5, 0x672c, 0x8a9e)
     readonly property string cjkPath: "git add -- " + root.kanji + ".txt"
@@ -89,8 +89,8 @@ Item {
             ]
         }
 
-        /// Puts one column on all three and waits for them to settle on one width. **Never read at a moment of this
-        /// test's choosing**: a `Text` answers at the family's own advance until the fallback carrying the other
+        /// Puts one column on all three and waits for them to settle on one width. **The column names the moment
+        /// it is read at**: a `Text` answers at the family's own advance until the fallback carrying the other
         /// glyphs is resolved, and a rendered frame is not something a test window is promised
         /// (`waitForRendering` answers false on a real platform, `tst_diffreach`). What is waited for is the two
         /// sides agreeing, which is only true once both have settled.
@@ -135,7 +135,7 @@ Item {
                 compare(ruler.placeAt(data.text, false, ink + past), data.text.length,
                         "the blank " + past + "px past the column")
             }
-            // And the end is where the column was drawn to, not where a count of its characters would put it.
+            // And the end is where the column was drawn to.
             compare(ruler.xOf(data.text.length), ink)
         }
 

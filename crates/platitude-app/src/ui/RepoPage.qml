@@ -6,7 +6,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-// **A focus scope rather than a plain `Item`**, and that is what keeps Escape answerable: a pane swapped off the
+// **A focus scope**, and that is what keeps Escape answerable: a pane swapped off the
 // screen lets the keyboard go (規約 §矢印で履歴を辿る), and inside a plain item it falls all the way out of the page to
 // the window's own content item — where this page is a descendant rather than an ancestor, so nothing here is on the
 // key's way any more and the one gesture that puts a standing thing away goes quiet until the next press
@@ -36,7 +36,7 @@ FocusScope {
     property string selectedOid: ""
 
     property bool sidebarCollapsed: false
-    /// The fold the diff put on: closing the diff takes back only that, never a fold made by hand.
+    /// The fold the diff put on: closing the diff takes back only that; a fold by hand stays.
     property bool foldedByDiff: false
     function foldForDiff(open) {
         if (open) {
@@ -53,9 +53,9 @@ FocusScope {
     /// history the plan is composed over — so it goes down to the rail with the rest of the window's other business
     /// (規約 §フル interactive rebase). Its own flag, so putting the plan away takes back only the fold the plan made.
     ///
-    /// **The fold comes back when the plan does, not when the replay ends.** From the run onwards the list has nothing
-    /// left to say about a screen that is no longer standing over it, and the reader is back on the graph watching the
-    /// rewrite land — the hold on the doors carries on without it (`doorsHeldWhy`).
+    /// **The fold comes back when the plan does.** From the run onwards the list has nothing left to say about a
+    /// screen that is no longer standing over it, and the reader is back on the graph watching the rewrite land —
+    /// the hold on the doors carries on without it (`doorsHeldWhy`).
     ///
     /// Unlike the diff's, there is no way back by hand while the plan stands: the rail's own fold control is inside
     /// the pane the plan freezes (`sidebarFrozen`).
@@ -72,36 +72,36 @@ FocusScope {
         }
     }
     /// A plan has been handed over and its replay has not started yet, so the hold can begin at the press:
-    /// `replaying` rises when the queue *starts* the write, not when the button was let go.
+    /// `replaying` rises when the queue *starts* the write.
     ///
-    /// **The gap is not a fixed length and no sequence number spans it.** The run is queued, and the queue can be
-    /// carrying something else — the timer's fetch travels it too — so the wait is however long that takes; and
-    /// `writeSeq` counts *every* write's answer, so the fetch landing in between would move it past anything armed
-    /// here and let the pane back to life with the rebase still to come. Let go of the moment a replay is under way,
-    /// which is exactly where `replayRunning` takes over.
+    /// **The gap runs as long as the queue takes, and no sequence number spans it.** The run is queued, and the
+    /// queue can carry something else — the timer's fetch travels it too — so the wait is however long that
+    /// takes; and `writeSeq` counts *every* write's answer, so the fetch landing in between would move it past
+    /// anything armed here and let the pane back to life with the rebase still to come. Let go of the moment a
+    /// replay is under way, which is where `replayRunning` takes over.
     property bool planRunOut: false
     readonly property bool replayRunning: repoTab.replaying || page.autoReplayHeld
     onReplayRunningChanged: if (page.replayRunning) page.planRunOut = false
     /// Automation: a replay this run really started, kept standing until its picture has been taken
-    /// (`AutoActNavVerbs`, PGG_AUTO_ACT=doors-held). The rise is caught at the signal rather than sampled — a demo
-    /// repository's rebase is over inside one beat of the sampler — and what it holds up is the state the picture is
-    /// of, not a stand-in for it (app-ui.md §UI 自動化の因果性: 一瞬だけ立つ状態は signal で観測して latch する).
+    /// (`AutoActNavVerbs`, PGG_AUTO_ACT=doors-held). The rise is caught at the signal — a demo repository's rebase is
+    /// over inside one beat of the sampler — and what it holds up is the state the picture is
+    /// of (app-ui.md §UI 自動化の因果性: 一瞬だけ立つ状態は signal で観測して latch する).
     property bool autoReplayHeld: false
-    /// **The two ways the left pane is out are two different things, and they are not shown the same way.**
+    /// **The two ways the left pane is out are two different things, shown two different ways.**
     ///
     /// This one is the plan's: while a rebase is being composed the only way into a write is the run button, so the
-    /// whole pane goes to the disabled step and stays there — the restriction belongs to the mode rather than to a
-    /// command, and lasts as long as the mode does, so it is said plainly (デザイン規約 §フル interactive rebase). Only
+    /// whole pane goes to the disabled step and stays there — the restriction belongs to the mode, and lasts as
+    /// long as the mode does, so it is said plainly (デザイン規約 §フル interactive rebase). Only
     /// the `>_` band is left out of it (`SidebarPane.frozen`).
     ///
-    /// **From the press, not from the rows**: the mode is entered when the face takes the graph's seat, and a pane
-    /// that stays live under it for the length of the read would be saying the reader may still write — which is
+    /// **From the press**: the mode is entered when the face takes the graph's seat, and a pane that stays live
+    /// under it for the length of the read would be saying the reader may still write — which is
     /// the one thing this mode is for taking away.
     readonly property bool sidebarFrozen: page.planShown
     /// The other one, which begins where the plan ends: a write that replays a range a commit at a time is running
     /// (`RepoTab.replaying` — the meaning core puts on the op name), or its run is out and has not started yet. A
     /// rebase is measured in seconds once the range is deep, and a switch or a delete let go into the middle of one is
-    /// the exit nobody meant — but the answer here is "wait for it", not "this screen is another mode".
+    /// the exit nobody meant — but the answer here is "wait for it".
     ///
     /// **So nothing freezes and nothing leaves**: the doors are held one at a time and each says this line
     /// (`SidebarPane.doorsHeld` / `AppMenu.heldReason`), and the lock comes off the moment git answers. One line for
@@ -116,9 +116,9 @@ FocusScope {
         sidebarPane.stopEdit()
         graphPane.dropEmptyBoxes(scenePos)
     }
-    /// A press landed anywhere in the window (Main's `FocusRelease` again, this one on every press rather than only
-    /// the ones that take a caret away). The right pane's mark says where a reader was just sent, and the first thing
-    /// they do after arriving is the answer that they arrived (デザイン規約 §hover のツールチップ).
+    /// A press landed anywhere in the window (Main's `FocusRelease` again, this one on every press). The right
+    /// pane's mark says where a reader was just sent, and the first thing they do after arriving is the answer that
+    /// they arrived (デザイン規約 §hover のツールチップ).
     function notePress() {
         detailsPane.dropAttention()
         // The same answer for the same question, on the other mark this window raises (`raiseCommands`). **A link is
@@ -128,7 +128,7 @@ FocusScope {
     }
     /// And Escape, which every other standing thing in this window answers (デザイン規約 §hover のツールチップ).
     ///
-    /// **A key handler rather than a `Shortcut`**, and that is what keeps it out of everyone else's way: a shortcut is
+    /// **A key handler**, and that is what keeps it out of everyone else's way: a shortcut is
     /// matched before the key is delivered at all, so a bar, a popup or a box that wants Escape takes it first and
     /// this is never reached — which is the rule itself, since the mark is the last thing left to dismiss. **Two
     /// enabled `StandardKey.Cancel` shortcuts in one window fire neither**, so a third one here would have taken
@@ -142,7 +142,7 @@ FocusScope {
     ///
     /// Accepted only when there was something to take: an Escape this page did nothing with is not this page's.
     function escapePressed() {
-        // The plan has the centre and names its own way out, so Escape is that door rather than a second one — and
+        // The plan has the centre and names its own way out, so Escape is that door — and
         // **only while that door is a press**. With something composed to lose the button is a hold (規約 §長押し —
         // `RebasePlanPane.discards`), and one key down is not a hold; a key that threw away typed rows because it
         // could not be held would be the very thing the hold is there to stop.
@@ -214,7 +214,7 @@ FocusScope {
     //
     // **Every uncommitted row carries git's all-zero id**, this window's own included: that spelling is git saying
     // there is no object here, and it is as true of a copy's row as of ours (P3-確認事項 §別 worktree の未コミット行).
-    // So which copy a row is about is the row's, not the id's — and it is the predicate the whole read-only pane hangs
+    // So which copy a row is about is the row's own — and it is the predicate the whole read-only pane hangs
     // off: **empty means this window's own tree, and only then can anything here be written.**
     property string carriedPath: ""
     property string carriedName: ""
@@ -228,8 +228,8 @@ FocusScope {
     /// to know. The two panes agree on what it can answer — which bucket holds a path, what is beside it, where a
     /// rename came from — because both lists are built from the whole of one status (`models::nav::Source::files`).
     readonly property var wipUnstaged: page.wipWritable ? worktreeModel : carriedModel
-    /// Tree or flat paths, for both trios at once: the choice is the pane's, not one list's, so stepping onto another
-    /// copy and back keeps it — and what is saved at close is the one answer either trio would give.
+    /// Tree or flat paths, for both trios at once: the choice is the pane's, so stepping onto another copy and back
+    /// keeps it — and what is saved at close is the one answer either trio would give.
     function setWipTreeView(tree) {
         conflictsModel.setTreeView(tree)
         worktreeModel.setTreeView(tree)
@@ -266,8 +266,8 @@ FocusScope {
         page.carriedName = ""
     }
     /// Follows the copy being read across a graph pass, and lets go of it where the copy has gone clean and taken its
-    /// row with it. **Addressed by the copy, not by the row number**: the rows move under a rebuild, and every one of
-    /// them answers to the same all-zero id.
+    /// row with it. **Addressed by the copy**: the rows move under a rebuild, and every one of them answers to the
+    /// same all-zero id.
     function settleCarriedAfterPass() {
         if (page.carriedPath === "")
             return
@@ -309,9 +309,9 @@ FocusScope {
         }
     }
 
-    // A tab whose repository would not open. The screen sits where the panes do, not over the whole page, so the log's
-    // seat and the panel both stay reachable. The log is not raised on its own: the failed command is a background
-    // read, so the panel would come up empty (measured).
+    // A tab whose repository would not open. The screen sits where the panes do, so the log's seat and the panel
+    // both stay reachable. The log stays down: the failed command is a background read, so the panel would come up
+    // empty (measured).
     readonly property bool openFailed: !page.blank && repoTab.state === "error"
     /// Automation: that screen's hand — the one its three lines are dragged over from the air around them
     /// (`PGG_AUTO_ACT=open-fail-sweep`). An automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
@@ -346,10 +346,10 @@ FocusScope {
     /// A stopped merge opens the box already holding what it is about to record.
     ///
     /// The button under it is what finishes a merge — `git commit` there writes the very commit `--continue` would,
-    /// down to the tree, the two parents and the hooks it runs (measured, 2.55) — so the message it will use belongs on
-    /// screen before the press rather than in the log after it (デザイン規約 §進行中の操作から出る).
+    /// down to the tree, the two parents and the hooks it runs (measured, 2.55) — so the message it will use belongs
+    /// on screen before the press (デザイン規約 §進行中の操作から出る).
     ///
-    /// **Answered once per message, and never written over a draft.** Text in the boxes is the one thing here that
+    /// **Answered once per message, and only into empty boxes.** Text in the boxes is the one thing here that
     /// cannot be read back off disk, so a merge arriving under it leaves it where it is; the merge's own words are
     /// still the placeholder underneath, and emptying the boxes commits them.
     ///
@@ -389,8 +389,8 @@ FocusScope {
     /// words. Empty for one git named itself (`WIP on …`) — that line names the commit the work was standing on,
     /// not the work.
     property string pendingPopLabel: ""
-    /// The id the queue gave the pop at the press (`RepoTab.popStash`), so its answer is found by name rather than
-    /// by turn. Zero while no pop is out.
+    /// The id the queue gave the pop at the press (`RepoTab.popStash`), so its answer is found by name. Zero while
+    /// no pop is out.
     ///
     /// **Every stash operation answers under the same word** (`writeStashed` cannot say whose), so the answer alone
     /// does not say it was the pop's: the details pane's band leaves its buttons live, and an `apply` pressed just
@@ -410,7 +410,7 @@ FocusScope {
     /// (デザイン規約 §変更を退避する. by design). Looked up by id in the answers this notify carried
     /// (`RepoTab.writeAnswerIndex`): a notify that did not carry it leaves the wait standing.
     ///
-    /// **Never over what is already typed.** Text in these boxes is the one thing on this page that cannot be read
+    /// **Only into empty boxes.** Text in these boxes is the one thing on this page that cannot be read
     /// back off disk (`absorbOpMessage`), and both are asked: a description with no summary is not an empty editor.
     function absorbPopLabel() {
         if (page.pendingPopId === 0)
@@ -426,7 +426,7 @@ FocusScope {
             wipPane.setMessage(carried, "")
     }
 
-    // Not confirmed even when HEAD is already on a remote: amending rewrites nothing that a switch or a reset cannot
+    // Run straight, even when HEAD is already on a remote: amending rewrites nothing that a switch or a reset cannot
     // bring back, and the push that would spread it is asked about on its own.
     //
     // **The id the queue took it under is written down by the slot itself** (`ops::Press`), so nothing here holds
@@ -496,10 +496,10 @@ FocusScope {
     /// two pairs that reach over there after doing something here (`RepoTab.refPushAnswer`, -1 where this notify
     /// carried none).
     ///
-    /// **Its own answer, not the group's.** These all answer under the word `push`, like the fetch running behind
-    /// them and like the toolbar's own button, so a fetch coming back in the same drain took the group over and the
-    /// far side's refusal was never said at all (P3-確認事項, observed). The rows the delete took away come back
-    /// either way — that is the delete's own owner — and what only this carries is why.
+    /// **Its own answer.** These all answer under the word `push`, like the fetch running behind them and like the
+    /// toolbar's own button, so a fetch coming back in the same drain took the group over and the far side's refusal
+    /// was never said at all (P3-確認事項, observed). The rows the delete took away come back either way — that is
+    /// the delete's own owner — and what only this carries is why.
     function absorbRefPushAnswer() {
         const answer = repoTab.refPushAnswer
         if (answer < 0 || !repoTab.writeAnswerFailed(answer))
@@ -514,8 +514,8 @@ FocusScope {
     /// Says whether there was one, because what is left when there is not differs for every reader: the editor
     /// raises the log, and the card that stayed up for a delete turns its own row instead.
     ///
-    /// **Read off the answer, not off the group the answers leave behind** — a report belongs to the answer that
-    /// carried it, and one drain can bring several (`RepoTab.writeAnswerReportKind`).
+    /// **Read off the answer** — a report belongs to the answer that carried it, and one drain can bring several
+    /// (`RepoTab.writeAnswerReportKind`).
     function reportRefusal(answer) {
         const kind = repoTab.writeAnswerReportKind(answer)
         if (kind === "")
@@ -571,7 +571,7 @@ FocusScope {
     /// git refuses because the first one made the branch.
     ///
     /// So while a move is on its way, the road a press arrives by (`switchToRef`) sends nothing. **What ends the wait
-    /// is the move's own landing, not a counter**: HEAD on the branch and that branch in the listing
+    /// is the move's own landing**: HEAD on the branch and that branch in the listing
     /// (`offers::move_landed` — a seq would move for reads nobody asked for). Everything else that can become of a
     /// move puts it down where it happens, and each of those certainly comes: a refusal (nothing moved, so pressing
     /// again is the reader's to do) and the question a move can come back as (`absorbMoveAsk`).
@@ -595,8 +595,8 @@ FocusScope {
         page.runSwitch(leaving === true)
     }
     function runSwitch(leaving) {
-        // Marked where the move goes out rather than where it was asked for: the question a blocked move raises comes
-        // back through here, and a press held behind a bar has sent nothing yet.
+        // Marked where the move goes out: the question a blocked move raises comes back through here, and a press
+        // held behind a bar has sent nothing yet.
         page.moveLanding = page.moveLocal
         if (page.moveKind === "branch")
             repoTab.checkoutBranch(page.moveTarget, leaving === true)
@@ -609,7 +609,7 @@ FocusScope {
     // ---- moving out of what stands in a move's way --------------------
     // What blocks a move — an operation standing or unmerged paths — is core's measured rule
     // (offers::moves_blocked → `workTree.movesBlocked`). The move has to clear the way first, and that is a question
-    // rather than a side effect (デザイン規約 §進行中の操作から出る).
+    // (デザイン規約 §進行中の操作から出る).
     //
     // **One question for both.** The second needs no operation put down, and everything after that is the same two
     // commands, so it is the same question with one clause fewer.
@@ -648,8 +648,8 @@ FocusScope {
     // A branch another working copy holds is the one refusal no stash gets past and no operation put down can clear
     // (offers::SwitchAction) — the branch is simply somewhere else, and the way to it is that copy. So the press
     // raises a bar like every other refusal does, and the pill goes there instead: the same road the WORKTREES row
-    // takes (`openRepositoryPathRequested`). **The `!` after the word is what says the pill is not the switch that
-    // was pressed** (デザイン規約 §進行中の操作から出る, by design).
+    // takes (`openRepositoryPathRequested`). **The `!` after the word is what says the pill leads somewhere else**
+    // (デザイン規約 §進行中の操作から出る, by design).
     function askOpenHolder(local) {
         const held = worktreesModel.worktreeHolding(local)
         if (held === "")
@@ -675,8 +675,8 @@ FocusScope {
     /// of two presses in one turn has to be turned away, and the gate that turns it away is not something the run can
     /// see from outside (both presses look alike, and the window after them differs only by a line in the log).
     function switchToRef(kind, name, leaving) {
-        // `busyCount` alone is not the gate: it rises when the queue starts the write, not when the press is made, and
-        // it is back down while the screen is still catching up with what the write did (`moveLanding`).
+        // `busyCount` alone is not the gate: it rises when the queue starts the write, and it is back down while the
+        // screen is still catching up with what the write did (`moveLanding`).
         //
         // **The held doors are the third of them**, and the one that covers the beat between a plan's run being handed
         // over and the queue starting it: the count is still zero there, and a move let go into that gap lands ahead
@@ -700,8 +700,8 @@ FocusScope {
             page.askOpenHolder(local)
             return true
         }
-        // Ahead of the branches below rather than inside them: the one that lands on an existing local branch asks git
-        // what the move would cost before it moves, and that read is worth nothing while an operation is standing.
+        // Ahead of the branches below: the one that lands on an existing local branch asks git what the move would
+        // cost before it moves, and that read is worth nothing while an operation is standing.
         if (page.standsInTheWay(leaving)) {
             page.askLeaveOperation(function () { page.switchToRef(kind, name, true) })
             return true
@@ -763,7 +763,7 @@ FocusScope {
     readonly property bool planActive: planModel.active && !page.planLoadHeld
     /// The plan's face has the graph's seat: the read that opens it is out, or its rows have arrived.
     ///
-    /// **The seat is taken at the press, not at the answer**. The read walks the whole range, so a shallow click is
+    /// **The seat is taken at the press**. The read walks the whole range, so a shallow click is
     /// quick and the root of a real history is far past the moment a press has to be acknowledged in
     /// (ci/baseline/code-costs-windows-x64.md) — and a screen that does not move for that long says the press was
     /// not heard. What the pane can say before the rows land is in the pane (`RebasePlanPane.waiting`).
@@ -776,9 +776,9 @@ FocusScope {
     /// the feed and can land while the asynchronous grab is still out, and the picture would then be of the plan
     /// rather than of the wait for it (verify-ui スキル §中間状態は実 edge を latch する).
     ///
-    /// It holds the *whole* face, not the middle of it: a run that held only the pane would photograph the run bar
-    /// standing at the right pane's foot and the left menu already frozen, under a centre that says the plan has not
-    /// arrived. That is a screen this app never puts up.
+    /// It holds the *whole* face: a run that held only the pane would photograph the run bar standing at the right
+    /// pane's foot and the left menu already frozen, under a centre that says the plan has not arrived. That is a
+    /// screen this app never puts up.
     property bool planLoadHeld: false
     /// The plan model itself — an automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
     readonly property var rebasePlan: planModel
@@ -787,30 +787,30 @@ FocusScope {
     readonly property int planPushed: planModel.pushedCount
     /// Whether the details pane's boxes are, right now, a plan row's reword input: the plan stands, the row the
     /// selection sits on carries the verb, **and the pane is showing that very commit** — anything else that moves
-    /// the selection (a shortcut, a landing) must not leave typing routed into a row whose message is not on
-    /// screen. The model owns which row it is, so a reorder cannot detach the two.
+    /// the selection (a shortcut, a landing) leaves the typing where the message on screen is. The model owns which
+    /// row it is, so a reorder cannot detach the two.
     readonly property bool planReword: page.planActive && planModel.selectedAction === "reword"
                                        && planModel.selectedOid !== ""
                                        && planModel.selectedOid === detailsModel.shaHex
     /// What `Discard` is about to take away with the plan: the plan's own edits, and a reword standing in the right
     /// pane's boxes that the plan has not been given yet. Both are composed here and nowhere else — the screen after
-    /// the press holds no copy of either — so the button is held rather than clicked (デザイン規約 §長押し).
+    /// the press holds no copy of either — so the button is held (デザイン規約 §長押し).
     ///
     /// **A half-written amend from before the plan stood is not in this.** The plan closing leaves that text exactly
     /// where it is (`DetailsPane.dropDraft`), so there is nothing for a hold to guard, and arming one there would
     /// say the press costs something it does not.
     ///
-    /// **Read off `boxMoved`, not `messageDirty`.** A row walked back out of `reword` locks the boxes with the
-    /// typed text still standing in them, and the reader can neither save it nor be warned by a button that asks
-    /// whether the boxes still take typing — but `Discard` takes that text all the same.
+    /// **Read off `boxMoved`.** A row walked back out of `reword` locks the boxes with the typed text still
+    /// standing in them, and the reader can neither save it nor be warned by a button that asks whether the boxes
+    /// still take typing — but `Discard` takes that text all the same.
     readonly property bool planDiscards: page.planActive
         && (planModel.dirty || (detailsPane.boxFromPlan && detailsPane.boxMoved))
     function startRebasePlan(oidHex) {
         planModel.open(oidHex)
     }
-    // What the pane's arrival and departure do, on the edge the *seat* changes rather than the one the rows do: the
-    // graph is gone from the press, and a diff opened over it goes with it. Either way out of the read — rows, a
-    // refusal, a failure, `Discard` pressed on the empty face — comes back through here, so the fold has no exceptions.
+    // What the pane's arrival and departure do, on the edge the *seat* changes: the graph is gone from the press, and
+    // a diff opened over it goes with it. Either way out of the read — rows, a refusal, a failure, `Discard` pressed
+    // on the empty face — comes back through here, so the fold has no exceptions.
     onPlanShownChanged: {
         if (page.planShown) {
             page.closeDiff()
@@ -841,10 +841,10 @@ FocusScope {
         }
     }
     // What the range has already been sent of moves with the remote-tracking refs, and fetch is the one write the
-    // freeze leaves running — so the count is asked again whenever the refs actually move (`refsMoved`, not the
-    // every-tick `refsSettled` — that would spawn a rev-list at the status rate), and the run button's amber
-    // follows the fetch instead of freezing at the plan's opening (規約 §フル interactive rebase). The plan asks for
-    // itself and reads its own answer by range, so no other question can take the answer's place.
+    // freeze leaves running — so the count is asked again whenever the refs actually move (`refsMoved` — the
+    // every-tick `refsSettled` would spawn a rev-list at the status rate), and the run button's amber follows the
+    // fetch (規約 §フル interactive rebase). The plan asks for itself and reads its own answer by range, so no other
+    // question can take the answer's place.
     Connections {
         target: branchesModel
         function onRefsMoved() {
@@ -853,16 +853,16 @@ FocusScope {
     }
     Connections {
         target: planModel
-        // Armed by the answer that a run actually went out, not by the button being pressed: `runPlan` turns away a
-        // plan that asks for nothing, and a hold armed for a write that was never sent would never be let go of.
+        // Armed by the answer that a run actually went out: `runPlan` turns away a plan that asks for nothing, and a
+        // hold armed for a write that was never sent would never be let go of.
         function onPlanRan() {
             page.planRunOut = true
         }
         // Three ways a range cannot be replayed. Only the kind travels — the words are this end's, because git was
-        // never run (app-ui.md「Rust に文言を置かない」). **The line under the heading is not this file's**: the row
-        // menu turns down the same three histories and says them the same way (`Words.rewriteRefusedWhy`). What
-        // stays here is what the two surfaces do not share — a heading about the range rather than about the one
-        // commit that was pressed, and `warning` rather than `danger`, because the plan is a gesture still going
+        // never run (app-ui.md「Rust に文言を置かない」). **The line under the heading is `Words`'**: the row menu
+        // turns down the same three histories and says them the same way (`Words.rewriteRefusedWhy`). What stays
+        // here is what the two surfaces do not share — a heading about the range, and `warning`, because the
+        // plan is a gesture still going
         // (規約 §答えの要らない報せ).
         function onRefusedPlan(kind) {
             const why = Words.rewriteRefusedWhy(kind)
@@ -904,7 +904,7 @@ FocusScope {
         // Whoever was dressing the bar lets go first: a question can be raised over one still standing (a ref clicked
         // in the left menu while the first push asks where it goes), and the flow left behind would go on calling
         // itself the one standing — which is what keeps its check timer firing round trips at a remote nobody is
-        // asking about. Not for the dress: `startAsking`'s assignments beat a live `Binding` outright
+        // asking about. The dress is safe: `startAsking`'s assignments beat a live `Binding` outright
         // (measured). The flow raising this one turns its own back on after this returns.
         publishFlow.publishAsking = false
         upstreamFlow.asking = false
@@ -997,10 +997,10 @@ FocusScope {
     property bool keepBuilt: false
 
     // ---- context menu on a sidebar row ------------------------------
-    // Each menu is built the first time it is raised, not with the page: five cards of rows, held ready, are working
-    // set a page pays for whether or not a hand ever comes (rules-refs/app-ui.md — the same rule the window's two
-    // dialogs follow, `WindowDialogSeat`). The door activates the seat and then calls into it, which is synchronous;
-    // the seat fills the page so the menu inside measures the window the way it always did (`AppMenu.ownerItem`).
+    // Each menu is built the first time it is raised: five cards of rows, held ready, are working set a page pays
+    // for whether or not a hand ever comes (rules-refs/app-ui.md — the same rule the window's two dialogs follow,
+    // `WindowDialogSeat`). The door activates the seat and then calls into it, which is synchronous; the seat fills
+    // the page so the menu inside measures the window the way it always did (`AppMenu.ownerItem`).
     Loader {
         id: refMenuSeat
         anchors.fill: parent
@@ -1028,8 +1028,8 @@ FocusScope {
             onDismissed: rowHost.settleRefList()
         }
     }
-    // What a remote itself offers. Its own menu rather than rows added to the one above: a remote is repository
-    // configuration, and the ref menu is about refs (デザイン規約 §左メニューの所作).
+    // What a remote itself offers. Its own menu: a remote is repository configuration, and the ref menu is about
+    // refs (デザイン規約 §左メニューの所作).
     Loader {
         id: remoteMenuSeat
         anchors.fill: parent
@@ -1094,10 +1094,10 @@ FocusScope {
         } else if (kind === "stash") {
             repoTab.renameStash(id, name)
         } else if (kind === "remote") {
-            // **No write goes out here** — this one is asked first, and the question carries both names from now on
-            // (`askRenameRemote`). So the box that sent it has nothing to wait for and comes down, where every other
-            // rename keeps it until git answers (デザイン規約 §答えの要らない報せ). Left waiting, a dismissed question would
-            // leave it standing over the sidebar with nothing coming.
+            // **The question goes out first**, carrying both names from now on (`askRenameRemote`). So the box that
+            // sent it has nothing to wait for and comes down, where every other rename keeps it until git answers
+            // (デザイン規約 §答えの要らない報せ). Left waiting, a dismissed question would leave it standing over the
+            // sidebar with nothing coming.
             page.noteRenameLanded()
             page.askRenameRemote(id, name)
         }
@@ -1121,8 +1121,8 @@ FocusScope {
     }
 
     /// Renaming a branch on a remote, which git has no command for: core pushes the new name and deletes the old, so
-    /// the question is asked first and its answer is held down rather than clicked — this is the one write here that
-    /// another machine keeps (デザイン規約 §長押し).
+    /// the question is asked first and its answer is held down — this is the one write here that another machine
+    /// keeps (デザイン規約 §長押し).
     function askRenameRemote(remoteRef, name) {
         // The cut is the configured remote name where one owns the ref (a remote's own name may contain `/`), the
         // first slash otherwise — either way the question still fires (`GitFacts.remoteOfRef`).
@@ -1130,9 +1130,9 @@ FocusScope {
         if (remote === "")
             return
         const from = GitFacts.branchOfRef(remoteRef, repoTab.remoteNames)
-        // A name already over there is not offered: a plain push to one that exists fast-forwards it and reports
-        // success, so somebody else's branch would move instead of ours being renamed. The box refuses it too; this
-        // catches the way in that has no box.
+        // The question stops at a name already over there: a plain push to one that exists fast-forwards it and
+        // reports success, so somebody else's branch would move. The box refuses it too; this catches the way in
+        // that has no box.
         if (name === from || remotesModel.oidOfName(remote + "/" + name) !== "")
             return
         page.startRowAsk(
@@ -1150,13 +1150,13 @@ FocusScope {
     /// same one `GraphPane.view` is (app-ui.md).
     signal renameRemoteAsked(string from, string to)
 
-    /// Refusals this page already has an answer for. The question bar explains them, so the command log stays where it
-    /// was rather than raising itself over the same news (デザイン規約 §git が言ったことを読む場所). Counted rather than flagged
-    /// because the refusal and the write result arrive on separate paths, in no fixed order.
+    /// Refusals this page already has an answer for. The question bar explains them, so the command log stays where
+    /// it was (デザイン規約 §git が言ったことを読む場所). Counted, because the refusal and the write result arrive on
+    /// separate paths, in no fixed order.
     property int expectedRefusals: 0
     /// The plain delete's landing, read the way the card reads it (`RefBranchMenu`): the refusal armed above is not
-    /// coming, so the credit goes back. An edge rather than a check on the answer in hand — a fetch answering in the
-    /// same drain leaves the group saying fetch, and the landing would never be seen.
+    /// coming, so the credit goes back. An edge — a fetch answering in the same drain leaves the group saying fetch,
+    /// and the landing would never be seen.
     readonly property string deleteLanded: repoTab.branchDeleteLanded
     onDeleteLandedChanged: {
         if (page.deleteLanded !== "")
@@ -1228,11 +1228,11 @@ FocusScope {
     ///
     /// What it photographs is the in-between — the row taken away, git not yet answered for it — and a demo
     /// repository answers in tens of milliseconds, which is over before the picture is grabbed. Asked for before the
-    /// press rather than off it, so what holds the row up is a standing decision and not a second edge to get right
+    /// press, so what holds the row up is a standing decision
     /// (verify-ui スキル §壊れない動詞の実装と反復).
     ///
-    /// **Held by withholding the news, not by overruling the owner**: the two readings below are what the owner puts
-    /// the rows down on, so a run that wants the in-between simply does not tell it they arrived.
+    /// **Held by withholding the news**: the two readings below are what the owner puts the rows down on, so a run
+    /// that wants the in-between simply does not tell it they arrived.
     property bool holdGoneRows: false
 
     /// Whether the delete this page was last asked for went out to git, or was dropped before it did. **Both
@@ -1250,15 +1250,15 @@ FocusScope {
         // that can be clicked twice — the second click is the same request again.
         if (repoTab.busyCount > 0)
             return
-        // A branch is deleted with `-d`, and git's refusal is the question — asked when it arrives rather than
-        // guessed at beforehand (デザイン規約 §左メニューの所作). Which branch the answer is about is the tab's to keep,
-        // and the card that asked reads it there (`RefBranchMenu`); the row leaves the screen at the press, which is
-        // the same slot's doing (`ops_delete`).
+        // A branch is deleted with `-d`, and git's refusal is the question — asked when it arrives
+        // (デザイン規約 §左メニューの所作). Which branch the answer is about is the tab's to keep, and the card that asked
+        // reads it there (`RefBranchMenu`); the row leaves the screen at the press, which is the same slot's doing
+        // (`ops_delete`).
         page.expectedRefusals++
         repoTab.deleteBranch(id, false)
         page.deleteRowAsked = true
     }
-    /// Held, not asked (デザイン規約 §長押し).
+    /// Held (デザイン規約 §長押し).
     function dropStashNow(ref) {
         repoTab.dropStash(ref)
         if (page.selectedStashRef === ref)
@@ -1324,7 +1324,7 @@ FocusScope {
     /// The one door into that menu: the graph's rows wherever they are pressed, the rows of the stacked list a chip
     /// unfolds into, and the automation all come through here. `record` is the name the menu is aimed at — the one
     /// the chip draws, or the one pressed in the list — and empty aims it at nothing, which is a row that draws no
-    /// name at all. **The first level does not move with it**: it is the same commit either way, so what a naming in
+    /// name at all. **The first level stands still**: it is the same commit either way, so what a naming in
     /// the list changes is which card comes up (デザイン規約 §グラフ行の右クリック). Left out, the row's own name is
     /// asked of the model, which is what the callers with no row in hand do.
     function openRowMenu(oidHex, record) {
@@ -1455,7 +1455,7 @@ FocusScope {
     }
 
     // ---- double-click on a graph row -------------------------------
-    // A row with no chip is offered one instead of doing nothing.
+    // A row with no chip is offered one.
     function rowDoubleClicked(oidHex, record) {
         if (repoTab.state !== "open")
             return
@@ -1493,14 +1493,14 @@ FocusScope {
     }
 
     // ---- rewriting one commit --------------------------------------
-    // Not confirmed even for a commit a remote already has: nothing here leaves the machine, and the push that would
+    // Run straight, even for a commit a remote already has: nothing here leaves the machine, and the push that would
     // spread it is asked about on its own.
     function squashCommit(oidHex) {
         repoTab.squashIntoParent(oidHex)
     }
 
     /// Leaves the commit out of the history. One place for both ways in: the row is a hold or a click depending on
-    /// whether anything else still holds the branch tip, and what it runs must not depend on which of the two the
+    /// whether anything else still holds the branch tip, and what it runs is the same whichever of the two the
     /// reader got (デザイン規約 §履歴を合流させる).
     function dropCommit(oidHex) {
         repoTab.dropCommit(oidHex)
@@ -1512,7 +1512,7 @@ FocusScope {
     }
 
     // ---- editing the selected commit's message ---------------------
-    // No confirmation, even for a commit a remote already has: this rewrites nothing that a switch or a reset cannot
+    // Run straight, even for a commit a remote already has: this rewrites nothing that a switch or a reset cannot
     // bring back, and the push that would spread it is asked about on its own.
     function saveMessage(oidHex, subject, body) {
         // Where the row sits now. A reword leaves the shape of the history alone, so the rewritten commit lands on the
@@ -1526,8 +1526,8 @@ FocusScope {
     // What the details pane's boxes do with the commit on screen, in core's own word (`offers::message_edit`):
     // `amend` where typing lands, `stash` / `not-head` / `standing` where it does not, `""` where there is no message.
     // **Only HEAD's own commit takes it** — everything else would be replayed, and this is a text box a click can land
-    // a caret in (デザイン規約 §コミットメッセージの 2 つの枠). A binding rather than an answer asked per selection: the
-    // boxes stand open while the repository moves under them, so a commit that stops being HEAD's stops taking typing.
+    // a caret in (デザイン規約 §コミットメッセージの 2 つの枠). A binding: the boxes stand open while the repository moves
+    // under them, so a commit that stops being HEAD's stops taking typing.
     readonly property string messageEdit: GitFacts.messageEdit(
         !page.blank && repoTab.state === "open", detailsModel.shaHex, workTree.headOid,
         page.selectedStashRef, workTree.opText, workTree.opEditing)
@@ -1579,8 +1579,8 @@ FocusScope {
     // The whole of this tab's verification harness, which a shipped build does not carry (`HarnessSeat`). Everything
     // the verbs and the measurements act on is handed over here — a module of its own cannot see this one's ids — and
     // naming them is an automation-only exposure, the same one `GraphPane.view` is (app-ui.md). The menus and the
-    // plan's face go over as the seats they are built in rather than as themselves: none exists until it is asked
-    // for, and asking is the harness's to do (`keepBuilt`).
+    // plan's face go over as the seats they are built in: none exists until it is asked for, and asking is the
+    // harness's to do (`keepBuilt`).
     HarnessSeat {
         id: harness
         anchors.fill: parent
@@ -1653,10 +1653,10 @@ FocusScope {
     /// The bar itself — automation-only exposure, like `GraphPane.askCard` (app-ui.md). A headless run reads
     /// `settled` / `shut` / `label` off it and presses its one control through `dismiss()`.
     readonly property alias noticeCard: noticeBar
-    /// Automation: whether the middle of the page is standing **under** the report rather than behind it — the whole
-    /// of what moving the bar out of the graph was for, and the one thing about it a picture cannot settle (a bar
-    /// drawn over a pane frames exactly like a bar the pane was moved down for, since what it covers is the pane's
-    /// own top edge either way). Read in page coordinates, so it holds whichever of the two panes is showing.
+    /// Automation: whether the middle of the page is standing **under** the report — the whole of what moving the bar
+    /// out of the graph was for, and the one thing about it a picture cannot settle (a bar drawn over a pane frames
+    /// exactly like a bar the pane was moved down for, since what it covers is the pane's own top edge either way).
+    /// Read in page coordinates, so it holds whichever of the two panes is showing.
     readonly property bool noticeClears:
         centreStack.mapToItem(page, 0, 0).y >= noticeBar.mapToItem(page, 0, noticeBar.height).y
 
@@ -1709,8 +1709,8 @@ FocusScope {
         // Asked with no edge of its own: the landing is the edge (`leaveWipWhenDone`), and where nothing is standing
         // this reads as the poll it already ignores.
         page.leaveWipWhenDone(false)
-        // What is left over is the answers nobody named — **and its branches end it rather than this function**, so
-        // no press's own answer can be skipped by a refusal somebody else's write came back with.
+        // What is left over is the answers nobody named — **and its branches end it**, so no press's own answer can
+        // be skipped by a refusal somebody else's write came back with.
         page.absorbLeftoverAnswer()
     }
     /// The one answer of this notify nobody was waiting for by name, sequenced off the group it left behind
@@ -1773,10 +1773,10 @@ FocusScope {
                                    repoTab.writeReportName)
                 return
             }
-            // Nothing else on screen says what git said, so the log comes up (デザイン規約 §git が言ったことを読む場所). Raised from the
-            // answer rather than from the commands, because the ones that answer by their exit code do not raise it
-            // themselves — and whether an operation built out of several of them failed is a question only its own
-            // answer can settle.
+            // Nothing else on screen says what git said, so the log comes up (デザイン規約 §git が言ったことを読む場所).
+            // Raised from the answer, because the ones that answer by their exit code do not raise it themselves —
+            // and whether an operation built out of several of them failed is a question only its own answer can
+            // settle.
             //
             // **A fetch answering here is not somebody else's news**: it is the same refusal the tab has already
             // counted, lined and raised the panel once for, and taking the panel over on it would leave the reader's
@@ -1810,26 +1810,26 @@ FocusScope {
             page.pendingRenameTo = ""
             page.askRenameRemote(spokenFor, took)
         }
-        // Where the answer sends the reader — **read out of the answers this notify carried, not off the group they
-        // leave behind**. One drain empties the whole queue and notifies once (`RepoTab::write_answers`), so a write
-        // *starting* in the same batch — the fetch that follows a run — takes the stop's flag back down before this
-        // line is reached, and the reader is left on the graph where the conflicted rows should have been.
+        // Where the answer sends the reader — **read out of the answers this notify carried**. One drain empties the
+        // whole queue and notifies once (`RepoTab::write_answers`), so a write *starting* in the same batch — the
+        // fetch that follows a run — takes the stop's flag back down before this line is reached, and the reader is
+        // left on the graph where the conflicted rows should have been.
         //
         // Walked in order with the later answer winning: the two landings are exclusive — a stop leaves no commit at
         // the tip to go to — so the one armed is the one the last answer asked for.
         for (let i = 0; i < repoTab.writeAnswerCount(); i++) {
             // git stopped part-way and left the operation standing, so there is no commit at the tip to land on and
             // the answer to the press is the working tree: the conflicted rows, and the way out under them
-            // (デザイン規約 §進行中の操作から出る). Armed rather than done on the spot, for the reason the head landing
-            // below is: the status that will carry those rows has not arrived yet (by design).
+            // (デザイン規約 §進行中の操作から出る). Armed, for the reason the head landing below is: the status that will
+            // carry those rows has not arrived yet (by design).
             if (repoTab.writeAnswerStopped(i)) {
                 page.pendingWipSelect = true
                 page.pendingHeadSelect = false
                 page.pendingHeadAsked = false
             }
-            // The answer is a commit at the tip, and that commit is what was asked for here, not the row or the ref
-            // that was clicked. The selection goes to it and the viewport follows: what was clicked can be anywhere
-            // in the history, while the answer is always at the top.
+            // The answer is a commit at the tip, and that commit is what was asked for here. The selection goes to it
+            // and the viewport follows: what was clicked can be anywhere in the history, while the answer is always
+            // at the top.
             else if (repoTab.writeAnswerAtTip(i)) {
                 page.pendingWipSelect = false
                 page.pendingHeadSelect = true
@@ -1864,8 +1864,8 @@ FocusScope {
             page.closeDiff()
     }
 
-    // Center area switches between the graph and a file diff. The pieces are kept apart rather than parsed back out of
-    // the key: a path may contain anything, colons included.
+    // Center area switches between the graph and a file diff. The pieces are kept apart: a path may contain
+    // anything, colons included.
     property bool diffShown: false
     onDiffShownChanged: page.foldForDiff(page.diffShown)
     property string diffKey: ""
@@ -1876,13 +1876,13 @@ FocusScope {
     property bool diffFromWt: false
     readonly property bool diffStaged: page.diffKind === "staged"
     /// The two stage letters git reports for the file being shown, read once when it is opened: the pane is handed a
-    /// path, not the row the path came from, and on a conflict git prints no patch for those letters are all there is
+    /// path, and on a conflict git prints no patch for those letters are all there is
     /// to say. A file stops being conflicted only by a write, and every write reads the diff again.
     property string diffChange: ""
     /// The colour each side of a conflict is drawn in: the lane colour the graph gives that branch where it has one, so
-    /// the diff borrows an answer rather than keeping a second set of its own.
+    /// the diff borrows an answer.
     ///
-    /// A binding, not a one-off read: the graph arrives in two passes (the chips land after the rows), and it is
+    /// A binding: the graph arrives in two passes (the chips land after the rows), and it is
     /// rebuilt whenever refs move. `finishCount` is read only to depend on it — every graph property shares one notify
     /// signal, so touching any of them is what makes this re-run when the rows change.
     readonly property int sideColorOurs:
@@ -1899,8 +1899,8 @@ FocusScope {
     /// Reads one file, whoever asked — a row that was clicked, or the pane moving itself off a side that ran out
     /// (`followEmptySide`).
     function openDiff(kind, path, origPath) {
-        // Not while a plan stands. The plan has the centre for the whole of its stay (`centreStack`), so a file read
-        // here goes into a pane nobody can see — and it is still open when the plan is put away, which lands the
+        // Held off while a plan stands. The plan has the centre for its whole stay (`centreStack`), so a file
+        // read here goes into a pane nobody can see — and it is still open when the plan is put away, which lands the
         // reader who came back for the graph on a file instead. **This is the only place the diff can be raised**, so
         // the fold, the neighbour and the read are all held by the one line.
         //
@@ -1954,7 +1954,7 @@ FocusScope {
     /// (デザイン規約 §複数のコミットを選ぶ): one commit's own change to the file, what differs between exactly two, or —
     /// for a merged list — what **each** of the chosen commits did to it, one block after another.
     ///
-    /// **The last is not a comparison across the span.** The list above it is what these commits did, so the patches
+    /// **The last is each commit's own block.** The list above it is what these commits did, so the patches
     /// behind a row of it are theirs: a diff of the two ends would carry whatever unchosen commits stand in between.
     function askCommitDiff(path, origPath) {
         if (detailsModel.selectionCount > 2) {
@@ -1976,12 +1976,12 @@ FocusScope {
         // The shown diff's fingerprint rides along: the write refuses to apply the indices to bytes that drifted since
         // this was read.
         //
-        // Said here rather than left to `busyCount`, which rises when the queue starts the write rather than when the
-        // press is made: two presses in a row both went out before the first had begun.
+        // Said here, because `busyCount` rises when the queue starts the write: two presses in a row both went out
+        // before the first had begun.
         //
-        // Armed by the answer, not by the asking: the slot says whether a write actually went out, and a request it
-        // turned away — nothing selected, no fingerprint to address — has no answer coming, so a wait armed for it
-        // would hold the marks for good (the same wedge the tree-read wait had, through the request's own door).
+        // Armed by the answer: the slot says whether a write actually went out, and a request it turned away —
+        // nothing selected, no fingerprint to address — has no answer coming, so a wait armed for it would hold the
+        // marks for good (the same wedge the tree-read wait had, through the request's own door).
         page.diffAwaits = repoTab.stageSelection(page.diffKind, page.diffPath, page.diffOrigPath, hunk, line,
                                                  diffModel.fingerprint)
     }
@@ -2008,7 +2008,7 @@ FocusScope {
         page.diffNeighbour = page.wipUnstaged.besidePath(page.diffKind, page.diffPath)
     }
     /// Everything the open diff's file had on the side being read has gone over — staged, unstaged, thrown away,
-    /// committed. The reader is left standing on it, so the pane moves rather than closing (デザイン規約 §diff の中のステージ):
+    /// committed. The reader is left standing on it, so the pane moves (デザイン規約 §diff の中のステージ):
     ///
     ///  - the next file of the side that ran out, if it still has one;
     ///  - otherwise the same file, read from wherever it went — the whole
@@ -2016,8 +2016,8 @@ FocusScope {
     ///  - and only with nothing uncommitted left does the pane close.
     ///
     /// **The file list is what says so** — this runs on its `changed` and stands down while it still holds the file on
-    /// the side being read. The re-read's own emptiness cannot say it: the read runs beside the status rather than
-    /// after it (`load_diff` / `publish_status`), so an empty answer could land first and ask a list that still held
+    /// the side being read. The re-read's own emptiness cannot say it: the read runs beside the status
+    /// (`load_diff` / `publish_status`), so an empty answer could land first and ask a list that still held
     /// the pre-write rows for a neighbour — and some sides never read empty at all (an untracked file staged whole
     /// still renders as its whole content, a picture has no rows either way). Asked here, the answers below are read
     /// from the very change that said the file moved.
@@ -2044,7 +2044,7 @@ FocusScope {
     ///
     /// A press addresses the rows it was made on, and carries the fingerprint of the bytes they were read from; git
     /// refuses it against anything else. So from the moment a press goes out until the rows it changed are back, the
-    /// pane must not take another one — pressed twice in a row, the second landed on the diff the first had already
+    /// pane holds the next one back — pressed twice in a row, the second landed on the diff the first had already
     /// replaced and came back with a refusal in the log.
     ///
     /// Three parts, in the order they happen, and **every one of them ends by itself**: the press is out and no answer
@@ -2052,7 +2052,7 @@ FocusScope {
     /// is running (`busyCount`, which the session balances), the file is being read again (`loading`, put down by the
     /// rows arriving).
     ///
-    /// **Nothing here waits on a signal that may not come.** Held on "the tree has not been read yet" instead, it
+    /// **Every wait here has an end of its own.** Held on "the tree has not been read yet" instead, it
     /// wedged for good the first time a write moved no rows — staging a second line of a file already on both sides —
     /// because the file list only says `changed` when its rows differ, and then no `+` anywhere would go in again.
     property bool diffAwaits: false
@@ -2074,14 +2074,14 @@ FocusScope {
     /// Asks whether the file on screen still reads the way it did. Run on the page's tick, beside the repository's own
     /// re-read.
     ///
-    /// **The tree moving is not the only way the file moves.** The counts below say a stage or an unstage happened, and
+    /// **The file can move with the tree standing still.** The counts below say a stage or an unstage happened, and
     /// the file list says a file changed state; neither hears an edit that leaves both where they were — a conflict
     /// resolved in another window keeps its two stage letters until it is added, so the pane went on drawing the
     /// conflict it was opened on. Core answers this with silence unless the bytes moved
     /// (`RepoSession::refresh_diff`), so a quiet file costs one read and no repaint.
     ///
-    /// A commit's diff is not asked: what a commit holds is settled. Nor is one still catching up with a write — that
-    /// answer is already on its way.
+    /// Only a settled working-tree file is asked: a commit's diff is settled already, and one catching up with a
+    /// write has its answer coming.
     ///
     /// Answers whether a read went out, for the automation to latch on (`diff-tick`): the read itself is answered with
     /// silence on a file nobody touched, so the ask is the only edge this side of it has.
@@ -2112,15 +2112,15 @@ FocusScope {
     /// Puts the diff away by a gesture aimed at the diff itself — Escape, or the header's own mark — and hands the
     /// arrows to the graph (デザイン規約 §diff のファイル一覧「diff を仕舞う所作は、矢印をグラフへ返す」).
     ///
-    /// **Not the file row's second click** (`toggleDiff`). That is a press, it landed in the list, and the list is
-    /// still on screen with the row it lit — so the keyboard stays where the press fell and the arrows go on walking
-    /// files (規約 §diff のファイル一覧「キーボードは press が落ちた所に残る」). These two doors have no such place to
-    /// leave it in: Escape is not a press at all, and the mark's own pane is what goes. What is left in the middle is
-    /// the graph, so the graph is what answers next.
+    /// **The file row's second click keeps them where they are** (`toggleDiff`): it is a press, it landed in the
+    /// list, still on screen with the row it lit — so the keyboard stays where the press fell and
+    /// the arrows go on walking files (規約 §diff のファイル一覧「キーボードは press が落ちた所に残る」). These two doors
+    /// have no such place to leave it in: Escape is not a press at all, and the mark's own pane is what goes. What
+    /// is left in the middle is the graph, so the graph answers next.
     ///
-    /// **Nothing else that closes a diff comes through here.** The rest are not the reader putting it away — a plan
-    /// taking the centre, a write moving HEAD, the side under the reader running out, the list coming back — and the
-    /// graph is not always even what they leave behind.
+    /// **This door is the reader putting the diff away.** The rest go their own way — a plan taking the centre, a
+    /// write moving HEAD, the side under the reader running out, the list coming back — and the graph is not always
+    /// even what they leave behind.
     function closeDiffToGraph() {
         page.closeDiff()
         graphPane.takeKeyboard()
@@ -2161,8 +2161,8 @@ FocusScope {
     /// Whether the right pane is still waiting on the selected commit's own read — the last of the page's reads, and
     /// the one the changed-file list is laid out from. **The graph's pass and the refs are both in before it is even
     /// asked for**: they are what decide the row this page opens on, and the request goes out from that landing
-    /// (`trySelectDefault`). **Settled, not loaded**: a page showing the working tree is waiting for no such answer,
-    /// and neither is a repository with no commit to select, so both answer yes holding no details at all.
+    /// (`trySelectDefault`). **Settled**: a page showing the working tree is waiting for no such answer, and neither
+    /// is a repository with no commit to select, so both answer yes holding no details at all.
     readonly property bool pageDetailsSettled: page.wipShown || page.selectedOid === ""
                                                || !detailsModel.loading
     /// Whether this page still owes itself a landing — a move of the reader it has already decided on and is holding
@@ -2170,18 +2170,18 @@ FocusScope {
     /// whether the page has stopped arriving (`PageSettled`): between a write's answer and the landing behind it,
     /// every other reading of the page is of the repository as the write found it, and both ends of that hold still.
     readonly property bool pageLanding: page.pendingHeadSelect || page.pendingWipSelect
-    /// The window's own band, handed back in by `Main`. The Stash button stands there rather than on this page
-    /// (デザイン規約 §変更を退避する), and this page's verbs press the real one through here — a verb that called what the
-    /// button calls would be answering for a second way in rather than for the band's wiring. An automation-only
-    /// exposure, the same one `GraphPane.view` is (app-ui.md). `var` because `TopBar` is above this file, not beside it.
+    /// The window's own band, handed back in by `Main`. The Stash button stands there (デザイン規約 §変更を退避する), and
+    /// this page's verbs press the real one through here — a verb that called what the button calls would be
+    /// answering for a second way in. An automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
+    /// `var` because `TopBar` is above this file, not beside it.
     property var pageBand: null
 
     /// Whether the command log is up. Closed is the resting state: the `>_` at the foot of the left menu opens it, and
     /// a failed command raises it.
     property bool commandsOpen: false
-    // The mark is the panel's own, so it cannot outlive it (`commandsAttention`). Written here rather than in each
-    // way down — the three the reader presses, Escape, and the recovery a landing fetch takes it down with — because
-    // what it says is about the mark rather than about any one of them.
+    // The mark is the panel's own, so it cannot outlive it (`commandsAttention`). Written here — the three ways down
+    // the reader presses, Escape, and the recovery a landing fetch takes it down with all say the same thing —
+    // because what it says is about the mark.
     onCommandsOpenChanged: if (!page.commandsOpen) page.commandsAttention = false
     // Who the panel standing belongs to — the one rule here that is about the **order** failures arrive in, which is
     // why it is a component of its own with every order walked (`CommandsOwner` / `tst_commandsowner.qml`).
@@ -2216,9 +2216,9 @@ FocusScope {
         page.commandsOpen = false
     }
     /// A fetch has reached the remote again, and the panel its failure raised goes down with the news
-    /// (デザイン規約 §git が言ったことを読む場所 — パネルを下ろす唯一の自動). **Read on every drain rather than off a
-    /// signal of its own**: the run of failures going back to zero *is* the recovery, and the tab holds both halves
-    /// of what the answer turns on.
+    /// (デザイン規約 §git が言ったことを読む場所 — パネルを下ろす唯一の自動). **Read on every drain**: the run of failures
+    /// going back to zero *is* the recovery, and the tab holds both halves of what the answer turns
+    /// on.
     function absorbFetchRecovery() {
         if (commandsOwner.landingTakesItDown(repoTab.fetchFailures, repoTab.lastError !== ""))
             page.commandsOpen = false
@@ -2232,9 +2232,9 @@ FocusScope {
     /// Automation: the colour the `>_` painted — the log's own band while it is up, the pane's foot while it is down.
     readonly property color commandsMarkColor:
         page.commandsPane !== null ? page.commandsPane.markColor : sidebarPane.commandsMarkColor
-    /// What the panel is doing rather than what was asked of it — automation reads this one, so a cut binding fails.
+    /// What the panel is doing — automation reads this one, so a cut binding fails.
     readonly property bool commandsShown: page.commandsPane !== null && page.commandsPane.visible
-    /// Automation reads the laid-out width, not the preferred width it requested, before persisting a state round trip.
+    /// Automation reads the laid-out width before persisting a state round trip.
     readonly property real stateDetailsWidth: rightPane.width
     /// Automation only: the header's `Clear`, pressed from outside the panel (`PGG_AUTO_ACT=commands-clear`).
     function clearCommandLog() {
@@ -2287,9 +2287,9 @@ FocusScope {
     NavSectionModel { id: worktreeModel }
     NavSectionModel { id: stagedModel }
     // The same three again, for the copy the pane shows when the row being read is another working copy's
-    // (`page.carriedPath`). **A second set rather than the same one retold**: this window's own status arrives on its
-    // own tick whether or not anybody is reading another copy, and one set of lists would lose the copy's rows to it
-    // every ten seconds — and lose the reader's place in them with it.
+    // (`page.carriedPath`). **A second set**: this window's own status arrives on its own tick whether or not anybody
+    // is reading another copy, and one set of lists would lose the copy's rows to it every ten seconds — and lose the
+    // reader's place in them with it.
     // The list another working copy's changes are shown as — **one**, where this window's own tree is three: the
     // split those three stand for is the index's, and nothing here can move that copy's index (`CarriedPane`).
     NavSectionModel { id: carriedModel }
@@ -2344,9 +2344,9 @@ FocusScope {
         // `trySelectDefault` leaves a page showing the working tree alone.
         page.showWip()
         wipPane.setMessage(subject, body)
-        // **Not `pendingWipSelect`.** A dirty tree already puts its own row at the top of a graph nobody has picked a
-        // row on, so the highlight lands there without asking; a clean tree has no such row, and the flag would then
-        // stand until the tree got dirty and jump the view to the top from wherever the reader had scrolled to
+        // **`pendingWipSelect` stays down.** A dirty tree already puts its own row at the top of a graph nobody has
+        // picked a row on, so the highlight lands there without asking; a clean tree has no such row, and the flag
+        // would then stand until the tree got dirty and jump the view to the top from wherever the reader was
         // (規約 §ListView.highlightFollowsCurrentItem — a background pass may not move a reader's view).
     }
 
@@ -2429,9 +2429,9 @@ FocusScope {
         if (page.visible && repoTab.state === "open") {
             repoTab.refreshQuick()
             // The window coming back is the moment an outside change is most likely to be waiting, so the file on
-            // screen is asked as well rather than waiting out the rest of the tick — and where the pane is standing
-            // on another copy, that copy is what the file belongs to (`pollCarried` reads one, not every copy: the
-            // rest are the slow tick's, which is the whole reason they are on one).
+            // screen is asked as well — and where the pane is standing on another copy, that copy is what the file
+            // belongs to (`pollCarried` reads one, not every copy: the rest are the slow tick's, which is the whole
+            // reason they are on one).
             page.pollDiff()
             page.pollCarried()
         }
@@ -2490,13 +2490,13 @@ FocusScope {
     property int selectedRow: -1
 
     // ---- the commits being held (デザイン規約 §複数のコミットを選ぶ) ----
-    /// The choice, as a set of commit ids, and how many are in it. **Ids, not rows**: a background pass rewrites the
-    /// rows under the hand, and everything this page holds is re-resolved by id when one lands (`onStatsChanged`).
+    /// The choice, as a set of commit ids, and how many are in it. **Ids**: a background pass rewrites the rows under
+    /// the hand, and everything this page holds is re-resolved by id when one lands (`onStatsChanged`).
     /// Empty only where the working tree's row is what is shown — that row is not a commit.
     property var chosenOids: ({})
     property int chosenCount: 0
-    /// The commit the last press landed on, which is what a Shift click measures its range from. **A commit, not a
-    /// row**: a background pass rewrites the rows under the hand, and a row number kept across one would measure the
+    /// The commit the last press landed on, which is what a Shift click measures its range from. **A commit**: a
+    /// background pass rewrites the rows under the hand, and a row number kept across one would measure the
     /// next range from whatever commit had moved into it (デザイン規約 §複数のコミットを選ぶ). Empty before the first press.
     property string chosenAnchorOid: ""
     /// The choice as the models want it: the ids in walk order, and the rows that name them. Settled together, so the
@@ -2538,7 +2538,7 @@ FocusScope {
     /// Puts a commit into the choice, or takes it back out — a Ctrl click. The anchor is left where it was: which
     /// presses move it is the callers' to say.
     ///
-    /// **The last one cannot be taken out.** An empty choice is the working tree's own state, and reaching it from a
+    /// **One always stays in.** An empty choice is the working tree's own state, and reaching it from a
     /// commit would leave the pane on the right describing something no row is drawn as holding.
     function chooseAlso(oidHex) {
         // A fresh object every time: the rows follow this property, and assigning the same one back changes nothing
@@ -2593,8 +2593,8 @@ FocusScope {
     }
     /// The one place the set and its tally are written together, so a count and a highlight cannot disagree.
     ///
-    /// **A choice that has come back down to one commit is not a choice**: it is that commit being read, which is what
-    /// every other way of landing on one row does (`activateRow`).
+    /// **A choice that has come back down to one commit is that commit being read**, which is what every other way of
+    /// landing on one row does (`activateRow`).
     function settleChoice(next) {
         const ids = Object.keys(next)
         if (ids.length === 1) {
@@ -2672,10 +2672,10 @@ FocusScope {
         return now < 0 ? 0 : now - page.anchorRow
     }
 
-    // The row the selection stood on is gone and this page owes it a landing. Deliberately not resolved on the spot:
-    // the status of the working tree, the refs and the walk arrive as three separate messages, and the two that come
-    // first still describe the repository as it was — reading the branch out of them lands on the commit that was just
-    // replaced. Resolved once the graph holds where the branch points, which is only true of the refreshed pair.
+    // The row the selection stood on is gone and this page owes it a landing. Held over: the status of the working
+    // tree, the refs and the walk arrive as three separate messages, and the two that come first still describe the
+    // repository as it was — reading the branch out of them lands on the commit that was just replaced. Resolved
+    // once the graph holds where the branch points, which is only true of the refreshed pair.
     property bool pendingHeadSelect: false
     /// The first report of HEAD that may answer the landing (`WorkTreeModel.headSeq`). A write's answer names it
     /// (`RepoTab.writeAnswerHeadSeq`): the report in hand at that arming may still describe the repository as it
@@ -2689,50 +2689,50 @@ FocusScope {
     // background pass that moves rows under a reader may not also move their view
     // (§ListView.highlightFollowsCurrentItem).
     property bool pendingHeadAsked: false
-    /// Whether the working tree the last status described has nothing left in it — **a tree nobody has read is not
-    /// one with nothing in it**, so every reader of this stands behind `workTree.loaded` (the counts start at zero,
+    /// Whether the working tree the last status described has nothing left in it — **a tree nobody has read has yet
+    /// to answer**, so every reader of this stands behind `workTree.loaded` (the counts start at zero,
     /// which is this question's own picture of a job that is done. 規約 §UI 自動化の因果性).
     ///
     /// A property because two sides read it: the status that finds the tree empty, and the write answer that may be
     /// the half completing a stash's pair (`leaveWipWhenDone`).
     readonly property bool treeClean: workTree.stagedCount === 0 && workTree.unstagedCount === 0
                                    && workTree.untrackedCount === 0 && workTree.conflictCount === 0
-    /// What operation the last status named, so that its going away can be read as an edge rather than as a state.
+    /// What operation the last status named, so that its going away can be read as an edge.
     property string seenOpText: ""
     /// The WIP face has nothing left to hold the reader with. The working tree emptied: after a commit of our own that
     /// is the end of the editor's job; when someone else committed these changes it happens with no warning, so a
     /// message being written stays on screen with its text — it is the one thing here that cannot be read back off
-    /// disk. Or the operation went away, which is what takes the exit card off the face. Either way, land on the commit
-    /// that now holds the changes rather than on nothing.
+    /// disk. Or the operation went away, which is what takes the exit card off the face. Either way, land on the
+    /// commit that now holds the changes.
     ///
-    /// **A stash pressed here is not held by the message.** The press *is* the decision to empty the tree, so the box
+    /// **A stash pressed here lands past the message.** The press *is* the decision to empty the tree, so the box
     /// is not a reason to stay: the words are still in it when the working tree comes back (the pane is hidden, not
     /// unloaded) and the entry took them for its own name on the way out. Left to the message alone, the one press that
     /// always has words in front of it — a stopped merge fills the box itself (`absorbOpMessage`) — is the one that
     /// never lands, and the pane stands over a tree it no longer describes while the highlight the working-tree row
     /// left behind is inherited by whatever slid into its place, which after this press is the entry it just made.
     ///
-    /// **Every half is read off one status** (`WorkTreeModel`), never off the file list beside it, and each of the two
-    /// reasons is a way out that was missing. The list says `changed` only when its rows differ, so a stop that ends on
-    /// a clean tree — an `edit` stop put down by `--continue`, `--skip`, `--abort` or a terminal — moves no row and
-    /// would never ask this question at all. And the list is drained before the headline is (`hub::sink` pushes the nav
-    /// runs first), so a question asked from there reads an `opText` one status old and hears the operation that has
-    /// just gone as though it were still standing — which is every ordinary conflict landing, where the rows empty and
-    /// the operation ends in the same status.
+    /// **Every half is read off one status** (`WorkTreeModel`), and each of the two reasons is a way out that was
+    /// missing. The list says `changed` only when its rows differ, so a stop that ends on a clean tree — an `edit`
+    /// stop put down by `--continue`, `--skip`, `--abort` or a terminal — moves no row and would never ask this
+    /// question at all. And the list is drained before the headline is (`hub::sink` pushes the nav runs first), so a
+    /// question asked from there reads an `opText` one status old and hears the operation that has just gone as
+    /// though it were still standing — which is every ordinary conflict landing, where the rows empty and the
+    /// operation ends in the same status.
     ///
     /// `edge` is what that status moved: the tree's own counts, or the operation. Standing alone, the condition would
     /// walk a reader off the face on a poll that changed nothing under them — the message box emptied by hand is the
     /// one that would do it.
     function leaveWipWhenDone(edge) {
-        // **A tree nobody has read is not a tree with nothing in it.** The counts start at zero and `opText` starts
+        // **A tree nobody has read has yet to answer.** The counts start at zero and `opText` starts
         // empty, which is this question's own picture of a job that is done — so asked before the first status it
         // answers yes about a repository it has never seen (規約 §UI 自動化の因果性). `loaded` latches on that first
         // status and never goes back (`WorkTreeModel`), so this stands in front of a page's opening moment alone.
         if (!workTree.loaded)
             return
-        // **A pane about another working copy is not this tree's face.** What is on screen is that copy's changes, and
+        // **A pane about another working copy is that copy's face.** What is on screen is that copy's changes, and
         // they are still there whatever this tree has just finished — so nobody is walked off it. The landing below
-        // is left armed rather than taken: the moment it is about is the reader coming back to their own row.
+        // is left armed: the moment it is about is the reader coming back to their own row.
         if (!page.wipWritable)
             return
         // Whether this window's own stash is what emptied it — asked of the press that made it, which is the only
@@ -2743,8 +2743,8 @@ FocusScope {
         if (!page.treeClean)
             return
         // **A landing of our own is an edge in itself.** `edge` keeps a poll that changed nothing under the reader
-        // from walking them off the face — the message box emptied by hand is the one that would do it — and it is
-        // not the question here, where the press itself is what moved.
+        // from walking them off the face — the message box emptied by hand is the one that would do it — and here
+        // the press itself is what moved.
         if ((!edge && !ourStash) || !page.wipShown || workTree.opText !== "")
             return
         if (!ourStash && (wipPane.subjectText !== "" || wipPane.bodyText !== ""))
@@ -2792,7 +2792,7 @@ FocusScope {
         // has said there is something to commit; until then row 0 is still the commit that was on top, or a
         // neighbour copy's row wearing the same all-zero id. Landing on either would take the press to the wrong
         // place entirely, so the question is the graph's own word (`GraphModel.wipRow`, the one place ours is told
-        // from theirs) and never the id at row 0.
+        // from theirs).
         if (!graphModel.wipRow)
             return
         page.pendingWipSelect = false
@@ -2836,7 +2836,7 @@ FocusScope {
     // the commit.
     /// `atRow` is where the row is, for the callers that already know (a click knows: it came from that row). **The
     /// lookup is a walk over every loaded row** (`GraphModel::row_of`), so a path that has the number and asks for it
-    /// again puts a walk of the whole history on a click (CLAUDE.md §性能予算「コミット数に比例する同期処理を UI 操作の経路に置かない」).
+    /// again puts a walk of the whole history on a click (CLAUDE.md §性能予算「同期処理はコミット数・refs の本数から独立」).
     /// -1 asks for the lookup, which is what a landing named only by its commit has to do.
     function activateRow(oidHex, atRow) {
         // Any new selection settles where the last rewrite left off, and answers any landing this page still owed.
@@ -2844,8 +2844,8 @@ FocusScope {
         page.pendingHeadSelect = false
         page.pendingHeadAsked = false
         page.pendingWipSelect = false
-        // Clicking anywhere is the way out of the name box and of a standing row question: both are offers, not work in
-        // progress.
+        // Clicking anywhere is the way out of the name box and of a standing row question: both are offers the
+        // reader may leave.
         graphPane.stopNaming()
         page.stopRowAsk()
         // And the right pane's mark is about the commit it was raised over. Every road to another commit comes through
@@ -2908,16 +2908,16 @@ FocusScope {
         if (workTree.wipRowStands) {
             // **Uncommitted work is the landing, branch or no branch** (デザイン規約 §未コミット行が名乗るもの):
             // the row stands while the tree is dirty or an operation is (`graph::wip_row_stands`), and it is what
-            // the reader came back to. Asked of the status rather than of row 0, because whether the opening walk
+            // the reader came back to. Asked of the status, because whether the opening walk
             // carries that row is a race between the first status and the walk's own start (`session::walk`) — the
             // two disagreeing is the graph saying it is one read behind, and until the pass that knows lands, row 0
             // is still the commit that was on top (`tryPendingWipSelect` waits on the same word). Every pass calls
             // this again.
             //
-            // **Asked of the graph's own word rather than of row 0's id** (`GraphModel.wipRow`): every working
-            // copy's row wears the same all-zero id, so the id answers yes for a pass that put a neighbour's row
-            // first and left ours out — and landing there opens the pane on a copy nobody asked for and stands the
-            // page on it (`openWipFor`). Which of the two a pass leaves first is the walk's to decide.
+            // **Asked of the graph's own word** (`GraphModel.wipRow`): every working copy's row wears the same
+            // all-zero id, so the id answers yes for a pass that put a neighbour's row first and left ours out —
+            // and landing there opens the pane on a copy nobody asked for and stands the page on it (`openWipFor`).
+            // Which of the two a pass leaves first is the walk's to decide.
             if (!graphModel.wipRow)
                 return
             row = 0
@@ -2987,8 +2987,8 @@ FocusScope {
             page.trySelectDefault()
         }
     }
-    // Where HEAD stands is not the refs' to say — the record's report rides the working-tree model, and the landings
-    // and the default selection are paid there (`workTree.onChanged`).
+    // Where HEAD stands rides the working-tree model — the record's own report, and the landings and the default
+    // selection are paid there (`workTree.onChanged`).
     Connections {
         target: branchesModel
         function onRefsSettled() {
@@ -2999,10 +2999,10 @@ FocusScope {
         }
     }
     /// A list has drawn what it was handed, and a delete may have been waiting on that list's own row — so **every
-    /// one of them says it**, not just the branches section above. The three refs sections are handed one snapshot
-    /// and draw it on three separate turns (`ops::Applied`), and the stash has a listing of its own; the row each
-    /// answers for is its own, so **which list this came from is not passed on** — it could only be passed on
-    /// wrongly. Said rather than decided, because what a listing proves is the delete's owner to work out
+    /// one of them says it**. The three refs sections are handed one snapshot and draw it on three separate turns
+    /// (`ops::Applied`), and the stash has a listing of its own; the row each answers for is its own, so **which
+    /// list this came from stays here** — passed on, it could only be passed on wrongly. Said, because what a
+    /// listing proves is the delete's owner to work out
     /// (`ops_delete::note_listing_drawn`). Withheld while a run is holding the in-between open for a picture
     /// (`holdGoneRows`).
     function listingDrawn() {
@@ -3024,10 +3024,10 @@ FocusScope {
     Connections {
         target: diffModel
         // The rows are about to be swapped for a re-read of the same file — a write of ours, or an edit made outside
-        // this window that the tick caught. Held here rather than beside whoever asked, because this is the moment the
-        // view is still standing where the reader left it, and the two askers cannot both be trusted to say so: the
-        // tick asks on files that turn out not to have moved, and holding a place for a swap that never comes would
-        // put the next one back somewhere the reader has since left (`DiffScrollPlace`).
+        // this window that the tick caught. Held here, because this is the moment the view is still standing where
+        // the reader left it, and the two askers cannot both be trusted to say so: the tick asks on files that turn
+        // out not to have moved, and holding a place for a swap that never comes would put the next one back
+        // somewhere the reader has since left (`DiffScrollPlace`).
         function onRowsReplacing() {
             diffPane.holdScroll()
         }
@@ -3043,9 +3043,9 @@ FocusScope {
     /// The `WorkTreeModel.treeRevision` the open diff was last read against — the counts of the four buckets are what
     /// a stage or an unstage moves whoever made it, and the model bumps the revision when they do.
     property int seenTreeRev: -1
-    // **The tree was read.** Said by the working-tree model rather than by the file list beside it: the list says
-    // `changed` only when its rows differ, and a status that moved no row is exactly the one this has to hear about (a
-    // second line staged out of a file already on both sides moves nothing).
+    // **The tree was read.** Said by the working-tree model: the list says `changed` only when its rows differ, and
+    // a status that moved no row is exactly the one this has to hear about (a second line staged out of a file
+    // already on both sides moves nothing).
     Connections {
         target: workTree
         function onChanged() {
@@ -3062,9 +3062,9 @@ FocusScope {
                 repoTab.noteTreeRead(workTree.statusSeq, page.treeClean)
             // The status that follows this window's own write: the file was read when the write answered, and this
             // report is the one that write published. Measured against the number the answer named for it
-            // (`ops::DiffReread`) rather than against a count of answers — another write answering in between moves
-            // every counter without saying which tree this status describes, and a read already in flight when the
-            // write ended arrives with a number from before it.
+            // (`ops::DiffReread`): a count of answers moves for another write answering in between without saying
+            // which tree this status describes, and a read already in flight when the write ended arrives with a
+            // number from before it.
             const ours = repoTab.takeDiffRead()
             // Something outside this window moved the tree, so the rows on screen — and the fingerprint the next `+`
             // would be written against — are a picture of the file as it was. Pressing one then came back with git's
@@ -3096,7 +3096,7 @@ FocusScope {
             // pane, with the neighbour noted by every change before it (`followEmptySide`).
             page.noteDiffNeighbour()
             page.followEmptySide()
-            // **The face's own exit is not here** — it is asked of the status headline, one snapshot at a time
+            // **The face's own exit is the status headline's** — asked one snapshot at a time
             // (`leaveWipWhenDone`), because half the ways out of it move no row in this list at all.
         }
     }
@@ -3187,19 +3187,19 @@ FocusScope {
 
                 // Center: a report over the whole of it, and under that the commit graph ⇄ file diff.
                 //
-                // **The report is above the pair rather than inside either**: it answers a write, and a write is
-                // answered wherever the reader happens to be standing — a push refused while a diff is open has the
-                // same news to give (デザイン規約 §答えの要らない報せ). Put in one of them it would be silent in the other, and
-                // put over them it would cover what it is about.
+                // **The report is above the pair**: it answers a write, and a write is answered wherever the reader
+                // happens to be standing — a push refused while a diff is open has the same news to give
+                // (デザイン規約 §答えの要らない報せ). Put in one of them it would be silent in the other, and put over them
+                // it would cover what it is about.
                 //
                 // **So the middle steps down for it.** The bar takes its own row of the column and the pair takes what
                 // is left, which is the same thing the graph did for it when the bar lived inside that pane: nothing is
                 // covered, and a closed bar has no height to give.
                 ColumnLayout {
                     SplitView.fillWidth: true
-                    // Not a number of its own: what the graph's own columns come to once they have both given
-                    // everything they can, held up to a side pane's width so the middle never reads as the thinnest of
-                    // the three (`PageLayout.centreMinWidth`).
+                    // Read off the graph: what its own columns come to once they have both given everything they
+                    // can, held up to a side pane's width so the middle never reads as the thinnest of the three
+                    // (`PageLayout.centreMinWidth`).
                     SplitView.minimumWidth: pageLayout.centreMinWidth
                     spacing: 0
 
@@ -3210,16 +3210,16 @@ FocusScope {
                         // standing at once — raising a question does not lower a report (`startRowAsk`), and a write
                         // answered while one stands does not lower the question — and **two enabled
                         // `StandardKey.Cancel` shortcuts in one window fire neither** (`tests/qml/tst_escape.qml`),
-                        // so one of them has to give way rather than both dying.
+                        // so one of them gives way.
                         //
                         // **The question keeps it**: it is what is being asked of the reader, it holds the keyboard
                         // (its pill takes the focus as it opens), and it is the one thing here that stands until it
                         // is answered — a report is read and nothing follows from it. Under both is the arrival mark,
-                        // last because it takes Escape as a key handler rather than as a shortcut
+                        // last because it takes Escape as a key handler
                         // (`page.escapePressed`).
                         //
-                        // Written as this bar's own line rather than handed round from the page: what each bar does
-                        // with Escape stays in its own declaration, and only the order between them is here.
+                        // Written as this bar's own line: what each bar does with Escape stays in its own
+                        // declaration, and only the order between them is here.
                         yieldsEscape: graphPane.asking
                         onAcknowledged: page.hideNotice()
                     }
@@ -3243,8 +3243,8 @@ FocusScope {
                             chosenOids: page.chosenOids
                             chosenCount: page.chosenCount
                             onRowActivated: (oidHex, atRow, modifiers) => page.pickRow(oidHex, atRow, modifiers)
-                            // The bar moves between matches, not between commits — landing on the same row twice changes
-                            // nothing and costs no git.
+                            // The bar moves between matches — landing on the same row twice changes nothing and
+                            // costs no git.
                             onFindLanded: oidHex => {
                                 if (oidHex !== "" && oidHex !== page.selectedOid)
                                     page.activateRow(oidHex)
@@ -3340,9 +3340,9 @@ FocusScope {
                         // corner's own property — a `visible` here replaces the one it draws itself by.
                         offered: !page.planActive
                         // Only one of the three panes is on screen at a time, and each measures its own file list.
-                        // **The carried copy's is asked for its own room** rather than counted as the working tree:
-                        // the tree's pane never lends the corner (its foot is the commit button's), and a carried
-                        // pane read through that answer left every reader of another copy's work with no version at
+                        // **The carried copy's is asked for its own room**: the tree's pane never lends the corner
+                        // (its foot is the commit button's), and a carried pane read through that answer left every
+                        // reader of another copy's work with no version at
                         // all.
                         roomLeft: !page.wipShown ? detailsPane.bottomRoom
                                 : page.wipWritable ? wipPane.bottomRoom : carriedPane.bottomRoom
@@ -3354,9 +3354,9 @@ FocusScope {
                         z: 1
                     }
 
-                    // Another working copy's changes are a pane of their own rather than this one with its controls
-                    // switched off (デザイン規約 §別の作業コピーを読む): what a reader can do with them is read them,
-                    // which is what the commit pane is already shaped for.
+                    // Another working copy's changes are a pane of their own (デザイン規約 §別の作業コピーを読む): what a
+                    // reader can do with them is read them, which is what the commit pane is already shaped
+                    // for.
                     CarriedPane {
                         id: carriedPane
                         anchors.fill: parent
@@ -3433,7 +3433,7 @@ FocusScope {
                         signatureCode: page.selectedSignatureCode
                         signatureSigner: page.selectedSignatureSigner
                         // Whom a rewrite would be attributed to: git keeps the author and puts the reader in as
-                        // committer, so the save button wears the reader's face rather than the row's.
+                        // committer, so the save button wears the reader's face.
                         committerFace: repoTab.authorAvatar
                         committerFaceUrl: repoTab.authorAvatarUrl
                         signsCommits: repoTab.signsCommits
@@ -3485,7 +3485,7 @@ FocusScope {
             // ---- command log ------------------------------------------
             // Raised when asked for, and by a failure. Its band is the left menu's last row, carried across.
             //
-            // **Built when it is raised and taken down when it is shut**, not hidden: the panel is a list with its
+            // **Built when it is raised and taken down when it is shut**: the panel is a list with its
             // own hand, a band and a ruler, and a page whose log is down would otherwise carry all of it
             // (rules-refs/app-ui.md — the dialog-seat rule). Nothing is lost in the taking down — the rows and the
             // selection are the model's — and the panel comes back the way it always came up, on its newest row
@@ -3500,8 +3500,8 @@ FocusScope {
                     curPage: page
                     commandsModel: commandsModel
                     errorText: repoTab.lastError
-                    // Read off the page rather than set on the panel: the press that raises the mark is often the
-                    // press that builds this seat, and a panel told afterwards would come up dark and light a frame
+                    // Read off the page: the press that raises the mark is often the press that builds this seat,
+                    // and a panel told afterwards would come up dark and light a frame
                     // later.
                     attention: page.commandsAttention
                     onCloseRequested: page.shutCommands()
@@ -3512,16 +3512,16 @@ FocusScope {
         }
     }
 
-    // A command the user asked for failed. Nothing else on screen says what git said, so the log comes up by itself and
-    // stays up — closing it is the reader's call, not the next success's (the one exception is the panel a failed
-    // fetch raised, which a fetch that lands takes back down: `absorbFetchRecovery`). Unless this page asked for the
-    // refusal and turned it into a question: then the bar is already saying it, and the log would say it twice while
-    // pushing the graph out of the way.
+    // A command the user asked for failed. Nothing else on screen says what git said, so the log comes up by itself
+    // and stays up — closing it is the reader's call (the one exception is the panel a failed fetch raised, which a
+    // fetch that lands takes back down: `absorbFetchRecovery`). Unless this page asked for the refusal and turned it
+    // into a question: then the bar is already saying it, and the log would say it twice while pushing the graph out
+    // of the way.
     //
     // And unless a write is in flight, whose own answer decides instead (デザイン規約 §git が言ったことを読む場所 — 開く判断は
     // 「操作」の答えで下し、コマンド 1 本の終了コードでは下さない). One operation is several commands, so a non-zero one part
     // way through is not a failure yet; and the answer is the only thing that knows whether the far side turned it
-    // down with something to report rather than to raise (`absorbWriteResult`, which raises the log itself).
+    // down with something to report (`absorbWriteResult`, which raises the log itself).
     Connections {
         target: commandsModel
         function onFailure() {
@@ -3582,7 +3582,7 @@ FocusScope {
         : splitWatch.refuses ? splitWatch.at
         : null
 
-    /// What is drawn, not what was asked for — the one badge's own `shown` (`RefusalBadge`, on why not its `visible`).
+    /// What is drawn — the one badge's own `shown` (`RefusalBadge`, on why not its `visible`).
     readonly property bool refusalShown: splitWatch.shown
 
     function jumpToRef(oidHex) {

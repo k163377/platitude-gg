@@ -1,9 +1,9 @@
 //! What the plan does with what its feed hands it, and the two moves
 //! that reset the rows.
 //!
-//! A plain `impl` rather than more of the `#[qobject]` block next door:
-//! the Qt-facing face has to be one file (app-ui.md), and what it does
-//! does not (structure.md §分割 Qt).
+//! A plain `impl`: the Qt-facing face has to be one file
+//! (app-ui.md), and what it does does not
+//! (structure.md §分割 Qt).
 
 use super::*;
 
@@ -101,9 +101,9 @@ impl RebasePlanModel {
                 self.changed();
             }
             // The count asked again after the refs moved (`refreshPushed`).
-            // Matched by range rather than by the ask's generation: a plan
-            // put away and another opened since is a different range, and
-            // the old answer is dropped on the name.
+            // Matched by range: a plan put away and another opened since
+            // is a different range, and the old answer is dropped on the
+            // name.
             PlanMsg::Published { range, published } => {
                 if !self.active || range != self.publish_range || published == self.pushed_count {
                     return;
@@ -114,13 +114,13 @@ impl RebasePlanModel {
         }
     }
 
-    /// Replaces every row under one model reset: the plan opens whole,
-    /// not row by row (`QListModelBase::reset` installs what
+    /// Replaces every row under one model reset: the plan opens whole
+    /// (`QListModelBase::reset` installs what
     /// `reset_unnotified` finds staged).
     ///
     /// Every delegate goes with the reset, one under a hand included, so
-    /// no release is coming for it — the drag is put down here rather
-    /// than left latched over rows that no longer exist (`end_move`).
+    /// no release is coming for it — the drag is put down here
+    /// (`end_move`).
     fn reset_rows(&mut self, rows: Vec<PlanStepItem>) {
         self.dragging = false;
         self.pending_rows = Some(rows);

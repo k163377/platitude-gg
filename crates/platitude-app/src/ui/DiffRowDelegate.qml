@@ -8,9 +8,9 @@ import platitude.ui
 // One line of a unified diff: its two numbers, the seat between them where a changed line puts its mark out, the line
 // itself, and — on a hunk heading — the two words that act on the whole hunk.
 //
-// **The mark is the only thing in a row that takes a press** (デザイン規約 §diff の中のステージ). Nothing else in the row is a
-// target at all, so the text stays free for the hand that wants to read or copy it — and whether the pointer is
-// here is not the row's question either: the pane works it out and names the row (`hoverHunk` / `hoverLine`, see
+// **The mark is the only thing in a row that takes a press** (デザイン規約 §diff の中のステージ). The text stays free for
+// the hand that wants to read or copy it — and whether the pointer is here is the pane's own question: it
+// works it out and names the row (`hoverHunk` / `hoverLine`, see
 // `DiffPane.settlePointedRow`).
 //
 // Everything the pane knows arrives as a property; everything the pane has to do about a press leaves as a signal.
@@ -20,8 +20,8 @@ Rectangle {
     required property string kind
     required property int old_no
     required property int new_no
-    /// What this row draws, as `Text.StyledText` reads it — every row, coloured or not (`encode::DiffRow`). One format
-    /// and not two: a row whose format arrived a moment after its text was measured with its own tags counted as
+    /// What this row draws, as `Text.StyledText` reads it — every row, coloured or not (`encode::DiffRow`). One format:
+    /// a row whose format arrived a moment after its text was measured with its own tags counted as
     /// letters, and the width that came off it set how far the whole diff could be sent (`DiffReach`).
     required property string text
     /// Which row this is, for the width it reports back (`DiffReach.noteRow`).
@@ -56,10 +56,10 @@ Rectangle {
 
     required property real rowWidth
     /// How far the file's own text has been sent sideways (`DiffCodeScroll.offset`). The gutter and the hunk headings
-    /// do not travel with it: the numbers, the mark and the pane's own words are about the row rather than in it
+    /// stay put: the numbers, the mark and the pane's own words are about the row
     /// (デザイン規約 §diff を横へ送る).
     required property real codeX
-    /// One measured column of the mono font (`DiffPane.charMeasure`). The row draws nothing at it: it is how wide the
+    /// One measured column of the mono font (`DiffPane.charMeasure`). It is how wide the
     /// wash on an **empty** line is, and that is the only place a width without characters behind it is needed.
     required property real charW
     /// Where the two washes go: this row's own line, laid out, asked where each run of it is drawn
@@ -75,8 +75,8 @@ Rectangle {
     required property bool busy
     /// How wide a line number is (`DiffPane.numberW`).
     required property int numberW
-    /// Whether the two sides are being told apart by colour, and the two colours themselves — held as properties rather
-    /// than asked of the pane per row.
+    /// Whether the two sides are being told apart by colour, and the two colours themselves — held as properties, so
+    /// the pane is never asked per row.
     required property bool sidesTold
     required property var oursColor
     required property var theirsColor
@@ -89,7 +89,7 @@ Rectangle {
     /// How wide this row was laid out, as soon as that is known and again whenever it changes — a `Text` answers with
     /// every glyph at the family's own advance until the fallback carrying the wide ones is resolved, so the first
     /// number out of it is not the last (`DiffTextMetrics`). The pane files it under `index`, so a second answer
-    /// replaces the first rather than being added to a maximum (`DiffReach`).
+    /// replaces the first (`DiffReach`).
     ///
     /// Headings do not send one: they stand at the pane's own left edge and never travel, so how wide their words are
     /// is not how far there is to go.
@@ -107,43 +107,43 @@ Rectangle {
     width: diffRow.rowWidth
     height: Theme.rowHeight
     onRowsGenChanged: diffRow.tellWidth()
-    /// Says what this row was laid out at. Guarded on the Label rather than assumed: a reading can turn over while
+    /// Says what this row was laid out at. Guarded on the Label: a reading can turn over while
     /// this row is still being built, and the parts of a delegate exist only once the whole of it does.
     function tellWidth() {
         if (!diffRow.banded && codeLine)
             diffRow.rowDrawn(diffRow.index, codeLine.implicitWidth)
     }
-    /// Automation: how far right this row's ink stands inside `frame` — **not `codeInk` carried through the send**,
-    /// though the two describe the same edge. That arithmetic runs through the gutter and the offset, which is what
-    /// `codeMax` is built out of, so a run holding the result against `codeMax` would be checking a number against
-    /// itself. This asks the item where it was *placed*, which is the one reading of that edge owing the reach
-    /// nothing — and the far end of a send is the only place a reach measured past the end of every line can be seen
-    /// at all (verify-ui, `code-grow`). A heading does not travel, so it answers 0 rather than standing in for where
-    /// the file's own text ends.
+    /// Automation: how far right this row's ink stands inside `frame` — **asked of the item where it was placed**,
+    /// which is the one reading of that edge owing the reach nothing. `codeInk` carried through the send describes
+    /// the same edge, but that arithmetic runs through the gutter and the offset, which is what `codeMax` is built
+    /// out of, so a run holding the result against `codeMax` would be checking a number against itself — and the
+    /// far end of a send is the only place a reach measured past the end of every line can be seen at all
+    /// (verify-ui, `code-grow`). A heading does not travel, so it answers 0; where the file's own text ends is a
+    /// question for the lines.
     function inkRightIn(frame) {
         return diffRow.banded || !codeLine
             ? 0 : codeLine.mapToItem(frame, codeLine.implicitWidth, 0).x
     }
-    /// A row that names something rather than showing a line of a file: the hunk's own heading, and — where several
+    /// A row that names something: the hunk's own heading, and — where several
     /// commits' patches of one file stand one after another — the commit each block is of
     /// (デザイン規約 §複数のコミットを選ぶ). Neither has a line number, a stage seat or a place in the gutter.
     readonly property bool banded: diffRow.kind === "hunk" || diffRow.kind === "commit"
     /// A changed line is bold (規約 §シンタックスハイライト) — the wash says which side it is, the weight is what makes
-    /// it stand off the context around it. Not the fences: git's scaffolding is not a change to read. Named here
-    /// rather than written on the Label alone, because **the ruler has to be set in the weight the row is drawn in**
+    /// it stand off the context around it. The fences keep the plain weight: git's scaffolding is not a change to
+    /// read. Named here, because **the ruler has to be set in the weight the row is drawn in**
     /// — a family whose bold face advances differently would otherwise put every wash and every press out by the
     /// difference (`DiffTextSelect` reads it off this row for the same reason).
     readonly property bool codeBold: !diffRow.fence && (diffRow.kind === "add" || diffRow.kind === "del")
     /// Automation: how far this row's own line is drawn, which is where the blank right of it begins
     /// (`PGG_AUTO_ACT=diff-blank`). The same number the row files under `rowDrawn`, as a property — a run presses
-    /// beside one row rather than beside the widest, and no count of that row's characters can find this edge.
+    /// beside one row, and no count of that row's characters can find this edge.
     readonly property real codeInk: codeLine ? codeLine.implicitWidth : 0
 
     /// Where this row's two washes are drawn, taken from this row's own line laid out — `[{ x, w }, …]` in the
     /// code's own coordinates, before the send (`LineRuler.rectsOf`). A line taken end to end says so with one
     /// word and needs no ruler at all; a heading has neither wash.
     ///
-    /// **Pushed, not bound** (the rule `DiffTextMetrics.codeW` is written under). Asking the ruler means putting
+    /// **Pushed** (the rule `DiffTextMetrics.codeW` is written under). Asking the ruler means putting
     /// this row's line on it, and a binding that writes while it is being evaluated is a binding loop — Qt says so
     /// by name and then holds whatever it had, which is a wash left on the row before it. The four properties the
     /// answer is made of say when to ask instead.
@@ -177,7 +177,7 @@ Rectangle {
     readonly property bool underPointer: diffRow.hoverHunk === diffRow.hunk && diffRow.hoverLine === diffRow.line
     /// The pointer is on this hunk's heading, so the whole hunk lights: the heading's two words act on exactly these
     /// rows, and this is what says so (デザイン規約 §diff の中のステージ). Only the heading does it — a pointer resting on a line is
-    /// reading, not aiming at the hunk.
+    /// reading.
     readonly property bool inAimedHunk: diffRow.partial && diffRow.hoverLine < 0 && diffRow.hoverHunk === diffRow.hunk
     /// The room held between the two line numbers for the mark this line puts out for the hand. A
     /// hairline of air on each side of it: the mark belongs to neither number, and anything wider reads as the new
@@ -206,7 +206,7 @@ Rectangle {
         color: diffRow.side === "ours" ? diffRow.oursColor : diffRow.theirsColor
     }
     // The gutter: two numbers with the mark's seat between them. It stays where it is however far the code is sent
-    // sideways — a number belongs to the row rather than to the line, and a `+` that scrolled out of reach would take
+    // sideways — a number belongs to the row, and a `+` that scrolled out of reach would take
     // partial staging with it.
     Row {
         id: gutter
@@ -251,8 +251,8 @@ Rectangle {
         }
     }
     // The room the file's own text is read in. It is cut to what is left of the row, and the line inside it is not: the
-    // text is as wide as it is and travels under this window, so a long line is read by sending it rather than by
-    // having its end replaced with three dots (デザイン規約 §diff を横へ送る).
+    // text is as wide as it is and travels under this window, so a long line is read by sending it
+    // (デザイン規約 §diff を横へ送る).
     Item {
         id: codeRoom
         x: gutter.width
@@ -260,7 +260,7 @@ Rectangle {
         height: parent.height
         clip: true
         // The stronger wash under what actually changed inside the row (`emph`), while the quiet parts keep the
-        // line's own background — the strong/weak split is these rectangles, not the text
+        // line's own background — the strong/weak split is these rectangles
         // (デザイン規約 §シンタックスハイライト). Under the Label, travelling with the same send.
         Repeater {
             model: diffRow.emphRects
@@ -273,7 +273,7 @@ Rectangle {
             }
         }
         // The reader's own selection, over the emphasis and under the text — the same place the row's other two
-        // washes stand, and for the same reason: the strong/weak split of a diff is rectangles, not letters
+        // washes stand, and for the same reason: the strong/weak split of a diff is rectangles
         // (デザイン規約 §シンタックスハイライト), so a selected line keeps its syntax colours.
         Repeater {
             model: diffRow.sel === "*" ? [diffRow.sel] : diffRow.selRects
@@ -282,7 +282,7 @@ Rectangle {
                 readonly property bool whole: modelData === "*"
                 x: -diffRow.codeX + (whole ? 0 : modelData.x)
                 // A line taken whole is washed to its own end — the ink it was drawn in, which is the one number no
-                // walk of it can produce — and never to nothing: an empty line is still a line the copy takes, and a
+                // walk of it can produce — and a column at least: an empty line is a line the copy takes, and a
                 // wash of no width would leave a hole in the middle of a selection.
                 width: whole ? Math.max(codeLine.implicitWidth, diffRow.charW) : modelData.w
                 height: parent.height
@@ -312,10 +312,10 @@ Rectangle {
             // The weight this row is set in, said once for the Label and for the ruler both washes are placed with
             // (`codeBold`).
             font.bold: diffRow.codeBold
-            // The size an editor puts source at rather than a step in the UI's scale — `fontCode`, matched to
+            // The size an editor puts source at — `fontCode`, matched to
             // IntelliJ's default (デザイン規約 §タイポグラフィ).
             //
-            // The hunk heading is smaller still: it is the pane's own words rather than the file's, and at the file's
+            // The hunk heading is smaller still: it is the pane's own words, and at the file's
             // size its `@@` line runs under the two words sitting at the right of the same row.
             font.pixelSize: diffRow.banded ? Theme.fontSm : Theme.fontCode
             // Where the theme said nothing — an uncoloured language, a row past the lexer's budget, the moment before
@@ -323,8 +323,8 @@ Rectangle {
             // words (規約 §シンタックスハイライト): the wash and the weight already name it, and green-on-green said the
             // same thing twice while reading worse.
             //
-            // A fence drops its voice: `<<<<<<<` is git's scaffolding round the two sides, not a line the file has
-            // anything to say with, and painting it the added-line green puts the loudest thing in the pane on the part
+            // A fence drops its voice: `<<<<<<<` is git's scaffolding round the two sides, and painting it the
+            // added-line green puts the loudest thing in the pane on the part
             // nobody is reading (デザイン規約 §シンタックスハイライト). It keeps its background — it really is in the file.
             // How far this row is drawn, filed under its own row number (`diffRow.rowDrawn`).
             onImplicitWidthChanged: diffRow.tellWidth()
@@ -347,7 +347,7 @@ Rectangle {
         Loader {
             id: noEolMark
             active: diffRow.no_newline
-            // Off the ink, not the box: the mark's square holds air past its ring, and a whole `spaceXs` on top of
+            // Off the ink: the mark's square holds air past its ring, and a whole `spaceXs` on top of
             // that would leave the last character further from this than any other pair in the row (§余白).
             x: noEolMark.item
                ? codeLine.x + codeLine.implicitWidth + Theme.spaceXs - (noEolMark.item.width - noEolMark.item.inkWidth) / 2
@@ -356,7 +356,7 @@ Rectangle {
             sourceComponent: NavIcon {
                 kind: "no-entry"
                 // A mark that stands at the end of a line of words (デザイン規約 §寸法), with the stroke dropped to that
-                // step so it carries the weight of the letters beside it rather than 4/3 of it.
+                // step so it carries the weight of the letters beside it.
                 width: Theme.iconSm
                 height: Theme.iconSm
                 stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
@@ -378,7 +378,7 @@ Rectangle {
     // Hunk-level staging. The row carries the hunk index the patch builder needs, so what is staged is exactly what is
     // shown — and so is what is thrown away. Absent on a diff with no pieces in it (see `partial`).
     //
-    // **Built only on a heading that has them, never hidden on the other lines.** A delegate is built per line on
+    // **Built only on a heading that has them.** A delegate is built per line on
     // screen, and each `ActionButton` is a label with its rulers, a hold and its timers — on the lines that are not
     // headings the pair was the heaviest thing in the row while drawing nothing — tens of megabytes of heap on a diff
     // of a few dozen lines, most of it in parts the rows never showed (ci/baseline/code-costs-windows-x64.md §メモリの形).
@@ -396,11 +396,11 @@ Rectangle {
             // Only the unstaged side has a piece to throw away: on the staged side the button beside this one puts the
             // hunk back where it can be.
             //
-            // Held, not asked about (デザイン規約 §長押し): the button sits in the hunk's own heading, so what it takes is the
+            // Held (デザイン規約 §長押し): the button sits in the hunk's own heading, so what it takes is the
             // thing it is standing on, and a bar coming down over the diff to say so is machinery a hunk does not need.
             //
-            // Shaped like the held row of a right-click menu, not like the toolbar's framed button: this one sits in a
-            // line of other words rather than in a row of other buttons, and a frame around one word in a heading reads
+            // Shaped like the held row of a right-click menu: this one sits in a
+            // line of other words, and a frame around one word in a heading reads
             // as a box that has come loose. The mark says it is held, and the hold fills the words' own ground edge to
             // edge.
             ActionButton {
@@ -409,7 +409,7 @@ Rectangle {
                 text: qsTr("Discard hunk")
                 font.pixelSize: Theme.fontSm
                 // Asleep until the pointer is on this heading (デザイン規約 §diff の中のステージ). The mark is what still says this
-                // one is held rather than clicked — the colour is saying something else.
+                // one is held — the colour is saying something else.
                 tone: diffRow.underPointer ? Theme.danger : Theme.textSecondary
                 holdTone: Theme.danger
                 holdMs: Metrics.holdMs
@@ -420,8 +420,8 @@ Rectangle {
                 onHeld: diffRow.discardRequested(diffRow.hunk)
             }
             // The same pair of colours the file rows put on their own `+` and `−`: staging is the green half of the
-            // gesture and unstaging the red one, and the heading should not name them in a different voice than the
-            // list does — but it says it at the volume of a heading that is not being pointed at. At rest both words
+            // gesture and unstaging the red one, and the heading names them in the list's own
+            // voice — but it says it at the volume of a heading that is not being pointed at. At rest both words
             // wear `textSecondary`, which is the colour the `@@` beside them already has, so the whole heading reads
             // as one grey line until the pointer arrives (デザイン規約 §diff の中のステージ). A file diff carries 2 hunks at the
             // middle and 8 at the ninetieth percentile — measured over 52 files — so leaving them all lit puts 2 to 4
@@ -438,8 +438,8 @@ Rectangle {
     }
     // The mark a changed line puts out for the hand: `+` where a press takes the line into the staging area and `−`
     // where it takes it back out, in the pair of colours that gesture wears everywhere else (デザイン規約 §diff の中のステージ). It
-    // names the *direction* of the write, not what the line did — an added and a deleted line are both staged by the
-    // same `+`. No frame: a box around a mark this size reads as a control that came loose from the toolbar, and the
+    // names the *direction* of the write — an added and a deleted line are both staged by the
+    // same `+`. Unframed: a box around a mark this size reads as a control that came loose from the toolbar, and the
     // ground it needs is the one the pointer brings with it.
     //
     // **It writes, there and then**, and it is the only thing in the row that takes a press at all.
@@ -447,8 +447,8 @@ Rectangle {
     // It stands in the seat the row holds between the two numbers (`stageSeatW`).
     //
     // **Built only on a line that can be staged on its own** — a changed line of a diff with pieces in it. The rows of
-    // a commit's diff never carry one, and the context lines of any diff do not either, so on those it is not built
-    // rather than hidden (the hunk tools' rule). Whether the pointer is on the line is still what shows it: the
+    // a commit's diff never carry one, and the context lines of any diff do not either, so on those it is left
+    // unbuilt (the hunk tools' rule). Whether the pointer is on the line is still what shows it: the
     // pointer moves faster than a canvas can be built and painted, so the mark waits built and hidden on the lines
     // the pointer can reach.
     Loader {
@@ -480,7 +480,7 @@ Rectangle {
             }
         }
     }
-    // No square for throwing one line away. A line can be staged on its own because staging loses nothing — the line
-    // stays on disk either way — but the smallest thing that can be thrown away is a hunk (デザイン規約 §その他の操作): a bare `×`
+    // Throwing away starts at the hunk (デザイン規約 §その他の操作). A line can be staged on its own because staging loses
+    // nothing — the line stays on disk either way — but a bare `×`
     // has no words to say what it takes, and a control that must be held has to say it.
 }

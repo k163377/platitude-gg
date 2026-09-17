@@ -9,8 +9,8 @@ import platitude.ui
 //
 // **The three are columns of one line** (デザイン規約 §git が言ったことを読む場所): a drag over the log picks the line's own
 // characters out of them, so each column is a run of the mono font at a place this row can name, and the two gaps
-// between them are the tabs a copy comes out with. That is why the command's two halves are a character apart rather
-// than a spacing token — `git` and what follows it are one string, drawn in two colours.
+// between them are the tabs a copy comes out with. That is why the command's two halves are a character apart
+// — `git` and what follows it are one string, drawn in two colours.
 Rectangle {
     id: row
 
@@ -27,7 +27,7 @@ Rectangle {
     /// Empty on a row the selection does not reach.
     required property string sel
 
-    /// One measured column of the mono font (`CommandsPane.charW`). **Two spacings and nothing else**: the space
+    /// One measured column of the mono font (`CommandsPane.charW`). **Two spacings only**: the space
     /// between `git` and what follows it, and the one between the two words about how the command went. Where the
     /// characters of a column are drawn is that column's own layout to answer (`ruler`).
     required property real charW
@@ -77,7 +77,7 @@ Rectangle {
         acceptedButtons: Qt.NoButton
         ToolTip.visible: containsMouse && row.state !== "running"
         ToolTip.delay: Metrics.tipDelayMs
-        // The reproducible form is long; it is here rather than in the row so the log stays one line per command.
+        // The reproducible form is long; it is here so the log stays one line per command.
         ToolTip.text: row.full
     }
 
@@ -87,7 +87,7 @@ Rectangle {
     readonly property bool tookLine: row.picked.length === 4 && row.picked[3] === "1"
     /// The three columns as `CommandsModel` numbers them, in the order the runs above come in — `AT_CLOCK`,
     /// `AT_CMD`, `AT_OUT` of `models/commands/selection.rs`, whose odd numbers are the two gaps no run is drawn in.
-    /// Written out rather than derived: `CommandsTextSelect` names the same five for the hand, and a renumbering has
+    /// Written out: `CommandsTextSelect` names the same five for the hand, and a renumbering has
     /// to find both.
     readonly property var washCols: [0, 2, 4]
 
@@ -95,14 +95,14 @@ Rectangle {
     /// null where the column holds none of the selection. Taken from the column's own layout: a place of it is drawn
     /// where the row drew it, and no count of characters finds that (`LineRuler`).
     ///
-    /// **Pushed, not bound** (the same rule `DiffRowDelegate.emphRects` is written under). Asking the ruler means
+    /// **Pushed** (the same rule `DiffRowDelegate.emphRects` is written under). Asking the ruler means
     /// putting the column on it, and a binding that writes while it is being evaluated is a binding loop — Qt says so
     /// by name and then holds whatever it had, which is a wash left on the row before it. The column's coordinates
     /// are its own, so the three x the columns stand at stay bindings and this is asked again only when what a
     /// column holds changes.
     property var washSpans: [null, null, null]
     function settleWash() {
-        // **`sel` is read again here rather than through `picked`.** A change handler runs *before* the bindings
+        // **`sel` is read again here.** A change handler runs *before* the bindings
         // that derive from the property it is about, so `picked` inside `onSelChanged` is still the row's previous
         // selection — measured on a throwaway `qmltestrunner` scene, and seen as a log that held a selection and
         // wore no wash at all.
@@ -153,11 +153,11 @@ Rectangle {
         }
         return 0
     }
-    // Both read `washSpans` and nothing else about the selection — a row wearing no span is a row with no wash, and
+    // Both read only `washSpans` — a row wearing no span is a row with no wash, and
     // asking `sel` here again would be the second reader of a property this one already answers for.
     readonly property real washX: row.washEdge(true)
     // Clamped to the row: a command too long for its column is drawn elided, and a wash running on past the last
-    // character anybody can see would be washing the panel rather than the text.
+    // character anybody can see would be washing the panel.
     readonly property real washRight: Math.min(row.washEdge(false), row.width - Theme.spaceMd)
 
     Rectangle {
@@ -189,16 +189,16 @@ Rectangle {
             x: Theme.spaceMd
             anchors.verticalCenter: parent.verticalCenter
             text: row.clock
-            // Every column of this log is the characters it holds, named on all five of them rather than left to
-            // `AutoText`: the ruler that places the wash and reads the press is set in this format (`row.ruler`),
-            // and Qt's guess is a property of the text — a row whose format came from what a command happened to
+            // Every column of this log is the characters it holds, named on all five of them: the ruler that
+            // places the wash and reads the press is set in this format (`row.ruler`), and Qt's `AutoText`
+            // guess is a property of the text — a row whose format came from what a command happened to
             // carry would be drawn as a line the ruler has never seen.
             textFormat: Text.PlainText
             color: Theme.textMuted
             font.family: Theme.monoFamily
             font.pixelSize: Theme.fontSm
         }
-        // The program never varies, so it is drawn rather than read: what changes from row to row is the part after it.
+        // The program never varies, so it is drawn: what changes from row to row is the part after it.
         Label {
             id: program
             x: row.clockEnd + Theme.spaceLg
@@ -211,10 +211,10 @@ Rectangle {
         }
         Label {
             id: argsText
-            // One character along from `git`, not one spacing token: the two are one string with one space in it —
+            // One character along from `git`: the two are one string with one space in it —
             // which is the string the ruler is handed for this column (`CommandsModel.column`), so a selection that
             // runs through them lands on the same pixels the copy names. **Its width is
-            // written rather than anchored to the outcome** — an anchor on the right decides the x as well, and this
+            // written** — an anchor on the right decides the x as well, and this
             // one has to begin where the command's own column does (measured, the args went to the far edge).
             x: program.x + 4 * row.charW
             width: Math.max(0, outcome.x - Theme.spaceMd - x)
@@ -231,7 +231,7 @@ Rectangle {
             anchors.right: parent.right
             anchors.rightMargin: Theme.spaceMd
             anchors.verticalCenter: parent.verticalCenter
-            // The same one space the copy puts between them: two words about how it went, not two columns.
+            // The same one space the copy puts between them: two words about how it went.
             spacing: row.charW
             Label {
                 text: row.result
@@ -253,7 +253,7 @@ Rectangle {
         }
     }
 
-    // Indented to the command it belongs to. Positioned rather than anchored: the column it lines up with lives inside
+    // Indented to the command it belongs to. Positioned: the column it lines up with lives inside
     // `line`, which makes it neither parent nor sibling of this.
     Label {
         id: outputText

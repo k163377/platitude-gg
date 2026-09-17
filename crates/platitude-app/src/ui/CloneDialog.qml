@@ -12,8 +12,8 @@ import platitude.ui
 //
 // **It stays up for the whole call.** git is on the network here, and this box is the only thing on screen that the
 // operation is about: the ring turns in the accept button's own seat, the word stays and steps down
-// (§進行中・長押しの定数), and whatever git answers is read out underneath. That is also why nothing is checked before
-// the call — a destination that is taken and a URL nothing answers are git's to refuse, and unlike the picker's folder
+// (§進行中・長押しの定数), and whatever git answers is read out underneath. That is also why git is the one that
+// checks — a destination that is taken and a URL nothing answers are git's to refuse, and unlike the picker's folder
 // the refusal has somewhere to be shown when it arrives (§リポジトリを取り寄せる).
 AppDialog {
     id: cloneDialog
@@ -28,27 +28,27 @@ AppDialog {
     property string refusal: ""
     /// Set once somebody edits the name themselves, after which it stops following the URL.
     property bool nameTyped: false
-    /// This box is going down because the clone came, rather than because anybody left. Read by `onClosed`, which
+    /// This box is going down because the clone came. Read by `onClosed`, which
     /// otherwise takes every close for a cancel — and a cancel here would be a slot call back into the object whose
     /// `drain` emitted the landing, which is the re-entrant borrow the bridge panics on (.claude/rules/app-ui.md).
     property bool landing: false
 
     readonly property string wantedUrl: urlField.text.trim()
     readonly property string wantedName: nameField.text.trim()
-    /// The folder as a person reads it, rather than as a URL.
+    /// The folder as a person reads it.
     readonly property string parentPath: cloneDialog.parentUrl !== ""
                                          ? GitFacts.pickedPath(cloneDialog.parentUrl) : ""
     /// Whether there is a clone to ask for: somewhere to fetch from, somewhere to put it, and a name for it. The
-    /// accept button reads this, and so does the headless run — which needs the form's own answer to wait on rather
-    /// than a second reading of the three fields (規約 §UI 自動化の因果性).
+    /// accept button reads this, and so does the headless run — which needs the form's own answer to wait on
+    /// (規約 §UI 自動化の因果性).
     readonly property bool canSubmit: cloneDialog.wantedUrl !== "" && cloneDialog.wantedName !== ""
                                       && cloneDialog.parentUrl !== "" && !cloneDialog.cloning
 
     /// Fetch it. The three the call takes, in the order the form asks them.
     signal submitted(string url, string parentUrl, string name)
     /// The box is going away — whether by the button, by Escape, or by anything else that closes a dialog. A clone
-    /// still out is stopped by it: **one road out**, so no way of leaving can strand git on the network with nowhere
-    /// left to report.
+    /// still out is stopped by it: **one road out**, so every way of leaving takes the clone
+    /// with it.
     signal cancelled()
     /// Bring the platform's folder dialog up, starting at whatever is chosen now.
     signal chooseFolder(string near)
@@ -61,7 +61,7 @@ AppDialog {
         nameField.text = ""
         cloneDialog.open()
     }
-    /// The folder dialog answered. Its own function rather than a write from outside: the name follows the URL and
+    /// The folder dialog answered. Its own function: the name follows the URL and
     /// nothing else, and a caller reaching into the properties is how the two got out of step in the first place.
     function setFolder(url) {
         cloneDialog.parentUrl = url
@@ -97,7 +97,7 @@ AppDialog {
     }
 
     /// What the box offers to call the folder, for as long as nobody has said otherwise. The rule is
-    /// `platitude_core::remote::folder_name_for` — asked of `GitFacts` rather than written here, like every other rule
+    /// `platitude_core::remote::folder_name_for` — asked of `GitFacts`, like every other rule
     /// QML asks by value (.claude/rules/app-ui.md).
     function settleName() {
         if (!cloneDialog.nameTyped)
@@ -133,7 +133,7 @@ AppDialog {
             }
         }
 
-        // A folder that is chosen rather than typed, so it wears no sunken ground: what is shown is the whole of it and
+        // A folder that is chosen, so it wears no sunken ground: what is shown is the whole of it and
         // there is nothing to type into (規約 §選ぶ欄と打つ欄).
         LabeledField {
             caption: qsTr("Where to put it")
@@ -185,7 +185,7 @@ AppDialog {
         }
 
         // git's own words and the only red here, the way every other screen quotes them (規約 §リポジトリを開く:
-        // 赤は git の文言だけ). Wrapped rather than cut: a refusal names the destination or the URL, and both are worth
+        // 赤は git の文言だけ). Wrapped: a refusal names the destination or the URL, and both are worth
         // reading whole.
         Label {
             Layout.fillWidth: true

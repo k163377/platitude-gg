@@ -9,7 +9,7 @@ import QtQuick
 // has run and the name's text node is built in the same polish — so what a picture taken in between shows is a row
 // with its name and an **empty seat where its mark goes**.
 //
-// A headless run lands in that gap on purpose rather than by luck: the working tree's buckets stand up when the status
+// A headless run lands in that gap on purpose: the working tree's buckets stand up when the status
 // arrives, which is the same edge the verbs wait on, so the rows are built in the very turn the verb completes in and
 // `AutoShotDriver` asks for the picture. It holds the picture until this is back to nothing.
 //

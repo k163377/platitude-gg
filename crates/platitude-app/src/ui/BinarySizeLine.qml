@@ -6,8 +6,8 @@ import QtQuick.Layouts
 import platitude.ui
 
 // The word, then what the file weighs. Both marks are drawn for the same reason: as glyphs they sit in a full-width
-// cell whose leftover became the spacing, and each family drew its own arrow (規約 §寸法「印はフォントの字に任せない」). The one wording
-// without a size keeps its dash — that is a sentence, not a mark, and it measured the same on both OSes.
+// cell whose leftover became the spacing, and each family drew its own arrow (規約 §寸法「印は描いて出す」). The one wording
+// without a size keeps its dash — that is a sentence, and it measured the same on both OSes.
 RowLayout {
     id: binaryLine
 

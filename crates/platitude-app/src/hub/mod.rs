@@ -52,8 +52,8 @@ pub use tabs::{from_session, listing_applied, stand_in, with_session};
 /// which is why it survives the release everything else goes through
 /// (`Hub::release_tab`). The amend flag travels with the words because it
 /// says what pressing the button under them would do: a message written
-/// for an amend, put back into a plain commit editor, would make a second
-/// commit rather than replace the first.
+/// for an amend, put back into a plain commit editor, would make a
+/// second commit of its own.
 #[derive(Debug, Clone, Default)]
 pub struct Draft {
     pub subject: String,
@@ -63,10 +63,10 @@ pub struct Draft {
 
 struct Tab {
     /// `None` until the tab is first looked at, and again after it leaves
-    /// the front. Restoring a window full of tabs must not spend a
-    /// `RepoSession` — and the git it spawns — on repositories nobody has
-    /// asked to see yet, and a tab that has been switched away from goes
-    /// back to costing the same nothing (`Hub::release_tab`).
+    /// the front. Restoring a window full of tabs spends a `RepoSession`
+    /// — and the git it spawns — on the repository it is asked to show,
+    /// and a tab that has been switched away from goes back to costing
+    /// the same nothing (`Hub::release_tab`).
     session: Option<Arc<RepoSession>>,
     /// Kept after opening too: it is the name a per-repository setting is
     /// filed under (`reapply_settings`).
@@ -119,9 +119,9 @@ pub struct Hub {
     store: Store,
     settings: Settings,
     /// What the window looks like now, and what is already on disk. The
-    /// flush compares the two rather than trusting a dirty flag: the UI
-    /// reports the whole layout on a timer, so most reports say nothing
-    /// new and a flag would be set by all of them.
+    /// flush compares the two: the UI reports the whole layout on a
+    /// timer, so most reports say nothing new and a flag would be set by
+    /// all of them.
     state: State,
     saved_state: State,
     /// Empty unless another process is already using the files this one

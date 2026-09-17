@@ -4,7 +4,7 @@ import platitude.ui
 
 // ---- what the commit menu is standing on ----------------------------
 // The row the menu was opened on and what it may offer there. Held apart from the page because the answers are decided
-// once, in the function that opens the menu, and must not move again while it stands (app-ui.md §メニュー) — one place to
+// once, in the function that opens the menu, and hold still while it stands (app-ui.md §メニュー) — one place to
 // open it is also one place to look for why a row is not on offer.
 //
 // Nothing is drawn here, so this is a `QtObject`: the menu itself is declared on the page, where it has an item to
@@ -26,8 +26,8 @@ QtObject {
     // git keeps off to one side of every branch, so none of the commit menu's rows land on it and it gets its own
     // (デザイン規約 §グラフ行の右クリック).
     property string menuStashRef: ""
-    // Whether a remote already has the menu's commit. Rewriting it is not asked about — nothing here leaves the machine
-    // — but デザイン規約 「push 済みの範囲は尋ねずに言う」 wants it said, so the squash row carries a tag the way the amend editor does.
+    // Whether a remote already has the menu's commit. Rewriting it goes ahead unasked — nothing here leaves the machine
+    // — but デザイン規約 「push 済みの範囲は言うだけ」 wants it said, so the squash row carries a tag the way the amend editor does.
     //
     // **Read off the row, in hand as the menu opens** (`GraphModel.publishedAt`). The walk that drew the row already
     // marked it, so nothing here waits on git: a note arriving a frame later would grow the widest row and take the
@@ -43,7 +43,7 @@ QtObject {
     property bool menuCanBranchHere: false
     property bool menuStashCanWrite: false
     /// Whether the name this row draws is somewhere to move to, and whether the press raises a question first. Off
-    /// the ref rules rather than the commit's: it is the name that is the destination, not the commit
+    /// the ref rules, where the destination is the name
     /// (offers::ref_menu).
     property bool menuCanSwitch: false
     property bool menuSwitchAsks: false
@@ -73,7 +73,7 @@ QtObject {
             menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
             menuState.workTree.branch, menuState.workTree.detached,
             menuState.workTree.opText, menuState.workTree.conflictCount,
-            // No reading to have drifted: what this level reads is where a move lands, and the rows that reach a
+            // The drift is the card's: what this level reads is where a move lands, and the rows that reach a
             // remote are the card's (`RefBranchMenu`).
             held, "", false, menuState.repoTab.defaultRemote, "").split(" ")
         menuState.menuCanSwitch = offers.includes("switch")

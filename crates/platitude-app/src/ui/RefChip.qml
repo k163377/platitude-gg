@@ -10,26 +10,26 @@ import platitude.ui
 // wears, with the same WORKTREES mark on it, tag = refTag with a fill behind it), and the name carries where the ref
 // is: ordinary text for one that is in this repository, grey for one that is only on the remote
 // (デザイン規約 §ref の種別). The sidebar already reads that way
-// — names in textPrimary, kind in the section icon — and on a graph row the name is the thing most worth reading, so it
-// is not the place to spend a colour on something the frame is already saying. The kind is the first record's own, not
-// something the caller sets: a row hands over everything on it in one list, branches ahead of tags, and the chip shows
-// the head of that list. The one icon is the remote/PR badge, same mark and same single slot as the sidebar rows — for
-// tags too, which is how "this one is only here" reads.
+// — names in textPrimary, kind in the section icon — and on a graph row the name is the thing most worth reading, so
+// its colour is spent on where the ref is and the frame keeps the kind. The kind is the first record's own: a row
+// hands over everything on it in one list, branches ahead of tags, and the chip shows the head of that list. The one
+// icon is the remote/PR badge, same mark and same single slot as the sidebar rows — for tags too, which is how
+// "this one is only here" reads.
 Rectangle {
     id: chip
     property var records: []
     property real maxWidth: Metrics.labelColW
-    /// Whether a name too long for `maxWidth` runs on to another line instead of being cut. Off everywhere the chip
-    /// stands in a row of its own size — the graph row, the menus — and on in the list a chip unstacks into, which is
-    /// the one place the name is shown *in order to be read* (規約 §hover のツールチップ). **One frame either way**: the
-    /// lines are a single label inside a single border, so a wrapped name is one chip that got taller, not two chips.
+    /// Whether a name too long for `maxWidth` runs on to another line. Off everywhere the chip stands in a row of its
+    /// own size — the graph row, the menus — and on in the list a chip unstacks into, which is the one place the name
+    /// is shown *in order to be read* (規約 §hover のツールチップ). **One frame either way**: the lines are a single
+    /// label inside a single border, so a wrapped name is one chip that got taller.
     property bool wrapped: false
     /// Nowhere a move can go, in the two shapes that come to: another working copy has this branch out and git
     /// refuses it outright (§無効), or a working copy is standing here with no branch at all — which names nothing to
     /// move onto in the first place. The words drop to the muted colour, frame included, since the frame is how a
     /// chip is read at all — and the mark beside them says where the reader would find it instead. **The record
-    /// carries it**, so the chip reads the same wherever it is drawn — nothing outside may dull one, or the same ref
-    /// comes out in two colours on the two things that draw it (the row and the card it unfolds into).
+    /// carries it**, so the chip reads the same wherever drawn — the dulling is the record's alone, or the
+    /// same ref comes out in two colours on the two things that draw it (the row and the card it unfolds into).
     readonly property bool dulled: chip.recHeld || chip.recKind === "W"
     /// This chip has taken a second click and is waiting out the double-click window before it becomes a name box
     /// (デザイン規約 §グラフ行のダブルクリック). **The wash the pointer uses**, one step over whatever the row is already wearing
@@ -43,16 +43,16 @@ Rectangle {
     // band, low enough that the chip is not the loudest thing on it (by design — the frame was the node's own
     // twenty for a day, and against a subject at `fontMd` the chip won the row).
     //
-    // A wrapped name adds the family's own line spacing per extra line rather than another `fontChipLine`: the first
-    // line keeps the box the token names, and the lines under it are spaced the way the family spaces them, so nothing
-    // is clipped in a family whose lines are taller than the box (the CJK ones are). **A one-line chip is the same
-    // eighteen it always was** — the term is zero.
+    // A wrapped name adds the family's own line spacing per extra line: the first line keeps the box the token
+    // names, and the lines under it are spaced the way the family spaces them, so nothing is clipped in a family
+    // whose lines are taller than the box (the CJK ones are). **A one-line chip is the same eighteen it always
+    // was** — the term is zero.
     height: Theme.fontChipLine + Math.max(0, chip.nameLines - 1) * chipFont.lineSpacing + 2 * Theme.borderWidth
     // **The frame is drawn on whole pixels.** Every term inside is fractional — glyph advances, and a mark's seat is
     // its ink — so the box lands wherever the sum does, and a box whose width stops just past a whole pixel **loses its
     // right border altogether**: the top and bottom rules and both corners are drawn, and the straight run between them
     // is not (measured — `main +4` came to 71.04 and drew three sides; the same chip at 72 draws four. The chip
-    // clips, which is what puts its own frame under the cut). Rounded up, so the box is never narrower than what it
+    // clips, which is what puts its own frame under the cut). Rounded up, so the box is at least as wide as what it
     // holds; the pixel that buys goes where a layout's remainder goes anyway, into the padding at the end (§余白).
     width: Math.min(Math.ceil(chipContent.implicitWidth) + 2 * Theme.spaceXs, maxWidth)
     /// How many lines the name came out on. Only a wrapped chip can answer more than one.
@@ -64,7 +64,7 @@ Rectangle {
                                        + (chip.hasCount ? chip.countW + Theme.spaceXs / 2 : 0)
                                        + (chip.hasTree ? chip.heldInk + Theme.spaceXs / 2 : 0)
     /// What the frame's contents actually come to. `width` is this clamped to `maxWidth`, and whatever it runs over by
-    /// is what the frame clips off its own right-hand end — so nothing inside may ask for more than the name's room
+    /// is what the frame clips off its own right-hand end — so everything inside is held to what the name's room
     /// leaves, which is the whole of what [`furnitureW`] is measured for (`tst_refstack.qml` holds it).
     readonly property real contentW: chipContent.implicitWidth
     /// Lays the frame's contents out now, for a caller that has just changed the room this chip is given and is about
@@ -80,16 +80,16 @@ Rectangle {
     }
     /// Whether the row carries names this card is not showing, which is the whole of what the count is for.
     readonly property bool hasCount: chip.records.length > 1
-    /// The count's own seat, measured off the label that draws it rather than off a token standing in for one. **A
-    /// seat priced for a single digit is a seat the two-digit rows overrun**: what it does not cover is handed to the
-    /// name, and the frame clips its own right-hand end off the far side of the row — **the count itself first**, since
-    /// it stands last, and a `+41` cut to `+4` is a wrong number rather than a missing one (measured on
-    /// `JetBrains/kotlin`: 20 commits carry ten or more refs, and the deepest wears 42).
+    /// The count's own seat, measured off the label that draws it. **A seat priced for a single digit is a seat the
+    /// two-digit rows overrun**: what it does not cover is handed to the name, and the frame clips its own
+    /// right-hand end off the far side of the row — **the count itself first**, since it stands last, and a `+41`
+    /// cut to `+4` is a wrong number (measured on `JetBrains/kotlin`: 20 commits carry ten or more refs, and the
+    /// deepest wears 42).
     readonly property real countW: countLabel.implicitWidth
-    /// What each mark's ink actually spans (`NavIcon.inkWidth`). **Both marks are seated to that rather than to their
-    /// square**: the air a box holds past its ink is the mark's own, and belongs to the gap beside it (デザイン規約 §余白).
-    /// Seated so, the chip reads the same figures from both ends — a whole gap between the frame and the mark, half a
-    /// one between the mark and the word.
+    /// What each mark's ink actually spans (`NavIcon.inkWidth`). **Both marks are seated to that**: the air a box
+    /// holds past its ink is the mark's own, and belongs to the gap beside it (デザイン規約 §余白). Seated so, the chip
+    /// reads the same figures from both ends — a whole gap between the frame and the mark, half a one between the
+    /// mark and the word.
     readonly property real heldInk: heldMark.inkWidth
     /// The cloud needs the seat more than the tree does: it is drawn 1.7 of the sixteen in from its own left edge, so
     /// the gap before it was that air on top of the row's spacing — the one place in the chip where two spacings added
@@ -112,9 +112,9 @@ Rectangle {
     readonly property bool recRemote: rec.length > 2 && rec[2] === "1"
     readonly property bool recPr: rec.length > 3 && rec[3] === "1"
     readonly property bool recHere: rec.length > 4 && rec[4] === "1"
-    // Another working copy has this branch out, so git refuses a move onto it (measured). Read off the record
-    // rather than asked of a model: the record is rebuilt whenever the ref joins are, so the chip repaints with the
-    // rest of them instead of hanging a binding off a slot (app-ui.md 「QML バインディングはプロパティにしか反応しない」).
+    // Another working copy has this branch out, so git refuses a move onto it (measured). Read off the record: the
+    // record is rebuilt whenever the ref joins are, so the chip repaints with the rest of them
+    // (app-ui.md 「QML バインディングはプロパティにしか反応しない」).
     readonly property bool recHeld: rec.length > 5 && rec[5] === "1"
     // Name, and the remotes it was read from when it was not read here. The separator is absent whenever there are
     // none, so the name runs to the end of the record (see encode.rs).
@@ -133,12 +133,12 @@ Rectangle {
     /// other moves with it.
     readonly property bool hasTree: chip.recHeld || chip.recKind === "W"
     /// Every colour a record can wear, which is how many cards one commit's names can ever come to
-    /// (`RefChipStack.maxSheets`). **The list, not a number** — a kind added below is counted here by adding it here.
+    /// (`RefChipStack.maxSheets`). **The list itself** — a kind added below is counted here by adding it here.
     readonly property var kindKeys: ["head", "local", "held", "remote", "tag", "tagdim"]
-    /// Which of the frame colours a record wears, as a name rather than the colour itself. **The stack behind the card
-    /// counts colours** (`RefChipStack`) and two colours cannot be told apart by comparing `color` values, so the rule
-    /// answers in words and [`kindColourFor`] turns one into ink. A branch another working copy holds answers with its
-    /// state rather than its kind: nothing can move onto it, and that is what the reader has to see first.
+    /// Which of the frame colours a record wears, as a name. **The stack behind the card counts colours**
+    /// (`RefChipStack`) and two colours cannot be told apart by comparing `color` values, so the rule answers in
+    /// words and [`kindColourFor`] turns one into ink. A branch another working copy holds answers with its state:
+    /// nothing can move onto it, and that is what the reader has to see first.
     function kindKeyOf(rec) {
         if (rec.length > 5 && rec[5] === "1")
             return "held"
@@ -150,9 +150,9 @@ Rectangle {
             return "head"
         // A working copy standing here with no branch out reads as the branch chip a copy *does* hold: the same
         // muted frame, the same mark, and a name in the same ink (デザイン規約 §ref の種別). The two say one thing —
-        // another copy is on this commit — and the graph already says it that way, so the marker joins that reading
-        // rather than opening a second one. **Which is also this key**: the sheets behind the card are one per
-        // colour (§重ね表示), and a key of its own over the same ink would draw two nobody can tell apart.
+        // another copy is on this commit — and the graph already says it that way, so the marker joins that
+        // reading. **Which is also this key**: the sheets behind the card are one per colour (§重ね表示), and a key
+        // of its own over the same ink would draw two nobody can tell apart.
         if (rec[0] === "W")
             return "held"
         return "local"
@@ -174,9 +174,9 @@ Rectangle {
     }
     readonly property string kindKey: chip.kindKeyOf(chip.rec)
     readonly property color kindColor: chip.kindColourFor(chip.kindKey)
-    // Where it is, not what it is. Grey is the name of something this repository does not hold — a remote branch, or a
-    // tag only a remote has. Dropping further, to textMuted, would claim it cannot be reached, and a double-click on a
-    // remote branch row goes there (§無効 is for what is actually unavailable). The detached HEAD marker keeps its state
+    // Where it is. Grey is the name of something this repository does not hold — a remote branch, or a tag only a
+    // remote has. Dropping further, to textMuted, would claim it cannot be reached, and a double-click on a remote
+    // branch row goes there (§無効 is for what is actually unavailable). The detached HEAD marker keeps its state
     // colour in the name too: it is the one chip whose colour is not a kind. The branch the working tree stands on is
     // the nearest answer this colour has — "here" — and the sidebar already writes it that way, so the chip does too.
     readonly property color nameColor: chip.dulled ? Theme.textMuted
@@ -192,15 +192,15 @@ Rectangle {
     /// Where the ink starts inside the frame, in whole pixels off the top of the chip: the room the **first line's**
     /// box leaves, halved, **with the odd pixel going up**.
     ///
-    /// The line box rather than the frame's own height, which are the same thing until a name wraps: measured off the
+    /// The line box, which is the frame's own height until a name wraps: measured off the
     /// frame, a two-line chip would centre its first line halfway down the box and leave the last one on the border.
     ///
     /// A line box is not where a family puts its ink: it keeps more room above its ascender than below its descender,
     /// so centring the box inside the frame spent that room there and sat the descenders of `g` and `/` on the
     /// border. How much room is the family's own — a fixed lift squares one family and opens a gap under the other —
     /// so this asks the family instead. When what is left over will not halve, the pixel goes above, where every
-    /// ascender is, rather than below the one descender a name may not even have. **Not to be measured off the
-    /// headless picture**, which is drawn in a family neither OS uses (verify-ui スキル §Windows での実行・デバッグの罠).
+    /// ascender is. **Measured on the real families**, the headless picture being drawn in one neither OS
+    /// uses (verify-ui スキル §Windows での実行・デバッグの罠).
     function inkTop(ink) {
         const room = Theme.fontChipLine - ink.tightBoundingRect.height
         return Theme.borderWidth + Math.ceil(room / 2)
@@ -212,8 +212,8 @@ Rectangle {
         return Math.round(chip.inkTop(ink) - label.baselineOffset - ink.tightBoundingRect.y)
     }
 
-    // Measured off a probe reaching every extreme Latin ink has, rather than off the name itself, so a chip does not
-    // stand differently from its neighbour because the name it carries happens to have no descender in it.
+    // Measured off a probe reaching every extreme Latin ink has, so a chip stands level with its neighbour whatever
+    // the name it carries happens to have in it.
     TextMetrics {
         id: nameInk
         font: nameLabel.font
@@ -233,8 +233,8 @@ Rectangle {
         font: nameLabel.font
     }
 
-    // The wash the wait wears. A layer of its own rather than a colour on the frame: a tag already has a fill and a
-    // branch has none, and the wash has to read as one step over whichever of the two is underneath.
+    // The wash the wait wears. A layer of its own: a tag already has a fill and a branch has none, and the wash has
+    // to read as one step over whichever of the two is underneath.
     Rectangle {
         anchors.fill: parent
         radius: chip.radius
@@ -244,8 +244,8 @@ Rectangle {
     // **The mark, the name and the badge, and the count after them** (デザイン規約 §重ね表示). The first three are the
     // one ref this card is showing — where it is checked out, what it is called, and whether it is on a remote or has
     // a PR open — and the count is the only thing in the frame that is not about that ref at all: it is how many
-    // *others* the row is carrying behind it. So it stands after the phrase it is not part of rather than through the
-    // middle of it, and the card reads as a branch and its state, and then how many more are under it.
+    // *others* the row is carrying behind it. So it stands after the phrase it is not part of, and the card reads as
+    // a branch and its state, and then how many more are under it.
     Row {
         id: chipContent
         anchors.top: parent.top
@@ -262,13 +262,13 @@ Rectangle {
         // — the seat is added on the left only when it applies). Same mark and same meaning as the sidebar row's
         // (`NavItemDelegate`), which is the WORKTREES section's own.
         //
-        // **The seat is not held open** the way the sidebar row's is: a chip is measured to its own contents rather
-        // than laid out in a column of them, so an empty seat on every chip would walk every name on the graph one
-        // mark to the right for a state almost none of them are in.
+        // **The seat comes and goes** where the sidebar row's is held open: a chip is measured to its own contents,
+        // so an empty seat on every chip would walk every name on the graph one mark to the right for a state almost
+        // none of them are in.
         //
-        // **And it is seated to its ink, not to its box.** The mark is a head on a stem and fills half the sixteen it
-        // is drawn on; a square seat would add that air to the gaps on both sides, and the pair read as a name pushed
-        // away from a mark that sat tight against the frame (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」;
+        // **And it is seated to its ink.** The mark is a head on a stem and fills half the sixteen it is drawn on; a
+        // square seat would add that air to the gaps on both sides, and the pair read as a name pushed away from a
+        // mark that sat tight against the frame (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」;
         // observed, measured 114 -> 110 -> 108).
         Item {
             visible: chip.hasTree
@@ -296,7 +296,7 @@ Rectangle {
             color: chip.nameColor
             font.pixelSize: Theme.fontChip
             font.weight: chip.recHead ? Font.DemiBold : Font.Normal
-            // Cut, or carried on to the next line — never both, and which one is the owner's to say (`wrapped`).
+            // Cut, or carried on to the next line — one of the two, and which is the owner's to say (`wrapped`).
             elide: chip.wrapped ? Text.ElideNone : Text.ElideRight
             // A ref name has no spaces to break at, so the break has to be allowed anywhere; `Text.Wrap` takes the word
             // boundary when there is one and breaks anywhere when there is not.
@@ -317,14 +317,14 @@ Rectangle {
             visible: chip.hasBadge
             width: chip.badgeInk
             height: Theme.iconSm
-            // On the first line's box, not on the middle of the frame — the two are the same height until a name wraps,
-            // and a badge that centres itself on a three-line chip has left the name it belongs to.
+            // On the first line's box — the two are the same height until a name wraps, and a badge that centres
+            // itself on a three-line chip has left the name it belongs to.
             y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconSm) / 2)
             NavIcon {
                 id: badgeMark
                 anchors.verticalCenter: parent.verticalCenter
-                // The ink's right edge on the seat's: the air the box holds past the ink comes off here rather than
-                // widening the gap after it, and the ink runs half a gap out the other side into the row's spacing.
+                // The ink's right edge on the seat's: the air the box holds past the ink comes off here, and the ink
+                // runs half a gap out the other side into the row's spacing.
                 anchors.right: parent.right
                 anchors.rightMargin: -(badgeMark.width - badgeMark.inkRight)
                 kind: chip.recPr ? "pr" : "remote"
@@ -333,8 +333,8 @@ Rectangle {
                 height: Theme.iconSm
             }
         }
-        // How many more names the row carries, which is meta about the row rather than one of the names — the colour
-        // the row's other meta (author, date) is written in.
+        // How many more names the row carries, which is meta about the row — the colour the row's other meta
+        // (author, date) is written in.
         //
         // **The sheets behind the card say which colours they are; this says how many there are** (デザイン規約 §重ね表示).
         // The two answer different halves of the same question and neither can be read off the other: a colour is one

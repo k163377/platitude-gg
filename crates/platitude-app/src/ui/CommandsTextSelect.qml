@@ -4,15 +4,15 @@ import QtQuick
 import platitude.ui
 
 // The hand that picks the log's text out of its rows: a drag selects, a plain click puts the selection down
-// (デザイン規約 §git が言ったことを読む場所). There is no menu behind it — the reader drags and presses Ctrl+C, the way a
+// (デザイン規約 §git が言ったことを読む場所). The reader drags and presses Ctrl+C, the way a
 // terminal is read.
 //
-// **It is laid over the list rather than declared inside it**, for the two reasons that are the same reason twice: a
+// **It is laid over the list**, for the two reasons that are the same reason twice: a
 // `Flickable` takes the grab away from its own children once a drag passes the threshold, and `reuseItems` builds a
 // scrolled-away row again from scratch. A hand that started on row 40 and is now dragging past the bottom of the
 // window would lose its grip both ways.
 //
-// It is a plain `MouseArea` and it is not `hoverEnabled`, which is what lets the rows underneath keep their own hover —
+// It is a plain `MouseArea` with hover left to the rows underneath, which keep their own —
 // the lit ground and the one line a row has no room for (a `HoverHandler` here would take all of it, app-ui.md).
 //
 // **Every place in the frame that nobody else takes is a start**, the ground a log shorter than its panel leaves under
@@ -20,7 +20,7 @@ import platitude.ui
 // is the whole of the rule — except at the right edge, where the list's own bar is drawn over them and this stops
 // short of it (`barRoom`, observed against the diff's hand, which had the same shape).
 //
-// **Which byte a press landed on takes two questions and neither of them is arithmetic.** This knows which of the
+// **Which byte a press landed on takes two questions, both lookups.** This knows which of the
 // row's three columns the pointer was over and how far into it in pixels; the column's own layout says which place of
 // it that is (`LineRuler`), and the model says which byte of the line that place stands on — the line those columns
 // are cut from is there, and where their characters are drawn is here.
@@ -100,7 +100,7 @@ Item {
         pick.commandsModel.extendSelect(row, at)
     }
     /// The button is up. A press that never moved selected nothing, and a selection of nothing is no selection — so
-    /// the wash the previous drag left goes down with this press rather than standing under an unrelated click.
+    /// the wash the previous drag left goes down with this press.
     function releaseText() {
         pick.dragging = false
         if (pick.commandsModel.selectionText() === "")
@@ -121,7 +121,7 @@ Item {
     /// last row a place a selection can start (規約 §git が言ったことを読む場所「掴めるのは、誰も取らない所すべて」).
     /// Without it a press there reached nothing at all, which is the same dead corner the right pane's values had.
     ///
-    /// `originY` rather than zero: this list is sent to its end over rows of differing heights — a failure brings
+    /// `originY`: this list is sent to its end over rows of differing heights — a failure brings
     /// git's words down with it — and a view that has been so moves its own origin (`CommandsPane.clampY`). An empty
     /// log has no band at all — the clamp then answers above its own last row, `indexAt` finds nothing, and the press
     /// goes down to the list as it always did.
@@ -150,7 +150,7 @@ Item {
         return pick.hit(row, pick.atOut, x - item.outX)
     }
     /// One column: the pixels are the column's own to read (`LineRuler`), and the place that comes back is the
-    /// model's to turn into a byte of the line. **Nothing in between is arithmetic** — a column is not a width, and
+    /// model's to turn into a byte of the line. **Each step is a lookup** — a column is not a width, and
     /// the walk that treated it as one selected a byte in the middle of a line the reader had dragged past the end of.
     function hit(row, at, x) {
         const text = pick.commandsModel.columnText(row, at)
@@ -164,7 +164,7 @@ Item {
     // ---- the ground under the last row ---------------------------------------------------------------------------
     /// Where the ground a log shorter than its panel leaves under the last row begins, in this item's own
     /// coordinates, and whether there is any of it at all. A sweep run against a log that fills its panel would prove
-    /// nothing, so it says so rather than passing (verify-ui `commands-sweep`).
+    /// nothing, so it says so (verify-ui `commands-sweep`).
     readonly property real groundTop: Math.max(0, pick.view.originY + pick.view.contentHeight - pick.view.contentY)
     readonly property bool hasGround: pick.groundTop < pick.height - 2
     /// Automation: the gesture as a hand makes it — a press on that ground, and a drag up into the text. It enters the
@@ -190,9 +190,9 @@ Item {
         id: hand
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
-        // Not hoverEnabled: the rows below keep their own (see the note at the top).
+        // The rows below keep their own hover (see the note at the top).
         cursorShape: Qt.IBeamCursor
-        // The two above, and nothing beside them: what the hand does is written once, where a run enters it too.
+        // The two above only: what the hand does is written once, where a run enters it too.
         onPressed: mouse => { mouse.accepted = pick.takeAt(mouse.x, mouse.y) }
         onPositionChanged: mouse => pick.followAt(mouse.x, mouse.y)
         onReleased: pick.releaseText()

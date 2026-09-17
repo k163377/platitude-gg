@@ -13,8 +13,8 @@ import platitude.ui
 /// `RepoPage` builds this only when a verb was given, so an ordinary run carries none of it. What the verbs act on is
 /// handed in below: a file of its own cannot see the page's ids, and naming them in one list is what says how far the
 /// harness reaches into the page.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing and is never
-// given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: driver
 
@@ -89,7 +89,7 @@ Item {
     property string markWanted: ""
     property RefListPopup refList
     property CommitHoverCard rowCard
-    /// The pair's own keeper, for the one verb whose subject is what it is holding rather than what it drew
+    /// The pair's own keeper, for the one verb whose subject is what it is holding
     /// (`row-card-return`): whether the hand coming back to a row re-holds the card that is already out.
     property RowHoverHost rowHost
 
@@ -102,7 +102,7 @@ Item {
     /// **Asked of the model**: a row off screen has no delegate to ask, and every one of these rows answers to the
     /// same all-zero id, so the copy's own name is what tells them apart (`GraphModel.carriedName`).
     ///
-    /// Named here rather than in one family: two of them stand on a copy before doing anything else, and a second
+    /// Named here: two of them stand on a copy before doing anything else, and a second
     /// copy of the walk is a second answer to "which row is that copy's".
     function rowOfCopy(name) {
         for (let row = 0; row < graphModel.rowTotal; row++) {
@@ -126,25 +126,25 @@ Item {
     property bool writeExpected: false
     /// The tab's count of answers as it stood when the run armed — **a floor, and the only thing it is**: an answer
     /// numbered above it came back after the arm, which is how a verb reading the answers one by one finds its own
-    /// among them (`RepoTab.writeAnswerSeq`). Whether the run's write is *done* is not this count's to say; that is
-    /// the watch's, by id.
+    /// among them (`RepoTab.writeAnswerSeq`). Whether the run's write is *done* is the watch's to say, by
+    /// id.
     property int writeSeqBefore: 0
     /// Whether the breach has been said. **The contract's own memory is the tab's** (`RepoTab.writeContractBroken`),
-    /// and this is not a second copy of it: the tab is already broken by the time the words come back from it, so a
+    /// and this says it once: the tab is already broken by the time the words come back from it, so a
     /// sampler still ticking needs something that was false when the first one said them.
     property bool saidBroken: false
-    /// **Nothing else about this run's write is held here.** The id belongs to the ask that was given it and the
+    /// **The rest of this run's write lives on the tab.** The id belongs to the ask that was given it and the
     /// run's own side of the contract belongs beside it, both on the tab (`repo_tab::write_watch`) — where
     /// `cargo test` reaches them, and where one thread means the arm, the ask and the read are one uninterrupted
     /// stretch.
-    /// Whether this run's picture is of the page the status behind its write leaves rather than of the page its
-    /// answer arrives on — the verb says so (`AutoActCompletion.owesStatus`), and that file is where the two
+    /// Whether this run's picture is of the page the status behind its write
+    /// leaves — the verb says so (`AutoActCompletion.owesStatus`), and that file is where the two
     /// pages are told apart.
     property bool statusOwed: false
     /// Which report of HEAD can carry that status (`RepoTab.writeAnswerHeadSeq`), 0 until this run's own answer
     /// names one. **A status counted before the write cannot reach that number**, which is what makes the wait
     /// below about this write — the reset landing waits on the same pair for the same reason
-    /// (`AutoActHistoryVerbs.resetLandedTimer`). Not a count of statuses: the poll's own tick moves that too.
+    /// (`AutoActHistoryVerbs.resetLandedTimer`). A report number: the poll's own tick moves a count too.
     property int statusOwedFrom: 0
     /// Arms that wait on the answer at `index` of the notify being drained — the run's own, where the run knows
     /// which one that is (`RepoTab.commitAnswer`). A notify that carried none (-1) leaves the arming to the
@@ -156,7 +156,7 @@ Item {
     /// Whether everything a run that named [`statusOwed`] is waiting for is in: the status that write asked for,
     /// the graph holding where it put HEAD, and the page that pair leaves behind.
     ///
-    /// **The graph is waited out on the row and not on a count of passes** — a pass finishes for work nobody here
+    /// **The graph is waited out on the row** — a pass finishes for work nobody here
     /// asked for, and the rebuild the refs ask for is skipped where nothing moved. Where the reader ends up on what
     /// the write made, the landing inside `PageSettled` asks for that row as well; where the tree keeps the reader
     /// on the working-tree face, nothing else does.
@@ -175,7 +175,7 @@ Item {
     /// shape `graphGoneOid` below answers for on the graph. That is how a run whose merge editor resolved a file and a
     /// run whose editor never started came to save the same picture, down to the sha256.
     ///
-    /// Waited out on the row itself rather than on a status counter, for the reason the graph gives: a counter also
+    /// Waited out on the row itself, for the reason the graph gives: a counter also
     /// moves for statuses nobody here asked for, while this row moves only for this write.
     property string treeGoneRow: ""
     /// The graph row this run's write takes off the graph, or "" for the verbs the write barrier alone answers for.
@@ -183,7 +183,7 @@ Item {
     /// A write answers before the rebuild it asks for is even started (core's `AfterWrite::Graph`), so a shot taken at
     /// the write barrier is a shot of the graph as it was — two rows can wear each other's marks in it (a popped
     /// stash's archive box on the working-tree row, the dashed ring on the entry just made). Waiting on the row itself
-    /// — gone from the model — rather than on a pass counter keeps the wait about this write: the counter also moves
+    /// — gone from the model — keeps the wait about this write: the counter also moves
     /// for passes nobody here asked for.
     ///
     /// **Stash verbs only as it stands**: `graphBarrier` also holds for the stash total moving, so a non-stash write
@@ -195,13 +195,13 @@ Item {
     /// holds until this one has gone (`complete`), the way the item's own click would have had it down before the
     /// write's answer came.
     property AppMenu menuGoing: null
-    /// How many entries the stash list held before that write. The list is read after the rebuild rather than with it,
+    /// How many entries the stash list held before that write. The list is read after the rebuild,
     /// so a shot taken the moment the graph settles frames a sidebar still counting the old entries — which is not a
     /// state the application ever rests in, and the run is judged by eye.
     property int stashTotalBefore: -1
     /// The summary this run put in the commit box before the write, or "" — what the entry the write makes has to be
-    /// carrying when the list settles (`named=`). Held here rather than read back off the box, because the box is not
-    /// what the claim is about: the name has to have reached git.
+    /// carrying when the list settles (`named=`). Held here: the claim is that the name reached
+    /// git.
     property string stashWanted: ""
     /// The name the entry this run pops was carrying, or "" — what the commit box has to be holding once the pop has
     /// landed (`back=`). Read before the press, because the entry is gone by the time the answer is.
@@ -238,13 +238,13 @@ Item {
 
     /// Whether the entry now at the top of the list is wearing the summary this run typed. Read off the sidebar's own
     /// model — the reflog subject git wrote — so a name that never left the box answers `false`. git puts its own
-    /// `On <branch>: ` in front of a named entry (measured), which is why this is a tail and not an equality.
+    /// `On <branch>: ` in front of a named entry (measured), which is why this is a tail.
     function stashNamed() {
         return driver.stashWanted !== "" && stashesModel.nameAt(0).endsWith(driver.stashWanted)
     }
 
-    /// Whether the entry this run popped left its name in the commit box. The box is read, not the property that was
-    /// put there: the claim is about what a reader would find typed in front of them.
+    /// Whether the entry this run popped left its name in the commit box. The box is read: the claim is
+    /// about what a reader would find typed in front of them.
     function stashCameBack() {
         return driver.popWanted !== "" && wipPane.subjectText === driver.popWanted
     }
@@ -275,7 +275,7 @@ Item {
     }
 
     function complete() {
-        // **A run whose contract broke does not complete.** It has already been ended, by the one path that ends it
+        // **A run whose contract broke is already over**, ended by the one path that ends it
         // (`sayBroken`), and a barrier landing afterwards would otherwise hand the shot driver a run that finished —
         // green, over a page the broken write never reached.
         if (repoTab.writeContractBroken())
@@ -295,8 +295,8 @@ Item {
     ///
     /// **The arm and the press are one call on purpose.** Held apart, every verb had to spell the order itself — arm,
     /// press, take the id — and one that armed on the far side of its press swallowed its own write and waited out
-    /// the watchdog in silence (measured, `stage-all` / `unstage-all` / `resolve-all`, both sides, 600s). There is no
-    /// order left to spell: the tab is told to keep the id of the next ask before the input goes in, and the ask that
+    /// the watchdog in silence (measured, `stage-all` / `unstage-all` / `resolve-all`, both sides, 600s). The
+    /// order is the tab's: it is told to keep the id of the next ask before the input goes in, and the ask that
     /// input produces is the one it keeps (`repo_tab::write_watch`).
     function pressWrite(what, press) {
         if (!driver.beginWrite(what))
@@ -305,11 +305,11 @@ Item {
     }
 
     /// **A write whose input takes time** — a hold to run out, a dialog to answer, a row to appear. Arms and says the
-    /// input is on its way; the ask it produces is caught whenever it comes, and until then the barrier is waiting on
-    /// the input rather than on a missing id. Answers whether the arm took.
+    /// input is on its way; the ask it produces is caught whenever it comes, and until then the barrier is waiting
+    /// on the input. Answers whether the arm took.
     /// **The rule itself is `repo_tab::write_watch`**, where `cargo test` reaches it: arming over a write this run
-    /// announced a press for and is still waiting out is the breach, and a run that broke arms no more. Nothing
-    /// here reads whether any particular timer is running — a verb waiting from a sampler of its own
+    /// announced a press for and is still waiting out is the breach, and a run that broke arms no more.
+    /// A verb waiting from a sampler of its own
     /// (`line-back` stages three writes that way) is waiting exactly as much as one on the shared barrier.
     function beginWrite(what) {
         const breach = repoTab.watchNextWrite(what)
@@ -338,7 +338,7 @@ Item {
     }
 
     /// Hands the window what this run's write is doing, for the line the ceiling leaves (`AutoShotDriver`). Said on
-    /// every change rather than read at the ceiling, because the window cannot reach a page's own driver.
+    /// every change, because the window cannot reach a page's own driver.
     function noteWrite() {
         page.Window.window.noteAutoActWrite("verb=" + Harness.autoAct + " press=" + repoTab.writeWanted()
                                             + " run=" + repoTab.writeRunStage()
@@ -347,7 +347,7 @@ Item {
     }
 
     /// **The contract broke, and this is the end of the run.** Says it once with the verb's name on it, and ends the
-    /// run there rather than leaving it to the ceiling — the words are the finding, and ten minutes of silence after
+    /// run there — the words are the finding, and ten minutes of silence after
     /// them says nothing more. The line is what the parent fails on (`verify::outcome`), so the run cannot come back
     /// green by another road either: the contract refuses to arm again and refuses to complete
     /// (`repo_tab::write_watch`).
@@ -376,12 +376,12 @@ Item {
     /// Whether the write this run asked for has been through the boundaries behind it (`RepoTab.wroteThrough` — the
     /// tab holds the id its own ask was given and matches it, so another write answering first cannot answer for
     /// this one) and nothing else this run started is still in flight — **the whole of the write barrier**, so a verb
-    /// with a sub-barrier of its own asks this rather than spelling it again (it was spelled out in ten files, and
+    /// with a sub-barrier of its own asks this (it was spelled out in ten files, and
     /// the spellings drifted).
     function wroteAndSettled() {
         return repoTab.wroteThrough() && repoTab.busyCount === 0
     }
-    /// Runs a hold to its end, with the write barrier armed on the end and not on the start. The end is
+    /// Runs a hold to its end, with the write barrier armed on the end. The end is
     /// `Metrics.holdMs` of ticks away, and a write this run never pressed can answer in between — the fetch a
     /// repository makes on the way open, or the one a verb asked for itself (`push-tag` on a drifted tag). A barrier
     /// armed at the start passes on that answer and photographs the card still up, the row half filled and nothing
@@ -404,7 +404,7 @@ Item {
     readonly property int pastLineEnd: 9999
 
     // AutoShotDriver owns the final render boundary: it requests an update, advances the event loop, and waits for
-    // grabToImage callbacks. Do not wait for frameSwapped here. A quiet scene is allowed not to emit one (the pilot
+    // grabToImage callbacks. A quiet scene may emit no frameSwapped at all (the pilot
     // reproduced that hang twice under concurrent load).
     QtObject {
         id: renderedBarrier
@@ -414,7 +414,7 @@ Item {
     }
     readonly property alias barrierRendered: renderedBarrier
     // The number this run's own write answer named, for a run with no index of its own to arm from
-    // (`owedStatusAt`). **Not whatever answered first**: the fetch a page makes on its way open and the interval's
+    // (`owedStatusAt`). **The one the press asked for**: the fetch a page makes on its way open and the interval's
     // own travel the same queue and answer on the same notify, and a run armed on one of those waits for a report
     // a status read before the press already carries. Which answers those are is named on the other side of the
     // bridge (`RepoTab.writeAnswerAsked`), the same set the barrier below counts.
@@ -433,29 +433,29 @@ Item {
     }
     // **The run's own write, through every one of its boundaries** (`wroteAndSettled`): git answered *this* id, and
     // every reading it invalidated has been published — so what the page is about to be photographed showing is that
-    // write's result and not the page its answer arrived on. `busyCount === 0` is the quiet condition on top: nothing
+    // write's result. `busyCount === 0` is the quiet condition on top: nothing
     // else this run started is still in flight. (Waiting for busy to *rise* would wedge: the answer can be absorbed
     // before this sampler ever sees the flag up.) A verb whose picture is of the page the write's status leaves waits
     // past all of it (`owedStatusLanded`).
     SampleTimer {
         id: writeBarrier
         onTriggered: {
-            // A broken contract has been said once, by name, and the run ended there (`sayBroken`). Nothing here
-            // can mend it: `wroteAndSettled` answers false for good, so this would tick to the ceiling.
+            // A broken contract has been said once, by name, and the run ended there (`sayBroken`).
+            // `wroteAndSettled` answers false for good, so this would tick to the ceiling.
             if (repoTab.writeContractBroken()) {
                 writeBarrier.stop()
                 return
             }
             if (!driver.wroteAndSettled()) {
                 // The one sampler that can be the thing still ticking at the ceiling, so the line it would leave is
-                // kept current from here rather than read at the ceiling (the window cannot reach this driver).
+                // kept current from here (the window cannot reach this driver).
                 driver.noteWrite()
                 return
             }
             if (driver.statusOwed && !driver.owedStatusLanded())
                 return
             writeBarrier.stop()
-            // **What the barrier waited on, said out loud.** Read off the tab rather than off the condition above,
+            // **What the barrier waited on, said out loud.** Read off the tab,
             // so a barrier that went back to counting answers says so: `mine=false` is a run that passed without
             // ever having had a write of its own, and `settled=` is the last boundary that write reached.
             Harness.report("write_barrier mine=" + (repoTab.watchedWriteId() !== 0)
@@ -468,7 +468,7 @@ Item {
     }
     readonly property alias barrierWrite: writeBarrier
     /// The report a write that did not happen comes down in — **waited on all the way down**
-    /// (`NoticeBar.settled`), not at the write barrier: the answer to the write is what raises the bar, so a picture
+    /// (`NoticeBar.settled`): the answer to the write is what raises the bar, so a picture
     /// taken on the answer catches a bar whose words are written and whose height is still nothing (the edge
     /// `AskBar.settled` names, for the same reason).
     ///
@@ -476,7 +476,7 @@ Item {
     /// declined, a push that is only out of date — because what each of those runs claims is the same three things:
     /// the bar came down, it was written out of what core classified, and no error was raised beside it.
     ///
-    /// The words themselves are reported rather than photographed for the second half: whoever said no writes
+    /// The words themselves are reported for the second half: whoever said no writes
     /// sentences that wrap, and a report line cannot hold what the picture holds.
     SampleTimer {
         id: noticeBarrier
@@ -485,7 +485,7 @@ Item {
                 return
             // A diff the verb opened under the bar (`notice-over-diff`) is a git subprocess away, and the picture is
             // of the whole window: a pane still reading frames like one that has, and a walk taken then records no
-            // row of it. So the bar is not the whole of the wait while the middle is a diff on its way.
+            // row of it. So the diff is waited out beside the bar.
             if (page.diffShown && !diffPane.diffSettled())
                 return
             noticeBarrier.stop()
@@ -504,7 +504,7 @@ Item {
         }
     }
     readonly property alias barrierNotice: noticeBarrier
-    // The menu a verb took down, waited off the screen rather than off the clock: `visible` stays up for the exit
+    // The menu a verb took down, waited off the screen: `visible` stays up for the exit
     // transition and drops when it ends, and that edge is what lets the completion through (`complete`).
     SampleTimer {
         id: menuGoneBarrier
@@ -523,7 +523,7 @@ Item {
         else
             graphBarrier.start()
     }
-    // The status that follows a write, read off the file list rather than off the clock: the row the write moves is
+    // The status that follows a write, read off the file list: the row the write moves is
     // still in the model until the new status lands, so its leaving the bucket it was named in is the edge (see
     // `treeGoneRow`). A write git refused leaves the row where it was and the run to the watchdog, which is the
     // diagnosis — the same bargain every barrier here makes.
@@ -547,7 +547,7 @@ Item {
             driver.afterTreeSettled()
         }
     }
-    // The rebuild that follows a write, read off the graph rather than off the clock: the row the write took away is
+    // The rebuild that follows a write, read off the graph: the row the write took away is
     // still in the model until the rebuilt one lands, so its absence is the edge — and the marks the rows wear are
     // only right once that has happened (see `graphGoneOid`).
     SampleTimer {
@@ -653,8 +653,8 @@ Item {
         const arg = Harness.autoActArg
         if (act === "perf") return // WindowPerfDriver owns this verb's causal completion.
         driver.prepareCompletion(act)
-        // First family to know the verb runs it — the same first match the one chain had, and no verb is
-        // named by two of them.
+        // First family to know the verb runs it — the same first match the one chain had, and each verb
+        // is named by one.
         const known =
             wipVerbs.run(act, arg)
             || fileRowVerbs.run(act, arg)
@@ -673,14 +673,14 @@ Item {
             || findVerbs.run(act, arg)
             || diffVerbs.run(act, arg)
         if (!known && !driver.completionDeferred && !driver.writeExpected) {
-            // Not a page verb, and not in the completion ledger either —
-            // window verbs are (they defer to Main's own driver), so this
-            // is a misspelling. It must not pass as a green run of the
-            // plain screen: say so and leave the run to the watchdog.
+            // A misspelling: window verbs are in the completion
+            // ledger (they defer to Main's own driver), so a verb in neither
+            // place is a name nobody knows. Said out loud, and the run
+            // is left to the watchdog.
             Harness.report("auto_act unknown=" + act)
             return
         }
-        // **The dispatch does not announce a press.** Whatever it asked for on its way through is already in the
+        // **`pressed` is a verb's own word.** Whatever the dispatch asked on its way through is already in the
         // watch armed above, which is all the barrier needs; what `pressed` means is a verb saying "the input I was
         // waiting to put in has gone in", and a verb that presses from a sampler has not said it yet. Claiming it
         // here would make every later arm read as a second write over an unfinished first.

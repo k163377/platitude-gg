@@ -18,15 +18,14 @@ Popup {
     /// Whether the pointer is over the card — over the padding band the background covers, or over the content (規約
     /// §hover のツールチップ の罠 (2)).
     ///
-    /// **Two handlers, because the background and the content are siblings rather than parent and child**: "handlers
-    /// are passive" holds down a subtree, and the content's children are in the content's subtree, but the background
-    /// is not their parent — it is next to them. Measured on `RefListPopup`'s rows: on a row, the content's handler
-    /// reads true and the background's reads false; with only the background's, the list called itself empty of the
-    /// pointer the instant the hand reached a row and went out from under it (observed). With only the
-    /// content's, the card shuts in the width of its own padding, which the hand walking in over the border crosses
-    /// first.
+    /// **Two handlers, because the background and the content are siblings**: "handlers are passive" holds down a
+    /// subtree, and the content's children are in the content's subtree; the background stands beside them. Measured on
+    /// `RefListPopup`'s rows: on a row, the content's handler reads true and the background's reads false; with only
+    /// the background's, the list called itself empty of the pointer the instant the hand reached a row and went out
+    /// from under it (observed). With only the content's, the card shuts in the width of its own padding, which the
+    /// hand walking in over the border crosses first.
     readonly property bool pointerInside: cardFace.pointed || card.contentPointed
-    /// The ground, for a card that is a piece of something else rather than a card over it: `SectionPeekPopup` keeps
+    /// The ground, for a card that is a piece of something else: `SectionPeekPopup` keeps
     /// the sidebar's `bgSurface`, against which its header band would otherwise be lost (`AppCardFace`).
     property alias faceColor: cardFace.color
     /// And the corners, for a card that opens flush against the thing it comes out of — there is nothing for the two

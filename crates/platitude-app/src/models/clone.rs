@@ -1,11 +1,11 @@
 //! Fetching a repository that has no tab yet.
 //!
-//! Its own object rather than a corner of [`TabsModel`]: a clone runs
-//! **outside every session and before there is anything to open**, which
-//! is the one write in the application that the tab strip has no part in.
-//! What the strip does with the answer — opening the folder that came
-//! down — is its ordinary job and is asked of it from the window
-//! (`Main.qml`), so neither object has to know the other.
+//! Its own object: a clone runs **outside every session and before there
+//! is anything to open**, which is the one write in the application that
+//! the tab strip has no part in. What the strip does with the answer —
+//! opening the folder that came down — is its ordinary job and is asked
+//! of it from the window (`Main.qml`), so neither object has to know the
+//! other.
 //!
 //! [`TabsModel`]: super::TabsModel
 
@@ -22,14 +22,14 @@ use super::qml_register;
 #[derive(Default)]
 pub struct CloneModel {
     /// What the background task answers with. Attached the first time a
-    /// clone is asked for rather than at startup: a window nobody clones
-    /// in never has one to hear.
+    /// clone is asked for: a window nobody clones in never has one to
+    /// hear.
     feed: Arc<Feed<CloneMsg>>,
     attached: bool,
     cloning: bool,
-    /// What stops it. Held here rather than in the dialog because the
-    /// dialog is built and rebuilt with the window's overlay, and the
-    /// token is not its to lose.
+    /// What stops it. Held here because the dialog is built and rebuilt
+    /// with the window's overlay, and the token has to outlive every
+    /// rebuild.
     cancel: Option<tokio_util::sync::CancellationToken>,
 }
 
@@ -45,10 +45,10 @@ impl CloneModel {
     #[qsignal]
     fn cloning_changed(&mut self);
 
-    /// The clone came down, into the folder `path` names. Its own signal
-    /// rather than a reader watching `cloning` fall: the dialog has to
-    /// tell a clone that landed from one git refused, and the two answers
-    /// arrive on the same property.
+    /// The clone came down, into the folder `path` names. Its own
+    /// signal: the dialog has to tell a clone that landed from one git
+    /// refused, and the two answers arrive on the same property, where
+    /// `cloning` falls for both.
     #[qsignal]
     fn clone_done(&mut self, path: String);
 
@@ -63,18 +63,18 @@ impl CloneModel {
     /// `parent_url` names (a `file://` URL, as the FolderDialog hands one
     /// over).
     ///
-    /// **Nothing is checked here first.** A destination that is taken and
-    /// a URL nothing answers are both git's to refuse, and unlike the
-    /// picker's folder — where the refusal would arrive after the dialog
-    /// had closed — this dialog stays open for the whole call and has
+    /// **Handed straight to git.** A destination that is taken and a URL
+    /// nothing answers are both git's to refuse, and unlike the picker's
+    /// folder — where the refusal would arrive after the dialog had
+    /// closed — this dialog stays open for the whole call and has
     /// somewhere to put what git says.
     #[qslot]
     fn clone_repository(&mut self, url: String, parent_url: String, name: String) {
         let url = url.trim().to_string();
         let name = name.trim().to_string();
         // One at a time: the dialog is modal and its accept is refused
-        // while a clone is out, so a second call is a wiring accident
-        // rather than something a reader can ask for.
+        // while a clone is out, so a second call could only be a wiring
+        // accident.
         if url.is_empty() || name.is_empty() || self.cloning {
             return;
         }

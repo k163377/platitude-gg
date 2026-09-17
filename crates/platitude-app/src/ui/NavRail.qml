@@ -36,8 +36,8 @@ Rectangle {
     /// It left a cell. Which one it was is the whole message: the cell being left on the way to another has already
     /// been replaced, and only the one whose section is open can take it away.
     signal peekLeft(string kind)
-    /// A click landed on a cell: the section it opened goes away, and a second click brings it back. It does not put
-    /// the list back — a stray click on the rail would take an open file down with it.
+    /// A click landed on a cell: the section it opened goes away, and a second click brings it back. The list stays
+    /// folded — a stray click on the rail would take an open file down with it.
     signal peekToggled(string kind, real top)
     /// Put the list back, with whatever was open in it still open.
     signal unfoldRequested()
@@ -56,8 +56,8 @@ Rectangle {
     ]
 
     /// A section's icon and tint, so the one the sidebar opens beside the rail wears the same mark as the cell that
-    /// opened it. An unnamed section answers with the first one's look rather than nothing — the caller is a binding
-    /// that outlives the choice.
+    /// opened it. An unnamed section answers with the first one's look — the caller is a binding that outlives the
+    /// choice.
     function sectionOf(kind) {
         for (let i = 0; i < rail.sections.length; i++) {
             if (rail.sections[i].kind === kind)
@@ -117,10 +117,10 @@ Rectangle {
     /// How tall one cell stands. **The ☰'s own cell**, which is the band it sits in (`toolbarHeight` — TopBar): the
     /// mark at the head of this column and the five under it answer the pointer over the same run, and a reach that
     /// changes partway down a column of one kind of thing is a difference nobody can see and everybody feels. Written
-    /// as the relationship rather than the number, so the two move together (デザイン規約 §ウィンドウの縁 — 近い値を
+    /// as the relationship, so the two move together (デザイン規約 §ウィンドウの縁 — 近い値を
     /// 書き写さない).
     ///
-    /// Not `railWidth`: that one is the window's own outer edge, and what sets it is the mark at the head of this
+    /// `railWidth` is the window's own outer edge, and what sets it is the mark at the head of this
     /// column plus a step either side (§左メニューを畳む). Two questions, and once the edge came in they stopped
     /// having one answer — a square cell would have the narrower of them decide the reach.
     readonly property int cellHeight: Theme.toolbarHeight
@@ -187,7 +187,7 @@ Rectangle {
                        ? Theme.bgHover : "transparent"
                 // The `+` is the cell's only name while it is standing in for the whole band, and a mark with no word
                 // beside it has nowhere else to carry one (規約 §hover のツールチップ). The wording is the band's own, so
-                // the two doors into the dialog do not name it differently (デザイン規約 §リモートを書き留める).
+                // the two doors into the dialog name it the same (デザイン規約 §リモートを書き留める).
                 ToolTip.visible: cell.addLive && cellHover.hovered
                 ToolTip.delay: Metrics.tipDelayMs
                 ToolTip.text: Words.addRemote
@@ -202,10 +202,10 @@ Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: parent.top
                     anchors.topMargin: Theme.spaceXs
-                    // Taken back, not written: the box keeps half its unused grid as air under the mark's ink, and the
-                    // number's line box keeps its own leading above the digit, so a zero here still reads as a gap —
-                    // and once the mark took the cell's whole remainder, a wider one than the cells keep between them.
-                    // The pair then reads as two things rather than one (measured on Windows, ink to ink: at zero, 6px
+                    // Taken back: the box keeps half its unused grid as air under the mark's ink, and the number's
+                    // line box keeps its own leading above the digit, so a zero here still reads as a gap — and once
+                    // the mark took the cell's whole remainder, a wider one than the cells keep between them. The
+                    // pair then reads as two things rather than one (measured on Windows, ink to ink: at zero, 6px
                     // from the mark to its own digit against 5px from that digit to the next cell's mark — the gap
                     // inside the pair is the larger of the two; 2 against 9 with this). Subtracting the air a mark
                     // holds is what デザイン規約 §余白 says to do beside a word — under one it is the same sum.
@@ -214,10 +214,10 @@ Rectangle {
                         id: sectionIcon
                         anchors.horizontalCenter: parent.horizontalCenter
                         kind: cell.modelData.icon
-                        // Off the graph is a state, and a state is said by dropping the mark a step, not by greying it
-                        // — grey text is what unavailable looks like (デザイン規約 §暗く落とした段). Which is what an empty one is,
-                        // so grey is exactly what it wears. An empty REMOTES cell greys too: what is unavailable there
-                        // is the section, and the mark and the number are what report it — the `+` beside them is the
+                        // Off the graph is a state, and a state is said by dropping the mark a step — grey text is what
+                        // unavailable looks like (デザイン規約 §暗く落とした段). Which is what an empty one is, so grey is
+                        // exactly what it wears. An empty REMOTES cell greys too: what is unavailable there is the
+                        // section, and the mark and the number are what report it — the `+` beside them is the
                         // part that can be pressed, and it keeps its colour.
                         tint: cell.empty ? Theme.textMuted : cell.offGraph ? Theme.refTagDim : cell.modelData.tint
                         // The cell's whole height above the number, with no padding written around the box: the mark
@@ -227,18 +227,18 @@ Rectangle {
                         //
                         // The remainder of `cellHeight` once the number's line and the slack above are out of it, one
                         // step up from the marks that stand alone in a band: this one is the cell (デザイン規約 §寸法 —
-                        // 印が帯ではなくセルの中身そのものである時).
+                        // 印がセルの中身そのものである時は別の規則).
                         width: Theme.iconXl
                         height: Theme.iconXl
                         // The eye the TAGS header carries, worn as a mark on the corner: folded, this is the only place
                         // "are tags in the graph" can be answered. Up in both states, and struck through once they are
-                        // out — the same pair the open header wears (NavHeader), so folding does not change the mark
-                        // that says it. A badge that is only there in one state leaves the other reading as a cell that
-                        // never carried one, and two steps of colour is not a state anyone reads at this size: the
-                        // colour is what the stroke is read against, not the answer on its own.
+                        // out — the same pair the open header wears (NavHeader), so folding keeps the mark that says
+                        // it. A badge that is only there in one state leaves the other reading as a cell that never
+                        // carried one, and two steps of colour is not a state anyone reads at this size: the colour is
+                        // what the stroke is read against.
                         // An empty section is the exception — with no tags to keep out of the graph the switch has
                         // nothing to answer for, and the cell is unavailable anyway (規約 §無効).
-                        // Smaller than the section's own mark, because it is about the mark rather than beside it.
+                        // Smaller than the section's own mark, because it is about the mark it sits on.
                         NavIcon {
                             visible: cell.taggable && !cell.empty
                             kind: rail.tagsShown ? "eye" : "eye-off"
@@ -260,7 +260,7 @@ Rectangle {
                         // The `+` the open band carries at the end of it (NavHeader), worn on the same corner as the
                         // eye and only while the section is empty: with rows in it the band is a hover away and
                         // carries its own. It keeps the section's colour against the greyed mark it sits on — what
-                        // cannot be pressed is the section, not this (規約 §無効).
+                        // cannot be pressed is the section (規約 §無効).
                         NavIcon {
                             visible: cell.addable
                             kind: "plus"
@@ -276,8 +276,8 @@ Rectangle {
                         }
                     }
                     // How many are in there. It stands in for the caption as well as the count, so it takes the
-                    // caption's colour rather than the dimmer one a count wears when a word is already carrying the
-                    // section (NavHeader).
+                    // caption's colour (NavHeader — a count wears the dimmer one where a word is already carrying
+                    // the section).
                     Label {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: cell.sectionCount

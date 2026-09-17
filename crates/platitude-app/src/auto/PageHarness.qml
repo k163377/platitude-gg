@@ -8,11 +8,11 @@ import platitude.ui
 /// (`HarnessSeat`). Everything the verbs and the measurements act on is handed over here — a file of its own cannot see
 /// `RepoPage.qml`'s ids.
 ///
-/// **The menus arrive whole**, not row by row: what a verb needs off `RefRowMenu` is which row it presses, and picking
-/// that row out is harness wiring rather than something the page has to know it is holding. **And they arrive as
+/// **The menus arrive whole**: what a verb needs off `RefRowMenu` is which row it presses, and picking
+/// that row out is harness wiring. **And they arrive as
 /// their seats**: the page builds a menu the first time it is raised, so what the page can hand over is the seat, and
 /// asking for the menus up front is this file's to do (`RepoPage.keepBuilt`) — a verb reads a menu's rows before
-/// opening it, and a null there is a dead run rather than a refusal.
+/// opening it, and a null there is a dead run.
 Item {
     id: harness
 
@@ -38,8 +38,8 @@ Item {
     required property var wipPane
     required property var carriedPane
     required property var gitCorner
-    /// The seat the plan's face is built in while a plan stands. Not asked for up front: the plan verbs raise the
-    /// face the way a hand does and read it only once it is up, so the driver follows the seat's `item` instead.
+    /// The seat the plan's face is built in while a plan stands. Built on demand: the plan verbs raise the
+    /// face the way a hand does and read it only once it is up, so the driver follows the seat's `item`.
     required property var planSeat
     /// The seats the five menus are built in, and the flows a verb enters, each whole.
     required property var refMenuSeat
@@ -53,8 +53,8 @@ Item {
     required property var publishFlow
     required property var upstreamFlow
 
-    /// The menus have been asked for, so the verbs that read them may be built. **Two phases rather than one
-    /// binding**: the driver's properties are read off the menus as it is built, and this whole part is built inside
+    /// The menus have been asked for, so the verbs that read them may be built. **Two
+    /// phases**: the driver's properties are read off the menus as it is built, and this whole part is built inside
     /// the page's own completion, so both phases are over before the page reaches its next line (`HarnessSeat`) — the
     /// same two the window's harness keeps (`WindowHarness.screensUp`).
     property bool seatsUp: false

@@ -1,17 +1,17 @@
 //! What the harness is, as QML sees it: one object carrying everything a
 //! run was told to do, and the three ways back out to `tracing` and the hub.
 //!
-//! **A QObject of its own rather than fields on `AppBackend`**, because
-//! `#[cfg]` does not reach inside `#[qslot]` — the macro emits the
-//! registration and the dispatch arm without looking (app-ui.md §Qt
-//! Bridges). A whole type behind the feature is the one shape that
-//! disappears: no properties, no slots, no names in the shipped binary's
-//! meta-object. What the product keeps is the single bit that says whether
-//! this build has one at all (`AppBackend::harness_present`).
+//! **A QObject of its own**, because `#[cfg]` does not reach inside
+//! `#[qslot]` — the macro emits the registration and the dispatch arm
+//! without looking (app-ui.md §Qt Bridges). A whole type behind the
+//! feature is the one shape that disappears: no properties, no slots, no
+//! names in the shipped binary's meta-object. What the product keeps is
+//! the single bit that says whether this build has one at all
+//! (`AppBackend::harness_present`).
 //!
-//! Nothing in `platitude.ui` may name it. The QML that reads it is the
-//! module the same feature leaves out (`src/auto`), and the product asks
-//! its own questions of its own properties instead — counted by machine
+//! The QML that names it is the module the same feature leaves out
+//! (`src/auto`); `platitude.ui` asks its own questions of its own
+//! properties, and the split is counted by machine
 //! (`cargo xtask structure`).
 
 use qtbridge::qobject;
@@ -24,13 +24,13 @@ use crate::models::qml_register;
 /// Every property is `Constant`: these are what the run was started with,
 /// and nothing writes one afterwards.
 pub struct Harness {
-    /// The one operation this run is to make, and its argument. A bare verb
-    /// rather than a script, so QML dispatches on equality; the argument
-    /// passes through as the verb needs it.
+    /// The one operation this run is to make, and its argument. A bare
+    /// verb, so QML dispatches on equality; the argument passes through
+    /// as the verb needs it.
     auto_act: String,
     auto_act_arg: String,
-    /// `;`-separated repositories to open as tabs instead of restoring the
-    /// ones that were left.
+    /// `;`-separated repositories, and the whole of what this run opens
+    /// as tabs.
     auto_open: String,
     /// Where a headless run leaves its pictures; empty is a run that takes
     /// none.
@@ -38,8 +38,8 @@ pub struct Harness {
     /// A second git this run may be pointed at, staged beside the pictures
     /// and not on PATH; empty where none was asked for (`--other-git`).
     other_git: String,
-    /// The deadline that keeps a broken causal run bounded. It never
-    /// chooses when a screenshot is taken.
+    /// The deadline that keeps a broken causal run bounded. The verb's
+    /// own causality chooses the shot.
     auto_watchdog_ms: i32,
     /// The three ways a run picks the row a page stands on, so a picture
     /// has something in every pane and a measurement has a selection to
@@ -53,8 +53,8 @@ pub struct Harness {
     /// submits it straight away.
     auto_identity: String,
     auto_identity_save: bool,
-    /// The window drives the memory breakdown off a timer instead of
-    /// leaving it to whoever remembers to ask.
+    /// The window drives the memory breakdown off a timer, whatever else
+    /// the run is doing.
     mem_report: bool,
     /// Shape one glyph the UI family lacks before `perf_done`, either side
     /// of an idle, and say when: the font database's population, paid
@@ -66,8 +66,8 @@ pub struct Harness {
     automated: bool,
     /// Swallow the verb's completion where a run asked for it: the act
     /// runs, the loop turns, and nothing ever reports done
-    /// (`xtask::verify::faults` orders this shape rather than racing a
-    /// ceiling against it).
+    /// (`xtask::verify::faults` orders this shape, so the run is the
+    /// same everywhere).
     fault_hold_act: bool,
 }
 

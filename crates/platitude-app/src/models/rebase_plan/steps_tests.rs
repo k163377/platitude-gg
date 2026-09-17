@@ -61,7 +61,7 @@ fn an_untouched_plan_is_not_dirty_and_a_real_request_makes_it_so() {
 /// The verb on its own is not one. `todo_steps` folds a reword with an
 /// empty pair back into `pick`, so a plan holding nothing else would run
 /// the very todo an untouched plan writes — and the run button, which
-/// reads `dirty`, must not open on it.
+/// reads `dirty`, stays shut.
 #[test]
 fn a_reword_is_a_request_only_once_something_is_typed() {
     let mut model = fresh();

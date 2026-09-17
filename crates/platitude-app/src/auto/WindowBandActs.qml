@@ -10,8 +10,8 @@ import platitude.ui
 ///
 /// Built by `WindowAutoActDriver`, which is what `Main` builds when a verb was given; what these verbs act
 /// on is handed down below, one property per part of the window they reach into.
-// An `Item` only because `QtObject` has no default property to hold the timers below; it draws nothing and is
-// never given a size.
+// An `Item` only because `QtObject` has no default property to hold the timers below; it is a
+// sizeless holder.
 Item {
     id: acts
 
@@ -22,7 +22,7 @@ Item {
     required property IdentityDialog identityDialog
 
     // Capture the communication ring from a real busy edge: the tab has to have entered the operation, so a fast
-    // child cannot clear it before the image callback runs. Latched here rather than read back — the edge is often
+    // child cannot clear it before the image callback runs. Latched here — the edge is often
     // shorter than a sampler's beat, and a run that missed it would wait out its watchdog on a band that had already
     // been through what it was there to photograph.
     Connections {
@@ -79,7 +79,7 @@ Item {
     SampleTimer {
         running: Harness.autoAct === "fetch-tip"
         onTriggered: {
-            // The graph as well as the refs, for the picture rather than for the answer: the band settles first, and a
+            // The graph as well as the refs, for the picture: the band settles first, and a
             // half-drawn page under a settled band is a worse photograph of it.
             if (window.curPage === null
                     || !window.curPage.pageRefsLoaded
@@ -113,7 +113,7 @@ Item {
     SampleTimer {
         running: Harness.autoAct === "stash-state"
         onTriggered: {
-            // The graph as well, for the picture rather than for the answer — the same reason `fetch-tip` waits on it.
+            // The graph as well, for the picture — the same reason `fetch-tip` waits on it.
             // `empty` has no rows at all, so that repository is judged settled on its working tree alone.
             if (window.curPage === null || !window.curPage.pageWt.loaded)
                 return
@@ -130,13 +130,13 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=band: numbers rather than a screenshot — the headless platform draws no window buttons of its own, so
+    // PGG_AUTO_ACT=band: numbers say it — the headless platform draws no window buttons of its own, so
     // a band that lost the grab run or pushed its buttons off the end looks fine in the picture.
     SampleTimer {
         id: bandActTimer
         running: Harness.autoAct === "band"
         onTriggered: {
-            // No tabs is a valid laid-out band, not an unanswered one. Read readiness from the window and bar
+            // No tabs is a valid laid-out band. Read readiness from the window and bar
             // themselves, then let `tabsW=0` describe the empty output.
             if (!window.visible || mainUi.width <= 0 || topBar.width <= 0)
                 return
@@ -250,7 +250,7 @@ Item {
                 return
             }
             // The panel is built into its seat as it is raised (`RepoPage.commandsSeat`), so what says the press
-            // arrived is the panel standing and wearing the mark — not the page's own flag alone.
+            // arrived is the panel standing and wearing the mark.
             if (!page.commandsOpen || page.commandsPane === null)
                 return
             tipLinkTimer.stop()
@@ -262,7 +262,7 @@ Item {
     }
 
     // PGG_AUTO_ACT=band-actions / band-actions-fold: the band's three actions giving their words up as the window
-    // narrows (規約 §ウィンドウの縁). The width the run asks for is a *shape* rather than a number, because which pixel
+    // narrows (規約 §ウィンドウの縁). The width the run asks for is a *shape*, because which pixel
     // brings on which shape is a question about the installed fonts; the band's own arithmetic names the width.
     SampleTimer {
         id: actionsActTimer
@@ -287,9 +287,9 @@ Item {
             // that answer landed frames a band with nothing the matter — which is what an ordinary band looks like.
             //
             // The refusal is a real one, from git: `--preset diverged` is a branch git will not fast-forward, and the
-            // plain push is the road to hearing so (`push-retry` の仕込み). Sent through the page rather than through
-            // the button, because in this state the button is a **hold** — its plain press is not wired to anything,
-            // and force is the go that lands rather than the one that is refused.
+            // plain push is the road to hearing so (`push-retry` の仕込み). Sent through the page, because in this
+            // state the button is a **hold** — its plain press is not wired to anything, and force is the go that
+            // lands.
             if (Harness.autoAct === "band-actions-alert") {
                 if (!actionsActTimer.pushRequested) {
                     window.curPage.pushNow()
@@ -308,7 +308,7 @@ Item {
                 if (!acts.stoppedYet(tab, actionsActTimer))
                     return
             }
-            // Asked for again on every tick rather than once. **What the shape is worth is measured off the wording
+            // Asked for again on every tick. **What the shape is worth is measured off the wording
             // the button is saying**, and push's wording arrives with the readings that decide it — a width settled
             // on the tick the working tree loaded is one measured for `push`, and the band it lands on is saying
             // `push -f` (measured, the run came out a whole step further down than it asked for). Re-asking
@@ -351,13 +351,13 @@ Item {
             return Math.ceil(floor + 3 * (topBar.actionNaturalW - Theme.railWidth))
         // The narrowest cell that still has a word in it — the last step before the marks.
         //
-        // Not the middle of the stretch where the wordings are being cut: **how long that stretch is depends on the
-        // installed fonts, and for a four-letter command it can be nothing at all** (measured, Linux: `push` and
+        // **How long the stretch where the wordings are cut is depends on the installed
+        // fonts, and for a four-letter command it can be nothing at all** (measured, Linux: `push` and
         // `…` + two characters measure the same 27px, so `push -f` goes from whole to given up with no cut in
         // between). Landing on the last labelled cell is a shape that exists on every machine, and `cut=` rides along
         // to say whether this one had a cut in it.
         //
-        // Rounded **up**, so the cap lands at or above the fold rather than a third of a pixel under it.
+        // Rounded **up**, so the cap lands at or above the fold.
         return Math.ceil(floor + 3 * (topBar.actionFoldW - Theme.railWidth))
     }
     /// What the three came out as. `cut=` and `folded=` are the two the picture cannot answer on its own: a wording

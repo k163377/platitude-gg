@@ -6,13 +6,13 @@ import platitude.ui
 // Lanes viewport of one commit-graph row: the full-width canvases slide behind clips when the graph column scrolls
 // horizontally. Two canvases with two clips: the lanes stop at the column's edge, while the faces' clipper leans
 // `spaceSm` further — up to where the message tick stands — so a column pulled toward its floor slides its edge over
-// the badge's gap instead of through the ink, and the floor itself is where the tick meets the badge
+// the badge's gap, and the floor itself is where the tick meets the badge
 // (GraphColumnMetrics.graphColWMin).
 Item {
     id: laneCell
 
     /// How far the lanes have been sent sideways, and how wide they are at their widest — the list's own two numbers,
-    /// read in rather than off `ListView.view`, so this cell has no view to be missing.
+    /// read in, so this cell has no view to be missing.
     required property real xOffset
     required property real fullWidth
     /// Precomputed draw tokens for this row's lanes (`encode.rs`).
@@ -51,8 +51,8 @@ Item {
     // repaints only when it is asked to.
     onAvatarUrlChanged: laneCell.loadFace()
     // What the row *is* decides which mark stands on its node — the dashed ring of the working tree, the stash's
-    // archive box, or the author's face — and a rebuild writes a different row over the same delegate rather than
-    // building a new one (`GraphModel::splice_notified`). Without these two the mark of the row that was there stays:
+    // archive box, or the author's face — and a rebuild writes a different row over the same delegate
+    // (`GraphModel::splice_notified`). Without these two the mark of the row that was there stays:
     // a stash popped off the top left its box on the working-tree row, and a stash just made wore the dashed ring.
     onIsWipChanged: laneCell.repaintNode()
     onStashRefChanged: laneCell.repaintNode()
@@ -73,9 +73,9 @@ Item {
     /// (ci/baseline/code-costs-windows-x64.md §メモリの形).
     ///
     /// **Full width while it is sent sideways**, because that is what needs the rest of it: the picture is slid by
-    /// moving the canvas rather than repainting it (`x`), so during a pan it has to already hold what the slide will
+    /// moving the canvas (`x`), so during a pan it has to already hold what the slide will
     /// bring in. Widening and narrowing again each cost one repaint of the rows on screen — the same repaint the
-    /// column's own divider drag costs, and taken once at each end of a pan rather than per frame. **Qt asks for that
+    /// column's own divider drag costs, and taken once at each end of a pan. **Qt asks for that
     /// repaint itself for a canvas that is visible** (the note on `onWidthChanged` below), so the first frame of a pan
     /// is the lanes and not the old picture stretched — verified at that frame (`PGG_AUTO_ACT=graph-bar`).
     ///
@@ -94,12 +94,12 @@ Item {
     Component.onCompleted: laneCell.loadFace()
 
     // One clipper for the row's whole ink, and it is the faces': `spaceSm` past the column, up to where the message
-    // tick stands, so a narrowing column or a sideways pan slides the clip edge over the badge's gap instead of
-    // cutting a face mid-ink (規約 §グラフ列は最も広い所のレーンまで). The lanes stop at the column's own edge, which
+    // tick stands, so a narrowing column or a sideways pan slides the clip edge over the badge's gap
+    // (規約 §グラフ列は最も広い所のレーンまで). The lanes stop at the column's own edge, which
     // is a clip *inside* the paint now — one canvas holds both inks, and only the faces lean past.
     //
-    // One canvas rather than the two this held (lanes under, faces over): a canvas is an image plus the texture it
-    // uploads, and the pair doubled both on every row that exists and again on every repaint, for two inks that are
+    // One canvas, the lanes under and the faces over: a canvas is an image plus the texture it
+    // uploads, and two would double both on every row that exists and again on every repaint, for two inks that are
     // drawn in one order into one picture anyway.
     Item {
         width: parent.width + Theme.spaceSm
@@ -200,7 +200,7 @@ Item {
                 // The marks below are the row's own — they dim with it while the lanes above stay lit. A lane is one
                 // line drawn across many rows: dimming it per row would break each line into a bright-and-dark ladder.
                 ctx.globalAlpha = laneCell.dimmed ? Metrics.dimFade : 1
-                // The WIP row has no commit and no author: a dashed, empty node instead of a face. A lane mark, drawn
+                // The WIP row has no commit and no author: a dashed, empty node. A lane mark, drawn
                 // inside the lanes' clip — nothing of it leans past the column.
                 const r = Metrics.nodeIcon / 2
                 if (laneCell.isWip) {
@@ -216,11 +216,11 @@ Item {
                     ctx.restore()
                     return
                 }
-                // Stash rows draw the bare archive box of the STASHES section (NavIcon "stash", same 16-unit grid)
-                // instead of the author identicon — no ring around it, so the node reads as the icon and nothing else.
-                // The glyph is centered on the node point (its own middle, 8.5 of the grid, not the grid's), and its
-                // footprint is cleared first so the dashed leash comes out from under the box instead of running
-                // through it.
+                // Stash rows draw the bare archive box of the STASHES section (NavIcon "stash", same
+                // 16-unit grid) — no ring around it, so the node reads as the icon and nothing
+                // else. The glyph is centered on the node point (its own middle, 8.5 of the
+                // grid), and its footprint is cleared first so the dashed leash comes out
+                // from under the box.
                 if (laneCell.stashRef !== "") {
                     const s = Metrics.nodeIcon / 16
                     const gx = nodeX - 8 * s
@@ -234,7 +234,7 @@ Item {
                     ctx.moveTo(gx + 6.5 * s, gy + 9.5 * s)
                     ctx.lineTo(gx + 9.5 * s, gy + 9.5 * s)
                     ctx.stroke()
-                    // Same discipline as the ring above: the save may not outlive the paint.
+                    // Same discipline as the ring above: the save ends with the paint.
                     ctx.restore()
                     return
                 }
@@ -255,7 +255,7 @@ Item {
                 if (shared) {
                     const br = Theme.iconSm / 2
                     // Punched out of what is already drawn — the author's face and the lane ink under it alike — so
-                    // the smaller face reads as being in front of the node rather than blended into it, and no lane
+                    // the smaller face reads as being in front of the node, and no lane
                     // line shows through the gap the badge keeps around itself. At full strength whatever the row's
                     // is: this takes pixels away, and a dimmed eraser would leave the author's face showing through
                     // the badge.

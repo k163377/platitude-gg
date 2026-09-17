@@ -11,7 +11,7 @@ RowLayout {
     id: avatarRow
 
     /// The assignment this row shows ({ email, name, url } — `SettingsAppPane.assigned`) and its place in the list.
-    /// Declared, not inherited: a delegate in a file of its own is only handed the roles it names.
+    /// Declared: a delegate in a file of its own is only handed the roles it names.
     required property var modelData
     required property int index
     /// The one column every row's name is laid into, as wide as the widest of them (`avatarRepeater.nameColW`).
@@ -25,13 +25,13 @@ RowLayout {
     /// hand — デザイン規約 §長押し), or headless having put it
     /// there for a shot.
     ///
-    /// The button rather than the row it sits in: red says
+    /// The button itself: red says
     /// what the hand is about to lose, and a word that
     /// reddens while the pointer is still three columns of
     /// data away is about none of them (observed).
     readonly property bool lit: unsetButton.hovered || unsetButton.activeFocus
         || avatarRow.pointedAtRow === avatarRow.index
-    /// Automation reads and works the row through these two rather than reaching inside it: the
+    /// Automation reads and works the row through these two: the
     /// picture the list is photographed for, and the hold it has no hand to make.
     function pictureReady() {
         return rowFace.pictureReady()
@@ -59,7 +59,7 @@ RowLayout {
         Layout.preferredWidth: avatarRow.nameColW
         elide: Text.ElideRight
     }
-    // The address beside the name is supporting information, which is `textSecondary` — not `textMuted`, which is
+    // The address beside the name is supporting information, which is `textSecondary` — `textMuted` is
     // what a row nobody may touch looks like (デザイン規約 §テキスト / §無効).
     Label {
         Layout.fillWidth: true
@@ -68,10 +68,10 @@ RowLayout {
         color: Theme.textSecondary
         font.pixelSize: Theme.fontSm
     }
-    // Held, not clicked: this card writes as it is worked
-    // rather than on a Save, so the gesture is the only
-    // thing standing between a stray click and a picture
-    // that has to be found again (デザイン規約 §長押し).
+    // Held: this card writes as it is worked, so the
+    // gesture is the only thing standing between a stray
+    // click and a picture that has to be found again
+    // (デザイン規約 §長押し).
     //
     // Red only where the hand is (デザイン規約 §状態): a
     // standing state colour is for saying that the usual
@@ -81,10 +81,10 @@ RowLayout {
     // frame is what carries "this is a control" at rest:
     // the other three columns are data, and a bare word
     // among them reads as a fourth one. `*Dim` belongs on
-    // that frame rather than on the word, which is the one
-    // use §暗く落とした段 allows for it. Kept in the layout
-    // either way, so the address beside it does not
-    // re-elide as the pointer crosses the list.
+    // that frame, which is the one use §暗く落とした段
+    // allows for it. Kept in the layout either way, so the
+    // address beside it does not re-elide as the pointer
+    // crosses the list.
     ActionButton {
         id: unsetButton
         text: qsTr("Remove")
