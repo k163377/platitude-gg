@@ -205,3 +205,146 @@ pub async fn hunk_count(
     let raw = details::file_diff_raw(executor, workdir, target, cancel).await?;
     Ok(patch::hunk_count(&raw))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::*;
+    use crate::Oid;
+    use crate::operation::OperationId;
+    use crate::process::{CommandEnd, CommandObserver, Kept};
+    use crate::repo::ObjectFormat;
+
+    /// How many commands were asked for. The observer hears of a command
+    /// at the ask — before the queue in front of it and before any spawn
+    /// — so a zero here says no git was started, which is the whole of
+    /// what the refusals below claim.
+    #[derive(Default)]
+    struct Asked(AtomicUsize);
+
+    impl Asked {
+        fn count(&self) -> usize {
+            self.0.load(Ordering::Relaxed)
+        }
+    }
+
+    impl CommandObserver for Asked {
+        fn records(&self, _kept: Kept) -> bool {
+            true
+        }
+        fn started(
+            &self,
+            _display: &str,
+            _full: &str,
+            _kept: Kept,
+            _operation: Option<OperationId>,
+        ) -> u64 {
+            self.0.fetch_add(1, Ordering::Relaxed) as u64
+        }
+        fn finished(
+            &self,
+            _id: u64,
+            _end: CommandEnd,
+            _waited_ms: u64,
+            _elapsed_ms: u64,
+            _message: &str,
+        ) {
+        }
+    }
+
+    /// An executor that cannot run anything, over a repository that is
+    /// not there — **the second witness**, beside the count: a target
+    /// that slipped past the refusal would fail on the spawn rather than
+    /// pass against a working tree this test never made.
+    fn refusing_git() -> (GitExecutor, Arc<Asked>, RepoInfo, CancellationToken) {
+        let asked = Arc::new(Asked::default());
+        let exec = GitExecutor::with_program("no-such-git-for-this-test")
+            .observed(Arc::clone(&asked) as Arc<dyn CommandObserver>, Kept::Asked);
+        let nowhere = std::path::PathBuf::from("no-such-tree-for-this-test");
+        let repo = RepoInfo {
+            git_dir: nowhere.join(".git"),
+            config_path: nowhere.join(".git").join("config"),
+            workdir: nowhere,
+            object_format: ObjectFormat::Sha1,
+        };
+        (exec, asked, repo, CancellationToken::new())
+    }
+
+    fn an_oid() -> Oid {
+        Oid::from_hex_str("0123456789abcdef0123456789abcdef01234567").expect("40 hex digits")
+    }
+
+    /// The three targets whose diff is of history: one commit against its
+    /// parent, a span between two, and several commits' own patches one
+    /// after another.
+    fn committed_targets() -> [DiffTarget; 3] {
+        [
+            DiffTarget::Commit {
+                oid: an_oid(),
+                parent: None,
+                path: "f.txt".to_string(),
+                orig_path: None,
+            },
+            DiffTarget::Range {
+                from: an_oid(),
+                to: an_oid(),
+                path: "f.txt".to_string(),
+                orig_path: None,
+            },
+            DiffTarget::Choice {
+                oids: vec![an_oid(), an_oid()],
+                path: "f.txt".to_string(),
+                orig_path: None,
+            },
+        ]
+    }
+
+    /// **A committed diff has no index entry to be written into**, so all
+    /// three are turned down here — and turned down ahead of the diff the
+    /// patch would have been rebuilt from. The pane offers no pieces on
+    /// such a target; this is the floor under that.
+    #[tokio::test]
+    async fn no_diff_of_history_can_be_staged_and_none_of_them_reaches_git() {
+        for target in committed_targets() {
+            let (exec, asked, repo, cancel) = refusing_git();
+            let err = apply_partial(&exec, &repo, &target, &[HunkSelect::whole(0)], 0, &cancel)
+                .await
+                .expect_err("committed diffs are not stageable");
+            assert!(
+                err.to_string().contains("cannot be staged"),
+                "{target:?}: {err}"
+            );
+            assert_eq!(asked.count(), 0, "{target:?}: nothing was asked of git");
+        }
+    }
+
+    /// Discarding writes the working tree, so **only the side that has
+    /// one gets here**: a staged hunk is unstaged first and thrown away
+    /// from the unstaged side afterwards, and an untracked file has no
+    /// pre-image to restore part of.
+    #[tokio::test]
+    async fn only_the_unstaged_side_can_be_thrown_away_in_pieces() {
+        let others = [
+            DiffTarget::Staged {
+                path: "f.txt".to_string(),
+                orig_path: None,
+            },
+            DiffTarget::Untracked {
+                path: "f.txt".to_string(),
+            },
+        ];
+        for target in committed_targets().into_iter().chain(others) {
+            let (exec, asked, repo, cancel) = refusing_git();
+            let err = discard_partial(&exec, &repo, &target, &[HunkSelect::whole(0)], 0, &cancel)
+                .await
+                .expect_err("only unstaged changes go piecemeal");
+            assert!(
+                err.to_string().contains("only unstaged changes"),
+                "{target:?}: {err}"
+            );
+            assert_eq!(asked.count(), 0, "{target:?}: nothing was asked of git");
+        }
+    }
+}

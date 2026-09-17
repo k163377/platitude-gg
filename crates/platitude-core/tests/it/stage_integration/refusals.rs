@@ -1,5 +1,10 @@
-//! What staging refuses: commit diffs, vanished selections, stale
-//! fingerprints.
+//! What staging refuses once git has been asked: vanished selections,
+//! stale fingerprints, a conflicted file's combined diff.
+//!
+//! The targets that never reach git at all — a diff of history, a side
+//! with no working tree of its own — are refused off the target alone,
+//! and are pinned where that decision is made (`stage::partial`), with
+//! no repository to build.
 
 use crate::support::exec::env;
 use crate::support::stage::{buckets, fp};
@@ -8,31 +13,6 @@ use platitude_core::details::DiffTarget;
 use platitude_core::patch::HunkSelect;
 use platitude_core::report::ReportKind;
 use platitude_core::{stage, status};
-
-#[tokio::test]
-async fn staging_a_commit_diff_is_rejected() {
-    let mut repo = TestRepo::init();
-    let oid = repo.commit_file_id("f.txt", "x\n", "root");
-    let (exec, cancel) = env();
-    let repo_info = info(&repo).await;
-
-    let err = stage::apply_partial(
-        &exec,
-        &repo_info,
-        &DiffTarget::Commit {
-            oid: platitude_core::Oid::from_hex_str(&oid).unwrap(),
-            parent: None,
-            path: "f.txt".into(),
-            orig_path: None,
-        },
-        &[HunkSelect::whole(0)],
-        0,
-        &cancel,
-    )
-    .await
-    .expect_err("committed diffs are not stageable");
-    assert!(err.to_string().contains("cannot be staged"));
-}
 
 /// A fresh `git init` has no HEAD and an empty index; emptying that index
 /// is a no-op (measured, without --ignore-unmatch,
