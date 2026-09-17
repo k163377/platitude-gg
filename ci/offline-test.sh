@@ -23,10 +23,10 @@ done
 
 # Offscreen smoke: open a locally generated repository, stream it, and let
 # causal completion finish the run. The coreutils timeout is the parent kill
-# guard for a broken automation path; app startup is not bounded by a fixed
-# quit clock. PGG_SMOKE_BIN must be a build carrying the harness feature —
-# without it the app reads none of the knobs below and the window stands
-# until the timeout kills it.
+# guard for a broken automation path; startup ends on that completion.
+# PGG_SMOKE_BIN must be a build carrying the harness feature — without it
+# the app reads none of the knobs below and the window stands until the
+# timeout kills it.
 if [ -n "${PGG_SMOKE_BIN:-}" ]; then
     echo "== offline smoke: ${PGG_SMOKE_BIN}"
     smoke_root="$(mktemp -d)"
@@ -41,12 +41,12 @@ if [ -n "${PGG_SMOKE_BIN:-}" ]; then
     git -C "${smoke_repo}" add .
     git -C "${smoke_repo}" commit -qm "smoke commit"
 
-    # Whatever automation the caller carries is cleared by rule, not by a
-    # hand-kept list: everything under `PGG_` except the three names that
-    # say nothing about who is driving (xtask `app_env::clear_automation`,
-    # core `settings::AUTOMATION_PREFIX` / `settings::NOT_AUTOMATION` —
-    # change those and change this). A list would let a knob added to the
-    # app later compose two automation protocols in one run.
+    # Whatever automation the caller carries is cleared by rule:
+    # everything under `PGG_` except the three names that say nothing
+    # about who is driving (xtask `app_env::clear_automation`, core
+    # `settings::AUTOMATION_PREFIX` / `settings::NOT_AUTOMATION` — change
+    # those and change this). A list would let a knob added to the app
+    # later compose two automation protocols in one run.
     smoke_env=(env)
     while IFS= read -r name; do
         case "${name}" in

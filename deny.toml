@@ -1,7 +1,7 @@
 # cargo-deny configuration — machine-enforces two core guarantees (see internal-docs/実装計画.md §11.1):
-#   1. No networking capability in the dependency closure (all networking goes
-#      through the installed git CLI, executed as a subprocess).
-#   2. No git implementation libraries (system git subprocess only).
+#   1. All networking in the dependency closure goes through the installed
+#      git CLI, executed as a subprocess.
+#   2. Git work goes through the system git subprocess.
 # Licensing: MIT app; permissive deps only. Qt / qtbridge are LGPL-3.0-only,
 # an approved exception (dynamically linked).
 
@@ -22,9 +22,9 @@ ignore = [
 [licenses]
 # This allow list is where CLAUDE.md's absolute constraint keeps its license
 # set, so editing it edits that constraint and needs a human's approval.
-# The list is the policy, not an inventory of the current tree: an allowance
-# that no crate matches today is the normal state, so an unmatched entry is
-# not a finding.
+# The list is the policy, so an allowance that no crate matches today is
+# the normal state and an unmatched entry is the list holding a door
+# open for a later crate.
 unused-allowed-license = "allow"
 allow = [
     "MIT",
@@ -53,7 +53,7 @@ exceptions = [
 [bans]
 multiple-versions = "allow"
 deny = [
-    # --- networking stacks: forbidden, the app itself must never open a socket ---
+    # --- networking stacks: the git CLI subprocess owns every socket ---
     { crate = "reqwest", reason = "networking is forbidden: all network I/O goes through the git CLI" },
     { crate = "hyper", reason = "networking is forbidden: all network I/O goes through the git CLI" },
     { crate = "ureq", reason = "networking is forbidden: all network I/O goes through the git CLI" },

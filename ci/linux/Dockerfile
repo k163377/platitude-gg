@@ -4,15 +4,15 @@
 # ubuntu:24.04 earns the base twice over. It is what CI's ubuntu-latest
 # resolves to, so a failure here is reproducible there and the other way
 # round. And its git is 2.43 — the oldest version git最低バージョン整合.md promises to
-# support, which no other machine in this project runs. Green here is the
-# floor, not just "some Linux".
+# support, which no other machine in this project runs. Green here is
+# the floor.
 #
-# The core stage carries no Qt on purpose. platitude-core is Qt-free by rule,
+# The core stage stops at git and Rust. platitude-core is Qt-free by rule,
 # so the tests that most want a second operating system — paths, a
 # case-sensitive filesystem, file modes, git itself — need none of it, and
-# leaving it out is the difference between a two-minute image and a
+# leaving Qt out is the difference between a two-minute image and a
 # twenty-minute one. Work that reaches platitude-app builds the app stage
-# below instead; `cargo xtask linux` picks between the two.
+# below; `cargo xtask linux` picks between the two.
 FROM ubuntu:24.04 AS core
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -57,9 +57,9 @@ WORKDIR /work
 # before this image.
 FROM core AS app
 
-# No default: the version is CI's to pin (ci.yml calls itself the toolchain
-# lockfile), and `cargo xtask linux` reads it from there and passes it in.
-# A second copy here is a second place to forget.
+# The version comes from the caller: ci.yml pins it (calling itself the
+# toolchain lockfile) and `cargo xtask linux` passes it in. A second
+# copy here is a second place to forget.
 ARG QT_VERSION
 
 # The two expensive downloads go first and stay put, so editing the library
@@ -95,8 +95,8 @@ RUN python3 -m venv /opt/aqt \
 # and Qt's own libraries want fontconfig, freetype, dbus and the X client
 # libraries whether or not a display is ever opened (measured by walking
 # ldd over the Qt libraries this app loads until nothing came back "not
-# found"). libgl1-mesa-dri is llvmpipe: no GPU reaches a container, so the
-# offscreen platform renders through software or not at all.
+# found"). libgl1-mesa-dri is llvmpipe: no GPU reaches a container, so it
+# is what the offscreen platform renders through.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         libdbus-1-3 \
@@ -127,8 +127,8 @@ RUN apt-get update \
 
 # qtbridge finds Qt through QMAKE, as CI hands it over; the built binary
 # finds its libraries through LD_LIBRARY_PATH. Qt switches a "C" locale to
-# C.UTF-8 on its own and says so on every run — naming it here says it once
-# instead. git is unaffected either way: core pins LC_ALL=C per command.
+# C.UTF-8 on its own and says so on every run — naming it here says it once.
+# git is unaffected either way: core pins LC_ALL=C per command.
 ENV PATH=/opt/qt/${QT_VERSION}/gcc_64/bin:/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     LD_LIBRARY_PATH=/opt/qt/${QT_VERSION}/gcc_64/lib \
     QMAKE=/opt/qt/${QT_VERSION}/gcc_64/bin/qmake \
@@ -159,10 +159,10 @@ ENV LD_LIBRARY_PATH=/opt/pgg-qt/lib \
     LANG=C.UTF-8
 
 # The same machine, with exactly what a package would have to declare. The
-# list is not copied from the build stage and not reasoned about: `cargo
-# xtask linux bare --discover` derives it in the stage above by starting the
-# binary, reading the one library the loader names, installing only that,
-# and going round again. What that returned, in the order it returned it:
+# list is derived: `cargo xtask linux bare --discover` walks it out in the
+# stage above by starting the binary, reading the one library the loader
+# names, installing only that, and going round again. What that returned,
+# in the order it returned it:
 #
 #     git libglib2.0-0t64 libegl1 libfontconfig1 libxkbcommon0 libgl1
 #     libdbus-1-3
@@ -170,8 +170,8 @@ ENV LD_LIBRARY_PATH=/opt/pgg-qt/lib \
 # git leads because the product is a GUI over it, and it settles krb5 on the
 # way: Qt6Network wants libgssapi_krb5 and git's own curl brings it, so the
 # list does not name it. Everything else the build stage installs turned out
-# to be somebody's dependency rather than ours — llvmpipe included, which an
-# offscreen run never asked for.
+# to be somebody else's dependency — llvmpipe included, which an offscreen
+# run never asked for.
 #
 # That makes the list a claim and this stage the test of it: link one more
 # library and `cargo xtask linux bare` stops with its name. It has already

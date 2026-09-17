@@ -13,8 +13,8 @@ dialog が閉じる。その `onClosed` が `identityDismissed=true` を保持�
 後半が届いても dialog は戻らない。`WindowDialogActs` は opened と unsaved の両方を待って止まる。
 
 修正前の producer の最初の push の直後に、一時的に `feed.depth()==0` まで待つ処理を挿した。
-これは先行バッチを UI が取り出すまで producer を止め、後半をそのバッチに入れないためのもの。
-sleep で機械の速さに賭けず、待ちには 10 秒の backstop を付けた。実行コマンド:
+これは先行バッチを UI が取り出すまで producer を止め、後半を次のバッチへ回すためのもの。
+待ちは深さの条件と 10 秒の backstop で組んだ。実行コマンド:
 
 ```text
 cargo xtask verify-ui identity-tip --watchdog-ms 4000 --no-census --no-board
@@ -45,7 +45,7 @@ cargo xtask verify-ui identity-tip --watchdog-ms 4000 --no-census --no-board
 Linux コンテナでも `identity-tip` を最終実装で 10 回連続実行し、10/10 PASS(1.0〜1.1 秒)。
 Rust の identity 回帰 3 テストも PASS。
 
-これは最小スイートの並行検証であり、過去の gate 全量の負荷を再現したものではない。
-終了時に止まる後 2 件は再現せず、解決とは扱わない。
+検証の範囲は最小スイートの並行実行まで(gate 全量の負荷は未再現)。
+終了時に止まる後 2 件は再現せず、未解決のまま。
 identity の競合は実装上の到達可能性と修正前後を確認できたが、過去の run 自体に
-drain 境界の記録は無い。その 1 回の原因や budget 変更との因果、発生頻度は断定しない。
+drain 境界の記録は無い。その 1 回の原因や budget 変更との因果、発生頻度は未確定。

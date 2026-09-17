@@ -102,8 +102,8 @@ jobs:
       # arms those two switch out are compiled by the test line below,
       # which runs on the default set.
       # --locked on every cargo here, as on the gate's (xtask::gate): a cargo
-      # that would rewrite Cargo.lock says so and fails, instead of checking
-      # a graph nobody committed.
+      # that would rewrite Cargo.lock says so and fails, so the graph
+      # checked is the committed one.
       - name: Clippy
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Test
@@ -205,5 +205,5 @@ jobs:
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
           # The action's default, plus --locked: the graph it checks is the
-          # committed lock, never one it resolved afresh.
+          # committed lock.
           arguments: --all-features --locked

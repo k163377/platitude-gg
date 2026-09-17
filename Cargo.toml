@@ -18,24 +18,24 @@ license = "MIT"
 platitude-core = { path = "crates/platitude-core" }
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "time", "sync", "macros", "fs"] }
-# Settings/state files. Used through `toml::Table` rather than a derive:
-# per-key fallback needs the parsed tree anyway, and skipping the derive
-# keeps serde_derive/syn out of the build (measured: 14 -> 8 crates, -38KB).
+# Settings/state files. Used through `toml::Table`: per-key fallback
+# needs the parsed tree anyway, and leaving the derive aside keeps
+# serde_derive/syn out of the build (measured: 14 -> 8 crates, -38KB).
 toml = "1"
 tokio-util = "0.7"
 # Logging only — the `warn!` / `info!` macros. `attributes`, the other
 # half of the default, is off: nothing writes `#[instrument]`, so the
 # feature's whole content is a proc-macro crate compiled for no caller —
-# a cost in build time, not in bytes: nothing of it reaches the binary.
+# a cost in build time: nothing of it reaches the binary.
 # The first `#[instrument]` means turning it back on.
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 
 # **The task runner is optimised even in a debug build.** `cargo xtask`
-# runs the dev profile (`.cargo/config.toml`), and xtask is not a
-# library under a debugger — it is the thing a person waits for: the
-# corpus generator alone writes tens of gigabytes through a few hundred
-# million integer draws, which unoptimised is most of an hour. Only the
-# one package, so nothing else pays the compile time.
+# runs the dev profile (`.cargo/config.toml`), and xtask is the thing a
+# person waits for: the corpus generator alone writes tens of gigabytes
+# through a few hundred million integer draws, which unoptimised is most
+# of an hour. Only the one package, so nothing else pays the compile
+# time.
 [profile.dev.package.xtask]
 opt-level = 3
 
@@ -60,8 +60,8 @@ opt-level = 0
 # other's binary: the verbs' release was relinked twice a gate, and a
 # verb starting while `shipped` links would read a binary being replaced.
 # In target/shipped the two never meet, so the gate runs `shipped` beside
-# its verbs instead of ahead of them. The release settings unchanged, at
-# the price of one more copy of the release build per tree.
+# its verbs. The release settings unchanged, at the price of one more
+# copy of the release build per tree.
 [profile.shipped]
 inherits = "release"
 
