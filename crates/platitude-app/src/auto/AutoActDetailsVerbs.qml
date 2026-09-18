@@ -97,7 +97,10 @@ Item {
         } else if (act === "corner") {
             // Both sides of the corner's one rule: preset `basic` leaves the corner bare, `long` runs rows into it.
             // Read as a pair — one half alone frames like a label always on, or always off.
-            if (arg === "" || arg === "wip")
+            //
+            // The pane is named, never defaulted: a bare run used to mean this same `wip`, which is one path entered
+            // twice by two lines (xtask refuses the empty argument now).
+            if (arg === "wip")
                 page.showWip()
             else
                 page.activateRow(graphModel.oidAt(Number(arg)))
@@ -414,11 +417,31 @@ Item {
     // The rows have to arrive, and the list be laid out with them, before what they leave bare is worth measuring.
     SampleTimer {
         id: cornerTimer
+        /// What the corner answered at the previous sample, for the settle below.
+        property string lastSaid: ""
         // `shown=` is the label's own visibility: reporting the room that decided it would go
         // green with the binding cut.
         onTriggered: {
             if (gitCorner.parent === null || gitCorner.width <= 0)
                 return
+            // **The pane this is about has to be done arriving.** A details pane whose file list is still being
+            // read leaves its whole bottom edge bare — the same number an empty pane leaves — so a sample taken
+            // there says the corner is standing whatever the commit turns out to hold (`DetailsPane.bottomRoomSettled`;
+            // observed on Windows as `shown=true room=823` over a list that runs off the pane, which is the
+            // answer for the opposite preset). The working tree's pane has no list under the question: its foot is
+            // the commit button's, whatever is above it.
+            if (!page.wipShown && (!driver.cardSettled || !detailsPane.bottomRoomSettled))
+                return
+            // And it has to have stopped moving, for the reason `details-fit` waits the same way: the pane lays
+            // out more than once on its way to a commit, and a corner read halfway answers about a frame nobody
+            // sees. **Both halves are needed, measured on Windows**: the readiness alone read `--preset basic` at
+            // 775 where the settled pane leaves 547, and the settle alone would be two samples agreeing about a
+            // list that had not arrived.
+            const said = gitCorner.visible + "/" + Math.round(gitCorner.roomLeft)
+            if (said !== cornerTimer.lastSaid) {
+                cornerTimer.lastSaid = said
+                return
+            }
             cornerTimer.stop()
             Harness.report(
             "git_corner pane=" + (page.wipShown ? "wip" : "details")

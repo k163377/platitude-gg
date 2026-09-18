@@ -301,6 +301,14 @@ ColumnLayout {
     /// hangs there (the same measurement `WipPane.bottomRoom` makes).
     readonly property real bottomRoom: detailsPane.height - fileList.y
         - Math.max(0, Math.min(fileList.height, fileList.originY + fileList.contentHeight - fileList.contentY))
+    /// Whether that measurement is about this commit yet. **A list still being read leaves the whole bottom edge
+    /// bare**, which is an empty pane's answer rather than this one's — and the two are the same number, so nothing
+    /// downstream can tell them apart (observed: a headless run reported the corner standing with 823 pixels to
+    /// spare over a list that runs off the pane). Automation reads this before it reads `bottomRoom`
+    /// (`PGG_AUTO_ACT=corner`); nothing in the product needs it, because a binding re-evaluates when the list
+    /// arrives and a photograph does not.
+    readonly property bool bottomRoomSettled: !detailsPane.details.loading
+        && (fileList.count === 0 || fileList.contentHeight > 0)
 
     Connections {
         target: detailsPane.details

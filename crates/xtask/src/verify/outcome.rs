@@ -91,7 +91,7 @@ pub(super) fn judge(
     let (status, err_lines, out_lines, timed_out) =
         (&ran.status, &ran.err_lines, &ran.out_lines, ran.timed_out);
 
-    let must_say = super::verbs::must_say(&opts.verb, &opts.arg);
+    let must_say = super::verbs::must_say(&opts.verb, &opts.arg, &opts.preset);
     Outcome {
         exit_ok: status.as_ref().is_some_and(|s| s.success()),
         saved: err_lines

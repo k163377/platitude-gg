@@ -42,16 +42,23 @@ pub(super) enum Arg {
     Starts(&'static str),
     Ends(&'static str),
     Has(&'static str),
+    /// Not the argument at all: **which repository the run was given**.
+    /// Two runs of one verb that differ only in what the preset built are
+    /// two states, and a row keyed on the argument alone claims one line
+    /// for both — which is a pair that goes on passing after the two stop
+    /// telling each other apart (`corner`, measured).
+    WithPreset(&'static str),
 }
 
 impl Arg {
-    fn answers(&self, arg: &str) -> bool {
+    fn answers(&self, arg: &str, presets: &[String]) -> bool {
         match self {
             Self::Is(want) => arg == *want,
             Self::OneOf(any) => any.contains(&arg),
             Self::Starts(head) => arg.starts_with(head),
             Self::Ends(tail) => arg.ends_with(tail),
             Self::Has(part) => arg.contains(part),
+            Self::WithPreset(want) => presets.iter().any(|preset| preset == want),
         }
     }
 }
@@ -88,15 +95,17 @@ const TABLES: &[&[Verb]] = &[
 ];
 
 /// What `verb` has to say for its picture to be worth anything, or `None`
-/// when the picture is the whole of it. `arg` is the verb's own argument:
-/// one verb serves two panes and wants a different line for each.
-pub(super) fn must_say(verb: &str, arg: &str) -> Option<&'static str> {
+/// when the picture is the whole of it. `arg` is the verb's own argument
+/// (one verb serves two panes and wants a different line for each) and
+/// `presets` the repositories it was given — a run's state is the two of
+/// them together, and a row may key on either.
+pub(super) fn must_say(verb: &str, arg: &str, presets: &[String]) -> Option<&'static str> {
     let found = TABLES.iter().copied().flatten().find(|v| v.name == verb)?;
     Some(
         found
             .when
             .iter()
-            .find(|(when, _)| when.answers(arg))
+            .find(|(when, _)| when.answers(arg, presets))
             .map_or(found.plain, |(_, line)| *line),
     )
 }
@@ -169,24 +178,61 @@ mod tests {
         }
     }
 
+    fn presets(names: &[&str]) -> Vec<String> {
+        names.iter().map(|name| (*name).to_string()).collect()
+    }
+
     /// The narrow rows come first, and what no row claims falls to
     /// `plain`.
     #[test]
     fn the_narrow_row_answers_before_the_plain_one() {
         assert_eq!(
-            must_say("stash", "named"),
+            must_say("stash", "named", &[]),
             Some("graph_settled gone=true top=stash named=true")
         );
         assert_eq!(
-            must_say("stash", "anything else"),
+            must_say("stash", "anything else", &[]),
             Some("graph_settled gone=true top=stash named=false")
         );
-        assert_eq!(must_say("stash", ""), must_say("stash", "anything else"));
+        assert_eq!(
+            must_say("stash", "", &[]),
+            must_say("stash", "anything else", &[])
+        );
+    }
+
+    /// A row may be keyed on the repository instead: two runs of one verb
+    /// that differ only in what the preset built are two states, and a
+    /// pair judged on the argument alone goes on passing after the two
+    /// stop telling each other apart.
+    #[test]
+    fn a_row_may_answer_to_the_preset_rather_than_the_argument() {
+        assert_eq!(
+            must_say("corner", "1", &presets(&["basic"])),
+            Some("git_corner pane=details shown=true")
+        );
+        assert_eq!(
+            must_say("corner", "1", &presets(&["long"])),
+            Some("git_corner pane=details shown=false room=0")
+        );
+        assert_ne!(
+            must_say("corner", "1", &presets(&["basic"])),
+            must_say("corner", "1", &presets(&["long"])),
+            "the pair is two states or it is one run twice"
+        );
+        // The argument still outranks it where the pane decides on its
+        // own: the working tree's foot is the commit button's, whatever
+        // list is above it.
+        for preset in [&["basic"][..], &["long"][..]] {
+            assert_eq!(
+                must_say("corner", "wip", &presets(preset)),
+                Some("git_corner pane=wip shown=false room=0")
+            );
+        }
     }
 
     /// A verb no table claims is one whose picture is the whole of it.
     #[test]
     fn a_verb_no_table_claims_says_nothing() {
-        assert_eq!(must_say("no-such-verb", ""), None);
+        assert_eq!(must_say("no-such-verb", "", &[]), None);
     }
 }

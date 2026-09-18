@@ -206,11 +206,33 @@ pub(super) const TABLE: &[Verb] = &[
     // instance wrote its own `visible` over the corner's, and every
     // WIP pane carried the version across its commit button until a
     // picture was looked at.
+    // The pane is named and never defaulted: a bare run meant this same
+    // `wip` — the same staging, the same press, the same line — so the
+    // two were one path entered twice, and the one dropped is the
+    // default (`verify::options::name_the_verb` refuses it now).
+    //
+    // **What is left is a pair, and the rows say which half each run
+    // is.** `basic` leaves the corner bare and `long` runs the list into
+    // it, so judging both on `pane=details` alone is judging neither:
+    // measured, the two came back identical on one platform for a
+    // fortnight (the run read the room before the list had arrived) and
+    // the pair went on passing. The claim keyed on the preset is what
+    // reads that as the failure it is.
     Verb {
         name: "corner",
         when: &[
-            (Arg::Is(""), "git_corner pane=wip shown=false room=0"),
             (Arg::Is("wip"), "git_corner pane=wip shown=false room=0"),
+            (
+                Arg::WithPreset("long"),
+                "git_corner pane=details shown=false room=0",
+            ),
+            // `room=` is left off: how much the one-file list leaves bare
+            // is the platform's font talking, and what is claimed is that
+            // the corner is standing in it.
+            (
+                Arg::WithPreset("basic"),
+                "git_corner pane=details shown=true",
+            ),
         ],
         plain: "git_corner pane=details",
     },

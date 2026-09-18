@@ -326,6 +326,15 @@ fn name_the_verb(opts: &mut Options, positional: &[&str]) -> Result<(), String> 
     {
         return Err("publish-new-go needs <name>|<url> with a non-empty URL".into());
     }
+    // The corner is a question about one pane, and a bare run used to
+    // mean the working tree's — the same staging, the same press and the
+    // same expected line as naming it, so the two ran one path twice.
+    // Named, because a default that is one of the answers is the arm a
+    // door can stop passing without a run going red
+    // (rules-refs/app-ui.md).
+    if opts.verb == "corner" && opts.arg.is_empty() {
+        return Err("corner needs the pane it is about: wip, or the row to land on".into());
+    }
     Ok(())
 }
 
