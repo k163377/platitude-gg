@@ -600,43 +600,56 @@ async fn an_emptied_box_takes_the_override_out_and_leaves_the_global_alone() {
     assert!(global.contains("Ada Lovelace"), "{global}");
 }
 
-/// A save that asks for what the file already says spawns no write at
-/// all. The reason: `git config --unset` fails when there was nothing to
-/// unset, and it fails with the same exit code as its refusal to touch a
-/// key written twice (measured, git 2.55: both are 5), so reading first is what
-/// keeps a real failure from passing for a harmless one.
+/// What actually goes out to git is the list the decision made, key for
+/// key and value for value — and nothing else goes out at all.
+///
+/// **The combinations are a unit test** (`identity::local::keys_to_write`):
+/// two keys, each held or not and wanted or not, is a table, and asking it
+/// through a repository costs a git process per answer. What is left for a
+/// real git is this — that the list reaches it as written, at `--local`,
+/// and that a decision to write nothing is nothing spawned.
+///
+/// That last part is why the decision exists: `git config --unset` fails
+/// when there was nothing to unset, and it fails with the same exit code
+/// as its refusal to touch a key written twice (measured, git 2.55: both
+/// are 5), so a pass that unset blindly would report a failure for a save
+/// that had nothing to do.
 #[tokio::test]
-async fn a_save_that_changes_nothing_asks_git_to_write_nothing() {
+async fn the_keys_the_decision_names_are_the_ones_git_is_asked_for() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     let (exec, spawns, cancel) = counted();
 
+    // One key moves and the other is already what was asked for.
     let written =
-        identity::set_local_identity(&exec, &repo.path, "Test User", "test@example.com", &cancel)
+        identity::set_local_identity(&exec, &repo.path, "Test User", "work@example.com", &cancel)
             .await
             .expect("set_local_identity");
-    assert!(
-        written.is_saved(),
-        "already what was asked for: {written:?}"
+    assert!(written.is_saved(), "{written:?}");
+    assert_eq!(
+        writes(&spawns),
+        vec!["git config --local user.email 'work@example.com'"],
+        "the name was already this, so nothing was spawned for it"
     );
 
-    let seen = spawns.seen();
-    assert!(
-        seen.iter().all(|command| command.contains("--get-regexp")),
-        "only reads went out: {seen:?}"
-    );
-}
-
-/// The same from the other side: a repository that already writes nothing
-/// is not asked to take out keys it does not have.
-#[tokio::test]
-async fn emptying_boxes_that_are_already_empty_asks_git_to_write_nothing() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.git(&["config", "--local", "--unset", "user.name"]);
-    repo.git(&["config", "--local", "--unset", "user.email"]);
+    // Both emptied: two keys are really held here, so both come out.
     let (exec, spawns, cancel) = counted();
+    let written = identity::set_local_identity(&exec, &repo.path, "", "", &cancel)
+        .await
+        .expect("set_local_identity");
+    assert!(written.is_saved(), "{written:?}");
+    assert_eq!(written.identity, identity::Identity::default());
+    assert_eq!(
+        writes(&spawns),
+        vec![
+            "git config --local --unset user.name",
+            "git config --local --unset user.email"
+        ]
+    );
 
+    // And again, over a file that now holds neither — the `--unset` git
+    // would refuse is the one this must not send.
+    let (exec, spawns, cancel) = counted();
     let written = identity::set_local_identity(&exec, &repo.path, "", "", &cancel)
         .await
         .expect("set_local_identity");
@@ -644,10 +657,14 @@ async fn emptying_boxes_that_are_already_empty_asks_git_to_write_nothing() {
         written.is_saved(),
         "there was nothing to take out: {written:?}"
     );
+    assert_eq!(writes(&spawns), Vec::<String>::new());
+}
 
-    let seen = spawns.seen();
-    assert!(
-        seen.iter().all(|command| command.contains("--get-regexp")),
-        "only reads went out: {seen:?}"
-    );
+/// The spawned commands that were not reads.
+fn writes(spawns: &Spawns) -> Vec<String> {
+    spawns
+        .seen()
+        .into_iter()
+        .filter(|command| !command.contains("--get-regexp"))
+        .collect()
 }

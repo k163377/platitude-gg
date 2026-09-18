@@ -77,8 +77,8 @@ pub async fn set_local_identity(
     write_local_pair(executor, workdir, name, email, cancel).await
 }
 
-/// One pass: whichever of the two keys is not already what was asked for,
-/// then what the file holds after.
+/// Which of the two keys a pass has to touch, and with what — the whole
+/// of the decision, with no git in it.
 ///
 /// **What the file already says is read first**, and a key that already
 /// says it is left alone. Not an optimisation: `git config --unset` fails
@@ -86,6 +86,30 @@ pub async fn set_local_identity(
 /// as its refusal to touch a key written more than once (measured git 2.55:
 /// both are 5). Asking first is what keeps those two apart — after it, a
 /// failed unset is a real one and is reported as such.
+///
+/// Separate from the pass that runs it because the combinations are
+/// where the rule lives — two keys, each of them held or not and wanted
+/// or not — and every one of them costs a repository and up to three git
+/// processes to ask through. What the pass around it still owes a real
+/// git is the other half: that this list is what actually goes out, and
+/// what happens when one of them is refused.
+fn keys_to_write<'a>(
+    held: &Identity,
+    name: &'a str,
+    email: &'a str,
+) -> Vec<(&'static str, &'a str)> {
+    [
+        ("user.name", name, held.name.as_deref()),
+        ("user.email", email, held.email.as_deref()),
+    ]
+    .into_iter()
+    .filter(|(_, wanted, held_value)| *held_value != non_empty(wanted).as_deref())
+    .map(|(key, wanted, _)| (key, wanted))
+    .collect()
+}
+
+/// One pass: the keys [`keys_to_write`] names, then what the file holds
+/// after.
 async fn write_local_pair(
     executor: &GitExecutor,
     workdir: &Path,
@@ -95,13 +119,7 @@ async fn write_local_pair(
 ) -> Result<IdentityWrite, GitError> {
     let held = load_local(executor, workdir, cancel).await?;
     let mut message = String::new();
-    for (key, wanted, held_value) in [
-        ("user.name", name, held.name.as_deref()),
-        ("user.email", email, held.email.as_deref()),
-    ] {
-        if held_value == non_empty(wanted).as_deref() {
-            continue;
-        }
+    for (key, wanted) in keys_to_write(&held, name, email) {
         // Stops at the first that fails, the way the global write does:
         // the second would be writing into a file this pass has just been
         // told it cannot change.
@@ -146,4 +164,96 @@ async fn write_local_key(
         cmd.args(["config", "--local", key, value])
     };
     executor.run(cmd, cancel).await.map(drop)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Identity, keys_to_write};
+
+    /// What one repository's own file holds, in the shape the read hands
+    /// back: an absent key is a key nobody wrote here.
+    fn held(name: Option<&str>, email: Option<&str>) -> Identity {
+        Identity {
+            name: name.map(str::to_string),
+            email: email.map(str::to_string),
+        }
+    }
+
+    /// A save that asks for what the file already says asks git for
+    /// nothing. Both halves of it: a value that matches, and the blank
+    /// box over a key nobody wrote — the second is the one that would
+    /// otherwise reach a `--unset` git refuses, with the exit code it
+    /// refuses a twice-written key with.
+    #[test]
+    fn a_save_that_changes_nothing_writes_nothing() {
+        assert!(
+            keys_to_write(
+                &held(Some("Ada"), Some("ada@example.com")),
+                "Ada",
+                "ada@example.com"
+            )
+            .is_empty()
+        );
+        assert!(keys_to_write(&Identity::default(), "", "").is_empty());
+        assert!(
+            keys_to_write(&held(Some("Ada"), None), "Ada", "").is_empty(),
+            "one key written and one not, each asked for what it already is"
+        );
+    }
+
+    /// One key at a time, which is the errand the whole level exists for:
+    /// another address for this project under the name the person already
+    /// goes by. The other key is not touched — not written, and not taken
+    /// out either.
+    #[test]
+    fn one_key_moves_without_the_other() {
+        assert_eq!(
+            keys_to_write(
+                &held(Some("Ada"), Some("ada@example.com")),
+                "Ada",
+                "work@example.com"
+            ),
+            vec![("user.email", "work@example.com")]
+        );
+        assert_eq!(
+            keys_to_write(
+                &held(Some("Ada"), Some("ada@example.com")),
+                "Ada Lovelace",
+                "ada@example.com"
+            ),
+            vec![("user.name", "Ada Lovelace")]
+        );
+    }
+
+    /// Both, in the order the pass writes them — which is the order a
+    /// half-landed write is reported in.
+    #[test]
+    fn both_keys_move_together_and_in_order() {
+        assert_eq!(
+            keys_to_write(&Identity::default(), "Ada", "ada@example.com"),
+            vec![("user.name", "Ada"), ("user.email", "ada@example.com")]
+        );
+    }
+
+    /// An emptied box takes its key out, and the two directions mix: a
+    /// pass may be taking one key out while it writes the other.
+    #[test]
+    fn an_emptied_box_takes_its_key_out_beside_one_being_written() {
+        assert_eq!(
+            keys_to_write(&held(Some("Ada"), Some("ada@example.com")), "", ""),
+            vec![("user.name", ""), ("user.email", "")]
+        );
+        assert_eq!(
+            keys_to_write(
+                &held(Some("Ada"), Some("ada@example.com")),
+                "",
+                "work@example.com"
+            ),
+            vec![("user.name", ""), ("user.email", "work@example.com")]
+        );
+        assert_eq!(
+            keys_to_write(&held(None, Some("ada@example.com")), "Ada", ""),
+            vec![("user.name", "Ada"), ("user.email", "")]
+        );
+    }
 }
