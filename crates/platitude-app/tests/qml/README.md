@@ -30,3 +30,9 @@ cargo xtask linux qmltest
 `tst_menudismiss.qml`: 入れ子のカードから呼んだ Qt の `Menu.dismiss()` が上のメニューまで
 全段畳むこと、親を閉じれば開いているカードも落ちることを固定する。製品のカードは
 この 1 発だけで畳む(app-ui.md §メニューを閉じるのは自分)。
+
+`tst_tabwidths.qml`: 帯の run を名前へ配る算術(`TabShare` — フォントもアイテムも
+持たない側)の条件表と、その答えの下で描かれた実 `TabItemDelegate`。**寸法は名前で
+渡す** — 境界がどこに来るかはコストで決まるので、プラットフォームのフォントから
+読んだ値では機械ごとに境界が動く。`tab-widths` の run が 6 本から 2 本になったのは
+この分割による(rules-refs/app-ui.md)。

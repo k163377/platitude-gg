@@ -65,7 +65,7 @@ Item {
         // The nested run settles the name against the column it now has; read first, this one would lay its own
         // answer, worked out against the column that is gone, back over it. What that leaves is a name cut for a box
         // narrower than the one it is drawn in — the mark standing alone where two letters fit (`TabProbe`,
-        // `PGG_AUTO_ACT=tab-widths`).
+        // `PGG_AUTO_ACT=tab-widths`; `tests/qml/tst_tabwidths.qml` is where it is held).
         const box = cut.width
         // No name, or no column yet — a delegate is built before the layout has given it one, and the labels below
         // are anchored to the item, so a name drawn against a box of nothing would be
