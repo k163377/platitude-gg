@@ -35,6 +35,7 @@ BandStashButton 1.0 BandStashButton.qml
 BandStateCard 1.0 BandStateCard.qml
 BandStateGroup 1.0 BandStateGroup.qml
 BandStateMetrics 1.0 BandStateMetrics.qml
+BandStateShare 1.0 BandStateShare.qml
 BandWidest 1.0 BandWidest.qml
 CoAuthorCard 1.0 CoAuthorCard.qml
 CoAuthorLine 1.0 CoAuthorLine.qml

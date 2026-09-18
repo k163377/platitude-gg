@@ -113,16 +113,11 @@ Item {
     property real cap: Number.MAX_VALUE
     /// Whether the words have been given up altogether. Bound, because two of the three
     /// conditions can change without the group's own width moving, and an assignment made in `settleCap` would never be
-    /// asked for again.
-    readonly property bool tabsScrolling: stateGroup.tabContentWidth > stateGroup.tabRunAvail
-    /// How many tabs the strip has room for as they are drawn now. Off their real width: a cap is
-    /// a ceiling the names may be nowhere near.
-    readonly property int tabsInView: {
-        const each = stateGroup.tabCount > 0 ? stateGroup.tabContentWidth / stateGroup.tabCount : 0
-        return each > 0 ? Math.floor(stateGroup.tabRunAvail / each) : 3
-    }
-    readonly property bool folded: stateGroup.cap < stateGroup.stateBadgeMinW
-        || (stateGroup.tabsScrolling && stateGroup.tabsInView < 3) || stateGroup.windowAtFloor
+    /// asked for again. **Every input is read in the expression itself**, so the binding takes its dependency on each
+    /// one — a read made inside the share's own body would be on an object this binding never touched.
+    readonly property bool folded: share.folded(stateGroup.cap, stateGroup.tabContentWidth,
+                                                stateGroup.tabRunAvail, stateGroup.tabCount,
+                                                stateGroup.windowAtFloor)
 
     /// Whether anything is asking for the card: the pointer on the mark, the pointer inside the card, or the hook
     /// standing in for either.
@@ -175,22 +170,7 @@ Item {
             want.push(stateGroup.staleBadgeW)
         if (stateGroup.oldGitBadgeShown)
             want.push(stateGroup.oldGitBadgeW)
-        if (want.length === 0) {
-            stateGroup.cap = Number.MAX_VALUE
-            return
-        }
-        let left = Math.floor(stateGroup.width) - (want.length - 1) * Theme.spaceXs
-        want.sort((a, b) => a - b)
-        let cap = Number.MAX_VALUE
-        for (let i = 0; i < want.length; i++) {
-            const share = Math.floor(left / (want.length - i))
-            if (want[i] > share) {
-                cap = share
-                break
-            }
-            left -= want[i]
-        }
-        stateGroup.cap = cap
+        stateGroup.cap = share.cap(want, stateGroup.width)
     }
 
     /// The stand-in pointer is down on a group that can answer it: standing, and placed.
@@ -233,6 +213,13 @@ Item {
         hasAlso: stateGroup.stateHasAlso
         hasStep: stateGroup.stateHasStep
         minChars: stateGroup.stateMinChars
+    }
+    /// The share-out itself, which owns no measurement of its own (`BandStateShare`). The floor comes across as a
+    /// binding on the metrics' own property — that one *is* settled by an assignment, so it notifies.
+    BandStateShare {
+        id: share
+        gap: Theme.spaceXs
+        badgeMinW: badgeMetrics.minW
     }
 
     // A handler: it is passive, so the identity badge under it still takes its own press
