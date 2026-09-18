@@ -103,3 +103,63 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
     );
     assert_eq!(tab.write_report_reason, "lint found 1 problem");
 }
+
+/// **The five shapes a history is turned down for, each reaching the page
+/// under its own name.** git was never asked and nobody outside said
+/// anything, so the kind is the whole of what the screen has to write
+/// both of its lines from (`Words.rewriteRefusedWhy`): a refusal
+/// arriving as its neighbour's tells a reader whose history is fine to
+/// switch branches, or to deepen a clone that is whole.
+///
+/// **Read off the producers themselves** (`platitude_core::report`), not
+/// a list of kinds written out again on this side: the claim is that
+/// what core withholds a rewrite with is what the page names it, and two
+/// hand-written tables stay green while they drift apart.
+#[test]
+fn every_withheld_rewrite_reaches_the_page_under_its_own_name() {
+    use platitude_core::report;
+    // Four of them are asked for through a fold and the fifth through a
+    // drop; the id is the row the press was on, which only the sentence
+    // the log keeps ever spells.
+    let refused = [
+        (K::Squash, report::rewrite_across_merge(), "across-merge"),
+        (
+            K::Squash,
+            report::rewrite_off_branch("9f4a21c0"),
+            "off-branch",
+        ),
+        (
+            K::Squash,
+            report::fold_first_commit("9f4a21c0"),
+            "fold-first",
+        ),
+        (
+            K::Squash,
+            report::rewrite_unfetched_base(),
+            "unfetched-base",
+        ),
+        (K::Drop, report::drop_all_commits(), "drop-all"),
+    ];
+    for (kind, withheld, named) in refused {
+        let mut tab = RepoTab::default();
+        tab.settle_write(
+            1,
+            kind,
+            withheld.to_string(),
+            withheld.report().cloned(),
+            0,
+            0,
+        );
+        assert!(tab.write_refused, "{named}: nothing was rewritten");
+        assert_eq!(tab.write_report_kind, named);
+        assert_eq!(
+            (
+                tab.write_report_remote.as_str(),
+                tab.write_report_name.as_str(),
+                tab.write_report_reason.as_str(),
+            ),
+            ("", "", ""),
+            "{named}: nothing over a network, no ref, and nobody else's words to quote"
+        );
+    }
+}
