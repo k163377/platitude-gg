@@ -141,16 +141,32 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "tab_edge landed=true",
     },
-    // What the crowded strip made of the run it was handed. The widths
-    // are read by eye against the shape the verb's own notes give, and
-    // `crushed=0` is the one reading they cannot carry: a tab is drawn
-    // as wide as its name, so a name cut away to the mark alone leaves
-    // every number here exactly where it should be, and the picture of
-    // it is a narrow tab with a mark in it — which is what a short name
-    // in this strip looks like as well.
+    // What a strip made of the run it was handed, with a real font's
+    // widths going in and real tabs coming out. The widths are read by
+    // eye against the shape the verb's own notes give, and `crushed=0`
+    // is the one reading they cannot carry: a tab is drawn as wide as
+    // its name, so a name cut away to the mark alone leaves every number
+    // here exactly where it should be, and the picture of it is a narrow
+    // tab with a mark in it — which is what a short name in this strip
+    // looks like as well.
+    //
+    // **Two runs, because there are two states and no count names
+    // either.** What the arithmetic does between them is a table asked
+    // without a window (`tests/qml/tst_tabwidths.qml`); what only a
+    // window answers is that this platform's font reached the state at
+    // all, so each run says which one it is in and is judged on it. A
+    // count that stopped crowding the band — a wider window, a narrower
+    // font — then fails here instead of going on passing against a strip
+    // with room to spare.
     Verb {
         name: "tab-widths",
-        when: &[],
+        when: &[
+            (Arg::OneOf(&["", "ample"]), "tab_widths crushed=0 cut=false"),
+            (
+                Arg::Is("short"),
+                "tab_widths crushed=0 cut=true folded=true",
+            ),
+        ],
         plain: "tab_widths crushed=0",
     },
     // The stand-in for the tab in front, and the press that takes it

@@ -30,14 +30,34 @@ const TAB_NAMES: [&str; 16] = [
     "a-final-repository-with-a-long-name",
 ];
 
-/// The strip the `tab-widths` verb is run against: `count` repositories
-/// (default 8) named off the ladder above.
+/// The strip the `tab-widths` verb is run against: repositories named off
+/// the ladder above, as many as the state the run asked for takes.
+///
+/// **The argument names the state, not a count.** Which count crowds this
+/// band is the window's furniture and the platform's font talking — the
+/// same six tabs leave Windows sharing a run it has to cut and Linux with
+/// room to spare (rules-refs/app-ui.md) — so a run that named a count
+/// would be claiming a state nobody had checked it reached. What the
+/// counts here are is the two ends of the ladder: the fewest that share a
+/// run at all, and the most it holds, which crowds every band this app
+/// has been run on. The state itself is read off the strip and judged
+/// (`TabStrip.tabNamesCut`), so a count that stopped reaching it fails
+/// rather than passing quietly.
+///
+/// A bare number still works, for choosing those counts again on a band
+/// nobody has measured — it makes the strip and reports what it came to,
+/// and claims only that no name was crushed.
 pub(super) fn tab_width_repos(arg: &str) -> Result<Vec<PathBuf>, String> {
-    named_strip(strip_count("tab-widths", arg)?, "basic", "tab-widths")
+    let count = match arg {
+        "" | "ample" => 6,
+        "short" => TAB_NAMES.len(),
+        _ => strip_count("tab-widths", arg)?,
+    };
+    named_strip(count, "basic", "tab-widths")
 }
 
-/// How many tabs a strip verb was asked for. Eight where it named none,
-/// which is the count the ladder shows both halves of its rule at.
+/// How many tabs a strip verb was asked for. Eight where it named none —
+/// which is only `badges`, whose own argument may end before the `:`.
 fn strip_count(verb: &str, arg: &str) -> Result<usize, String> {
     if arg.is_empty() {
         return Ok(8);
@@ -379,9 +399,11 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
     } else if opts.verb == "tab-widths" {
         tab_width_repos(&opts.arg)?
     } else if opts.verb == "tab-mark" {
-        // Same strip; the argument here names a tab, where
-        // `tab-widths` counts them.
-        tab_width_repos("")?
+        // Same ladder, eight of them; the argument here names the tab the
+        // hand is on, so the count is written out rather than taken from
+        // the other verb's default — which is a state name now, and the
+        // strip this one photographs has no business moving with it.
+        tab_width_repos("8")?
     } else if opts.verb == "tab-name" {
         // A different strip entirely: names that collide, which the
         // ladder above deliberately has none of.

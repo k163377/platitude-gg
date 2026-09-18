@@ -128,10 +128,17 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       -cancel ways out, and open-fail-tab for the road that keeps its
       tab) make their own folder when no argument names one: what they
       are about is a folder no repository can be.
-      The verb `tab-widths` makes its own repositories too — its argument
-      is how many (1..=16, default 8), and it names them at a spread of
-      lengths, because a strip of equally-named tabs cannot show which
-      of them gave way and which were left at their own width.
+      The verb `tab-widths` makes its own repositories too, named at a
+      spread of lengths, because a strip of equally-named tabs cannot
+      show which of them gave way and which were left at their own
+      width. Its argument names the state to reach — `ample` (the
+      default: a run the names all fit in) or `short` (one they have to
+      be cut for) — and the run is judged on having reached it, since
+      how many tabs that takes is the window's furniture and the
+      platform's font talking, not a number anyone can write down. A
+      bare count (1..=16) still builds that many, for choosing the two
+      again on a band nobody has measured; it claims only that no name
+      was crushed.
       `tab-mark` opens the same strip and puts the pointer on the tab its
       argument names (default 1), which is the only way a headless run
       reaches the half of the `✕` rule that hover answers.

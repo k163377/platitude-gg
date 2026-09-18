@@ -266,6 +266,10 @@ Rectangle {
     /// between are the strip's own (`TabMetrics.markRoomFull` / `markRoomMin`). A picture of a strip that has given it
     /// all up reads the same as one that has not had to.
     readonly property real tabMarkRoom: tabStrip.tabMarkRoom
+    /// And which of the two states that leaves the strip in — the reading a run is judged on, since the count that
+    /// reaches either is the platform's answer and not the run's (`TabStrip.tabNamesCut`).
+    readonly property bool tabNamesCut: tabStrip.tabNamesCut
+    readonly property bool tabMarksFolded: tabStrip.tabMarksFolded
 
     implicitHeight: Theme.toolbarHeight
     color: Theme.bgElevated

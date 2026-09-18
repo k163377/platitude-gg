@@ -427,6 +427,11 @@ Item {
             stop()
             Harness.report(
                 "tab_widths crushed=" + tabProbe.tabNamesCrushed()
+                // Which state the run actually reached, beside the crush count and judged with it: how many tabs it
+                // takes to crowd this band is the platform's answer (`TabStrip.tabNamesCut`), so a run that named a
+                // count would be claiming a state nobody checked.
+                + " cut=" + topBar.tabNamesCut
+                + " folded=" + topBar.tabMarksFolded
                 + " tabs=" + topBar.bandTabCount
                 + " run=" + Math.round(topBar.bandTabRun)
                 + " cap=" + Math.round(topBar.tabTitleCap)
