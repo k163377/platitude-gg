@@ -57,23 +57,29 @@ Item {
                 planLoadingTimer.start()
             else
                 planOpenTimer.begin(act)
-        } else if (act === "plan-across-merge" || act === "plan-off-branch"
-                   || act === "plan-unfetched-base") {
-            // The same press, on the three histories a preview turns down before the plan opens (`PlanRefusal`).
-            // Nothing is written and no plan comes back, so the answer is the bar in the middle and the notice
-            // barrier is the only one that can finish the run.
+        } else if (act === "plan-off-branch") {
+            // The same press as `rebase-plan`, on a history the preview turns down before the plan opens
+            // (`PlanRefusal`). Nothing is written and no plan comes back, so the answer is the bar in the middle
+            // and the notice barrier is the only one that can finish the run.
             //
-            // Each is its own verb because each is caught saying a different heading — the picture cannot tell
-            // a bar that came down from a log that came up, and the three bars differ only in their words.
+            // **One run for the three shapes a preview turns down.** All three take this one road — press,
+            // preview, bar — and the only thing the three ever said differently was the heading, which
+            // `tst_reportdress.qml` reads without raising a window. The shape itself comes from real git
+            // (`integrate_integration/plan.rs`) and the name the page reads it under from
+            // `rebase_plan::drain_tests`. The one left standing is the one whose repository is smallest:
+            // `one-commit` builds a commit and a branch of one, where `rewrite-merge` builds a merge and
+            // `shallow` wants a clone.
             //
-            // The row is what tells the preset's refusal apart: one below the tip is the merge in `rewrite-merge`
-            // and the oldest row a `--depth 2` clone holds in `shallow`, while the commit no branch of
-            // `one-commit` can see is row 0 and has to be named.
+            // The row has to be named (`row:0`): the commit no branch of `one-commit` can see is not under the
+            // tip, and a plan opened from the tip would open perfectly well.
             const refusedOid = arg !== "" ? driver.autoActOid(arg)
                              : graphModel.oidAt(graphModel.rowOf(workTree.headOid) + 1)
             page.openRowMenu(refusedOid)
             page.startRebasePlan(refusedOid)
             commitMenu.close()
+            // And that no plan stands behind the bar, which the picture cannot say: a window that opened one and
+            // put it away frames exactly like one that never opened it.
+            driver.barrierNotice.saysPlan = true
             driver.barrierNotice.start()
         } else if (act === "plan-amend-kept") {
             // The one order in which a plan closing over the boxes meets text that was never the plan's: type the

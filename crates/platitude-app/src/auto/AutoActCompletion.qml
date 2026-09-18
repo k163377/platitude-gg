@@ -138,7 +138,7 @@ QtObject {
                 "fold-first-commit", "drop-last-commit",
                 // The same bar with nothing written behind it: the preview turns the plan down before it opens,
                 // so the notice is the whole answer and no write barrier stands in front of it.
-                "plan-across-merge", "plan-off-branch", "plan-unfetched-base",
+                "plan-off-branch",
                 // Dress only: nothing is written, and the bar is raised through the page's own door.
                 "report-tone", "rename-tag-box",
                 // The write barrier is behind this one: what it photographs is the box still standing after git's

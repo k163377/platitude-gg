@@ -480,6 +480,10 @@ Item {
     /// sentences that wrap, and a report line cannot hold what the picture holds.
     SampleTimer {
         id: noticeBarrier
+        /// Whether the line also says no plan is standing — set by the verbs whose bar comes up *instead of* a plan
+        /// (`AutoActPlanVerbs`), and by nobody else: the other eleven reports are about writes, and a field they
+        /// carry the same answer to every time is one nothing would notice going wrong.
+        property bool saysPlan: false
         onTriggered: {
             if (!page.noticeCard.settled)
                 return
@@ -499,6 +503,8 @@ Item {
                               + " tone=" + (page.noticeCard.tone === "" ? "none" : page.noticeCard.tone)
                               + " log=" + page.commandsOpen
                               + " wrong=" + page.commandsWrong
+                              + (noticeBarrier.saysPlan ? " plan=" + page.planActive : "")
+                              // Last, because it is a sentence.
                               + " said=" + page.noticeCard.label)
             driver.complete()
         }

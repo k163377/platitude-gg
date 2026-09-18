@@ -104,31 +104,22 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=The history was not rewritten",
     },
-    // The same three histories through the other door: the plan's preview
-    // turns them down before it opens, and the bar it raises is the whole
-    // answer. **The heading is where the two doors part** — this one is
-    // about the range that would be replayed, the row menu's about the one
-    // commit that was pressed — so `said=` is what each row here is for,
-    // and the line under it is the same sentence either way
-    // (`Words.rewriteRefusedWhy`). `tone=warning` is the other half: the
-    // plan is a gesture still going, and no picture can read a 2px line.
-    Verb {
-        name: "plan-across-merge",
-        when: &[],
-        plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
-                said=A merge is in the way",
-    },
+    // The other door: the plan's preview turns a history down before the
+    // plan opens, and the bar it raises is the whole answer. **One run
+    // for the three shapes it turns down** — the press, the preview and
+    // the bar are the same road for all of them, and the only thing the
+    // three ever said differently was the heading, which
+    // `tst_reportdress.qml` now reads for the price of no window at all.
+    // `plan=false` is the claim no picture can make on its own: a window
+    // that opened a plan and put it away frames exactly like one that
+    // never opened it. `tone=warning` is the other half of what parts
+    // this door from the row menu's `danger` — the plan is a gesture
+    // still going — and no picture can read a 2px line.
     Verb {
         name: "plan-off-branch",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
-                said=Not on this branch",
-    },
-    Verb {
-        name: "plan-unfetched-base",
-        when: &[],
-        plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
-                said=The history stops here",
+                plan=false said=Not on this branch",
     },
     // The other end of the same merge: the button under the card is
     // what finishes it, and an empty box commits the message git
