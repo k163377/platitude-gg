@@ -297,6 +297,35 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "commit_answered landed=true empty=true amend=false",
     },
+    // The offer to take HEAD's authorship over, which stands only where
+    // there is something to take over. **`differs=` is the whole of
+    // why the row is there** and no picture holds it: a window that read
+    // HEAD's author and found it its own frames exactly like one that
+    // never read it, since both leave the row off. The name is beside it
+    // because a `differs=true` worked out against an author that never
+    // arrived is the same answer for the wrong reason.
+    //
+    // What git records either way is `commit_integration.rs`'s
+    // (`amending_keeps_the_author_until_reset_author_is_asked_for`);
+    // this is the reading reaching the editor.
+    Verb {
+        name: "amend-author",
+        when: &[],
+        plain: "amend_author differs=true name=Yuki Tanaka",
+    },
+    // And the box ticked, sent, and the page back afterwards. **The
+    // claim is whose name is in the picture**: the amend answers before
+    // the rebuild it asks for is started, so a run that stopped at the
+    // write photographs the commit that was replaced — still under the
+    // author the amend was sent to take over (observed: this preset
+    // photographed `Yuki Tanaka` on a green run). Both names, because
+    // a plain amend already moves the committer, and the author is the
+    // one `--reset-author` is asked for.
+    Verb {
+        name: "amend-reset-author",
+        when: &[],
+        plain: "author=Demo User committer=Demo User",
+    },
     // A commit a hook would not have. **The picture cannot judge this**
     // for the same reason the far side's refusals cannot be: a bar
     // saying nothing frames exactly like a bar saying the right thing,
