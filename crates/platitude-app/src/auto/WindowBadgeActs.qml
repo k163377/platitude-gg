@@ -118,6 +118,12 @@ Item {
             + " conflicts=" + topBar.conflictBadgeShown
             + " identity=" + topBar.identityBadgeShown
             + " oldGit=" + topBar.oldGitBadgeShown
+            // Whether the band was short at all, which is the half of the share-out a window is still for: the
+            // arithmetic is `BandStateShare`'s and asked without one, and what is left here is that a real font's
+            // widths reach the group and a real crowd narrows it. **Judged**, because a run whose window turned out
+            // to have room for every word photographs a band nobody crowded, and that picture cannot be told from a
+            // band that gave the crowd room.
+            + " narrowed=" + (topBar.stateCapW >= 0)
             // Which of the group's three shapes landed is `words=` / `mark=`; `cap=` is the width the badges were
             // narrowed to (-1 = none was).
             + " words=" + topBar.stateWordsShown

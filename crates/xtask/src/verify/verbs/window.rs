@@ -240,20 +240,43 @@ pub(super) const TABLE: &[Verb] = &[
     // cannot be told from a band that gave the crowd room — so the
     // crowd has to be said out loud.
     //
-    // The claim stops before the fit and which shape landed: this verb
-    // takes a width, and the widths that show the last shape are below
-    // the floor a hand can drag the window to (`fits=false` is what was
-    // asked for there). The floor itself is
-    // `window-floor`'s question.
+    // **And so does the shape**, which a width does not name: the same
+    // number lands in a different one on a different font, so a run that
+    // says only which badges stood goes on passing in a shape nobody
+    // asked for (measured 2026-09-18: the run written for the folded
+    // mark folded on Windows and kept its words on Linux, where that
+    // shape was then photographed by nothing). The arithmetic behind the
+    // shapes is `BandStateShare`'s and is asked in one process
+    // (`tst_bandshare.qml`); the two runs left are the two sides of what
+    // a window is still for — a group the band had the room for, and the
+    // same group narrowed by a real crowd of tabs.
+    //
+    // The claim stops before the fit: the widths that show the last
+    // shape are below the floor a hand can drag the window to
+    // (`fits=false` is what was asked for there), and the folded mark is
+    // photographed on both sides by `old-git-fold`, which reaches it
+    // through the floor instead of through the arithmetic. The floor
+    // itself is `window-floor`'s question.
     Verb {
         name: "badges",
-        when: &[],
-        plain: "op=true conflicts=true identity=true",
+        when: &[(
+            Arg::Is("1200:6"),
+            "op=true conflicts=true identity=true oldGit=false narrowed=true words=true mark=false",
+        )],
+        plain: "op=true conflicts=true identity=true oldGit=false narrowed=false words=true \
+                mark=false",
     },
     // The card, opened. `rows=` is the half the picture cannot carry
     // on its own: a card with one row and a card with three frame the
     // same way once it is cropped to the band, and which rows arrived
     // is the whole question the group raises when it gives way.
+    //
+    // **One stopped operation is every stopped operation here.** The
+    // card ran a second time over a stopped cherry-pick, and the rows
+    // are the same three — the only thing that differed was the word
+    // inside the op row, which is the model's
+    // (`worktree::tests::every_operation_that_can_stand_here_…`, where
+    // all four are walked without a window).
     Verb {
         name: "badges-hover",
         when: &[],
