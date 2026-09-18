@@ -70,6 +70,7 @@
 
 - **git を撃つ前に答えが出る分岐は `#[cfg(test)]` の単体テストへ**(2026-09-17)。**証人を 2 つ置く** —— `CommandObserver` の `started` を数えて 0(observer は queue と spawn の手前で呼ばれるので、0 は「1 本も撃っていない」の意味)と、在りもしないプログラム名 + 在りもしない木(すり抜けた分岐は spawn で落ちる = 作ってもいない作業ツリーで緑にならない)。先例は `stage::partial`(履歴の diff の拒否 = 使い捨てリポジトリ 1 つと git 5 本を消した)。**統合テストに残すのは git が答えてから断る側**(fingerprint のズレ・combined diff・実際の patch 適用と復旧)
 - **読みの並びの後の判断は純関数に割る**(2026-09-17)。先例は `remote::push::decide_push`(4 本の読みの後の「どこへ送るか」)—— 鍵の並べ方は実装が 2 か所に綴られて食い違った唯一の場所で、実 git で歩くと 1 通りにつき clone 1 つ + bare 2 つ + `config` の書き込みが要る。**統合テストに残すのは「読みが git の持ち物を持って返るか」**(scope・正規表現になる名前・実 push の代表例)と、`config_reads::planning_a_push_answers_by_code`(4 本が全部「答え」に分類されること)
+- **同じ割り方の 2 例目・3 例目**(2026-09-18): `identity::local::keys_to_write`(保持値と要求値から「どの鍵を設定・削除・維持するか」。組合せ全件が単体、実 git に残すのは**発行されたコマンドがその判断どおりであること** = `the_keys_the_decision_names_are_the_ones_git_is_asked_for` が 1 リポジトリで 3 回 save して読む)/ `sequencer::plan::decide_edit`(2 本の読みの後の 4 つの拒否と 3 つの編集。**拒否の順**(merge が off-branch と fold-first より先)が単体で初めて読める形になった。実 git に残すのは shallow clone の縁が縁として返ること = `plan_edit` の depth が範囲をそこまで届かせるかどうか)。**割る前に測る対象は「その判断 1 通りあたり何プロセス・何リポジトリか」** —— 純関数を足しただけで元の統合テストを全部残すのは未完了
 
 - **メモリの内訳は `cargo xtask perf --breakdown` で出す**。取りこぼしは「残り」が膨らむ形で出るので総量は嘘にならない。実測記録は [ci/baseline/perf-windows-x64.md](../../ci/baseline/perf-windows-x64.md)
 - **refs に比例する名前は `crate::Name`(`compact_str`)で持つ** — 24 バイトまで inline(ref 名の実測平均 20.2 字)。app 側には純 Rust 型で渡す(§core の API は純 Rust 型のみ)。**`Footprint` は `SmallVec` に明示 impl が要る** — 無いと `[T]` へ deref して溢れたバッファを数え落とす

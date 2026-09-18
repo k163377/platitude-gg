@@ -65,34 +65,23 @@ async fn squashing_the_second_commit_reaches_back_to_the_root() {
     assert!(repo.path.join("a.txt").exists() && repo.path.join("b.txt").exists());
 }
 
+/// What a shallow clone's edge answers, which is a question about git and
+/// nothing else: at the edge `%P` comes back empty and `<edge>~1` exits 1,
+/// exactly as at a real first commit, so the read has to reach past both
+/// to tell them apart (`sequencer::plan::base_of`).
+///
+/// **Which refusal that answer becomes is a unit test**
+/// (`sequencer::plan::decide_edit`): the four are a table over two reads,
+/// and every row of it here costs a source repository and a clone. What is
+/// left for a real git is this — that the edge comes back as an edge, and
+/// that the depth of the edit decides whether the range reaches it at all.
 #[tokio::test]
-async fn the_first_commit_has_nothing_to_fold_into() {
-    let mut repo = TestRepo::init();
-    let root = repo.commit_file_id("a.txt", "one\n", "root");
-    repo.commit_file("b.txt", "two\n", "second");
-    let (exec, cancel) = env();
-
-    let err = sequencer::plan_edit(
-        &exec,
-        &repo.path,
-        &root,
-        sequencer::Edit::SquashIntoParent,
-        &cancel,
-    )
-    .await
-    .expect_err("nothing before the root");
-    assert!(err.to_string().contains("first commit"), "{err}");
-    // The refusal carries the report the screen says it with. Without this
-    // the sentence alone passes either way: `#[error("{message}")]` reads
-    // the same whether the kind went back to one that opens the log.
-    assert!(err.report().is_some(), "{err}");
-}
-
-#[tokio::test]
-async fn an_edit_at_the_shallow_edge_is_refused() {
+async fn the_shallow_edge_is_read_as_an_edge_and_only_an_edit_that_reaches_it_is_refused() {
     let (_source, clone, held) = shallow_clone(6, 3);
     let (exec, cancel) = env();
 
+    // The oldest commit this clone holds: its parent is unfetched, so
+    // nothing can be composed under it whatever the edit.
     let err = sequencer::plan_edit(&exec, &clone, &held[0], sequencer::Edit::Drop, &cancel)
         .await
         .expect_err("the edge has no parent this clone can name");
@@ -101,16 +90,10 @@ async fn an_edit_at_the_shallow_edge_is_refused() {
         "{err}"
     );
     assert!(err.report().is_some(), "{err}");
-}
 
-#[tokio::test]
-async fn only_the_edit_that_reaches_down_to_the_shallow_edge_is_refused() {
     // Depth is what decides it: a squash folds into the line above it, so
     // its range takes the parent in and bottoms out at the edge. A drop of
     // the same commit reaches only itself and plans onto the edge fine.
-    let (_source, clone, held) = shallow_clone(6, 3);
-    let (exec, cancel) = env();
-
     let err = sequencer::plan_edit(
         &exec,
         &clone,
@@ -185,14 +168,25 @@ async fn rewording_the_root_commit_works_through_root_mode() {
     );
 }
 
+/// **The range a plan is read over is this branch's history and no other.**
+///
+/// Which refusals the two reads become is a unit test
+/// (`sequencer::plan::decide_edit`) — but it is handed a range, and a range
+/// is only as good as the revisions it was spelled with. A plan read over
+/// `--all`, or over a range ending somewhere other than HEAD, would hold
+/// the commit on the side branch and compose a rebase that replays it: the
+/// table cannot see that, because the list it is given is the answer being
+/// questioned. So one repository asks git for it, with a commit either
+/// side of the branch point so the reading has to tell them apart rather
+/// than refuse everything.
 #[tokio::test]
-async fn a_commit_outside_the_current_branch_is_refused() {
+async fn the_range_read_is_this_branchs_history_and_not_another() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     repo.git(&["checkout", "-b", "side"]);
     let elsewhere = repo.commit_file_id("s.txt", "side\n", "side work");
     repo.git(&["checkout", "main"]);
-    repo.commit_file("m.txt", "main\n", "main work");
+    let here = repo.commit_file_id("m.txt", "main\n", "main work");
     let (exec, cancel) = env();
 
     let err = sequencer::plan_edit(
@@ -205,7 +199,28 @@ async fn a_commit_outside_the_current_branch_is_refused() {
     .await
     .expect_err("not in this history");
     assert!(err.to_string().contains("not in the history"), "{err}");
+    // The refusal carries the report the screen says it with. Without this
+    // the sentence alone passes either way: `#[error("{message}")]` reads
+    // the same whether the kind went back to one that opens the log.
     assert!(err.report().is_some(), "{err}");
+
+    // And the commit that *is* on this branch plans — the reading is not
+    // simply refusing whatever it is handed.
+    let plan = sequencer::plan_edit(
+        &exec,
+        &repo.path,
+        &here,
+        sequencer::Edit::Reword("yes\n".into()),
+        &cancel,
+    )
+    .await
+    .expect("the tip of this branch is in this branch's range");
+    assert_eq!(plan.tip, here);
+    assert!(
+        plan.steps.iter().all(|step| step.oid != elsewhere),
+        "and the side branch is not in what would be replayed: {:?}",
+        plan.steps
+    );
 }
 
 #[tokio::test]
