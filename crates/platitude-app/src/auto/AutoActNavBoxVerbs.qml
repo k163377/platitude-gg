@@ -59,10 +59,36 @@ Item {
                               + " collapsed=" + page.sidebarCollapsed
                               + " box=" + (sidebarPane.editKey !== "")
                               + " editing=" + sidebarPane.editKey)
-        } else if (act === "nav-tip") {
+        } else if (act === "nav-tip" || act === "nav-open") {
             // `<section>:<row>`, or `head` for the current branch's sticky stand-in. The pointer goes in at the row's
-            // own `pointedTipRow`, the same one the file lists carry.
+            // own `pointedTipRow`, the same one the file lists carry. `nav-open` is the same walk read on the lines a
+            // branch row opens under itself (`NavRowFacts`) instead of on the shared tooltip.
+            navTipTimer.opens = act === "nav-open"
+            navTipTimer.then = ""
             navTipTimer.begin(arg)
+        } else if (act === "nav-open-foot") {
+            // The same rest, taken on the last row of a section with more rows than it has height for: the list goes
+            // to its end first, so the row the hand comes to rest on has the bottom edge under it and nowhere to
+            // open into. **The list is what has to move** (`NavList.revealOpenRow`).
+            // With `away` it goes on: the hand leaves, and the list gives back what showing the lines took.
+            navTipTimer.opens = true
+            navTipTimer.then = arg
+            navTipTimer.foot = true
+            navTipTimer.begin("branch")
+        } else if (act === "nav-open-held") {
+            // The other order: the name box first, and **then** a hand on a row. Nothing may open — what opens moves
+            // the rows under it, and the box is the only thing on screen saying what mode the reader is in.
+            sidebarPane.beginRename("branch", navProbe.tipNameAt("branch", 2),
+                                    navProbe.tipNameAt("branch", 2))
+            openHeldTimer.start()
+        } else if (act === "nav-open-then") {
+            // The open row, and then the next thing the hand does — `away` leaves it, `edit` opens the name box on
+            // that row, `menu` opens a menu from somewhere else, `filter` types a filter that takes the row out of
+            // the list, and `rightclick` / `sweep` / `tap` are the three the hand makes on the open lines themselves.
+            // **The orders are what is being read**, not the opening on its own: each is a state it has to answer to.
+            navTipTimer.opens = true
+            navTipTimer.then = arg
+            navTipTimer.begin("branch:2")
         } else if (act === "nav-rename" || act === "rename-branch"
                    || act === "rename-tag" || act === "rename-stash") {
             // Which row: the current branch, the first tag, the first stash. "nav-rename" leaves the box standing for
@@ -254,21 +280,59 @@ Item {
             driver.complete()
         }
     }
+    // The other order: a name box standing, and then a hand on a row. Nothing may open, and the row still has to be
+    // the one under the hand — a run that never reached it would answer the same way.
+    SampleTimer {
+        id: openHeldTimer
+        onTriggered: {
+            // The hand goes in the same place a pointer's does. **The answer is read in the same beat**: the stand-in
+            // opens outright where a hand would sit out a rest, so a row that was going to open is open already.
+            navProbe.pointTipAt("branch", 2)
+            const name = navProbe.tipNameAt("branch", 2)
+            if (name === "" || sidebarPane.editKey === "")
+                return
+            openHeldTimer.stop()
+            Harness.report("nav_open_held row=2 name=" + name
+                + " box=true open=" + navProbe.rowFactsOpen
+                + " lit=" + navProbe.rowWashLit("branch", 2))
+            driver.complete()
+        }
+    }
     // The sidebar's row tooltips, and the rows that answer with none. Every run lights a control row first — the
     // WORKTREES row always says where it leads — so a run that photographs an empty overlay has said in the same line
     // that the pointer and the shared instance were both working. Without that, "nothing came out" and "nothing was
-    // pointed at" are one picture.
+    // pointed at" are one picture. The rows that open under themselves instead walk the same path and are read on
+    // what they opened (`opens`).
     SampleTimer {
         id: navTipTimer
         property string kind: "branch"
         property int row: 0
         property bool head: false
+        /// Whether the run is about the lines a branch row opens under itself rather than the shared tooltip
+        /// (PGG_AUTO_ACT=nav-open), and what the hand does once the row is open (PGG_AUTO_ACT=nav-open-then).
+        property bool opens: false
+        property string then: ""
+        /// Whether that next thing has been done — once, not on every beat, because the beat after it is what the
+        /// answer is read from — and the name the hand had rested on when it was.
+        property bool acted: false
+        property string rested: ""
         /// What the stand-in is put on screen by: a filter its own branch does not answer to. **This is the half with
-        /// no row anywhere** (`HeadPinRow.seated`) — the two ways into it are a filter and a folded folder, and no
-        /// section in these repositories has more rows than it is given height for (`NavList.Layout.maximumHeight`),
-        /// so there is nothing here to scroll the row off with. The other half, where the row is in the list and the
-        /// list moved out from under it, is `nav-pin-edge`'s.
+        /// no row anywhere** (`HeadPinRow.seated`) — the two ways into it are a filter and a folded folder, and the
+        /// repositories this argument is run against give every section height for all its rows
+        /// (`NavList.Layout.maximumHeight`), so there is nothing here to scroll the row off with. The other half,
+        /// where the row is in the list and the list moved out from under it, is `nav-pin-edge`'s — and the one
+        /// preset whose BRANCHES does overflow is what that and `nav-open-foot` are run on.
         property string hide: ""
+        /// Whether the row rested on is the last of its section, with the list taken to its end first
+        /// (PGG_AUTO_ACT=nav-open-foot). Done once: the scroll is the state the rest is taken in, not something
+        /// re-applied under a hand that has already arrived.
+        property bool foot: false
+        property bool footDone: false
+        /// Where the list was standing when the hand arrived, remembered out here: what closing has to give back is
+        /// held against the run's own note of it rather than against the list's (`NavList.openRestY`).
+        property real restY: 0
+        /// The geometry the last beat read, so a beat that reads the same one knows the layout has come to rest.
+        property string stood: ""
         property bool lit: false
         function begin(arg) {
             const parts = ("" + arg).split(":")
@@ -281,6 +345,9 @@ Item {
                              : (parts.length > 2 ? parts[2] : "")
             navTipTimer.row = !navTipTimer.head && parts.length > 1 ? Number(parts[1]) : 0
             navTipTimer.lit = false
+            navTipTimer.acted = false
+            navTipTimer.footDone = false
+            navTipTimer.stood = ""
             navTipTimer.start()
         }
         onTriggered: {
@@ -299,29 +366,123 @@ Item {
                     navProbe.typeFilter(navTipTimer.hide)
                 if (navTipTimer.head)
                     sidebarPane.headPinPointed = true
+                navTipTimer.restY = navProbe.listContentY(navTipTimer.kind)
+                return
+            }
+            // The list to its end, once, before the hand comes to rest: what the rest is taken on is the last row of
+            // a section that had to scroll to reach it. A beat is given back so the list is standing still by the
+            // time the pointer is on it.
+            if (navTipTimer.foot && !navTipTimer.footDone) {
+                // **The rows have to be there first.** What proved the tooltip works is a row of the working
+                // copies' listing, which is a read of its own and can land before the refs one — so the branches
+                // may still be empty here. Taking the last row then takes -1, which is also "the pointer is on no
+                // row", and the run rests on nothing and waits out the ceiling (measured: 1 run in 7).
+                const list = navProbe.listOf("branch")
+                if (!list || list.count <= 0)
+                    return
+                navProbe.scrollBranchesToEnd()
+                navTipTimer.row = list.count - 1
+                navTipTimer.footDone = true
+                navTipTimer.restY = navProbe.listContentY("branch")
                 return
             }
             const target = navTipTimer.head ? branchesModel.headRow : navTipTimer.row
-            if (!navTipTimer.head)
+            // **Stopped once the hand has moved on**: re-applying the rest every beat would put the pointer back on
+            // the row the run has just walked it off (`nav-open-then away`).
+            if (!navTipTimer.head && !navTipTimer.acted)
                 navProbe.pointTipAt(navTipTimer.kind, target)
             // Nothing is attached to the stand-in, so what is read there is that the pointer is on it and the
             // instance went back down.
-            const name = navTipTimer.head ? branchesModel.headName
+            // Once the hand has moved on, the row it was on may not be in the list any more — a filter takes it out —
+            // so what the run says it rested on is the name it read then, not what is there now.
+            const name = navTipTimer.acted ? navTipTimer.rested
+                       : navTipTimer.head ? branchesModel.headName
                        : navProbe.tipNameAt(navTipTimer.kind, target)
-            if (name === "" || (navTipTimer.head && !navProbe.headPinLit))
+            if (name === "" || (!navTipTimer.acted && navTipTimer.head && !navProbe.headPinLit))
                 return
+            navTipTimer.rested = name
             const words = navTipTimer.head ? navProbe.headPinWords
                         : navProbe.tipWordsAt(navTipTimer.kind, target)
-            // A row with something to say is not photographed until the instance is up; one with nothing to say is not
-            // photographed until the control's own tip has left the screen.
-            if ((words !== "") !== tip.visible)
-                return
+            // A branch row opens its facts under itself instead of raising the tooltip, so that is what the run waits
+            // for and reads (`SidebarPane.rowFactsWords`). Everywhere else: a row with something to say is not
+            // photographed until the shared instance is up, and one with nothing to say not until the control's own
+            // tip has left the screen.
+            //
+            // **Nothing is waited out after the hand moves on**: what opens is inside the row, so it goes the moment
+            // the pointer leaves and there is no beat between the two — the tick after the order is the answer.
+            if (!navTipTimer.acted) {
+                if (navTipTimer.opens) {
+                    if (!navProbe.rowFactsOpen)
+                        return
+                    // The row is open: the second half of the run is whatever the hand does next.
+                    if (navTipTimer.then !== "") {
+                        navTipTimer.acted = true
+                        navProbe.afterOpen(navTipTimer.then, navTipTimer.kind, target)
+                        return
+                    }
+                } else if ((words !== "") !== tip.visible) {
+                    return
+                }
+            }
+            // **Nothing is read until the layout has stopped moving.** What a row opens is measured on a layout, and
+            // the section's own height answers to that measurement in turn — so on the pass the row opened on
+            // neither has arrived, and a run reading the geometry there says the lines are out of view of a list
+            // that is about to show them (measured: `room=21` against a section still 25 tall). Two beats saying the
+            // same thing is the list standing still; what it is standing at is then the answer.
+            if (navTipTimer.opens) {
+                const geom = sidebarPane.rowFactsGeom()
+                if (geom !== navTipTimer.stood) {
+                    navTipTimer.stood = geom
+                    return
+                }
+            }
             navTipTimer.stop()
+            // The row at the foot of a section that had to scroll to reach it, and — with `away` — the list after
+            // the hand left it again. **The list is the subject here**, not the hand, so it has a line of its own:
+            // `shown=` is the row weighed against what the list is showing, and `back=` is where the list is standing
+            // weighed against where this run saw it standing before the hand arrived.
+            if (navTipTimer.foot) {
+                const at = navProbe.listContentY(navTipTimer.kind)
+                Harness.report("nav_open_foot what=" + navTipTimer.then
+                    + " row=" + target + " name=" + name
+                    + " open=" + navProbe.rowFactsOpen
+                    + " shown=" + navProbe.rowFactsShown()
+                    + " back=" + (Math.round(at) === Math.round(navTipTimer.restY))
+                    + " rest=" + Math.round(navTipTimer.restY) + " at=" + Math.round(at)
+                    + " seat=" + sidebarPane.rowFactsGeom())
+                driver.complete()
+                return
+            }
+            if (navTipTimer.then !== "") {
+                Harness.report("nav_open_then what=" + navTipTimer.then
+                    + " row=" + target + " name=" + name
+                    + " open=" + navProbe.rowFactsOpen
+                    + " lit=" + navProbe.rowWashLit(navTipTimer.kind, target)
+                    + " box=" + (sidebarPane.editKey !== "")
+                    + " menu=" + sidebarPane.menuOpen
+                    + " rows=" + navProbe.listOf(navTipTimer.kind).count
+                    // What the hand on those lines came away with, and where the click landed: a drag takes words and
+                    // the row hears nothing, a press that never moved is the row's (`NavRowFacts.handClicked`).
+                    + " caret=" + navProbe.factsCaret()
+                    + " copied=" + (navProbe.factsTook() !== "")
+                    + " clicked=" + (sidebarPane.activeKey !== "")
+                    // The two above said as words, which is the repository's business rather than the rule's.
+                    + " took=" + navProbe.factsTook()
+                    + " active=" + sidebarPane.activeKey)
+                driver.complete()
+                return
+            }
             Harness.report("nav_tip section=" + (navTipTimer.head ? "head" : navTipTimer.kind)
                 + " row=" + target + " name=" + name
                 + " lit=" + navTipTimer.lit + " wants=" + (words !== "")
-                + " tip=" + tip.visible + " text=" + (tip.visible ? tip.text : "")
-                // Last, and after a text that may carry anything: the judged trio above has to stay one substring.
+                + " tip=" + tip.visible + " open=" + navProbe.rowFactsOpen
+                // Whether what opened is inside what the list shows — the whole of the question at the foot, and
+                // true everywhere else because there was room under the row to begin with.
+                + (navTipTimer.opens ? " shown=" + navProbe.rowFactsShown() : "")
+                + " text=" + (tip.visible ? tip.text : "")
+                // Last, and after a text that may carry anything: the judged four above have to stay one substring.
+                + (navTipTimer.opens ? " seat=" + sidebarPane.rowFactsGeom() : "")
+                + (navTipTimer.opens ? " says=" + navProbe.rowFactsWords() : "")
                 + (navTipTimer.head ? " pin=" + navProbe.headPinLit : ""))
             driver.complete()
         }

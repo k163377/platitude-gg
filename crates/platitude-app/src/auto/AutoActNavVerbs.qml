@@ -85,6 +85,14 @@ Item {
                                         workTree.branch)
             }
             navRailTimer.start()
+        } else if (act === "nav-peek-open") {
+            // A row opened on the section standing beside the folded rail. **The row grows inside a popup**: what
+            // this reads is that the section makes room for it and stays up, rather than taking itself — and the
+            // row — down as the rows under it move.
+            page.foldByHand(true)
+            navProbe.peekAt("branch")
+            peekOpenTimer.want = arg === "" ? 0 : Number(arg)
+            peekOpenTimer.start()
         } else if (act === "tags-eye") {
             // The eye pressed at the band itself, with the list left standing beside the graph: what the switch is
             // about is the graph, and TAGS keeping its count while the graph loses a row is half of what the picture
@@ -215,6 +223,25 @@ Item {
             // far the list had to go to leave it behind.
             + " row=" + branchesModel.headRow
             + " rested=" + Math.round(rested))
+            driver.complete()
+        }
+    }
+    /// PGG_AUTO_ACT=nav-peek-open: rest on a row of the open section and wait for it to open, which is what says the
+    /// section stayed up while the rows inside it moved.
+    SampleTimer {
+        id: peekOpenTimer
+        property int want: 0
+        onTriggered: {
+            // Re-applied every beat: the rows of a popup that has just opened arrive on a later layout, and a miss
+            // reads exactly like a row with nothing to open (the reading `nav-tip` makes of the sections' own lists).
+            navProbe.pointPeekTipAt(peekOpenTimer.want)
+            const name = navProbe.peekNameAt(peekOpenTimer.want)
+            if (name === "" || !navProbe.rowFactsOpen)
+                return
+            peekOpenTimer.stop()
+            Harness.report("nav_peek_open row=" + peekOpenTimer.want + " name=" + name
+                + " peek=" + navProbe.peekStanding + " open=" + navProbe.rowFactsOpen
+                + " says=" + navProbe.rowFactsWords())
             driver.complete()
         }
     }

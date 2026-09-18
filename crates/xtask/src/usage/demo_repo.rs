@@ -53,6 +53,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   a plain push git will not send until the remote has been
                   read again (push-outdated)
         unpublished  a branch never sent anywhere, two remotes, one taken name
+        gone      a branch whose upstream the far side deleted: git answers
+                  [gone] for it, and the row has a remote branch to name
+                  with nothing behind it (nav-open)
         forkmark  a fork checkout: fetches from origin, and the branch's
                   own mark sends every push of it to the fork instead
         protected an origin that keeps what it holds: every push to it is

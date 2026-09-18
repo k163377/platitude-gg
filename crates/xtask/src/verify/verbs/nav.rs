@@ -299,6 +299,110 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "same=true lit=true marked=true wip=false",
     },
+    // A branch row opens its facts under itself rather than raising the
+    // shared tooltip (`NavRowFacts`), so the pair judged here is the
+    // other way round: nothing in the tooltip, the row open.
+    //
+    // **The words it carries stay out of the claim.** The name, the
+    // upstream and the working copy holding the branch are the
+    // repository's and the preset's, not the rule's — they go on the
+    // line (`says=`) for the reader of the report, and the picture is
+    // where a row that opened on nothing is caught.
+    Verb {
+        name: "nav-open",
+        when: &[],
+        plain: "wants=false tip=false open=true",
+    },
+    // The same rest, taken on the last row of a section holding more
+    // rows than it has height for (`--preset stack`: 30 branches, 10 of
+    // them on screen). **The list is what has to move**: the lines open
+    // below the row's own line, and at the foot of the list there is
+    // nothing below — so a list that stood still opens them under the
+    // bottom edge, where the picture shows the row and none of them.
+    //
+    // `shown=` is the two geometries weighed against each other — where
+    // the row landed and what the list is showing — rather than the
+    // scroll that was asked for: a list keeping a note of a move it
+    // never made would otherwise vouch for itself. It rides with
+    // `open=` because a row that never opened shows whole as well.
+    //
+    // `away` is the other half of the same rule: what the list gave up
+    // to show them it takes back when the hand leaves. `back=` is the
+    // run's own note of where the list stood before the hand arrived,
+    // weighed against where it is standing now — the list's memory of
+    // the move is the thing being tested, so it cannot be the witness.
+    Verb {
+        name: "nav-open-foot",
+        when: &[
+            (Arg::Is(""), "open=true shown=true"),
+            (Arg::Is("away"), "open=false shown=false back=true"),
+        ],
+        plain: "open=",
+    },
+    // The open row, and then the next thing the hand does. **Each order
+    // has its own line**, because what the row must do differs: it
+    // closes when the hand leaves, closes when a name box opens on it,
+    // closes when a menu takes over the list, goes with the row a filter
+    // takes away, and stays under the menu it raised itself.
+    //
+    // `lit=` rides with them: the row wears the wash over the whole of
+    // itself while it is open, and one that went dark under its own
+    // lines reads as a row nothing is on.
+    Verb {
+        name: "nav-open-then",
+        // **Each claim is one run of the line**, since that is how a must_say
+        // is read: the words in between are part of what is being claimed.
+        when: &[
+            (Arg::Is("away"), "open=false lit=false box=false"),
+            (Arg::Is("edit"), "open=false lit=true box=true"),
+            (Arg::Is("menu"), "open=false lit=true box=false menu=true"),
+            (
+                Arg::Is("filter"),
+                "open=false lit=false box=false menu=false rows=0",
+            ),
+            // A menu asked for from the open lines themselves. **The row
+            // stays open** — it is what that menu is about, and lines
+            // that went out from under it would take the context with
+            // them. The order beside this one (`menu`) is a menu raised
+            // anywhere else, which does close the row: the pair is the
+            // rule.
+            (
+                Arg::Is("rightclick"),
+                "open=true lit=true box=false menu=true",
+            ),
+            // The hand on those lines. A drag takes the words away and
+            // **the row hears nothing** — the row's second click opens a
+            // name box, and a reader dragging over a name to copy it
+            // must not find it in one. A press that never moved is the
+            // row's click, which is the other half: lines that answered
+            // only one of the two would pass a claim written for the
+            // other.
+            (Arg::Is("sweep"), "caret=true copied=true clicked=false"),
+            (Arg::Is("tap"), "copied=false clicked=true"),
+        ],
+        plain: "open=",
+    },
+    // The other order: a name box first, then a hand on the row it is
+    // open on. **Nothing may open.** A row that opens takes the rows
+    // under it down with it, and one of them carries the box — the only
+    // thing on screen saying what mode the reader is in. `lit=true`
+    // rides along because the row is still the one under the hand: the
+    // pointer landed, and what answered it is the row staying shut
+    // rather than the hand never arriving.
+    Verb {
+        name: "nav-open-held",
+        when: &[],
+        plain: "box=true open=false lit=true",
+    },
+    // The same opening, on a row of the section the folded rail has
+    // open. **`peek=true` is the point**: the row that grows is inside
+    // that popup, and a section that cannot make room for it takes
+    // itself — and the row — down as the rows under it move.
+    Verb {
+        name: "nav-peek-open",
+        when: &[],
+        plain: "peek=true open=true",
+    },
     // The current branch's stand-in riding the edge its own row went out
     // of, with the list scrolled out from under it. **The picture cannot
     // answer this**: on the top edge the stand-in draws the same whether

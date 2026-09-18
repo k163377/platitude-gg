@@ -146,6 +146,32 @@ pub(super) fn outrun(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// A branch that still names an upstream the far side no longer holds:
+/// git answers `[gone]` for it, and the row has a remote branch to say
+/// with nothing behind it (デザイン規約 §左メニューの所作).
+///
+/// **The prune is what puts the state on record.** A copy that only
+/// deleted the far branch goes on holding its remote-tracking ref and
+/// reads as tracking; git calls the upstream gone once that ref is not
+/// there and the configuration still names it. The window's own fetch on
+/// opening does the same thing, so the state holds however a run arrives
+/// at it.
+///
+/// **The name carries no slash** — one would fold the row under a folder,
+/// and this preset is about the branch's own line.
+pub(super) fn gone(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+    repo.git(&["switch", "--create", "release-1.2"])?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.git(&["push", "--set-upstream", "origin", "release-1.2"])?;
+    repo.git(&["push", "origin", "--delete", "release-1.2"])?;
+    repo.git(&["fetch", "--prune", "origin"])?;
+    repo.git(&["switch", "main"])?;
+    Ok(())
+}
+
 /// Puts one hook into `hooks` and makes it runnable — the mechanics all
 /// three hook-carrying presets share, so a platform fix (the exec bit is
 /// the one that only matters on machines the author is not on) lands in

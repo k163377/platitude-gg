@@ -100,6 +100,80 @@ QtObject {
         if (list)
             list.pointedTipRow = row
     }
+    /// Where one section's list is standing (PGG_AUTO_ACT=nav-open-foot / nav-open-then): a run remembers this
+    /// itself before the hand arrives, so what it holds the give-back against is not the list's own note of it.
+    function listContentY(kind) {
+        const list = probe.listOf(kind)
+        return list ? list.contentY : 0
+    }
+    /// PGG_AUTO_ACT=nav-open: the facts a branch row opens under itself — whether one is open, and what it says.
+    /// Read off the row itself (`SidebarPane.rowFactsWords`), so a run cannot go green with the wiring cut.
+    readonly property bool rowFactsOpen: probe.sidebar.rowFactsOpen
+    function rowFactsWords() {
+        return probe.sidebar.rowFactsWords()
+    }
+    /// PGG_AUTO_ACT=nav-open-foot: whether the open row is showing whole, its lines included.
+    function rowFactsShown() {
+        return probe.sidebar.rowFactsShown()
+    }
+    /// PGG_AUTO_ACT=nav-open-then: what the hand does once the row is open. Every one of these goes in where the hand
+    /// goes in — the row's own pointer stand-in, the lines' own handlers, the pane's rename, the filter field — so
+    /// what answers is the wiring and not a second copy of it.
+    function afterOpen(what, kind, row) {
+        // The three the hand makes on the lines themselves: a menu asked for from them, a drag that takes words
+        // away, and a press that never moved (`NavRowFacts.handPressed`).
+        const lines = probe.sidebar.openFactsItem()
+        if (what === "rightclick") {
+            lines.handClicked(Qt.RightButton, Qt.NoModifier)
+            return
+        }
+        if (what === "sweep" || what === "tap") {
+            // Along the first line, from its head to the far side: a drag that starts mid-word comes away with half
+            // of one, which says nothing about whether a name can be taken.
+            const line = lines.height / 4
+            lines.handPressed(Qt.LeftButton, 0, line)
+            if (what === "sweep")
+                lines.handMoved(lines.width, line)
+            lines.handReleased()
+            lines.handClicked(Qt.LeftButton, Qt.NoModifier)
+            return
+        }
+        if (what === "away")
+            probe.pointTipAt(kind, -1)
+        else if (what === "edit")
+            probe.sidebar.beginRename(kind, probe.tipNameAt(kind, row), probe.tipNameAt(kind, row))
+        else if (what === "menu")
+            probe.sidebar.menuOpen = true
+        else if (what === "filter")
+            probe.typeFilter("zzzz")
+    }
+    /// What the hand on those lines came away with, and where the click landed — the pad's own answers
+    /// (`SweepPad`), read through the lines that are open.
+    function factsCaret() {
+        const lines = probe.sidebar.openFactsItem()
+        return lines !== null && lines.caretLanded
+    }
+    function factsTook() {
+        const lines = probe.sidebar.openFactsItem()
+        return lines === null ? "" : lines.sweptText()
+    }
+    /// Whether the row is still painted as the one under the hand — a row that has its facts open wears the wash
+    /// over the whole of itself.
+    function rowWashLit(kind, row) {
+        const list = probe.listOf(kind)
+        return !!list && list.rowWashLit(row)
+    }
+
+    /// PGG_AUTO_ACT=nav-peek-open: the same rest, taken on a row of the section the folded rail has open — the case
+    /// where the row that grows is inside a popup, which has to make room for it without taking itself down.
+    function pointPeekTipAt(row) {
+        probe.peek.pointTipAt(row)
+    }
+    function peekNameAt(row) {
+        return probe.peek.rowNameAt(row)
+    }
+    readonly property bool peekStanding: probe.peek.opened
+
     function tipWordsAt(kind, row) {
         const list = probe.listOf(kind)
         return list ? list.rowTipWords(row) : ""
