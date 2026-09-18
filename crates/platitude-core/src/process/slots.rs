@@ -254,6 +254,16 @@ pub struct Report {
 pub struct Slots {
     state: Mutex<State>,
     groups: Mutex<HashMap<GroupKey, Group>>,
+    /// Raised after every change to who is queued or running, so that
+    /// somebody outside can wait for one ([`Slots::settled`]).
+    ///
+    /// **`notify_waiters`, not `notify_one`**: several may be watching,
+    /// and a change concerns all of them. It wakes what is registered at
+    /// that instant and leaves no permit behind, which is what makes the
+    /// order in [`Slots::settled`] load-bearing — the registration is
+    /// made before the look, or a change landing between the two would
+    /// be lost and the wait would never end.
+    moved: tokio::sync::Notify,
 }
 
 impl std::fmt::Debug for Slots {
@@ -404,6 +414,7 @@ impl Slots {
                 waited_most_interactive: Duration::ZERO,
             }),
             groups: Mutex::new(HashMap::new()),
+            moved: tokio::sync::Notify::new(),
         }
     }
 
@@ -422,9 +433,12 @@ impl Slots {
     /// once; narrower ones admit nothing more until the running fall
     /// below them — a child already running runs on.
     pub fn set_limits(self: &Arc<Self>, limits: Limits) {
-        let mut state = lock(&self.state);
-        state.limits = limits;
-        self.drain(&mut state);
+        {
+            let mut state = lock(&self.state);
+            state.limits = limits;
+            self.drain(&mut state);
+        }
+        self.stirred();
     }
 
     #[must_use]
@@ -477,6 +491,10 @@ impl Slots {
             self.drain(&mut state);
             ticket
         };
+        // Said after the lock is gone, and after the state it is about
+        // already holds: a waiter woken here looks at the queue itself,
+        // and has to find what it was told about.
+        self.stirred();
         let _leaving = Unqueue {
             slots: self,
             ticket,
@@ -520,17 +538,65 @@ impl Slots {
     }
 
     fn release(self: &Arc<Self>, pace: Pace, priority: Priority) {
-        let mut state = lock(&self.state);
-        state.running.sub(pace, priority);
-        self.drain(&mut state);
+        {
+            let mut state = lock(&self.state);
+            state.running.sub(pace, priority);
+            self.drain(&mut state);
+        }
+        self.stirred();
     }
 
     fn unqueue(&self, ticket: u64) {
-        let mut state = lock(&self.state);
-        let before = state.queue.len();
-        state.queue.retain(|waiting| waiting.ticket != ticket);
-        if state.queue.len() < before {
-            state.left_waiting += 1;
+        {
+            let mut state = lock(&self.state);
+            let before = state.queue.len();
+            state.queue.retain(|waiting| waiting.ticket != ticket);
+            if state.queue.len() < before {
+                state.left_waiting += 1;
+            }
+        }
+        self.stirred();
+    }
+
+    /// Says that the queue or the running have moved. **Called with no
+    /// lock held** — waking a waiter runs its task, and a lock held
+    /// across that is a lock held across somebody else's work.
+    fn stirred(&self) {
+        self.moved.notify_waiters();
+    }
+
+    /// Waits until the slots answer `done`, and answers at once if they
+    /// already do.
+    ///
+    /// **The waiting side is taken out before the look.**
+    /// `notify_waiters` leaves no permit, so a stir that lands between a
+    /// look and a `notified()` taken out after it would be nobody's and
+    /// the wait would hang. Taken out first, the same stir is held for
+    /// this one however long the look takes — that is the line, and
+    /// `enable` registers it eagerly on top, so the order still holds if
+    /// the stir ever becomes a `notify_one`. The order is a test, not
+    /// only a claim: `done` is called inside that very window, so a
+    /// predicate that joins the queue from within it stirs exactly there
+    /// (`a_stir_from_inside_the_look_still_ends_the_wait`).
+    ///
+    /// **And the notification is not the answer** — it is only a reason
+    /// to look again. What ends the wait is the state, read under the
+    /// lock, which is why a stir that does not reach `done` leaves this
+    /// waiting.
+    ///
+    /// This exists for what cannot be watched any other way: a command
+    /// reaching the queue is not an event anybody sends — the executor
+    /// announces the command before it asks for a slot, so nothing
+    /// downstream can tell "announced" from "queued" (`tests/it/slots.rs`).
+    pub async fn settled(&self, mut done: impl FnMut(&Report) -> bool) {
+        loop {
+            let moved = self.moved.notified();
+            tokio::pin!(moved);
+            moved.as_mut().enable();
+            if done(&self.report()) {
+                return;
+            }
+            moved.await;
         }
     }
 
@@ -1154,5 +1220,128 @@ mod tests {
         let WayIn::Lead(_) = slots.lead_or_follow(key) else {
             panic!("with the group closed, the next ask leads");
         };
+    }
+
+    // --- waiting for the queue to move (`settled`) ------------------------
+    //
+    // Driven by hand throughout: every one of these is about the order two
+    // things happen in, and a wait that needed time to pass would be
+    // answering about the machine instead.
+
+    /// Waiting for what is already true answers without waiting at all.
+    #[tokio::test]
+    async fn a_wait_for_what_already_stands_answers_at_once() {
+        let slots = slots(1, 0);
+        let mut first = ask(&slots, Priority::Interactive, Pace::Here);
+        let _held = granted(&mut first).expect("the first fits");
+        let mut second = ask(&slots, Priority::Interactive, Pace::Here);
+        assert!(granted(&mut second).is_none(), "the second queues");
+
+        let mut waiting = Box::pin(slots.settled(|report| report.queued_interactive == 1));
+        assert!(
+            poll_once(&mut waiting).is_ready(),
+            "the queue already answers, so nothing is waited for"
+        );
+    }
+
+    /// And a wait begun first is woken by the ask that arrives after it.
+    #[tokio::test]
+    async fn a_wait_begun_first_is_woken_by_the_ask_that_follows() {
+        let slots = slots(1, 0);
+        let mut first = ask(&slots, Priority::Interactive, Pace::Here);
+        let _held = granted(&mut first).expect("the first fits");
+
+        let mut waiting = Box::pin(slots.settled(|report| report.queued_interactive == 1));
+        assert!(
+            poll_once(&mut waiting).is_pending(),
+            "nothing is queued yet, so it registers and waits"
+        );
+
+        let mut second = ask(&slots, Priority::Interactive, Pace::Here);
+        assert!(granted(&mut second).is_none(), "the second queues");
+        assert!(
+            poll_once(&mut waiting).is_ready(),
+            "and the wait it was registered for woke it"
+        );
+    }
+
+    /// **A stir landing inside the look is not lost** — the window
+    /// [`Slots::settled`] takes its `Notified` out ahead of, driven
+    /// through `settled` itself.
+    ///
+    /// The predicate is the way in: it is called between the two, on a
+    /// `Report` already read, so an ask joining the queue from inside it
+    /// lands in exactly the window — no second thread, and nothing in the
+    /// slots that exists for a test. The predicate then answers `false`,
+    /// because the report it was handed was taken before the join.
+    ///
+    /// So a `settled` that takes its `Notified` out *after* the look
+    /// misses this stir — `notify_waiters` leaves no permit — and waits
+    /// for a queue that has already stopped moving.
+    #[tokio::test]
+    async fn a_stir_from_inside_the_look_still_ends_the_wait() {
+        let slots = slots(1, 0);
+        let mut first = ask(&slots, Priority::Interactive, Pace::Here);
+        let _held = granted(&mut first).expect("the first fits");
+        let mut second = ask(&slots, Priority::Interactive, Pace::Here);
+
+        let looks = std::cell::Cell::new(0);
+        let mut waiting = Box::pin(slots.settled(|report| {
+            looks.set(looks.get() + 1);
+            if looks.get() == 1 {
+                assert_eq!(report.queued_interactive, 0, "read before the join");
+                assert!(
+                    granted(&mut second).is_none(),
+                    "the second joins the queue from inside the look"
+                );
+            }
+            report.queued_interactive == 1
+        }));
+
+        assert!(
+            poll_once(&mut waiting).is_ready(),
+            "the stir made inside the look was held, and the look taken again answered"
+        );
+        drop(waiting);
+        assert_eq!(
+            looks.get(),
+            2,
+            "it looked again rather than answering on the stir"
+        );
+    }
+
+    /// **The state is the answer, and the stir is only a reason to look.**
+    /// A queue that moved before anybody was waiting leaves nothing behind
+    /// to satisfy a later wait (`notify_waiters` stores no permit), and a
+    /// stir that does not reach the answer leaves the wait where it was.
+    #[tokio::test]
+    async fn a_stir_is_not_the_answer_and_leaves_none_behind() {
+        let slots = slots(1, 0);
+        let mut first = ask(&slots, Priority::Interactive, Pace::Here);
+        let _held = granted(&mut first).expect("the first fits");
+        // Two stirs with nobody registered: one queues, one leaves.
+        let mut early = ask(&slots, Priority::Interactive, Pace::Here);
+        assert!(granted(&mut early).is_none(), "it queues");
+        drop(early);
+        assert_eq!(slots.report().queued_interactive, 0, "and it leaves");
+
+        let mut waiting = Box::pin(slots.settled(|report| report.queued_interactive == 1));
+        assert!(
+            poll_once(&mut waiting).is_pending(),
+            "the stirs before it began left nothing it could take for an answer"
+        );
+
+        // A stir that moves the running rather than the queue: told, looked
+        // at, and still not the answer.
+        let mut background = ask(&slots, Priority::Background, Pace::Elsewhere);
+        assert!(granted(&mut background).is_none(), "the pool is full");
+        assert!(
+            poll_once(&mut waiting).is_pending(),
+            "it was woken and looked, and the interactive queue is still empty"
+        );
+
+        let mut second = ask(&slots, Priority::Interactive, Pace::Here);
+        assert!(granted(&mut second).is_none(), "the second queues");
+        assert!(poll_once(&mut waiting).is_ready());
     }
 }

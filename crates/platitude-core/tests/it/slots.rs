@@ -199,6 +199,18 @@ async fn a_closed_session_takes_its_queued_reads_with_it() {
             })
         })
         .await;
+    // **`CommandStarted` is the ask being announced, not its place in the
+    // queue.** `GitExecutor::execute` tells the observer and only then
+    // goes to `Slots::acquire`, so between the two the count is still 0
+    // for as long as it takes that task to reach the lock — which under a
+    // full gate is long enough to be seen on both machines
+    // (P3-確認事項 §core). The queue is what this is about, so the queue
+    // is what is waited for; the event is kept for the id.
+    bounded(
+        "the details read to reach the queue",
+        slots.settled(|report| report.queued_interactive == 1),
+    )
+    .await;
     assert_eq!(
         slots.report().queued_interactive,
         1,
