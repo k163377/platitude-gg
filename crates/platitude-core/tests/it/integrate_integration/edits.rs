@@ -5,6 +5,7 @@ use crate::support::exec::env;
 use crate::support::info;
 use crate::support::integrate::{apply, helper};
 use crate::support::remote::shallow_clone;
+use platitude_core::ReportKind;
 use platitude_core::integrate::{RebaseOptions, RebaseOutcome};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 
@@ -142,12 +143,41 @@ async fn rewording_an_older_commit_replaces_only_its_message() {
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "after");
 }
 
+/// The two edits the very first commit can be asked for, which reach the
+/// base read by different roads (`sequencer::plan::base_of`).
+///
+/// A reword is one commit deep, so the revision under its range is the
+/// root itself and git resolves it. **A fold is two**, so the range it
+/// names starts at `root~1` — a revision this repository does not have,
+/// and the only way the read is ever handed one that does not resolve:
+/// every other caller asks about a commit that is there. That arm is
+/// the root as well, and the difference is not one a table can be asked
+/// for — read as a base nobody fetched, a reader holding a whole
+/// repository would be told to deepen it.
 #[tokio::test]
-async fn rewording_the_root_commit_works_through_root_mode() {
+async fn the_root_commit_rewords_through_root_mode_and_has_nothing_to_fold_into() {
     let mut repo = TestRepo::init();
     let root = repo.commit_file_id("a.txt", "one\n", "root");
     repo.commit_file("b.txt", "two\n", "second");
     let (exec, cancel) = env();
+
+    let err = sequencer::plan_edit(
+        &exec,
+        &repo.path,
+        &root,
+        sequencer::Edit::SquashIntoParent,
+        &cancel,
+    )
+    .await
+    .expect_err("there is nothing before the first commit to fold it into");
+    // Which refusal, not merely that there was one: the sentence and the
+    // heading a reader gets are picked off this kind and nothing else
+    // (`Words.rewriteRefusedWhy`).
+    assert_eq!(
+        err.report().map(|report| report.kind),
+        Some(ReportKind::FoldFirstCommit),
+        "{err}"
+    );
 
     let plan = sequencer::plan_edit(
         &exec,
