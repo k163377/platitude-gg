@@ -251,7 +251,10 @@ impl Footprint for crate::session::LogRow {
 
 impl Footprint for crate::session::BranchItem {
     fn heap_bytes(&self) -> usize {
-        self.short.heap_bytes() + self.full.heap_bytes() + self.upstream.heap_bytes()
+        self.short.heap_bytes()
+            + self.full.heap_bytes()
+            + self.upstream.heap_bytes()
+            + self.upstream_gone.heap_bytes()
     }
 }
 

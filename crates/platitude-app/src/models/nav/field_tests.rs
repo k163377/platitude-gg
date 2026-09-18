@@ -321,6 +321,7 @@ fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
         has_remote: false,
         is_head: false,
         upstream: "".into(),
+        upstream_gone: "".into(),
         upstream_oid: None,
         upstream_drifted: false,
         held_elsewhere: held,

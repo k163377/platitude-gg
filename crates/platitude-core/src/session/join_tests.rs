@@ -105,6 +105,42 @@ fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
     assert!(snapshot.locals[0].upstream_drifted);
 }
 
+/// A branch measured against a reading that is not here: the far side
+/// deleted the ref and a prune took the tracking copy with it, while the
+/// configuration goes on naming it — git's own `[gone]`. **The name has
+/// to survive the join**, because it is the whole of what the row can say
+/// about a branch it can no longer measure (デザイン規約 §左メニューの所作).
+///
+/// An upstream configured `remote = .` is the other half: the ref it
+/// names is a branch here, so nothing is gone and the field stays empty.
+#[test]
+fn a_branch_keeps_the_name_of_an_upstream_that_is_not_here() {
+    let remote_tags = index_of("origin", Vec::new());
+    let held = held_by_nobody();
+
+    let mut pruned = branch("release-1.2", oid(1));
+    pruned.upstream = Some(crate::Name::from("refs/remotes/origin/release-1.2"));
+    let alone = vec![pruned];
+    let joins = RefJoins::new(&alone, &held);
+    let snapshot = build_snapshot(&alone, &head_at(oid(1)), &remote_tags, &joins);
+    assert_eq!(
+        snapshot.locals[0].upstream, "",
+        "there is no reading to speak for"
+    );
+    assert!(!snapshot.locals[0].has_remote);
+    assert_eq!(snapshot.locals[0].upstream_gone, "origin/release-1.2");
+
+    let mut tracks_a_branch_here = branch("topic", oid(1));
+    tracks_a_branch_here.upstream = Some(crate::Name::from("refs/heads/main"));
+    let here = vec![branch("main", oid(1)), tracks_a_branch_here];
+    let joins = RefJoins::new(&here, &held);
+    let snapshot = build_snapshot(&here, &head_at(oid(1)), &remote_tags, &joins);
+    assert_eq!(
+        snapshot.locals[1].upstream_gone, "",
+        "the ref it names is a branch in this listing"
+    );
+}
+
 /// The graph's cloud follows the fold: it is on the chip exactly while the
 /// remote it is about is folded into that chip (デザイン規約 §ref の種別).
 /// Drifted, the remote keeps a row of its own and neither row wears one —

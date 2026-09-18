@@ -97,6 +97,29 @@ impl<'a> RefJoins<'a> {
         self.local_commit.get(up).copied()
     }
 
+    /// The upstream this branch is configured for while **nothing in the
+    /// listing answers to that name** — git's own `[gone]`, shortened the
+    /// way the row says it. Empty where the ref is there, and where the
+    /// branch has no upstream at all.
+    ///
+    /// Both indexes are asked, because both can hold the answer: an
+    /// ordinary upstream is a remote-tracking ref, and one configured
+    /// `remote = .` is a branch here (the same pair
+    /// [`Self::upstream_commit`] reads).
+    fn upstream_gone(&self, r: &RefEntry) -> crate::Name {
+        let Some(up) = r.upstream.as_deref() else {
+            return crate::Name::default();
+        };
+        if self.remotes.spoken_for(r).is_some() || self.local_commit.contains_key(up) {
+            return crate::Name::default();
+        }
+        let short = up
+            .strip_prefix("refs/remotes/")
+            .or_else(|| up.strip_prefix("refs/heads/"))
+            .unwrap_or(up);
+        crate::Name::from(short)
+    }
+
     /// Whether another working copy has this ref out. Only a local branch
     /// can be — a remote-tracking ref is nobody's checkout.
     fn held_elsewhere(&self, r: &RefEntry) -> bool {
@@ -352,6 +375,7 @@ pub(super) fn build_snapshot(
                     has_remote: spoken.is_some(),
                     is_head: r.is_head,
                     upstream: spoken.map(|u| u.short.clone()).unwrap_or_default(),
+                    upstream_gone: joins.upstream_gone(r),
                     upstream_oid: joins.upstream_commit(r),
                     upstream_drifted: spoken.is_some_and(|u| u.commit_oid() != r.commit_oid()),
                     held_elsewhere: joins.held_elsewhere(r),
@@ -366,6 +390,9 @@ pub(super) fn build_snapshot(
                 has_remote: true,
                 is_head: false,
                 upstream: crate::Name::default(),
+                // The setting is the local branch's, so this side has
+                // none to be missing either.
+                upstream_gone: crate::Name::default(),
                 upstream_oid: None,
                 // The setting is the local branch's, so this side has
                 // none to have drifted from.

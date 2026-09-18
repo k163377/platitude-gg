@@ -107,6 +107,12 @@ pub struct BranchItem {
     /// wherever the two stand — the one its badge is about, and the one a
     /// rename offers to carry over. Empty when it speaks for none.
     pub upstream: crate::Name,
+    /// The upstream this branch is **configured** for while nothing in the
+    /// listing answers to the name — git's own `[gone]`, by the short name
+    /// a reader knows it by. Empty wherever that ref is there, so the two
+    /// are never both filled: [`Self::upstream`] is the reading it has,
+    /// this is the one it is measured against and cannot reach.
+    pub upstream_gone: crate::Name,
     /// The commit the configured upstream stands on — that reading, or
     /// under `remote = .` a branch here — and `None` where the branch has
     /// none or the ref it names is not in the listing. **The reference
