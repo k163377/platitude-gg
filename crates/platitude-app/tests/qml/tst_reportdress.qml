@@ -118,6 +118,37 @@ Item {
                 compare(Words.writeReportedWhy(kind), Words.rewriteRefusedWhy(kind), kind)
         }
 
+        /// **Which line belongs to which refusal**, one by one.
+        ///
+        /// The two cases above are satisfied by any mapping at all: swap the off-branch line with the
+        /// unfetched-base one and both stay green, while a reader short of history is told to switch branches.
+        /// The only thing that ever said which line was due was the picture each refusal's own run took — one
+        /// window per reason — and this is where that reading goes instead.
+        ///
+        /// **The expectation is the source text.** `qsTr` hands it back wherever no translator is installed and
+        /// `qmltestrunner` installs none, which is the footing the headings above are already compared on.
+        function test_each_refused_rewrite_says_its_own_reason() {
+            const owed = {
+                "across-merge": "A merge sits in the history this would replay, and a replay drops merges."
+                                + " What came back would be flattened.",
+                "off-branch": "This commit is not in the current branch's history."
+                              + " Switch to a branch that has it first.",
+                "fold-first": "This is the first commit, so there is nothing before it to fold into.",
+                "unfetched-base": "The commit below this one is not in this clone. Replaying from here would cut"
+                                  + " the branch off from the rest of its history.",
+                "drop-all": "This is the last commit, and a branch cannot be left with no history at all.",
+                "tip-moved": "The branch moved after this was worked out.",
+                "op-standing": "An operation is in progress here. Finish it or put it down first."
+            }
+            for (const kind in owed) {
+                compare(Words.rewriteRefusedWhy(kind), owed[kind], kind)
+                // And through the door the row menu takes, which delegates the whole list rather than
+                // keeping a second copy — so the same table answers for both.
+                compare(Words.writeReportedWhy(kind), owed[kind], kind)
+            }
+            compare(Words.rewriteRefusedWhy("no-such-kind"), "", "a kind nobody spelled is owed no line")
+        }
+
         /// The bar wearing them. **The hairline is the whole of the colour** — the words stay in their own.
         function test_the_hairline_takes_the_tone_and_the_words_do_not() {
             dress("half-rename", "origin", "main", "")
