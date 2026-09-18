@@ -335,9 +335,11 @@ Item {
     /// pointer off it at once (`RowHoverHost`), and a row gone dark under its own card says nothing about which it is.
     readonly property bool lit: rowMouse.containsMouse || rowItem.cardOnThisRow || rowItem.listOnThisChip
 
-    // Both open on a rest, and neither on landing: a hand crossing the graph passes over every row on the way, and
-    // opening where it lands flashes one card out and back per row (規約 §hover のツールチップ). **Only one of the two is
-    // ever out** (規約: 1 つのポインタが開けるものは 1 つ). Whatever the pointer has left goes now
+    // **The chip's list opens at once; the row's card opens on a rest** (規約 §hover のツールチップ: 展開は即時・補足は
+    // 待つ). The chip wears the `+N` and the fan of the refs it is holding back, so the list is the chip's own inside
+    // and the hand on it has already aimed at that. The card is other facts about the commit, and a hand crossing the
+    // graph passes over every row on the way — opening that where it lands flashes one card out and back per row.
+    // **Only one of the two is ever out** (規約: 1 つのポインタが開けるものは 1 つ). Whatever the pointer has left goes now
     // — the beat is for walking into what is open, and what is being left is not it.
     onPointedPartChanged: rowItem.settlePointed()
     /// A second click is waiting out its window somewhere in this graph. **Hover is held still while it
@@ -354,10 +356,11 @@ Item {
             view.chipCollapseRequested()
         if (rowItem.pointedPart !== "row")
             view.rowHoverRequested(rowItem, false)
-        if (rowItem.pointedPart === "chip" && rowItem.listOnThisChip) {
-            // Already out, and the hand walked down into it and came back. The rest asks "did you mean to point at
-            // this", and it has been answered — re-hold now, or it closes at `hoverKeepMs` and reopens at
-            // `tipDelayMs`, which reads as a blink (規約「戻る手は即通す」).
+        if (rowItem.pointedPart === "chip") {
+            // Unfolding, so there is nothing to ask: the rest asks "did you mean to point at this", and a chip that
+            // says it is holding refs back has been pointed at on purpose (規約「展開は即時」). This is also the door
+            // a hand that walked down into the list and came back takes, and for the same reason it needs no wait —
+            // holding it now, the list never closes at `hoverKeepMs` under a hand that is reaching for it.
             rowItem.openPointed()
         } else if (rowItem.pointedPart === "row" && rowItem.cardOnThisRow) {
             // The same condition one card along, and the same answer. **The card is the worse of the two to sit the

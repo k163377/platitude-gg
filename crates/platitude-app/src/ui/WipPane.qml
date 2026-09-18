@@ -403,8 +403,14 @@ ColumnLayout {
         target: wipPane.workTree
         function onEolStagedCountChanged() { wipPane.settleCommitCard() }
     }
+    /// Whether the button's card is being asked for: the button is warning, and the pointer — or a headless run, hover
+    /// being the one thing that cannot be injected — is on it. **One place**, because the rest below has to ask the
+    /// same question again when it runs out.
+    readonly property bool commitCardAsked:
+        commitBlock.commitWarned && (commitBlock.commitPointed || wipPane.pointAtCommit)
     function settleCommitCard() {
-        if (!commitBlock.commitWarned || !(commitBlock.commitPointed || wipPane.pointAtCommit)) {
+        if (!wipPane.commitCardAsked) {
+            commitRest.stop()
             // The card the button put out settles, for the reason the rows' does: the hand may be
             // walking into it (`pointEol`).
             if (eolCard.path === "") {
@@ -413,6 +419,28 @@ ColumnLayout {
             }
             return
         }
+        // **What this card adds is not on the button** — which files, and how many — so it waits the pointer out, like
+        // every other card that adds a fact (規約 §hover のツールチップ: 展開は即時・補足は待つ).
+        //
+        // **Already out means only the count moved**: the words are swapped where they stand. Sitting the rest out
+        // again would take the card down under a hand that is reading it (規約「戻る手は即通す」).
+        //
+        // **A rest already running is not restarted**: the count moves while a hand stands on the button (someone
+        // stages the last file and walks over), and counting again from there answers a question nobody asked — the
+        // wait is of the hand, and the hand has not moved.
+        if (eolCard.opened && eolCard.path === "")
+            wipPane.openCommitCard()
+        else if (!commitRest.running)
+            commitRest.restart()
+    }
+    // The rest itself. **It asks again when it runs out**: the pointer may have left the button, or the index may have
+    // stopped warning, while it ran — and neither of those comes back through here.
+    Timer {
+        id: commitRest
+        interval: Metrics.tipDelayMs
+        onTriggered: if (wipPane.commitCardAsked) wipPane.openCommitCard()
+    }
+    function openCommitCard() {
         // No one file to name: the button speaks for the whole index, and so has to hold for all four cases at once.
         // **"problems"** — only one of them is a change. A new file has nothing to have changed from, a mixed one is
         // a file disagreeing with itself, and a file that never had an ending has only gained its first.
