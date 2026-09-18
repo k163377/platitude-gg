@@ -149,6 +149,37 @@ Item {
             compare(Words.rewriteRefusedWhy("no-such-kind"), "", "a kind nobody spelled is owed no line")
         }
 
+        /// **The heading the plan's own door writes, one by one.** Where the row menu says the same thing over all
+        /// seven — the reader is looking at the row they pressed — the plan has no row on screen to say which
+        /// history it is, so the heading carries it (`RepoPage.onRefusedPlan`, `Words.planRefused`).
+        ///
+        /// The three ran as three headless windows until this took the reading over: one press each, one picture
+        /// each, and the only thing the three pictures said differently was these three lines.
+        ///
+        /// **The expectation is the source text**, on the same footing as the headings and reasons above.
+        function test_each_refused_plan_says_which_history_stopped_it() {
+            compare(Words.planRefused("across-merge"), "A merge is in the way")
+            compare(Words.planRefused("off-branch"), "Not on this branch")
+            compare(Words.planRefused("unfetched-base"), "The history stops here")
+        }
+
+        /// **The two doors part on the heading and meet on the line.** Said as one case because either half alone is
+        /// satisfied by the wrong implementation: a plan door that fell through to the row menu's heading would pass
+        /// the line half, and one that wrote its own second line would pass the heading half — and a reader short of
+        /// history would be told to switch branches either way.
+        function test_the_plan_door_parts_from_the_row_menu_on_the_heading_only() {
+            for (const kind of ["across-merge", "off-branch", "unfetched-base"]) {
+                verify(Words.planRefused(kind) !== Words.writeReported(kind, "origin", "main"),
+                       kind + ": the range's own heading, not the pressed row's")
+                compare(Words.rewriteRefusedWhy(kind), Words.writeReportedWhy(kind),
+                        kind + ": and one line under both")
+            }
+            // What is true of every refused rewrite, for a shape nobody here has words of its own for. Nothing
+            // reaches it — `PlanRefusal` is exhaustive on both sides of the bridge — and an empty heading over a
+            // bar that has come down is the one answer worse than a general one.
+            compare(Words.planRefused("no-such-kind"), "The history was not rewritten")
+        }
+
         /// The bar wearing them. **The hairline is the whole of the colour** — the words stay in their own.
         function test_the_hairline_takes_the_tone_and_the_words_do_not() {
             dress("half-rename", "origin", "main", "")

@@ -865,13 +865,7 @@ FocusScope {
         // plan is a gesture still going
         // (規約 §答えの要らない報せ).
         function onRefusedPlan(kind) {
-            const why = Words.rewriteRefusedWhy(kind)
-            if (kind === "across-merge")
-                page.showNotice(qsTr("A merge is in the way"), why, "warning")
-            else if (kind === "unfetched-base")
-                page.showNotice(qsTr("The history stops here"), why, "warning")
-            else
-                page.showNotice(qsTr("Not on this branch"), why, "warning")
+            page.showNotice(Words.planRefused(kind), Words.rewriteRefusedWhy(kind), "warning")
         }
         function onStalePlan() {
             page.showNotice(qsTr("The branch tip moved"),

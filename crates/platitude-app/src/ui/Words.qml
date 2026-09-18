@@ -170,8 +170,35 @@ QtObject {
         // The two the outside world makes after the press. Same heading, for the same reason: what did not happen
         // is the same thing, and which of them it was is the line underneath.
         case "tip-moved":
-        case "op-standing": return qsTr("The history was not rewritten")
+        case "op-standing": return Words.historyNotRewritten
         default: return qsTr("The commit was not made")
+        }
+    }
+
+    /// What did not happen, for a rewrite that did not — the row menu's heading over all seven of them, and what the
+    /// plan's door falls back to for a refusal nobody here has words of its own for (`planRefused`).
+    readonly property string historyNotRewritten: qsTr("The history was not rewritten")
+
+    /// What did not happen at the **plan's** door, where a preview turns the range down before it opens
+    /// (`RepoPage.onRefusedPlan`). **This is the one thing the two doors say differently**: the row menu's heading is
+    /// about the one commit that was pressed, so it is the same sentence for every shape
+    /// (`historyNotRewritten`), while here the shape *is* what the reader is being told about the range — there is no
+    /// pressed row on screen to say it instead. The line underneath is the same either way (`rewriteRefusedWhy`).
+    ///
+    /// **Each of the three is written out.** A shape left to the fallback would take a heading about some other
+    /// history and read as if it were its own, which is the reading a picture of one bar cannot rule out.
+    function planRefused(kind) {
+        switch (kind) {
+        case "across-merge":
+            return qsTr("A merge is in the way")
+        case "off-branch":
+            return qsTr("Not on this branch")
+        case "unfetched-base":
+            return qsTr("The history stops here")
+        // Nothing reaches this: what raises the bar is `PlanRefusal`, which core spells and
+        // `rebase_plan::drain::refusal_kind` names in one exhaustive arm each. A fourth shape stops the build
+        // there — and if one ever arrived here anyway, what is true of every one of them is still true of it.
+        default: return Words.historyNotRewritten
         }
     }
 
