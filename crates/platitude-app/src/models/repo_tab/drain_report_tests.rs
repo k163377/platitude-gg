@@ -163,3 +163,45 @@ fn every_withheld_rewrite_reaches_the_page_under_its_own_name() {
         );
     }
 }
+
+/// **The three of them the plan door turns down too, named the same way
+/// there.** One page table answers both doors with the sentence under
+/// the heading (`Words.rewriteRefusedWhy`), so a spelling that drifts on
+/// either side leaves that door's bar with a heading and nothing under
+/// it — and two hand-written tables stay green while they part.
+///
+/// Written as a `match` over the preview's refusals, so a fourth added
+/// to core stops the build here rather than reaching the page under a
+/// name nobody wrote a sentence for.
+#[test]
+fn the_plan_door_names_the_same_refused_history_the_same_way() {
+    use platitude_core::rebase_plan::PlanRefusal;
+
+    for refusal in [
+        PlanRefusal::AcrossMerge,
+        PlanRefusal::OffBranch,
+        PlanRefusal::UnfetchedBase,
+    ] {
+        // This door's own answer for the same history, taken from the
+        // producer core withholds with.
+        let withheld = match refusal {
+            PlanRefusal::AcrossMerge => platitude_core::report::rewrite_across_merge(),
+            PlanRefusal::OffBranch => platitude_core::report::rewrite_off_branch("9f4a21c0"),
+            PlanRefusal::UnfetchedBase => platitude_core::report::rewrite_unfetched_base(),
+        };
+        let mut tab = RepoTab::default();
+        tab.settle_write(
+            1,
+            K::Squash,
+            withheld.to_string(),
+            withheld.report().cloned(),
+            0,
+            0,
+        );
+        assert_eq!(
+            crate::models::rebase_plan::refusal_kind(refusal),
+            tab.write_report_kind,
+            "the two doors have to hand the page one name for one history"
+        );
+    }
+}

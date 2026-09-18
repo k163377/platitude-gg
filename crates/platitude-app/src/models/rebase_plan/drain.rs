@@ -7,6 +7,25 @@
 
 use super::*;
 
+/// The name the page reads a refused preview under, and the whole of
+/// what it has to write both its lines from: git was never asked and
+/// nobody outside said anything, so a refusal arriving as its
+/// neighbour's tells a reader whose history is fine to switch branches.
+///
+/// **The spellings are the row menu's** (`repo_tab::drain`), so the one
+/// `Words.rewriteRefusedWhy` answers both doors without a table in
+/// between.
+pub(in crate::models) fn refusal_kind(
+    refusal: platitude_core::rebase_plan::PlanRefusal,
+) -> &'static str {
+    use platitude_core::rebase_plan::PlanRefusal as Refusal;
+    match refusal {
+        Refusal::AcrossMerge => "across-merge",
+        Refusal::OffBranch => "off-branch",
+        Refusal::UnfetchedBase => "unfetched-base",
+    }
+}
+
 impl RebasePlanModel {
     pub(super) fn take(&mut self, msg: PlanMsg) {
         match msg {
@@ -77,16 +96,10 @@ impl RebasePlanModel {
                 self.changed();
             }
             PlanMsg::Refused { from, refusal } => {
-                if !self.loading || from != self.asked_from {
+                let Some(kind) = self.refused(&from, refusal) else {
                     return;
-                }
-                self.loading = false;
-                self.changed();
-                let kind = match refusal {
-                    platitude_core::rebase_plan::PlanRefusal::AcrossMerge => "across-merge",
-                    platitude_core::rebase_plan::PlanRefusal::OffBranch => "off-branch",
-                    platitude_core::rebase_plan::PlanRefusal::UnfetchedBase => "unfetched-base",
                 };
+                self.changed();
                 self.refused_plan(kind.to_string());
             }
             // The read failed; the error itself is on the shared surface
@@ -112,6 +125,26 @@ impl RebasePlanModel {
                 self.changed();
             }
         }
+    }
+
+    /// A preview that came back turned down: the waiting state goes down
+    /// and the answer is what the page is to be told it was, or nothing
+    /// at all where this is the answer to a click the screen has already
+    /// left behind (`asked_from`).
+    ///
+    /// **Everything the refusal does to the model is here**, and the arm
+    /// above is left holding the two signals — which only a real QObject
+    /// can carry, and which say nothing back.
+    pub(super) fn refused(
+        &mut self,
+        from: &str,
+        refusal: platitude_core::rebase_plan::PlanRefusal,
+    ) -> Option<&'static str> {
+        if !self.loading || from != self.asked_from {
+            return None;
+        }
+        self.loading = false;
+        Some(refusal_kind(refusal))
     }
 
     /// Replaces every row under one model reset: the plan opens whole

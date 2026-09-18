@@ -9,9 +9,20 @@ use crate::hub::{Feed, PlanMsg};
 use super::qml_register;
 
 mod drain;
+#[cfg(test)]
+mod drain_tests;
 mod qobject;
 #[cfg(test)]
 mod steps_tests;
+
+/// The row menu's own spellings, reached from that door too — the two
+/// have to name one refused history one way (`drain::refusal_kind`).
+///
+/// Only that claim reads it from outside this module, and the claim is a
+/// test (`repo_tab::drain_report_tests`), so the name is one too: left
+/// standing in a shipping build it is an export nothing imports.
+#[cfg(test)]
+pub(in crate::models) use drain::refusal_kind;
 
 // ---------------------------------------------------------------------------
 // RebasePlanModel: the interactive-rebase screen's plan — the rows of
