@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
+import platitude
 import platitude.ui
 
 // The current branch never leaves the viewport: while its own row is scrolled off, this stand-in rides the edge the row
@@ -34,6 +35,10 @@ Rectangle {
     signal activated(string oidHex)
 
     readonly property real rowTop: headPin.branchesModel.headRow * Theme.rowHeight
+    /// Whether the upstream this branch is measured against is one git cannot reach — the same answer the rows read
+    /// off their own slot, read here off the model because a stand-in has no row to read (`models::nav::drain` の
+    /// `settle_head_marks`).
+    readonly property bool goneUpstream: headPin.branchesModel.headUpstreamGone !== ""
     /// The branch is there but its row is not — a filter or a folded folder is holding it. Nothing to ride above, so
     /// this asks for a row of its own and the list begins one row lower (`NavSections` reads it for `topMargin`).
     /// **Asks for it**: a list with no rows at all keeps its hairline and grants nothing, so this stays true while
@@ -46,7 +51,10 @@ Rectangle {
                                      && headPin.rowTop + Theme.rowHeight > headPin.contentY + headPin.viewHeight
 
     visible: headPin.branchesModel.headName !== "" && (headPin.rowAbove || headPin.rowBelow)
-    height: Theme.rowHeight
+    // **It grows by what it has open under it**, the way a row does (デザイン規約 §左メニューの所作). Riding the
+    // bottom edge its foot is what is pinned, so growing takes the top of it upward and the rows it stands over stay
+    // where they are.
+    height: Theme.rowHeight + pinFacts.height
     y: headPin.rowAbove ? 0 : headPin.viewHeight - height
     // Dressed as the row it stands for, down to the margins: the current branch's own highlight.
     color: Theme.accentMuted
@@ -56,7 +64,11 @@ Rectangle {
         visible: headRowMouse.containsMouse || headPin.pointed
     }
     RowLayout {
-        anchors.fill: parent
+        id: pinLine
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: Theme.rowHeight
         // The panel's own margin and the folds the row it stands for is nested by (`NavItemDelegate.rowInset` /
         // `nestStep`, which the list sets to the one value — see there). **The fold count comes from that row**
         // (`headDepth`): a branch carrying a `/` sits one step in and `main` sits at none, so a stand-in that always
@@ -76,6 +88,7 @@ Rectangle {
             Layout.alignment: Qt.AlignVCenter
         }
         CutName {
+            id: pinName
             Layout.fillWidth: true
             text: headPin.branchesModel.headName
             color: Theme.textLink
@@ -94,21 +107,136 @@ Rectangle {
             behind: headPin.branchesModel.headBehind
             Layout.alignment: Qt.AlignVCenter
         }
-        NavIcon {
-            visible: headPin.branchesModel.headHasRemote || headPin.branchesModel.headHasPr
-            kind: headPin.branchesModel.headHasPr ? "pr" : "remote"
-            // One slot, one colour: which of the two marks it is answers the question, so the colour is free to be
-            // the quiet one every row mark wears (デザイン規約 §ref の種別).
-            tint: Theme.textSecondary
-            width: Theme.iconSm
-            height: Theme.iconSm
+        // The badge the row it stands for wears, out of the part both draw it from (`GoneBadge`).
+        GoneBadge {
+            visible: headPin.branchesModel.headHasRemote || headPin.branchesModel.headHasPr || headPin.goneUpstream
+            pullRequest: headPin.branchesModel.headHasPr
+            gone: headPin.goneUpstream
+            Layout.preferredWidth: Theme.iconSm
+            Layout.preferredHeight: Theme.iconSm
+            Layout.alignment: Qt.AlignVCenter
         }
     }
-    /// The name in full, as the row this one stands for would say it (デザイン規約 §hover のツールチップ).
-    readonly property string tipWords: headPin.branchesModel.headName
-    ToolTip.visible: headRowMouse.containsMouse || headPin.pointed
+    /// The name in full, as the row this one stands for would say it (デザイン規約 §hover のツールチップ). **What opens
+    /// under it says it** wherever it opens — a branch answers the same way whether the reader is on its own row or
+    /// on this stand-in (デザイン規約 §左メニューの所作: 同じ問いに、置かれた場所で違う答え方をしない).
+    readonly property string tipWords: headPin.opensFacts ? "" : headPin.branchesModel.headName
+    ToolTip.visible: (headRowMouse.containsMouse || headPin.pointed) && headPin.tipWords !== ""
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: headPin.tipWords
+
+    /// Whether this stand-in opens its facts under itself the way a row does, the gestures that hold which row is
+    /// open, and the section that knows which working copy has a branch out (`NavRowFacts` / `SidebarRowGestures`).
+    /// The current branch is out in this copy, so that last answer is empty here unless another one has it as well,
+    /// which git refuses.
+    property bool opensFacts: false
+    property var gestures: null
+    property var worktreesModel: null
+    /// Whether this stand-in is the open one. The key is the branch's own name, and **being on screen is part of the
+    /// answer**: the row and the stand-in answer to the same name, so a stand-in that called itself open while its
+    /// row was the one showing would open lines nobody can see — and a hand reading the row's would be reaching into
+    /// them (measured: the sweep came away empty, because a hidden item holds no fields).
+    readonly property bool factsOpen: headPin.opensFacts && headPin.visible && headPin.gestures !== null
+                                   && headPin.gestures.openKey === headPin.branchesModel.headName
+    /// What it opens, read as it opens rather than bound (the reading `NavItemDelegate.gatherFacts` makes).
+    property string factsName: ""
+    property string factsHeldBy: ""
+    property string factsUpstream: ""
+    property bool factsGone: false
+
+    /// A press on this stand-in, the pair every row of the sidebar answers (`NavItemDelegate.rowPressed`) — the facts
+    /// under it hand a press back the same way a row's do. The stand-in leads where its own row does and nowhere
+    /// else: no menu, and no second gesture.
+    function rowPressed(button, modifiers, held) {
+        if (button === Qt.LeftButton)
+            headPin.activated(headPin.branchesModel.headOid)
+    }
+    function rowDoubled(button) {
+    }
+    /// The stand-in raises no menu, so there is never one of its own to keep its lines up for (`NavRowFacts`).
+    function factsMenuAsked() {
+    }
+    function gatherFacts() {
+        const branch = headPin.branchesModel.headName
+        const upstream = headPin.branchesModel.upstreamOf(branch)
+        // The upstream this branch is measured against and cannot reach — git's `[gone]`, said the same way its own
+        // row says it (`NavItemDelegate.gatherFacts`) and drawn from the same answer the badge above reads.
+        const gone = headPin.branchesModel.headUpstreamGone
+        const held = headPin.worktreesModel !== null ? headPin.worktreesModel.worktreeHolding(branch) : ""
+        headPin.factsUpstream = gone !== "" ? gone : upstream
+        headPin.factsGone = gone !== ""
+        headPin.factsHeldBy = GitFacts.pathLeaf(held)
+        headPin.factsName = pinName.cutting ? branch : ""
+        return headPin.factsName !== "" || headPin.factsHeldBy !== "" || headPin.factsUpstream !== ""
+    }
+    function askFacts(at) {
+        if (headPin.opensFacts && headPin.gestures !== null && headPin.gatherFacts())
+            headPin.gestures.openFacts(headPin.branchesModel.headName, at)
+    }
+    function dropFacts() {
+        if (headPin.gestures !== null)
+            headPin.gestures.closeFacts(headPin.branchesModel.headName)
+    }
+    /// What this stand-in has open under it, and the lines themselves — for the runs alone (PGG_AUTO_ACT=nav-open
+    /// `head:…`). Empty and null while it is closed, which is what lets the sections ask it first.
+    function openWords() {
+        return headPin.factsOpen
+            ? headPin.branchesModel.headName + " held=" + headPin.factsHeldBy
+              + " up=" + headPin.factsUpstream + " gone=" + headPin.factsGone
+            : ""
+    }
+    function openFactsItem() {
+        return headPin.factsOpen ? pinFacts.item : null
+    }
+    /// Whether the whole of it — its own line and what it opened — is inside the list it rides (the answer the rows
+    /// give off their own geometry: `NavList.openShown`). Its foot is pinned to one edge, so what it opens grows the
+    /// other way and there is nothing here to scroll; the numbers are read all the same, because a rule nobody reads
+    /// back is a rule nobody can see break.
+    function openShown() {
+        return headPin.y >= 0 && headPin.y + headPin.height <= headPin.viewHeight
+    }
+    // The pointer's stand-in opens what the hand does, with no rest to sit out — a run has no hand to rest
+    // (verify-ui スキル).
+    onPointedChanged: {
+        if (headPin.pointed)
+            headPin.askFacts(headPin.mapToItem(null, headPin.width / 2, Theme.rowHeight / 2))
+        else
+            headPin.dropFacts()
+    }
+    onFactsOpenChanged: if (headPin.factsOpen) headPin.gatherFacts()
+    // The rest a hand sits out before this opens — the same one every other hover that adds a fact asks for
+    // (規約 §hover のツールチップ「補足は待ってから開く」).
+    Timer {
+        id: pinFactsWait
+        interval: Metrics.tipDelayMs
+        onTriggered: if (headRowMouse.containsMouse) headPin.askFacts(headRowMouse.mapToItem(null, headRowMouse.mouseX,
+                                                                                            headRowMouse.mouseY))
+    }
+    // The facts, under this stand-in's own line and inside it (`NavRowFacts`). Riding the bottom edge the stand-in
+    // keeps its foot there, so what grows goes upward and the line stays above what it opened.
+    Loader {
+        id: pinFacts
+        active: headPin.factsOpen
+        visible: pinFacts.active
+        // The same seat a row gives its own lines, measured off the row's height rather than off the layout above it
+        // (`NavItemDelegate`).
+        anchors.top: parent.top
+        anchors.topMargin: Theme.rowHeight
+        anchors.left: parent.left
+        anchors.leftMargin: Theme.spaceSm + headPin.branchesModel.headDepth * Theme.spaceSm
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.navBarGutter
+        height: pinFacts.item ? pinFacts.item.implicitHeight : 0
+        sourceComponent: NavRowFacts {
+            row: headPin
+            fullName: headPin.factsName
+            nameTone: pinName.color
+            nameWeight: pinName.weight
+            heldBy: headPin.factsHeldBy
+            upstream: headPin.factsUpstream
+            gone: headPin.factsGone
+        }
+    }
 
     // Hairline on the side the scrolled rows pass under — its foot while it is seated, where the rows begin instead.
     Rectangle {
@@ -123,6 +251,16 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         enabled: headPin.branchesModel.headOid !== ""
-        onClicked: headPin.activated(headPin.branchesModel.headOid)
+        onClicked: headPin.rowPressed(Qt.LeftButton, Qt.NoModifier, 0)
+        // The hand sits out the rest here too, and what it opened goes the moment it leaves — the facts are inside
+        // this stand-in, so the hand reading them never leaves it (規約 §hover のツールチップ).
+        onContainsMouseChanged: {
+            if (headRowMouse.containsMouse) {
+                pinFactsWait.restart()
+            } else {
+                pinFactsWait.stop()
+                headPin.dropFacts()
+            }
+        }
     }
 }

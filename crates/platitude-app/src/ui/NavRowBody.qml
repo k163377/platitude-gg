@@ -24,6 +24,9 @@ RowLayout {
     /// this layout (`NavNameBox`) — it is allowed to be wider than the seat, and a seat that grew with it would push
     /// the row's own columns sideways.
     readonly property alias boxSeat: boxSeat
+    /// Where this row draws its name — the colour, the weight and the "did it fit" the lines the row opens read off
+    /// it (`NavRowFacts`).
+    readonly property Item nameInk: nameCell.nameInk
 
     spacing: Theme.spaceXs
     // The mark and the name, in the part both file lists share (`NameCell`): the slot every row opens with — a
@@ -31,6 +34,7 @@ RowLayout {
     // after it. A ref row has nothing to put in the slot and it stays open all the same, which is what keeps every
     // name at a given depth beginning in one column.
     NameCell {
+        id: nameCell
         // The box below takes the row's slack while it is open, and the slot stays where it is: a name going into a
         // box leaves the columns beside it where they are.
         Layout.fillWidth: !body.row.editing
@@ -47,7 +51,11 @@ RowLayout {
         // A branch row uses the same slot for the one question it shares with those rows: whether a move can land
         // here. Its mark is the WORKTREES section's own (`tree`) — where the branch actually is. **The padlock**
         // is spoken for by `git worktree lock`; a mark cannot mean two things in one window.
-        seatMark: body.row.kindHint === "branch" ? (body.row.change === "HELD" ? "tree" : "")
+        // **The mark goes while the row has it open underneath** — the answer moved down into the line that spells
+        // it out, and a mark left beside it says the same thing twice (`NavRowFacts`). The seat stays open either
+        // way, so no name moves.
+        seatMark: body.row.factsOpen ? ""
+                : body.row.kindHint === "branch" ? (body.row.change === "HELD" ? "tree" : "")
                 : body.row.kindHint !== "worktree" ? ""
                 : body.row.change === "LOCKED" ? "lock"
                 : body.row.change === "PRUNABLE" ? "bang" : ""
@@ -110,20 +118,28 @@ RowLayout {
     // would be a second one (デザイン規約 §ref の種別).
     Loader {
         id: remoteSeat
+        /// The upstream this branch is measured against and cannot reach, carried on the row itself
+        /// (`models::nav::field` の `Role::Bucket`): the badge goes on wearing the state, since **the far side
+        /// deleting the ref takes the badge's own reason away** — no remote-tracking ref is left for `has_remote`,
+        /// and a row that answered by dropping the mark would read as a branch that never tracked anything.
+        readonly property bool gone: body.row.kindHint === "branch" && body.row.bucket !== ""
+        // **This one stays while the row has it open underneath**, unlike the mark in the seat at the other end:
+        // it is the last thing in the row, and the counts beside it are measured from it — a badge that came and
+        // went would carry `↑1 ↓1` sideways under the reader's hand every time a row opened (デザイン規約
+        // §左メニューの所作).
         active: !body.row.folder
-                && (((body.row.kindHint === "branch"
-                      || body.row.kindHint === "tag")
-                     && (body.row.has_remote || body.row.has_pr))
+                && (remoteSeat.gone
+                    || ((body.row.kindHint === "branch"
+                         || body.row.kindHint === "tag")
+                        && (body.row.has_remote || body.row.has_pr))
                     || ((body.row.kindHint === "remote" || body.row.kindHint === "worktree") && body.row.has_pr))
         visible: remoteSeat.active
         // The size the graph's chips wear the same badge at: one question, one mark, one size (デザイン規約 §寸法).
         Layout.preferredWidth: Theme.iconSm
         Layout.preferredHeight: Theme.iconSm
-        sourceComponent: NavIcon {
-            kind: body.row.has_pr ? "pr" : "remote"
-            tint: Theme.textSecondary
-            width: Theme.iconSm
-            height: Theme.iconSm
+        sourceComponent: GoneBadge {
+            pullRequest: body.row.has_pr
+            gone: remoteSeat.gone
         }
     }
     // The remote this repository sends pushes to. The toolbar's own push mark, in the seat the badge above holds

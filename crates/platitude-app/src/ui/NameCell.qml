@@ -73,6 +73,9 @@ RowLayout {
     /// the change mark fills its seat: there the box *is* the ink, and the arrow it shares the slot with is centred in
     /// it the way it always was.
     readonly property real seatNudge: nameCell.showChange ? 0 : (Theme.iconSm - nameCell.seatSize) / 2
+    /// Where the name itself is drawn — what the lines a row opens under itself read their voice off, and the one
+    /// that knows whether the name had to be cut (`NavRowFacts`, app-ui.md §測って決める値は押し出す).
+    readonly property Item nameInk: newName
 
     spacing: Theme.spaceXs
 

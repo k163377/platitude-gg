@@ -130,6 +130,25 @@ AppCard {
     function rowInView(index) {
         return peekList.rowInView(index)
     }
+    /// Rest the pointer on one of these rows (PGG_AUTO_ACT=nav-peek-open). The same `pointedTipRow` the sections'
+    /// own lists carry, written on the list standing beside the rail.
+    function pointTipAt(index) {
+        peekList.pointedTipRow = index
+    }
+    function rowNameAt(index) {
+        return peekList.rowNameAt(index)
+    }
+    /// What the open row in here is saying, and the row itself — the same two the sections answer with, for the runs
+    /// that read a row opened beside the folded rail.
+    function openWords() {
+        return peekList.openWords()
+    }
+    function openFactsItem() {
+        return peekList.openFactsItem()
+    }
+    function openShown() {
+        return peekList.openShown()
+    }
     function scrollToEnd() {
         peekList.scrollToEnd()
     }
@@ -216,6 +235,11 @@ AppCard {
             expanded: true
             kindHint: peek.kind
             gestures: peek.gestures
+            // The rows in here open under themselves the way the sections' own do, and the working copies are read
+            // off the section that holds them whichever list the row is standing in. **BRANCHES alone for now**:
+            // opening is a branch row's answer, and the other sections still answer with the tooltip.
+            offersFacts: peek.kind === "branch"
+            worktreesModel: peek.rail !== null ? peek.rail.modelOf("worktree") : null
             stretch: true
             remotesPacked: peek.repoTab.remoteNames
             markedRemote: peek.repoTab.pushDefault

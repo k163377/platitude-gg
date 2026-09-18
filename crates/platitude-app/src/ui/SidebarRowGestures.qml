@@ -186,6 +186,56 @@ QtObject {
         gestures.editWaiting = false
         gestures.editGitRefusal = why
     }
+    /// Which row has its facts open under it, by the name git knows it by (`NavRowFacts`) — the hover expansion of a
+    /// BRANCHES row. Held here for the reason the two gestures above are: a delegate is recycled the moment its row
+    /// scrolls off, only one row is ever open, and the row that opens may be in the sections, in the sticky stand-in
+    /// or in the section the folded rail has open.
+    property string openKey: ""
+    /// The last row to open, and where the pointer was standing when it did — in the window's own coordinates.
+    /// **A row opens where the hand travelled to it, and not where the list travelled to the hand**: an open row is
+    /// taller than a closed one, so the rows under it move, and a pointer that never left its place can be left over
+    /// a row it was never aimed at. Opening that one would move the list again under a hand that asked for nothing,
+    /// and the two would go on trading places (デザイン規約 §左メニューの所作).
+    property string openedKey: ""
+    property point openedAt: Qt.point(-1, -1)
+    function openFacts(key, at) {
+        if (gestures.editKey !== "" || gestures.menuOpen)
+            return
+        // The same row coming back under the same hand is the reader pointing at it again — it is a row arriving
+        // under a hand that did not move that says nothing was asked for.
+        if (key !== gestures.openedKey && gestures.settled(at))
+            return
+        gestures.openKey = key
+        gestures.openedKey = key
+        gestures.openedAt = at
+    }
+    function closeFacts(key) {
+        if (gestures.openKey === key)
+            gestures.openKey = ""
+    }
+    /// Whether the pointer is still where the last row opened under it. Half a row of slack: a hand that has moved
+    /// that far has moved on purpose, and anything less is the list having moved instead.
+    function settled(at) {
+        return Math.abs(at.x - gestures.openedAt.x) < Theme.rowHeight / 2
+            && Math.abs(at.y - gestures.openedAt.y) < Theme.rowHeight / 2
+    }
+    /// A menu raised from the open row's own lines. **That one does not take them down** — it is about the row they
+    /// belong to, and the reader who right-clicked them is reading about that row. Every other menu does: the
+    /// pointer is over there, and what is open would be moving rows under the hand reading them.
+    property bool menuFromFacts: false
+    function noteMenuFromFacts() {
+        gestures.menuFromFacts = true
+    }
+    /// Nothing opens over a name box or under a menu: the box is the mode the reader has entered and the menu is the
+    /// rows they are reading, and what opens moves the rows under both (デザイン規約 §左メニューの所作).
+    onEditKeyChanged: if (gestures.editKey !== "") gestures.openKey = ""
+    onMenuOpenChanged: {
+        if (gestures.menuOpen && !gestures.menuFromFacts)
+            gestures.openKey = ""
+        if (!gestures.menuOpen)
+            gestures.menuFromFacts = false
+    }
+
     /// A click landed somewhere: any box open elsewhere is walked away from (nothing is asked — what it costs is the
     /// typing). Which row it landed on is the gesture's own to remember — it is what tells its next click apart.
     function noteClick(key) {

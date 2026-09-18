@@ -11,6 +11,11 @@ impl NavSectionModel {
     qproperty!("headHasPr", Member = head_has_pr, Notify = changed);
     qproperty!("headAhead", Member = head_ahead, Notify = changed);
     qproperty!("headBehind", Member = head_behind, Notify = changed);
+    qproperty!(
+        "headUpstreamGone",
+        Member = head_upstream_gone,
+        Notify = changed
+    );
     qproperty!("headRow", Member = head_row, Notify = changed);
     qproperty!("headDepth", Member = head_depth, Notify = changed);
     qproperty!("refsLoaded", Member = refs_loaded, Notify = changed);

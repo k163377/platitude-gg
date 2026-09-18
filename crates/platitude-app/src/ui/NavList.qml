@@ -26,6 +26,11 @@ AppListView {
     /// the delegates and this list, and only one row at a time is either, whichever section it sits in. A list with
     /// none (the WIP file list) simply has no gestures — every call below is skipped.
     property var gestures: null
+    /// Whether this list's rows open their facts under themselves on a rest (`NavRowFacts`), and the section that
+    /// knows which working copy has a branch out (`worktreeHolding`). Off and null in the lists whose rows do not
+    /// open — opening is a branch row's answer, and the working tree's file lists are not branches.
+    property bool offersFacts: false
+    property var worktreesModel: null
     /// Stands in for the pointer where headless cannot put one, so a row's tooltip — or the absence of one — can be
     /// photographed (PGG_AUTO_ACT=nav-tip). -1 points at no row. The file lists carry the same property on their own
     /// panes (`WipPane` / `DetailsPane`).
@@ -61,9 +66,13 @@ AppListView {
     /// The box has opened on a row: if it is one of this section's, bring it into view. A row can be typed into
     /// without having been clicked — the current branch's sticky row raises the same menu while the real row is
     /// scrolled off (`HeadPinRow`) — and a name changing itself somewhere off screen is a name nobody agreed to.
-    /// Watched: only the gestures know when a box opens, and every list they reach is one of these.
+    /// Watched: only the gestures know when a box opens, and every list they reach is one of these. A row opening
+    /// under itself is watched from the same place, for the same reason (`keepOpenRowInView`).
     Connections {
         target: navList.gestures
+        function onOpenKeyChanged() {
+            navList.keepOpenRowInView()
+        }
         function onEditKeyChanged() {
             const key = navList.gestures.editKey
             const head = navList.kindHint + ":"
@@ -75,6 +84,51 @@ AppListView {
                 navList.positionViewAtIndex(row, ListView.Contain)
         }
     }
+
+    /// The room the open row grew by, which this section asks for on top of its rows (`Layout.maximumHeight`). Zero
+    /// with nothing open — a section is as tall as the rows it holds, and one row of them is taller while it is open.
+    readonly property real openRoom: {
+        const row = navList.openRow()
+        return row === null ? 0 : Math.max(0, row.height - Theme.rowHeight)
+    }
+    /// Where this list was standing when the row opened, and whether it is holding that place. **A row at the foot
+    /// opens past the bottom edge**, and what the list gives up to show its lines is the top — the part the reader
+    /// has already left behind (デザイン規約 §左メニューの所作). Closing puts it back here, whatever the list did in
+    /// between.
+    property real openRestY: 0
+    property bool openHeld: false
+    function keepOpenRowInView() {
+        if (navList.gestures === null)
+            return
+        // Put back what the last open row took, whichever way the key moved: it goes from one row straight to the
+        // next when a hand crosses between them, and a place left standing would be given back against a row that
+        // never took it.
+        if (navList.openHeld)
+            navList.contentY = navList.openRestY
+        navList.openHeld = false
+        if (navList.gestures.openKey === "")
+            return
+        navList.openRestY = navList.contentY
+        navList.openHeld = true
+        navList.revealOpenRow()
+    }
+    /// Stand where the open row's lines are in view — **asked again every time either side of that can have moved**,
+    /// because neither is settled when the key arrives: the lines are measured on a layout, so the row grows on the
+    /// pass after the one that built them, and the section's own height answers to that growth in turn
+    /// (`openRoom`). Written as the place to stand rather than as a scroll to add, so an answer read too early is
+    /// corrected rather than kept: a section that was given the room its row grew by gives the scroll back by
+    /// itself, and a run of these never adds up to more than one.
+    function revealOpenRow() {
+        if (!navList.openHeld)
+            return
+        const row = navList.openRow()
+        if (row === null)
+            return
+        // Never below where the reader left it — a row that opened in full view moves nothing.
+        navList.contentY = Math.max(navList.openRestY, row.y + row.height - navList.height)
+    }
+    onOpenRoomChanged: navList.revealOpenRow()
+    onHeightChanged: navList.revealOpenRow()
 
     /// Smoke hooks (PGG_AUTO_ACT=nav-reclick): a left click on one row, and what that row made of it. Clicks cannot be
     /// injected (verify-ui スキル), so they go in at the row's own answer. `clickRow` says false when the view has not
@@ -150,6 +204,56 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.oid_hex : ""
     }
+    /// The row that has its facts open in this list, and what they say (PGG_AUTO_ACT=nav-open) — read off the row
+    /// itself, so a run cannot go green with the wiring cut. Null and empty where the open row is not in this list.
+    function openRow() {
+        // A list with no section behind it is one the rail closed (`SectionPeekPopup`): it holds no rows to open.
+        if (navList.gestures === null || navList.sectionModel === null || navList.gestures.openKey === "")
+            return null
+        const row = navList.itemAtIndex(navList.sectionModel.rowOfName(navList.gestures.openKey))
+        return row && row.factsOpen ? row : null
+    }
+    function openWords() {
+        const row = navList.openRow()
+        return row === null ? ""
+             : row.fullName + " held=" + row.factsHeldBy + " up=" + row.factsUpstream + " gone=" + row.factsGone
+    }
+    /// Where the open row and its lines actually landed, for a run that has to see the list make room rather than
+    /// take the layout's word for it (PGG_AUTO_ACT=nav-open). `view=` is what the list is showing while they are
+    /// there — the pair a row opening at the foot is judged on.
+    function openGeom() {
+        const row = navList.openRow()
+        if (row === null)
+            return "none"
+        const lines = row.factsItem
+        const at = lines ? lines.mapToItem(row, 0, 0) : null
+        return Math.round(row.y) + "+" + Math.round(row.height) + " line=" + Math.round(row.lineHeight)
+             + " lines=" + (at ? Math.round(at.y) + "+" + Math.round(lines.height) : "none")
+             + " view=" + Math.round(navList.contentY) + "+" + Math.round(navList.height)
+             + " room=" + Math.round(navList.openRoom)
+    }
+    /// Whether the whole of the open row — its own line and the lines under it — is inside what this list shows
+    /// (PGG_AUTO_ACT=nav-open-foot). Read off the two geometries rather than off the scroll that was asked for: a
+    /// list that recorded a move it never made would answer for itself otherwise. False with nothing open.
+    function openShown() {
+        const row = navList.openRow()
+        if (row === null)
+            return false
+        return Math.round(row.y) >= Math.round(navList.contentY)
+            && Math.round(row.y + row.height) <= Math.round(navList.contentY + navList.height)
+    }
+    /// The lines themselves, where a sweep takes words from and a press that never moved goes
+    /// (PGG_AUTO_ACT=nav-open-then: `NavRowFacts` is what the hand is driven into).
+    function openFactsItem() {
+        const row = navList.openRow()
+        return row === null ? null : row.factsItem
+    }
+    /// Whether one row is painted as the one under the hand (PGG_AUTO_ACT=nav-open-then): the wash goes out with the
+    /// pointer, and covers the whole of a row that has its facts open (`NavItemDelegate.washLit`).
+    function rowWashLit(index) {
+        const row = navList.itemAtIndex(index)
+        return !!row && row.washLit
+    }
     /// Where the list has actually scrolled to, and how a run puts a row out of sight to begin with. Read off
     /// `contentY`: a row scrolled away has no delegate, and "there is no delegate" is also what a list that has not
     /// been built yet says.
@@ -175,15 +279,24 @@ AppListView {
     // thicker reads as a blank row belonging to the section. A top margin is a seat given to something standing over
     // the rows, so the section asks for it on top of them (`NavSections` / `HeadPinRow`); every other list here has
     // none and adds nothing.
+    // **A row that opened asks for the room it grew by** — the ceiling is counted in whole rows, so without it the
+    // section keeps the height it had and the lines it opened push its own row up under the sticky stand-in
+    // (measured: the name went behind it and only the lines showed).
     Layout.maximumHeight: !expanded ? 0
                           : stretch ? Number.POSITIVE_INFINITY
-                          : count * Theme.rowHeight + navList.topMargin + Theme.borderWidth
+                          : count * Theme.rowHeight + navList.openRoom
+                            + navList.topMargin + Theme.borderWidth
     model: sectionModel
     // The pane's own bar, in place of the style's one that `AppListView` hands the graph, the diff and the log.
     verticalBar: PaneScrollBar {}
     delegate: NavItemDelegate {
         id: row
         listWidth: navList.width
+        // The card, and the two sections its answers come off.
+        opensFacts: navList.offersFacts
+        openKey: navList.gestures ? navList.gestures.openKey : ""
+        sectionModel: navList.sectionModel
+        worktreesModel: navList.worktreesModel
         // Both margins of the panel are the one the bar asks for at the right edge, so the rows sit between equal
         // sides; the folds step in by that same value
         // (`NavItemDelegate.rowInset` / デザイン規約 §余白 の左メニューの行の項).
@@ -218,6 +331,18 @@ AppListView {
         onRowClicked: {
             if (navList.gestures)
                 navList.gestures.noteClick(row.rowKey)
+        }
+        onFactsAsked: (open, at) => {
+            if (!navList.gestures)
+                return
+            if (open)
+                navList.gestures.openFacts(row.fullName, at)
+            else
+                navList.gestures.closeFacts(row.fullName)
+        }
+        onFactsMenuAsked: {
+            if (navList.gestures)
+                navList.gestures.noteMenuFromFacts()
         }
         onActivateRequested: {
             if (navList.gestures)

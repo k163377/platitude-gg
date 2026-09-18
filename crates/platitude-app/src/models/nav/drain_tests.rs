@@ -48,3 +48,34 @@ fn the_stand_in_takes_its_counts_off_the_row_it_stands_for() {
     assert_eq!(model.head_ahead, 0);
     assert_eq!(model.head_behind, 0);
 }
+
+/// The stand-in wears the badge its row wears, the state on it
+/// included: a branch measured against an upstream git cannot reach
+/// keeps the mark and takes the warning, because the far side deleting
+/// the ref is what took `has_remote` away (デザイン規約 §ref の種別).
+/// **The name, not a flag** — the line the stand-in opens says it, and
+/// both come off this one answer.
+#[test]
+fn the_stand_in_carries_the_upstream_that_is_not_here() {
+    let mut pruned = local("release-1.2", true);
+    pruned.upstream_gone = "origin/release-1.2".into();
+    let mut model = section(
+        "branches",
+        Source::Locals(locals(vec![local("main", false), pruned])),
+    );
+    model.head_name = "release-1.2".to_string();
+    assert!(model.settle_head_marks());
+    assert_eq!(model.head_upstream_gone, "origin/release-1.2");
+    // Nothing is left of the ordinary reason for the badge, which is
+    // why the state has to ride on the mark rather than take it away.
+    assert!(!model.head_has_remote);
+
+    // The branch whose upstream is here leaves it empty, and so does a
+    // HEAD the listing has never heard of.
+    model.head_name = "main".to_string();
+    assert!(model.settle_head_marks());
+    assert_eq!(model.head_upstream_gone, "");
+    model.head_name = "made-since".to_string();
+    assert!(!model.settle_head_marks());
+    assert_eq!(model.head_upstream_gone, "");
+}

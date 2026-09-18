@@ -118,6 +118,14 @@ impl NavSectionModel {
                 // A worktree row carries its branch here (empty =
                 // detached), which is what the row shows on its right.
                 Entry::Worktree { entry, .. } => entry.branch.as_deref().unwrap_or(""),
+                // A local branch has no bucket, so the slot carries the
+                // upstream this branch is measured against and cannot
+                // reach — git's own `[gone]`. **A name, not a flag**: it
+                // is what the row says when it opens, and the row draws
+                // the state of it from the same answer, so a badge and
+                // the line under it cannot disagree. Empty on every
+                // branch whose upstream is here, or that tracks none.
+                Entry::Local(branch) => branch.upstream_gone.as_str(),
                 _ => "",
             }),
             Role::Group => Value::Said(match of {

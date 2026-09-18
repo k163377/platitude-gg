@@ -107,6 +107,11 @@ pub struct NavSectionModel {
     /// once both are in hand (`drain::settle_head_marks`).
     head_has_remote: bool,
     head_has_pr: bool,
+    /// The upstream that branch is measured against and cannot reach,
+    /// off the same lookup — the name, because the stand-in draws the
+    /// badge's state from it and says it in the line it opens, the way
+    /// the rows read one answer out of one slot (`field::Role::Bucket`).
+    head_upstream_gone: String,
     /// How far that branch stands from its upstream, off the same lookup
     /// — the pair the stand-in draws, so it and the row it stands for
     /// cannot say different numbers. **Drawn while the status read's

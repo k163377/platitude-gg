@@ -256,6 +256,35 @@ Rectangle {
     /// What the seat leaves for the list above it.
     readonly property real footRoom: commandsSeat.visible ? commandsSeat.height : 0
 
+    /// Which row of the left panel has its facts open under it, wherever that row is standing: in the sections below,
+    /// or in the one section the folded rail has open (`SectionPeekPopup`). One row for the pane — only one pointer
+    /// is ever resting, and the row that holds the answer may be in either list (`SidebarRowGestures.openKey`).
+    property alias openKey: rowGestures.openKey
+    /// What the open row is saying, for a headless run to read: whether one is open at all, and the answers under it.
+    /// Read off the row itself rather than off whatever asked for it, so a run cannot go green with the wiring cut
+    /// (PGG_AUTO_ACT=nav-open).
+    readonly property bool rowFactsOpen: sidebar.openKey !== ""
+    function rowFactsWords() {
+        const said = sections.openWords()
+        return said !== "" ? said : peek.openWords()
+    }
+    /// Where the open row and its lines landed, so a run reads the list having made room rather than the layout's
+    /// word for it (PGG_AUTO_ACT=nav-open).
+    function rowFactsGeom() {
+        return sections.openGeom()
+    }
+    /// Whether the open row is showing whole, its lines included — the rule a row opening at the foot of a section
+    /// that scrolls is judged on (PGG_AUTO_ACT=nav-open-foot).
+    function rowFactsShown() {
+        return sections.openFactsItem() !== null ? sections.openShown() : peek.openShown()
+    }
+    /// The lines that are open, for the runs that read what the hand did next (PGG_AUTO_ACT=nav-open-then) — they
+    /// are where a sweep takes words from, and where a press that never moved goes.
+    function openFactsItem() {
+        const lines = sections.openFactsItem()
+        return lines !== null ? lines : peek.openFactsItem()
+    }
+
     // ---- the open list ----------------------------------------------
     // The filter band, the five sections and the ground under them, as
     // one column (`NavSections`). The column reports upward; the pane

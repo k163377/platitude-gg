@@ -22,6 +22,24 @@ ColumnLayout {
     /// The pane's row gestures (`SidebarRowGestures`): which row was clicked last and which is being typed into
     /// outlive both the delegates and these lists.
     required property var gestures
+    /// What the open branch row is saying under itself, and the lines themselves — for the runs alone
+    /// (PGG_AUTO_ACT=nav-open). Asked of the row rather than of the model: the row is what a run has to find wired
+    /// up. **The stand-in is asked first**: while it is the one on screen its own row is not (`HeadPinRow`).
+    function openWords() {
+        const said = headPin.openWords()
+        return said !== "" ? said : branchList.openWords()
+    }
+    function openFactsItem() {
+        const lines = headPin.openFactsItem()
+        return lines !== null ? lines : branchList.openFactsItem()
+    }
+    function openGeom() {
+        return branchList.openGeom()
+    }
+    /// Whether the open row is showing whole, lines included — asked of whichever of the two is the open one.
+    function openShown() {
+        return headPin.openFactsItem() !== null ? headPin.openShown() : branchList.openShown()
+    }
     // Section expansion, read only (see above).
     required property bool expBranches
     required property bool expRemotes
@@ -114,6 +132,10 @@ ColumnLayout {
     NavList {
         id: branchList
         sectionModel: sections.branchesModel
+        // These rows open their facts under themselves on a rest, and the section that knows which working copy
+        // holds one is where half of what they open comes from.
+        offersFacts: true
+        worktreesModel: sections.worktreesModel
         expanded: branchHead.showsRows
         kindHint: "branch"
         gestures: sections.gestures
@@ -142,6 +164,12 @@ ColumnLayout {
                      || (branchList.pointedTipRow >= 0
                          && branchList.pointedTipRow === sections.branchesModel.headRow)
             branchesModel: sections.branchesModel
+            // It opens the way the row it stands for does — one question, one answer, wherever the row is standing
+            // (デザイン規約 §左メニューの所作). Riding the bottom edge it grows upward, because its foot is what is
+            // pinned there (`HeadPinRow.y`).
+            opensFacts: true
+            gestures: sections.gestures
+            worktreesModel: sections.worktreesModel
             contentY: branchList.contentY
             viewHeight: branchList.height
             width: branchList.width

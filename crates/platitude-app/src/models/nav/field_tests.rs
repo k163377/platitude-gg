@@ -350,6 +350,55 @@ fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
     assert_eq!(model.told(Role::Name, "main", Role::Change), "");
 }
 
+/// The upstream a branch is measured against and cannot reach rides
+/// the row in the slot a local branch has no bucket for, as the name
+/// rather than a flag: the row draws the badge's state from it and the
+/// line it opens says it, so the two cannot disagree
+/// (デザイン規約 §左メニューの所作).
+#[test]
+fn a_branch_carries_the_upstream_that_is_not_here_in_the_shared_slot() {
+    let local = |short: &str, gone: &str| platitude_core::session::BranchItem {
+        short: short.into(),
+        full: format!("refs/heads/{short}").into(),
+        oid: oid("a"),
+        // The far side deleted it, so no remote-tracking ref is left to
+        // set this — which is the whole reason the row cannot say it.
+        has_remote: false,
+        is_head: false,
+        upstream: "".into(),
+        upstream_gone: gone.into(),
+        upstream_oid: None,
+        upstream_drifted: false,
+        held_elsewhere: false,
+        ahead: 0,
+        behind: 0,
+    };
+    let mut snap = platitude_core::session::RefsSnapshot {
+        locals: vec![
+            local("main", ""),
+            local("release-1.2", "origin/release-1.2"),
+        ],
+        remotes: Vec::new(),
+        tags: Vec::new(),
+        tags_by_name: Vec::new(),
+        tag_drifts: Vec::new(),
+        head: None,
+        remote_names: Vec::new(),
+        remote_urls: Vec::new(),
+        push_default: None,
+    };
+    snap.locals.sort_by(|a, b| a.short.cmp(&b.short));
+    let mut model = section("branches", Source::Locals(std::sync::Arc::new(snap)));
+    model.arrange();
+    assert_eq!(
+        model.told(Role::Name, "release-1.2", Role::Bucket),
+        "origin/release-1.2"
+    );
+    // A branch whose upstream is here leaves the slot empty — the badge
+    // it wears is the ordinary one, drawn off `has_remote`.
+    assert_eq!(model.told(Role::Name, "main", Role::Bucket), "");
+}
+
 /// What the rows that would run `switch` or `branch --delete` ask
 /// before offering: git refuses both for a branch another worktree
 /// holds, and answers nothing about the copy this window is in.

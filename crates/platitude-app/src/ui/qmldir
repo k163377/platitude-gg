@@ -86,6 +86,7 @@ FocusRelease 1.0 FocusRelease.qml
 FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml
 GitVersionCorner 1.0 GitVersionCorner.qml
+GoneBadge 1.0 GoneBadge.qml
 GraphColumnDividers 1.0 GraphColumnDividers.qml
 GraphColumnMetrics 1.0 GraphColumnMetrics.qml
 GraphEmptyState 1.0 GraphEmptyState.qml
@@ -129,6 +130,7 @@ NavList 1.0 NavList.qml
 NavNameBox 1.0 NavNameBox.qml
 NavRail 1.0 NavRail.qml
 NavRowBody 1.0 NavRowBody.qml
+NavRowFacts 1.0 NavRowFacts.qml
 NavSections 1.0 NavSections.qml
 NoticeBar 1.0 NoticeBar.qml
 NoticeButton 1.0 NoticeButton.qml
