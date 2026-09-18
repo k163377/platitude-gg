@@ -44,13 +44,13 @@ Item {
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
     /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
-        if (act === "squash" || act === "fold-across-merge" || act === "fold-off-branch"
-                || act === "fold-first-commit" || act === "fold-unfetched-base") {
-            // One press, five landings: the fold itself, and the four shapes a history is turned down for
-            // (`report::rewrite_across_merge` 他). Each refusal is its own verb because each has a different line
-            // to be caught saying — the picture alone cannot tell a bar that came down from a log that came up.
-            // The tip without an argument, and any row with one: the refusal about a commit the branch cannot
-            // see needs a row that is not on it (`row:` / an oid).
+        if (act === "squash" || act === "fold-first-commit") {
+            // One press, two landings: the fold itself, and the one refusal a window is still asked for
+            // (`report::fold_first_commit`). **The other three shapes a history is turned down for are no
+            // window's** — which shape it is comes from real git, the name the page reads it under from
+            // `repo_tab::drain_report_tests`, and the sentence from `tst_reportdress.qml`; what is left here
+            // is the press reaching core and the bar coming back, which is the same road for all of them.
+            // The tip without an argument, and any row with one.
             const foldOid = driver.autoActOid(arg)
             page.openRowMenu(foldOid)
             page.squashCommit(foldOid)

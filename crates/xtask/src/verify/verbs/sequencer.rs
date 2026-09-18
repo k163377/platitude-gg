@@ -78,33 +78,22 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "write_stopped wip=true conflicts=true error=false log=false cont=true stashes=1",
     },
-    // The rewrites turned down before git is asked. **The picture is
-    // half the claim** — a bar came down over the graph — and the line
-    // is the other half: which of the five it was, and that the report
-    // reached the page at all (デザイン規約 §答えの要らない報せ).
-    // `ref=/` because a rewrite is about no ref: the row it was
-    // pressed on is what it is about, and the row is
-    // in the picture.
-    Verb {
-        name: "fold-across-merge",
-        when: &[],
-        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
-                said=The history was not rewritten",
-    },
-    Verb {
-        name: "fold-off-branch",
-        when: &[],
-        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
-                said=The history was not rewritten",
-    },
+    // The rewrites turned down before git is asked, through the row
+    // menu's door. **What is left for a window is the connection** —
+    // the press reaching core, core withholding the write, and a bar
+    // coming down over the graph with the report in it
+    // (デザイン規約 §答えの要らない報せ). Which of the five it was is
+    // no longer a window's to say: the conditions are read from real
+    // git by `integrate_integration`, the kind the page is handed by
+    // `repo_tab::drain_report_tests`, and the sentence each kind is
+    // owed by `tst_reportdress.qml`. So one fold stands for the four,
+    // and the one that stands is the cheapest history to build — a
+    // branch of one commit.
+    // `ref=/` because a rewrite is about no ref: the row it
+    // was pressed on is what it is about, and the row is in the
+    // picture.
     Verb {
         name: "fold-first-commit",
-        when: &[],
-        plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
-                said=The history was not rewritten",
-    },
-    Verb {
-        name: "fold-unfetched-base",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=The history was not rewritten",

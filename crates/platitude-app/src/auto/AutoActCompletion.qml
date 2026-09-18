@@ -37,7 +37,7 @@ QtObject {
                 "delete-stash-row", "stash-apply-row", "stash-pop-row",
                 "branch-at-tag", "dbl-local", "dbl-remote", "ref-list-pick", "graph-rename", "move-branch",
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
-                "fold-across-merge", "fold-off-branch", "fold-first-commit", "fold-unfetched-base", "drop-last-commit",
+                "fold-first-commit", "drop-last-commit",
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
                 "wip-landing-stopped",
@@ -135,7 +135,7 @@ QtObject {
                 "commit", "amend",
                 // The bar is what these wait for, and it comes down after the write's own answer.
                 "commit-refused", "notice-over-diff", "push-outdated", "stale-part",
-                "fold-across-merge", "fold-off-branch", "fold-first-commit", "fold-unfetched-base", "drop-last-commit",
+                "fold-first-commit", "drop-last-commit",
                 // The same bar with nothing written behind it: the preview turns the plan down before it opens,
                 // so the notice is the whole answer and no write barrier stands in front of it.
                 "plan-across-merge", "plan-off-branch", "plan-unfetched-base",

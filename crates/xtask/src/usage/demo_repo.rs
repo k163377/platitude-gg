@@ -39,17 +39,15 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         stashes   three stashes, one with untracked files
         detached  HEAD detached at a tag
         rewrite-merge  a merge inside the stretch a rewrite of the tip
-                  would replay: the fold turned down before git is asked
-                  (fold-across-merge, plan-across-merge)
+                  would replay: the plan turned down before it opens
+                  (plan-across-merge)
         one-commit  one commit on the branch and one beside it nobody
                   took: the fold and the drop with nowhere to go, and the
                   commit the branch cannot see (fold-first-commit,
-                  drop-last-commit, fold-off-branch row:0,
-                  plan-off-branch row:0)
+                  drop-last-commit, plan-off-branch row:0)
         shallow   a --depth 2 clone: the commit under the oldest row it
-                  holds was never fetched, so the fold of the tip reaches
-                  down to it and is turned down (fold-unfetched-base,
-                  plan-unfetched-base)
+                  holds was never fetched, so a rewrite reaching down to
+                  it is turned down (plan-unfetched-base)
         behind    remote has commits fetch would bring in
         diverged  the same, fetched, with a commit of our own on top
         outrun    the same, NOT fetched, with a commit of our own on top:

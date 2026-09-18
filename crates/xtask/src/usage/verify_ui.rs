@@ -100,8 +100,7 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
                           push-outdated,
                           commit-refused, notice-over-diff, stale-part —
                           which refuses a write of its own, without git —,
-                          rename-taken, fold-across-merge, fold-off-branch,
-                          fold-first-commit, fold-unfetched-base,
+                          rename-taken, fold-first-commit,
                           drop-last-commit, band-actions-alert, push
                           --preset unreachable, and publish-new-go given
                           a URL nothing can reach — that preset cannot
