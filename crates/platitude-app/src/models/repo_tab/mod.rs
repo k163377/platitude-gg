@@ -12,6 +12,8 @@ use super::qml_register;
 
 mod drain;
 #[cfg(test)]
+mod drain_report_tests;
+#[cfg(test)]
 mod drain_tests;
 mod ops_config;
 mod ops_conflict;
