@@ -61,11 +61,11 @@ Item {
     readonly property bool tabPinNameKept: tabPin.nameKept
 
     /// The longest a name is drawn at — a share of the run the tabs were handed, so it moves with the band
-    /// (`TabMetrics.titleCeilingW`). Pushed, for `tabTitleMinW`'s reason.
+    /// (`TabShare.ceiling`). Pushed, for `tabTitleMinW`'s reason.
     property int tabTitleMaxW: 0
     /// The shortest it is cut down to, the length it stops being eased at, and the run it goes quiet over where the
     /// mark stands on it — all three measured off the font, and so all three pushed
-    /// (`TabMetrics.titleMinW` / `titleEaseW` / `fadeW`).
+    /// (`TabMetrics.titleMinW` / `titleEaseFullW` / `fadeW`).
     property int tabTitleMinW: 0
     property real tabTitleEaseW: 0
     property real tabTitleFadeW: 0
@@ -73,6 +73,12 @@ Item {
     /// answers to how much run it was given, in the order it gives them up (`settleTitleCap`).
     property real tabTitleCap: tabStrip.tabTitleMaxW
     property real tabMarkRoom: tabMetrics.markRoomFull
+    /// Which of the two the strip is living on, said as the answer rather than left to be worked out from a tab
+    /// count: **how many tabs it takes to reach either state is a question about the run**, and the run is the
+    /// window's furniture and the platform's font (rules-refs/app-ui.md — the same count is ample on one OS and short
+    /// on the other). A headless run that named a count would be claiming a state it had not checked it reached.
+    readonly property bool tabNamesCut: tabStrip.tabTitleCap < tabStrip.tabTitleMaxW
+    readonly property bool tabMarksFolded: tabStrip.tabMarkRoom <= tabMetrics.markRoomMin
     /// What the strip would take with nothing cut (`settleTitleCap`), and the least it is ever laid out at. Two tabs
     /// (規約 §ウィンドウの縁).
     property real tabsWantWidth: 0
@@ -272,52 +278,20 @@ Item {
         // of the run, so an ask carrying it is read out of the run that ask is about to be answered with — and an ask
         // that moves with the run it is handed closes a loop, this width being the strip's own `implicitWidth` and
         // the band answering it with `Layout.fillWidth`.
+        //
+        // **What is measured here and what is worked out from it are two objects** (`TabShare`): this walk owns the
+        // items and the font, and the run is handed out by arithmetic that has never seen either — which is what lets
+        // the strip's whole condition table be asked without a window (`tests/qml/tst_tabwidths.qml`).
         const run = Math.floor(tabs.runAvail)
-        tabStrip.tabTitleMinW = tabMetrics.titleMinW()
-        tabStrip.tabTitleMaxW = tabMetrics.titleCeilingW(run, nat.length)
-        tabStrip.tabTitleEaseW = tabMetrics.titleEaseW(tabStrip.tabTitleMaxW)
+        const settled = tabMetrics.settle(nat, run)
+        tabStrip.tabTitleMinW = settled.minW
+        tabStrip.tabTitleMaxW = settled.maxW
+        tabStrip.tabTitleEaseW = settled.easeW
         tabStrip.tabTitleFadeW = tabMetrics.fadeW()
-        const eased = nat.reduce(
-            (sum, w) => sum + tabMetrics.titleEase(w, tabStrip.tabTitleMaxW, tabStrip.tabTitleEaseW), 0)
-        const names = nat.reduce((sum, w) => sum + w, 0)
-        const easeFull = tabMetrics.titleEaseFullW()
-        const wantEase = nat.reduce((sum, w) => sum + tabMetrics.titleEase(w, easeFull, easeFull), 0)
-        tabStrip.tabsWantWidth = menuButton.width + plusButton.width + tabs.grabRun + wantEase + names
-            + nat.length * (tabMetrics.tabPadL + tabMetrics.markRoomFull)
-        if (nat.length === 0) {
-            tabStrip.tabMarkRoom = tabMetrics.markRoomFull
-            tabStrip.tabTitleCap = tabStrip.tabTitleMaxW
-            return
-        }
-        // The room the marks stand in is what a crowded strip takes back first, and **every tab gives up the same
-        // amount of it** (デザイン規約 §ウィンドウの縁): taking it from the tabs that are short of run would stand the
-        // marks at a different distance from each tab's edge, which is a row of marks nobody lined up.
-        const capped = nat.reduce((sum, w) => sum + Math.min(w, tabStrip.tabTitleMaxW), 0)
-        const room = Math.floor((run - eased - capped - nat.length * tabMetrics.tabPadL) / nat.length)
-        tabStrip.tabMarkRoom = Math.max(tabMetrics.markRoomMin, Math.min(tabMetrics.markRoomFull, room))
-        // What is left over once the marks have stood down as far as this run makes them, shared out the one way a
-        // crowded strip shares anything (デザイン規約 §ウィンドウの縁 の譲る順). Against the room they actually got:
-        // costed at the full room while standing in less, the strip leaves the
-        // difference on every tab unspent and cuts names it had the run for (measured).
-        nat.sort((a, b) => a - b)
-        const share = tabStrip.shareTitleRun(nat, eased, tabStrip.tabMarkRoom)
-        tabStrip.tabTitleCap = Math.max(tabStrip.tabTitleMinW, Math.min(share, tabStrip.tabTitleMaxW))
-    }
-
-    /// The widest every name may be drawn and still leave room for all of them: the max-min share of what the run has
-    /// left once each tab has its near step and `markRoom` for its mark. The longest names give way and come out
-    /// equal; the ones already under their share keep their own width (デザイン規約 §ウィンドウの縁). `nat` comes in
-    /// sorted ascending, and the ceiling is the answer when they all fit — the ceiling is what caps the
-    /// strip, or a tab whose name happens to be short would cap the ones beside it.
-    function shareTitleRun(nat, eased, markRoom) {
-        let left = Math.floor(tabs.runAvail) - eased - nat.length * (tabMetrics.tabPadL + markRoom)
-        for (let i = 0; i < nat.length; i++) {
-            const share = Math.floor(left / (nat.length - i))
-            if (nat[i] > share)
-                return share
-            left -= nat[i]
-        }
-        return tabStrip.tabTitleMaxW
+        tabStrip.tabMarkRoom = settled.markRoom
+        tabStrip.tabTitleCap = settled.cap
+        tabStrip.tabsWantWidth =
+            menuButton.width + plusButton.width + tabs.grabRun + settled.wantNames
     }
 
     implicitWidth: tabStrip.tabsWantWidth

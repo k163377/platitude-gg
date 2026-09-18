@@ -39,18 +39,14 @@ QtObject {
     /// what makes one tab too wide is how much of the band it is holding, and the band is not one size —
     /// a width written here is generous in a wide window and the whole strip in a narrow one.
     readonly property int titleRunParts: 3
-    /// That share of the run the strip has — **cut into at most one part per tab**, so the last tab in a
-    /// narrow band is not held to a third of a run nobody else is standing in (which is the cut-with-run-to-spare
-    /// this ceiling exists to end). Floored at the width a name still says something at: in a window narrow enough
-    /// the two meet, and the floor is the one with letters behind it.
+    /// Cut into at most one part per tab, so the last tab in a narrow band is not held to a third of a run nobody
+    /// else is standing in (which is the cut-with-run-to-spare this ceiling exists to end), and floored at the width
+    /// a name still says something at: in a window narrow enough the two meet, and the floor is the one with letters
+    /// behind it (`TabShare.ceiling`, where it is worked out).
     ///
     /// Read off the run the tabs are handed — `TabStrip.tabsWantWidth` asks at
     /// the names' full width for this reason, since a width asked for out of the run it is about to be given back is
     /// one that moves every time it is read.
-    function titleCeilingW(run, tabs) {
-        const parts = Math.max(1, Math.min(tabMetrics.titleRunParts, tabs))
-        return Math.max(tabMetrics.titleMinW(), Math.floor(run / parts))
-    }
     /// The shortest, in characters (同表): the same count costs a different number of pixels in each
     /// platform's UI font and at every scaling, so the length comes out of the font. **Three at each end** — the cut is
     /// in the middle (デザイン規約 §タブの所作), so a name has two ends to say itself with and the floor has to hold
@@ -78,21 +74,19 @@ QtObject {
     /// answered with.
     ///
     /// Pushed: `advanceWidth` is a method, so a binding on it never re-evaluates and freezes at the
-    /// default font's answer (rules-refs/app-ui.md §FontMetrics). `TabStrip.settleTitleCap` is where both are called
-    /// from, which is already the pushed form.
+    /// default font's answer (rules-refs/app-ui.md §FontMetrics). [`priceShare`] is where it is called from, which is
+    /// already the pushed form. Held under the ceiling on the way out, so that air added past the width a name is cut
+    /// at is never paid for in that name's own letters (`TabShare.settle`).
     function titleEaseFullW() {
         return Math.ceil(tabMetrics.titleEaseChars * tabMetrics.titleFont.advanceWidth("n"))
     }
-    /// And the same length held under the ceiling, which is what a tab being laid out is eased by: air added past the
-    /// width a name is cut at would be paid for in that name's own letters.
-    function titleEaseW(ceiling) {
-        return Math.min(tabMetrics.titleEaseFullW(), ceiling)
-    }
     /// The air a name of this width is given on top of itself — half of what it falls short by, split evenly over its
     /// two sides. Held to the cap: a strip short of run is already cutting names, and air added there would be paid
-    /// for in letters (`TabStrip.settleTitleCap` and the delegate both come through here, off the same numbers).
+    /// for in letters. **The tab and the stand-in come through here; the strip's own pass goes straight to
+    /// `TabShare.ease`** — one implementation either way, so what a tab is drawn at and what the run was handed out
+    /// by cannot disagree.
     function titleEase(naturalW, cap, easeW) {
-        return Math.round(Math.max(0, Math.min(easeW, cap) - naturalW) * tabMetrics.titleEaseShare)
+        return tabMetrics.share.ease(naturalW, cap, easeW)
     }
 
     /// Which side of the name that air is set down on. Half and half while the mark keeps its whole room; as the strip
@@ -100,7 +94,7 @@ QtObject {
     /// one. A short name has room to spare in its own tab, so the one that ends up under the mark is a long one —
     /// what the strip is short of is run for all of them, which the tab has already given up in its width.
     function easeRight(ease, markRoom) {
-        return Math.max(ease / 2, Math.min(ease, tabMetrics.markRoomFull - markRoom))
+        return tabMetrics.share.easeRight(ease, markRoom)
     }
 
     /// How far apart a short name's letters are set, at its shortest. Part of the same easing and for the same reason:
@@ -127,6 +121,34 @@ QtObject {
     readonly property int fadeChars: 3
     function fadeW() {
         return Math.ceil(tabMetrics.fadeChars * tabMetrics.titleFont.advanceWidth("n"))
+    }
+
+    /// The arithmetic that hands the run out among the names, with none of the measuring above in it (`TabShare`).
+    /// The costs it works in are this object's, so there is still one copy of each: what is set here is bound, and
+    /// what only the font can answer is pushed by [`priceShare`].
+    readonly property TabShare share: TabShare {
+        padL: tabMetrics.tabPadL
+        markRoomFull: tabMetrics.markRoomFull
+        markRoomMin: tabMetrics.markRoomMin
+        runParts: tabMetrics.titleRunParts
+        easeShare: tabMetrics.titleEaseShare
+    }
+    /// The two the font answers, put where the arithmetic can read them. Pushed on the way in to every call rather
+    /// than bound, for `titleEaseFullW`'s reason — and pushed on **every** call, because the font itself moves: the
+    /// family arrives after the first pass, and a value read once would be the default font's for the life of the
+    /// window.
+    function priceShare() {
+        tabMetrics.share.minW = tabMetrics.titleMinW()
+        tabMetrics.share.easeFullW = tabMetrics.titleEaseFullW()
+    }
+
+    /// One pass over the names the strip measured: the ceiling, the easing width, the room the marks are left with
+    /// and the cap every name is drawn under (`TabShare.settle` is the whole of the reasoning). The seam — measuring
+    /// on this side, the run handed out on the other — and the only door into it, since nothing else pushes the
+    /// font's answers in first.
+    function settle(nat, run) {
+        tabMetrics.priceShare()
+        return tabMetrics.share.settle(nat, run)
     }
 
     /// The font the strip draws its names in, for the floors above to be measured in.

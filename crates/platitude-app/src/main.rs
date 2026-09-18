@@ -272,6 +272,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/TabMetrics.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabPin.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabRun.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/TabShare.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabStrip.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TabTitleFade.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TopBar.qml", "qt/qml/platitude");

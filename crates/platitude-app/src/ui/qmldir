@@ -188,6 +188,7 @@ TabItemDelegate 1.0 TabItemDelegate.qml
 TabMetrics 1.0 TabMetrics.qml
 TabPin 1.0 TabPin.qml
 TabRun 1.0 TabRun.qml
+TabShare 1.0 TabShare.qml
 TabStrip 1.0 TabStrip.qml
 TabTitleFade 1.0 TabTitleFade.qml
 TopBar 1.0 TopBar.qml
