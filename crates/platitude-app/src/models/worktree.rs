@@ -558,6 +558,7 @@ qml_register!(WorkTreeModel, "WorkTreeModel", singleton = false);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use platitude_core::opstate::OpState;
     use platitude_core::status::{StatusItem, WorkTreeStatus};
 
     const ROOT: &str = "1111111111111111111111111111111111111111";
@@ -755,5 +756,121 @@ mod tests {
             model.stash_standing, "ready",
             "the same tree, once it has a commit"
         );
+    }
+
+    /// **The word the band's badge and the card's row are both drawn
+    /// from, one operation at a time.** Nothing else on screen names
+    /// which operation stopped here, so an operation reaching the badge
+    /// under its neighbour's word sends a reader to the wrong way out
+    /// of it (`BandStateGroup` / `BandStateCard`).
+    ///
+    /// Written as a `match` over the operations core can find standing,
+    /// so a fifth added there stops the build here rather than reaching
+    /// the badge with nothing in it.
+    #[test]
+    fn every_operation_that_can_stand_here_reaches_the_badge_under_its_own_word() {
+        use platitude_core::integrate::InProgress;
+
+        for op in [
+            InProgress::Rebase,
+            InProgress::Merge,
+            InProgress::CherryPick,
+            InProgress::Revert,
+        ] {
+            let (state, word) = match op {
+                InProgress::Rebase => (
+                    OpState {
+                        rebasing: true,
+                        ..OpState::default()
+                    },
+                    "REBASING",
+                ),
+                InProgress::Merge => (
+                    OpState {
+                        merging: true,
+                        ..OpState::default()
+                    },
+                    "MERGING",
+                ),
+                InProgress::CherryPick => (
+                    OpState {
+                        cherry_picking: true,
+                        ..OpState::default()
+                    },
+                    "CHERRY-PICKING",
+                ),
+                InProgress::Revert => (
+                    OpState {
+                        reverting: true,
+                        ..OpState::default()
+                    },
+                    "REVERTING",
+                ),
+            };
+            let mut model = WorkTreeModel::default();
+            model.settle_op(&state, "");
+            assert_eq!(model.op_text, word);
+            assert!(model.op_also.is_empty(), "{word}: one operation, one word");
+        }
+    }
+
+    /// Bisect is the one that runs alongside, so it is the one that can
+    /// be a second word — and on its own it is the first. The band draws
+    /// both inside one badge and costs both into its width
+    /// (`BandStateMetrics.opW`), so which of the two slots it lands in
+    /// is what the badge is measured from.
+    #[test]
+    fn a_bisect_takes_the_second_word_and_the_first_when_it_is_alone() {
+        let mut model = WorkTreeModel::default();
+        model.settle_op(
+            &OpState {
+                bisecting: true,
+                ..OpState::default()
+            },
+            "",
+        );
+        assert_eq!(
+            (model.op_text.as_str(), model.op_also.as_str()),
+            ("BISECTING", "")
+        );
+
+        model.settle_op(
+            &OpState {
+                rebasing: true,
+                bisecting: true,
+                ..OpState::default()
+            },
+            "",
+        );
+        assert_eq!(
+            (model.op_text.as_str(), model.op_also.as_str()),
+            ("REBASING", "BISECTING")
+        );
+    }
+
+    /// **A rebase stopped on a pick writes `CHERRY_PICK_HEAD` too**, and
+    /// the badge is not two operations: core answers which one is live
+    /// and that is the one word (`InProgress::from_state`, the same
+    /// answer the continuations act on).
+    #[test]
+    fn a_rebase_that_stopped_on_a_pick_is_one_operation_not_two() {
+        let mut model = WorkTreeModel::default();
+        model.settle_op(
+            &OpState {
+                rebasing: true,
+                cherry_picking: true,
+                ..OpState::default()
+            },
+            "",
+        );
+        assert_eq!(
+            (model.op_text.as_str(), model.op_also.as_str()),
+            ("REBASING", "")
+        );
+
+        // And nothing standing leaves the badge with nothing to say,
+        // which is the whole of what keeps it off the band.
+        model.settle_op(&OpState::default(), "");
+        assert_eq!((model.op_text.as_str(), model.op_also.as_str()), ("", ""));
     }
 }
