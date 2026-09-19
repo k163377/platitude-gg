@@ -154,6 +154,19 @@ async fn a_session_opens_whole_through_two_slots_and_gives_them_back() {
     let exec = crate::support::exec::isolated().scheduled(Arc::clone(&slots));
     let (sink, session) = opened_with(&repo, exec).await;
     sink.opened_graph(&session, 5).await;
+    // **The graph landing is not the last slot going back.** An opening
+    // starts more than the three commands the rows are drawn from, and a
+    // reap runs after the answer its command carried — so the slots are
+    // waited for where they are given back (`Slots::settled`) rather than
+    // read on the beat the graph arrived. Reading them there says "one
+    // still running" whenever the machine is busy enough to put a beat
+    // between the two, which is a race and not an answer
+    // (core.md §非同期・並行テスト:「もう起きない」は完了後の状態で証明する).
+    bounded(
+        "every slot the opening took, given back",
+        slots.settled(|report| report.running == 0),
+    )
+    .await;
     let report = slots.report();
     assert!(
         report.admitted >= 3,
