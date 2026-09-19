@@ -261,8 +261,9 @@ QtObject {
         case "drop-all":
             return qsTr("This is the last commit, and a branch cannot be left with no history at all.")
         // The two that are about right now: something outside this window moved
-        // between the press and git. **One line each, like the five above** — the bar gives a report one
-        // (`NoticeBar`, デザイン規約 §長さ), and a sentence that runs past it loses its end rather than wrapping.
+        // between the press and git. **One sentence each, like the five above** — a report is written to one
+        // (`NoticeBar`, デザイン規約 §長さ). A longer one is not cut, it is wrapped, and what it costs is the rows of
+        // history the bar pushes off the screen.
         //
         // **The heading has already said what did not happen**, so these owe the reader the cause and nothing else:
         // spelling out what a replay would have dropped is the application explaining its own reasoning, which is

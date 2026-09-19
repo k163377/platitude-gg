@@ -186,8 +186,14 @@ Rectangle {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spaceXs
+                // The chip opens the sentence, so it stands on the line the sentence **starts** on: both are hung
+                // from the top and the shorter of the two drops half the difference, which is where a centred row
+                // put them while the heading was one line. Centred against the whole block instead, a chip beside a
+                // heading that wrapped floats between its lines, reading as a word of its own.
                 CodeChip {
-                    Layout.alignment: Qt.AlignVCenter
+                    id: askCode
+                    Layout.alignment: Qt.AlignTop
+                    Layout.topMargin: Math.max(0, (askWord.lineHeight - askCode.implicitHeight) / 2)
                     visible: bar.code !== ""
                     word: bar.code
                     tint: bar.tone
@@ -195,23 +201,31 @@ Rectangle {
                 }
                 // Fields, because what the question names is this window's own — a branch, a remote, the
                 // folder another working copy is holding — and none of it is written anywhere a reader could take it
-                // from while the bar is standing over the list (規約 §右のペインの字は掴める). Cut at the tail,
-                // since a question is read from its first word.
-                LineText {
+                // from while the bar is standing over the list (規約 §右のペインの字は掴める).
+                //
+                // **Wrapped, never cut** (デザイン規約 §答えの要らない報せ): the name is what is being decided about, and a
+                // question whose subject ends in a `…` is a question nobody can answer. So the wrapping half of the
+                // pair stands here, and the bar grows by the line.
+                CardText {
+                    id: askWord
                     text: bar.label
                     markup: bar.labelWords
                     color: bar.tone
                     pixelSize: Theme.fontMd
                     weight: Font.DemiBold
-                    ground: Theme.bgElevated
                     Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignTop
+                    // The other half of the pair above, and **only where a chip stands**: an invisible chip is out of
+                    // the layout but still has a height of its own, and read unguarded it would drop every question
+                    // git has no one word for.
+                    Layout.topMargin: bar.code === ""
+                                      ? 0 : Math.max(0, (askCode.implicitHeight - askWord.lineHeight) / 2)
                 }
             }
-            LineText {
+            CardText {
                 text: bar.detail
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
-                ground: Theme.bgElevated
                 Layout.fillWidth: true
             }
             // Put down as the next question is dressed, so the pill and the ✕ — centred against the whole row — hold

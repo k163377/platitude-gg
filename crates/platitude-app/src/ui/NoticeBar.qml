@@ -47,6 +47,13 @@ Rectangle {
     readonly property real openHeight: bar.open ? noticeRow.implicitHeight + 2 * Theme.spaceMd : 0
     readonly property bool settled: bar.openHeight > 0 && bar.implicitHeight === bar.openHeight
     readonly property bool shut: !bar.open && bar.implicitHeight === 0
+    /// Automation: whether either line lost its tail to the bar's width. **Read off the fields themselves**
+    /// (`Text.truncated`), because a bar that wrapped and a bar that cut are the same height in every reading that
+    /// asks the bar instead of the words (`tests/qml/tst_reportdress.qml`).
+    readonly property bool wordsCut: headingWord.truncated || detailWord.truncated
+    /// Automation: the one control, so a run can read where it stands — the middle of the bar, however many lines
+    /// the words take.
+    readonly property alias pill: okPill
 
     clip: true
     color: Theme.bgElevated
@@ -85,24 +92,30 @@ Rectangle {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Theme.spaceXs
+            // **Wrapped, never cut** (デザイン規約 §答えの要らない報せ): what did not happen names a branch and a remote,
+            // and a heading that loses its tail is a report about something the reader cannot name.
             Label {
+                id: headingWord
                 Layout.fillWidth: true
                 text: bar.label
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontMd
                 font.weight: Font.DemiBold
-                elide: Text.ElideRight
+                wrapMode: Text.Wrap
             }
-            // The far side's own sentences, run together into the one line a report is allowed (デザイン規約 §長さ — 見出し
-            // 1 行 + 1 行). A forge writes two or three of them (`GH006: …` and then the rule that was broken) and they
-            // fit; whatever does not is read in the log with the command that was refused (§git が言ったことを読む場所).
+            // The far side's own sentences, run together and wrapped. A forge writes two or three of them
+            // (`GH006: …` and then the rule that was broken) and **the rule is the last of them**, so a line cut at
+            // the bar's width drops the one sentence the reader came for.
+            //
+            // **The bar grows with the words** and the middle steps down for it — nothing caps the height, so a hook
+            // that writes a screenful takes a screenful (デザイン規約 §答えの要らない報せ).
             Label {
+                id: detailWord
                 Layout.fillWidth: true
                 text: bar.detail
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSm
-                maximumLineCount: 1
-                elide: Text.ElideRight
+                wrapMode: Text.Wrap
             }
         }
         // The one thing on the bar that acts, and it only takes the bar away.
