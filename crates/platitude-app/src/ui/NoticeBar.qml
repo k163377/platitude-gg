@@ -11,7 +11,8 @@ import platitude.ui
 // **Nothing here failed and nothing is being asked.** The far side turned a write down under a rule of its own — a
 // protected branch, a hook — and the whole answer is what it said for itself: this end could not have known beforehand
 // and cannot do anything about it now. So the bar wears no state colour, the heading says what did not happen, and the
-// line under it is the far side's own words, quoted.
+// line under it is the far side's own words, quoted — or this application's own where nobody over there ever saw the
+// write (デザイン規約 §答えの要らない報せ).
 //
 // One report stands at a time, above whatever question is standing: both push the history down.
 Rectangle {
@@ -19,8 +20,9 @@ Rectangle {
 
     /// What did not happen, in this application's words (`Words.remoteRefused`).
     property string label: ""
-    /// Why, in the words of whoever said no — passed through as it came where that was somebody else, said by this
-    /// application where it refused the write itself (`Words.writeReportedWhy`).
+    /// Why, in the words of whoever said no — passed through as it came where somebody over there said it, and
+    /// written here where nobody did: the writes this end withheld, and the push git turned down without the far
+    /// side hearing of it (`Words.writeReportedWhy`).
     property string detail: ""
     /// Which state, if any, this report is in — `danger` / `warning` / empty (`Words.reportTone`).
     property string tone: ""
@@ -58,7 +60,15 @@ Rectangle {
     clip: true
     color: Theme.bgElevated
     implicitHeight: bar.openHeight
+    /// The same 200ms the question bar spends, **on the same two things**: coming down and going back up. A report
+    /// already standing that is handed longer words — a second refusal while the first is still up — takes the room
+    /// for them in the pass that draws them, or the clip shears whatever the extra lines pushed past the edge.
+    /// Raised from the handler and lowered on arrival, both for the reasons `AskBar` carries.
+    property bool travelling: false
+    onSettledChanged: if (bar.settled) bar.travelling = false
+    onShutChanged: if (bar.shut) bar.travelling = false
     Behavior on implicitHeight {
+        enabled: bar.travelling
         NumberAnimation { duration: 200 }
     }
     // The band's own hairline, and **it always wears one of the two colours**: a press that was turned down has to say
@@ -77,9 +87,13 @@ Rectangle {
     // Opening hands the pill the focus, so the keyboard's way out needs no hunting for. A tick later: the
     // gesture that ran the write is still being delivered, and what it lands on takes the focus back if the pill
     // claims it first (`AskBar`).
-    onOpenChanged: if (bar.open) {
-        okPill.tookTheOpening = true
-        Qt.callLater(okPill.forceActiveFocus)
+    onOpenChanged: {
+        // First, ahead of the bindings that read the same property: this is the travel the 200ms is for.
+        bar.travelling = true
+        if (bar.open) {
+            okPill.tookTheOpening = true
+            Qt.callLater(okPill.forceActiveFocus)
+        }
     }
 
     RowLayout {

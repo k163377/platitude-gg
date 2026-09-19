@@ -132,6 +132,8 @@ Rectangle {
     // A question with a form leaves the focus to it: the first thing to do there is type, and the form's
     // own box asks for it.
     onOpenChanged: {
+        // First, ahead of the bindings that read the same property: this is the travel the 200ms is for.
+        bar.travelling = true
         if (bar.open) {
             if (bar.form === null) {
                 acceptPill.tookTheOpening = true
@@ -154,7 +156,26 @@ Rectangle {
     /// caught the bar half-retracted with its words cut off by the clip.
     readonly property bool shut: !bar.open && bar.implicitHeight === 0
     implicitHeight: bar.openHeight
+    /// Whether the height on the move is the bar itself coming down or going back up. **The 200ms is those two and
+    /// nothing else**: a bar already standing grows when its words arrive late — the remote's answer lands in the
+    /// line under the heading — and those words take their room in the pass that lays them out, while an animated
+    /// height would still be on its way there. What is left outside is cut by the clip, which was the boxes at the
+    /// foot of the column with their bottoms sheared off and the hairline drawn through them (observed, `publish`
+    /// in a narrow middle).
+    ///
+    /// **Raised from the handler, not read off `open`.** A condition standing on `open` answers with the value it
+    /// holds when the height arrives, and a bar that was open a moment ago says "not travelling" about its own way
+    /// out — which takes it off the screen in one frame, with the words still being read (observed:
+    /// `publish-dismiss`). The handler runs ahead of the bindings that read the same property (app-ui.md), so the
+    /// animation is armed before the height it is to carry.
+    ///
+    /// **The travel is over when the bar has arrived**, which the two edges a run photographs on already name: all
+    /// the way down, or all the way back up.
+    property bool travelling: false
+    onSettledChanged: if (bar.settled) bar.travelling = false
+    onShutChanged: if (bar.shut) bar.travelling = false
     Behavior on implicitHeight {
+        enabled: bar.travelling
         NumberAnimation { duration: 200 }
     }
     BandRule {
