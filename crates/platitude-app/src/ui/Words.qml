@@ -214,11 +214,18 @@ QtObject {
         }
     }
 
-    /// The second line for the reports **nobody outside answered** — this end refused them itself, before git was
-    /// asked, so the words are ours and belong here (app-ui.md「Rust に文言を置かない」).
+    /// The second line for the reports **nobody outside answered** — the ones this end refused itself before git was
+    /// asked, and the push git turned down here without the far side ever seeing it. Either way there is nobody to
+    /// quote, so the words are ours and belong here (app-ui.md「Rust に文言を置かない」).
     /// Empty for the reports that quote somebody else; the page uses what came across.
     function writeReportedWhy(kind) {
         switch (kind) {
+        // **The far side never saw this push.** git turned it down here, reading what this clone holds, and the
+        // advice it writes under that is for somebody at a terminal — three sentences ending in `git pull`, which
+        // is the one thing this reader has no use for: the session is fetching already
+        // (デザイン規約 §答えの要らない報せ). So the line says the cause and stops there.
+        case "outdated":
+            return qsTr("The remote has commits this clone has not fetched yet.")
         case "stale-stage":
         case "stale-unstage":
         case "stale-discard":

@@ -808,12 +808,10 @@ async fn a_push_that_is_only_out_of_date_reports_gits_own_advice() {
     assert_eq!(report.remote, "origin");
     assert_eq!(report.name, "main");
     assert!(
-        !report.reason.is_empty(),
-        "git says why in advice of its own, and that is what goes under the heading"
-    );
-    assert!(
-        !report.reason.contains("hint:"),
-        "git's framing comes off the way the far side's does: {}",
+        report.reason.is_empty(),
+        "nobody over there saw this push, so there is nobody to quote: the line under the heading \
+         is the screen's own (`Words.writeReportedWhy`), and git's advice — written for somebody \
+         at a terminal — is read in the log with the command it came from. Carried: {}",
         report.reason
     );
 }

@@ -140,11 +140,6 @@ pub struct WriteReport {
     pub reason: String,
 }
 
-/// The prefix git puts in front of its own advice, which the words under
-/// a report are taken out from behind
-/// ([`crate::remote::push`] reads it; the far side's is `remote:`).
-pub const HINT_PREFIX: &str = "hint:";
-
 /// A rename git would not make, said in git's own words.
 ///
 /// Written in one place because both callers — a branch and a tag —

@@ -32,12 +32,18 @@ pub(super) fn refusal(
                 ReportKind::Outdated,
                 remote,
                 branch,
-                // git's own advice, which is the whole of what is known
-                // here: the far side said nothing, this end worked the
-                // refusal out from what it holds. Where the advice is
-                // switched off there is still the parenthetical git
-                // writes on the ref line itself.
-                hint_words(&out.stderr_utf8(), &out.stdout_utf8()),
+                // **Nobody over there said anything**, so nothing is
+                // quoted: the far side never saw this push, and what
+                // turned it down is git reading what this clone holds.
+                // git's own advice under it is written for somebody at a
+                // terminal — three sentences ending in `git pull` and a
+                // page of `git push --help` — and the one thing it says
+                // that this reader does not already have from the
+                // heading is the cause, which the screen writes in its
+                // own line (`Words.writeReportedWhy`,
+                // デザイン規約 §答えの要らない報せ). The whole of what git
+                // wrote is in the log with the command it came from.
+                String::new(),
             )),
         };
     }
@@ -141,41 +147,6 @@ fn remote_words(stderr: &str) -> String {
         }
     }
     said.join(" ")
-}
-
-/// **git's own words** for a refusal it made itself, out of the `hint:`
-/// lines it writes under one.
-///
-/// The same shape as [`remote_words`] and for the same reason: nobody
-/// over there said anything, so what goes under the heading is the
-/// explanation git wrote, quoted as it stands.
-///
-/// **Advice can be switched off** (`advice.pushNonFastForward=false`, and
-/// a git that words its hints differently from one release to the next),
-/// so the fallback is the parenthetical on the ref line — `fetch first`,
-/// `stale info` — which is git's machine-readable half and always there.
-fn hint_words(stderr: &str, porcelain: &str) -> String {
-    let mut said: Vec<&str> = Vec::new();
-    for line in stderr.lines() {
-        let Some(rest) = line.trim_end().strip_prefix(crate::report::HINT_PREFIX) else {
-            continue;
-        };
-        let rest = rest.trim();
-        if !rest.is_empty() {
-            said.push(rest);
-        }
-    }
-    if !said.is_empty() {
-        return said.join(" ");
-    }
-    porcelain
-        .lines()
-        .find_map(|line| {
-            let mut fields = line.split('\t');
-            (fields.next() == Some("!")).then(|| fields.nth(1))?
-        })
-        .map(bracket_reason)
-        .unwrap_or_default()
 }
 
 /// git's own reason out of `[remote rejected] (deletion prohibited)` —

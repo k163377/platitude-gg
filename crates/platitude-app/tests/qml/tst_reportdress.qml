@@ -107,12 +107,14 @@ Item {
         function test_the_second_line_is_ours_only_where_nobody_outside_spoke() {
             const owed = ["stale-stage", "stale-unstage", "stale-discard", "conflicted-part", "half-rename",
                           "across-merge", "off-branch", "fold-first", "unfetched-base", "drop-all",
-                          "tip-moved", "op-standing"]
+                          "tip-moved", "op-standing",
+                          // git turned this one down without the far side hearing of it, so there is nobody to
+                          // quote — and what git writes under it is advice for a terminal.
+                          "outdated"]
             for (const kind of owed)
                 verify(Words.writeReportedWhy(kind).length > 0, kind)
             compare(Words.writeReportedWhy("delete"), "")
             compare(Words.writeReportedWhy("update"), "")
-            compare(Words.writeReportedWhy("outdated"), "")
             compare(Words.writeReportedWhy("rename"), "", "the box that is still holding the name answers instead")
             compare(Words.writeReportedWhy(""), "")
         }
