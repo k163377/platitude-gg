@@ -141,7 +141,7 @@ Item {
         } else if (act === "dbl-local" || act === "dbl-remote") {
             // The record is the chip as drawn (kind letter, four flags, name — see encode.rs).
             page.activateRecord(
-                (act === "dbl-local" ? "L00010" : "R00000") + arg)
+                (act === "dbl-local" ? "L000100" : "R000000") + arg)
         } else {
             return false
         }

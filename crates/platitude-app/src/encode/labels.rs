@@ -17,7 +17,7 @@ pub(crate) fn pr_set() -> &'static std::collections::HashSet<String> {
 /// How many flag digits stand between the kind letter and the name. The
 /// QML side counts the same seat by hand (`RefChip`), so a change here is
 /// a change there.
-const FLAGS: usize = 5;
+const FLAGS: usize = 6;
 
 /// Labels → `\u{1f}`-joined chip records: a kind letter, the flag digits,
 /// the name, and — only when the ref was read off a remote — the field
@@ -26,14 +26,16 @@ const FLAGS: usize = 5;
 /// The letter is `H`ead / `L`ocal / `R`emote / `W`orktree / `T`ag; the
 /// flags, in order, are is-head, has-remote, has-PR (`pr` names the
 /// branches wearing it — the callers pass [`pr_set`], the preview until
-/// Phase 4), is-it-here and is-it-out-in-another-working-copy. The
-/// fourth is what the chip writes in the name's colour: a remote branch
-/// and a tag only a remote has are both somewhere else, and read the same
-/// way for it. The fifth is what makes the chip say a move cannot go here
-/// — it mutes and wears the WORKTREES mark (`RefChip.recHeld`), because
-/// git refuses a `switch` onto a branch another working copy holds
-/// (measured); the `W` record says the same thing about a copy that has
-/// no branch to carry the flag, and is drawn the same way for it.
+/// Phase 4), is-it-here, is-it-out-in-another-working-copy and
+/// is-that-copy-locked. The fourth is what the chip writes in the name's
+/// colour: a remote branch and a tag only a remote has are both somewhere
+/// else, and read the same way for it. The fifth is what puts the green
+/// frame on the chip (`RefChip.recHeld`) — a working copy is standing
+/// here, which is also why git refuses a `switch` onto it (measured); the
+/// `W` record says the same thing about a copy that has no branch to
+/// carry the flag, and is drawn the same way for it. The sixth is the
+/// padlock beside the name, and is only ever read where one of those two
+/// stands (デザイン規約 §ref の種別).
 ///
 /// **The flags are fixed-width and the name starts after them**
 /// ([`FLAGS`]), so adding one moves every reader; the test at the foot of
@@ -61,6 +63,7 @@ pub fn encode_labels(labels: &[RefLabel], pr: &std::collections::HashSet<String>
         out.push(if has_pr { '1' } else { '0' });
         out.push(if l.here { '1' } else { '0' });
         out.push(if l.held_elsewhere { '1' } else { '0' });
+        out.push(if l.locked { '1' } else { '0' });
         out.push_str(&l.text);
         if !l.remote.is_empty() {
             out.push(FIELD_SEP);
@@ -212,29 +215,51 @@ mod tests {
                 locked: false,
             },
         ];
-        assert_eq!(encode_no_pr(&labels), "L11010main\u{1f}T00010v1.0");
+        assert_eq!(encode_no_pr(&labels), "L110100main\u{1f}T000100v1.0");
     }
 
-    /// The fifth flag, spelled out: the chip is what says a move cannot
-    /// go here, and it reads the digit by its seat (`RefChip`).
+    /// The last two flags, spelled out: a working copy is standing here
+    /// (the green frame), and that copy is locked (the padlock). The chip
+    /// reads both by their seats (`RefChip`).
     #[test]
-    fn a_branch_another_working_copy_holds_carries_the_last_flag() {
+    fn a_branch_another_working_copy_holds_carries_the_last_two_flags() {
+        let held = |locked| {
+            [RefLabel {
+                text: "feature/topic-a".into(),
+                kind: LabelKind::LocalBranch,
+                has_remote: false,
+                is_head: false,
+                here: true,
+                remote: String::new(),
+                held_elsewhere: true,
+                locked,
+            }]
+        };
+        assert_eq!(encode_no_pr(&held(false)), "L000110feature/topic-a");
+        assert_eq!(encode_no_pr(&held(true)), "L000111feature/topic-a");
+        // And the name still starts where the readers look for it.
+        assert_eq!(
+            label_names("L000111feature/topic-a").collect::<Vec<_>>(),
+            vec!["feature/topic-a"]
+        );
+    }
+
+    /// The marker for a copy with no branch out carries the padlock on
+    /// its own: it names no branch, so the flag beside it stays down and
+    /// the chip's kind letter is what puts the frame on it.
+    #[test]
+    fn a_locked_copy_with_no_branch_carries_the_padlock_and_not_the_held_flag() {
         let labels = [RefLabel {
-            text: "feature/topic-a".into(),
-            kind: LabelKind::LocalBranch,
+            text: "spike".into(),
+            kind: LabelKind::Worktree,
             has_remote: false,
             is_head: false,
             here: true,
             remote: String::new(),
-            held_elsewhere: true,
-            locked: false,
+            held_elsewhere: false,
+            locked: true,
         }];
-        assert_eq!(encode_no_pr(&labels), "L00011feature/topic-a");
-        // And the name still starts where the readers look for it.
-        assert_eq!(
-            label_names("L00011feature/topic-a").collect::<Vec<_>>(),
-            vec!["feature/topic-a"]
-        );
+        assert_eq!(encode_no_pr(&labels), "W000101spike");
     }
 
     #[test]
@@ -284,7 +309,7 @@ mod tests {
             held_elsewhere: false,
             locked: false,
         }];
-        assert_eq!(encode_no_pr(&labels), "T01010v1.0");
+        assert_eq!(encode_no_pr(&labels), "T010100v1.0");
     }
 
     /// The PR digit answers the set the caller passed — only a local
@@ -309,7 +334,7 @@ mod tests {
         let pr = std::collections::HashSet::from(["topic".to_string()]);
         assert_eq!(
             encode_labels(&labels, &pr),
-            "L00110topic\u{1f}T00010topic",
+            "L001100topic\u{1f}T000100topic",
             "the branch wears the digit; the tag sharing its name does not"
         );
     }
@@ -326,7 +351,7 @@ mod tests {
             held_elsewhere: false,
             locked: false,
         }];
-        assert_eq!(encode_no_pr(&labels), "T01000v9.9\u{1e}origin, fork");
+        assert_eq!(encode_no_pr(&labels), "T010000v9.9\u{1e}origin, fork");
     }
 
     #[test]
@@ -380,28 +405,28 @@ mod tests {
 
     #[test]
     fn a_record_answers_its_kind_and_its_name() {
-        assert_eq!(label_kind_word("L11010main"), "branch");
-        assert_eq!(label_kind_word("R01000origin/main\u{1e}origin"), "remote");
-        assert_eq!(label_kind_word("T00010v1.0"), "tag");
-        assert_eq!(label_kind_word("H10010HEAD"), "", "nothing to act on");
-        assert_eq!(label_kind_word("W00010spike"), "", "nor is a working copy");
+        assert_eq!(label_kind_word("L110100main"), "branch");
+        assert_eq!(label_kind_word("R010000origin/main\u{1e}origin"), "remote");
+        assert_eq!(label_kind_word("T000100v1.0"), "tag");
+        assert_eq!(label_kind_word("H100100HEAD"), "", "nothing to act on");
+        assert_eq!(label_kind_word("W000100spike"), "", "nor is a working copy");
         assert_eq!(label_kind_word(""), "");
         assert_eq!(
-            label_name_of("R01000origin/main\u{1e}origin"),
+            label_name_of("R010000origin/main\u{1e}origin"),
             "origin/main"
         );
-        assert_eq!(label_name_of("L11010main"), "main");
+        assert_eq!(label_name_of("L110100main"), "main");
         assert_eq!(label_name_of("L11"), "", "flags cut short name nothing");
     }
 
     #[test]
     fn the_gone_set_takes_chips_out_by_kind_and_name() {
-        let packed = "L11010main\u{1f}T00010main\u{1f}R01000origin/main\u{1e}origin";
+        let packed = "L110100main\u{1f}T000100main\u{1f}R010000origin/main\u{1e}origin";
         // A tag sharing the branch's name stays: the letter is part of
         // the identity.
         assert_eq!(
             labels_shown(packed, &gone_keys("main", "", "")),
-            "T00010main\u{1f}R01000origin/main\u{1e}origin"
+            "T000100main\u{1f}R010000origin/main\u{1e}origin"
         );
         assert_eq!(
             labels_shown(packed, &gone_keys("main", "origin/main", "main")),

@@ -23,6 +23,9 @@ InkCanvas {
         case "arrow": return 8
         // A head on a stem: the head is the whole of its width, and half the box.
         case "tree": return 8
+        // The padlock's body, 3.5 to 12.5; the shackle is 5.6..10.4 and stands inside it. Said out loud because a
+        // graph chip seats this mark beside a name and the gap is measured to its ink (デザイン規約 §余白).
+        case "lock": return 9
         case "plus":
         case "minus":
         case "copyicon": return 9

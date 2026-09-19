@@ -6,15 +6,16 @@ import platitude.ui
 // those others are is said behind the card, one sheet per colour, by the stack that seats this (`RefChipStack`) — this
 // file draws the card and nothing else. There are two things to read off the name and they get one channel each — the
 // frame carries the kind (local = accent, remote = secondary grey, detached HEAD = warning, which is a state rather
-// than a kind, a working copy standing here with no branch = the muted frame a branch another copy holds already
-// wears, with the same WORKTREES mark on it, tag = refTag with a fill behind it), and the name carries where the ref
+// than a kind, a working copy standing on this commit = the WORKTREES section's own green, whether it is holding a
+// branch here or standing on no branch at all, tag = refTag with a fill behind it), and the name carries where the ref
 // is: ordinary text for one that is in this repository, grey for one that is only on the remote
 // (デザイン規約 §ref の種別). The sidebar already reads that way
 // — names in textPrimary, kind in the section icon — and on a graph row the name is the thing most worth reading, so
 // its colour is spent on where the ref is and the frame keeps the kind. The kind is the first record's own: a row
 // hands over everything on it in one list, branches ahead of tags, and the chip shows the head of that list. The one
 // icon is the remote/PR badge, same mark and same single slot as the sidebar rows — for tags too, which is how
-// "this one is only here" reads.
+// "this one is only here" reads. The one mark at the other end is the padlock, and only a locked working copy wears
+// it.
 Rectangle {
     id: chip
     property var records: []
@@ -24,13 +25,6 @@ Rectangle {
     /// is shown *in order to be read* (規約 §hover のツールチップ). **One frame either way**: the lines are a single
     /// label inside a single border, so a wrapped name is one chip that got taller.
     property bool wrapped: false
-    /// Nowhere a move can go, in the two shapes that come to: another working copy has this branch out and git
-    /// refuses it outright (§無効), or a working copy is standing here with no branch at all — which names nothing to
-    /// move onto in the first place. The words drop to the muted colour, frame included, since the frame is how a
-    /// chip is read at all — and the mark beside them says where the reader would find it instead. **The record
-    /// carries it**, so the chip reads the same wherever drawn — the dulling is the record's alone, or the
-    /// same ref comes out in two colours on the two things that draw it (the row and the card it unfolds into).
-    readonly property bool dulled: chip.recHeld || chip.recKind === "W"
     /// This chip has taken a second click and is waiting out the double-click window before it becomes a name box
     /// (デザイン規約 §グラフ行のダブルクリック). **The wash the pointer uses**, one step over whatever the row is already wearing
     /// — the gesture's own beat is the one place in the app where a press has landed and nothing has happened yet,
@@ -57,12 +51,12 @@ Rectangle {
     width: Math.min(Math.ceil(chipContent.implicitWidth) + 2 * Theme.spaceXs, maxWidth)
     /// How many lines the name came out on. Only a wrapped chip can answer more than one.
     readonly property int nameLines: chip.wrapped ? Math.max(1, nameLabel.lineCount) : 1
-    /// Everything in the chip that is not the name: the badge with its gap, the count with its own, and the held mark
-    /// with its own. Each is counted only while it is drawn — all three come and go, and a name measured against room
-    /// that is not taken would be cut short of the frame.
+    /// Everything in the chip that is not the name: the badge with its gap, the count with its own, and the mark in
+    /// front of the name with its own. Each is counted only while it is drawn — all three come and go, and a name
+    /// measured against room that is not taken would be cut short of the frame.
     readonly property real furnitureW: (chip.hasBadge ? chip.badgeInk + Theme.spaceXs / 2 : 0)
                                        + (chip.hasCount ? chip.countW + Theme.spaceXs / 2 : 0)
-                                       + (chip.hasTree ? chip.heldInk + Theme.spaceXs / 2 : 0)
+                                       + (chip.hasMark ? chip.markInk + Theme.spaceXs / 2 : 0)
     /// What the frame's contents actually come to. `width` is this clamped to `maxWidth`, and whatever it runs over by
     /// is what the frame clips off its own right-hand end — so everything inside is held to what the name's room
     /// leaves, which is the whole of what [`furnitureW`] is measured for (`tst_refstack.qml` holds it).
@@ -90,10 +84,10 @@ Rectangle {
     /// holds past its ink is the mark's own, and belongs to the gap beside it (デザイン規約 §余白). Seated so, the chip
     /// reads the same figures from both ends — a whole gap between the frame and the mark, half a one between the
     /// mark and the word.
-    readonly property real heldInk: heldMark.inkWidth
-    /// The cloud needs the seat more than the tree does: it is drawn 1.7 of the sixteen in from its own left edge, so
-    /// the gap before it was that air on top of the row's spacing — the one place in the chip where two spacings added
-    /// up.
+    readonly property real markInk: nameMark.inkWidth
+    /// The cloud needs the seat more than the padlock does: it is drawn 1.7 of the sixteen in from its own left edge,
+    /// so the gap before it was that air on top of the row's spacing — the one place in the chip where two spacings
+    /// added up.
     readonly property real badgeInk: badgeMark.inkWidth
     /// Where the two things after the name stand. The badge is this ref's own state and belongs beside the name it
     /// describes; the count is how many *others* the row carries and belongs after both (デザイン規約 §重ね表示).
@@ -106,42 +100,55 @@ Rectangle {
     radius: Theme.radiusSm
     clip: true
 
-    readonly property string rec: records.length > 0 ? records[0] : "L00010"
+    readonly property string rec: records.length > 0 ? records[0] : "L000100"
     readonly property string recKind: rec[0]
     readonly property bool recHead: rec[1] === "1"
     readonly property bool recRemote: rec.length > 2 && rec[2] === "1"
     readonly property bool recPr: rec.length > 3 && rec[3] === "1"
     readonly property bool recHere: rec.length > 4 && rec[4] === "1"
-    // Another working copy has this branch out, so git refuses a move onto it (measured). Read off the record: the
-    // record is rebuilt whenever the ref joins are, so the chip repaints with the rest of them
-    // (app-ui.md 「QML バインディングはプロパティにしか反応しない」).
+    // Another working copy has this branch out, which is what puts the green frame on it — and also why git refuses
+    // a move onto it (measured). Read off the record: the record is rebuilt whenever the ref joins are, so the chip
+    // repaints with the rest of them (app-ui.md 「QML バインディングはプロパティにしか反応しない」).
     readonly property bool recHeld: rec.length > 5 && rec[5] === "1"
+    // And `git worktree lock` is on that copy — the branch's holder, or the copy this marker is about. Only the two
+    // records a copy is standing on ever carry it, so the padlock cannot turn up on a chip nobody is standing on.
+    readonly property bool recLocked: rec.length > 6 && rec[6] === "1"
     // Name, and the remotes it was read from when it was not read here. The separator is absent whenever there are
     // none, so the name runs to the end of the record (see encode.rs).
-    readonly property var recFields: rec.substring(6).split("\u001E")
+    readonly property var recFields: rec.substring(7).split("\u001E")
     readonly property string recName: chip.recFields[0]
     readonly property string recWhere: chip.recFields.length > 1 ? chip.recFields[1] : ""
     // One slot, one mark: on the remote, or on the remote with a PR open (規約 §グラフ行のダブルクリック — the two never stack).
     readonly property bool hasBadge: recRemote || recPr
-    /// Whether the WORKTREES mark stands ahead of the name. Two records wear it and they are the two halves of one
-    /// fact — **a working copy is standing on this commit**: a branch another copy has out (which is also why nothing
-    /// can move onto it), and a copy that is on no branch at all, whose whole chip is that fact
-    /// (デザイン規約 §ref の種別). One mark, so a row never says it twice.
+    /// Whether the padlock stands ahead of the name: `git worktree lock` is on the copy standing here
+    /// (デザイン規約 §ref の種別). **That a copy is standing here at all is the frame's to say** — the green is on
+    /// every one of them — so this is a state and not a kind, and a chip with no padlock is a copy nobody has
+    /// locked. Same mark and same colour as the WORKTREES row's own (`NavRowBody`), which is the other place this
+    /// state is read.
+    readonly property bool hasLock: chip.recLocked
+    /// And whether the name itself is a working copy's folder rather than a ref's — the one chip that is not
+    /// naming a ref at all. **The mark belongs to the name**, not to the state: every other chip in the column
+    /// spells a branch, a remote or a tag, and a bare folder name among them reads as one of those
+    /// (デザイン規約 §ref の種別). It is the same mark the pane and the sidebar section write a copy's name with, so
+    /// the three places spell it one way — and it takes the ink every mark in this frame takes, the padlock and the
+    /// badge included: what a mark says is its shape, and a colour on top of it would be a second answer.
     ///
-    /// **The same two records [`dulled`] is about**, and for the same reason: what wears this mark is what leads
-    /// nowhere. The two are spelled out separately because they are different questions — move the one and the
-    /// other moves with it.
-    readonly property bool hasTree: chip.recHeld || chip.recKind === "W"
+    /// **One mark in front of the name, never two.** A padlock is already a working copy's own state — nothing
+    /// else in this column can be locked — so it says what the tree was there to say, and the pair only crowded a
+    /// frame eighteen pixels tall.
+    readonly property bool hasTree: chip.recKind === "W" && !chip.recLocked
+    /// Which is why there is one seat, and the two above only decide what stands in it.
+    readonly property bool hasMark: chip.hasLock || chip.hasTree
     /// Every colour a record can wear, which is how many cards one commit's names can ever come to
     /// (`RefChipStack.maxSheets`). **The list itself** — a kind added below is counted here by adding it here.
-    readonly property var kindKeys: ["head", "local", "held", "remote", "tag", "tagdim"]
+    readonly property var kindKeys: ["head", "local", "worktree", "remote", "tag", "tagdim"]
     /// Which of the frame colours a record wears, as a name. **The stack behind the card counts colours**
     /// (`RefChipStack`) and two colours cannot be told apart by comparing `color` values, so the rule answers in
-    /// words and [`kindColourFor`] turns one into ink. A branch another working copy holds answers with its state:
-    /// nothing can move onto it, and that is what the reader has to see first.
+    /// words and [`kindColourFor`] turns one into ink. A branch another working copy holds answers with where that
+    /// copy is: standing on this commit, which is the thing the reader has to see first.
     function kindKeyOf(rec) {
         if (rec.length > 5 && rec[5] === "1")
-            return "held"
+            return "worktree"
         if (rec[0] === "T")
             return rec.length > 4 && rec[4] === "1" ? "tag" : "tagdim"
         if (rec[0] === "R")
@@ -149,19 +156,19 @@ Rectangle {
         if (rec[0] === "H")
             return "head"
         // A working copy standing here with no branch out reads as the branch chip a copy *does* hold: the same
-        // muted frame, the same mark, and a name in the same ink (デザイン規約 §ref の種別). The two say one thing —
-        // another copy is on this commit — and the graph already says it that way, so the marker joins that
-        // reading. **Which is also this key**: the sheets behind the card are one per colour (§重ね表示), and a key
-        // of its own over the same ink would draw two nobody can tell apart.
+        // green frame and a name in the same ink, the only difference being which name there is to show
+        // (デザイン規約 §ref の種別). The two say one thing — a copy is on this commit — so they share one key:
+        // the sheets behind the card are one per colour (§重ね表示), and a key of its own over the same ink would
+        // draw two nobody can tell apart.
         if (rec[0] === "W")
-            return "held"
+            return "worktree"
         return "local"
     }
     /// A tag this repository does not hold keeps the tag hue and only drops a step (§暗く落とした段): still a tag, read
     /// somewhere else. Only tags dim, because only tags need it — every other kind says where it is in its own frame
     /// colour (a remote branch is grey) or in its name (`origin/main` carries the remote in the name itself).
     function kindColourFor(key) {
-        return key === "held" ? Theme.textMuted
+        return key === "worktree" ? Theme.success
              : key === "tag" ? Theme.refTag
              : key === "tagdim" ? Theme.refTagDim
              : key === "remote" ? Theme.textSecondary
@@ -179,8 +186,12 @@ Rectangle {
     // branch row goes there (§無効 is for what is actually unavailable). The detached HEAD marker keeps its state
     // colour in the name too: it is the one chip whose colour is not a kind. The branch the working tree stands on is
     // the nearest answer this colour has — "here" — and the sidebar already writes it that way, so the chip does too.
-    readonly property color nameColor: chip.dulled ? Theme.textMuted
-                                       : recKind === "H" ? Theme.warning
+    //
+    // **A branch another copy holds writes its name in the ordinary ink**: the name is the
+    // branch's, the branch is in this repository, and where the copy is is the frame's to say. Dulling the words as
+    // well spent a second channel on a fact the frame already carries, and left the row's most-read text as the
+    // faintest thing on it.
+    readonly property color nameColor: recKind === "H" ? Theme.warning
                                        : recHead ? Theme.textLink
                                        : !recHere ? Theme.textSecondary
                                        : Theme.textPrimary
@@ -258,33 +269,35 @@ Rectangle {
         // far as the name stands off from the frame. The two marks are then seated to their plain ink, since it is
         // this spacing that is already the half gap their box-air would otherwise take out of a whole one.
         spacing: Theme.spaceXs / 2
-        // Ahead of the name, and only when there is one to draw: another working copy has this branch out (observed
-        // — the seat is added on the left only when it applies). Same mark and same meaning as the sidebar row's
-        // (`NavItemDelegate`), which is the WORKTREES section's own.
+        // Ahead of the name, and only when there is one to draw: the padlock of a locked working copy, or the mark
+        // that says the name itself is a copy's folder ([`hasLock`], [`hasTree`] — the two never meet). Same marks
+        // and same colour as the sidebar's own (`NavRowBody`), which is the other place they are read.
         //
         // **The seat comes and goes** where the sidebar row's is held open: a chip is measured to its own contents,
         // so an empty seat on every chip would walk every name on the graph one mark to the right for a state almost
         // none of them are in.
         //
-        // **And it is seated to its ink.** The mark is a head on a stem and fills half the sixteen it is drawn on; a
+        // **And it is seated to its ink.** Neither mark fills the sixteen it is drawn on; a
         // square seat would add that air to the gaps on both sides, and the pair read as a name pushed away from a
         // mark that sat tight against the frame (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」;
         // observed, measured 114 -> 110 -> 108).
         Item {
-            visible: chip.hasTree
+            visible: chip.hasMark
             // The seat is the ink, so the frame keeps its whole gap to the mark and the row's own half gap is all
-            // that stands between the mark and the name.
-            width: chip.heldInk
+            // that stands between the mark and the name. **The two kinds do not span the same ink** (the padlock's
+            // body is nine of the sixteen, the tree's head eight), so the seat is asked of the mark rather than
+            // told a number.
+            width: chip.markInk
             height: Theme.iconSm
             // On the first line's box, for the reason the badge at the other end is.
             y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconSm) / 2)
             NavIcon {
-                id: heldMark
+                id: nameMark
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.left: parent.left
-                anchors.leftMargin: -(Theme.iconSm - heldMark.inkWidth) / 2
-                kind: "tree"
-                tint: chip.dulled ? Theme.textMuted : Theme.textSecondary
+                anchors.leftMargin: -(Theme.iconSm - nameMark.inkWidth) / 2
+                kind: chip.hasLock ? "lock" : "tree"
+                tint: Theme.textSecondary
                 width: Theme.iconSm
                 height: Theme.iconSm
             }
@@ -328,7 +341,7 @@ Rectangle {
                 anchors.right: parent.right
                 anchors.rightMargin: -(badgeMark.width - badgeMark.inkRight)
                 kind: chip.recPr ? "pr" : "remote"
-                tint: chip.dulled ? Theme.textMuted : Theme.textSecondary
+                tint: Theme.textSecondary
                 width: Theme.iconSm
                 height: Theme.iconSm
             }
@@ -345,7 +358,7 @@ Rectangle {
             y: chip.inkY(countLabel, countInk)
             visible: chip.hasCount
             text: "+" + (chip.records.length - 1)
-            color: chip.dulled ? Theme.textMuted : Theme.textSecondary
+            color: Theme.textSecondary
             font.pixelSize: Theme.fontSm
         }
     }

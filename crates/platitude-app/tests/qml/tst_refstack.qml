@@ -10,27 +10,30 @@ import platitude.ui
 // came out to, which nothing outside a laid-out chip knows.
 //
 // The records are the fixed-width flags plus a name (`encode::labels`): kind, is-head, on-a-remote, has-a-PR, here,
-// held elsewhere. Spelled out whole, so a flag that moves is a test that fails.
+// held elsewhere, and that holder locked. Spelled out whole, so a flag that moves is a test that fails.
 Item {
     id: root
     width: 400
     height: 200
 
-    readonly property string head: "H10010HEAD"
-    readonly property string current: "L10010main"
-    readonly property string local2: "L00010hotfix"
-    readonly property string held: "L00011spike"
-    readonly property string remote: "R00000origin/preview"
+    readonly property string head: "H100100HEAD"
+    readonly property string current: "L100100main"
+    readonly property string local2: "L000100hotfix"
+    readonly property string held: "L000110spike"
+    /// The same branch, held by a copy somebody has run `git worktree lock` on — the padlock's record.
+    readonly property string heldLocked: "L000111spike"
+    readonly property string remote: "R000000origin/preview"
     /// A working copy standing on this commit with no branch out — a marker, and a colour of its
-    /// own (デザイン規約 §ref の種別).
-    readonly property string copy: "W00010rig"
-    readonly property string tagHere: "T00010v1.0"
-    readonly property string tagHere2: "T00010v1.1"
-    readonly property string tagAway: "T01000v2.0"
+    /// own (デザイン規約 §ref の種別), with and without the lock.
+    readonly property string copy: "W000100rig"
+    readonly property string copyLocked: "W000101rig"
+    readonly property string tagHere: "T000100v1.0"
+    readonly property string tagHere2: "T000100v1.1"
+    readonly property string tagAway: "T010000v2.0"
 
-    /// A branch another working copy holds that is also on a remote — the worst-dressed card there is, which is the
-    /// one the column's floor is measured on.
-    readonly property string dressed: "L01011feature/a-name-far-too-long-for-any-column"
+    /// A branch a **locked** working copy holds that is also on a remote — the worst-dressed card there is, which is
+    /// the one the column's floor is measured on: both marks and the count, all at once.
+    readonly property string dressed: "L010111feature/a-name-far-too-long-for-any-column"
 
     RefChipStack {
         id: stack
@@ -79,7 +82,7 @@ Item {
 
         // The measured shape of nearly every multi-ref row in a real repository: one commit wearing several tags.
         function test_the_front_card_s_own_colour_is_the_one_that_may_come_twice() {
-            stack.records = [root.tagHere, root.tagHere2, "T00010v1.2", "T00010v1.3"]
+            stack.records = [root.tagHere, root.tagHere2, "T000100v1.2", "T000100v1.3"]
             compare(stack.sheets, ["tag"])
             // And it stands out by the step every other sheet stands out by: the repeat sits one step from the
             // card it repeats.
@@ -88,7 +91,7 @@ Item {
 
         // Every other colour is one sheet however many names wear it — only the sheet against the card may repeat it.
         function test_a_colour_behind_the_card_is_one_sheet_however_many_wear_it() {
-            stack.records = [root.current, root.tagHere, root.tagHere2, "T00010v1.2"]
+            stack.records = [root.current, root.tagHere, root.tagHere2, "T000100v1.2"]
             compare(stack.sheets, ["tag"])
         }
 
@@ -98,10 +101,10 @@ Item {
             compare(stack.sheets, ["tag", "tagdim"])
         }
 
-        // A branch another working copy holds is nowhere a move can go, which is what the reader has to see first.
+        // A branch another working copy holds says where that copy is, which is what the reader has to see first.
         function test_a_held_branch_is_its_own_colour() {
             stack.records = [root.local2, root.held]
-            compare(stack.sheets, ["held"])
+            compare(stack.sheets, ["worktree"])
             stack.records = [root.held, root.local2]
             compare(stack.sheets, ["local"])
         }
@@ -112,9 +115,54 @@ Item {
             stack.records = [root.copy]
             compare(stack.sheets, [])
             stack.records = [root.local2, root.copy]
-            compare(stack.sheets, ["held"])
+            compare(stack.sheets, ["worktree"])
             stack.records = [root.held, root.copy, root.local2]
-            compare(stack.sheets, ["held", "local"], "the two are one colour, so one sheet")
+            compare(stack.sheets, ["worktree", "local"], "the two are one colour, so one sheet")
+        }
+
+        // **Two working copies on one commit put green behind green.** The colour they share is the front card's own,
+        // and the one colour a fan is allowed to repeat is that one — the sheet says "and more of these"
+        // (デザイン規約 §重ね表示). **Read with the front card's key**, because a single `worktree` sheet is also what
+        // a row with one copy and one other colour comes to: the two are told apart by what the card in front is.
+        function test_two_copies_on_one_commit_put_a_green_sheet_behind_a_green_card() {
+            stack.records = [root.held, root.copy]
+            compare(stack.chipItem.kindKeyOf(stack.records[0]), "worktree", "the card in front is not a copy's")
+            compare(stack.sheets, ["worktree"], "the second copy drew no sheet of its own colour")
+            // A third one is the same single sheet: a colour is one sheet however many wear it, and the card's `+N`
+            // is what says how many.
+            stack.records = [root.held, root.heldLocked, root.copy]
+            compare(stack.sheets, ["worktree"])
+        }
+
+        // The tree mark belongs to the **name**, not to the state: the one chip whose name is a folder's wears it,
+        // and a branch a copy holds — whose name is still a branch's — does not (デザイン規約 §ref の種別).
+        function test_only_the_chip_naming_a_folder_wears_the_tree_mark() {
+            stack.records = [root.copy]
+            verify(stack.chipItem.hasTree, "the copy's own name came out with nothing saying it is a folder")
+            // **The padlock takes the seat when there is one.** Only a working copy can be locked, so the lock
+            // already says what the tree says, and the frame is too short to wear both.
+            stack.records = [root.copyLocked]
+            verify(stack.chipItem.hasLock && !stack.chipItem.hasTree, "a locked copy wore both marks")
+            stack.records = [root.held]
+            verify(!stack.chipItem.hasTree, "a branch is not a folder, whoever has it out")
+            stack.records = [root.current]
+            verify(!stack.chipItem.hasTree)
+        }
+
+        // The padlock is the copy's, not the ref's: it stands on whichever of the two shapes a copy takes, and on
+        // neither of them when nobody has locked it (デザイン規約 §ref の種別). **The colour does not move with it** —
+        // a locked copy is still a copy standing here, so the frame is the same green and the fan counts one sheet.
+        function test_the_padlock_stands_on_a_locked_copy_and_nowhere_else() {
+            stack.records = [root.held]
+            verify(!stack.chipItem.hasLock, "an unlocked holder put a padlock on the card")
+            stack.records = [root.heldLocked]
+            verify(stack.chipItem.hasLock, "the locked holder's card wears no padlock")
+            stack.records = [root.copy]
+            verify(!stack.chipItem.hasLock)
+            stack.records = [root.copyLocked]
+            verify(stack.chipItem.hasLock, "the marker for a locked copy wears no padlock")
+            stack.records = [root.local2, root.heldLocked, root.copyLocked]
+            compare(stack.sheets, ["worktree"], "the lock is not a colour of its own")
         }
 
         function test_the_detached_head_marker_is_its_own_colour() {
@@ -129,7 +177,7 @@ Item {
                              root.remote, root.copy, root.tagHere, root.tagAway]
             // **The working copy's marker wears the frame a branch another copy holds wears**, and a sheet is a
             // colour (デザイン規約 §重ね表示).
-            compare(stack.sheets, ["local", "held", "remote", "tag", "tagdim"])
+            compare(stack.sheets, ["local", "worktree", "remote", "tag", "tagdim"])
             compare(stack.sheets.length, stack.maxSheets)
         }
 
@@ -226,7 +274,7 @@ Item {
         function tags(n) {
             const out = []
             for (let i = 0; i < n; ++i)
-                out.push("T00010v1." + i)
+                out.push("T000100v1." + i)
             return out
         }
 
@@ -265,7 +313,8 @@ Item {
         function test_the_dressed_card_s_contents_stop_at_its_frame() {
             stack.records = [root.dressed].concat(tags(41))
             const chip = stack.chipItem
-            verify(chip.hasCount && chip.hasBadge && chip.recHeld, "the card is not the worst-dressed one")
+            verify(chip.hasCount && chip.hasBadge && chip.recHeld && chip.hasLock,
+                   "the card is not the worst-dressed one")
             // The row inside the frame is a positioner and the name inside it elides: both answer their width in a
             // pass after the records land. **Waited out** — a read taken at the first pass that answers anything
             // at all catches the name at its unelided width.
@@ -319,7 +368,7 @@ Item {
         when: windowShown
 
         /// The name a graph column has to cut and a card has room to show whole.
-        readonly property string cutInTheColumn: "L00010feature/a-name-far-too-long-for-any-column"
+        readonly property string cutInTheColumn: "L000100feature/a-name-far-too-long-for-any-column"
 
         // A chip handed a wider room answers with the width it had before it, until it is asked to lay out: the frame's
         // contents are a positioner, and a positioner sums itself in the polish after the turn its children moved in.

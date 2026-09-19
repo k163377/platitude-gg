@@ -300,8 +300,8 @@ AppCard {
                 // working copy has out is unavailable for the other reason there is — git refuses the move outright
                 // (§無効 is for what is actually unavailable, and this one is).
                 //
-                // **The chip's colour is left alone here.** Two of the three already say it in their own
-                // record — a dulled frame and the `tree` mark, wherever they are drawn — and the detached HEAD's
+                // **The chip's colour is left alone here.** Two of the three already say where they lead in their own
+                // record — the green frame of a copy standing there, wherever it is drawn — and the detached HEAD's
                 // colour is a state rather than a kind: muting that one here would make the same marker amber on the
                 // row and grey in the card it unfolds into. What this answers is the move and the menu, below.
                 readonly property bool unavailable:

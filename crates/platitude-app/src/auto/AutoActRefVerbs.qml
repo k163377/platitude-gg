@@ -148,11 +148,11 @@ Item {
             // The chip's own entrance. **It raises the row's menu, aimed at that name** — the chip
             // and the rest of the row share one menu (デザイン規約 §グラフ行の右クリック). Only the kind letter
             // and the name of the record are read.
-            page.openRowMenu(branchesModel.oidOfName(arg), "L00000" + arg)
+            page.openRowMenu(branchesModel.oidOfName(arg), "L000000" + arg)
             chipMenuTimer.start()
         } else if (act === "chip-menu-current") {
             page.openRowMenu(branchesModel.oidOfName(workTree.branch),
-                             "L10010" + workTree.branch)
+                             "L100100" + workTree.branch)
             chipMenuTimer.start()
         } else if (act === "delete-blocked-tip") {
             // Forced: the pointer cannot be put on a row from here, and this writes to the property
@@ -549,7 +549,7 @@ Item {
                 if (repoTab.busyCount !== 0)
                     return
                 const arg = Harness.autoActArg
-                page.openRowMenu(branchesModel.oidOfName(arg), "L00000" + arg)
+                page.openRowMenu(branchesModel.oidOfName(arg), "L000000" + arg)
                 commitMenu.openSub(commitBranchCard)
                 // The row's own press: a stays-open row is picked (`AppMenuItem.picked`).
                 commitDeleteItem.picked()

@@ -50,13 +50,13 @@ QtObject {
     readonly property int labelMinChars: 3
     readonly property real chipNameMinW: Math.ceil(chipCutInk.advanceWidth
         + labelMinChars * chipLetterInk.advanceWidth)
-    /// The mark a chip wears when another working copy holds the branch, kept here only to be priced. **A seat is the
-    /// mark's ink** (規約 §余白), and how much of the 16-grid a kind fills is the icon's own knowledge —
+    /// The mark a chip wears when the working copy standing on that commit is locked, kept here only to be priced.
+    /// **A seat is the mark's ink** (規約 §余白), and how much of the 16-grid a kind fills is the icon's own knowledge —
     /// `NavIcon.inkGrid` says the caller cannot carry that number — so the width comes off a mark.
     /// It draws nothing: `inkWidth` is arithmetic on the kind, the size and the stroke, and answers the
-    /// same 7.5 with no scene around it (measured, qmltestrunner: no window, no warning).
-    readonly property NavIcon chipHeldMark: NavIcon {
-        kind: "tree"
+    /// same figure with no scene around it (measured, qmltestrunner: no window, no warning).
+    readonly property NavIcon chipLockMark: NavIcon {
+        kind: "lock"
         width: Theme.iconSm
         height: Theme.iconSm
     }
@@ -90,15 +90,19 @@ QtObject {
         font.pixelSize: Theme.fontSm
     }
     /// Everything a chip column spends on what is not the name: the fan of sheets behind the card, the remote/PR badge
-    /// and the gap before it, the count and the gap before it, the held mark and the gap after it, and the card's own
+    /// and the gap before it, the count and the gap before it, the padlock and the gap after it, and the card's own
     /// padding on either side. **Each one is a term the card takes off the name**, so each one is here, and a floor
     /// measured on the bare chip leaves the row that wears them with nothing but the cut mark (measured).
     ///
     /// **The marks come and go and the floor still counts them all**: a column stays wide enough for the chip that
-    /// turns up in it later. The worst-dressed chip is a branch another working copy holds
+    /// turns up in it later. The worst-dressed chip is a branch a locked working copy holds
     /// that is also on a remote, on a commit some other ref names too — measured at `fontChip` in Yu Gothic UI, the
-    /// held mark alone is 9.5 of the 31 the floor keeps for a name, so a floor that leaves it out gives
+    /// mark ahead of the name alone is 9.5 of the 31 the floor keeps for a name, so a floor that leaves it out gives
     /// `feature/topic-a` one character where three were promised (measured).
+    ///
+    /// **The tree mark is not a term of its own.** There is one seat in front of a name and one mark ever stands
+    /// in it (`RefChip.hasTree` gives way to the padlock), so the lock priced above is that seat's whole cost —
+    /// and it is the wider of the two anyway (9 of the grid against the tree's 8).
     ///
     /// **The gaps inside the frame are half ones** (`RefChip`'s row spacing), and the two whole ones are the frame's
     /// own padding. Each mark's term is its plain ink and the half gap that follows it, and so is the count's; the
@@ -106,7 +110,7 @@ QtObject {
     readonly property real chipFurnitureW: chipFan.fanMaxW
         + chipCountInk.implicitWidth + Theme.spaceXs / 2
         + chipBadgeMark.inkWidth + Theme.spaceXs / 2
-        + chipHeldMark.inkWidth + Theme.spaceXs / 2
+        + chipLockMark.inkWidth + Theme.spaceXs / 2
         + 2 * Theme.spaceXs
     // The narrowest the chip column goes, and the widest. The floor is that much name, that much furniture, and the
     // gap the column keeps in front of the chip (`GraphRowChips` hands it the column less `spaceSm`). **Move any of
