@@ -269,12 +269,19 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "tip_sweep all=true caret=true hand=true",
     },
-    // A row's tooltip. `lit=` is the control — the tip that came up
-    // under the same pointer on the way in, so an empty overlay in the
-    // picture is the row's own answer, from a pointer that landed.
+    // A row's tooltip. `lit=` is the control — the first row of the
+    // working copies' listing, which answered the same pointer on the
+    // way in, so an empty overlay in the picture is the row's own
+    // answer, from a pointer that landed. **It answers by opening**:
+    // that section's rows open under themselves now, and it is still
+    // the one section every repository has a row in.
     // `wants=` is the row's own words and `tip=` the shared instance
-    // carrying them: every row of the sidebar spells its name in full,
-    // so both are judged.
+    // carrying them: every row that answers with a tooltip spells its
+    // name in full, so both are judged.
+    //
+    // **The rows left on this side are few**: the remote's own row,
+    // stashes, tags and the working tree's files. A row of BRANCHES,
+    // REMOTES or WORKTREES is read by `nav-open` instead.
     Verb {
         name: "nav-tip",
         when: &[],
@@ -314,6 +321,14 @@ pub(super) const TABLE: &[Verb] = &[
     // a line drawn from the row's own name instead of from the join
     // frames the same — so the words are judged.
     //
+    // A WORKTREES row opens on the same lines, and the one it fills is
+    // the state git noted on the checkout — the answer its own mark
+    // stands for, which goes from the row's seat while the row is open.
+    // **The words are judged there too**: a padlock drawn with no
+    // sentence beside it and one drawn with the wrong sentence frame the
+    // same to a claim that stopped at `open=`, and the reason a lock was
+    // taken for is the half that comes off the row's other slot.
+    //
     // **`open=` rides inside them**: the sentence is empty until a row
     // is open, so `says=` carrying a name is the row having opened.
     Verb {
@@ -327,8 +342,46 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Is("remote:0:topic-a"),
                 "says=origin/feature/topic-a local=feature/topic-a track=1/0 held=topic",
             ),
+            // The two shapes of a state, on the rows of the `worktrees`
+            // preset — the one repository that holds every annotation
+            // `git worktree list` can print. **The name leads the
+            // claim**: a working copy's row goes on showing the folder
+            // it is named by while it is open, and the path it stands at
+            // rides at the tail of the sentence, since it is this
+            // machine's. **The state is claimed and the words are not**:
+            // a lock draws no line at all — the padlock on the row is
+            // the whole of it, and what it was taken for belongs to
+            // whoever took it — while a folder git can no longer find
+            // draws one naming the warning, which the picture reads.
+            // A copy holding a branch that reads a remote: the lines say
+            // of that branch what its own row would — the reading it is
+            // measured against and how far it stands from it — and the
+            // counts are the branch's, which no role of this row carries.
+            (
+                Arg::Is("worktree:1"),
+                "says=topic local= track=1/0 held= up=origin/feature/topic-a gone=false \
+                 branch=feature/topic-a",
+            ),
+            (
+                Arg::Is("worktree:2"),
+                "says=gone local= track=0/0 held= up= gone=false branch=gone/branch state=PRUNABLE",
+            ),
+            (
+                Arg::Is("worktree:3"),
+                "says=hotfix local= track=0/0 held= up= gone=false branch=hotfix/urgent state=LOCKED",
+            ),
         ],
         plain: "wants=false tip=false open=true",
+    },
+    // The rest on what a row opened, and the one thing those lines
+    // keep for it: where the working copy stands. **`open=` rides with
+    // it** — a tip that came up over a row that never opened is the
+    // shared instance answering for something else, and the overlay
+    // frames the same either way.
+    Verb {
+        name: "nav-open-tip",
+        when: &[],
+        plain: "open=true tip=true",
     },
     // The reader who does not wait out the rest: a press on a closed
     // row's own line that starts to move. **Three answers in one line** —

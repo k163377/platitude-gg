@@ -61,8 +61,8 @@ Item {
                               + " editing=" + sidebarPane.editKey)
         } else if (act === "nav-tip" || act === "nav-open") {
             // `<section>:<row>`, or `head` for the current branch's sticky stand-in. The pointer goes in at the row's
-            // own `pointedTipRow`, the same one the file lists carry. `nav-open` is the same walk read on the lines a
-            // branch row opens under itself (`NavRowFacts`) instead of on the shared tooltip.
+            // own `pointedTipRow`, the same one the file lists carry. `nav-open` is the same walk read on the lines
+            // a row opens under itself (`NavRowFacts`) instead of on the shared tooltip.
             navTipTimer.opens = act === "nav-open"
             navTipTimer.then = ""
             navTipTimer.begin(arg)
@@ -85,6 +85,15 @@ Item {
             dragOpenTimer.held = parts.length > 2 ? parts[2] : ""
             dragOpenTimer.acted = false
             dragOpenTimer.start()
+        } else if (act === "nav-open-tip") {
+            // The row opens, and then the hand rests on what it opened: the one thing those lines keep for that
+            // rest is where the working copy stands (デザイン規約 §左メニューの所作). **Two pointers, in order** —
+            // the row's own stand-in opens it, the lines' stand-in asks them.
+            const parts = ("" + arg).split(":")
+            openTipTimer.kind = parts[0] === "" ? "worktree" : parts[0]
+            openTipTimer.row = parts.length > 1 ? Number(parts[1]) : 3
+            openTipTimer.step = 0
+            openTipTimer.start()
         } else if (act === "nav-open-held") {
             // The other order: the name box first, and **then** a hand on a row. Nothing may open — what opens moves
             // the rows under it, and the box is the only thing on screen saying what mode the reader is in.
@@ -327,6 +336,47 @@ Item {
             driver.complete()
         }
     }
+    // PGG_AUTO_ACT=nav-open-tip: the supplement the open lines keep for a hand that rests on them — a working
+    // copy's path. **The picture answers half of it** (the words are in the overlay), and the other half is that
+    // they came from the row that is open: `says=` carries the same path off the row, so a tip drawn from anywhere
+    // else is caught by the two not matching.
+    SampleTimer {
+        id: openTipTimer
+        property string kind: "worktree"
+        property int row: 3
+        property int step: 0
+        onTriggered: {
+            const tip = page.ToolTip.toolTip
+            if (openTipTimer.step === 0) {
+                // The row first: the lines have to be there before a hand can rest on them.
+                navProbe.pointTipAt(openTipTimer.kind, openTipTimer.row)
+                if (!navProbe.rowFactsOpen)
+                    return
+                openTipTimer.step = 1
+                return
+            }
+            if (openTipTimer.step === 1) {
+                if (!navProbe.pointFactsTip(true))
+                    return
+                openTipTimer.step = 2
+                return
+            }
+            // The shared instance comes up after the same rest every other supplement waits out, so the beat that
+            // reads it is the one where it is standing.
+            if (!tip.visible)
+                return
+            openTipTimer.stop()
+            Harness.report("nav_open_tip section=" + openTipTimer.kind
+                + " row=" + openTipTimer.row
+                + " open=" + navProbe.rowFactsOpen
+                + " tip=" + tip.visible
+                // The row's own answer beside the instance's: the path the lines were handed, and the words the
+                // tip came up with. Last, since a path carries anything.
+                + " says=" + navProbe.rowFactsWords()
+                + " text=" + tip.text)
+            driver.complete()
+        }
+    }
     // The other order: a name box standing, and then a hand on a row. Nothing may open, and the row still has to be
     // the one under the hand — a run that never reached it would answer the same way.
     SampleTimer {
@@ -346,16 +396,21 @@ Item {
         }
     }
     // The sidebar's row tooltips, and the rows that answer with none. Every run lights a control row first — the
-    // WORKTREES row always says where it leads — so a run that photographs an empty overlay has said in the same line
-    // that the pointer and the shared instance were both working. Without that, "nothing came out" and "nothing was
-    // pointed at" are one picture. The rows that open under themselves instead walk the same path and are read on
-    // what they opened (`opens`).
+    // first row of the working copies' listing, the one section every repository has a row in — so a run that
+    // photographs an empty overlay has said in the same line that the pointer arrived somewhere. Without that,
+    // "nothing came out" and "nothing was pointed at" are one picture. The rows that open under themselves instead
+    // walk the same path and are read on what they opened (`opens`).
+    //
+    // **The control answers by opening**, not with a tooltip: a working copy's row opens under itself like the rest
+    // of them now (デザイン規約 §左メニューの所作), and the one section that is never empty is the one that had to
+    // carry the control. What the shared instance can still do is said by the runs that claim `tip=true` — the
+    // remote's own row is the one this section has left (`verify/verbs/nav.rs`).
     SampleTimer {
         id: navTipTimer
         property string kind: "branch"
         property int row: 0
         property bool head: false
-        /// Whether the run is about the lines a branch row opens under itself rather than the shared tooltip
+        /// Whether the run is about the lines a row opens under itself rather than the shared tooltip
         /// (PGG_AUTO_ACT=nav-open), and what the hand does once the row is open (PGG_AUTO_ACT=nav-open-then).
         property bool opens: false
         property string then: ""
@@ -401,9 +456,9 @@ Item {
             const tip = page.ToolTip.toolTip
             if (!navTipTimer.lit) {
                 // Re-applied every beat: the delegate arrives on a later layout than the rows the model got, and a
-                // miss reads exactly like a row that wants no tooltip (`NavList.clickRow`).
+                // miss reads exactly like a row that answers a rest with nothing (`NavList.clickRow`).
                 navProbe.pointTipAt("worktree", 0)
-                if (!tip.visible)
+                if (!navProbe.rowFactsOpen)
                     return
                 navTipTimer.lit = true
                 navProbe.pointTipAt("worktree", -1)
@@ -450,7 +505,7 @@ Item {
             navTipTimer.rested = name
             const words = navTipTimer.head ? navProbe.headPinWords
                         : navProbe.tipWordsAt(navTipTimer.kind, target)
-            // A branch row opens its facts under itself instead of raising the tooltip, so that is what the run waits
+            // A row that opens has its facts under itself instead of raising the tooltip, so that is what the run waits
             // for and reads (`SidebarPane.rowFactsWords`). Everywhere else: a row with something to say is not
             // photographed until the shared instance is up, and one with nothing to say not until the control's own
             // tip has left the screen.

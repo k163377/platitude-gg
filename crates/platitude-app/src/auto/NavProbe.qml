@@ -106,7 +106,7 @@ QtObject {
         const list = probe.listOf(kind)
         return list ? list.contentY : 0
     }
-    /// PGG_AUTO_ACT=nav-open: the facts a branch row opens under itself — whether one is open, and what it says.
+    /// PGG_AUTO_ACT=nav-open: the facts a row opens under itself — whether one is open, and what it says.
     /// Read off the row itself (`SidebarPane.rowFactsWords`), so a run cannot go green with the wiring cut.
     readonly property bool rowFactsOpen: probe.sidebar.rowFactsOpen
     function rowFactsWords() {
@@ -177,6 +177,16 @@ QtObject {
     function rowWashLit(kind, row) {
         const list = probe.listOf(kind)
         return !!list && list.rowWashLit(row)
+    }
+    /// PGG_AUTO_ACT=nav-open-tip: the rest **on the lines the row opened**, which is where a working copy's path
+    /// comes out (`NavRowFacts.tipPointed`). Hover cannot be injected (verify-ui スキル), so it goes in at the
+    /// stand-in the lines carry for it. Answers false while no row is open.
+    function pointFactsTip(on) {
+        const lines = probe.sidebar.openFactsItem()
+        if (lines === null)
+            return false
+        lines.tipPointed = on
+        return true
     }
 
     /// PGG_AUTO_ACT=nav-peek-open: the same rest, taken on a row of the section the folded rail has open — the case
