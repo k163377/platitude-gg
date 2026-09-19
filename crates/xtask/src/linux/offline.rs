@@ -43,14 +43,14 @@ pub(super) fn offline(root: &Path) -> Result<(), String> {
         crate::tree::HARNESS_FEATURE,
     ]
     .map(String::from);
-    in_container(root, &app, &build, false)?;
+    in_container(root, &app, &build, false, None, None)?;
 
     // Built here and listed again below, the way the job does it: this run
     // is the one whose compile output a reader watches, and the listing
     // that follows it is then a re-check that prints nothing.
     println!("building the test binaries…");
     let tests = ["cargo", "test", "--locked", "--workspace", "--no-run"].map(String::from);
-    in_container(root, &app, &tests, false)?;
+    in_container(root, &app, &tests, false, None, None)?;
 
     let binaries = test_binaries(root, &app)?;
     if binaries.is_empty() {

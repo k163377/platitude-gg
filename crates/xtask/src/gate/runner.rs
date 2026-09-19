@@ -8,7 +8,7 @@
 
 use std::path::Path;
 
-use super::{census, default_jobs, rank, seat_of};
+use super::{Ground, Required, census, default_jobs, rank, seat_of};
 
 /// The tests' switch: with it set no step runs at all (`execute_step`).
 pub(super) const FAKE_LOG: &str = "PGG_GATE_FAKE_LOG";
@@ -35,13 +35,13 @@ fn no_build_log(fake: &str) -> String {
 /// rewrites the census the way a passing verb does: one line put in,
 /// once, so the run after the commit of it finds nothing to move.
 pub(super) fn execute_step(
-    dir: &Path,
+    ground: &Ground<'_>,
     id: &str,
     command: &[String],
     log: &Path,
-    runner: Option<&Path>,
     room: &crate::budget::Admitted,
 ) -> Result<(), String> {
+    let dir = ground.dir;
     if let Ok(fake) = std::env::var(FAKE_LOG) {
         use std::io::Write;
         // Both sides append from their own thread: one write per line,
@@ -91,7 +91,12 @@ pub(super) fn execute_step(
         }
         return Ok(());
     }
-    match crate::check::run_step(dir, &launched(command, runner), log, room) {
+    match crate::check::run_step(
+        dir,
+        &launched(command, ground.runner, ground.copy),
+        log,
+        room,
+    ) {
         Ok(true) => Ok(()),
         Ok(false) => Err(format!(
             "exited non-zero (log: {})\n{}",
@@ -185,23 +190,139 @@ pub(super) fn runner(
     Ok(copy)
 }
 
+/// The Linux side's own copy of the task runner, prepared before the
+/// side's first step and named after this run — or `None` when the side
+/// has nothing to start from one.
+///
+/// **What it takes off the machine**: a verb of this side is spelled
+/// `cargo xtask <verb>` inside the container (`linux::command_line`), and
+/// a full gate's Linux side is five hundred of them, each resolving
+/// /work's manifests and lock across the mount before the verb begins.
+/// One build in there, one copy, and every one of those lines starts from
+/// a binary instead — the move [`runner`] made out here, one boundary
+/// further in.
+///
+/// **Only when a step would use it**: a side whose every verb a stamp
+/// answers for runs nothing, and a build in there for nobody is a
+/// container this gate did not owe. The look is the plan's, and the
+/// second look a queued step takes can only take work away
+/// (`super::run_one`); `--fresh` leaves every step uncached, so it always
+/// asks.
+///
+/// **A failure here is the side's failure**, reported with no step run.
+/// There is no road from here back to `cargo xtask` (`linux::runner`).
+pub(super) fn linux_runner(
+    ground: &Ground<'_>,
+    steps: &[&Required],
+) -> Result<Option<String>, String> {
+    // Under the tests' faked steps there is no tree to build one from,
+    // and no step will run anything either ([`execute_step`]).
+    let Some(host) = ground.runner else {
+        return Ok(None);
+    };
+    if !a_copy_is_wanted(steps) {
+        return Ok(None);
+    }
+    let name = ground.run.to_string();
+    // A compile like any other and out of the same budget as [`runner`]'s
+    // own build: a container's cargo is this machine's cargo.
+    let room = ground
+        .pool
+        .admit_once_the_machine_is_free(&crate::budget::Ask {
+            weight: crate::budget::COMPILE,
+            rank: ground.rank,
+            seat: ground.seat,
+            what: "the container's task runner",
+        })?;
+    ground.waited.add(room.waited);
+    // One name, written over by the next gate here, as a step's log is
+    // (`super::log_of`): a tree runs one gate at a time (`lanes::sole`),
+    // so a name per run would only leave a file per gate behind.
+    let log = ground.logs.join("linux-runner.log");
+    println!(
+        "[linux] run    the container's task runner … (log: {})",
+        log.display()
+    );
+    // This process's own pid, which is the one in the tree's gate note
+    // (`lanes::sole`, written by `gate`): the step reads that note back
+    // and runs only if a live gate holds this tree and is the one that
+    // named it (`linux::runner::owned_by_the_gate`): a preparation
+    // builds in this checkout's volume and stands at its one
+    // preparation container, and neither is free to take beside a gate.
+    let line = [
+        host.display().to_string(),
+        "linux".to_string(),
+        "runner".to_string(),
+        name.clone(),
+        "--gate".to_string(),
+        std::process::id().to_string(),
+    ];
+    match crate::check::run_step(ground.dir, &line, &log, &room) {
+        Ok(true) => Ok(Some(name)),
+        Ok(false) => Err(format!(
+            "the container's task runner did not build (log: {})\n{}",
+            log.display(),
+            crate::check::log_tail(&log)
+        )),
+        Err(why) => Err(format!(
+            "the container's task runner did not run to its end: {why}"
+        )),
+    }
+}
+
+/// Whether any step of this side would start from a copy: one that is
+/// going to run (a stamp answers for the others, and `--fresh` leaves
+/// none of them answered) and whose container line is one of this
+/// program's own verbs. Pure, so the two ways of asking for a container
+/// nobody needed are a test and not a run.
+fn a_copy_is_wanted(steps: &[&Required]) -> bool {
+    steps.iter().any(|r| {
+        !r.cached
+            && r.step
+                .command
+                .iter()
+                .position(|word| word == "linux")
+                .is_some_and(|at| crate::linux::a_runner_verb(&r.step.command[at + 1..]))
+    })
+}
+
 /// The command as it is started: a step that is one of this program's
 /// own verbs — `cargo run --locked -p xtask -- <verb>…`, which the plan
 /// keeps spelling so that a stamp's key names one line on every machine
 /// — starts from the runner copy, and any other step as spelled.
-fn launched(command: &[String], runner: Option<&Path>) -> Vec<String> {
+///
+/// A step of the Linux side whose verb is one of this program's own is
+/// handed the name of the copy prepared inside the container
+/// ([`linux_runner`]), so that the line in there starts from a binary as
+/// well. Only those: a `linux test` in there is cargo's work and stays
+/// cargo's (`linux::runner`).
+fn launched(command: &[String], runner: Option<&Path>, copy: Option<&str>) -> Vec<String> {
     const THROUGH_CARGO: [&str; 6] = ["cargo", "run", "--locked", "-p", "xtask", "--"];
     let through_cargo = command.len() >= THROUGH_CARGO.len()
         && command
             .iter()
             .zip(THROUGH_CARGO)
             .all(|(word, spelled)| word == spelled);
-    match runner {
-        Some(runner) if through_cargo => std::iter::once(runner.display().to_string())
-            .chain(command[THROUGH_CARGO.len()..].iter().cloned())
-            .collect(),
-        _ => command.to_vec(),
+    let Some(runner) = runner.filter(|_| through_cargo) else {
+        return command.to_vec();
+    };
+    let verb = &command[THROUGH_CARGO.len()..];
+    let mut line = vec![runner.display().to_string()];
+    match copy {
+        Some(name)
+            if verb.first().is_some_and(|word| word == "linux")
+                && crate::linux::a_runner_verb(&verb[1..]) =>
+        {
+            line.extend([
+                "linux".to_string(),
+                "--runner".to_string(),
+                name.to_string(),
+            ]);
+            line.extend(verb[1..].iter().cloned());
+        }
+        _ => line.extend(verb.iter().cloned()),
     }
+    line
 }
 
 /// Whether a red verb's log says the app itself did not build — cargo's
@@ -215,10 +336,53 @@ pub(super) fn app_did_not_build(log: &Path) -> bool {
 mod tests {
     use std::path::Path;
 
-    use super::{app_did_not_build, launched};
+    use super::super::plan::{Side, Step};
+    use super::{Required, a_copy_is_wanted, app_did_not_build, launched};
 
     fn words(line: &[&str]) -> Vec<String> {
         line.iter().map(|w| (*w).to_string()).collect()
+    }
+
+    fn owed(line: &str, cached: bool) -> Required {
+        Required {
+            step: Step {
+                id: line.to_string(),
+                side: Side::Linux,
+                always: false,
+                builds_app: false,
+                release: false,
+                command: words(&["cargo", "run", "--locked", "-p", "xtask", "--"])
+                    .into_iter()
+                    .chain(line.split_whitespace().map(String::from))
+                    .collect(),
+                inputs: std::collections::BTreeSet::new(),
+            },
+            key: "k".to_string(),
+            cached,
+        }
+    }
+
+    /// A container is asked for only when a step of the side would start
+    /// from what it builds: a side a stamp answers for whole runs
+    /// nothing, and a build in there for nobody is work this gate did not
+    /// owe ([`linux_runner`]).
+    #[test]
+    fn a_copy_is_asked_for_only_when_a_step_would_start_from_one() {
+        let verb = owed("linux verify-ui wip", false);
+        let stamped = owed("linux verify-ui wip", true);
+        let cargo = owed("linux test -p platitude-core", false);
+        let bare = owed("linux bare", false);
+        assert!(a_copy_is_wanted(&[&verb]));
+        assert!(a_copy_is_wanted(&[&cargo, &stamped, &verb]));
+        assert!(
+            !a_copy_is_wanted(&[&stamped]),
+            "every verb answered by a stamp: nothing starts from a copy"
+        );
+        assert!(
+            !a_copy_is_wanted(&[&cargo, &bare]),
+            "cargo's own work in there needs no copy"
+        );
+        assert!(!a_copy_is_wanted(&[]));
     }
 
     #[test]
@@ -237,7 +401,8 @@ mod tests {
                     "wip",
                     "--no-build"
                 ]),
-                Some(runner)
+                Some(runner),
+                None
             ),
             words(&[
                 "C:/x/target/gate-logs/xtask-runner-7.exe",
@@ -247,17 +412,85 @@ mod tests {
             ])
         );
         let test = words(&["cargo", "test", "--locked", "-p", "xtask", "--lib"]);
-        assert_eq!(launched(&test, Some(runner)), test);
+        assert_eq!(launched(&test, Some(runner), None), test);
         let verb = words(&["cargo", "run", "--locked", "-p", "xtask", "--", "structure"]);
         assert_eq!(
-            launched(&verb, None),
+            launched(&verb, None, None),
             verb,
             "without a copy the plan's spelling stands"
         );
         // An older spelling, without the lock, is not this runner's line
         // any more: it is started as spelled, and cargo answers for it.
         let unlocked = words(&["cargo", "run", "-p", "xtask", "--", "structure"]);
-        assert_eq!(launched(&unlocked, Some(runner)), unlocked);
+        assert_eq!(launched(&unlocked, Some(runner), None), unlocked);
+    }
+
+    /// The container's cargo comes off the road the way the host's did:
+    /// the line names the copy prepared for this run, and `linux` starts
+    /// the verb from it ([`linux_runner`]).
+    #[test]
+    fn a_container_verb_names_this_runs_copy_and_a_cargo_in_there_does_not() {
+        let runner = Path::new("C:/x/target/gate-logs/xtask-runner-7.exe");
+        let verb = words(&[
+            "cargo",
+            "run",
+            "--locked",
+            "-p",
+            "xtask",
+            "--",
+            "linux",
+            "verify-ui",
+            "wip",
+            "--no-build",
+        ]);
+        assert_eq!(
+            launched(&verb, Some(runner), Some("1758-40")),
+            words(&[
+                "C:/x/target/gate-logs/xtask-runner-7.exe",
+                "linux",
+                "--runner",
+                "1758-40",
+                "verify-ui",
+                "wip",
+                "--no-build"
+            ])
+        );
+        // No copy prepared — this is the host side, or a Linux side that
+        // runs nothing needing one — and the line is what it always was.
+        assert_eq!(
+            launched(&verb, Some(runner), None),
+            words(&[
+                "C:/x/target/gate-logs/xtask-runner-7.exe",
+                "linux",
+                "verify-ui",
+                "wip",
+                "--no-build"
+            ])
+        );
+        // A cargo command in there is cargo's work whatever is prepared.
+        for line in [
+            words(&[
+                "cargo",
+                "run",
+                "--locked",
+                "-p",
+                "xtask",
+                "--",
+                "linux",
+                "test",
+                "-p",
+                "platitude-core",
+            ]),
+            words(&[
+                "cargo", "run", "--locked", "-p", "xtask", "--", "linux", "bare",
+            ]),
+        ] {
+            let started = launched(&line, Some(runner), Some("1758-40"));
+            assert!(
+                !started.contains(&"--runner".to_string()),
+                "{started:?} is cargo's line"
+            );
+        }
     }
 
     #[test]

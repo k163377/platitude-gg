@@ -67,6 +67,15 @@ pub(crate) static VERIFY: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
+pub(crate) static RUNNER: command::Command = command::Command {
+    id: "linux.runner",
+    call: "linux runner <name> --gate <pid>",
+    purpose: "the gate's own step: build the task runner in there and install this run's copy",
+    run_in: Where::Seat,
+    needs: &["a gate running in this tree — it names the pid, and this refuses any other"],
+    permission: Permission::Plain,
+};
+
 pub(crate) static BARE: command::Command = command::Command {
     id: "linux.bare",
     call: "linux bare --discover",
@@ -76,12 +85,15 @@ pub(crate) static BARE: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
-pub(crate) static COMMANDS: &[&command::Command] = &[&RUN, &VERIFY, &BARE];
+pub(crate) static COMMANDS: &[&command::Command] = &[&RUN, &VERIFY, &RUNNER, &BARE];
 
 mod bare;
 mod offline;
+pub(crate) mod runner;
 #[cfg(test)]
 mod tests;
+
+pub(crate) use runner::a_runner_verb;
 
 /// The image. Its tag names the stage and fingerprints what built it.
 const IMAGE: &str = "pgg-linux";
@@ -159,36 +171,58 @@ const UNLOCKED_VERBS: [&str; 9] = [
 /// test`, whose default members have the app in them.
 const QT_FREE: [&str; 2] = ["platitude-core", "xtask"];
 
-pub fn run(args: &[String]) -> Result<(), String> {
-    let mut rebuild = false;
-    let mut shell = false;
-    let mut forced_stage: Option<String> = None;
-    // Options are the leading tokens only: everything from the first one
-    // that is not ours belongs to the command, `--` and all.
-    let mut at = 0;
-    while let Some(arg) = args.get(at) {
+/// The leading options of a `linux` line, and where the command begins.
+struct Options {
+    rebuild: bool,
+    shell: bool,
+    stage: Option<String>,
+    /// `--runner`: the name of a prepared copy to start the verb from
+    /// ([`runner`]).
+    copy: Option<String>,
+    at: usize,
+}
+
+/// **Options are the leading tokens only**: everything from the first one
+/// that is not ours belongs to the command, `--` and all.
+fn options(args: &[String]) -> Result<Options, String> {
+    let mut opts = Options {
+        rebuild: false,
+        shell: false,
+        stage: None,
+        copy: None,
+        at: 0,
+    };
+    while let Some(arg) = args.get(opts.at) {
         match arg.as_str() {
-            "--rebuild" => rebuild = true,
-            "--shell" => shell = true,
+            "--rebuild" => opts.rebuild = true,
+            "--shell" => opts.shell = true,
+            "--runner" => {
+                opts.at += 1;
+                opts.copy = Some(
+                    args.get(opts.at)
+                        .ok_or("--runner needs the name a `linux runner <name>` prepared")?
+                        .clone(),
+                );
+            }
             "--stage" => {
-                at += 1;
-                let name = args.get(at).ok_or("--stage needs core or app")?;
+                opts.at += 1;
+                let name = args.get(opts.at).ok_or("--stage needs core or app")?;
                 if !matches!(name.as_str(), "core" | "app") {
                     return Err(format!("unknown stage {name:?}: core or app"));
                 }
-                forced_stage = Some(name.clone());
+                opts.stage = Some(name.clone());
             }
             _ => break,
         }
-        at += 1;
+        opts.at += 1;
     }
-    let rest = &args[at..];
-    if !shell && rest.is_empty() {
+    let rest = &args[opts.at..];
+    if !opts.shell && rest.is_empty() {
         return Err(
             "linux needs a command, e.g. `cargo xtask linux test -p platitude-core`".into(),
         );
     }
-    if shell && !rest.is_empty() {
+    if opts.shell && !rest.is_empty() {
         // Silently dropping the command would run bash where a check was
         // asked for.
         return Err(format!(
@@ -197,9 +231,35 @@ pub fn run(args: &[String]) -> Result<(), String> {
             rest.join(" ")
         ));
     }
+    Ok(opts)
+}
 
+pub fn run(args: &[String]) -> Result<(), String> {
+    let Options {
+        rebuild,
+        shell,
+        stage: forced_stage,
+        copy,
+        at,
+    } = options(args)?;
+    let rest = &args[at..];
     let root = crate::tree::workspace_root();
-    let command = command_line(rest);
+    // A prepared copy starts the task runner's own verbs and nothing
+    // else: a cargo command in there is cargo's work, and a line that
+    // silently dropped the flag would be a line nobody could read the
+    // road of afterwards (`runner`).
+    if let Some(name) = &copy {
+        runner::spelled(name)?;
+        if !runner::a_runner_verb(rest) {
+            return Err(format!(
+                "--runner {name} starts one of the task runner's own verbs ({}) and nothing \
+                 else — got {:?}. Drop --runner to run it through cargo in there.",
+                XTASK_VERBS.join(" / "),
+                rest.join(" ")
+            ));
+        }
+    }
+    let command = command_line(rest, copy.as_deref().map(|name| runner::at(&root, name)));
     // The container's work is this machine's work — the image built as
     // much as the command run in it — and it is counted here
     // (`crate::budget`): a VM's worth of cargo is not less of this
@@ -215,6 +275,36 @@ pub fn run(args: &[String]) -> Result<(), String> {
         crate::budget::Rank::Normal,
         &format!("linux {}", rest.join(" ")),
     )?;
+    // The verb that prepares what the others start from. Before the two
+    // below it for the same reason they are before the road out: it is
+    // this side's work whichever machine the host is, and on Linux it
+    // runs where it stands like everything else (`runner::prepare`).
+    if rest.first().is_some_and(|verb| verb == "runner") {
+        // `--gate` is not a nicety: a preparation builds in this
+        // checkout's volume and stands at its one preparation
+        // container, so the line has to name the gate it is under and
+        // that gate has to be the live one
+        // (`runner::owned_by_the_gate`). Nothing types this by hand.
+        let [_, name, flag, pid] = rest else {
+            return Err(format!(
+                "`{}` is the gate's own step — it builds in this checkout's volume and \
+                 stands at its one preparation container, so it runs under a gate or not \
+                 at all. Run `cargo xtask gate`. (got {:?})",
+                RUNNER.call,
+                rest[1..].join(" ")
+            ));
+        };
+        if flag != "--gate" {
+            return Err(format!(
+                "linux runner takes `{}` (got {flag:?})",
+                RUNNER.call
+            ));
+        }
+        let pid = pid
+            .parse::<u32>()
+            .map_err(|_| format!("--gate takes the pid of the gate that sent this; got {pid:?}"))?;
+        return runner::prepare(&root, name, pid);
+    }
     // The one verb that is about a different machine: it runs in the
     // container even on Linux, because what it asks is whether a stock
     // Ubuntu is enough.
@@ -247,7 +337,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // a verb run where it stands announces itself.
     let _busy = crate::still::busy(&root, "linux")?;
     let tag = ensure_image(&root, &stage, rebuild)?;
-    in_container(&root, &tag, &command, shell)
+    in_container(&root, &tag, &command, shell, copy.as_deref(), None)
 }
 
 fn ensure_image(root: &Path, stage: &str, rebuild: bool) -> Result<String, String> {
@@ -302,7 +392,17 @@ fn subcommand_at(rest: &[String]) -> Option<usize> {
 /// A task-runner verb needs neither: `cargo xtask` is an alias that
 /// carries `--locked` already (.cargo/config.toml), and a second one
 /// would be a second place to forget it.
-fn command_line(rest: &[String]) -> Vec<String> {
+///
+/// `copy` is a prepared task runner ([`runner`]), and a line that has one
+/// starts from it: no cargo, no resolve, no manifest read across the
+/// mount. Only a line whose verb is the task runner's own ever carries
+/// one, which `run` refuses anything else at.
+fn command_line(rest: &[String], copy: Option<String>) -> Vec<String> {
+    if let Some(copy) = copy {
+        let mut line = vec![copy];
+        line.extend(rest.iter().cloned());
+        return line;
+    }
     let mut line = vec!["cargo".to_string()];
     line.extend(rest.iter().cloned());
     // A line with no subcommand resolves nothing, so there is nothing to
@@ -485,8 +585,33 @@ fn forget_older_images(stage: &str, keep: &str) {
     }
 }
 
-fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Result<(), String> {
+/// `copy` is the name of the prepared task runner the line starts from
+/// ([`runner`]), which the script in there says is missing rather than
+/// letting `sh` answer for it.
+///
+/// **No container started here is named, and none is reaped.** A name
+/// would be for finding an interrupted one to take away, and taking one
+/// away is a `docker rm` on this side with nothing watching how long it
+/// takes. Neither is needed: an interrupted container cannot reach this
+/// checkout's copies at all (`runner::SCRIPT`), and the one thing it
+/// does hold — the volume's cargo lock — the next build waits out under
+/// the step's own ceiling (`check::run_step`).
+fn in_container(
+    root: &Path,
+    tag: &str,
+    command: &[String],
+    shell: bool,
+    copy: Option<&str>,
+    note: Option<&Path>,
+) -> Result<(), String> {
     let mut cmd = carried();
+    // The tree's gate note, read-only, for the one line that has to
+    // read it late (`runner::note_of`). It cannot come in through
+    // `/work`: the build volume covers the `target` it stands in.
+    if let Some(note) = note {
+        cmd.arg("--volume")
+            .arg(format!("{}:{}:ro", mount_path(note), runner::NOTE_MOUNT));
+    }
     // A terminal only when there is one to attach: docker refuses --tty
     // outright when the harness runs this with a pipe for stdin.
     if std::io::stdin().is_terminal() {
@@ -522,7 +647,10 @@ fn in_container(root: &Path, tag: &str, command: &[String], shell: bool) -> Resu
     if shell {
         cmd.arg("bash");
     } else {
-        cmd.args(watched_from_inside(&inside));
+        cmd.args(watched_from_inside(
+            &inside,
+            copy.map(|name| runner::at(root, name)).as_deref(),
+        ));
     }
     // Through the budget's runner: the container goes on running when
     // the launcher is killed, so the ledger has to know which number is
@@ -576,26 +704,49 @@ const READ_TO_RESOLVE: [&str; 4] = [
 /// intact says only that nothing was standing wrong before the command
 /// and after it — **the read cargo itself made is in between, and is not
 /// bracketed**, so neither end is evidence of what cargo read.
-fn watched_from_inside(inside: &[String]) -> Vec<String> {
-    // Unquoted so the glob is the shell's to expand; a pattern that
-    // matches nothing stays as it was typed, and the test below reports
-    // it absent under its own name.
-    let looks = READ_TO_RESOLVE
-        .map(|file| format!("{WORK}/{file}"))
-        .join(" ");
-    // `${f#/work/}`: the name as the host's side of the evidence spells
-    // it, so the two lines stand side by side.
-    let script = format!(
-        "look() {{\n  for f in {looks}; do\n    \
-         if [ -f \"$f\" ]; then echo \"pgg-probe $1 ${{f#{WORK}/}} \
-         bytes=$(wc -c < \"$f\") sha=$(sha256sum \"$f\" | cut -c1-16)\"; \
-         else echo \"pgg-probe $1 ${{f#{WORK}/}} absent\"; fi\n  done\n}}\n\
-         before=$(look before)\n\"$@\"\ncode=$?\n\
-         if [ \"$code\" -ne 0 ]; then\n  echo \"$before\"\n  look after\n  \
-         echo \"pgg-probe cargo $(cargo --version 2>&1)\"\n  \
-         printf 'pgg-probe ran'; for w in \"$@\"; do printf ' [%s]' \"$w\"; done; echo\n\
-         fi\nexit \"$code\"\n"
-    );
+///
+/// **A line that starts from a prepared task runner gets a guard instead
+/// of the bracket** ([`runner`]). Two reasons, and the second is the one
+/// that matters: a line with no cargo in it resolves nothing, so a look
+/// at what a resolve reads could only say something about a read nobody
+/// made — and taking it would start a `cargo --version` of its own on
+/// every red step, which is the very thing the copy exists to stop. What
+/// the guard answers instead is the one failure a copy has: it is not
+/// there, because the preparation did not happen. It says so by name and
+/// stops, where `sh` would say `not found` and a number. The line the
+/// command was is printed either way.
+fn watched_from_inside(inside: &[String], copy: Option<&str>) -> Vec<String> {
+    // The line as the container was handed it, on either road: what a red
+    // step leaves for a reader who was not standing there.
+    let ran = "printf 'pgg-probe ran'; for w in \"$@\"; do printf ' [%s]' \"$w\"; done; echo\n";
+    let script = match copy {
+        Some(copy) => format!(
+            "if [ ! -x {copy} ]; then\n  echo \"pgg-runner {copy} is not here — this run's \
+             task runner was not prepared, and nothing here falls back to cargo\"\n  \
+             exit 127\nfi\n\"$@\"\ncode=$?\n\
+             if [ \"$code\" -ne 0 ]; then\n  {ran}fi\nexit \"$code\"\n"
+        ),
+        // Unquoted so the glob is the shell's to expand; a pattern that
+        // matches nothing stays as it was typed, and the test below
+        // reports it absent under its own name.
+        // `${f#/work/}`: the name as the host's side of the evidence
+        // spells it, so the two lines stand side by side.
+        None => {
+            let looks = READ_TO_RESOLVE
+                .map(|file| format!("{WORK}/{file}"))
+                .join(" ");
+            format!(
+                "look() {{\n  for f in {looks}; do\n    \
+                 if [ -f \"$f\" ]; then echo \"pgg-probe $1 ${{f#{WORK}/}} \
+                 bytes=$(wc -c < \"$f\") sha=$(sha256sum \"$f\" | cut -c1-16)\"; \
+                 else echo \"pgg-probe $1 ${{f#{WORK}/}} absent\"; fi\n  done\n}}\n\
+                 before=$(look before)\n\"$@\"\ncode=$?\n\
+                 if [ \"$code\" -ne 0 ]; then\n  echo \"$before\"\n  look after\n  \
+                 echo \"pgg-probe cargo $(cargo --version 2>&1)\"\n  {ran}\
+                 fi\nexit \"$code\"\n"
+            )
+        }
+    };
     let mut line = vec![
         "sh".to_string(),
         "-c".to_string(),
@@ -660,7 +811,7 @@ fn mount_path(path: &Path) -> String {
 /// One volume per checkout, named after it. Two worktrees sharing a build
 /// directory would put back exactly what worktrees exist to prevent: one
 /// lock, one incremental cache, two sessions.
-fn volume(root: &Path, kind: &str) -> String {
+pub(super) fn volume(root: &Path, kind: &str) -> String {
     // The last segment after either separator: the path being named is
     // a Windows one whenever the host is Windows, and everywhere else a
     // backslash is an ordinary character in a name, so `file_name` would

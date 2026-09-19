@@ -21,6 +21,7 @@ hook.event
 land.branch
 linux.bare
 linux.run
+linux.runner
 linux.verify
 perf.measure
 qmltest.run

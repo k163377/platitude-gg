@@ -724,6 +724,14 @@ impl Note {
         }
     }
 
+    /// Whose note this is. What it is good for is deciding whether a
+    /// process is the one somebody else named — the note alone never
+    /// says a holder is alive, which is the lock's answer
+    /// (`linux::runner::owned_by_the_gate`).
+    pub(crate) fn pid(&self) -> u32 {
+        self.pid
+    }
+
     pub(crate) fn text(&self) -> String {
         format!(
             "pid {}\nsince {}\nwhat {}\n",

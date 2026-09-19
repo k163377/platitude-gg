@@ -38,7 +38,7 @@ use std::path::Path;
 use plan::{Plan, Required, Side};
 use record::{Spent, Waited};
 pub(crate) use reuse::preserve_reader;
-use runner::{FAKE_LOG, FAKE_STAMP, app_did_not_build, execute_step, runner};
+use runner::{FAKE_LOG, FAKE_STAMP, app_did_not_build, execute_step, linux_runner, runner};
 use stamp::{CommitStamp, Store};
 
 use census::Shift;
@@ -585,6 +585,7 @@ fn run_sides(
         store,
         logs,
         runner,
+        copy: None,
         run: &run,
         waited: &host_waited,
         pool: &pool,
@@ -599,7 +600,20 @@ fn run_sides(
     };
     let failures: Vec<String> = std::thread::scope(|scope| {
         let host = scope.spawn(|| side(&host_ground, &host, jobs));
-        let linux = scope.spawn(|| side(&linux_ground, &linux, jobs));
+        // On this side and not ahead of both, so the host side starts
+        // now: what the preparation owes is only that it is in before
+        // the first step of *this* side (`runner::linux_runner`).
+        let linux = scope.spawn(|| match linux_runner(&linux_ground, &linux) {
+            Ok(copy) => side(
+                &Ground {
+                    copy: copy.as_deref(),
+                    ..linux_ground
+                },
+                &linux,
+                jobs,
+            ),
+            Err(why) => vec![why],
+        });
         let mut failures = Vec::new();
         for handle in [host, linux] {
             match handle.join() {
@@ -671,6 +685,10 @@ struct Ground<'a> {
     store: &'a Store,
     logs: &'a Path,
     runner: Option<&'a Path>,
+    /// The Linux side's own copy of the task runner, by the name
+    /// `runner::linux_runner` prepared it under — `None` on the host
+    /// side, and on a Linux side whose every step a stamp answers for.
+    copy: Option<&'a str>,
     /// What this run is called where its red steps' logs are kept
     /// (`evidence::keep`): a step's log is named by its index, so the
     /// next gate in this tree writes over it.
@@ -965,7 +983,7 @@ fn run_one(
     if no_build {
         command.push("--no-build".to_string());
     }
-    let outcome = execute_step(ground.dir, id, &command, &log, ground.runner, &room);
+    let outcome = execute_step(ground, id, &command, &log, &room);
     let ran = at.elapsed();
     let secs = ran.as_secs();
     // How long this unit held the machine, kept because it is how long a

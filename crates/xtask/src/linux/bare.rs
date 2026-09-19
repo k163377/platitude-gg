@@ -33,7 +33,7 @@ pub(super) fn bare(root: &Path, discover: bool) -> Result<(), String> {
         crate::tree::HARNESS_FEATURE,
     ]
     .map(String::from);
-    in_container(root, &app, &build, false)?;
+    in_container(root, &app, &build, false, None, None)?;
 
     if discover {
         return discover_deps(root);

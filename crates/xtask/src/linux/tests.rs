@@ -30,11 +30,11 @@ fn anything_that_can_reach_the_app_takes_the_other_one() {
 #[test]
 fn an_xtask_verb_is_run_through_the_task_runner() {
     assert_eq!(
-        command_line(&words("verify-ui commit --preset basic")),
+        command_line(&words("verify-ui commit --preset basic"), None),
         words("cargo xtask verify-ui commit --preset basic")
     );
     assert_eq!(
-        command_line(&words("demo-repo --preset basic")),
+        command_line(&words("demo-repo --preset basic"), None),
         words("cargo xtask demo-repo --preset basic")
     );
 }
@@ -45,23 +45,26 @@ fn an_xtask_verb_is_run_through_the_task_runner() {
 #[test]
 fn a_cargo_that_resolves_is_locked_wherever_it_was_typed() {
     assert_eq!(
-        command_line(&words("test -p platitude-core")),
+        command_line(&words("test -p platitude-core"), None),
         words("cargo test --locked -p platitude-core")
     );
     assert_eq!(
-        command_line(&words("clippy -p xtask --all-targets")),
+        command_line(&words("clippy -p xtask --all-targets"), None),
         words("cargo clippy --locked -p xtask --all-targets")
     );
-    assert_eq!(command_line(&words("tree")), words("cargo tree --locked"));
+    assert_eq!(
+        command_line(&words("tree"), None),
+        words("cargo tree --locked")
+    );
     // Cargo's own one-letter aliases are the same verbs.
     assert_eq!(
-        command_line(&words("t -p platitude-core")),
+        command_line(&words("t -p platitude-core"), None),
         words("cargo t --locked -p platitude-core")
     );
     assert_eq!(stage_for(&words("t")), "app");
     // The gate spells its own, and one line does not carry it twice.
     assert_eq!(
-        command_line(&words("test --locked -p xtask --lib")),
+        command_line(&words("test --locked -p xtask --lib"), None),
         words("cargo test --locked -p xtask --lib")
     );
 }
@@ -71,10 +74,13 @@ fn a_cargo_that_resolves_is_locked_wherever_it_was_typed() {
 /// missed by a list of the verbs that resolve.
 #[test]
 fn a_verb_nobody_listed_is_locked_all_the_same() {
-    assert_eq!(command_line(&words("fetch")), words("cargo fetch --locked"));
+    assert_eq!(
+        command_line(&words("fetch"), None),
+        words("cargo fetch --locked")
+    );
     for verb in ["vendor", "package", "rustc", "fix", "publish", "install"] {
         assert_eq!(
-            command_line(&words(verb)),
+            command_line(&words(verb), None),
             words(&format!("cargo {verb} --locked")),
             "{verb}"
         );
@@ -83,13 +89,16 @@ fn a_verb_nobody_listed_is_locked_all_the_same() {
     // the flag says so where the person who typed it can read it, which
     // is the loud half of being wrong.
     assert_eq!(
-        command_line(&words("deny check")),
+        command_line(&words("deny check"), None),
         words("cargo deny --locked check")
     );
     // A line that is all options has no subcommand to spell it after,
     // and resolves nothing either.
-    assert_eq!(command_line(&words("--version")), words("cargo --version"));
-    assert_eq!(command_line(&words("--list")), words("cargo --list"));
+    assert_eq!(
+        command_line(&words("--version"), None),
+        words("cargo --version")
+    );
+    assert_eq!(command_line(&words("--list"), None), words("cargo --list"));
 }
 
 /// **Cargo takes its own options ahead of the subcommand**, so the first
@@ -98,46 +107,46 @@ fn a_verb_nobody_listed_is_locked_all_the_same() {
 #[test]
 fn cargos_own_options_come_before_the_subcommand() {
     assert_eq!(
-        command_line(&words("--offline fetch")),
+        command_line(&words("--offline fetch"), None),
         words("cargo --offline fetch --locked")
     );
     assert_eq!(
-        command_line(&words("-v test -p platitude-core")),
+        command_line(&words("-v test -p platitude-core"), None),
         words("cargo -v test --locked -p platitude-core")
     );
     // Value-bearing options in both spellings: the value is a word with
     // no dash on it, and is not the subcommand.
     assert_eq!(
-        command_line(&words("--config net.retry=2 test")),
+        command_line(&words("--config net.retry=2 test"), None),
         words("cargo --config net.retry=2 test --locked")
     );
     assert_eq!(
-        command_line(&words("--config=net.retry=2 test")),
+        command_line(&words("--config=net.retry=2 test"), None),
         words("cargo --config=net.retry=2 test --locked")
     );
     assert_eq!(
-        command_line(&words("--color always -Z unstable-options build")),
+        command_line(&words("--color always -Z unstable-options build"), None),
         words("cargo --color always -Z unstable-options build --locked")
     );
     // The attached spellings are one word each, and the word after them
     // is the subcommand.
     assert_eq!(
-        command_line(&words("--color=always -Zscript build")),
+        command_line(&words("--color=always -Zscript build"), None),
         words("cargo --color=always -Zscript build --locked")
     );
     // The exceptions are the exceptions wherever the verb stands.
     assert_eq!(
-        command_line(&words("--offline fmt --check")),
+        command_line(&words("--offline fmt --check"), None),
         words("cargo --offline fmt --check")
     );
     // Already locked, in either spelling — --frozen is --locked and
     // --offline in one word.
     assert_eq!(
-        command_line(&words("--locked fetch")),
+        command_line(&words("--locked fetch"), None),
         words("cargo --locked fetch")
     );
     assert_eq!(
-        command_line(&words("--frozen fetch")),
+        command_line(&words("--frozen fetch"), None),
         words("cargo --frozen fetch")
     );
     // The image is chosen off the same word.
@@ -149,7 +158,7 @@ fn cargos_own_options_come_before_the_subcommand() {
     assert_eq!(stage_for(&words("--config net.retry=2 build")), "app");
     // An xtask verb behind cargo's options is still ours.
     assert_eq!(
-        command_line(&words("--offline verify-ui commit")),
+        command_line(&words("--offline verify-ui commit"), None),
         words("cargo --offline xtask verify-ui commit")
     );
     assert_eq!(stage_for(&words("--offline verify-ui commit")), "app");
@@ -161,7 +170,7 @@ fn cargos_own_options_come_before_the_subcommand() {
 #[test]
 fn the_verbs_that_do_not_resolve_are_handed_over_as_typed() {
     assert_eq!(
-        command_line(&words("fmt --all --check")),
+        command_line(&words("fmt --all --check"), None),
         words("cargo fmt --all --check")
     );
     for line in [
@@ -171,12 +180,15 @@ fn the_verbs_that_do_not_resolve_are_handed_over_as_typed() {
         "remove thiserror",
         "clean",
     ] {
-        assert_eq!(command_line(&words(line)), words(&format!("cargo {line}")));
+        assert_eq!(
+            command_line(&words(line), None),
+            words(&format!("cargo {line}"))
+        );
     }
     // An xtask verb needs none of this: the alias carries it
     // (.cargo/config.toml).
     assert!(
-        !command_line(&words("verify-ui commit")).contains(&"--locked".to_string()),
+        !command_line(&words("verify-ui commit"), None).contains(&"--locked".to_string()),
         "the alias already spells it"
     );
 }
@@ -185,9 +197,60 @@ fn the_verbs_that_do_not_resolve_are_handed_over_as_typed() {
 #[test]
 fn a_locked_beyond_the_separator_is_not_this_lines_own() {
     assert_eq!(
-        command_line(&words("run -p xtask -- structure --locked")),
+        command_line(&words("run -p xtask -- structure --locked"), None),
         words("cargo run --locked -p xtask -- structure --locked")
     );
+}
+
+/// A line that names this run's prepared copy starts from it and says
+/// nothing about cargo: no `cargo xtask`, no alias, no resolve
+/// (`linux::runner`).
+#[test]
+fn a_prepared_copy_starts_the_verb_and_no_cargo_does() {
+    let copy = "/work/target/gate-runner/xtask-1758-40".to_string();
+    assert_eq!(
+        command_line(
+            &words("verify-ui commit --preset basic"),
+            Some(copy.clone())
+        ),
+        vec![
+            copy.clone(),
+            "verify-ui".into(),
+            "commit".into(),
+            "--preset".into(),
+            "basic".into()
+        ]
+    );
+    let line = command_line(&words("verify-ui wip --no-build"), Some(copy));
+    assert!(!line.iter().any(|word| word == "cargo"), "{line:?}");
+}
+
+/// A copy that is not there is a preparation that did not happen. The
+/// script says so and stops — the one thing that must never follow is a
+/// quiet road back to cargo, and the script that guards a copy holds no
+/// cargo on any of its roads, the red one included.
+#[test]
+fn a_line_that_names_a_copy_stops_when_the_copy_is_not_there() {
+    let copy = "/work/target/gate-runner/xtask-1758-40";
+    let line = watched_from_inside(&[copy.to_string(), "verify-ui".into()], Some(copy));
+    let script = &line[2];
+    assert!(
+        !script.contains("cargo --version") && !script.contains("sha256sum"),
+        "nothing in there resolves, so nothing looks at what a resolve reads: {script}"
+    );
+    assert!(script.contains("pgg-probe ran"), "a red line is still said");
+    assert!(
+        script.starts_with(&format!("if [ ! -x {copy} ]; then")),
+        "{script}"
+    );
+    assert!(script.contains("exit 127"), "{script}");
+    assert!(
+        script.contains("nothing here falls back to cargo"),
+        "the failure names what it refuses to do: {script}"
+    );
+    // The guard is the copy's alone: a cargo line is the line it was.
+    let cargo = watched_from_inside(&words("cargo test --locked -p platitude-core"), None);
+    assert!(cargo[2].starts_with("look()"), "{}", cargo[2]);
 }
 
 /// The container is `--rm`: what it did not say while it ran is gone.
@@ -195,7 +258,7 @@ fn a_locked_beyond_the_separator_is_not_this_lines_own() {
 /// fails, so a green run's log is the log it always was.
 #[test]
 fn the_command_runs_bracketed_by_a_look_at_what_a_resolve_reads() {
-    let line = watched_from_inside(&words("cargo xtask verify-ui commit"));
+    let line = watched_from_inside(&words("cargo xtask verify-ui commit"), None);
     assert_eq!(line[..2], words("sh -c")[..]);
     // The command arrives as arguments.
     assert_eq!(line[3], IMAGE);
@@ -212,6 +275,31 @@ fn the_command_runs_bracketed_by_a_look_at_what_a_resolve_reads() {
     );
     assert!(script.contains("before=$(look before)"), "{script}");
     assert!(script.contains("exit \"$code\""), "{script}");
+}
+
+/// **Nothing here names a container and nothing here reaps one.** A
+/// name would be for finding an interrupted container to take away, and
+/// that is a `docker rm` on this side with no ceiling over it. What it
+/// was for is gone: an interrupted container can no longer reach this
+/// checkout's copies (`linux::runner::SCRIPT`), and the cargo lock it
+/// still holds is waited out under the step's own ceiling.
+#[test]
+fn no_container_started_here_is_named_or_reaped() {
+    assert!(
+        !args_of(&carried()).iter().any(|arg| arg == "--name"),
+        "a named container is one something has to come back and remove"
+    );
+    let source = include_str!("../linux.rs");
+    for reaping in [
+        "docker\", \"rm",
+        "\"rm\", \"--force\"",
+        "reap_an_interrupted",
+    ] {
+        assert!(
+            !source.contains(reaping),
+            "linux.rs removes a container ({reaping}) outside any ceiling"
+        );
+    }
 }
 
 #[test]

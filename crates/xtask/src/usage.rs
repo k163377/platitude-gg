@@ -412,7 +412,14 @@ const TAIL: &str = "  shipped [--no-build]
         cargo xtask linux bare
         cargo xtask linux offline
       A cargo command goes to cargo; an xtask verb goes to cargo xtask.
-      Two are neither, and both stay in the container on Linux too.
+      `runner <name> --gate <pid>` is the gate's own step and not one to
+      type: it builds in the checkout's volume, so it runs only when the
+      pid it names is the live gate of this tree. What it clears under
+      gate-runner it clears out of one reading taken up front, sparing
+      whichever pid the gate note carries at the moment of each
+      decision — so one of these held up past its gate cannot reach a
+      later run's copy.
+      Two more are neither, and both stay in the container on Linux too.
       `bare` builds the release workspace-wide and starts it on an Ubuntu
       carrying only what a package would declare, which is the only check
       that the thing runs somewhere it was not built; `bare --discover`
