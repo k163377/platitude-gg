@@ -68,6 +68,13 @@ fn guarded_git_denied(input: &str, command: &str, cwd: &str) -> bool {
     if guarded.offence == Offence::Rebase && command.contains(REBASE_APPROVAL_FLAG) {
         return false;
     }
+    if guarded.offence == Offence::TouchesASeat {
+        if !names_a_seat(cwd, guarded.dir, guarded.target.as_ref()) {
+            return false;
+        }
+        deny(&guarded.offence.reason(guarded.what));
+        return true;
+    }
     let dir = guarded.dir.unwrap_or(cwd);
     // Any git that cannot answer is git we are not guarding: a throwaway
     // repository (CLAUDE.md Rust 規約: measure git in one) is on main as
@@ -84,8 +91,98 @@ fn guarded_git_denied(input: &str, command: &str, cwd: &str) -> bool {
     {
         return false;
     }
+    // A repository that keeps no seats has no letters, whatever its
+    // branches are called: the throwaway a session measures git in may
+    // well carry a `worktree-c` of its own.
+    if guarded.offence == Offence::DeletesASeatsBranch && !keeps_seats(dir) {
+        return false;
+    }
     deny(&guarded.offence.reason(guarded.what));
     true
+}
+
+/// Whether the repository `dir` sits in keeps a seat roster at all.
+fn keeps_seats(dir: &str) -> bool {
+    crate::seats::primary_checkout(dir).is_ok_and(|(primary, _)| {
+        std::path::Path::new(&crate::seats::roster_dir(&primary)).is_dir()
+    })
+}
+
+/// Whether the tree a worktree verb names is a seat of *this* roster.
+/// Only that is held back: the corpus copies, a topical tree and the
+/// throwaway repository a session measures git in are nobody's seat and
+/// go without a word, laid out the same way or not.
+///
+/// Two paths are resolved, not one. `-C <dir>` and a `cd` before the git
+/// are as often relative as not — from a seat, the primary checkout is
+/// `../../..` — and a base left relative leaves the target relative
+/// after it, which names no seat at all and let every such line through.
+fn names_a_seat(cwd: &str, dir: Option<&str>, target: Option<&String>) -> bool {
+    let Some(target) = target else {
+        return false;
+    };
+    let resolve = super::launch::resolve;
+    let base = dir.map_or_else(|| cwd.to_string(), |dir| resolve(cwd, unquote(dir)));
+    let Some((repository, _)) = crate::seats::seat_in_repository(&resolve(&base, unquote(target)))
+    else {
+        return false;
+    };
+    crate::seats::primary_checkout(cwd)
+        .is_ok_and(|(primary, _)| crate::seats::same_tree(&primary, &repository))
+}
+
+/// The path a worktree verb names: its first argument that is not an
+/// option, with the options that take a value of their own stepped over
+/// (`-b`, `-B` and `--reason`; `--orphan` takes none), and `--force` on
+/// either side. A value or a path the shell split on the spaces inside
+/// its quotes is put back together.
+fn worktree_path(arguments: &[&str]) -> Option<String> {
+    let mut rest = arguments.iter().skip(1).copied();
+    while let Some(argument) = rest.next() {
+        if matches!(argument, "-b" | "-B" | "--reason") {
+            // The value this option takes, and the rest of it when the
+            // shell split it on the spaces inside its quotes.
+            if let Some(value) = rest.next() {
+                quoted(value, &mut rest);
+            }
+        } else if !argument.starts_with('-') {
+            return Some(quoted(argument, &mut rest));
+        }
+    }
+    None
+}
+
+/// One argument, with the tokens the shell split out of its quotes put
+/// back: everything up to the token that closes the quote this one
+/// opened. A token that is not quoted, or closes its own quote, is
+/// itself.
+fn quoted<'a>(first: &'a str, rest: &mut impl Iterator<Item = &'a str>) -> String {
+    let mut whole = first.to_string();
+    let Some(quote) = first.chars().next().filter(|c| matches!(c, '"' | '\'')) else {
+        return whole;
+    };
+    if first.len() > 1 && first.ends_with(quote) {
+        return whole;
+    }
+    for token in rest.by_ref() {
+        whole.push(' ');
+        whole.push_str(token);
+        if token.ends_with(quote) {
+            break;
+        }
+    }
+    whole
+}
+
+/// Whether a `git branch` deletion names a roster letter's branch.
+fn deletes_a_seat_branch(arguments: &[&str]) -> bool {
+    arguments
+        .iter()
+        .any(|a| matches!(*a, "-d" | "-D" | "--delete"))
+        && arguments.iter().any(|a| {
+            a.strip_prefix("worktree-")
+                .is_some_and(|letter| crate::seats::SEATS.contains(&letter))
+        })
 }
 
 /// A git command in a shell line that a rule holds back.
@@ -95,6 +192,9 @@ struct GuardedGit<'a> {
     dir: Option<&'a str>,
     offence: Offence,
     what: &'static str,
+    /// The tree the command names, for the offence that is about a tree
+    /// rather than a branch.
+    target: Option<String>,
 }
 
 /// Which rule the command runs into.
@@ -110,6 +210,16 @@ enum Offence {
     WritesMain { only_from_main: bool },
     /// Rewrites the branch it runs on, whichever branch that is.
     Rebase,
+    /// Makes, takes away, locks or unlocks a roster seat's tree by hand.
+    /// The seat verbs do all four behind the roster's rules; a hand
+    /// doing one is a session deciding what only the user decides — a
+    /// claim written or lifted by hand moves a letter without the user's
+    /// word, and a tree taken away strands its branch (`seats::grow_back`).
+    TouchesASeat,
+    /// Deletes a roster letter's branch: the commits the roster refuses
+    /// to hand the letter out over, and the ones a takeover grows the
+    /// tree back on.
+    DeletesASeatsBranch,
 }
 
 impl Offence {
@@ -139,6 +249,28 @@ impl Offence {
                 crate::land::LAND.instruction(),
                 crate::land::LAND.line()
             ),
+            Offence::TouchesASeat => format!(
+                "{what} would act on a roster seat by hand. A seat's tree and its claim are \
+                 the roster's to make, lock and lift: `{}` hands a letter out, `{}` hands it \
+                 back, `{}` frees it when the branch reaches main, and `{}` moves it on the \
+                 user's word — a letter whose tree went away included, which it grows back \
+                 on its own branch. A tree taken away by hand strands its branch (that is how \
+                 two letters sat unreachable for days), and a claim written or lifted by hand \
+                 moves a letter without the user's word (CLAUDE.md ビルド・テスト).",
+                crate::seats::commands::TAKE.line(),
+                crate::seats::commands::RELEASE.line(),
+                crate::land::LAND.line(),
+                crate::seats::commands::TAKEOVER.line()
+            ),
+            Offence::DeletesASeatsBranch => format!(
+                "{what} would delete a roster letter's branch. Its commits are what the roster \
+                 refuses to hand the letter out over, and what a takeover grows the tree back \
+                 on. To drop the work, take the letter over (`{}`) and put the branch at \
+                 main's tip in its own tree (`git switch -C worktree-<letter> main`) — the \
+                 commits stay in the reflog, and the letter is at main for the next session \
+                 (CLAUDE.md ビルド・テスト).",
+                crate::seats::commands::TAKEOVER.line()
+            ),
             Offence::Rebase => format!(
                 "{what} rewrites the branch under the session, and a rebase runs \
                  only when the user asks for it in so many words (CLAUDE.md Git \
@@ -166,6 +298,7 @@ fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
             dir: None,
             offence: Offence::Landing,
             what: "`cargo xtask land`",
+            target: None,
         });
     }
     let mut cd_dir = None;
@@ -225,9 +358,20 @@ fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
             {
                 Some(("Forcing the main branch", writes(false)))
             }
+            "branch" if deletes_a_seat_branch(&arguments) => {
+                Some(("`git branch -D`", Offence::DeletesASeatsBranch))
+            }
             "update-ref" if arguments.iter().any(|a| is_main_ref(a)) => {
                 Some(("Updating refs/heads/main", writes(false)))
             }
+            "worktree" => match arguments.first().copied() {
+                Some("remove") => Some(("`git worktree remove`", Offence::TouchesASeat)),
+                Some("add") => Some(("`git worktree add`", Offence::TouchesASeat)),
+                Some("move") => Some(("`git worktree move`", Offence::TouchesASeat)),
+                Some("lock") => Some(("`git worktree lock`", Offence::TouchesASeat)),
+                Some("unlock") => Some(("`git worktree unlock`", Offence::TouchesASeat)),
+                _ => None,
+            },
             _ => None,
         };
         if let Some((what, offence)) = guarded {
@@ -235,6 +379,7 @@ fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
                 dir: dir.or(cd_dir),
                 offence,
                 what,
+                target: worktree_path(&arguments),
             });
         }
     }
@@ -290,6 +435,76 @@ pub(super) fn xtask_verb(tokens: &[&str], verb: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{Offence, guarded_call};
+
+    /// A worktree verb is read as far as the tree it names; whether that
+    /// tree is a roster seat is judged afterwards (`names_a_seat`), which
+    /// is what keeps the guard off the corpus copies and the throwaway
+    /// repositories.
+    ///
+    /// Reading the path is where this can go quietly wrong: an option's
+    /// value read as the path, or a quoted reason the shell split on its
+    /// spaces, and the guard measures the wrong thing and lets the line
+    /// through.
+    #[test]
+    fn reads_the_tree_a_worktree_verb_names_whichever_side_the_options_are_on() {
+        for command in [
+            "git worktree remove .claude/worktrees/c",
+            "git worktree remove --force .claude/worktrees/c",
+            "git worktree remove .claude/worktrees/c --force",
+            "git -C .. worktree remove .claude/worktrees/c",
+            "git worktree add .claude/worktrees/c worktree-c",
+            "git worktree add -b worktree-c .claude/worktrees/c main",
+            "git worktree add --lock --reason \"claude-seat x\" -B worktree-c .claude/worktrees/c main",
+            // --orphan takes no value of its own, so the path is the
+            // token right after it.
+            "git worktree add --orphan .claude/worktrees/c",
+            "git worktree lock --reason \"claude-seat x pid 1\" .claude/worktrees/c",
+            "git worktree unlock .claude/worktrees/c",
+            "git worktree move .claude/worktrees/c C:/elsewhere",
+        ] {
+            let guarded = guarded_call(command).expect(command);
+            assert_eq!(guarded.offence, Offence::TouchesASeat, "{command}");
+            assert_eq!(
+                guarded.target.as_deref(),
+                Some(".claude/worktrees/c"),
+                "{command}"
+            );
+        }
+        // A path the shell split on the spaces inside its quotes comes
+        // back whole.
+        let guarded = guarded_call("git worktree remove \"C:/x y/.claude/worktrees/c\"")
+            .expect("a quoted path");
+        assert_eq!(
+            guarded.target.as_deref(),
+            Some("\"C:/x y/.claude/worktrees/c\"")
+        );
+        // Reading and pruning touch no tree a session is in.
+        for command in ["git worktree list --porcelain", "git worktree prune"] {
+            assert!(guarded_call(command).is_none(), "{command}");
+        }
+    }
+
+    /// A letter's branch is deleted by nobody; every other branch is the
+    /// session's business.
+    #[test]
+    fn flags_the_deletion_of_a_roster_letters_branch() {
+        for command in [
+            "git branch -D worktree-b",
+            "git branch -d worktree-f",
+            "git branch --delete worktree-c",
+        ] {
+            let guarded = guarded_call(command).expect(command);
+            assert_eq!(guarded.offence, Offence::DeletesASeatsBranch, "{command}");
+        }
+        for command in [
+            "git branch -D panel-wip",
+            "git branch -D worktree-tooltip",
+            "git branch worktree-b",
+            "git branch -f worktree-b HEAD~1",
+        ] {
+            assert!(guarded_call(command).is_none(), "{command}");
+        }
+    }
 
     #[test]
     fn flags_every_verb_that_writes_main() {

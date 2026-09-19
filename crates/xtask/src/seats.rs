@@ -796,6 +796,22 @@ pub(crate) fn roster_letter(path: &str) -> Option<&'static str> {
     SEATS.iter().find(|seat| **seat == name).copied()
 }
 
+/// Where a repository keeps its seats. A repository with no such
+/// directory has no roster, whatever its branches are called.
+pub(crate) fn roster_dir(primary: &str) -> String {
+    format!("{}{WORKTREES}", primary.trim_end_matches('/'))
+}
+
+/// The same, with the repository whose roster that letter belongs to —
+/// for a reader that has to tell this checkout's seats from the same
+/// layout somewhere else (hook/git.rs).
+pub(crate) fn seat_in_repository(path: &str) -> Option<(String, &'static str)> {
+    let letter = roster_letter(path)?;
+    let root = worktree_root(path)?;
+    let repository = root.strip_suffix(&format!("{WORKTREES}{letter}"))?;
+    Some((repository.to_string(), letter))
+}
+
 /// The worktree `cwd` sits in: the path down to the directory named under
 /// .claude/worktrees/, and None for the primary checkout.
 pub(crate) fn worktree_root(cwd: &str) -> Option<String> {

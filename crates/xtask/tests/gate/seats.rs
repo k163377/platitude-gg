@@ -599,3 +599,75 @@ fn the_hooks_hold_every_door_a_seat_has() {
         "a claim is a session in the seat, whatever became of its process: {greeting}"
     );
 }
+
+/// The git that would do a seat verb's work by hand: making, removing,
+/// moving, locking or unlocking a letter's tree, and deleting its
+/// branch. Every other worktree and every other repository goes without
+/// a word — the guard measures the path, not the spelling.
+#[test]
+fn the_git_that_would_move_a_letter_by_hand_is_held_back() {
+    let sb = Sandbox::new("seat-hand-git");
+    let mine = letter(&sb, "b");
+    lock(&sb, &mine, "claude-seat mine pid 4242");
+    letter(&sb, "c");
+
+    for command in [
+        "git worktree remove .claude/worktrees/c",
+        "git worktree remove --force .claude/worktrees/c",
+        "git worktree lock --reason \"claude-seat mine\" .claude/worktrees/c",
+        "git worktree unlock .claude/worktrees/b",
+        "git worktree add .claude/worktrees/f worktree-f",
+        "git worktree move .claude/worktrees/c ../elsewhere",
+        "git branch -D worktree-c",
+    ] {
+        let refusal = shell(&sb, &sb.repo, "mine", command);
+        assert!(refusal.contains("\"deny\""), "{command}: {refusal}");
+        assert!(refusal.contains("seat takeover"), "{command}: {refusal}");
+    }
+    // The same lines run from inside a seat, where the repository is
+    // named relatively: a base left unresolved leaves the path after it
+    // relative too, which names no seat and let every such line through.
+    for command in [
+        "git -C ../../.. worktree remove .claude/worktrees/c",
+        "cd ../../.. && git worktree remove .claude/worktrees/c",
+        "git worktree remove ../c",
+    ] {
+        let refusal = shell(&sb, &mine, "mine", command);
+        assert!(refusal.contains("\"deny\""), "{command}: {refusal}");
+    }
+    let topical = sb.root.join("topical");
+    sb.git_ok(
+        &sb.repo,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "topical",
+            &slashed(&topical),
+            "main",
+        ],
+    );
+    let remove = format!("git worktree remove {}", slashed(&topical));
+    assert_eq!(shell(&sb, &sb.repo, "mine", &remove), "", "nobody's seat");
+    assert_eq!(
+        shell(&sb, &sb.repo, "mine", "git branch -D topical"),
+        "",
+        "nobody's letter"
+    );
+    // A repository that keeps no seats has no letters, whatever its
+    // branches are called — the throwaway a session measures git in.
+    let throwaway = sb.root.join("throwaway");
+    std::fs::create_dir_all(&throwaway).expect("a repository of its own");
+    sb.git_ok(&throwaway, &["init", "-q", "-b", "main"]);
+    sb.git_ok(
+        &throwaway,
+        &["commit", "-q", "--allow-empty", "-m", "probe"],
+    );
+    sb.git_ok(&throwaway, &["branch", "worktree-c"]);
+    assert_eq!(
+        shell(&sb, &throwaway, "mine", "git branch -D worktree-c"),
+        "",
+        "a throwaway repository's branches are its own"
+    );
+}
