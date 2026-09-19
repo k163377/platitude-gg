@@ -14,6 +14,20 @@ use super::*;
 /// asks.
 static NEXT_PLAN_ASK: AtomicU64 = AtomicU64::new(1);
 
+/// Numbers every merge-tool ask this process makes.
+///
+/// **This one exists for the log, not for the code.** The read that
+/// answers a settings screen has stopped four times in a gate with the
+/// indicator turning and nothing after it (`P3-確認事項.md`), and what
+/// the logs could not say was how far it had got: the screen reports
+/// `loading=true choices=0` either way, whether the ask was never
+/// accepted, or the opening never finished, or a git read never came
+/// back. The stages in [`RepoSession::ask_merge_tools`] say which, and
+/// the number ties them to the ask they belong to — the slot makes the
+/// read single-flight, but two tabs are two sessions and one screen can
+/// be opened twice.
+static MERGE_TOOL_ASKS: AtomicU64 = AtomicU64::new(1);
+
 impl RepoSession {
     /// Says a write came to rest on a stop, when that is what git did
     /// ([`SessionEvent::WriteStopped`]).
@@ -357,13 +371,15 @@ impl RepoSession {
     /// free text field, and offering nothing is a working
     /// state.
     pub fn ask_merge_tools(self: &Arc<Self>) {
+        let ask = MERGE_TOOL_ASKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let Ok(permit) = Arc::clone(&self.merge_tools_slot).try_acquire_owned() else {
-            tracing::debug!("merge tools: the previous read has not finished");
+            tracing::info!(ask, "merge tools: the previous read has not finished");
             return;
         };
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let _permit = permit;
+            tracing::info!(ask, "merge tools: asked");
             // **Every road out of here ends in the event.** The screen
             // marks its combo loading the instant this is accepted
             // (`repo_tab::list_merge_tools`) and only this event puts
@@ -375,12 +391,14 @@ impl RepoSession {
             // the opening has settled without one there is nothing to
             // offer, and offering nothing is a working state.
             let Some(workdir) = s.workdir_when_open().await else {
+                tracing::info!(ask, "merge tools: the opening settled with no working tree");
                 s.sink.event(SessionEvent::MergeToolsLoaded {
                     names: Vec::new(),
                     settled: true,
                 });
                 return;
             };
+            tracing::info!(ask, "merge tools: the working tree is known");
             let cancel = s.root_cancel.clone();
             // Config first: these are deliberate choices, and they arrive
             // in milliseconds where the other takes seconds. Publish them
@@ -388,6 +406,7 @@ impl RepoSession {
             let mut names = conflict::user_defined_tools(&s.executor, &workdir, &cancel)
                 .await
                 .unwrap_or_default();
+            tracing::info!(ask, named = names.len(), "merge tools: what config names");
             if !names.is_empty() {
                 s.sink.event(SessionEvent::MergeToolsLoaded {
                     names: names.clone(),
@@ -397,6 +416,11 @@ impl RepoSession {
             let installed = conflict::available_tools(&s.executor, &workdir, &cancel)
                 .await
                 .unwrap_or_default();
+            tracing::info!(
+                ask,
+                found = installed.len(),
+                "merge tools: what the machine has"
+            );
             for name in installed {
                 if !names.contains(&name) {
                     names.push(name);
