@@ -46,6 +46,12 @@ Item {
         id: roomChip
         wrapped: true
     }
+    /// A card of the kind that unfolded list draws when the name on it reads something: one name, and under it in the
+    /// same frame the ref it reads (`RefChip.mate`).
+    RefChip {
+        id: readingChip
+        maxWidth: 400
+    }
     // The column arithmetic that has to keep back what the card above spends. Handed a pane so its own two required
     // properties are answered; nothing here reads the lanes.
     GraphColumnMetrics {
@@ -388,6 +394,79 @@ Item {
             compare(asRead, roomChip.width, "the chip answered with a width from the pass before")
             verify(asRead > Metrics.labelColW,
                    "the chip kept the column's width in a room four times as wide")
+        }
+    }
+
+    // What a chip comes to when the name on it reads something — the line the card draws inside the frame
+    // (デザイン規約 §グラフ行のダブルクリック「カードの行は、その名前が読んでいる相手を同じ枠の中で言う」). **None of it is
+    // a picture's to answer**: a line box is a height nobody can measure off a screenshot, and the seat the measure
+    // takes is a two-pixel question inside an eighteen-pixel frame.
+    TestCase {
+        id: refChipReading
+        name: "RefChipReading"
+        when: windowShown
+
+        /// What a branch's own chip is handed: the reading it is measured against, and how far it stands from it
+        /// (`NavFacts.readingLine`, with the branch's own counts on it — `RowHoverHost.mateOf`).
+        readonly property var reads: ({ "mark": "remote", "markTint": Theme.textSecondary,
+                                        "text": "origin/preview", "tone": Theme.textSecondary,
+                                        "ahead": 1, "behind": 0 })
+        /// And what a remote-tracking chip is handed: the branch that reads it, carrying that branch's counts
+        /// (`NavFacts.branchLine`).
+        readonly property var readBy: ({ "mark": "branch", "markTint": Theme.accent,
+                                         "text": "hotfix", "tone": Theme.textSecondary,
+                                         "ahead": 1, "behind": 1 })
+
+        function init() {
+            readingChip.mate = null
+            readingChip.maxWidth = 400
+        }
+
+        // The chips the graph itself draws read nothing, and they are the one line they always were: a row of the
+        // graph has no room for a second (規約 §グラフ行のダブルクリック).
+        function test_a_chip_that_reads_nothing_is_one_line() {
+            readingChip.records = [root.current]
+            compare(readingChip.height, Theme.fontChipLine + 2 * Theme.borderWidth)
+        }
+
+        // One more box of the same height — **not the height of the words**, which would leave the frame holding the
+        // name's own line box above and a descender below, and read as padding that lost its bottom half.
+        function test_the_reading_is_a_line_box_of_its_own() {
+            readingChip.records = [root.current]
+            readingChip.mate = refChipReading.reads
+            compare(readingChip.height, 2 * Theme.fontChipLine + 2 * Theme.borderWidth)
+        }
+
+        // **The measure rides the line that names the branch**: the chip's own name where the chip is the branch,
+        // the line under it where the chip is what that branch reads.
+        function test_the_measure_stands_on_the_line_that_names_the_branch() {
+            readingChip.records = [root.current]
+            readingChip.mate = refChipReading.reads
+            verify(readingChip.trackOnName, "a branch's own chip put the measure under its name")
+            readingChip.records = [root.remote]
+            readingChip.mate = refChipReading.readBy
+            verify(!readingChip.trackOnName, "a remote's chip put the measure on the name it is not measuring")
+        }
+
+        // And it takes the seat the count takes, which is the ink's and not the box's: seated on the box, a `fontSm`
+        // digit sits low against a `fontChip` name, and the frame reads as unevenly padded.
+        function test_the_measure_takes_the_count_s_own_seat() {
+            readingChip.records = [root.current, root.tagHere]
+            readingChip.mate = refChipReading.reads
+            verify(waitForRendering(readingChip), "the chip was laid out and drawn")
+            verify(readingChip.hasCount, "the card is not wearing the count this seat is read off")
+            compare(readingChip.trackY, readingChip.countY)
+        }
+
+        // The line is inside the frame, so the frame is at least as wide as it: a reading longer than the name is
+        // what widens the card (`RefListPopup.layOutRows` reads this back).
+        function test_a_reading_longer_than_the_name_widens_the_frame() {
+            readingChip.records = [root.current]
+            const alone = readingChip.width
+            readingChip.mate = refChipReading.reads
+            readingChip.layOutNow()
+            verify(readingChip.width > alone,
+                   "the frame stayed at " + alone + " with a longer name under it")
         }
     }
 }
