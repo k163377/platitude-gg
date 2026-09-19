@@ -206,6 +206,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/MiddleAutoScroll.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NameCell.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NavFactLine.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/NavFacts.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NavHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NavIcon.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/NavItemDelegate.qml", "qt/qml/platitude");

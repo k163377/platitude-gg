@@ -103,6 +103,35 @@ Rectangle {
         repoTab: sidebar.repoTab
         remotesModel: sidebar.remotesModel
     }
+    /// The place this panel last saw the hand in, in its own coordinates (the handler below).
+    property point handAt: Qt.point(-1, -1)
+    // The hand itself, heard once for the whole panel: **the rows read their own hover again on every move of it
+    // and never in between**, so a list that grew or shrank under a pointer that stood still cannot hand the light
+    // to a row nobody aimed at (`NavItemDelegate.syncHover`, デザイン規約 §左メニューの所作).
+    //
+    // **Declared on the panel, which is an ancestor of every row** — a handler laid over them as a sibling takes
+    // their hover away, one on the item they stand in does not (rules-refs/app-ui.md, measured). The pointer walking
+    // out of the panel is counted as well: it is the last move the hand makes here, and the row it left would keep
+    // the light without it.
+    HoverHandler {
+        id: handWatch
+        // **Being told is not the hand moving.** The handler is handed its point again when the layout moves under a
+        // still pointer — a row growing where it stands, a list sending itself — so what counts is the place
+        // (measured, `tests/qml/tst_hoverunderstillhand.qml`). Counting the telling instead put the rows back on
+        // "the light follows the content": a row opened, the layout moved, every row read its hover again, the open
+        // one closed, and the whole of it began again (observed as a blink).
+        onPointChanged: {
+            if (handWatch.point.position.x === sidebar.handAt.x
+                    && handWatch.point.position.y === sidebar.handAt.y)
+                return
+            sidebar.handAt = handWatch.point.position
+            rowGestures.handStirred()
+        }
+        onHoveredChanged: {
+            sidebar.handAt = Qt.point(-1, -1)
+            rowGestures.handStirred()
+        }
+    }
     property alias activeKey: rowGestures.activeKey
     property alias editKey: rowGestures.editKey
     /// Whether what is typed in that box cannot be taken, and the line the box says so with — automation-only

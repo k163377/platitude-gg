@@ -35,6 +35,9 @@ AppCard {
     property real top: 0
     /// The pointer is still on that cell.
     property bool wanted: false
+    /// The place this section last saw the hand in, in its own coordinates — what tells a hand that moved from a
+    /// layout that moved under it (`SidebarPane`, and the handler below).
+    property point handAt: Qt.point(-1, -1)
 
     signal refActivated(string oidHex)
     signal refMenuRequested(string kind, string name, string full, string oidHex)
@@ -208,7 +211,25 @@ AppCard {
             // the smoke hooks write the same one, so a headless
             // run and a real pointer come to a single answer (the same
             // shape as the diff's hunk hover — 規約 §diff の中のステージ).
-            onHoveredChanged: peek.contentPointed = peekHover.hovered
+            onHoveredChanged: {
+                peek.contentPointed = peekHover.hovered
+                // The hand itself, heard for the rows standing in here: they read their own hover again on every
+                // move of it and never in between (`NavItemDelegate.syncHover`). **This section is its own item
+                // tree** — a popup stands outside the panel, so the panel's watch never sees the pointer in here.
+                peek.handAt = Qt.point(-1, -1)
+                if (peek.gestures !== null)
+                    peek.gestures.handStirred()
+            }
+            // **The place, not the telling** — the same weighing the panel makes, and for the same reason: a row
+            // growing in here is handed to this handler as a fresh point (`SidebarPane`).
+            onPointChanged: {
+                if (peekHover.point.position.x === peek.handAt.x
+                        && peekHover.point.position.y === peek.handAt.y)
+                    return
+                peek.handAt = peekHover.point.position
+                if (peek.gestures !== null)
+                    peek.gestures.handStirred()
+            }
         }
         // The open list's own band, carrying what that section carries
         // wherever it stands — the tags eye, the `+` that writes a remote
@@ -236,9 +257,9 @@ AppCard {
             kindHint: peek.kind
             gestures: peek.gestures
             // The rows in here open under themselves the way the sections' own do, and the working copies are read
-            // off the section that holds them whichever list the row is standing in. **BRANCHES and REMOTES**:
-            // those two rows open, and the other sections still answer with the tooltip.
-            offersFacts: peek.kind === "branch" || peek.kind === "remote"
+            // off the section that holds them whichever list the row is standing in. **BRANCHES, REMOTES and
+            // WORKTREES**: those rows open, and the other sections still answer with the tooltip.
+            offersFacts: peek.kind === "branch" || peek.kind === "remote" || peek.kind === "worktree"
             worktreesModel: peek.rail !== null ? peek.rail.modelOf("worktree") : null
             stretch: true
             remotesPacked: peek.repoTab.remoteNames

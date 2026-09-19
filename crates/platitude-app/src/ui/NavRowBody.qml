@@ -57,11 +57,15 @@ RowLayout {
         // A branch row uses the same slot for the one question it shares with those rows: whether a move can land
         // here. Its mark is the WORKTREES section's own (`tree`) — where the branch actually is. **The padlock**
         // is spoken for by `git worktree lock`; a mark cannot mean two things in one window.
-        // **The mark goes while the row has it open underneath** — the answer moved down into the line that spells
-        // it out, and a mark left beside it says the same thing twice (`NavRowFacts`). The seat stays open either
-        // way, so no name moves.
-        seatMark: body.row.factsOpen ? ""
-                : body.row.kindHint === "branch" ? (body.row.change === "HELD" ? "tree" : "")
+        //
+        // **Which of them goes while the row is open is which of them the lines say again.** A branch row's tree
+        // mark stands for another working copy, and the line that opens names that copy — two of the same answer,
+        // so the mark goes. **A working copy's own state stays**: the lock is about this row, the line under it
+        // only says what the lock was taken for, and a row whose state came and went as a hand passed over it
+        // would answer "is this one locked" differently depending on where the pointer is. The seat stays open
+        // either way, so no name moves.
+        seatMark: body.row.kindHint === "branch"
+                    ? (body.row.change === "HELD" && !body.row.factsOpen ? "tree" : "")
                 : body.row.kindHint !== "worktree" ? ""
                 : body.row.change === "LOCKED" ? "lock"
                 : body.row.change === "PRUNABLE" ? "bang" : ""
@@ -90,13 +94,19 @@ RowLayout {
     // Worktree rows: checked-out branch on the right. Cut in the part that keeps the column's edges (`CutName`) — this
     // one is the row's right-aligned column, so a cut that stopped short of the gutter left the branch names hanging
     // a different distance from the edge on every row.
+    //
+    // **It gives way to the line that names the same branch** while the row is open (`NavRowFacts`): one fact, said
+    // once. **A copy on no branch shows nothing here** — a word in this column reads as a branch's name, since
+    // every other row in it holds one, and the column is no place to say that there is none
+    // (デザイン規約 §左メニューの所作).
     Loader {
         id: branchSeat
-        active: !body.row.folder && body.row.kindHint === "worktree"
+        active: !body.row.folder && body.row.kindHint === "worktree" && body.row.bucket !== ""
+                && !(body.row.factsOpen && body.row.factsBranch !== "")
         visible: branchSeat.active
         Layout.maximumWidth: body.row.listWidth / 2
         sourceComponent: CutName {
-            text: body.row.bucket !== "" ? body.row.bucket : qsTr("detached")
+            text: body.row.bucket
             color: Theme.textSecondary
             pixelSize: Theme.fontSm
         }

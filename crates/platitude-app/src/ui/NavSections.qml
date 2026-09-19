@@ -22,33 +22,41 @@ ColumnLayout {
     /// The pane's row gestures (`SidebarRowGestures`): which row was clicked last and which is being typed into
     /// outlive both the delegates and these lists.
     required property var gestures
-    /// What the open branch row is saying under itself, and the lines themselves — for the runs alone
+    /// What the open row is saying under itself, and the lines themselves — for the runs alone
     /// (PGG_AUTO_ACT=nav-open). Asked of the row rather than of the model: the row is what a run has to find wired
     /// up. **The stand-in is asked first**: while it is the one on screen its own row is not (`HeadPinRow`).
-    /// **Three lists can hold the open row now** — the stand-in, BRANCHES and REMOTES — and one key names it
+    /// **Four lists can hold the open row** — the stand-in, BRANCHES, REMOTES and WORKTREES — and one key names it
     /// (`SidebarRowGestures.openKey`), so each of these asks them in turn and takes the first that answers.
+    readonly property var openable: [headPin, branchList, remoteList, worktreeList]
     function openWords() {
-        const said = headPin.openWords()
-        if (said !== "")
-            return said
-        const branch = branchList.openWords()
-        return branch !== "" ? branch : remoteList.openWords()
+        for (const list of sections.openable) {
+            const said = list.openWords()
+            if (said !== "")
+                return said
+        }
+        return ""
     }
     function openFactsItem() {
-        const pinned = headPin.openFactsItem()
-        if (pinned !== null)
-            return pinned
-        const branch = branchList.openFactsItem()
-        return branch !== null ? branch : remoteList.openFactsItem()
+        for (const list of sections.openable) {
+            const lines = list.openFactsItem()
+            if (lines !== null)
+                return lines
+        }
+        return null
     }
+    /// Where the open row landed. **The stand-in is not asked**: it draws no geometry of its own — its foot is
+    /// pinned to an edge and what it opens grows the other way (`HeadPinRow.openShown`).
     function openGeom() {
-        return branchList.openRow() !== null ? branchList.openGeom() : remoteList.openGeom()
+        return branchList.openRow() !== null ? branchList.openGeom()
+             : remoteList.openRow() !== null ? remoteList.openGeom() : worktreeList.openGeom()
     }
-    /// Whether the open row is showing whole, lines included — asked of whichever of the three is the open one.
+    /// Whether the open row is showing whole, lines included — asked of whichever of the four is the open one.
     function openShown() {
-        if (headPin.openFactsItem() !== null)
-            return headPin.openShown()
-        return branchList.openFactsItem() !== null ? branchList.openShown() : remoteList.openShown()
+        for (const list of sections.openable) {
+            if (list.openFactsItem() !== null)
+                return list.openShown()
+        }
+        return false
     }
     // Section expansion, read only (see above).
     required property bool expBranches
@@ -239,6 +247,12 @@ ColumnLayout {
         expanded: worktreeHead.showsRows
         kindHint: "worktree"
         gestures: sections.gestures
+        // These rows open under themselves too — the same question answered the same way wherever it is asked
+        // (デザイン規約 §左メニューの所作). What they open is the branch that copy holds, said the way the BRANCHES
+        // row for it says itself, so the section holding those readings is where half of it comes from.
+        // **No working copies' model is handed down**: a row here *is* a working copy.
+        offersFacts: true
+        branchesModel: sections.branchesModel
         Layout.verticalStretchFactor: sections.sectionPull
         onRefActivated: oidHex => sections.refActivated(oidHex)
     }

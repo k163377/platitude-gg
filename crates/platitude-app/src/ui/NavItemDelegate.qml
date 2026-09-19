@@ -247,6 +247,28 @@ Item {
     /// The gesture the rows of this section share, or null for a list whose rows cannot be typed into (the working
     /// tree's files). Held by the sidebar, since it has to outlive this delegate (`SidebarRowGestures`).
     property ReclickGesture reclick: null
+    /// How often the hand itself has moved, as the panel counts it (`SidebarRowGestures.handMoves` — the place the
+    /// pointer was last seen in, not the events it raised). **Every row reads its own hover again on each of these
+    /// and never in between**, so the light stands on the row the hand walked onto: what the layout does under a
+    /// still pointer moves rows, not the reader's attention. A list that hands down nothing here — the working
+    /// tree's files — has no row that grows, and reads its hover the plain way.
+    property int handMoves: 0
+    /// Whether a panel is counting for this row at all (see above). The rows it does not count for answer the hover
+    /// event itself, the plain way.
+    property bool handCounted: false
+    /// Read a turn later, when every handler that event reached has run: a row asked in the middle of the delivery
+    /// answers with the hover it had before it (and the count coalesces, so a hand crossing the list asks once).
+    onHandMovesChanged: Qt.callLater(navRow.syncHover)
+    function syncHover() {
+        navRow.pointed = rowHover.hovered || navRow.factsTipOut
+    }
+    /// Whether the supplement these lines put out is standing (`NavRowFacts.tipShown`). **A row whose own tip is up
+    /// is still the row the reader is on**: that tip is a popup over the panel and takes the pointer as the hand
+    /// walks into it, and a row that closed then would take the lines, the tip's own target and the words the reader
+    /// was reaching for with it (デザイン規約 §hover のツールチップ). It goes when the tip does, which is the beat
+    /// after the hand has left both (`SharedToolTip`).
+    readonly property bool factsTipOut: factsSeat.item ? factsSeat.item.tipShown : false
+    onFactsTipOutChanged: Qt.callLater(navRow.syncHover)
     /// Whether this row is holding the wait the name box opens after, and whether a click landing now would still be
     /// counted as the other half of a double-click. What a headless run reads to see the gesture armed, and to know
     /// when a second click of its own counts as a second (app-ui.md §UI 自動化の因果性). Both are the sidebar's answer:
@@ -313,10 +335,17 @@ Item {
     // on answering the one pointer however many children of this row take hover of their own — and one of them,
     // `stageButton`, is a `Control` that takes its own. Gated the way the area below is: while the box is open the row
     // belongs to it.
+    // **Where a panel counts the hand, nothing is written from here.** Hover follows the item, not the hand: a row
+    // growing where it stands and a list sending itself both hand the pointer about, and the events say so as though
+    // the reader had walked there (measured — `tests/qml/tst_hoverunderstillhand.qml`). Those rows are read from
+    // this handler, once, whenever the hand itself moves (`syncHover`).
+    //
+    // **The working tree's file rows take the event**: nothing in that list grows or sends itself under a resting
+    // hand, so there is nothing there to tell apart, and no panel counts for them.
     HoverHandler {
         id: rowHover
         enabled: !navRow.editing
-        onHoveredChanged: navRow.pointed = rowHover.hovered
+        onHoveredChanged: if (!navRow.handCounted) navRow.pointed = rowHover.hovered
     }
     // The row that carries the mark tells the model it is the one being read, so the sentence can be built for it
     // alone. The row itself has no field left to hold it (`NavItem::eol_mark`).
@@ -350,10 +379,19 @@ Item {
             return
         if (navRow.pointed) {
             factsWait.restart()
-        } else {
-            factsWait.stop()
-            navRow.factsAsked(false, Qt.point(0, 0))
+            factsKeep.stop()
+            return
         }
+        factsWait.stop()
+        // **A row whose lines put something out waits the beat that thing waits.** The supplement is a popup over
+        // the panel, and the walk into it begins by leaving these lines: the tip falls with them and is put back a
+        // turn later (`SharedToolTip.reopen`), so a row that closed on the fall would take the tip's own target away
+        // before it came back — and the words could never be reached (デザイン規約 §hover のツールチップ
+        // 「出したものは持ち帰れる」). Rows with nothing to walk into let go at once, as they always did.
+        if (navRow.factsPath !== "")
+            factsKeep.restart()
+        else
+            navRow.factsAsked(false, Qt.point(0, 0))
     }
     onPointedChanged: {
         navRow.pointEol()
@@ -520,16 +558,22 @@ Item {
     /// (`worktreeHolding`), which is the only one holding the list of working copies.
     property var sectionModel: null
     property var worktreesModel: null
+    /// The branches' own section, which a working copy's row asks about the branch it holds (`upstreamOf` /
+    /// `upstreamGoneOf`) — what that branch's own row would say of itself. Null in every other list.
+    property var branchesModel: null
     /// Whether this row answers a rest by opening. **The whole of the section the facts were handed to**, folder rows
     /// included: a fold parent that answered with a tooltip while the rows under it opened would be the same question
     /// answered two ways in one list (デザイン規約 §左メニューの所作).
     ///
     /// **The one row of REMOTES that is left out is the remote's own** — it is a thing in itself rather than the
     /// shape of the names under it, and what it has to say is the role it holds (the default remote), which is a
-    /// sentence and not a name (`hoverText`). Every other row of that section opens, as every row of BRANCHES does.
+    /// sentence and not a name (`hoverText`). Every other row of that section opens, as every row of BRANCHES does,
+    /// and so does every row of WORKTREES: what a working copy's row shows is a folder's name, and the whole of it is
+    /// the path git lists it under.
     readonly property bool expands:
         navRow.opensFacts
         && (navRow.kindHint === "branch"
+            || navRow.kindHint === "worktree"
             || (navRow.kindHint === "remote" && !navRow.isRemoteRow))
     /// Whether this row is the open one. The marks it spells out go from the row's own line while it is, so the
     /// reader sees them move down rather than stand twice; the wash stays, because the row grew.
@@ -555,30 +599,21 @@ Item {
     readonly property string hoverText: {
         const full = navRow.fullName
         // A row that opens says it all under itself, name included — two things opening off one pointer would sit on
-        // top of each other (the reading the line-ending mark's own row makes above).
+        // top of each other (the reading the line-ending mark's own row makes above). **Three sections answer this
+        // way**, and a working copy's row is one of them: the state git noted on it is said by the line it opens
+        // (`NavRowFacts`), not from here.
         if (navRow.expands)
             return ""
         // The one folder row that is a thing in itself says what it is for when it holds the mark. The role
-        // leads and the name follows it (デザイン規約 §hover のツールチップ: 結論から 1 行 — the same shape a working copy's row
-        // says its state in), and `origin` is the word git gives the role (§リモートを書き留める).
+        // leads and the name follows it (デザイン規約 §hover のツールチップ: 結論から 1 行 — the same shape the line a
+        // working copy's row opens says its state in), and `origin` is the word git gives the role
+        // (§リモートを書き留める).
         if (navRow.pushesHere)
             return qsTr("Default remote (origin) — %1").arg(full)
         // A folder in the working tree's list says its own path, the same as the file rows under it — the path rides
         // in `orig_path` (`full` is the fold key, and a ref folder's fold key is its own path).
         if (navRow.folder)
             return navRow.kindHint === "wt" ? navRow.orig_path : full
-        if (navRow.kindHint === "worktree") {
-            // The state of the checkout comes before where the row leads: it is what the mark in the seat cannot spell
-            // out, and on a locked row the words git was given are the whole of what a reader hovers to learn (デザイン規約
-            // §hover のツールチップ: 結論から 1 行). A lock taken without a reason has nothing after the word.
-            if (navRow.change === "LOCKED")
-                return navRow.orig_path === "" ? qsTr("Locked")
-                                               : qsTr("Locked — %1").arg(navRow.orig_path)
-            if (navRow.change === "PRUNABLE")
-                return navRow.orig_path === "" ? qsTr("Folder is gone")
-                                               : qsTr("Folder is gone — %1").arg(navRow.orig_path)
-            return qsTr("Open %1 in a new tab").arg(full)
-        }
         if (navRow.kindHint === "stash")
             return navRow.name
         if (navRow.kindHint === "branch" || navRow.kindHint === "tag" || navRow.kindHint === "remote")
@@ -617,34 +652,36 @@ Item {
     property string factsHeldBy: ""
     property string factsUpstream: ""
     property bool factsGone: false
+    property string factsBranch: ""
+    property int factsAhead: 0
+    property int factsBehind: 0
+    property string factsPath: ""
+    /// Those answers as the lines to draw, in reading order (`NavFacts.lines`). The named fields above are the same
+    /// answers one at a time — what a run reads back off the row (`NavList.openWords`).
+    property var factsLines: []
+    property string factsState: ""
+    property string factsWhy: ""
 
     /// Read them, and answer whether there is anything to open. **The name alone is enough**: it is the copy a
     /// reader can drag away, so every row that expands has it and every one of them opens. A row with no name to
     /// say — one the model has not filled yet — opens nothing.
     function gatherFacts() {
-        // The branch measured against this reading, and the copy holding **that** one: a remote-tracking ref is
-        // nobody's checkout, so the working copy this row can name is the one holding the branch above it.
-        const local = navRow.kindHint === "remote" && !navRow.folder && navRow.sectionModel !== null
-                    ? navRow.sectionModel.trackedBy(navRow.fullName) : ""
-        const upstream = navRow.kindHint === "branch" && navRow.sectionModel !== null
-                       ? navRow.sectionModel.upstreamOf(navRow.fullName) : ""
-        // Configured and not here — the reading the branch is measured against cannot be reached, and git spells the
-        // same answer `[gone]` (デザイン規約 §ref の種別). **Off the row rather than the section**: the badge the row
-        // wears is drawn from the same slot, so the mark and the line under it cannot disagree
-        // (`models::nav::field` の `Role::Bucket`).
-        const gone = navRow.kindHint === "branch" ? navRow.bucket : ""
-        // The name the row asks the worktrees section about: its own on a BRANCHES row, the branch named above it
-        // on a REMOTES one.
-        const holds = navRow.kindHint === "remote" ? local : navRow.fullName
-        // The worktrees section answers with the path git prints; the rows of that section show the folder it ends
-        // in, and this says the same name they do.
-        const held = navRow.folder || holds === "" || navRow.worktreesModel === null ? ""
-                   : navRow.worktreesModel.worktreeHolding(holds)
-        navRow.factsLocal = local
-        navRow.factsUpstream = gone !== "" ? gone : upstream
-        navRow.factsGone = gone !== ""
-        navRow.factsHeldBy = GitFacts.pathLeaf(held)
-        navRow.factsName = navRow.fullName
+        // **What each section answers is one table** (`NavFacts`), so nothing here knows which of them this row is
+        // in: the answers come back the same shape for all three, and the lines they draw come from the same place
+        // (デザイン規約 §左メニューの所作).
+        const said = NavFacts.answers(navRow)
+        navRow.factsLocal = said.local
+        navRow.factsUpstream = said.upstream
+        navRow.factsGone = said.gone
+        navRow.factsHeldBy = said.heldBy
+        navRow.factsState = said.state
+        navRow.factsWhy = said.why
+        navRow.factsBranch = said.branch
+        navRow.factsAhead = said.ahead
+        navRow.factsBehind = said.behind
+        navRow.factsPath = said.path
+        navRow.factsName = said.name
+        navRow.factsLines = NavFacts.lines(navRow.kindHint, said)
         return navRow.factsName !== ""
     }
     /// Ask for this row to be the open one, with the pointer where it was standing when it asked.
@@ -658,6 +695,20 @@ Item {
         id: factsWait
         interval: Metrics.tipDelayMs
         onTriggered: if (navRow.pointed) navRow.askFacts(rowHover.point.scenePosition)
+    }
+    // The beat a row with something to walk into waits before it lets go — the same one the supplement itself waits
+    // (`Metrics.hoverKeepMs`, デザイン規約 §hover のツールチップ「出ているものの的へ戻る手は即通す」). **It asks
+    // again rather than deciding once**: while the tip stands the reader is still reading this row, and the fall of
+    // that tip is the last thing to answer for.
+    Timer {
+        id: factsKeep
+        interval: Metrics.hoverKeepMs
+        onTriggered: {
+            if (navRow.pointed || navRow.factsTipOut)
+                factsKeep.restart()
+            else
+                navRow.factsAsked(false, Qt.point(0, 0))
+        }
     }
     // The pointer's stand-in opens the same facts the hand does, with no rest to sit out — a run has no hand to rest
     // (verify-ui スキル). The point it names is the row's own middle, so two rows are never asked for from one place.
@@ -689,14 +740,11 @@ Item {
         height: factsSeat.item ? factsSeat.item.implicitHeight : 0
         sourceComponent: NavRowFacts {
             row: navRow
-            localBranch: navRow.factsLocal
-            // The counts ride the row itself (`models::nav::field` の `Role::Ahead`), the way the `[gone]` state
-            // does: they are a role, so they answer again when a fetch moves them.
-            ahead: navRow.ahead
-            behind: navRow.behind
-            heldBy: navRow.factsHeldBy
-            upstream: navRow.factsUpstream
-            gone: navRow.factsGone
+            // The lines, already in reading order (`NavFacts.lines`) — the part below draws what it is handed and
+            // knows nothing about which section handed it over.
+            lines: navRow.factsLines
+            // And the one answer that is not a line: where a working copy stands, said on a rest over them.
+            path: navRow.factsPath
         }
     }
 }

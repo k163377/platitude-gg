@@ -219,6 +219,23 @@ QtObject {
         return Math.abs(at.x - gestures.openedAt.x) < Theme.rowHeight / 2
             && Math.abs(at.y - gestures.openedAt.y) < Theme.rowHeight / 2
     }
+
+    /// How often the hand itself has moved, counted by the panel the rows stand in (`SidebarPane`) and by the
+    /// section the folded rail opens (`SectionPeekPopup`) — **each of them weighing the place the pointer was last
+    /// seen in, not the times it was told about one**: a row growing where it stands and a list sending itself are
+    /// both handed to those handlers as fresh points (measured — `tests/qml/tst_hoverunderstillhand.qml`).
+    ///
+    /// **The rows read their own hover again on every one of these and never in between**
+    /// (`NavItemDelegate.syncHover`). An open row is taller than a closed one, so opening and closing move the rows
+    /// around them, and Qt gives the hover to whatever arrives under the pointer whether or not the pointer moved.
+    /// Reading it on the events instead is what put the light on a row several places down — and, when the row that
+    /// moved was the open one, opened and closed it over and over under a hand that was doing nothing (observed as
+    /// a blink).
+    property int handMoves: 0
+    function handStirred() {
+        gestures.handMoves++
+    }
+
     /// A menu raised from the open row's own lines. **That one does not take them down** — it is about the row they
     /// belong to, and the reader who right-clicked them is reading about that row. Every other menu does: the
     /// pointer is over there, and what is open would be moving rows under the hand reading them.

@@ -127,6 +127,14 @@ Item {
         tip.y = Qt.binding(shared.seatY)
     }
 
+    /// Whether the target asks for the tip **beside** it rather than over it: a target whose own words are what the
+    /// reader is reading — the lines a left-panel row opens (`NavRowFacts`) — cannot have a box put on top of them,
+    /// and every seat inside that panel covers somebody's name. Read off the target, the way `tipPlace` is.
+    readonly property bool tipBeside: {
+        const at = shared.sharedTip.parent
+        return at !== null && at.tipBeside === true
+    }
+
     /// The target's top-left corner in `host` coordinates. A method, so nothing binds to it — the callers below read
     /// the sizes and the anchor, which is what moves the seat.
     function targetAt() {
@@ -154,6 +162,13 @@ Item {
         if (at === null)
             return 0
         const p = shared.targetAt()
+        // Beside it: **flush against its right edge**, and pulled back inside the window when there is not room for
+        // it there (a gap would be a band the pointer crosses while touching neither — see the component).
+        if (shared.tipBeside) {
+            const beside = p.x + at.width
+            const last = shared.host.width - tip.implicitWidth - Theme.spaceXs
+            return Math.max(Theme.spaceXs, Math.min(beside, last)) - p.x
+        }
         const mid = shared.anchorKnown ? shared.anchorX : p.x + at.width / 2
         const want = tip.implicitWidth >= at.width ? p.x : mid - tip.implicitWidth / 2
         const edge = Theme.spaceXs
@@ -173,6 +188,11 @@ Item {
         if (at === null)
             return 0
         const p = shared.targetAt()
+        // Beside it: level with the target's own top, and lifted only as far as the window's foot asks.
+        if (shared.tipBeside) {
+            const last = shared.host.height - tip.implicitHeight - Theme.spaceXs
+            return Math.max(Theme.spaceXs, Math.min(p.y, last)) - p.y
+        }
         const above = p.y
         const below = shared.host.height - (p.y + at.height)
         return tip.implicitHeight <= above || above >= below ? -tip.implicitHeight : at.height

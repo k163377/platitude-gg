@@ -170,6 +170,8 @@ Rectangle {
     property string factsHeldBy: ""
     property string factsUpstream: ""
     property bool factsGone: false
+    /// Those answers as the lines to draw (`NavFacts.lines`) — the part below draws what it is handed.
+    property var factsLines: []
 
     /// A press on this stand-in, the pair every row of the sidebar answers (`NavItemDelegate.rowPressed`) — the facts
     /// under it hand a press back the same way a row's do. The stand-in leads where its own row does and nowhere
@@ -185,17 +187,31 @@ Rectangle {
     }
     function gatherFacts() {
         const branch = headPin.branchesModel.headName
-        const upstream = headPin.branchesModel.upstreamOf(branch)
-        // The upstream this branch is measured against and cannot reach — git's `[gone]`, said the same way its own
-        // row says it (`NavItemDelegate.gatherFacts`) and drawn from the same answer the badge above reads.
-        const gone = headPin.branchesModel.headUpstreamGone
-        const held = headPin.worktreesModel !== null ? headPin.worktreesModel.worktreeHolding(branch) : ""
-        headPin.factsUpstream = gone !== "" ? gone : upstream
-        headPin.factsGone = gone !== ""
-        headPin.factsHeldBy = GitFacts.pathLeaf(held)
+        // **The same table the rows read** (`NavFacts`): the stand-in stands for a BRANCHES row, so it says what
+        // that row would — the same question, answered the same way wherever it is asked (デザイン規約
+        // §左メニューの所作). What it hands over is a row's worth of answers: the current branch's name, its
+        // section, and the state the badge above is drawn from (`headUpstreamGone`, git's own `[gone]`).
+        const said = NavFacts.answers({
+            "kindHint": "branch",
+            "folder": false,
+            "name": branch,
+            "fullName": branch,
+            "bucket": headPin.branchesModel.headUpstreamGone,
+            "change": "",
+            "orig_path": "",
+            "ahead": headPin.branchesModel.headAhead,
+            "behind": headPin.branchesModel.headBehind,
+            "sectionModel": headPin.branchesModel,
+            "worktreesModel": headPin.worktreesModel,
+            "branchesModel": headPin.branchesModel
+        })
+        headPin.factsUpstream = said.upstream
+        headPin.factsGone = said.gone
+        headPin.factsHeldBy = said.heldBy
+        headPin.factsLines = NavFacts.lines("branch", said)
         // **The name is always what opens**: it is the copy that can be dragged away, and
         // the line above takes its own off while this is out.
-        headPin.factsName = branch
+        headPin.factsName = said.name
         return headPin.factsName !== ""
     }
     function askFacts(at) {
@@ -260,9 +276,7 @@ Rectangle {
         height: pinFacts.item ? pinFacts.item.implicitHeight : 0
         sourceComponent: NavRowFacts {
             row: headPin
-            heldBy: headPin.factsHeldBy
-            upstream: headPin.factsUpstream
-            gone: headPin.factsGone
+            lines: headPin.factsLines
         }
     }
 

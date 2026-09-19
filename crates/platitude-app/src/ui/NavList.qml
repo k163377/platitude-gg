@@ -27,10 +27,15 @@ AppListView {
     /// none (the WIP file list) simply has no gestures — every call below is skipped.
     property var gestures: null
     /// Whether this list's rows open their facts under themselves on a rest (`NavRowFacts`), and the section that
-    /// knows which working copy has a branch out (`worktreeHolding`). Off and null in the lists whose rows do not
-    /// open — opening is a branch row's answer, and the working tree's file lists are not branches.
+    /// knows which working copy has a branch out (`worktreeHolding`). **The two are asked for separately**: the
+    /// working copies' own list opens its rows and has nothing to ask that section, since a row of it *is* a copy.
+    /// Off and null in the lists whose rows do not open — the refs a section holds answer by opening, and the
+    /// working tree's file lists hold no refs.
     property bool offersFacts: false
     property var worktreesModel: null
+    /// The branches' own section, for the rows that open on somebody else's branch: a working copy's row says of the
+    /// branch it holds what that branch's own row would (デザイン規約 §左メニューの所作). Null everywhere else.
+    property var branchesModel: null
     /// Stands in for the pointer where headless cannot put one, so a row's tooltip — or the absence of one — can be
     /// photographed (PGG_AUTO_ACT=nav-tip). -1 points at no row. The file lists carry the same property on their own
     /// panes (`WipPane` / `DetailsPane`).
@@ -247,9 +252,19 @@ AppListView {
     }
     function openWords() {
         const row = navList.openRow()
+        // **The name the open row shows leads** — the whole of what git knows it by everywhere but WORKTREES, where
+        // the row is named by its folder and the path is a line of its own (`path=`). **The two free fields come
+        // last**, in this order: what somebody typed when they took a lock, then a path off this machine. A claim is
+        // read as one substring (`verify/verbs/nav.rs`), so everything judged has to stand ahead of them.
+        // `track=` is the pair the open lines draw, which on a working copy's row is the branch it holds and not
+        // the row's own roles (`NavItemDelegate.factsAhead`).
         return row === null ? ""
-             : row.fullName + " local=" + row.factsLocal + " track=" + row.ahead + "/" + row.behind
+             : row.factsName + " local=" + row.factsLocal
+               + " track=" + (row.factsBranch !== "" ? row.factsAhead : row.ahead)
+               + "/" + (row.factsBranch !== "" ? row.factsBehind : row.behind)
                + " held=" + row.factsHeldBy + " up=" + row.factsUpstream + " gone=" + row.factsGone
+               + " branch=" + row.factsBranch
+               + " state=" + row.factsState + " why=" + row.factsWhy + " path=" + row.factsPath
     }
     /// Where the open row and its lines actually landed, for a run that has to see the list make room rather than
     /// take the layout's word for it (PGG_AUTO_ACT=nav-open). `view=` is what the list is showing while they are
@@ -330,6 +345,7 @@ AppListView {
         openKey: navList.gestures ? navList.gestures.openKey : ""
         sectionModel: navList.sectionModel
         worktreesModel: navList.worktreesModel
+        branchesModel: navList.branchesModel
         // Both margins of the panel are the one the bar asks for at the right edge, so the rows sit between equal
         // sides; the folds step in by that same value
         // (`NavItemDelegate.rowInset` / デザイン規約 §余白 の左メニューの行の項).
@@ -350,6 +366,11 @@ AppListView {
         // The gesture itself: the wait a second click opens has to outlive this row, and a list whose rows cannot be
         // typed into has none (`ReclickGesture`).
         reclick: navList.gestures ? navList.gestures.reclick : null
+        // How often the hand itself has moved, and whether anybody is counting: these rows grow where they stand, so
+        // the light is read again on a hand that moved and never on a layout that did
+        // (`NavItemDelegate.syncHover`). The working tree's list hands down neither.
+        handCounted: navList.gestures !== null
+        handMoves: navList.gestures ? navList.gestures.handMoves : 0
         editKey: navList.gestures ? navList.gestures.editKey : ""
         menuStanding: navList.gestures ? navList.gestures.menuOpen : false
         editMode: navList.gestures ? navList.gestures.editMode : ""
