@@ -207,14 +207,14 @@ pub(crate) fn prepare(root: &Path, name: &str, gate: u32) -> Result<(), String> 
     owned_by_the_gate(root, gate)?;
     if cfg!(target_os = "linux") {
         // Where it runs where it stands the note is where it always is.
-        let line = line(root, name, &note_of(root).display().to_string());
+        let line = line(root, name, &note_of(root).display().to_string(), None);
         return super::here(root, &line);
     }
     // The small image: the task runner holds no Qt (`super::QT_FREE`),
     // and the copy it leaves runs in either stage — the app stage is
     // built from this one (ci/linux/Dockerfile).
     let tag = super::ensure_image(root, "core", false)?;
-    let line = line(root, name, NOTE_MOUNT);
+    let line = line(root, name, NOTE_MOUNT, Some(super::DEMO_MOUNT));
     super::in_container(root, &tag, &line, false, None, Some(&note_of(root)))
 }
 
@@ -228,7 +228,13 @@ pub(crate) fn prepare(root: &Path, name: &str, gate: u32) -> Result<(), String> 
 /// build that went green, and every step of the side that follows it is
 /// red for a reason that is not theirs. Positional arguments cannot come
 /// apart that way.
-fn line(root: &Path, name: &str, note: &str) -> Vec<String> {
+///
+/// `demo` is the demo volume to sweep, and it is `None` on the road
+/// where the host runs this itself: there `/tmp/pgg-demo` is the
+/// person's own, and the host's sweep already has a policy for it
+/// (`verify::ownership::sweep_yesterdays_runs`). Two policies over one
+/// directory is one too many.
+fn line(root: &Path, name: &str, note: &str, demo: Option<&str>) -> Vec<String> {
     vec![
         "sh".to_string(),
         "-c".to_string(),
@@ -239,6 +245,7 @@ fn line(root: &Path, name: &str, note: &str) -> Vec<String> {
         target(root),
         name.to_string(),
         note.to_string(),
+        demo.unwrap_or_default().to_string(),
     ]
 }
 
@@ -294,11 +301,44 @@ pub(crate) const NOTE_MOUNT: &str = "/pgg-gate-running";
 /// A held-up container therefore either has an old reading (first
 /// bound) or a current note (second). What either leaves behind is a
 /// copy nobody names, which the next preparation's reading includes.
+///
+/// **It also takes yesterday's demo repositories with it**, and that is
+/// the same job the host does on its way into a gate
+/// (`verify::ownership::sweep_yesterdays_runs`) — the container side
+/// simply never had it. Nothing in there is reachable from inside a
+/// container that has ended, and the volume is one checkout's, so what
+/// stands in it at a gate's start belongs to runs that are over.
+/// Measured 2026-09-19: 14,895 run directories, **2,646,738 files**,
+/// 10.6 GB, about five hundred added per gate and none ever removed.
+/// That file count is what the VM pays for — a walk of it is what fills
+/// the dentry cache and the buffers Windows then loses
+/// ([the record](../../../../ci/baseline/wsl-memory-windows-x64.md)).
+///
+/// **What it spares, and why the floor is thirty minutes.** A template
+/// is not a run's leavings (`.pgg-template-ready` / `-refused`), and a
+/// tree somebody asked to keep is theirs (`.pgg-keep`). The floor is
+/// for the one thing a gate's lane does not cover: a
+/// `cargo xtask linux verify-ui` somebody runs by hand beside it, whose
+/// directory is minutes old and in use. A verb's own ceiling is ten
+/// minutes, so thirty is three of them.
 const SCRIPT: &str = "set -e\n\
      dir=$1\n\
      target=$2\n\
      name=$3\n\
      note=$4\n\
+     demo=$5\n\
+     if [ -d \"$demo\" ]; then\n\
+     \x20 was=$(find \"$demo\" -mindepth 1 -maxdepth 1 -type d | wc -l)\n\
+     \x20 find \"$demo\" -mindepth 1 -maxdepth 1 -type d -mmin +30 \
+     | while IFS= read -r d; do\n\
+     \x20 \x20 if [ -e \"$d/.pgg-template-ready\" ]; then continue; fi\n\
+     \x20 \x20 if [ -e \"$d/.pgg-template-refused\" ]; then continue; fi\n\
+     \x20 \x20 if [ -e \"$d/.pgg-keep\" ]; then continue; fi\n\
+     \x20 \x20 rm -rf -- \"$d\"\n\
+     \x20 done\n\
+     \x20 now=$(find \"$demo\" -mindepth 1 -maxdepth 1 -type d | wc -l)\n\
+     \x20 echo \"the demo volume's run directories: $was -> $now\"\n\
+     fi\n\
      mkdir -p \"$dir\"\n\
      here=$(find \"$dir\" -maxdepth 1 -type f)\n\
      printf '%s\\n' \"$here\" | while IFS= read -r f; do\n\
@@ -423,9 +463,11 @@ mod tests {
         );
         assert!(at("here=$(find") < at("rm -f"));
         assert!(SCRIPT.contains("printf '%s\\n' \"$here\" |"), "{SCRIPT}");
-        // Nothing re-reads the directory to decide what to remove.
+        // Nothing re-reads the runner directory to decide what to
+        // remove. The demo volume's own sweep lists its own directory,
+        // which is a different set with a different rule.
         assert_eq!(
-            SCRIPT.matches("find ").count(),
+            SCRIPT.matches("find \"$dir\"").count(),
             1,
             "a second listing is a second chance to name something newer:\n{SCRIPT}"
         );
@@ -472,7 +514,7 @@ mod tests {
     #[test]
     fn the_paths_reach_the_script_as_arguments_and_not_as_text() {
         let root = Path::new("/a place/platitude-gg");
-        let line = line(root, "1758-40", "/pgg-gate-running");
+        let line = line(root, "1758-40", "/pgg-gate-running", Some("/tmp/pgg-demo"));
         assert_eq!(line[..3], ["sh", "-c", SCRIPT].map(String::from)[..]);
         assert_eq!(
             line[3..],
@@ -481,7 +523,8 @@ mod tests {
                 super::dir(root),
                 super::target(root),
                 "1758-40".to_string(),
-                NOTE_MOUNT.to_string()
+                NOTE_MOUNT.to_string(),
+                "/tmp/pgg-demo".to_string()
             ][..]
         );
         for held in [super::dir(root), super::target(root)] {
@@ -529,7 +572,7 @@ mod tests {
         std::fs::write(held.join("xtask-older"), "x").expect("a dead run's copy");
         std::fs::write(held.join("xtask-1750-40"), "x").expect("the noted gate's copy");
 
-        let out = ran(&line(&root, "1758-40", &note), &root, &stub);
+        let out = ran(&line(&root, "1758-40", &note, None), &root, &stub);
         assert!(
             out.status.success(),
             "the preparation failed in {}:\n{}{}",
@@ -549,6 +592,86 @@ mod tests {
         assert!(
             held.join("xtask-1750-40").exists(),
             "the live gate's copy was taken — the emptying has to spare its pid"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// **The demo volume's leavings go, and three kinds stay.** What the
+    /// container side never had was the sweep the host runs on its way
+    /// into a gate, and the volume had grown to 2.6 million files by the
+    /// time anything looked. A template is not a run's leavings, a tree
+    /// somebody marked is theirs, and one written in the last half hour
+    /// may be a run standing beside the gate.
+    ///
+    /// Runs the real [`SCRIPT`], which is the only thing that can say
+    /// whether the shell holds.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn the_demo_volumes_run_directories_go_and_the_templates_stay() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::env::temp_dir().join(format!(
+            "pgg-sweep-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let stub = root.join("bin");
+        std::fs::create_dir_all(&stub).expect("a tree");
+        let cargo = stub.join("cargo");
+        std::fs::write(
+            &cargo,
+            "#!/bin/sh\nmkdir -p target/debug\nprintf x > target/debug/xtask\n\
+             chmod 755 target/debug/xtask\n",
+        )
+        .expect("a stub cargo");
+        std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).expect("+x");
+
+        let demo = root.join("demo");
+        let made = |leaf: &str| {
+            let dir = demo.join(leaf);
+            std::fs::create_dir_all(&dir).expect("a demo root");
+            std::fs::write(dir.join("a.txt"), "x").expect("something in it");
+            dir
+        };
+        let gone = made("basic-41-1789-0");
+        let template = made("basic");
+        std::fs::write(template.join(".pgg-template-ready"), "").expect("the marker");
+        let marked = made("kept-41-1789-0");
+        std::fs::write(marked.join(".pgg-keep"), "").expect("the mark");
+        let fresh = demo.join("basic-42-1790-0");
+        std::fs::create_dir_all(&fresh).expect("a run standing beside the gate");
+        // Two hours back, so the floor of thirty minutes is clear of
+        // them whatever the machine's clock is doing — and **one child
+        // for all three**: a spawn holds a copy of every open handle
+        // until it execs, and a suite where five hundred tests run at
+        // once has a lock of somebody else's in that window
+        // (`fork-carried-locks`).
+        let status = std::process::Command::new("touch")
+            .args(["-d", "-2 hours"])
+            .args([&gone, &template, &marked])
+            .status()
+            .expect("touch");
+        assert!(status.success(), "could not age the demo roots");
+
+        let note = a_note(&root, 40);
+        let line = line(&root, "1758-40", &note, Some(&demo.display().to_string()));
+        let out = ran(&line, &root, &stub);
+
+        assert!(
+            out.status.success(),
+            "the preparation failed:\n{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!gone.exists(), "a finished run's demo repository was left");
+        assert!(template.exists(), "the template was swept out");
+        assert!(marked.exists(), "a tree somebody marked was swept out");
+        assert!(fresh.exists(), "a run standing beside the gate was swept");
+        assert!(
+            String::from_utf8_lossy(&out.stdout)
+                .contains("the demo volume's run directories: 4 -> 3"),
+            "the sweep did not say what it took:\n{}",
+            String::from_utf8_lossy(&out.stdout)
         );
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -632,7 +755,7 @@ mod tests {
             let live = held.join("xtask-1750-22");
             std::fs::write(&live, "x").expect("a live gate's copy");
 
-            let line = line(&root, "1758-40", &note.display().to_string());
+            let line = line(&root, "1758-40", &note.display().to_string(), None);
             let out = ran(&line, &root, &stub);
             let said = format!(
                 "{}{}",
@@ -716,7 +839,7 @@ mod tests {
         std::fs::create_dir_all(&held).expect("the runner directory");
         std::fs::write(held.join("xtask-1700-99"), "x").expect("a dead run's copy");
 
-        let line = line(&root, "1700-11", &note);
+        let line = line(&root, "1700-11", &note, None);
         let (root_for, stub_for) = (root.clone(), stub.clone());
         let stale = std::thread::spawn(move || ran(&line, &root_for, &stub_for));
         crate::wait::until(
@@ -789,6 +912,16 @@ mod tests {
             wrong.contains("4242"),
             "it names the gate that holds it: {wrong}"
         );
+        // **Unlocked, not just dropped.** Closing a handle releases the
+        // lock only when the last copy of that open file description
+        // goes, and every `Command::spawn` anywhere in this suite holds
+        // a copy of it between fork and exec — measured: a drop alone
+        // leaves this reading "still held" about once in three runs of
+        // the container's suite (`fork-carried-locks`). `unlock` acts on
+        // the description itself.
+        if let Some(lock) = &lock {
+            lock.unlock().expect("the holder lets go");
+        }
         drop(lock);
         // The note is still there and still says 4242; the lock is not
         // held, so the gate is over and nothing here may clear anything.

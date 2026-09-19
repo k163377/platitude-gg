@@ -113,7 +113,7 @@ const OUT_MOUNT: &str = "/out";
 /// away. One volume per checkout, as the build directory is, because a
 /// template is only good for the task runner that built it and two
 /// checkouts build their own.
-const DEMO_MOUNT: &str = "/tmp/pgg-demo";
+pub(crate) const DEMO_MOUNT: &str = "/tmp/pgg-demo";
 /// Set for everything the container runs, and by nothing else: the mark a
 /// run reads to know it is not on the machine whose checkout it is
 /// writing.
