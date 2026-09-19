@@ -3,15 +3,6 @@
 
 use super::repo::DemoRepo;
 
-/// One worktree in each state git can report: an everyday linked one, a
-/// detached one, a lock with a reason and a lock without, and an entry
-/// whose folder is gone (`prunable`). The checkout this window opens is
-/// the main one, so it is the row that wears the current mark.
-///
-/// The branches matter as much as the folders: `feature/topic-a` is
-/// checked out over in `topic`, and git refuses both `switch` and
-/// `branch --delete` for a branch another worktree holds (measured), so the
-/// BRANCHES row for it is the one the menu has to answer for.
 /// Other working copies with something uncommitted in them, so the rows
 /// they draw on the graph have something to say.
 ///
@@ -134,6 +125,24 @@ pub(super) fn carried_clashing(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// One worktree in each state git can report: an everyday linked one, a
+/// detached one, a detached one that is also locked, a lock with a reason
+/// and a lock without, and an entry whose folder is gone (`prunable`). The
+/// checkout this window opens is the main one, so it is the row that wears
+/// the current mark.
+///
+/// **The graph reads the same list**: a branch another copy holds wears
+/// the green frame, a copy with no branch wears its own folder name in
+/// one, and a lock on either puts the padlock beside the name
+/// (デザイン規約 §ref の種別), so every one of those is on a row here.
+/// **And two copies stand on one commit**, which is the row that draws a
+/// green sheet behind a green card — the one colour a fan repeats
+/// (§重ね表示).
+///
+/// The branches matter as much as the folders: `feature/topic-a` is
+/// checked out over in `topic`, and git refuses both `switch` and
+/// `branch --delete` for a branch another worktree holds (measured), so the
+/// BRANCHES row for it is the one the menu has to answer for.
 pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -152,8 +161,35 @@ pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
 
     // Ordinary: a second checkout of a branch this one is not on.
     repo.git(&["worktree", "add", "../topic", "feature/topic-a"])?;
+    // **A second copy standing where the first one is**, on no branch of
+    // its own: the row then carries two green records — the branch
+    // `topic` holds and this marker — which is the one shape that draws
+    // the fan's repeated sheet in the front card's own colour
+    // (デザイン規約 §重ね表示「先頭のカードとその 1 つ後ろが同色の時だけ」).
+    // **Named to sort after `topic`**, so the rows the verbs address by
+    // number stay where they are.
+    repo.git(&[
+        "worktree",
+        "add",
+        "--detach",
+        "../topic-twin",
+        "feature/topic-a",
+    ])?;
     // Detached: no branch to name on the right of the row.
     repo.git(&["worktree", "add", "--detach", "../detached", "v0.1"])?;
+    // Detached **and** locked: the one shape the graph draws with a name
+    // of its own and a padlock beside it (デザイン規約 §ref の種別). A
+    // commit of its own, so the marker stands on a row nothing else
+    // names. **Named to sort between `topic` and the long one**, so the
+    // rows the verbs address by number stay where they are.
+    repo.git(&["worktree", "add", "--detach", "../vaulted", "main~1"])?;
+    repo.git(&[
+        "worktree",
+        "lock",
+        "--reason",
+        "kept for the audit",
+        "../vaulted",
+    ])?;
     // Locked, with the words git was given for why.
     repo.git(&["worktree", "add", "-b", "hotfix/urgent", "../hotfix"])?;
     repo.git(&[

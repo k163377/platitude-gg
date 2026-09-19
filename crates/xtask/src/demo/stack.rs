@@ -108,9 +108,10 @@ fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
             "feat: a local branch and one another copy holds",
         )?;
         repo.git(&["branch", name])?;
-        // Checked out over in another working copy, which is what dulls
-        // it: git refuses a move onto a branch someone else holds. Added
-        // where the commit is, so the branch starts on this row.
+        // Checked out over in another working copy, which is what puts
+        // the green frame on it: a copy is standing here, and git refuses
+        // a move onto a branch someone else holds. Added where the commit
+        // is, so the branch starts on this row.
         let held = format!("{name}-held");
         let at = format!("../{held}");
         repo.git(&["worktree", "add", "-b", &held, &at])?;
@@ -139,7 +140,7 @@ fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
         // **Named to sort after the two beside it**: the chips come out
         // in the order core sorted the refs, so a held branch whose name
         // sorts first would take the front card and the row would read
-        // as a dulled one.
+        // as a working copy's rather than as a local branch's.
         let held = format!("{name}-held");
         let at = format!("../{held}");
         repo.git(&["worktree", "add", "-b", &held, &at])?;
