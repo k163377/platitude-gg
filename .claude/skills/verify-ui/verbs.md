@@ -275,7 +275,7 @@
 - `identity-half`(半分だけ保存された identity から続ける)
 - `identity-tip`(半端 save の後の帯の状態カード。overlay.png 側。must_say)
 - `solo`(2 個目の起動が断られる報告。must_say `solo blocked=true`)
-- `band`(タブ行がタイトルバーを兼ねる帯 — 数字で読む。報告行 `band`)
+- `band`(タブ行がタイトルバーを兼ねる帯 — 数字で読む。報告行 `band`。**グラフは待たない** —— 見ているのは帯なので、重い preset ではグラフが読み込みのリングのまま掴まれる run が混じる(実測 2026-09-19: `--preset worktrees` は開く時に 7 コピーぶんの `status` を撃つので、7 run 中 3 run が空のグラフで PASS した)。**グラフを撮るための動詞ではない** —— チップや行を見せたい時は、その行を待つ動詞(`nav-jump` / `ref-list` / `row-card`)で撮るか、**撮れた PNG を 1 枚ずつ開いて確かめる**)
 - `app-menu` / `app-menu-reclick`(☰ を 1 回押して立てたまま / 2 回押して閉じる。**対で読む**。must_say)
 - `window-fill`(最大化が四隅まで届く報告。must_say `fills=true`)
 - `window-floor`(窓の床 = これ以上小さくできない大きさ。must_say)
