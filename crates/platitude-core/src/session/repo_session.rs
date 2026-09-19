@@ -313,12 +313,54 @@ pub struct RepoSession {
     pub(super) auto_fetch_slot: Arc<tokio::sync::Semaphore>,
     /// Where the opening's own fetch stands (see [`OpenFetchState`]).
     pub(super) open_fetch: Mutex<OpenFetchState>,
+    /// **The opening's completion boundary**: false until the open has
+    /// settled, true once it has — with a working tree or without one.
+    ///
+    /// `workdir()` answering `None` says two different things a reader
+    /// cannot tell apart: *not yet* and *never*. A read that treats the
+    /// first as the second gives up on an answer that was about to be
+    /// available, and any screen that marked itself loading when it
+    /// asked is then waiting on a word that is never coming
+    /// ([`RepoSession::workdir_when_open`]).
+    pub(super) opened: tokio::sync::watch::Sender<bool>,
 }
 
 impl RepoSession {
     /// Workdir of the opened repository (None until `Opened`).
     pub fn workdir(&self) -> Option<PathBuf> {
         self.lock_info().as_ref().map(|i| i.workdir.clone())
+    }
+
+    /// The working tree, waiting out an opening that has not settled.
+    ///
+    /// **For the reads a screen marks itself loading for.** Those are
+    /// asked the moment a screen opens, which can be inside the opening
+    /// — and [`Self::workdir`] answering `None` there means *not yet*,
+    /// not *never*. A read that gives up on it drops an ask the screen
+    /// is already holding a turning indicator for, and nothing later
+    /// puts that down. This waits instead, and answers `None` only once
+    /// the opening has settled with no working tree (it failed, or the
+    /// session is going away) — which is an answer the caller can
+    /// publish rather than a silence.
+    ///
+    /// The reads nobody is waiting on keep using `workdir` and give up:
+    /// what they are is best-effort, and a poll or a later click asks
+    /// again (`auto_fetch`, `head_reach`).
+    pub(super) async fn workdir_when_open(&self) -> Option<PathBuf> {
+        // Subscribed before the look, so an opening that settles between
+        // the two is a change this still sees.
+        let mut settled = self.opened.subscribe();
+        loop {
+            if let Some(workdir) = self.workdir() {
+                return Some(workdir);
+            }
+            if *settled.borrow_and_update() {
+                return None;
+            }
+            if settled.changed().await.is_err() {
+                return None;
+            }
+        }
     }
 
     /// Config file of the opened repository (None until `Opened`).

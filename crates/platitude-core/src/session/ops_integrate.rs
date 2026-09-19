@@ -364,7 +364,21 @@ impl RepoSession {
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let _permit = permit;
-            let Some(workdir) = s.workdir() else {
+            // **Every road out of here ends in the event.** The screen
+            // marks its combo loading the instant this is accepted
+            // (`repo_tab::list_merge_tools`) and only this event puts
+            // it down, so a road that says nothing is an indicator that
+            // turns for as long as the window is open. The ask arrives
+            // from a settings screen that can be opened inside the
+            // opening, where there is no working tree *yet*
+            // ([`RepoSession::workdir_when_open`] waits that out); once
+            // the opening has settled without one there is nothing to
+            // offer, and offering nothing is a working state.
+            let Some(workdir) = s.workdir_when_open().await else {
+                s.sink.event(SessionEvent::MergeToolsLoaded {
+                    names: Vec::new(),
+                    settled: true,
+                });
                 return;
             };
             let cancel = s.root_cancel.clone();

@@ -117,6 +117,7 @@ impl RepoSession {
             auto_fetch_interval: Mutex::new(None),
             auto_fetch_slot: Arc::new(tokio::sync::Semaphore::new(1)),
             open_fetch: Mutex::new(OpenFetchState::Unasked),
+            opened: tokio::sync::watch::channel(false).0,
         });
         // The handle is kept: the application's shutdown joins the loop
         // so a local write in flight ends before the runtime does
@@ -124,54 +125,94 @@ impl RepoSession {
         let write_loop = runtime.spawn(Arc::clone(&session).write_loop(write_rx));
         *relock(&session.write_join) = Some(write_loop);
 
-        let s = Arc::clone(&session);
-        runtime.spawn(async move {
-            let cancel = s.root_cancel.clone();
-            match repo::open(&s.executor, &path, &cancel).await {
-                Ok(info) => {
-                    let workdir = info.workdir.clone();
-                    s.set_info(info.clone());
-                    // Before the event that lets a write be asked for:
-                    // the tree this session shares its writes with is
-                    // only known now, and a write accepted with no order
-                    // installed would take no place in it
-                    // (`session::write_order`).
-                    s.join_write_order(&info);
-                    s.sink.event(SessionEvent::Opened { info });
-                    // The network before the reads: a round trip is
-                    // the longest thing an opening starts, and
-                    // starting it first is what lets the reads below
-                    // run inside it. It holds nothing up — the reads
-                    // do not wait on the write queue, and what the
-                    // fetch brings down is published by its own
-                    // refresh
-                    // (`AfterWrite::Graph`).
-                    let fetching = s.take_open_fetch(&workdir).await;
-                    // Before anything else: a missing identity turns the
-                    // first commit into a wall of git text, and the UI can
-                    // ask for one instead.
-                    s.refresh_author();
-                    s.restart_log();
-                    s.refresh_quick();
-                    // A fetch reads what the remotes carry under
-                    // `refs/tags/` on its way out, so only an opening
-                    // without one has anything to ask. Asked here:
-                    // `set_auto_fetch`, which the application calls the
-                    // instant this session is handed over, has no
-                    // workdir to read from until the lines above, and
-                    // the interval it installs is what grants
-                    // permission to look at all.
-                    if !fetching {
-                        s.catch_up_remote_tags();
-                    }
-                }
-                Err(error) => {
-                    if !error.is_cancelled() {
-                        s.sink.event(SessionEvent::OpenFailed { path, error });
-                    }
-                }
-            }
-        });
+        runtime.spawn(settle(Arc::clone(&session), path));
         session
+    }
+}
+
+/// The opening itself, once the session exists: what git answers, what
+/// that lets the session do, and — on every road, the cancelled one
+/// included — the word that the opening is over.
+///
+/// **That last word is a completion boundary, not bookkeeping.** Until
+/// it is said, `workdir()` answering `None` means *not yet*; after it,
+/// the same `None` means *never*. A read that cannot tell those apart
+/// either gives up on an answer that was coming or waits for one that
+/// is not (`RepoSession::workdir_when_open`).
+async fn settle(s: Arc<RepoSession>, path: PathBuf) {
+    let cancel = s.root_cancel.clone();
+    match repo::open(&s.executor, &path, &cancel).await {
+        Ok(info) => {
+            let workdir = info.workdir.clone();
+            s.set_info(info.clone());
+            // Before the event that lets a write be asked for: the tree
+            // this session shares its writes with is only known now, and
+            // a write accepted with no order installed would take no
+            // place in it (`session::write_order`).
+            s.join_write_order(&info);
+            s.sink.event(SessionEvent::Opened { info });
+            // The network before the reads: a round trip is the longest
+            // thing an opening starts, and starting it first is what
+            // lets the reads below run inside it. It holds nothing up —
+            // the reads do not wait on the write queue, and what the
+            // fetch brings down is published by its own refresh
+            // (`AfterWrite::Graph`).
+            let fetching = s.take_open_fetch(&workdir).await;
+            // Before anything else: a missing identity turns the first
+            // commit into a wall of git text, and the UI can ask for one
+            // instead.
+            s.refresh_author();
+            s.restart_log();
+            s.refresh_quick();
+            // A fetch reads what the remotes carry under `refs/tags/` on
+            // its way out, so only an opening without one has anything
+            // to ask. Asked here: `set_auto_fetch`, which the
+            // application calls the instant this session is handed over,
+            // has no workdir to read from until the lines above, and the
+            // interval it installs is what grants permission to look at
+            // all.
+            if !fetching {
+                s.catch_up_remote_tags();
+            }
+        }
+        Err(error) => {
+            if !error.is_cancelled() {
+                s.sink.event(SessionEvent::OpenFailed { path, error });
+            }
+        }
+    }
+    publish_opened(&s.opened);
+}
+
+/// Says the opening is over — to whoever asks, now or later.
+///
+/// **`send` is the wrong verb here.** A `watch` sender whose receivers
+/// have all gone refuses the send *and leaves the value as it was*, and
+/// this channel starts with none: the receiver made with it is dropped
+/// on the spot, and one exists only while some read is inside
+/// [`RepoSession::workdir_when_open`]. So an opening that finished
+/// before anybody subscribed would go on reading as *not yet*, and the
+/// next read to ask would wait for a word already said — the same
+/// turning indicator this boundary exists to prevent, moved one step
+/// later. `send_replace` keeps the value whether or not anybody is
+/// listening, which is what a completion boundary has to do.
+fn publish_opened(opened: &tokio::sync::watch::Sender<bool>) {
+    opened.send_replace(true);
+}
+
+#[cfg(test)]
+mod tests {
+    /// The defect this boundary had: measured, not reasoned about —
+    /// `send` returns an error and keeps the old value when nothing is
+    /// subscribed, and every road out of an opening can reach that line
+    /// with no reader in sight.
+    #[test]
+    fn a_completion_nobody_waited_for_is_still_kept() {
+        let opened = tokio::sync::watch::channel(false).0;
+        super::publish_opened(&opened);
+        assert!(
+            *opened.subscribe().borrow(),
+            "the opening settled, and a reader that came afterwards was told it had not"
+        );
     }
 }
