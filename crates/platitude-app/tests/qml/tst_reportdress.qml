@@ -14,6 +14,12 @@ Item {
     width: 420
     height: 200
 
+    /// A forge's whole answer, as one of them writes it: more sentences than this bar is wide, with **the rule it
+    /// enforced at the end** — which is the half a bar cut at its own width drops.
+    readonly property string longReason: "GH006: Protected branch update failed for refs/heads/main."
+                                         + " Cannot force-push to a protected branch."
+                                         + " Review this repository's branch protection rules."
+
     // Raised the way `RepoPage.showReport` raises it: the three answers `Words` gives, and nothing else.
     NoticeBar {
         id: bar
@@ -204,6 +210,48 @@ Item {
         function test_the_far_sides_own_words_are_the_ones_quoted() {
             dress("update", "origin", "main", "GH006: protected branch hook declined")
             compare(bar.detail, "GH006: protected branch hook declined")
+        }
+
+        /// **Quoted whole, however long it is** (デザイン規約 §答えの要らない報せ): a forge writes two or three sentences
+        /// and the rule it enforced is the last of them, so a bar cut at its own width drops the one sentence the
+        /// reader came for.
+        ///
+        /// **Both halves are the claim.** That every word is still there is `wordsCut`, read off the fields — and
+        /// that the bar took the room they need is the height, since a bar wrapping inside a height it never grew
+        /// shows exactly as much as one that elided.
+        function test_a_long_quote_wraps_and_the_bar_grows_by_it() {
+            dress("update", "origin", "main", "GH006: protected branch hook declined")
+            tryVerify(() => bar.settled)
+            const oneLine = bar.openHeight
+            verify(!bar.wordsCut, "a quote that fits is not cut either")
+
+            dress("update", "origin", "main", root.longReason)
+            // Both, because the words ask for their room a frame before the bar is given it, and the bar spends
+            // 200ms on the way there.
+            tryVerify(() => bar.openHeight > oneLine && bar.settled)
+            verify(!bar.wordsCut, "and not one word of it was cut")
+            compare(bar.detail, root.longReason, "with the whole of it still in the field")
+        }
+
+        /// **`OK` keeps the middle of the bar** (デザイン規約 §答えの要らない報せ), which is what stops it riding the first
+        /// line while the words run on under it. Asked on a bar the words have made taller than the pill, since on
+        /// a one-line bar every rule about the pill's place answers the same.
+        function test_the_pill_keeps_the_middle_however_many_lines_the_words_take() {
+            dress("update", "origin", "main", "GH006: protected branch hook declined")
+            tryVerify(() => bar.settled)
+            fuzzyCompare(pillMiddle(), bar.height / 2, 1, "centred while the quote is one line")
+            const oneLine = bar.openHeight
+
+            dress("update", "origin", "main", root.longReason)
+            tryVerify(() => bar.openHeight > oneLine && bar.settled)
+            verify(bar.height > bar.pill.height + 2 * Theme.spaceMd,
+                   "the words, not the pill, are what the bar is now as tall as: " + bar.height)
+            fuzzyCompare(pillMiddle(), bar.height / 2, 1, "and it is still the middle it keeps")
+        }
+
+        /// Where the pill's own middle sits in the bar.
+        function pillMiddle() {
+            return bar.pill.mapToItem(bar, 0, bar.pill.height / 2).y
         }
 
         /// The one control, and the key that says the same thing. **Both walk the same body** (`dismiss`), which is
