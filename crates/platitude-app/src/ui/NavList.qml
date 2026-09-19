@@ -142,6 +142,32 @@ AppListView {
         row.leftClick(Qt.NoModifier, 0)
         return true
     }
+    /// Smoke hook (PGG_AUTO_ACT=nav-drag-open): a press on one **closed** row's own line that starts to move — the
+    /// gesture that brings the lines out at once and carries straight on into them. It enters the row's own
+    /// handlers, so a run cannot go green with that hand-over cut (verify-ui §注入はハンドラ本体そのものへ入れる).
+    /// The drag runs along the row's own line to its far side, which is where the name it opened ends. False when
+    /// the view has not built that row yet — the same miss `clickRow` reports.
+    function dragRow(index) {
+        const row = navList.itemAtIndex(index)
+        if (!row)
+            return false
+        const line = Theme.rowHeight / 2
+        row.linePressed(Qt.LeftButton, Theme.spaceSm, line)
+        row.lineDragged(row.width, line)
+        row.lineReleased()
+        row.lineClicked(Qt.LeftButton, Qt.NoModifier)
+        return true
+    }
+    /// What a drag over that row's name came away with, and whether the keyboard went with it — read off the field
+    /// the open row shows (PGG_AUTO_ACT=nav-drag-open).
+    function rowNameTook(index) {
+        const row = navList.itemAtIndex(index)
+        return row ? row.nameTook : ""
+    }
+    function rowNameCaret(index) {
+        const row = navList.itemAtIndex(index)
+        return !!row && row.nameCaret
+    }
     function rowArmed(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.renameArmed : false
@@ -208,15 +234,22 @@ AppListView {
     /// itself, so a run cannot go green with the wiring cut. Null and empty where the open row is not in this list.
     function openRow() {
         // A list with no section behind it is one the rail closed (`SectionPeekPopup`): it holds no rows to open.
-        if (navList.gestures === null || navList.sectionModel === null || navList.gestures.openKey === "")
+        if (navList.gestures === null || navList.sectionModel === null)
             return null
-        const row = navList.itemAtIndex(navList.sectionModel.rowOfName(navList.gestures.openKey))
+        // The key carries the section it was opened in (`keyOf`), so a list asked about another's key answers
+        // with nothing rather than with a row of its own that happens to share the name.
+        const key = navList.gestures.openKey
+        const head = navList.kindHint + ":"
+        if (!key.startsWith(head))
+            return null
+        const row = navList.itemAtIndex(navList.sectionModel.rowOfName(key.substring(head.length)))
         return row && row.factsOpen ? row : null
     }
     function openWords() {
         const row = navList.openRow()
         return row === null ? ""
-             : row.fullName + " held=" + row.factsHeldBy + " up=" + row.factsUpstream + " gone=" + row.factsGone
+             : row.fullName + " local=" + row.factsLocal + " track=" + row.ahead + "/" + row.behind
+               + " held=" + row.factsHeldBy + " up=" + row.factsUpstream + " gone=" + row.factsGone
     }
     /// Where the open row and its lines actually landed, for a run that has to see the list make room rather than
     /// take the layout's word for it (PGG_AUTO_ACT=nav-open). `view=` is what the list is showing while they are
@@ -335,10 +368,12 @@ AppListView {
         onFactsAsked: (open, at) => {
             if (!navList.gestures)
                 return
+            // Named the way a click is remembered (`keyOf`): the section is part of it, or one name carried on
+            // both sides of a fetch would open a row in each list.
             if (open)
-                navList.gestures.openFacts(row.fullName, at)
+                navList.gestures.openFacts(row.rowKey, at)
             else
-                navList.gestures.closeFacts(row.fullName)
+                navList.gestures.closeFacts(row.rowKey)
         }
         onFactsMenuAsked: {
             if (navList.gestures)

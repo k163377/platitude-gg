@@ -236,9 +236,9 @@ AppCard {
             kindHint: peek.kind
             gestures: peek.gestures
             // The rows in here open under themselves the way the sections' own do, and the working copies are read
-            // off the section that holds them whichever list the row is standing in. **BRANCHES alone for now**:
-            // opening is a branch row's answer, and the other sections still answer with the tooltip.
-            offersFacts: peek.kind === "branch"
+            // off the section that holds them whichever list the row is standing in. **BRANCHES and REMOTES**:
+            // those two rows open, and the other sections still answer with the tooltip.
+            offersFacts: peek.kind === "branch" || peek.kind === "remote"
             worktreesModel: peek.rail !== null ? peek.rail.modelOf("worktree") : null
             stretch: true
             remotesPacked: peek.repoTab.remoteNames

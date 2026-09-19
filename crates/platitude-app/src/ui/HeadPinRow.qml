@@ -53,8 +53,13 @@ Rectangle {
     visible: headPin.branchesModel.headName !== "" && (headPin.rowAbove || headPin.rowBelow)
     // **It grows by what it has open under it**, the way a row does (デザイン規約 §左メニューの所作). Riding the
     // bottom edge its foot is what is pinned, so growing takes the top of it upward and the rows it stands over stay
-    // where they are.
-    height: Theme.rowHeight + pinFacts.height
+    // where they are. Two things grow it: the name shown whole where one line could not hold it, and the facts.
+    height: Theme.rowHeight + headPin.nameOverflow + pinFacts.height
+    /// The name field the open stand-in shows, and how far it hangs below the line — the pair the rows carry
+    /// (`NavItemDelegate` / `NameCell.wholeOver`, where the reading is spelled out).
+    readonly property Item nameField: pinWhole.item
+    readonly property real nameOverflow:
+        pinWhole.item ? Math.max(0, pinWhole.item.implicitHeight - pinWhole.item.lineHeight) : 0
     y: headPin.rowAbove ? 0 : headPin.viewHeight - height
     // Dressed as the row it stands for, down to the margins: the current branch's own highlight.
     color: Theme.accentMuted
@@ -94,6 +99,23 @@ Rectangle {
             color: Theme.textLink
             weight: Font.DemiBold
             pixelSize: Theme.fontMd
+            // Whole, in its own place, while the stand-in is open — the same swap the rows make
+            // (`NameCell.whole`), anchored so a name that wraps hangs below rather than moving the columns.
+            inked: !headPin.factsOpen
+            Loader {
+                id: pinWhole
+                active: headPin.factsOpen
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                height: pinWhole.item ? pinWhole.item.implicitHeight : 0
+                sourceComponent: CardText {
+                    text: headPin.factsName
+                    pixelSize: Theme.fontMd
+                    weight: Font.DemiBold
+                    color: Theme.textLink
+                }
+            }
         }
         // Dressed as the row it stands for, down to where the pair comes from: the same listing the row draws it
         // out of, read off the snapshot by name (`drain::settle_head_marks`), so the stand-in and the row cannot
@@ -132,12 +154,15 @@ Rectangle {
     property bool opensFacts: false
     property var gestures: null
     property var worktreesModel: null
-    /// Whether this stand-in is the open one. The key is the branch's own name, and **being on screen is part of the
-    /// answer**: the row and the stand-in answer to the same name, so a stand-in that called itself open while its
+    /// The key this stand-in answers to: the BRANCHES row's own (`NavList.keyOf`), since standing in for that row
+    /// is the whole of what it does.
+    readonly property string factsKey: "branch:" + headPin.branchesModel.headName
+    /// Whether this stand-in is the open one. The key is the row's, and **being on screen is part of the
+    /// answer**: the row and the stand-in answer to the same key, so a stand-in that called itself open while its
     /// row was the one showing would open lines nobody can see — and a hand reading the row's would be reaching into
     /// them (measured: the sweep came away empty, because a hidden item holds no fields).
     readonly property bool factsOpen: headPin.opensFacts && headPin.visible && headPin.gestures !== null
-                                   && headPin.gestures.openKey === headPin.branchesModel.headName
+                                   && headPin.gestures.openKey === headPin.factsKey
     /// What it opens, read as it opens rather than bound (the reading `NavItemDelegate.gatherFacts` makes).
     property string factsName: ""
     property string factsHeldBy: ""
@@ -166,22 +191,26 @@ Rectangle {
         headPin.factsUpstream = gone !== "" ? gone : upstream
         headPin.factsGone = gone !== ""
         headPin.factsHeldBy = GitFacts.pathLeaf(held)
-        headPin.factsName = pinName.cutting ? branch : ""
-        return headPin.factsName !== "" || headPin.factsHeldBy !== "" || headPin.factsUpstream !== ""
+        // **The name is always what opens**: it is the copy that can be dragged away, and
+        // the line above takes its own off while this is out.
+        headPin.factsName = branch
+        return headPin.factsName !== ""
     }
     function askFacts(at) {
         if (headPin.opensFacts && headPin.gestures !== null && headPin.gatherFacts())
-            headPin.gestures.openFacts(headPin.branchesModel.headName, at)
+            headPin.gestures.openFacts(headPin.factsKey, at)
     }
     function dropFacts() {
         if (headPin.gestures !== null)
-            headPin.gestures.closeFacts(headPin.branchesModel.headName)
+            headPin.gestures.closeFacts(headPin.factsKey)
     }
     /// What this stand-in has open under it, and the lines themselves — for the runs alone (PGG_AUTO_ACT=nav-open
     /// `head:…`). Empty and null while it is closed, which is what lets the sections ask it first.
     function openWords() {
         return headPin.factsOpen
-            ? headPin.branchesModel.headName + " held=" + headPin.factsHeldBy
+            ? headPin.branchesModel.headName + " local= track="
+              + headPin.branchesModel.headAhead + "/" + headPin.branchesModel.headBehind
+              + " held=" + headPin.factsHeldBy
               + " up=" + headPin.factsUpstream + " gone=" + headPin.factsGone
             : ""
     }
@@ -221,7 +250,7 @@ Rectangle {
         // The same seat a row gives its own lines, measured off the row's height rather than off the layout above it
         // (`NavItemDelegate`).
         anchors.top: parent.top
-        anchors.topMargin: Theme.rowHeight
+        anchors.topMargin: Theme.rowHeight + headPin.nameOverflow
         anchors.left: parent.left
         anchors.leftMargin: Theme.spaceSm + headPin.branchesModel.headDepth * Theme.spaceSm
         anchors.right: parent.right
@@ -229,9 +258,6 @@ Rectangle {
         height: pinFacts.item ? pinFacts.item.implicitHeight : 0
         sourceComponent: NavRowFacts {
             row: headPin
-            fullName: headPin.factsName
-            nameTone: pinName.color
-            nameWeight: pinName.weight
             heldBy: headPin.factsHeldBy
             upstream: headPin.factsUpstream
             gone: headPin.factsGone
@@ -246,12 +272,56 @@ Rectangle {
         height: Theme.borderWidth
         color: Theme.borderSubtle
     }
+    /// A press that starts to move is a reader going for the words: what is open comes out **now** rather than
+    /// after the rest, and the drag carries on into it (the pair `NavItemDelegate`
+    /// carries, and the one hand over this whole stand-in, its open lines included).
+    function linePressed(x, y) {
+        headRowMouse.pressFrom = Qt.point(x, y)
+        headRowMouse.handedOn = false
+        if (pinFacts.item !== null)
+            pinFacts.item.dropSweep()
+        if (headPin.nameField !== null)
+            headPin.nameField.deselect()
+    }
+    function lineDragged(x, y) {
+        if (!headPin.opensFacts || !headRowMouse.pressed)
+            return
+        if (!headRowMouse.handedOn
+                && Math.abs(x - headRowMouse.pressFrom.x) < Qt.styleHints.startDragDistance
+                && Math.abs(y - headRowMouse.pressFrom.y) < Qt.styleHints.startDragDistance)
+            return
+        if (!headRowMouse.handedOn) {
+            pinFactsWait.stop()
+            if (!headPin.factsOpen)
+                headPin.askFacts(headPin.mapToItem(null, x, y))
+            if (headPin.nameField === null)
+                return
+            headPin.nameField.anchorFrom(headPin, headRowMouse.pressFrom.x, headRowMouse.pressFrom.y)
+            headRowMouse.handedOn = true
+        }
+        headPin.nameField.extendFrom(headPin, x, y)
+    }
+    /// A drag that took the name away is not a click — the reader was copying (`NavRowFacts.handClicked`).
+    function lineClicked() {
+        if (headPin.nameField !== null && headPin.nameField.selected !== "")
+            return
+        headPin.rowPressed(Qt.LeftButton, Qt.NoModifier, 0)
+    }
     MouseArea {
         id: headRowMouse
         anchors.fill: parent
         hoverEnabled: true
         enabled: headPin.branchesModel.headOid !== ""
-        onClicked: headPin.rowPressed(Qt.LeftButton, Qt.NoModifier, 0)
+        /// Where the button went down, and whether this press has already been handed on to the lines below.
+        property point pressFrom: Qt.point(0, 0)
+        property bool handedOn: false
+        // **Each handler is one line into the stand-in's own** — a run enters those, so what it drives is this
+        // wiring rather than a copy of it (verify-ui スキル §注入はハンドラ本体そのものへ入れる).
+        // Nothing to undo at the release: what says the press is still down is the `MouseArea`'s own `pressed`,
+        // which `lineDragged` reads (the rows keep a flag because their hand is the row's, not a handler's).
+        onPressed: mouse => headPin.linePressed(mouse.x, mouse.y)
+        onPositionChanged: mouse => headPin.lineDragged(mouse.x, mouse.y)
+        onClicked: headPin.lineClicked()
         // The hand sits out the rest here too, and what it opened goes the moment it leaves — the facts are inside
         // this stand-in, so the hand reading them never leaves it (規約 §hover のツールチップ).
         onContainsMouseChanged: {

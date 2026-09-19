@@ -156,7 +156,13 @@ Item {
     // **The row grows by what it has open under it** and the rows below it move down: the list opens rather than
     // something landing on top of it (デザイン規約 §左メニューの所作). Every wash below fills the whole of it, because
     // what grew is this row.
-    height: Theme.rowHeight + factsSeat.height
+    //
+    // Two things grow it: the name shown whole, where it needed more than the one line the row draws it on, and the
+    // facts under that.
+    height: Theme.rowHeight + navRow.nameOverflow + factsSeat.height
+    /// How far the name shown whole hangs below the line the row draws it on — 0 while the row is closed, and while
+    /// the whole of it fits the line it was already on (`NameCell.wholeOver`).
+    readonly property real nameOverflow: rowLayout.nameWholeOver
 
     // The current branch stays highlighted inside the list (the sidebar's sticky row only stands in for it while this
     // row is scrolled off).
@@ -375,13 +381,77 @@ Item {
         /// When the button went down, so the gesture can take the time it was held off the wait it has left — Qt
         /// measures a double-click press to press, and `clicked` arrives at the release.
         property real pressAt: 0
-        onPressed: mouse => {
-            if (mouse.button === Qt.LeftButton)
-                itemMouse.pressAt = Date.now()
-        }
-        onClicked: mouse => navRow.rowPressed(mouse.button, mouse.modifiers,
-                                              Date.now() - itemMouse.pressAt)
+        /// Where it went down, and whether this press has already been handed on to the name. **Each handler is
+        /// one line into the row's own** — a run enters those, so what it drives is this wiring rather than a copy
+        /// of it (verify-ui スキル §注入はハンドラ本体そのものへ入れる).
+        property point pressFrom: Qt.point(0, 0)
+        property bool pressing: false
+        property bool handedOn: false
+        onPressed: mouse => navRow.linePressed(mouse.button, mouse.x, mouse.y)
+        onPositionChanged: mouse => navRow.lineDragged(mouse.x, mouse.y)
+        onReleased: navRow.lineReleased()
+        onCanceled: navRow.lineReleased()
+        onClicked: mouse => navRow.lineClicked(mouse.button, mouse.modifiers)
         onDoubleClicked: mouse => navRow.rowDoubled(mouse.button)
+    }
+    /// The name as the open row shows it, and what a drag over it came away with — null and empty while the row
+    /// is closed (`NameCell.whole`).
+    readonly property Item nameField: rowLayout.nameWhole
+    readonly property string nameTook: navRow.nameField ? navRow.nameField.selected : ""
+    readonly property bool nameCaret: !!navRow.nameField && navRow.nameField.hasCaret
+
+    /// A press on the row's **own line**, and what a hand that starts to move with it means. A press that never
+    /// moved is this row's click; one that moves is a reader going for the name, so the row opens **now** rather
+    /// than after the rest and the drag carries straight on into the name it put there
+    /// (デザイン規約 §左メニューの所作「開いた字は掴める」). The lines under the row answer their own presses
+    /// (`NavRowFacts`); this is the half on the row's line, where the name is.
+    function linePressed(button, x, y) {
+        if (button !== Qt.LeftButton)
+            return
+        itemMouse.pressAt = Date.now()
+        itemMouse.pressFrom = Qt.point(x, y)
+        itemMouse.pressing = true
+        itemMouse.handedOn = false
+        // One selection in the window: a press up here takes the last one off the name and off the lines below, so
+        // a click that takes no words is read as a click and not as the sweep before it.
+        if (navRow.factsItem !== null)
+            navRow.factsItem.dropSweep()
+        if (navRow.nameField !== null)
+            navRow.nameField.deselect()
+    }
+    function lineDragged(x, y) {
+        if (!navRow.expands || !itemMouse.pressing)
+            return
+        // The platform's own answer to "has this hand moved on purpose", so a click with a tremor in it is still a
+        // click (`RebasePlanRow` reads the same one).
+        if (!itemMouse.handedOn
+                && Math.abs(x - itemMouse.pressFrom.x) < Qt.styleHints.startDragDistance
+                && Math.abs(y - itemMouse.pressFrom.y) < Qt.styleHints.startDragDistance)
+            return
+        if (!itemMouse.handedOn) {
+            // The rest is what this press is skipping — the reader has already chosen this row.
+            factsWait.stop()
+            if (!navRow.factsOpen)
+                navRow.askFacts(navRow.mapToItem(null, x, y))
+            // Refused (a box is open, a menu is standing): there is no field to sweep, and the press stays a press.
+            if (navRow.nameField === null)
+                return
+            // Anchored where the button went down. The field clamps a point outside its own box to the nearest
+            // character, so a press in the air beside a short name starts at the end of it (`CardText.inBox`).
+            navRow.nameField.anchorFrom(navRow, itemMouse.pressFrom.x, itemMouse.pressFrom.y)
+            itemMouse.handedOn = true
+        }
+        navRow.nameField.extendFrom(navRow, x, y)
+    }
+    function lineReleased() {
+        itemMouse.pressing = false
+    }
+    /// The click at the end of it. **A drag that took the name away is not a click** — the reader was copying, and
+    /// the second click of a gesture opens a name box (`NavRowFacts.handClicked`, the same test one line down).
+    function lineClicked(button, modifiers) {
+        if (button === Qt.LeftButton && navRow.nameTook !== "")
+            return
+        navRow.rowPressed(button, modifiers, Date.now() - itemMouse.pressAt)
     }
     /// A press on this row, and a double-click on it — **the handler above is one line and this is the whole of
     /// what it does**, because the lines the row opens under itself answer with these two as well (`NavRowFacts`):
@@ -455,12 +525,22 @@ Item {
     property var worktreesModel: null
     /// Whether this row answers a rest by opening. **The whole of the section the facts were handed to**, folder rows
     /// included: a fold parent that answered with a tooltip while the rows under it opened would be the same question
-    /// answered two ways in one list (デザイン規約 §左メニューの所作). What a row has to open may still be nothing, and
-    /// then nothing opens — `gatherFacts` is what says so.
-    readonly property bool expands: navRow.opensFacts && navRow.kindHint === "branch"
+    /// answered two ways in one list (デザイン規約 §左メニューの所作).
+    ///
+    /// **The one row of REMOTES that is left out is the remote's own** — it is a thing in itself rather than the
+    /// shape of the names under it, and what it has to say is the role it holds (the default remote), which is a
+    /// sentence and not a name (`hoverText`). Every other row of that section opens, as every row of BRANCHES does.
+    readonly property bool expands:
+        navRow.opensFacts
+        && (navRow.kindHint === "branch"
+            || (navRow.kindHint === "remote" && !navRow.isRemoteRow))
     /// Whether this row is the open one. The marks it spells out go from the row's own line while it is, so the
     /// reader sees them move down rather than stand twice; the wash stays, because the row grew.
-    readonly property bool factsOpen: navRow.expands && navRow.fullName !== "" && navRow.openKey === navRow.fullName
+    ///
+    /// **The key carries the section** (`NavList.keyOf`, the key a click is remembered by): a name a remote
+    /// carries and a branch here carries are two different refs (デザイン規約 §ref の種別), and a bare name would
+    /// open both of their rows at once.
+    readonly property bool factsOpen: navRow.expands && navRow.fullName !== "" && navRow.openKey === navRow.rowKey
     /// Whether the row is painted as the one under the hand — the rectangle's own answer, so a run cannot go green
     /// with the wash unwired (the reading `litKey` already makes of the chosen row).
     readonly property bool washLit: washBox.visible
@@ -536,31 +616,39 @@ Item {
     /// binding freezes at the value they had when it ran (app-ui.md), and this is the same "asked once, as it opens"
     /// a menu makes of its own row.
     property string factsName: ""
+    property string factsLocal: ""
     property string factsHeldBy: ""
     property string factsUpstream: ""
     property bool factsGone: false
 
-    /// Read them, and answer whether there is anything to open. **A row wearing no mark and showing its whole name
-    /// has nothing folded** — a fold parent is the shape of the names under it rather than a name git knows, so the
-    /// only thing it can open is a name its own line had to cut.
+    /// Read them, and answer whether there is anything to open. **The name alone is enough**: it is the copy a
+    /// reader can drag away, so every row that expands has it and every one of them opens. A row with no name to
+    /// say — one the model has not filled yet — opens nothing.
     function gatherFacts() {
-        const upstream = navRow.sectionModel !== null ? navRow.sectionModel.upstreamOf(navRow.fullName) : ""
+        // The branch measured against this reading, and the copy holding **that** one: a remote-tracking ref is
+        // nobody's checkout, so the working copy this row can name is the one holding the branch above it.
+        const local = navRow.kindHint === "remote" && !navRow.folder && navRow.sectionModel !== null
+                    ? navRow.sectionModel.trackedBy(navRow.fullName) : ""
+        const upstream = navRow.kindHint === "branch" && navRow.sectionModel !== null
+                       ? navRow.sectionModel.upstreamOf(navRow.fullName) : ""
         // Configured and not here — the reading the branch is measured against cannot be reached, and git spells the
         // same answer `[gone]` (デザイン規約 §ref の種別). **Off the row rather than the section**: the badge the row
         // wears is drawn from the same slot, so the mark and the line under it cannot disagree
         // (`models::nav::field` の `Role::Bucket`).
         const gone = navRow.kindHint === "branch" ? navRow.bucket : ""
+        // The name the row asks the worktrees section about: its own on a BRANCHES row, the branch named above it
+        // on a REMOTES one.
+        const holds = navRow.kindHint === "remote" ? local : navRow.fullName
         // The worktrees section answers with the path git prints; the rows of that section show the folder it ends
         // in, and this says the same name they do.
-        const held = navRow.folder || navRow.worktreesModel === null ? ""
-                   : navRow.worktreesModel.worktreeHolding(navRow.fullName)
+        const held = navRow.folder || holds === "" || navRow.worktreesModel === null ? ""
+                   : navRow.worktreesModel.worktreeHolding(holds)
+        navRow.factsLocal = local
         navRow.factsUpstream = gone !== "" ? gone : upstream
         navRow.factsGone = gone !== ""
         navRow.factsHeldBy = GitFacts.pathLeaf(held)
-        // The row's own answer to "did the name fit" — asking the part that drew it is the only reading that cannot
-        // drift from what is on screen (`CutName.cutting`).
-        navRow.factsName = rowLayout.nameInk.cutting ? navRow.fullName : ""
-        return navRow.factsName !== "" || navRow.factsHeldBy !== "" || navRow.factsUpstream !== ""
+        navRow.factsName = navRow.fullName
+        return navRow.factsName !== ""
     }
     /// Ask for this row to be the open one, with the pointer where it was standing when it asked.
     function askFacts(at) {
@@ -593,9 +681,10 @@ Item {
         visible: factsSeat.active
         // Under the row's own line, in the columns it draws in. **Measured off the row's height rather than off the
         // layout above**: a `RowLayout` takes the height its content asks for, which is less than a row's, and lines
-        // seated on its foot would be drawn over the name (measured — the name went under them).
+        // seated on its foot would be drawn over the name (measured — the name went under them). A name that wrapped
+        // hangs below that line, so these begin under the last line of it.
         anchors.top: parent.top
-        anchors.topMargin: Theme.rowHeight
+        anchors.topMargin: Theme.rowHeight + navRow.nameOverflow
         anchors.left: parent.left
         anchors.leftMargin: navRow.rowInset + navRow.depth * navRow.nestStep
         anchors.right: parent.right
@@ -603,11 +692,11 @@ Item {
         height: factsSeat.item ? factsSeat.item.implicitHeight : 0
         sourceComponent: NavRowFacts {
             row: navRow
-            fullName: navRow.factsName
-            // The name in the row's own voice — read off the part that drew it, so the two cannot drift
-            // (`CutName.color` / `.weight`: the current branch is the one that carries a weight of its own).
-            nameTone: rowLayout.nameInk.color
-            nameWeight: rowLayout.nameInk.weight
+            localBranch: navRow.factsLocal
+            // The counts ride the row itself (`models::nav::field` の `Role::Ahead`), the way the `[gone]` state
+            // does: they are a role, so they answer again when a fetch moves them.
+            ahead: navRow.ahead
+            behind: navRow.behind
             heldBy: navRow.factsHeldBy
             upstream: navRow.factsUpstream
             gone: navRow.factsGone

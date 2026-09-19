@@ -123,6 +123,7 @@ MessageActionsRow 1.0 MessageActionsRow.qml
 MessageEditor 1.0 MessageEditor.qml
 MiddleAutoScroll 1.0 MiddleAutoScroll.qml
 NameCell 1.0 NameCell.qml
+NavFactLine 1.0 NavFactLine.qml
 NavHeader 1.0 NavHeader.qml
 NavIcon 1.0 NavIcon.qml
 NavItemDelegate 1.0 NavItemDelegate.qml

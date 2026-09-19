@@ -24,9 +24,12 @@ RowLayout {
     /// this layout (`NavNameBox`) — it is allowed to be wider than the seat, and a seat that grew with it would push
     /// the row's own columns sideways.
     readonly property alias boxSeat: boxSeat
-    /// Where this row draws its name — the colour, the weight and the "did it fit" the lines the row opens read off
-    /// it (`NavRowFacts`).
+    /// Where this row draws its name (`CutName`) — what a caller measuring the column reads.
     readonly property Item nameInk: nameCell.nameInk
+    /// The name in full, while the row has itself open: the field a drag takes it out of, and how far it hangs
+    /// below the row's own line (`NameCell.whole`).
+    readonly property Item nameWhole: nameCell.wholeField
+    readonly property real nameWholeOver: nameCell.wholeOver
 
     spacing: Theme.spaceXs
     // The mark and the name, in the part both file lists share (`NameCell`): the slot every row opens with — a
@@ -39,6 +42,9 @@ RowLayout {
         // box leaves the columns beside it where they are.
         Layout.fillWidth: !body.row.editing
         showName: !body.row.editing
+        // **While the row is open its name is shown whole, in its own place** — the arrangement the reader was
+        // looking at does not move, and what could not be said on one line wraps downward (`NameCell.whole`).
+        whole: body.row.factsOpen ? body.row.factsName : ""
         folder: body.row.folder
         change: body.row.change
         // A sidebar folder keeps its fold state in the change slot it has no change code for (`models::nav::item`).

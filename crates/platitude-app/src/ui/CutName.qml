@@ -35,6 +35,10 @@ Item {
     /// Where the mark falls: `middle` for a name (told apart by both of its ends), `end` for a sentence (read from the
     /// left, and nothing after the cut is worth keeping).
     property string cutAt: "middle"
+    /// Whether the pieces are drawn at all. False where something else is drawing the same name in this very place —
+    /// a row showing it whole while it has itself open (`NameCell.whole`). **The cut goes on being worked out**, so
+    /// the column keeps its width and `cutting` keeps answering.
+    property bool inked: true
 
     /// The two halves that are drawn, and whether the mark stands between them — the output side, which is also how a
     /// caller asks whether this name was cut at all (`Text.truncated` has no meaning here: neither half is elided).
@@ -193,6 +197,7 @@ Item {
     // shape a single Label had, so a column that stretches this part draws its name exactly where it drew it before.
     Label {
         id: headLabel
+        visible: cut.inked
         anchors.fill: parent
         text: cut.headText
         color: cut.color
@@ -206,7 +211,7 @@ Item {
         id: tailLabel
         anchors.fill: parent
         horizontalAlignment: Text.AlignRight
-        visible: cut.tailText !== ""
+        visible: cut.inked && cut.tailText !== ""
         text: cut.tailText
         color: cut.color
         font: headLabel.font
@@ -215,7 +220,7 @@ Item {
         id: markLabel
         y: 0
         height: cut.height
-        visible: cut.cutting
+        visible: cut.inked && cut.cutting
         text: "…"
         color: cut.color
         font: headLabel.font

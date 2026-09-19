@@ -4,14 +4,18 @@ import QtQuick
 import QtQuick.Layouts
 import platitude.ui
 
-// What a branch row of the left panel opens under itself: the name in full where the row had to cut it, the working
-// copy that has the branch out, and the branch it is measured against — one fact to a line, each behind the mark the
-// row wears for it (デザイン規約 §左メニューの所作).
+// What a row of the left panel opens under itself: one fact to a line, behind the mark that stands for it
+// (デザイン規約 §左メニューの所作). **The lines are the same parts wherever the row is standing** — a BRANCHES row
+// says which working copy has it out and what it is measured against; a REMOTES row says the branch measured
+// against *it* and the copy holding that one. Which of them are filled is the caller's answer.
+//
+// **The name is not here.** It stays in the row's own place and is shown whole there (`NameCell.whole`): what the
+// reader was looking at does not move when a hand rests on it.
 //
 // **It is the row growing, not a card over it.** The row is this much taller while it is open and the rows below it
 // move down, so the list opens rather than something landing on top of it. The icons stand in the row's own mark
 // column and the words begin where its name does, which is what makes the marks look like they moved down here — and
-// the row takes them off its own line while this is out.
+// the row takes its marks off its own line while this is out.
 //
 // **The press is taken here and split in two**: a drag takes the words away, and a press that never moved is the
 // row's own click. A `TextEdit` under a `MouseArea` declared after it never sees a press (measured), so one hand
@@ -21,12 +25,13 @@ Item {
 
     /// The row this belongs to — where a press that took no words goes (`NavItemDelegate.rowPressed`).
     property Item row: null
-    /// The name in full, empty wherever the row shows the whole of it already: two copies of one name, one under the
-    /// other, is the row saying the same thing twice.
-    property string fullName: ""
-    property color nameTone: Theme.textPrimary
-    property int nameWeight: Font.Normal
-    /// The working copy that has this branch out, empty where this one does.
+    /// REMOTES only: the local branch measured against this reading (`NavSectionModel.trackedBy`), and how far it
+    /// stands from it. Empty where nothing here reads it.
+    property string localBranch: ""
+    property int ahead: 0
+    property int behind: 0
+    /// The working copy that has the branch out — this row's own on a BRANCHES row, the one named above on a
+    /// REMOTES row. Empty where this copy has it, and where there is no branch to hold.
     property string heldBy: ""
     /// The remote branch the counts are measured against, empty where the branch tracks nothing.
     property string upstream: ""
@@ -43,6 +48,11 @@ Item {
     readonly property bool caretLanded: pad.caretLanded
     function sweptText() {
         return pad.sweptText()
+    }
+    /// Nothing under these lines holds a selection any more — what a press on the row's own line above clears
+    /// before it decides what that press is (`NavItemDelegate`). One selection in the window.
+    function dropSweep() {
+        pad.dropValues()
     }
 
     /// The hand, in this item's own coordinates: the press anchors a sweep at the nearest field whether it landed on
@@ -75,7 +85,9 @@ Item {
             facts.row.rowDoubled(button)
     }
 
-    implicitHeight: lines.implicitHeight + Theme.spaceXs
+    /// **Nothing at all where no line is drawn**: a row whose whole answer is its own name opens no height, so the
+    /// rows under it do not move for it (the name is shown in the row's own place — `NameCell.whole`).
+    implicitHeight: lines.implicitHeight > 0 ? lines.implicitHeight + Theme.spaceXs : 0
 
     // The hand's ground, under everything drawn here: the pad answers where the fields are, and the hand below drives
     // it (`SweepPad`).
@@ -91,54 +103,37 @@ Item {
         anchors.top: parent.top
         spacing: Theme.spaceXs
 
-        // The name the row had to cut, whole and wrapped. It carries the row's own colour and weight: the same name
-        // in the same voice, one line further down.
-        CardText {
-            visible: facts.fullName !== ""
+        // A REMOTES row leads with the branch that reads it: the BRANCHES mark in the BRANCHES colour, since what
+        // the line names is a row of that section, and the counts on the right are the ones that row draws
+        // (デザイン規約 §左メニューの所作).
+        NavFactLine {
             Layout.fillWidth: true
-            Layout.leftMargin: Theme.iconSm + Theme.spaceXs
-            text: facts.fullName
-            pixelSize: Theme.fontMd
-            color: facts.nameTone
-            weight: facts.nameWeight
+            visible: facts.localBranch !== ""
+            mark: "branch"
+            markTint: Theme.accent
+            text: facts.localBranch
+            ahead: facts.ahead
+            behind: facts.behind
         }
-        // Local first, then the remote: the reader's own copy of this branch, then where it is measured against.
-        RowLayout {
-            spacing: Theme.spaceXs
+        // Then the working copy holding it, and — on a BRANCHES row — where it is measured against.
+        NavFactLine {
+            Layout.fillWidth: true
             visible: facts.heldBy !== ""
-            NavIcon {
-                kind: "tree"
-                tint: Theme.textSecondary
-                Layout.preferredWidth: Theme.iconSm
-                Layout.preferredHeight: Theme.iconSm
-            }
-            CardText {
-                Layout.fillWidth: true
-                text: facts.heldBy
-                pixelSize: Theme.fontSm
-                color: Theme.textSecondary
-            }
+            mark: "tree"
+            text: facts.heldBy
         }
-        RowLayout {
-            spacing: Theme.spaceXs
+        // A branch git answers `[gone]` for says so in words, and the whole line wears the state
+        // (デザイン規約 §状態). **The sentence is what the row cannot say**: the row wears the mark, and the
+        // mark alone cannot tell "measured against something that is not here" from "measured against
+        // something". git's own word for it is `gone`, and it leads with the name so every line here begins in
+        // the same column.
+        NavFactLine {
+            Layout.fillWidth: true
             visible: facts.upstream !== ""
-            NavIcon {
-                kind: "remote"
-                tint: facts.gone ? Theme.warning : Theme.textSecondary
-                Layout.preferredWidth: Theme.iconSm
-                Layout.preferredHeight: Theme.iconSm
-            }
-            // A branch git answers `[gone]` for says so in words, and the whole line wears the state
-            // (デザイン規約 §状態). **The sentence is what the row cannot say**: the row wears the mark, and the
-            // mark alone cannot tell "measured against something that is not here" from "measured against
-            // something". git's own word for it is `gone`, and it leads with the name so every line here begins in
-            // the same column.
-            CardText {
-                Layout.fillWidth: true
-                text: facts.gone ? qsTr("%1 is gone").arg(facts.upstream) : facts.upstream
-                pixelSize: Theme.fontSm
-                color: facts.gone ? Theme.warning : Theme.textSecondary
-            }
+            mark: "remote"
+            markTint: facts.gone ? Theme.warning : Theme.textSecondary
+            text: facts.gone ? qsTr("%1 is gone").arg(facts.upstream) : facts.upstream
+            tone: facts.gone ? Theme.warning : Theme.textSecondary
         }
     }
     // **One hand for the whole of it, and it answers two gestures** — see the head of this file.

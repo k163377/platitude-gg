@@ -49,6 +49,20 @@ RowLayout {
     /// (`NavItemDelegate`'s rename) leaves the row's other columns where they are. The owner takes the slack back
     /// the same way it gives it — `Layout.fillWidth` follows this.
     property bool showName: true
+    /// The same name in full, drawn **in the name's own place** in place of the cut one — what a row shows while it
+    /// is open (デザイン規約 §左メニューの所作). Empty leaves the cut name where it is.
+    ///
+    /// **The row's arrangement does not move when a reader rests on it**: this stands over the cut name in the same
+    /// column, so the seat, the counts and the badge stay where they were, and a name too long for one line wraps
+    /// **downward** out of the row — which the row then grows by (`NavItemDelegate.nameOverflow`).
+    property string whole: ""
+    /// That field, and how far it hangs below the one line a name is drawn on — the row reads the first to drive
+    /// a drag into and the second to grow by. **The overhang is counted off the field's own line**, not off the
+    /// label it stands over: the two line boxes differ by a hair, and taking the difference against the label
+    /// would open that hair as a gap under every name that fits.
+    readonly property Item wholeField: wholeSeat.item
+    readonly property real wholeOver:
+        wholeSeat.item ? Math.max(0, wholeSeat.item.implicitHeight - wholeSeat.item.lineHeight) : 0
     /// Automation: the turn the fold arrow is drawn at, -1 on a row that has none. Read off the icon itself, so a
     /// run cannot go green with the arrow unwired (verify-ui — the same reading as
     /// `FileRowDelegate.litKey`).
@@ -187,6 +201,27 @@ RowLayout {
             pixelSize: Theme.fontMd
             weight: nameCell.weight
             color: nameCell.folder ? Theme.textSecondary : nameCell.tone
+            // The pieces go while the whole name stands over them; the cut goes on being worked out, so this column
+            // keeps the width it had and nothing beside it moves.
+            inked: nameCell.whole === ""
+            // The name in full, in this very place. **Anchored rather than laid out**: a child of the cut name is
+            // outside the row's layout, so a name that wraps hangs below the row instead of growing it sideways,
+            // and the row takes that overhang on itself (`NavItemDelegate.nameOverflow`). Built only while it is
+            // asked for — a field per row on screen is the heap the rows are measured by (the seat's rule).
+            Loader {
+                id: wholeSeat
+                active: nameCell.whole !== ""
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                height: wholeSeat.item ? wholeSeat.item.implicitHeight : 0
+                sourceComponent: CardText {
+                    text: nameCell.whole
+                    pixelSize: Theme.fontMd
+                    weight: nameCell.weight
+                    color: nameCell.folder ? Theme.textSecondary : nameCell.tone
+                }
+            }
             // Built only on a marked row (the seat's rule).
             Loader {
                 active: nameCell.marked

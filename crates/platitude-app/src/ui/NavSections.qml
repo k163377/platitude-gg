@@ -25,20 +25,30 @@ ColumnLayout {
     /// What the open branch row is saying under itself, and the lines themselves — for the runs alone
     /// (PGG_AUTO_ACT=nav-open). Asked of the row rather than of the model: the row is what a run has to find wired
     /// up. **The stand-in is asked first**: while it is the one on screen its own row is not (`HeadPinRow`).
+    /// **Three lists can hold the open row now** — the stand-in, BRANCHES and REMOTES — and one key names it
+    /// (`SidebarRowGestures.openKey`), so each of these asks them in turn and takes the first that answers.
     function openWords() {
         const said = headPin.openWords()
-        return said !== "" ? said : branchList.openWords()
+        if (said !== "")
+            return said
+        const branch = branchList.openWords()
+        return branch !== "" ? branch : remoteList.openWords()
     }
     function openFactsItem() {
-        const lines = headPin.openFactsItem()
-        return lines !== null ? lines : branchList.openFactsItem()
+        const pinned = headPin.openFactsItem()
+        if (pinned !== null)
+            return pinned
+        const branch = branchList.openFactsItem()
+        return branch !== null ? branch : remoteList.openFactsItem()
     }
     function openGeom() {
-        return branchList.openGeom()
+        return branchList.openRow() !== null ? branchList.openGeom() : remoteList.openGeom()
     }
-    /// Whether the open row is showing whole, lines included — asked of whichever of the two is the open one.
+    /// Whether the open row is showing whole, lines included — asked of whichever of the three is the open one.
     function openShown() {
-        return headPin.openFactsItem() !== null ? headPin.openShown() : branchList.openShown()
+        if (headPin.openFactsItem() !== null)
+            return headPin.openShown()
+        return branchList.openFactsItem() !== null ? branchList.openShown() : remoteList.openShown()
     }
     // Section expansion, read only (see above).
     required property bool expBranches
@@ -198,6 +208,11 @@ ColumnLayout {
         expanded: remoteHead.showsRows
         kindHint: "remote"
         gestures: sections.gestures
+        // These rows open under themselves the way the BRANCHES ones do, and what they open names a branch of that
+        // section — so the working copies' list is where half of it comes from here too
+        // (デザイン規約 §左メニューの所作).
+        offersFacts: true
+        worktreesModel: sections.worktreesModel
         remotesPacked: sections.repoTab.remoteNames
         markedRemote: sections.repoTab.pushDefault
         Layout.verticalStretchFactor: sections.sectionPull
