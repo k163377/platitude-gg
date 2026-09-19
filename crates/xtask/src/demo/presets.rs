@@ -23,7 +23,7 @@ use super::scale::{
 };
 use super::signing::{errsig, signed};
 use super::stack::{stack, stack_max};
-use super::tags::{manytags, tagonly, tags};
+use super::tags::{manytags, tagonly, tagremotes, tags};
 use super::worktrees::{
     carried, carried_clashing, tracked_elsewhere, worktree_detached, worktrees,
 };
@@ -189,6 +189,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "co-authors" => co_authors(&mut repo)?,
         "authorship" => authorship(&mut repo)?,
         "tags" => tags(&mut repo)?,
+        "tagremotes" => tagremotes(&mut repo)?,
         "manytags" => manytags(&mut repo)?,
         "tagonly" => tagonly(&mut repo)?,
         "stack" => stack(&mut repo)?,

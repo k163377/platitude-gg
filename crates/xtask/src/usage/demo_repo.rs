@@ -86,6 +86,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         co-authors  one, three and no co-authors, signed and not
         authorship  every way an author and a committer can be two
         tags      a tag in every state a remote can put it in (fetch first)
+        tagremotes
+                  the same states across two remotes: one name carried by
+                  both, one they disagree about, one only a fork has
+                  (nav-open-tag; fetch first)
         manytags  basic, with more tags than any pane can show at once
         tagonly   a commit no branch reaches, held by v1.1-kept alone, with
                   v1.0 on the trunk beside it: the only shape where taking
