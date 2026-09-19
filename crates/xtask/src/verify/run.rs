@@ -199,6 +199,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
     std::fs::write(&config, super::shim::global_seed(&opts.verb)).map_err(|e| e.to_string())?;
     println!("git config for this run: {}", config.display());
 
+    // Who was already running beside this run, so that what the app
+    // adds can be told from what was there
+    // (`ownership::give_back_claimed`). Taken here, which is the last
+    // moment before the app exists.
+    let beside = crate::reap::others_in_this_group();
+
     let ran = child::run_app(&child::Start {
         exe: &exe,
         shot_dir: &shot_dir,
@@ -213,31 +219,45 @@ pub fn run(args: &[String]) -> Result<(), String> {
         opts: &opts,
     })?;
     let verdict = outcome::judge(&opts, &ran, &config);
-    // A passing run tells the census what it showed, so the gate can pick
-    // this line by itself the next time one of those components changes
-    // (gate::census). Only a run somebody can type again is recorded, and
-    // only one whose page had stopped arriving writes its line — the rest
-    // add to it, having seen whichever rows the reads had brought.
-    if verdict.passed()
-        && let Some(line) = opts.census_line()
-        && let Some(names) = crate::gate::names_in(&ran.err_lines)
-    {
-        let page_settled = crate::gate::page_settled_in(&ran.err_lines);
-        match crate::gate::record(&root, &line, &names, page_settled) {
-            // The names the write moved, beside the count: the file's own
-            // diff is every line when a component came or went, and this
-            // is the run saying which name that was and whether the line
-            // it was about is the one that moved.
-            Ok((count, shift)) if page_settled => println!(
-                "census: {line} — {count} component(s) recorded{}",
-                shift.said_for(&line)
-            ),
-            Ok((count, shift)) => println!(
-                "census: {line} — {count} component(s), added to: the page was still arriving{}",
-                shift.said_for(&line)
-            ),
-            Err(why) => println!("census: not recorded ({why})"),
+    if verdict.passed() {
+        tell_the_census(&root, &opts, &ran);
+        // The scaffolding goes back where the run stood it up, and only
+        // on the road where nobody will want to look at it again
+        // (`ownership::give_back_claimed`). A failing run keeps its
+        // tree: in a container that volume is the only place the scene
+        // survives.
+        let gone = super::ownership::give_back_claimed(beside.as_deref());
+        if gone > 0 {
+            println!("demo repositories given back: {gone}");
         }
     }
     outcome::announce(&opts, &shot_dir, &ran, &verdict)
+}
+
+/// A passing run tells the census what it showed, so the gate can pick
+/// this line by itself the next time one of those components changes
+/// (`gate::census`). Only a run somebody can type again is recorded, and
+/// only one whose page had stopped arriving writes its line — the rest
+/// add to it, having seen whichever rows the reads had brought.
+fn tell_the_census(root: &std::path::Path, opts: &super::options::Options, ran: &child::Ran) {
+    let (Some(line), Some(names)) = (opts.census_line(), crate::gate::names_in(&ran.err_lines))
+    else {
+        return;
+    };
+    let page_settled = crate::gate::page_settled_in(&ran.err_lines);
+    match crate::gate::record(root, &line, &names, page_settled) {
+        // The names the write moved, beside the count: the file's own
+        // diff is every line when a component came or went, and this is
+        // the run saying which name that was and whether the line it was
+        // about is the one that moved.
+        Ok((count, shift)) if page_settled => println!(
+            "census: {line} — {count} component(s) recorded{}",
+            shift.said_for(&line)
+        ),
+        Ok((count, shift)) => println!(
+            "census: {line} — {count} component(s), added to: the page was still arriving{}",
+            shift.said_for(&line)
+        ),
+        Err(why) => println!("census: not recorded ({why})"),
+    }
 }

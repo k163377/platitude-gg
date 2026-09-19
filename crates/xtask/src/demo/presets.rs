@@ -76,6 +76,17 @@ fn root_for(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
     }
 }
 
+/// The roots this process claimed, in the order it claimed them.
+///
+/// **Only what [`claim_root`] made can be in here**, which is what makes
+/// the list safe to delete from: a tree somebody named with `--at` is
+/// theirs and never comes through here, and a template is not a run's
+/// leavings and is built at a fixed name rather than claimed
+/// (`super::template`). So the list is this run's own and nobody
+/// else's — including the other runs working in the same directory at
+/// the same time.
+static CLAIMED: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
 /// A directory of this run's own to build a demo repository in.
 ///
 /// **`pgg-demo` is one directory for the whole machine**, so the name
@@ -84,7 +95,17 @@ fn root_for(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
 /// concurrently, and two that share a root `git init` into each other.
 /// `claim_dir` makes `create_dir` say which run owns the answer.
 pub(crate) fn claim_root(stem: &str) -> Result<PathBuf, String> {
-    crate::verify::claim_dir(&base(), stem)
+    let root = crate::verify::claim_dir(&base(), stem)?;
+    if let Ok(mut claimed) = CLAIMED.lock() {
+        claimed.push(root.clone());
+    }
+    Ok(root)
+}
+
+/// What this process claimed under `pgg-demo`, for the one caller that
+/// takes its own away again (`verify::ownership::give_back_claimed`).
+pub(crate) fn claimed_roots() -> Vec<PathBuf> {
+    CLAIMED.lock().map(|held| held.clone()).unwrap_or_default()
 }
 
 /// The one directory the runs and the templates they copy share.

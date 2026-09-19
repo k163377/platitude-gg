@@ -103,6 +103,129 @@ pub(crate) fn own_group(command: &mut Command) {
 #[cfg(not(unix))]
 pub(crate) fn own_group(_command: &mut Command) {}
 
+/// Who, out of what this runner started, is still running — for a
+/// caller that must not take a directory away from a process still
+/// writing into it.
+///
+/// **Only unix has to ask.** On Windows an open handle makes a removal
+/// fail, so there the removal is itself the answer; here it is not, and
+/// a directory with a file open in it goes all the same. Where a unix
+/// has no answer implemented, this says so rather than "nobody".
+///
+/// **Read, not asked.** [`processes`] runs `ps`, and that `ps` is in
+/// this group and in its own listing — so the answer would name one
+/// process that is only the asking (measured: every passing run
+/// reported one still going). `/proc` costs no process at all.
+///
+/// **By group, not by parent.** A verified run's app is left in this
+/// runner's own group (`verify::child`), and so is everything it
+/// spawned: group membership is inherited, and it survives the
+/// re-parenting that follows the app's own exit. A walk by parent
+/// cannot be taken after the app has gone — the kernel re-points an
+/// orphan at init the moment its parent does, so the walk would find
+/// nothing and call that an answer.
+///
+/// **It errs towards saying somebody is there.** Started from a shell,
+/// this runner's group holds whatever else that pipeline put in it, and
+/// those count here too. A caller that keeps a directory it could have
+/// removed loses nothing but the sweep's time. Under a container the
+/// group is this run's alone, which is where the question matters.
+///
+/// `None` is "could not be found out", which is not "nobody".
+#[cfg(target_os = "linux")]
+pub(crate) fn others_in_this_group() -> Option<Vec<u32>> {
+    others_in_group_under(std::path::Path::new("/proc"))
+}
+
+/// [`others_in_this_group`] against a given `/proc`, which is what lets
+/// a test drive the reading itself — a listing that cannot be taken and
+/// a `stat` that cannot be made sense of are the two answers this has
+/// to get right, and neither can be arranged on the real one.
+///
+/// **A process that vanished is not a failure to read.** It was in the
+/// listing and gone by the read, which is the answer: it is not
+/// running. Anything else that goes wrong is, and takes the whole
+/// answer with it.
+#[cfg(target_os = "linux")]
+pub(crate) fn others_in_group_under(proc: &std::path::Path) -> Option<Vec<u32>> {
+    let me = std::process::id();
+    let Standing::In(mine) = standing_of(proc, me) else {
+        return None;
+    };
+    let mut others = Vec::new();
+    for entry in std::fs::read_dir(proc).ok()? {
+        // An error part way through a listing is not the end of it.
+        let entry = entry.ok()?;
+        let Ok(pid) = entry.file_name().to_string_lossy().parse::<u32>() else {
+            continue;
+        };
+        if pid == me {
+            continue;
+        }
+        match standing_of(proc, pid) {
+            Standing::In(group) if group == mine => others.push(pid),
+            Standing::In(_) | Standing::Over => {}
+            Standing::Unreadable => return None,
+        }
+    }
+    Some(others)
+}
+
+/// What `/proc/<pid>/stat` said about a process.
+#[cfg(target_os = "linux")]
+enum Standing {
+    /// Gone between the listing and the read, or waiting to be reaped.
+    /// Either way it runs no code and holds nothing open.
+    Over,
+    /// Running, in this group.
+    In(u32),
+    /// There, and not to be made sense of. **Not an empty answer** —
+    /// whoever asked must act as though somebody is running.
+    Unreadable,
+}
+
+#[cfg(target_os = "linux")]
+fn standing_of(proc: &std::path::Path, pid: u32) -> Standing {
+    let stat = match std::fs::read_to_string(proc.join(pid.to_string()).join("stat")) {
+        Ok(stat) => stat,
+        // The one failure that is an answer.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Standing::Over,
+        Err(_) => return Standing::Unreadable,
+    };
+    // Counted from the **last** `)`: the second field is the command, in
+    // brackets, and a command may hold spaces and brackets of its own.
+    let Some(after) = stat.rfind(')').map(|at| &stat[at + 1..]) else {
+        return Standing::Unreadable;
+    };
+    let mut fields = after.split_whitespace();
+    match (fields.next(), fields.next(), fields.next()) {
+        (Some("Z"), _, _) => Standing::Over,
+        (Some(_), Some(_), Some(group)) => match group.parse() {
+            Ok(group) => Standing::In(group),
+            Err(_) => Standing::Unreadable,
+        },
+        _ => Standing::Unreadable,
+    }
+}
+
+/// Nobody, because Windows asks the question by removing: a directory
+/// with a handle open in it refuses the removal.
+#[cfg(windows)]
+pub(crate) fn others_in_this_group() -> Option<Vec<u32>> {
+    Some(Vec::new())
+}
+
+/// **Not implemented here, so nobody may act on it.** A removal on
+/// macOS cannot refuse itself any more than on Linux, and there is no
+/// `/proc` to read instead — so this answers "could not be found out",
+/// and a caller that would have removed something keeps it. Nothing
+/// verifies on that machine yet (CLAUDE.md 現在のフェーズ); the first
+/// run that does fills this in, off `sysctl`'s `KERN_PROC`.
+#[cfg(not(any(target_os = "linux", windows)))]
+pub(crate) fn others_in_this_group() -> Option<Vec<u32>> {
+    None
+}
+
 /// Ends the step itself, which [`reap`] waits on afterwards either way.
 fn end_step(child: &mut Child) {
     if let Err(error) = child.kill() {

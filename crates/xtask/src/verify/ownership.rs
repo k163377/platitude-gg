@@ -160,10 +160,107 @@ pub(crate) fn keep(root: &Path) -> Result<(), String> {
     .map_err(|e| format!("could not mark {} as kept: {e}", root.display()))
 }
 
+/// Takes away the demo roots **this run** claimed, now that it has
+/// passed. Answers how many went.
+///
+/// **A run that passed has nothing left to look at.** What a person
+/// reads off a run is its pictures and its report, which are elsewhere
+/// (`keepsakes`, the board); the repository it built is scaffolding. A
+/// run that *failed* is the opposite — the tree it stopped on is the
+/// scene, and the container it ran in is gone, so the volume is the only
+/// place that scene survives ([failed-run forensics]). So this is called
+/// on the passing road only, and the sweeps that collect what failures
+/// leave behind stay exactly as they were ([`sweep_yesterdays_runs`] on
+/// the host, the preparation step's floor in the container).
+///
+/// **Four things it cannot reach**, and none of them by a guess about
+/// age or by reading the directory back:
+///
+/// * **Another run's roots.** The list is what *this process* claimed
+///   (`demo::claimed_roots`), and a claim is a `create_dir` that
+///   succeeded — so no name in it was ever anybody else's.
+/// * **A template.** Templates are built at a fixed name, not claimed,
+///   so they are not in the list at all.
+/// * **A tree somebody asked to keep.** [`KEEP`] is checked anyway: a
+///   root claimed by `demo-repo` is marked the moment it is built, and
+///   the rule reads better where the removing happens.
+/// * **A directory something is still writing into.** The app having
+///   exited says nothing about the git it spawned: on unix those are
+///   re-parented to init the instant it goes, and a directory with a
+///   file open in it is removed without complaint. So the question is
+///   asked outright — [`crate::reap::others_in_this_group`] — and
+///   **nothing is removed unless the answer is nobody**. On Windows the
+///   same question is answered by the removal itself, which an open
+///   handle refuses.
+pub(super) fn give_back_claimed(before: Option<&[u32]>) -> usize {
+    give_back(crate::demo::claimed_roots(), arrived_since(before))
+}
+
+/// Who is in this run's group now that was not there before the app
+/// started — which is the whole of what "the app left something
+/// running" can mean here.
+///
+/// **The group alone is the wrong question.** It holds whatever else
+/// this runner was started inside: under a container, the shell the
+/// command is wrapped in and its own children (measured — the plain
+/// question said two processes were running after every passing run,
+/// and the removal never happened). Taking the group before the app
+/// and again after leaves only what the app added.
+///
+/// A number handed out again between the two looks would be read as
+/// having been there all along. The two looks are a run apart and
+/// Linux hands numbers out in order, so that is not a second this
+/// costs a thought; it is written down because it is the one way this
+/// answer can be wrong in the unsafe direction.
+///
+/// `None` either side is "could not be found out", which is not
+/// "nobody".
+fn arrived_since(before: Option<&[u32]>) -> Option<Vec<u32>> {
+    let before = before?;
+    Some(
+        crate::reap::others_in_this_group()?
+            .into_iter()
+            .filter(|pid| !before.contains(pid))
+            .collect(),
+    )
+}
+
+/// [`give_back_claimed`] over what somebody hands in, which is the half
+/// a test can drive: the list the caller above reads is this process's
+/// own, and a test that emptied it would empty the other tests' too.
+fn give_back(roots: Vec<PathBuf>, others: Option<Vec<u32>>) -> usize {
+    match others {
+        Some(others) if others.is_empty() => {}
+        Some(others) => {
+            println!(
+                "demo repositories kept: {} process(es) this run started are still going",
+                others.len()
+            );
+            return 0;
+        }
+        None => {
+            println!("demo repositories kept: what is still running could not be read");
+            return 0;
+        }
+    }
+    let mut gone = 0;
+    for root in roots {
+        if root.join(KEEP).exists() {
+            continue;
+        }
+        if std::fs::remove_dir_all(&root).is_ok() {
+            gone += 1;
+        }
+    }
+    gone
+}
+
 /// Takes yesterday's run directories away, in the background. Nothing
-/// else ever does: every run claims a directory and leaves it, and the
-/// gate runs hundreds of them a day (measured: sixty thousand of them,
-/// six gigabytes, three days after the last sweep by hand). The gate
+/// else ever does for the ones a failure left: every run claims a
+/// directory, the passing ones give theirs back
+/// ([`give_back_claimed`]), and the gate runs hundreds of them a day
+/// (measured: sixty thousand of them, six gigabytes, three days after
+/// the last sweep by hand). The gate
 /// calls this on its way in; the thread is left to itself — a plan is
 /// half a second and the temp directory is seconds of reading — and a
 /// directory that will not go, or a sweep the process ends first, is the
@@ -486,5 +583,125 @@ mod tests {
 
         drop(outcomes);
         std::fs::remove_dir(target).expect("remove empty target directory");
+    }
+
+    /// **What a passing run gives back, and the one thing it does not.**
+    /// The roots are the run's own — a claim is a `create_dir` that
+    /// succeeded — so the only question left at the moment of removal is
+    /// whether somebody asked for one to be kept.
+    #[test]
+    fn a_passing_run_gives_back_its_roots_and_spares_a_marked_one() {
+        let base = std::env::temp_dir().join(format!(
+            "pgg-giveback-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let made = |leaf: &str| {
+            let dir = base.join(leaf);
+            std::fs::create_dir_all(&dir).expect("a root");
+            std::fs::write(dir.join("a.txt"), "x").expect("something in it");
+            dir
+        };
+        let scaffolding = made("basic-1-2-0");
+        let another = made("stashes-1-3-0");
+        let marked = made("kept-1-4-0");
+        super::keep(&marked).expect("the mark");
+
+        let roots = vec![scaffolding.clone(), another.clone(), marked.clone()];
+
+        // Something this run started is still going: nothing is taken.
+        assert_eq!(super::give_back(roots.clone(), Some(vec![4242])), 0);
+        assert!(scaffolding.exists(), "a root went while a process ran");
+        // And an answer nobody could read is not "nobody".
+        assert_eq!(super::give_back(roots.clone(), None), 0);
+        assert!(scaffolding.exists(), "a root went on an unread answer");
+
+        let gone = super::give_back(roots, Some(Vec::new()));
+
+        assert_eq!(gone, 2, "the count is what actually went");
+        assert!(!scaffolding.exists(), "a passing run's root was left");
+        assert!(!another.exists(), "a passing run's second root was left");
+        assert!(marked.exists(), "a tree somebody asked to keep was taken");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// **A reading that failed reaches the removal as a refusal.** The
+    /// two answers the real path has to get right are arranged on a
+    /// `/proc` of the test's own, because neither can be arranged on
+    /// the machine's: a process that vanished between the listing and
+    /// the read is not running and is passed over, and a `stat` that
+    /// cannot be made sense of is not an empty answer — it takes the
+    /// whole reading with it, and nothing is removed.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn a_reading_that_failed_keeps_the_roots() {
+        let base = std::env::temp_dir().join(format!(
+            "pgg-unreadable-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let root = base.join("basic-1-2-0");
+        std::fs::create_dir_all(&root).expect("a root to keep");
+
+        let fake = base.join("proc");
+        let me = std::process::id();
+        let stat_for = |pid: u32, line: &str| {
+            let dir = fake.join(pid.to_string());
+            std::fs::create_dir_all(&dir).expect("a process directory");
+            std::fs::write(dir.join("stat"), line).expect("its stat");
+        };
+        stat_for(me, &format!("{me} (xtask) R 1 {me} 0 0\n"));
+        // In the listing and gone by the read: no `stat` at all.
+        std::fs::create_dir_all(fake.join("4242")).expect("a process that went");
+
+        let seen = crate::reap::others_in_group_under(&fake).expect("a readable answer");
+        assert!(
+            seen.is_empty(),
+            "a process that had already gone was counted as running: {seen:?}"
+        );
+        assert_eq!(
+            super::give_back(vec![root.clone()], Some(seen)),
+            1,
+            "nothing was in the way and the root stayed"
+        );
+
+        // Now one that is there and says nothing this can read.
+        std::fs::create_dir_all(&root).expect("the root again");
+        stat_for(4243, "nonsense with no bracket\n");
+        assert!(
+            crate::reap::others_in_group_under(&fake).is_none(),
+            "a stat nobody could read was taken for an empty answer"
+        );
+        let kept = super::give_back(
+            vec![root.clone()],
+            crate::reap::others_in_group_under(&fake),
+        );
+        assert_eq!(kept, 0, "a root went on a reading that had failed");
+        assert!(root.exists(), "a root went on a reading that had failed");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// **A process that outlives the app is seen.** This is the whole of
+    /// what the removal rests on where a removal cannot refuse itself:
+    /// unix answers by group, so a child started here — which is in this
+    /// runner's group, as a verified run's app and its git are — has to
+    /// show up in the list.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn a_child_that_is_still_running_is_in_the_answer() {
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("a child that outlives the look");
+        let running = crate::reap::others_in_this_group().expect("the listing");
+        let seen = running.contains(&child.id());
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(
+            seen,
+            "a child of this run was not in {running:?} — a removal would have gone ahead"
+        );
     }
 }
