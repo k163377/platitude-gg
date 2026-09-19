@@ -270,6 +270,52 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
+    /// The reading this branch is measured against and cannot reach —
+    /// git's own `[gone]` (`BranchItem::upstream_gone`). Empty where the
+    /// branch tracks nothing, where what it tracks is here, and for every
+    /// section but the branches.
+    ///
+    /// **A name, not a flag**: it is what the line under a row says, and
+    /// the row that draws the same state from its own slot says it with
+    /// the same word (`models::nav::field` の `Role::Bucket`). Asked by
+    /// the rows that name somebody else's branch — a working copy's row
+    /// opens on the branch it holds, and says of it what the BRANCHES row
+    /// would (デザイン規約 §左メニューの所作).
+    #[qslot]
+    pub(super) fn upstream_gone_of(&self, name: String) -> String {
+        self.all
+            .branch_named(&name)
+            .map(|branch| branch.upstream_gone.as_str().to_string())
+            .unwrap_or_default()
+    }
+
+    /// How far the branch of this name stands from what it reads, as of
+    /// the last fetch — the pair its own row draws at its right edge
+    /// (`models::nav::field` の `Role::Ahead`). Zero where the branch is
+    /// level with its upstream, has none, or is not in this section.
+    ///
+    /// **Asked by the rows that name somebody else's branch**: a working
+    /// copy's row opens on the branch it holds and draws the same measure
+    /// beside the name (デザイン規約 §左メニューの所作). **A slot, where
+    /// the branch's own row has a role**: only the section holding the
+    /// readings can answer for a name, and the answer is read as the row
+    /// opens — a fetch landing while a hand rests there moves the branch's
+    /// own row and not this reading of it.
+    #[qslot]
+    pub(super) fn ahead_of(&self, name: String) -> i32 {
+        self.all
+            .branch_named(&name)
+            .map_or(0, |branch| super::field::counted(branch.ahead))
+    }
+
+    /// The other half of that pair — how far it is behind.
+    #[qslot]
+    pub(super) fn behind_of(&self, name: String) -> i32 {
+        self.all
+            .branch_named(&name)
+            .map_or(0, |branch| super::field::counted(branch.behind))
+    }
+
     /// The commit this branch's configured upstream stands on, hex —
     /// **the reference point `branch --delete` measures the tip against**
     /// (`BranchItem::upstream_oid`); empty where the branch has none or
