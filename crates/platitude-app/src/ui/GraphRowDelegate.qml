@@ -174,6 +174,30 @@ Item {
     }
 
     readonly property real labelsW: ListView.view ? ListView.view.labelWidth : Metrics.labelColW
+    /// What a copy's uncommitted row may spend on the message column: the whole of it, less the tick with its own
+    /// margin, the counts with theirs, and the layout's spacing between the five things standing in it. **Only that
+    /// row reads it** — it is the only one with five.
+    ///
+    /// **Measured off the row, not off the column that holds them.** A layout handed more than its cell holds takes
+    /// the room from nowhere — it keeps every child at its own width and runs over the end of the pane, words and
+    /// counts together (observed on the longest folder name in `--preset carried`) — and its own `width` grows with
+    /// them, so a ceiling read off that column is a ceiling that moves out of the way of what it is capping. The
+    /// three columns' widths are the view's, and none of them is anything to do with what is written in this row.
+    /// **Every term of the message column is in it**, the way `GraphPane.subjectTextX` counts the three in front of
+    /// the words: move one of those and this moves too.
+    readonly property real wipRoom:
+        rowItem.width - rowItem.labelsW - (ListView.view ? ListView.view.graphColWidth : 0)
+        - 2 * Theme.spaceSm - 2 * Theme.borderWidth - 5 * Theme.spaceXs - tallySeat.implicitWidth
+    /// And what is left of that for the copy's own name, once the words in front of it have theirs and the two
+    /// things between them have taken their seats: **the dot, which is two hairlines across** (`DotMark`), **and the
+    /// mark, which is a whole `iconSm` box** (the sentence is set at `fontMd`, where a box seat reads as the gap the
+    /// pane's own heading keeps), with a gap either side of the pair.
+    ///
+    /// **The words never cut** — they are the same fixed phrase on every one of these rows, and a sentence
+    /// that lost its end to a folder name would stop saying what the row is (規約 §未コミット行が名乗るもの). So the
+    /// whole of the overrun is the name's, which is the one thing here that keeps both of its ends when cut.
+    readonly property real carriedNameMax:
+        rowItem.wipRoom - wordsCut.implicitWidth - 2 * Theme.borderWidth - Theme.iconSm - 2 * Theme.spaceXs
 
     RowLayout {
         anchors.fill: parent
@@ -241,12 +265,14 @@ Item {
             // at one x (デザイン規約 §タイポグラフィ). **The stand-in cuts its own at the same x** (`GraphHeadPin`): one
             // commit's message keeps its length when its row steps aside for the stand-in.
             CutName {
-                // The uncommitted row's words are a fixed length, and the counts read as part of the same sentence: it
-                // keeps its own width so they sit right after it.
+                id: wordsCut
+                // The uncommitted row's words keep their own width, so the counts sit right after them and read as
+                // part of the same sentence (規約 §未コミット行が名乗るもの).
                 Layout.fillWidth: !rowItem.isWip
                 cutAt: "end"
                 // No total: the tallies beside it add up to exactly that number, and the pane's own heading says it as
-                // well (規約 §未コミット行が名乗るもの).
+                // well (規約 §未コミット行が名乗るもの). **The same words whosever tree it is** — whose comes after
+                // them, in the seat below.
                 text: rowItem.isWip ? qsTr("Uncommitted changes") : rowItem.subject
                 pixelSize: Theme.fontMd
                 // The commit the working tree is standing on writes its message in the branch's own blue — the same
@@ -255,6 +281,43 @@ Item {
                 color: rowItem.isWip ? Theme.textSecondary
                        : rowItem.isHead ? Theme.textLink
                        : Theme.textPrimary
+            }
+            // Whose tree the words are about, on the rows that are about somebody else's
+            // (デザイン規約 §未コミット行が名乗るもの). **A dot, not a preposition** — this is the device the window
+            // already separates a caption from its value with (`CarriedPane`, `DiffPaneHeader`), and the copy *is*
+            // that folder name, which is apposition: `in here` read as "in this place" rather than as the name of
+            // the copy called `here`. **And the mark is what says the name is a folder's**
+            // — the column of names beside it is full of refs, and a bare word in a sentence about a checkout looks
+            // like one of those (規約 §ref の種別). Same mark, same size and same three-part phrase as the pane this
+            // row opens, so a reader meets one spelling of a working copy's name.
+            //
+            // Built only on the rows that wear it, for the reason the counts below are: a canvas per graph row is
+            // heap the rows are measured by (rules-refs/app-ui.md, the Loader rule).
+            Loader {
+                active: rowItem.carried
+                visible: rowItem.carried
+                sourceComponent: RowLayout {
+                    spacing: Theme.spaceXs
+                    DotMark { tint: Theme.textSecondary }
+                    NavIcon {
+                        kind: "tree"
+                        // The ink every mark in this app takes, the padlock on a chip included: what a mark says is
+                        // its shape (規約 §ref の種別).
+                        tint: Theme.textSecondary
+                        Layout.preferredWidth: Theme.iconSm
+                        Layout.preferredHeight: Theme.iconSm
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    // Cut in the middle, the way this copy's name is cut everywhere else it is shown
+                    // (規約 §別の作業コピーを読む): a folder can be called anything, and the ends are what one is
+                    // told apart by. The whole of it is in the pane this row opens.
+                    CutName {
+                        Layout.maximumWidth: rowItem.carriedNameMax
+                        text: rowItem.carriedName
+                        pixelSize: Theme.fontMd
+                        color: Theme.textSecondary
+                    }
+                }
             }
             // **Only on the row they belong to.** A nested layout defaults to `Layout.fillWidth: true`, so left up on
             // every commit row this takes a share of the free space even with all six counts at zero and nothing drawn
@@ -265,6 +328,7 @@ Item {
             // which is heap the graph's rows are measured by (rules-refs/app-ui.md, the Loader rule). Invisible while
             // inactive as well: a layout skips an invisible item, and an empty loader would still take the spacing.
             Loader {
+                id: tallySeat
                 active: rowItem.isWip
                 visible: rowItem.isWip
                 Layout.leftMargin: Theme.spaceSm

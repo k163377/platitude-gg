@@ -290,17 +290,13 @@ impl CarriedRows {
             if wip.head != anchor {
                 return true;
             }
+            // **No chip.** Whose row this is belongs to the words on it
+            // (デザイン規約 §未コミット行が名乗るもの) — a chip in the
+            // ref column would be a name in the column of names that
+            // names no ref, and the row already has a sentence to carry
+            // it. The copy rides on the row itself, for the words and
+            // for the pane the row opens.
             let mut row = wip_row(&wip.head, &[], builder);
-            row.labels = vec![RefLabel {
-                text: wip.name.clone(),
-                kind: LabelKind::Worktree,
-                has_remote: false,
-                is_head: false,
-                here: true,
-                remote: String::new(),
-                held_elsewhere: false,
-                locked: false,
-            }];
             row.carried = Some(wip.clone());
             out.push(row);
             false
