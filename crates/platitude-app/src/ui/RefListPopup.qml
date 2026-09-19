@@ -28,6 +28,11 @@ AppCard {
 
     /// Chip records (kind + flags + name, see encode.rs), as shown.
     property var records: []
+    /// One entry per record: the ref this one reads, or the one that reads it, where that counterpart is not a row of
+    /// this card — `{mark, markTint, text, tone, ahead, behind}`, or null where the record has no counterpart to
+    /// name. Worked out as the card opens (`RowHoverHost.openRefList`): the card is measured over its rows in that
+    /// same turn, so a fact arriving later would be one the card has no room for.
+    property var mates: []
     /// The branch the working tree is on; that one leads nowhere.
     property string currentBranch: ""
     /// One was double-clicked: that is where the reader is going. The whole record, so its kind travels with it.
@@ -275,6 +280,8 @@ AppCard {
             delegate: Rectangle {
                 id: refRow
                 required property string modelData
+                /// Which record this row draws — what its counterpart is looked up by (`refList.mates`).
+                required property int index
                 // The row now holds a different ref: whatever was resting on the one before it is not resting on
                 // this. A recycled delegate is the same object with new data (`AppListView.reuseItems`), and the
                 // wash is written, so nothing else would take it off.
@@ -316,9 +323,13 @@ AppCard {
                 function layOutNow() {
                     rowChip.layOutNow()
                 }
-
                 /// What the reading's remote costs this row: its own ink and the gap that keeps it off the name.
                 readonly property real whoseRoom: whose.visible ? whose.width + Theme.spaceSm : 0
+                /// The counterpart this row names under itself, or null where it has none (`refList.mates`). Drawn
+                /// inside the chip's own frame (`RefChip.mate`), which is what makes the chip taller here.
+                readonly property var mate:
+                    refRow.index >= 0 && refRow.index < refList.mates.length
+                        ? refList.mates[refRow.index] : null
                 /// What is left for the chip. **The page while the card is being measured, the card itself once it
                 /// has a width.** The measuring pass is where the card decides how wide to be, so the rows it reads
                 /// there ask for everything the page leaves them (`refList.chipRoom`) — but a row built after it, one
@@ -340,7 +351,8 @@ AppCard {
                 // and a wider one would reach past the divider into the lanes).
                 implicitWidth: Theme.spaceXs + rowChip.width + refRow.whoseRoom
                 width: rows.width
-                // The chip sets the height, so a wrapped name makes its own row taller and leaves the others alone.
+                // The chip sets the height, so a wrapped name — or one carrying the line its reading opens under it
+                // — makes its own row taller and leaves the others alone.
                 height: rowChip.height + 2 * refList.chipInset
                 radius: Theme.radiusSm
                 color: refRow.lit ? Theme.bgHover : "transparent"
@@ -362,6 +374,8 @@ AppCard {
                     // the one place the name is shown in order to be read (規約 §hover のツールチップ).
                     wrapped: true
                     maxWidth: refRow.chipRoom
+                    // What this name reads, or what reads it, in the same frame under the name (`RefChip.mate`).
+                    mate: refRow.mate
                 }
                 // Whose reading this is. A tag has no namespace to say it in the way `origin/main` does, and a
                 // drifted one puts the same bare name on two rows — this card is where the two meet, so it is where

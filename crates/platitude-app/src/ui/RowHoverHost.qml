@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import platitude
 import platitude.ui
 
 // The two things a row puts under a resting pointer — the card of its own
@@ -22,6 +23,12 @@ Item {
     required property GraphPane graphPane
     /// The branch the working tree is on; that one leads nowhere.
     required property string currentBranch
+    /// The two sections that answer for a reading: which remote a branch
+    /// is measured against and how far it stands from it, and which
+    /// branch reads a remote-tracking ref. Owned by the page, and the
+    /// same pair the left panel's rows ask (`NavFacts`).
+    required property var branchesModel
+    required property var remotesModel
     /// A ref menu is standing on one of the list's rows — see the settle
     /// timer below on why that keeps the list up.
     required property bool menuStanding
@@ -182,6 +189,7 @@ Item {
         // — it would be drawn over the list the chip is opening.
         host.closeRowCard()
         refList.records = records
+        refList.mates = host.matesFor(records)
         // At least as wide as the chip it is covering (see the property).
         refList.minRowWidth = anchor.width
         // What is left of the page from the chip's own left edge, less
@@ -215,6 +223,63 @@ Item {
         host.refListWanted = true
         host.refListAnchor = anchor
         refList.open()
+    }
+    /// What each of the names on this commit reads, or is read
+    /// by — one entry per record, null where there is nothing to name.
+    ///
+    /// **Asked as the card opens** (デザイン規約 §行が読む答えはどこから
+    /// 来るか): the card is measured over its rows in that same turn, so
+    /// an answer landing after it is one the card has no room for.
+    function matesFor(records) {
+        const here = ({})
+        for (let i = 0; i < records.length; ++i)
+            here[GitFacts.recordName(records[i])] = 1
+        const out = []
+        for (let j = 0; j < records.length; ++j)
+            out.push(host.mateOf(records[j], here))
+        return out
+    }
+    /// And the one line a single record opens under itself — **the same
+    /// line the left panel's rows open**, drawn from the same table
+    /// (`NavFacts`), so the two places cannot come to say one relation
+    /// two ways.
+    ///
+    /// **A counterpart this commit already carries is a row of this
+    /// card** — standing on one commit is what being level means, and a
+    /// line naming it would write the same name twice in one card.
+    ///
+    /// **The working copy holding the branch has no line here**: the
+    /// chip's own frame is already green for it (デザイン規約 §ref の種別),
+    /// where a panel row has no colour of its own to say it with.
+    function mateOf(record, here) {
+        const kind = record[0]
+        const name = GitFacts.recordName(record)
+        if (kind === "L") {
+            const gone = host.branchesModel.upstreamGoneOf(name)
+            const reads = gone !== ""
+                        ? gone : host.branchesModel.upstreamOf(name)
+            if (reads === "" || (gone === "" && here[reads] === 1))
+                return null
+            const line = NavFacts.readingLine(
+                { "upstream": reads, "gone": gone !== "" })
+            // The measure is the branch's, and the branch here is the
+            // name over this line — so the chip draws it there
+            // (`RefChip.trackOnName`), the way the panel's own row does.
+            line.ahead = host.branchesModel.aheadOf(name)
+            line.behind = host.branchesModel.behindOf(name)
+            return line
+        }
+        if (kind === "R") {
+            const local = host.remotesModel.trackedBy(name)
+            if (local === "" || here[local] === 1)
+                return null
+            // This line names the branch, so the measure rides it.
+            return NavFacts.branchLine(
+                local,
+                { "ahead": host.branchesModel.aheadOf(local),
+                  "behind": host.branchesModel.behindOf(local) })
+        }
+        return null
     }
     function closeRefListUnlessEntered() {
         host.refListWanted = false

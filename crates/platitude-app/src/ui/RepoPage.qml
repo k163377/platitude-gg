@@ -1471,6 +1471,8 @@ FocusScope {
         id: rowHost
         graphPane: graphPane
         currentBranch: workTree.branch
+        branchesModel: branchesModel
+        remotesModel: remotesModel
         menuStanding: commitMenuSeat.item !== null && commitMenuSeat.item.opened
         hoverBlocked: page.menuStanding
         onRecordActivated: record => page.activateRecord(record)
