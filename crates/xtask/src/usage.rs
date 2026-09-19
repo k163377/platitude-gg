@@ -381,6 +381,24 @@ const TAIL: &str = "  shipped [--no-build]
       lock file each, held open by the process: a lock nobody holds is a
       note whoever meets it clears, whatever became of the process.
 
+  footprint [--settle <seconds>] <command…>
+      Runs the command and records, on one time axis, what the host has
+      left, what the WSL VM says it is using, which containers stood
+      before and after, and which processes inside the VM did the
+      reading. The samplers stay up for --settle seconds after the
+      command (60 by default), because what a run leaves behind is not
+      the last tick of it.
+        cargo xtask footprint --settle 300 gate --all --fresh
+      For the question repeating a gate raises: whether the VM grows and
+      what kind of memory grew. Neither side answers it alone —
+      `vmmemWSL`'s working set is what Windows has lost, /proc/meminfo
+      inside the distro is what Linux thinks it holds, and memory is not
+      namespaced, so that file is the whole VM and a sum over docker
+      stats is not a substitute. Judge by MemAvailable: MemFree alone
+      cannot tell a cache that would be given back from memory that is
+      gone. The rows are kept under target/footprint/<run>/ and nothing
+      sweeps them.
+
   budget [--dir <tree>]
       What the machine's one budget is doing: how much of it the running
       units hold, the queue behind them in the order they will be handed

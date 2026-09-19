@@ -24,6 +24,7 @@ pub(crate) fn all() -> Vec<&'static Command> {
         crate::seats::COMMANDS,
         crate::shots::COMMANDS,
         crate::still::COMMANDS,
+        crate::footprint::COMMANDS,
         crate::budget::COMMANDS,
         crate::land::COMMANDS,
         crate::gui::COMMANDS,

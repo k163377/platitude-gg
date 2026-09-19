@@ -11,6 +11,7 @@ demo.repo
 deny.policy
 docs.check
 docs.sync
+footprint.watch
 gate.daily
 gate.deps
 gate.full
