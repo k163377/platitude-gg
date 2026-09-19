@@ -40,7 +40,7 @@ impl RepoSession {
     ///
     /// Called from inside the write's own task, so the write it speaks
     /// for is the one the queue is serving ([`Self::running_write`]).
-    fn note_landing(&self, landing: integrate::Landing) {
+    pub(super) fn note_landing(&self, landing: integrate::Landing) {
         if landing != integrate::Landing::Stopped {
             return;
         }

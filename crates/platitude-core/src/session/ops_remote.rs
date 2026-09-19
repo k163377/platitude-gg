@@ -26,6 +26,30 @@ impl RepoSession {
         )
     }
 
+    /// `git pull`: the branch the working tree is on and its upstream.
+    ///
+    /// Refreshed as a write that moves history ([`AfterWrite::Graph`]):
+    /// it is a fetch and an integration in one command, and the near half
+    /// lands on this copy's branch, its index and its working tree.
+    ///
+    /// **The stop is not a failure**, the same as the merge's and the
+    /// rebase's: git leaves the operation standing with its markers and
+    /// the conflicted rows, and the way on is the exit card
+    /// (デザイン規約 §進行中の操作から出る).
+    pub fn pull(self: &Arc<Self>) -> Option<OperationId> {
+        let timeout = self.network_timeout();
+        let session = Arc::clone(self);
+        self.write(
+            OperationKind::Pull,
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                let landing = remote::pull(&exec, &repo.workdir, timeout, &cancel).await?;
+                session.note_landing(landing);
+                Ok(())
+            },
+        )
+    }
+
     /// `git push` for one branch.
     pub fn push(self: &Arc<Self>, spec: remote::PushSpec) -> Option<OperationId> {
         let timeout = self.network_timeout();

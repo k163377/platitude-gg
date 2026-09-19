@@ -16,6 +16,7 @@ mod clone;
 mod fetch;
 mod list;
 mod marks;
+mod pull;
 mod push;
 mod refusal;
 mod standing;
@@ -28,6 +29,7 @@ pub use self::list::{Remote, Remotes, add, list, read, set_url};
 pub use self::marks::{
     PushDefault, PushMarks, clear_push_default, push_default, push_marks, set_push_default,
 };
+pub use self::pull::pull;
 pub use self::push::{PushForce, PushSpec, plan_current_push, plan_publish, push};
 pub use self::standing::{PushStanding, push_standing, push_target};
 pub use self::tags::{RemoteTag, delete_remote_tag, list_tags, parse_ls_remote_tags, push_tag};

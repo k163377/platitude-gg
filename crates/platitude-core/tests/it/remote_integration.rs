@@ -9,6 +9,7 @@ use crate::support::exec::env;
 use crate::support::remote::origin_and_clone;
 use platitude_core::GitError;
 use platitude_core::commit;
+use platitude_core::integrate::Landing;
 use platitude_core::remote::{self, PushForce, PushSpec};
 use platitude_core::report::ReportKind;
 
@@ -814,5 +815,135 @@ async fn a_push_that_is_only_out_of_date_reports_gits_own_advice() {
         !report.reason.contains("hint:"),
         "git's framing comes off the way the far side's does: {}",
         report.reason
+    );
+}
+
+/// A second working clone of the same bare `origin`, with a commit of
+/// its own already pushed: the far side that has moved on.
+fn origin_that_moved_on(bare: &TestRepo, file: &str, message: &str) -> TestRepo {
+    let mut other = TestRepo::init();
+    other.git(&["remote", "add", "origin", &bare.file_url()]);
+    other.git(&["fetch", "origin"]);
+    other.git(&["switch", "--force-create", "main", "origin/main"]);
+    other.commit_file(file, "far side\n", message);
+    other.git(&["push", "origin", "main"]);
+    other
+}
+
+#[tokio::test]
+async fn a_pull_brings_the_upstream_in_and_moves_the_branch() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+    let _far = origin_that_moved_on(&bare, "b.txt", "over there");
+
+    assert_eq!(
+        remote::pull(&exec, &work.path, NET, &cancel)
+            .await
+            .expect("pull"),
+        Landing::Done
+    );
+    assert_eq!(
+        work.git(&["log", "-1", "--format=%s", "main"]),
+        "over there",
+        "the branch is on what the far side holds"
+    );
+    assert_eq!(
+        work.git(&["log", "-1", "--format=%s", "origin/main"]),
+        "over there",
+        "and the reading of the remote came down with it"
+    );
+}
+
+/// Two lines that have grown apart, with the way to reconcile them
+/// written down: whichever way that is, the stop is not a failure — the
+/// same landing the merge and the rebase come to rest on.
+#[tokio::test]
+async fn a_pull_that_conflicts_stops_with_the_operation_standing() {
+    for (reconcile, marker) in [("false", "MERGE_HEAD"), ("true", "rebase-merge")] {
+        let (bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+        work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+        work.git(&["config", "pull.rebase", reconcile]);
+        let _far = origin_that_moved_on(&bare, "a.txt", "their line");
+        work.commit_file("a.txt", "our line\n", "ours");
+
+        assert_eq!(
+            remote::pull(&exec, &work.path, NET, &cancel)
+                .await
+                .expect("a conflict is an answer, not a failure"),
+            Landing::Stopped,
+            "pull.rebase={reconcile}"
+        );
+        assert!(
+            work.path.join(".git").join(marker).exists(),
+            "git left the {marker} standing to be finished"
+        );
+    }
+}
+
+/// **git refuses a divergence it has no orders for** — `pull.rebase` and
+/// `pull.ff` unset, both sides holding commits of their own: exit 128
+/// with nothing started (measured, 2.55). Delegating means this reaches
+/// the reader as git's own words, hints and all
+/// (デザイン規約 §git が言ったことを読む場所), which is where the setting
+/// that answers it is named.
+#[tokio::test]
+async fn a_divergence_git_has_no_orders_for_is_a_failure() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+    let _far = origin_that_moved_on(&bare, "a.txt", "their line");
+    work.commit_file("a.txt", "our line\n", "ours");
+
+    let err = remote::pull(&exec, &work.path, NET, &cancel)
+        .await
+        .expect_err("git will not choose between merging and rebasing");
+    let GitError::Failed { code, stderr, .. } = &err else {
+        panic!("the refusal is git's own: {err}");
+    };
+    assert_eq!(*code, 128);
+    assert!(
+        stderr.contains("divergent branches"),
+        "git says what it needs: {stderr}"
+    );
+    assert!(
+        !work.path.join(".git").join("MERGE_HEAD").exists(),
+        "and nothing was started, so this is the failure it reads as"
+    );
+}
+
+/// And the refusals stay the failures they read as: both exit 1 with
+/// nothing standing (measured, 2.55), which is what tells them apart
+/// from the stop above.
+#[tokio::test]
+async fn a_pull_with_nothing_to_pull_from_is_a_failure() {
+    let (_bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    work.git(&["switch", "--create", "solo"]);
+
+    let err = remote::pull(&exec, &work.path, NET, &cancel)
+        .await
+        .expect_err("a branch with no tracking information has nowhere to go");
+    assert!(
+        matches!(err, GitError::Failed { code: 1, .. }),
+        "git spends 1 on it: {err}"
+    );
+}
+
+#[tokio::test]
+async fn a_pull_over_changes_it_would_write_on_is_a_failure() {
+    let (bare, mut work) = origin_and_clone();
+    let (exec, cancel) = env();
+    work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+    let _far = origin_that_moved_on(&bare, "a.txt", "their line");
+    work.write_file("a.txt", "uncommitted\n");
+
+    remote::pull(&exec, &work.path, NET, &cancel)
+        .await
+        .expect_err("git will not write over what is not committed");
+    assert!(
+        !work.git_ok(&["rev-parse", "--verify", "-q", "MERGE_HEAD"]),
+        "and it left nothing standing, so the words are the whole answer"
     );
 }

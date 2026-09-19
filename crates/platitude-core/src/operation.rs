@@ -81,6 +81,10 @@ pub enum OperationKind {
     Tag,
     Push,
     Fetch,
+    /// `git pull`: one command that reaches the network and then moves
+    /// this copy's own branch, so it is supervised as a remote write and
+    /// ordered as a local one.
+    Pull,
     Remote,
     Merge,
     Rebase,
@@ -128,6 +132,7 @@ impl OperationKind {
             Self::Tag | Self::DeleteTagEverywhere => "tag",
             Self::Push => "push",
             Self::Fetch => "fetch",
+            Self::Pull => "pull",
             Self::Remote => "remote",
             Self::Merge => "merge",
             Self::Rebase => "rebase",
@@ -170,9 +175,11 @@ impl OperationKind {
     #[must_use]
     pub fn lane(self) -> Lane {
         match self {
-            Self::Push | Self::Fetch | Self::DeleteBranchEverywhere | Self::DeleteTagEverywhere => {
-                Lane::Remote
-            }
+            Self::Push
+            | Self::Fetch
+            | Self::Pull
+            | Self::DeleteBranchEverywhere
+            | Self::DeleteTagEverywhere => Lane::Remote,
             Self::AutoFetch | Self::OpenFetch => Lane::UnaskedFetch,
             Self::Stage
             | Self::Unstage
@@ -223,7 +230,8 @@ impl OperationKind {
     pub fn writes_here(self) -> bool {
         match self {
             Self::Push | Self::Fetch | Self::AutoFetch | Self::OpenFetch => false,
-            Self::DeleteBranchEverywhere
+            Self::Pull
+            | Self::DeleteBranchEverywhere
             | Self::DeleteTagEverywhere
             | Self::Stage
             | Self::Unstage
@@ -259,7 +267,10 @@ impl OperationKind {
     /// on disk for while they run. Both halves of that matter: the poll
     /// is let through under these so the badge can count the steps out
     /// (`RepoSession::refresh_poll`), and the screen holds its write
-    /// doors down for as long as one is out. The three one-commit edits
+    /// doors down for as long as one is out. A pull is in the set because
+    /// it brings the far side in by one of the two already here —
+    /// `pull.rebase` makes it a rebase and anything else a merge — and
+    /// stops where they stop. The three one-commit edits
     /// are in the set because each is a rebase underneath
     /// (`sequencer::plan_edit` + `run_plan`), so a squash near the root
     /// replays everything above it — the same wait under a shorter name.
@@ -270,7 +281,8 @@ impl OperationKind {
     pub fn replays_history(self) -> bool {
         matches!(
             self,
-            Self::Merge
+            Self::Pull
+                | Self::Merge
                 | Self::Rebase
                 | Self::Squash
                 | Self::Drop
@@ -319,6 +331,7 @@ mod tests {
     #[test]
     fn the_writes_that_replay_are_the_ones_a_range_can_make_long() {
         for kind in [
+            OperationKind::Pull,
             OperationKind::Merge,
             OperationKind::Rebase,
             OperationKind::Squash,
@@ -366,6 +379,7 @@ mod tests {
         for kind in [
             OperationKind::Push,
             OperationKind::Fetch,
+            OperationKind::Pull,
             OperationKind::DeleteBranchEverywhere,
             OperationKind::DeleteTagEverywhere,
         ] {
@@ -418,6 +432,18 @@ mod tests {
         assert_eq!(OperationKind::DeleteTagEverywhere.label(), "tag");
         assert_eq!(OperationKind::Branch.lane(), Lane::Local);
         assert_eq!(OperationKind::DeleteBranchEverywhere.lane(), Lane::Remote);
+    }
+
+    /// A pull is supervised by the far end and ordered by the working
+    /// tree: the one command whose two halves are on opposite sides of
+    /// that line, where the fetches are wholly on one and the merge
+    /// wholly on the other.
+    #[test]
+    fn a_pull_runs_on_the_remote_lane_and_takes_its_place_in_the_tree() {
+        assert_eq!(OperationKind::Pull.lane(), Lane::Remote);
+        assert!(OperationKind::Pull.writes_here());
+        assert!(!OperationKind::Fetch.writes_here());
+        assert_eq!(OperationKind::Merge.lane(), Lane::Local);
     }
 
     /// Ids are handed out in acceptance order and never repeat within a

@@ -4,7 +4,7 @@ use super::*;
 /// cases below bend one at a time.
 fn offers_on(kind: RefKind, full: &str) -> RefMenuOffers {
     ref_menu(
-        kind, full, "abc123", true, 0, "main", false, "", 0, "", "", false, "origin", "here",
+        kind, full, "abc123", true, 0, "main", false, "", 0, "", "", false, "origin", "here", "",
     )
 }
 
@@ -25,6 +25,7 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
         false,
         "origin",
         "here",
+        "",
     );
     assert_eq!(
         offers,
@@ -33,6 +34,9 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
             switch_asks: false,
             branch_here: true,
             integrate_from: true,
+            // A branch nobody is standing on is not a pull's subject:
+            // git pulls into the branch it is run on.
+            pull: false,
             delete: true,
             delete_remote: true,
             // A branch goes out through the toolbar, and the tag rows
@@ -82,6 +86,7 @@ fn there_is_nothing_to_be_measured_against_without_a_remote() {
         false,
         "",
         "here",
+        "",
     );
     assert!(!offers.set_upstream, "no remote is no question to ask");
     let busy = ref_menu(
@@ -99,6 +104,7 @@ fn there_is_nothing_to_be_measured_against_without_a_remote() {
         false,
         "origin",
         "here",
+        "",
     );
     assert!(!busy.set_upstream, "another git is still running");
 }
@@ -111,6 +117,91 @@ fn the_current_branch_keeps_its_rows_but_moves_and_deletes_nowhere() {
     assert!(offers.on_current_branch);
     assert!(!offers.integrate_from, "nothing of itself to bring in");
     assert!(offers.branch_here, "where a branch is most often started");
+}
+
+/// The same inputs as [`offers_on`], with the working tree standing on
+/// `main` and tracking whatever `upstream` names.
+fn offers_tracked(kind: RefKind, full: &str, upstream: &str) -> RefMenuOffers {
+    ref_menu(
+        kind, full, "abc123", true, 0, "main", false, "", 0, "", "", false, "origin", "here",
+        upstream,
+    )
+}
+
+#[test]
+fn a_pull_is_offered_on_the_two_ends_of_the_trees_own_comparison() {
+    assert!(
+        offers_tracked(RefKind::Branch, "main", "origin/main").pull,
+        "the branch the tree is on"
+    );
+    assert!(
+        offers_tracked(RefKind::Remote, "origin/main", "origin/main").pull,
+        "and the upstream it is measured against"
+    );
+    assert!(
+        !offers_tracked(RefKind::Remote, "origin/feat", "origin/main").pull,
+        "a remote nothing here tracks would move a branch this row does not name"
+    );
+    assert!(
+        !offers_tracked(RefKind::Branch, "main", "").pull,
+        "git turns a plain pull down with no tracking information"
+    );
+    assert!(
+        !offers_tracked(RefKind::Branch, "feat", "origin/main").pull,
+        "a pull moves the branch it is run on, not the row it was asked from"
+    );
+    for kind in [RefKind::Tag, RefKind::Stash] {
+        assert!(
+            !offers_tracked(kind, "v1.0", "origin/main").pull,
+            "{kind:?} is no branch's upstream"
+        );
+    }
+    assert_eq!(
+        offers_tracked(RefKind::Remote, "origin/main", "origin/main").words(),
+        "switch branch-here integrate pull delete"
+    );
+}
+
+/// The upstream's own row, with one of the three things that hold a
+/// write back bent at a time.
+fn pull_on_the_upstream(busy: i32, op_text: &str, detached: bool) -> RefMenuOffers {
+    ref_menu(
+        RefKind::Remote,
+        "origin/main",
+        "abc123",
+        true,
+        busy,
+        if detached { "" } else { "main" },
+        detached,
+        op_text,
+        0,
+        "",
+        "",
+        false,
+        "origin",
+        "here",
+        "origin/main",
+    )
+}
+
+#[test]
+fn a_pull_asks_the_same_standing_the_rows_that_integrate_ask() {
+    assert!(
+        pull_on_the_upstream(0, "", false).pull,
+        "with nothing in the way it is on offer"
+    );
+    assert!(
+        !pull_on_the_upstream(1, "", false).pull,
+        "another git is still running"
+    );
+    assert!(
+        !pull_on_the_upstream(0, "REBASE 1/3", false).pull,
+        "an operation is standing in the way"
+    );
+    assert!(
+        !pull_on_the_upstream(0, "", true).pull,
+        "detached there is no branch to pull into"
+    );
 }
 
 #[test]
@@ -130,6 +221,7 @@ fn a_branch_out_in_another_copy_keeps_switch_but_it_asks() {
         false,
         "origin",
         "here",
+        "",
     );
     assert!(offers.switch_to, "the press goes through to the question");
     assert!(offers.switch_asks);
@@ -155,6 +247,7 @@ fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
         false,
         "origin",
         "here",
+        "",
     );
     assert!(offers.delete);
     assert!(
@@ -185,6 +278,7 @@ fn a_drifted_reading_keeps_the_local_delete_and_loses_the_remote_one() {
         true,
         "origin",
         "here",
+        "",
     );
     assert!(drifted.delete, "the branch itself is standing right here");
     assert!(!drifted.delete_remote);
@@ -211,6 +305,7 @@ fn a_standing_operation_asks_and_holds_back_new_history_but_not_deletes() {
         false,
         "origin",
         "here",
+        "",
     );
     assert!(offers.switch_asks);
     assert!(!offers.branch_here);
@@ -235,6 +330,7 @@ fn conflicts_alone_make_the_move_ask() {
         false,
         "origin",
         "here",
+        "",
     );
     assert!(offers.switch_asks);
     assert!(offers.branch_here, "conflicts gate moves, not new branches");
@@ -257,6 +353,7 @@ fn a_running_command_holds_back_every_write_but_not_the_switch() {
         false,
         "origin",
         "here",
+        "",
     );
     assert!(offers.switch_to);
     assert!(!offers.branch_here);
@@ -282,6 +379,7 @@ fn detached_or_unborn_has_no_branch_to_integrate_into() {
         false,
         "origin",
         "here",
+        "",
     );
     assert!(!detached.integrate_from);
     assert!(detached.switch_to, "the way back out of detached");
@@ -300,6 +398,7 @@ fn detached_or_unborn_has_no_branch_to_integrate_into() {
         false,
         "origin",
         "here",
+        "",
     );
     assert!(!unborn.integrate_from);
 }
@@ -330,6 +429,7 @@ fn tag_offers(sides: &str, default_remote: &str, busy: i32) -> RefMenuOffers {
         false,
         default_remote,
         sides,
+        "",
     )
 }
 
@@ -342,7 +442,7 @@ fn only_a_tag_is_pushed_from_this_menu_and_only_with_a_remote_to_send_it_to() {
         assert!(
             !ref_menu(
                 kind, "feat", "abc123", true, 0, "main", false, "", 0, "", "", false, "origin",
-                "here"
+                "here", ""
             )
             .push_tag,
             "a branch goes out through the toolbar; a stash goes nowhere"
@@ -413,6 +513,7 @@ fn a_tag_the_remote_has_elsewhere_loses_both_rows_that_reach_it() {
         true,
         "origin",
         "both",
+        "",
     );
     assert!(drifted.delete);
     assert!(drifted.push_tag);
@@ -464,6 +565,7 @@ fn a_stopped_operation_does_not_hold_a_tag_back() {
         false,
         "origin",
         "both",
+        "",
     );
     assert!(offers.push_tag);
     assert!(offers.delete_remote_tag);

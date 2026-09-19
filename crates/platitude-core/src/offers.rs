@@ -106,6 +106,23 @@ pub struct RefMenuOffers {
     /// branch the sentence's subject: detached or unborn there is nothing
     /// to move, and the branch itself is nothing to bring in.
     pub integrate_from: bool,
+    /// `git pull` — the branch the working tree is on, brought in line
+    /// with its upstream in one command.
+    ///
+    /// **Two rows, one command, and it is always the same one**: the
+    /// branch the tree is on, and the remote-tracking ref that is that
+    /// branch's upstream — the two ends of the one comparison the window
+    /// is already drawing (ahead / behind). Nothing else takes it: a
+    /// pull moves the branch it is *run on*, so a remote-tracking ref
+    /// somebody else's branch tracks would move a branch the row does
+    /// not name (デザイン規約 §取り込んで合流させる — bringing *that* in
+    /// is what merge and rebase are for).
+    ///
+    /// **The upstream has to be there.** git turns a plain pull down for
+    /// a branch with no tracking information (measured, 2.55), and a row
+    /// offered on a guess would be a press that only ever prints that
+    /// refusal (デザイン規約 §メニュー:「対象が存在しない」は席ごと消える).
+    pub pull: bool,
     /// The everyday delete. **git refuses to delete the branch the
     /// working tree is on — or one any other working copy has checked
     /// out** (`error: cannot delete branch … used by worktree at …`,
@@ -148,7 +165,7 @@ pub struct RefMenuOffers {
 
 impl RefMenuOffers {
     /// The offers as packed words (`switch asks branch-here integrate
-    /// delete delete-remote push-tag delete-remote-tag
+    /// pull delete delete-remote push-tag delete-remote-tag
     /// delete-tag-everywhere set-upstream current`), the shape
     /// `GitFacts.refMenuOffers` answers with and the opening function
     /// decodes mechanically.
@@ -165,6 +182,9 @@ impl RefMenuOffers {
         }
         if self.integrate_from {
             words.push("integrate");
+        }
+        if self.pull {
+            words.push("pull");
         }
         if self.delete {
             words.push("delete");
@@ -209,7 +229,11 @@ impl RefMenuOffers {
 /// where there is no reading to have drifted; `default_remote` is where
 /// this repository's pushes go, empty where it has no remote at all;
 /// `tag_sides` says which sides a tag row's name stands on
-/// ([`TagSides::from_word`] — ignored for every other kind). Per-row
+/// ([`TagSides::from_word`] — ignored for every other kind);
+/// `current_upstream` is what the branch the working tree is on tracks
+/// (`WorkTreeModel.upstream`), empty where it tracks nothing —
+/// **the tree's, not this row's**, because a pull goes to that one
+/// whichever of its two ends the menu was opened on. Per-row
 /// kind choices (a tag's row keeping rebase for the tag's own gestures)
 /// stay with the rows.
 #[expect(clippy::too_many_arguments)]
@@ -228,6 +252,7 @@ pub fn ref_menu(
     remote_drifted: bool,
     default_remote: &str,
     tag_sides: &str,
+    current_upstream: &str,
 ) -> RefMenuOffers {
     let branchy = matches!(kind, RefKind::Branch | RefKind::Remote);
     let busy = busy_count > 0;
@@ -255,6 +280,20 @@ pub fn ref_menu(
             && !op_standing
             && !full.is_empty()
             && full != current_branch,
+        // The same standing the rows that integrate ask for — a pull is
+        // an integration with a fetch in front of it — and then one of
+        // the two ends of the tree's own comparison.
+        pull: open
+            && !busy
+            && !detached
+            && !current_branch.is_empty()
+            && !op_standing
+            && !current_upstream.is_empty()
+            && match kind {
+                RefKind::Branch => full == current_branch,
+                RefKind::Remote => full == current_upstream,
+                RefKind::Tag | RefKind::Stash => false,
+            },
         delete: !busy
             && !(kind == RefKind::Branch && (full == current_branch || held))
             // A tag only a remote has leaves `tag --delete` nothing to
