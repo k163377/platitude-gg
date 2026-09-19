@@ -157,6 +157,19 @@ Item {
             // (`stack`, the deepest branch list there is, puts `main` on row 8 of 30 with 10 rows on screen) — so
             // the row can only ever leave upwards, and an argument for the other edge would be one nothing runs.
             pinEdgeTimer.start()
+        } else if (act === "nav-pin-seat") {
+            // The stand-in in the seat a fold opened for it, **with no hand on it**: what the line says at rest is
+            // the half `nav-open head::<row>` cannot photograph, since that one has to light the stand-in to read
+            // what it opens. The argument is `<畳む行>[:<手を置く行>]` — the BRANCHES row to shut, clicked at the
+            // row's own click so the fold is a hand's (`NavProbe.clickRow`), and optionally a row to rest on
+            // afterwards. **The second one is the seat moving under the stand-in**: a row above the seat that opens
+            // pushes the seat down by what it grew, and a stand-in placed by counting whole rows stays where it was.
+            const seatParts = ("" + arg).split(":")
+            pinSeatTimer.row = seatParts[0] === "" ? 0 : Number(seatParts[0])
+            pinSeatTimer.rest = seatParts.length > 1 ? Number(seatParts[1]) : -1
+            pinSeatTimer.folded = false
+            pinSeatTimer.stood = ""
+            pinSeatTimer.start()
         } else if (act === "nav-close") {
             // The pane keeps sections packed against the top; what is read is where the closed header came to rest — at
             // the foot of the pane is the failure this watches for.
@@ -223,6 +236,68 @@ Item {
             // far the list had to go to leave it behind.
             + " row=" + branchesModel.headRow
             + " rested=" + Math.round(rested))
+            driver.complete()
+        }
+    }
+    SampleTimer {
+        id: pinSeatTimer
+        property int row: 0
+        /// The row the hand comes to rest on once the fold has landed, -1 for none. It goes in at the row's own
+        /// pointer stand-in, the same one every other rest in this list uses (`NavProbe.pointTipAt`).
+        property int rest: -1
+        property bool folded: false
+        /// The geometry the last beat read, so a beat reading the same one knows the layout has come to rest —
+        /// the seat is a row's height handed out by a layout pass of its own (`AutoActNavBoxVerbs.stood`).
+        property string stood: ""
+        onTriggered: {
+            // **The rows have to be there first**: BRANCHES arrives on a read of its own, and a click aimed at a
+            // list still empty folds nothing while answering exactly as an already-folded row would.
+            if (!pinSeatTimer.folded) {
+                if (!navProbe.clickRow("branch", pinSeatTimer.row))
+                    return
+                pinSeatTimer.folded = true
+                return
+            }
+            // The row leaving is what is waited for, and the stand-in only after it: a stand-in up for some other
+            // reason is a different state wearing the same picture (the reading `nav-pin-edge` makes).
+            if (branchesModel.headRow >= 0 || !navProbe.headPinShown)
+                return
+            if (navProbe.headPinUnder !== pinSeatTimer.row)
+                return
+            // The hand, once the seat is there — re-applied every beat, since the delegate arrives on a later
+            // layout than the rows the model got and a miss reads as a row that answers a rest with nothing.
+            if (pinSeatTimer.rest >= 0) {
+                navProbe.pointTipAt("branch", pinSeatTimer.rest)
+                if (!navProbe.rowFactsOpen)
+                    return
+            }
+            const geom = Math.round(navProbe.headPinY) + "+" + Math.round(navProbe.headPinSeatY())
+            if (geom !== pinSeatTimer.stood) {
+                pinSeatTimer.stood = geom
+                return
+            }
+            pinSeatTimer.stop()
+            Harness.report(
+            "nav_pin_seat row=" + pinSeatTimer.row
+            + " pin=" + navProbe.headPinShown
+            // Whether the row the hand was sent to opened, which is the whole of what moved the seat.
+            + " open=" + navProbe.rowFactsOpen
+            // **The judged run is one stretch of the line**: which row it sits under, that it is in that row's own
+            // seat, that no hand is on it, and the column and the words it takes there.
+            //
+            // `sat=` is the stand-in's own `y` against the geometry of the row holding the seat — the same number
+            // worked out from opposite ends, so a stand-in placed by some other arithmetic says so here.
+            + " under=" + navProbe.headPinUnder
+            + " sat=" + (Math.round(navProbe.headPinY) === Math.round(navProbe.headPinSeatY()))
+            + " lit=" + navProbe.headPinLit
+            + " depth=" + branchesModel.headDepth
+            + " says=" + branchesModel.headShownName
+            // Behind them, for a reader: the two raw coordinates, which edge it would have taken had the seat been
+            // off screen, and the whole name it still answers to.
+            + " at=" + Math.round(navProbe.headPinY)
+            + " gap=" + Math.round(navProbe.headPinSeatY())
+            + " above=" + navProbe.headPinAbove
+            + " name=" + branchesModel.headName)
             driver.complete()
         }
     }

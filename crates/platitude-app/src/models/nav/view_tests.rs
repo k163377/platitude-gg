@@ -64,6 +64,95 @@ fn the_head_row_reports_the_fold_its_stand_in_takes() {
     assert_eq!(model.head_depth, 0);
 }
 
+/// Which row the sticky stand-in sits under once a fold has closed over
+/// the branch it stands for (`HeadPinRow.seatedUnder`).
+#[test]
+fn a_folded_head_names_the_row_it_stands_behind() {
+    let mut model = section(
+        "branches",
+        Source::Locals(locals(vec![
+            local("feature/topic-a", false),
+            local("main", false),
+        ])),
+    );
+    model.head_name = "feature/topic-a".to_string();
+    model.arrange();
+
+    // Open, so the branch has a row of its own and is behind nothing.
+    assert_eq!(model.head_row, 1);
+    assert_eq!(model.head_under_row, -1);
+
+    // Closed over: the row is gone, and what took it is the folder on
+    // row 0 — where the stand-in belongs, rather than at the head of a
+    // list the branch is not at the head of.
+    model.folder_overrides.insert("feature".to_string(), false);
+    model.arrange();
+    assert_eq!(model.head_row, -1);
+    assert_eq!(model.head_under_row, 0);
+    // And it begins its name in the folder's own column, not the one its
+    // row had — nothing stands above that folder here, so the name it
+    // says is the whole one.
+    assert_eq!(model.head_depth, 0);
+    assert_eq!(model.head_shown, "feature/topic-a");
+
+    // A filter flattens the tree away, so there is no folder row left to
+    // stand behind even while one is folded — and nothing on screen says
+    // any part of the name, so the stand-in says all of it.
+    model.filter = "main".to_string();
+    model.arrange();
+    assert_eq!(model.head_row, -1);
+    assert_eq!(model.head_under_row, -1);
+    assert_eq!(model.head_shown, "feature/topic-a");
+}
+
+/// The same, with folders to spare: whichever level closes is the one
+/// the stand-in sits under, and its column is that row's.
+#[test]
+fn the_stand_in_follows_whichever_fold_closed_over_it() {
+    let folded = |key: &str| {
+        let mut model = section(
+            "branches",
+            Source::Locals(locals(vec![
+                local("main", false),
+                local("team/backend/api/add-cache", false),
+                local("team/backend/api/fix-auth", false),
+                local("team/web/landing", false),
+            ])),
+        );
+        model.head_name = "team/backend/api/fix-auth".to_string();
+        model.folder_overrides.insert(key.to_string(), false);
+        model.arrange();
+        model
+    };
+
+    // main / team / team/backend / team/backend/api / …, so the folder
+    // that closed is at a different row and a different depth each time
+    // — and the name begins at that folder, the ones above it being rows
+    // the reader can still see.
+    let model = folded("team");
+    assert_eq!(model.head_under_row, 1);
+    assert_eq!(model.head_depth, 0);
+    assert_eq!(model.head_shown, "team/backend/api/fix-auth");
+
+    let model = folded("team/backend");
+    assert_eq!(model.head_under_row, 2);
+    assert_eq!(model.head_depth, 1);
+    assert_eq!(model.head_shown, "backend/api/fix-auth");
+
+    let model = folded("team/backend/api");
+    assert_eq!(model.head_under_row, 3);
+    assert_eq!(model.head_depth, 2);
+    assert_eq!(model.head_shown, "api/fix-auth");
+
+    // A fold that does not lie over the branch leaves its row alone, and
+    // the stand-in that is not standing says the whole name.
+    let model = folded("team/web");
+    assert_eq!(model.head_row, 5);
+    assert_eq!(model.head_under_row, -1);
+    assert_eq!(model.head_depth, 3);
+    assert_eq!(model.head_shown, "team/backend/api/fix-auth");
+}
+
 /// Where to scroll for a name, in the two shapes a row is keyed by:
 /// the full one a tree gives a leaf, and the shown one a tag carries
 /// on its own.

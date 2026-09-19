@@ -152,14 +152,22 @@ Item {
     /// menu reads them off the chosen rows (`orig_path`), so the row itself is enough.
     signal fileMenuRequested(string bucket, string path)
 
+    /// A row's worth of ground held at this row's foot for something the list draws over it — the stand-in for a
+    /// current branch a fold closed over, which belongs under the folder that closed on it (`NavList.pinSeatRow` /
+    /// `HeadPinRow.seatedUnder`). 0 on every other row. **It is not part of the row**: nothing here lights it, and
+    /// the hand crossing it has not arrived at this row.
+    property real pinSeat: 0
+
     width: listWidth
     // **The row grows by what it has open under it** and the rows below it move down: the list opens rather than
-    // something landing on top of it (デザイン規約 §左メニューの所作). Every wash below fills the whole of it, because
-    // what grew is this row.
+    // something landing on top of it (デザイン規約 §左メニューの所作). Every wash below fills the row, which is the
+    // whole of this less the seat it may be holding for somebody else.
     //
     // Two things grow it: the name shown whole, where it needed more than the one line the row draws it on, and the
     // facts under that.
-    height: Theme.rowHeight + navRow.nameOverflow + factsSeat.height
+    height: navRow.rowHeight + navRow.pinSeat
+    /// The row itself, seat aside — where its grounds stop and where the hand is still on it.
+    readonly property real rowHeight: Theme.rowHeight + navRow.nameOverflow + factsSeat.height
     /// How far the name shown whole hangs below the line the row draws it on — 0 while the row is closed, and while
     /// the whole of it fits the line it was already on (`NameCell.wholeOver`).
     readonly property real nameOverflow: rowLayout.nameWholeOver
@@ -174,12 +182,14 @@ Item {
     Rectangle {
         id: chosenBox
         anchors.fill: parent
+        anchors.bottomMargin: navRow.pinSeat
         color: Theme.bgSelected
         visible: !navRow.folder && (navRow.chosen || (navRow.rowKey !== "" && navRow.activeKey === navRow.rowKey))
     }
     Rectangle {
         id: washBox
         anchors.fill: parent
+        anchors.bottomMargin: navRow.pinSeat
         color: Theme.bgHover
         // The stand-in lights the row as the pointer does, so a picture taken of a row that says nothing still shows
         // where the pointer was standing (`tipPointedAt`). **An open row stays lit** whichever of the two put it
@@ -342,10 +352,21 @@ Item {
     //
     // **The working tree's file rows take the event**: nothing in that list grows or sends itself under a resting
     // hand, so there is nothing there to tell apart, and no panel counts for them.
-    HoverHandler {
-        id: rowHover
-        enabled: !navRow.editing
-        onHoveredChanged: if (!navRow.handCounted) navRow.pointed = rowHover.hovered
+    // **On the row rather than on the whole of this item**: a `HoverHandler` takes the full face of the item it is
+    // on (rules-refs/app-ui.md), and the seat at this row's foot is not this row — a hand crossing it is on the
+    // stand-in that is drawn there, and a row lighting under it would say the pointer was somewhere it is not.
+    // Level with the item itself on every row but the one holding a seat.
+    Item {
+        id: rowGround
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: navRow.rowHeight
+        HoverHandler {
+            id: rowHover
+            enabled: !navRow.editing
+            onHoveredChanged: if (!navRow.handCounted) navRow.pointed = rowHover.hovered
+        }
     }
     // The row that carries the mark tells the model it is the one being read, so the sentence can be built for it
     // alone. The row itself has no field left to hold it (`NavItem::eol_mark`).
@@ -410,6 +431,7 @@ Item {
     MouseArea {
         id: itemMouse
         anchors.fill: parent
+        anchors.bottomMargin: navRow.pinSeat
         // While the box is open the row belongs to it.
         visible: !navRow.editing
         acceptedButtons: Qt.LeftButton | Qt.RightButton

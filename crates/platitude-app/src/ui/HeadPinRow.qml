@@ -8,8 +8,9 @@ import platitude.ui
 
 // The current branch never leaves the viewport: while its own row is scrolled off, this stand-in rides the edge the row
 // went out of, and it steps aside the moment the row itself is on screen — so the sidebar never shows the branch twice.
-// A branch a filter or a folded folder hides has no row at all, so there is no edge to ride: the stand-in takes a place
-// of its own at the head of the list (`seated`).
+// A branch a filter or a folded folder hides has no row at all, so there is no edge to ride: the stand-in takes a
+// place of its own (`seated`) — the seat a folded folder opens under itself (`seatedUnder`), or the head of the
+// list where a filter left no folder to sit under.
 //
 // **A detached HEAD is said elsewhere.** There is no branch to keep on screen, and the words for one are not
 // a name; where HEAD is standing is said by the graph's pin, by the WORKTREES row and by the commit button's own
@@ -34,23 +35,41 @@ Rectangle {
 
     signal activated(string oidHex)
 
-    readonly property real rowTop: headPin.branchesModel.headRow * Theme.rowHeight
+    /// How much a row that opened above the seat has pushed it down — the rows of this list are whole rows except
+    /// for the one that is open, and that one is above the seat or it is not (`NavList.openRoom` / `openIndex`).
+    /// **Without it the stand-in is drawn over the lines that opened**: the seat moves with the rows and a place
+    /// counted in whole rows does not. 0 in the lists that hand nothing down.
+    property real roomAbove: 0
+    /// Where the seat this stands on begins, in the list's own content: its row, or — with the row folded away —
+    /// the line under the folder that closed over it (`seatedUnder`, and the gap `NavList.pinSeatRow` opens there).
+    readonly property real rowTop: headPin.seatedUnder
+                                   ? (headPin.underRow + 1) * Theme.rowHeight + headPin.roomAbove
+                                   : headPin.branchesModel.headRow * Theme.rowHeight
     /// Whether the upstream this branch is measured against is one git cannot reach — the same answer the rows read
     /// off their own slot, read here off the model because a stand-in has no row to read (`models::nav::drain` の
     /// `settle_head_marks`).
     readonly property bool goneUpstream: headPin.branchesModel.headUpstreamGone !== ""
-    /// The branch is there but its row is not — a filter or a folded folder is holding it. Nothing to ride above, so
-    /// this asks for a row of its own and the list begins one row lower (`NavSections` reads it for `topMargin`).
-    /// **Asks for it**: a list with no rows at all keeps its hairline and grants nothing, so this stays true while
-    /// the seat is refused and what is drawn is the 1px of it the shut section leaves. Read off the model alone: the
-    /// list's own height answers to this, so reading its geometry back would be a loop, and a list with a top margin
-    /// rests at a negative `contentY` — the edges below cannot be asked in that state.
+    /// The branch is there but its row is not — a filter or a folded folder is holding it.
+    /// **Asks for a seat**: a list with no rows at all keeps its hairline and grants nothing, so this stays true
+    /// while the seat is refused and what is drawn is the 1px of it the shut section leaves. Read off the model
+    /// alone: the list's own height answers to this, so reading its geometry back would be a loop, and a list with a
+    /// top margin rests at a negative `contentY` — the edges below cannot be asked in that state.
     readonly property bool seated: headPin.branchesModel.headName !== "" && headPin.branchesModel.headRow < 0
-    readonly property bool rowAbove: headPin.seated || headPin.rowTop < headPin.contentY
-    readonly property bool rowBelow: !headPin.seated
+    /// The folded row the branch is behind, and whether a fold is what took its row (`models::nav::view` の
+    /// `folded_over_head`). **Where a folded branch belongs is under the folder that closed on it** — opening that
+    /// folder is what brings it back — so the list opens a gap there and this sits in it, scrolling with the rows and
+    /// riding an edge only once that gap has left the view. A filter leaves no folder to sit under, and that half
+    /// keeps the head of the list: the list begins one row lower for it (`NavSections` reads `seated` for
+    /// `topMargin`).
+    readonly property int underRow: headPin.branchesModel.headUnderRow
+    readonly property bool seatedUnder: headPin.seated && headPin.underRow >= 0
+    readonly property bool rowAbove: (headPin.seated && !headPin.seatedUnder)
+                                     || headPin.rowTop < headPin.contentY
+    readonly property bool rowBelow: (!headPin.seated || headPin.seatedUnder)
                                      && headPin.rowTop + Theme.rowHeight > headPin.contentY + headPin.viewHeight
 
-    visible: headPin.branchesModel.headName !== "" && (headPin.rowAbove || headPin.rowBelow)
+    visible: headPin.branchesModel.headName !== ""
+             && (headPin.rowAbove || headPin.rowBelow || headPin.seatedUnder)
     // **It grows by what it has open under it**, the way a row does (デザイン規約 §左メニューの所作). Riding the
     // bottom edge its foot is what is pinned, so growing takes the top of it upward and the rows it stands over stay
     // where they are. Two things grow it: the name shown whole where one line could not hold it, and the facts.
@@ -60,7 +79,11 @@ Rectangle {
     readonly property Item nameField: pinWhole.item
     readonly property real nameOverflow:
         pinWhole.item ? Math.max(0, pinWhole.item.implicitHeight - pinWhole.item.lineHeight) : 0
-    y: headPin.rowAbove ? 0 : headPin.viewHeight - height
+    // Riding an edge takes the whole of it to that edge; standing in the gap the list opened, it sits where the row
+    // it stands for would have sat and scrolls with the rows around it.
+    y: headPin.rowAbove ? 0
+     : headPin.rowBelow ? headPin.viewHeight - height
+     : headPin.rowTop - headPin.contentY
     // Dressed as the row it stands for, down to the margins — which leaves it the list's own ground, since a row of
     // this list carries none of its own (`NavItemDelegate`). **Opaque all the same**: the rows scroll under it, and
     // the hairline at its foot is what says they do.
@@ -97,7 +120,10 @@ Rectangle {
         CutName {
             id: pinName
             Layout.fillWidth: true
-            text: headPin.branchesModel.headName
+            // What the rows say: the part of the name the folders standing over it do not
+            // (`models::nav::view` の `head_shown`). Whole while there is no fold — the filter's half
+            // has flattened every folder away, so nothing on screen says any of it.
+            text: headPin.branchesModel.headShownName
             color: Theme.textLink
             weight: Font.DemiBold
             pixelSize: Theme.fontMd
@@ -236,9 +262,10 @@ Rectangle {
         return headPin.factsOpen ? pinFacts.item : null
     }
     /// Whether the whole of it — its own line and what it opened — is inside the list it rides (the answer the rows
-    /// give off their own geometry: `NavList.openShown`). Its foot is pinned to one edge, so what it opens grows the
-    /// other way and there is nothing here to scroll; the numbers are read all the same, because a rule nobody reads
-    /// back is a rule nobody can see break.
+    /// give off their own geometry: `NavList.openShown`). While it rides an edge its foot is pinned there, so what
+    /// it opens grows the other way and there is nothing to scroll; standing in the gap a fold opened it can grow
+    /// past the bottom edge, which is what these numbers say. Read all the same in the pinned half, because a rule
+    /// nobody reads back is a rule nobody can see break.
     function openShown() {
         return headPin.y >= 0 && headPin.y + headPin.height <= headPin.viewHeight
     }
@@ -280,11 +307,12 @@ Rectangle {
         }
     }
 
-    // Hairline on the side the scrolled rows pass under — its foot while it is seated, where the rows begin instead.
+    // Hairline on the side the scrolled rows pass under — its head only while it rides the bottom edge, and its foot
+    // everywhere else: seated, and standing in the gap a fold opened, what is under it is the next row down.
     Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
-        y: headPin.rowAbove ? parent.height - height : 0
+        y: headPin.rowBelow && !headPin.rowAbove ? 0 : parent.height - height
         height: Theme.borderWidth
         color: Theme.borderSubtle
     }

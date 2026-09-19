@@ -425,6 +425,13 @@ Item {
         /// where the row is in the list and the list moved out from under it, is `nav-pin-edge`'s — and the one
         /// preset whose BRANCHES does overflow is what that and `nav-open-foot` are run on.
         property string hide: ""
+        /// The other way into that half: a folder of BRANCHES clicked shut over the current branch's own row. The
+        /// row is named rather than worked out, and the click goes in at the row's own (`NavProbe.clickRow`), so the
+        /// fold is the one a hand makes. -1 folds nothing. **Done once, and only once the view has built that row**
+        /// — the rows arrive on a read of their own, and clicking row 0 of an empty list folds nothing while
+        /// reporting the same miss as a fold that has already happened.
+        property int fold: -1
+        property bool folded: false
         /// Whether the row rested on is the last of its section, with the list taken to its end first
         /// (PGG_AUTO_ACT=nav-open-foot). Done once: the scroll is the state the rest is taken in, not something
         /// re-applied under a hand that has already arrived.
@@ -445,8 +452,12 @@ Item {
             // under its full name — `SidebarFilterRow`).
             navTipTimer.hide = navTipTimer.head ? (parts.length > 1 ? parts[1] : "")
                              : (parts.length > 2 ? parts[2] : "")
+            // `head:<filter>:<row>` — the folder to shut over the current branch, which is the other way its row
+            // leaves the list. An empty filter beside it is the ordinary case: a fold takes the row away on its own.
+            navTipTimer.fold = navTipTimer.head && parts.length > 2 ? Number(parts[2]) : -1
             navTipTimer.row = !navTipTimer.head && parts.length > 1 ? Number(parts[1]) : 0
             navTipTimer.lit = false
+            navTipTimer.folded = false
             navTipTimer.acted = false
             navTipTimer.footDone = false
             navTipTimer.stood = ""
@@ -469,6 +480,16 @@ Item {
                 if (navTipTimer.head)
                     sidebarPane.headPinPointed = true
                 navTipTimer.restY = navProbe.listContentY(navTipTimer.kind)
+                return
+            }
+            // The fold, once, and only once the view has built the row that carries it: BRANCHES arrives on a read
+            // of its own, so a click aimed at row 0 of a list that is still empty folds nothing — and answers
+            // exactly as a row already folded would. A beat is given back, because what the fold takes out of the
+            // list is what the rest of this run is about.
+            if (navTipTimer.fold >= 0 && !navTipTimer.folded) {
+                if (!navProbe.clickRow("branch", navTipTimer.fold))
+                    return
+                navTipTimer.folded = true
                 return
             }
             // The list to its end, once, before the hand comes to rest: what the rest is taken on is the last row of
@@ -578,6 +599,18 @@ Item {
                 + " row=" + target + " name=" + name
                 + " lit=" + navTipTimer.lit + " wants=" + (words !== "")
                 + " tip=" + tip.visible + " open=" + navProbe.rowFactsOpen
+                // Where the stand-in came to rest once a fold took its row: the row it is under, and whether it is
+                // sitting in the seat that row is holding. **`sat=` is read off two ends** — the stand-in's own `y`
+                // against the holding row's geometry — so a stand-in that placed itself by some other arithmetic
+                // says so here. `under=-1` is a run where no fold was asked for, and `at=` / `gap=` are the two
+                // raw numbers for a reader. **What the line says at rest is the other verb's**
+                // (`nav-pin-seat`): this one lights the stand-in, and a lit one shows the whole name.
+                + (navTipTimer.fold >= 0
+                   ? " under=" + navProbe.headPinUnder
+                     + " sat=" + (Math.round(navProbe.headPinY) === Math.round(navProbe.headPinSeatY()))
+                     + " at=" + Math.round(navProbe.headPinY)
+                     + " gap=" + Math.round(navProbe.headPinSeatY())
+                   : "")
                 // Whether what opened is inside what the list shows — the whole of the question at the foot, and
                 // true everywhere else because there was room under the row to begin with.
                 + (navTipTimer.opens ? " shown=" + navProbe.rowFactsShown() : "")

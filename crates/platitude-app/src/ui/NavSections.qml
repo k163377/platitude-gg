@@ -105,6 +105,17 @@ ColumnLayout {
     readonly property bool headPinShown: headPin.visible
     readonly property bool headPinAbove: headPin.rowAbove
     readonly property real headPinY: headPin.y
+    /// The folded row the stand-in is sitting under, or -1 while it is sitting under none
+    /// (PGG_AUTO_ACT=nav-open head).
+    readonly property int headPinUnder: headPin.seatedUnder ? headPin.underRow : -1
+    /// Where that seat actually came out, **read off the row holding it** rather than off the row count the
+    /// stand-in placed itself by: the two are the same number worked out from opposite ends, so a run holding one
+    /// against the other is reading a witness outside the arithmetic under test. -1 while no row holds a seat, and
+    /// while the view has not built the one that does.
+    function headPinSeatY() {
+        const row = headPin.seatedUnder ? branchList.itemAtIndex(headPin.underRow) : null
+        return row ? row.y + row.height - row.pinSeat - branchList.contentY : -1
+    }
     /// Jump the branches list to its end (PGG_AUTO_ACT=nav-pin-edge): the stand-in only changes edges under scroll,
     /// which a headless run cannot produce otherwise. Answers where the list came to rest — a list with no more rows
     /// than it can show has no end to go to, and a caller that could not tell that from a list still building would
@@ -157,15 +168,18 @@ ColumnLayout {
         expanded: branchHead.showsRows
         kindHint: "branch"
         gestures: sections.gestures
-        // The one list whose rows something else can sit at the head of: with no row to ride above, the stand-in
-        // takes a row of its own and the rows begin under it (`HeadPinRow.seated`). The list asks for that much more
-        // height along with it, or the row the margin pushed down would be the one that cannot be read.
+        // The one list whose rows something else can sit among: with no row to ride above, the stand-in takes a row
+        // of its own. **Where that row goes is where the branch is** — under the folder that closed over it, which
+        // the list opens a gap for (`pinSeatRow`), and at the head of the list only when there is no such folder to
+        // sit under. The list asks for that much more height either way, or the row the seat pushed down would be
+        // the one that cannot be read.
         //
         // **A section with nothing in it keeps its 1px of ground and nothing else.** That 1px is an instruction
         // (デザイン規約 §QML 実装ルール のセクションの地), so the stand-in stays off it: a filter that matched
         // no branch is answered by the section standing empty, and the stand-in's row waits for a
         // branch to ride above.
-        topMargin: headPin.seated && branchList.count > 0 ? Theme.rowHeight : 0
+        topMargin: headPin.seated && !headPin.seatedUnder && branchList.count > 0 ? Theme.rowHeight : 0
+        pinSeatRow: headPin.seatedUnder ? headPin.underRow : -1
         Layout.verticalStretchFactor: sections.sectionPull
         onRefActivated: oidHex => sections.refActivated(oidHex)
         onRefMenuRequested: (kind, name, full, oidHex) => sections.refMenuRequested(kind, name, full, oidHex)
@@ -190,6 +204,10 @@ ColumnLayout {
             worktreesModel: sections.worktreesModel
             contentY: branchList.contentY
             viewHeight: branchList.height
+            // The room a row that opened above the seat took, which the seat moved down by and this has to move with
+            // (`HeadPinRow.roomAbove`). The open row is at most one, so the test is where that one is.
+            roomAbove: branchList.openIndex >= 0 && branchList.openIndex <= headPin.underRow
+                       ? branchList.openRoom : 0
             width: branchList.width
             onActivated: oidHex => sections.refActivated(oidHex)
         }

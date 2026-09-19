@@ -109,6 +109,9 @@ QtObject {
                 // The scroll it is about is taken in its own sampler, a layout pass after the dispatch: without
                 // this the render barrier owns the completion and photographs the list where it opened.
                 "nav-pin-edge",
+                // The fold it is about is clicked in its own sampler, and the seat it opens comes out a layout pass
+                // later still: without this the render barrier photographs the list with every row still in it.
+                "nav-pin-seat",
                 // The replay has to be under way before the doors can be tried, so the sampler that waits for it is
                 // the one owner; the render barrier behind it would otherwise photograph the panes before any of it.
                 "doors-held",

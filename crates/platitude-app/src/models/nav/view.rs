@@ -74,19 +74,7 @@ impl NavSectionModel {
                     .collect(),
             )
         };
-        let head = (0..self.shown_rows()).find(|at| {
-            self.row_at(*at).is_some_and(|row| {
-                self.field(row, Role::IsHead).flag() && !self.field(row, Role::Folder).flag()
-            })
-        });
-        self.head_row = head.map_or(-1, |row| row as i32);
-        // The fold the stand-in steps itself in by, read off the row it
-        // stands for: a branch carrying a `/` sits one step in and `main`
-        // sits at none, and a stand-in that always took the same step
-        // began its name in a column no row was in.
-        self.head_depth = head
-            .and_then(|at| self.row_at(at))
-            .map_or(0, |row| self.field(row, Role::Depth).number());
+        self.place_head();
         self.shown_total = self.shown_rows() as i32;
         // The count the section's band shows. **A hidden row comes off
         // it** — the band is saying how many the repository has, and a
@@ -111,6 +99,85 @@ impl NavSectionModel {
                 .filter(|at| self.in_run(*at) && !self.hidden_at(*at))
                 .count() as i32
         };
+    }
+
+    /// Finds the current entry among the rows on show and settles what
+    /// stands in for it where it has none: which row it is, which folded
+    /// row is holding it, and the column and the name its stand-in takes
+    /// (`HeadPinRow`).
+    ///
+    /// **The column and the name are one reading.** A row on show is
+    /// nested by its own folders and says the segment under the last of
+    /// them; a branch a fold closed over is nested by that folder and
+    /// says its name from there down — the folders above it are rows the
+    /// reader can still see, and a name repeating them says twice what
+    /// the screen says once. The folder that closed leads the name,
+    /// because the segment under it alone would read as a name beside
+    /// that folder rather than inside it. A stand-in a filter put up cuts
+    /// nothing: the tree is flat there, so nothing on screen says any
+    /// part of the name.
+    fn place_head(&mut self) {
+        let head = (0..self.shown_rows()).find(|at| {
+            self.row_at(*at).is_some_and(|row| {
+                self.field(row, Role::IsHead).flag() && !self.field(row, Role::Folder).flag()
+            })
+        });
+        self.head_row = head.map_or(-1, |row| row as i32);
+        self.head_under_row = if head.is_none() {
+            self.folded_over_head()
+        } else {
+            -1
+        };
+        let (under_depth, under_cut) = match usize::try_from(self.head_under_row)
+            .ok()
+            .and_then(|at| self.row_at(at))
+        {
+            Some(row) => (
+                self.field(row, Role::Depth).number(),
+                self.field(row, Role::Full)
+                    .as_str()
+                    .rfind('/')
+                    .map_or(0, |at| at + 1),
+            ),
+            None => (0, 0),
+        };
+        let depth = match head.and_then(|at| self.row_at(at)) {
+            Some(row) => self.field(row, Role::Depth).number(),
+            None => under_depth,
+        };
+        let shown = self
+            .head_name
+            .get(under_cut..)
+            .unwrap_or(&self.head_name)
+            .to_string();
+        self.head_depth = depth;
+        self.head_shown = shown;
+    }
+
+    /// The shown row of the closed folder the current branch is inside,
+    /// or -1 when no folder is what took its row away.
+    ///
+    /// Asked only once the row itself is gone from the list. The folder
+    /// that swallowed it is the outermost closed one over it — the inner
+    /// ones are not emitted at all (`build_tree`) — so the one row on
+    /// screen whose fold key is a folder of the branch's name is it. A
+    /// filter answers nothing here: it flattens the tree, so there is no
+    /// folder row left to be behind.
+    fn folded_over_head(&self) -> i32 {
+        if self.head_name.is_empty() || !self.filter.is_empty() {
+            return -1;
+        }
+        (0..self.shown_rows())
+            .find(|at| {
+                self.row_at(*at).is_some_and(|row| {
+                    self.field(row, Role::Folder).flag()
+                        && self.field(row, Role::Change).as_str() == FOLDED
+                        && self
+                            .head_name
+                            .starts_with(&format!("{}/", self.field(row, Role::Full).as_str()))
+                })
+            })
+            .map_or(-1, |at| at as i32)
     }
 
     /// Whether this source row is one the page is already showing as gone

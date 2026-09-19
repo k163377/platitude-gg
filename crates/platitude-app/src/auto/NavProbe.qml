@@ -223,6 +223,20 @@ QtObject {
     readonly property bool headPinShown: probe.sections.headPinShown
     readonly property bool headPinAbove: probe.sections.headPinAbove
     readonly property real headPinY: probe.sections.headPinY
+    /// The folded row it is sitting under, and where the seat that row is holding actually came out
+    /// (PGG_AUTO_ACT=nav-open `head:<filter>:<row>`) — the second read off that row's own geometry, so the placement
+    /// is judged against something other than the count the stand-in placed itself by.
+    readonly property int headPinUnder: probe.sections.headPinUnder
+    function headPinSeatY() {
+        return probe.sections.headPinSeatY()
+    }
+    /// PGG_AUTO_ACT=nav-open `head:<filter>:<row>`: click one row of a section, which on a folder row is the fold
+    /// closing. It goes in at the row's own click (`NavList.clickRow`), and says false while the view has not built
+    /// that row — the rows of a section arrive on a read of their own, so a run has to be able to wait for them.
+    function clickRow(kind, row) {
+        const list = probe.listOf(kind)
+        return !!list && list.clickRow(row)
+    }
 
     /// PGG_AUTO_ACT=nav-pin-edge: jump the branches list to its end, which is the other of the two ways the stand-in
     /// comes on screen — its row scrolled off (the filter's way is `nav-tip head`). Only

@@ -36,6 +36,11 @@ AppListView {
     /// The branches' own section, for the rows that open on somebody else's branch: a working copy's row says of the
     /// branch it holds what that branch's own row would (デザイン規約 §左メニューの所作). Null everywhere else.
     property var branchesModel: null
+    /// The row that is holding a seat under itself for something standing over this list, or -1 for none: the row of
+    /// the folded folder the current branch is behind, which is where its stand-in belongs (`HeadPinRow.seatedUnder`
+    /// / `NavSections`). The row grows by that much at its foot, so the rows below it move down and the stand-in has
+    /// the line under the folder that is holding it. Off in every other list here — only BRANCHES has a stand-in.
+    property int pinSeatRow: -1
     /// Stands in for the pointer where headless cannot put one, so a row's tooltip — or the absence of one — can be
     /// photographed (PGG_AUTO_ACT=nav-tip). -1 points at no row. The file lists carry the same property on their own
     /// panes (`WipPane` / `DetailsPane`).
@@ -95,6 +100,13 @@ AppListView {
     readonly property real openRoom: {
         const row = navList.openRow()
         return row === null ? 0 : Math.max(0, row.height - Theme.rowHeight)
+    }
+    /// Which row that is, -1 with nothing open — what something standing among the rows has to weigh its own place
+    /// against, since the room above it is room its place moved by (`NavSections` hands it to `HeadPinRow`). **One
+    /// row is open at a time** (`SidebarRowGestures.openKey`), so one number answers for the whole list.
+    readonly property int openIndex: {
+        const row = navList.openRow()
+        return row === null ? -1 : row.index
     }
     /// Where this list was standing when the row opened, and whether it is holding that place. **A row at the foot
     /// opens past the bottom edge**, and what the list gives up to show its lines is the top — the part the reader
@@ -306,7 +318,10 @@ AppListView {
     /// `contentY`: a row scrolled away has no delegate, and "there is no delegate" is also what a list that has not
     /// been built yet says.
     function rowInView(index) {
-        const top = index * Theme.rowHeight
+        // The rows above this one, plus the seat any of them is holding for something standing over the list
+        // (`pinSeatRow`) — that seat is a row's worth of ground the rows under it begin after.
+        const seat = navList.pinSeatRow >= 0 && navList.pinSeatRow < index ? Theme.rowHeight : 0
+        const top = index * Theme.rowHeight + seat
         return top >= navList.contentY && top + Theme.rowHeight <= navList.contentY + navList.height
     }
     function scrollToEnd() {
@@ -329,10 +344,12 @@ AppListView {
     // none and adds nothing.
     // **A row that opened asks for the room it grew by** — the ceiling is counted in whole rows, so without it the
     // section keeps the height it had and the lines it opened push its own row up under the sticky stand-in
-    // (measured: the name went behind it and only the lines showed).
+    // (measured: the name went behind it and only the lines showed). A row holding a seat for the stand-in asks for
+    // it the same way, and for the same reason: the seat is a row's worth the ceiling does not count.
     Layout.maximumHeight: !expanded ? 0
                           : stretch ? Number.POSITIVE_INFINITY
                           : count * Theme.rowHeight + navList.openRoom
+                            + (navList.pinSeatRow >= 0 ? Theme.rowHeight : 0)
                             + navList.topMargin + Theme.borderWidth
     model: sectionModel
     // The pane's own bar, in place of the style's one that `AppListView` hands the graph, the diff and the log.
@@ -351,6 +368,11 @@ AppListView {
         // (`NavItemDelegate.rowInset` / デザイン規約 §余白 の左メニューの行の項).
         rowInset: Theme.spaceSm
         nestStep: Theme.spaceSm
+        // The seat this row holds under itself for the stand-in, on the one row that holds one.
+        // **`>= 0` first**: a delegate the view has put back in its reuse pool reports `index` -1, which is also
+        // "no row is holding a seat" — without the guard every pooled row of every list here grows by one
+        // (the reading `tipPointedAt` already makes of the same -1).
+        pinSeat: navList.pinSeatRow >= 0 && navList.pinSeatRow === row.index ? Theme.rowHeight : 0
         // The list's own place in that layer, so a scroll carries the box along with the row it belongs to.
         boxLayer: navList.boxLayer
         boxRowsX: navList.boxRowsX

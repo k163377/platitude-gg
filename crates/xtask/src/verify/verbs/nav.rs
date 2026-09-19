@@ -515,6 +515,53 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "nav_pin_edge pin=true above=true rowshown=false name=main y=0",
     },
+    // The other way the stand-in has no row: a fold shut over it, with
+    // no hand on the stand-in afterwards. **The picture cannot answer
+    // where it sat** — a stand-in at the head of the list and one in the
+    // seat a folder is holding draw the same line at a different height,
+    // and a height is what a picture shows rather than what it claims.
+    // `sat=` is that claim, and it is read from both ends: the
+    // stand-in's own `y` against the geometry of the row holding the
+    // seat, so a stand-in placed by some other arithmetic parts from it.
+    // `lit=false` is the resting state this verb exists for — the hand
+    // is what the other half (`nav-open head::<row>`) photographs.
+    //
+    // **What the line says is claimed per fold**, since that is the
+    // whole of the difference between the levels: the folders still on
+    // screen are left out of the name, and the ones the fold shut are
+    // not. `depth=` is the column beside it, which is that same folder's
+    // — the two disagree only if one of them stopped being read off the
+    // row that closed.
+    Verb {
+        name: "nav-pin-seat",
+        when: &[
+            (
+                Arg::Is("1"),
+                "under=1 sat=true lit=false depth=0 says=team/backend/api/fix-auth",
+            ),
+            (
+                Arg::Is("2"),
+                "under=2 sat=true lit=false depth=1 says=backend/api/fix-auth",
+            ),
+            (
+                Arg::Is("3"),
+                "under=3 sat=true lit=false depth=2 says=api/fix-auth",
+            ),
+            // The seat moving under the stand-in: a row above it opens,
+            // the rows below it — the folder holding the seat among them
+            // — come down by what it grew, and a stand-in placed by
+            // counting whole rows stays where it was, drawn over the
+            // lines that just opened. `open=true` is the push having
+            // happened at all; `sat=` is whether the stand-in came with
+            // it.
+            (Arg::Is("2:0"), "open=true under=2 sat=true"),
+        ],
+        // **The claim is one run of the line** — `pin=` sits between
+        // `under=` and these two, and `sat=` is read off the stand-in's
+        // own coordinate against the row's, so it cannot be true with
+        // nothing standing.
+        plain: "sat=true lit=false",
+    },
     // The left menu's rename gesture, and the absence that is the
     // whole of its bug: a click landing in the folded list's section
     // after that section went away and came back is an ordinary
