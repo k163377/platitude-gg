@@ -39,6 +39,7 @@ QtObject {
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
                 "fold-first-commit", "drop-last-commit",
                 "reset-mixed", "reset-hard", "drop-commit-go", "merge-branch",
+                "pull-go", "pull-ahead",
                 "merge-stops", "cherry-pick-stops", "revert-stops", "rebase-stops", "drop-stops",
                 "wip-landing-stopped",
                 "rebase-plan-run", "rebase-edit-stop", "rebase-edit-stop-out",
@@ -131,6 +132,9 @@ QtObject {
                 "nav-add-remote", "push-default", "push-target", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "delete-branch-chip", "remote-refused", "chip-menu", "chip-menu-current",
+                // The card has to be up before the row it came for can be read; the second waits for the line under
+                // the pointer as well.
+                "pull-menu", "pull-blocked",
                 // The press is two writes — the staging in front and the commit behind it — so the write barrier is
                 // answered by whichever of them finished first and stands in front of the claim. What these wait for
                 // is the editor's own answer reaching the editor (`RepoPage.commitAnswered`).
@@ -214,6 +218,11 @@ QtObject {
                 "divider-refuse", "commands-fail-shut", "commands-escape",
                 "commands-select", "commands-copy", "commands-sweep",
                 "cherry-pick", "merge-branch", "revert-commit", "reword", "edit-message",
+                // The same landing, off a press of its own: the card has to be up and nothing else running before
+                // the row can be pressed, and the tip it lands on is waited out behind the write barrier. The second
+                // is the press git answers without moving anything — what it waits for is the panel it opens to
+                // show the row git wrote.
+                "pull-go", "pull-ahead",
                 "edit-message-leave", "edit-message-focus",
                 // All four end in their own samplers: the plan arrives through the feed, and the three that run wait
                 // out the write's own landing (the gone row / the edit marker) behind the write barrier. The last

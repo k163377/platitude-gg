@@ -189,6 +189,7 @@ impl GitFacts {
         remote_drifted: bool,
         default_remote: String,
         tag_sides: String,
+        current_upstream: String,
     ) -> String {
         let Some(kind) = platitude_core::offers::RefKind::from_word(&kind) else {
             return String::new();
@@ -208,6 +209,7 @@ impl GitFacts {
             remote_drifted,
             &default_remote,
             &tag_sides,
+            &current_upstream,
         )
         .words()
     }

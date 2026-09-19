@@ -36,6 +36,7 @@ Item {
     readonly property var refBranchCard: driver.refBranchCard
     readonly property var refTagCard: driver.refTagCard
     readonly property var refDeleteItem: driver.refDeleteItem
+    readonly property var refPullItem: driver.refPullItem
     readonly property var refStashDropItem: driver.refStashDropItem
     readonly property var refPushTagItem: driver.refPushTagItem
     readonly property var refTagHereItem: driver.refTagHereItem
@@ -48,6 +49,7 @@ Item {
     readonly property var commitBranchCard: driver.commitBranchCard
     readonly property var commitDeleteItem: driver.commitDeleteItem
     readonly property var switchCommitItem: driver.switchCommitItem
+    readonly property var pullCommitItem: driver.pullCommitItem
     readonly property var renderedBarrier: driver.barrierRendered
     readonly property var writeBarrier: driver.barrierWrite
 
@@ -144,6 +146,34 @@ Item {
             // above: both entrances end at the one page function, and it drops what it is asked while a write runs.
             driver.beginWrite(act)
             chipDeleteTimer.start()
+        } else if (act === "pull-menu") {
+            // The rows a pull stands on, from the sidebar's entrance: bare is the branch the working tree is on, and
+            // an argument is a remote-tracking row, which lives behind a fold — opened here, so the row the menu
+            // speaks for is on screen under it (the same fold `delete-remote` opens). **Two remote rows tell the
+            // offer apart**: the upstream this branch is measured against carries the row, and every other remote
+            // does not (offers::ref_menu).
+            const onRemote = arg !== ""
+            const name = onRemote ? arg : workTree.branch
+            if (onRemote)
+                remotesModel.toggleFolder(GitFacts.remoteOfRef(arg, repoTab.remoteNames))
+            const oid = onRemote ? remotesModel.oidOfName(arg) : branchesModel.oidOfName(name)
+            pullMenuTimer.onRemote = onRemote
+            page.openRefMenu(onRemote ? "remote" : "branch", name, name, oid)
+            pullMenuTimer.start()
+        } else if (act === "pull-blocked") {
+            // The row that is out where both sides have moved, greyed with its reason under the pointer
+            // (規約 §取り込んで合流させる). **Both entrances**: bare is the sidebar's row, `chip` the graph's, and
+            // the two carry the same answer from the same place — a claim only a run through each can make.
+            // Forced, because a pointer cannot be put on a row from here (verify-ui §hover の絵の撮り方).
+            const onBranch = workTree.branch
+            if (arg === "chip")
+                page.openRowMenu(branchesModel.oidOfName(onBranch), "L100100" + onBranch)
+            else
+                page.openRefMenu("branch", onBranch, onBranch, branchesModel.oidOfName(onBranch))
+            pullBlockedTimer.onChip = arg === "chip"
+            pullBlockedTimer.row = arg === "chip" ? pullCommitItem : refPullItem
+            pullBlockedTimer.row.tipForced = true
+            pullBlockedTimer.start()
         } else if (act === "chip-menu") {
             // The chip's own entrance. **It raises the row's menu, aimed at that name** — the chip
             // and the rest of the row share one menu (デザイン規約 §グラフ行の右クリック). Only the kind letter
@@ -308,6 +338,52 @@ Item {
             "delete_blocked code=" + acts.blockedTipRow.code
             + " tip=" + acts.blockedTipRow.ToolTip.visible
             + " reason=" + acts.blockedTipRow.blockedReason)
+            driver.complete()
+        }
+    }
+    /// The greyed `pull` row and the line under the pointer.
+    ///
+    /// **Three claims the picture cannot make**: that the row is on offer at all, that it is out rather than merely
+    /// looking pale, and that the sentence on it is the one about the divergence. `blocked=` is the row's own answer
+    /// (`AppMenuItem.blocked`), which is what decides both the colour and the press.
+    SampleTimer {
+        id: pullBlockedTimer
+        /// Which entrance this run came in by, and the row it left standing there.
+        property bool onChip: false
+        property var row: null
+        onTriggered: {
+            const card = pullBlockedTimer.onChip ? commitMenu : refMenu
+            if (!card.opened || !pullBlockedTimer.row.ToolTip.visible)
+                return
+            pullBlockedTimer.stop()
+            Harness.report("pull_blocked where=" + (pullBlockedTimer.onChip ? "chip" : "row")
+                              + " offered=" + pullBlockedTimer.row.offered
+                              + " blocked=" + pullBlockedTimer.row.blocked
+                              + " tip=" + pullBlockedTimer.row.ToolTip.visible
+                              + " says=" + pullBlockedTimer.row.blockedReason)
+            driver.complete()
+        }
+    }
+    /// The `pull` row as the card opens on it, from either of the two rows it stands on.
+    ///
+    /// **The picture holds the card but not what the row is worth**: a row wired to nothing frames exactly like one
+    /// that reaches git, and whether it was offered at all is the answer this verb came for (offers::ref_menu).
+    SampleTimer {
+        id: pullMenuTimer
+        /// Whether the card went up on a remote-tracking row — the half that names the branch it lands in.
+        property bool onRemote: false
+        onTriggered: {
+            if (!refMenu.opened)
+                return
+            pullMenuTimer.stop()
+            // `sentence=` is whether the row says anything after its chip: both rows run the same `git pull`, so
+            // both are the word alone (デザイン規約 §取り込んで合流させる). A sentence coming back would be the row
+            // naming the other end of a comparison the row it was opened on already is.
+            Harness.report("pull_menu open=" + refMenu.opened
+                              + " kind=" + (pullMenuTimer.onRemote ? "remote" : "branch")
+                              + " pull=" + refPullItem.offered
+                              + " code=" + refPullItem.code
+                              + " sentence=" + (refPullItem.refSentence !== ""))
             driver.complete()
         }
     }

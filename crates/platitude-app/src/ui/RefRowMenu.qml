@@ -55,6 +55,13 @@ Item {
     property bool switchAsks: false
     property bool canBranchHere: false
     property bool canIntegrateFrom: false
+    /// Whether this row has a far side a `git pull` would go to: the branch the working tree is on, or the upstream
+    /// it is measured against — the two ends of one comparison (offers::ref_menu).
+    property bool canPull: false
+    /// And whether the sides have grown apart, which is what greys the row: a divergence is brought together by
+    /// choosing, and the rows that choose are the remote branch's own (`WorkTreeModel.pullBlocked`). Frozen as the
+    /// menu opens with everything else it shows.
+    property bool pullBlocked: false
     /// The stash's own drop — the only delete this level answers for. What a branch's name and a tag's name offer is
     /// their own cards' question, worked out inside them (`RefBranchMenu` / `RefTagMenu`).
     property bool canDelete: false
@@ -94,6 +101,7 @@ Item {
     readonly property alias upstreamItem: branchMenu.upstreamItem
     readonly property alias stashDropItem: refStashDropItem
     readonly property alias switchItem: refSwitchItem
+    readonly property alias pullItem: refPullItem
     readonly property alias rebaseItem: refRebaseItem
     /// The two cards the rows above hang behind — a run that photographs one of those rows has to open its card
     /// first (`AppMenu.openSub`).
@@ -146,12 +154,16 @@ Item {
             refRowMenu.workTree.branch, refRowMenu.workTree.detached,
             refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
             // No reading to have drifted: the rows that reach a remote are the branch card's, and it asks for itself
-            // (`RefBranchMenu`).
-            held, "", false, refRowMenu.repoTab.defaultRemote, "").split(" ")
+            // (`RefBranchMenu`). The last one is the working tree's own upstream, which is what the `pull` row reads
+            // — the row it stands on is one of that comparison's two ends (offers::ref_menu).
+            held, "", false, refRowMenu.repoTab.defaultRemote, "",
+            refRowMenu.workTree.upstream).split(" ")
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
         refRowMenu.canBranchHere = offers.includes("branch-here")
         refRowMenu.canIntegrateFrom = offers.includes("integrate")
+        refRowMenu.canPull = offers.includes("pull")
+        refRowMenu.pullBlocked = refRowMenu.canPull && refRowMenu.workTree.pullBlocked
         refRowMenu.canDelete = offers.includes("delete")
         // Asked only where the row that wears it is offered, and asked of the graph — the answer is already there,
         // and the card is about to be measured with it (see `rebasePublished`).
@@ -224,6 +236,26 @@ Item {
             // remote-tracking ref, only as fresh as the last fetch.
             note: refRowMenu.rebasePublished ? Words.rewritesPushed : ""
             onTriggered: refRowMenu.repoTab.rebase(refRowMenu.refId, "", true)
+        }
+        AppMenuSeparator {}
+        // **A group of its own, right above the cards.** The rows above bring *this row* in;
+        // a pull brings in the branch the working tree is on, whichever of the comparison's two ends the menu was
+        // opened from — a different subject, and the one seat it can keep in every menu that carries it. The graph
+        // row's menu offers more above it and none of that moves this row (デザイン規約 §取り込んで合流させる).
+        //
+        // **The word is the whole row.** Both rows it stands on are ends of the same comparison — the branch the tree
+        // is on and the upstream it is measured against — so the same `git pull` runs from either, and a sentence
+        // naming the other end would be the row saying what the row it was opened on already is (§メニュー).
+        AppMenuItem {
+            id: refPullItem
+            code: "pull"
+            offered: refRowMenu.canPull
+            // Greyed where both sides have moved: bringing those together is a choice, and the rows that make it are
+            // the remote branch's own — so this row points at them instead of running
+            // (規約 §メニュー の例外「今できない」行は無効で残す).
+            blockedReason: refRowMenu.pullBlocked ? Words.pullDiverged : ""
+            // Nothing to hand over: whichever end of the comparison this row is, git resolves the other.
+            onTriggered: refRowMenu.repoTab.pull()
         }
         // A stash has one thing done to it and nothing to nest: it is not a branch and not a tag, so its drop stays on
         // the card where the reader found it.

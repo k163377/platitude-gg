@@ -50,6 +50,7 @@ Item {
     property AppMenuItem refUpstreamItem
     property AppMenuItem refStashDropItem
     property AppMenuItem refSwitchItem
+    property AppMenuItem refPullItem
     /// The `rebase` row, read where a verb has to say what its note says about the range (`integrate-menu`).
     property AppMenuItem refRebaseItem
     property AppMenuItem refPushTagItem
@@ -78,6 +79,7 @@ Item {
     /// what the graph row's own entrance offered (`chip-menu`).
     property AppMenuItem commitDeleteItem
     property AppMenuItem switchCommitItem
+    property AppMenuItem pullCommitItem
     property AppMenuItem hardResetItem
     property PublishFlow publishFlow
     property UpstreamFlow upstreamFlow

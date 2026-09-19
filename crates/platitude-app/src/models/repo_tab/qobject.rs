@@ -1004,6 +1004,18 @@ impl RepoTab {
         self.ask_session(|s| s.fetch(remote.clone()));
     }
 
+    /// `git pull`, asked from either of the two rows that offer it.
+    ///
+    /// **Neither row names anything**: the branch the working tree is on
+    /// and the upstream it is measured against are the two ends of one
+    /// comparison, and git resolves that comparison itself
+    /// (デザイン規約 §取り込んで合流させる). Which way the far side is
+    /// brought in is git's own setting (`remote::pull`).
+    #[qslot]
+    fn pull(&mut self) {
+        self.ask_session(platitude_core::session::RepoSession::pull);
+    }
+
     /// Pushes the branch that is checked out to wherever it tracks, or to
     /// the default remote when it tracks nothing yet. `force` is `""` /
     /// `"lease"` / `"force"`; `lease_expect` pins the remote commit the

@@ -47,6 +47,12 @@ QtObject {
     /// (offers::ref_menu).
     property bool menuCanSwitch: false
     property bool menuSwitchAsks: false
+    /// Whether that name has a far side a `git pull` would go to, off the same rules and in the same one ask
+    /// (offers::ref_menu) — the chip's entrance to the row the sidebar's own draws.
+    property bool menuCanPull: false
+    /// And whether git would turn that press down for want of orders, which greys the row
+    /// (`WorkTreeModel.pullBlocked`).
+    property bool menuPullBlocked: false
     /// How many files the reset submenu's `--hard` would take with it besides the commits — read once here with every
     /// other answer, because the tag it feeds sits at the end of a row and widens the card: a count that grew while
     /// the menu stood would move the card's edge under the hand (app-ui.md §メニュー).
@@ -56,11 +62,13 @@ QtObject {
     /// row (`AppMenu.holdIndent`), so the words move under a hand already reaching for one.
     property bool menuTipHeldElsewhere: false
 
-    /// What the `switch` row reads, asked of the name the menu is aimed at. Empty on a row that draws none, which is
-    /// what takes the row off the menu.
-    function askSwitch(kind, name, oidHex) {
+    /// What the `switch` and `pull` rows read, asked of the name the menu is aimed at. Empty on a row that draws none,
+    /// which is what takes both rows off the menu.
+    function askRefRows(kind, name, oidHex) {
         menuState.menuCanSwitch = false
         menuState.menuSwitchAsks = false
+        menuState.menuCanPull = false
+        menuState.menuPullBlocked = false
         if (kind !== "branch" && kind !== "remote")
             return
         // A remote row lands on the local branch of the same name, so it is that one another copy can be holding.
@@ -74,10 +82,14 @@ QtObject {
             menuState.workTree.branch, menuState.workTree.detached,
             menuState.workTree.opText, menuState.workTree.conflictCount,
             // The drift is the card's: what this level reads is where a move lands, and the rows that reach a
-            // remote are the card's (`RefBranchMenu`).
-            held, "", false, menuState.repoTab.defaultRemote, "").split(" ")
+            // remote are the card's (`RefBranchMenu`). The last one is the working tree's own upstream, the same
+            // value the sidebar's entrance hands in — what the `pull` row reads (`RefRowMenu.offerOn`).
+            held, "", false, menuState.repoTab.defaultRemote, "",
+            menuState.workTree.upstream).split(" ")
         menuState.menuCanSwitch = offers.includes("switch")
         menuState.menuSwitchAsks = offers.includes("asks")
+        menuState.menuCanPull = offers.includes("pull")
+        menuState.menuPullBlocked = menuState.menuCanPull && menuState.workTree.pullBlocked
     }
 
     function openRowMenu(oidHex) {
@@ -104,7 +116,7 @@ QtObject {
         menuState.menuCanEditHistory = offers.includes("edit-history")
         menuState.menuCanMoveBranch = offers.includes("move-branch")
         menuState.menuCanBranchHere = offers.includes("branch-here")
-        menuState.askSwitch(menuState.menu.targetKind, menuState.menu.targetName, oidHex)
+        menuState.askRefRows(menuState.menu.targetKind, menuState.menu.targetName, oidHex)
         menuState.menu.offerCommit()
     }
 }

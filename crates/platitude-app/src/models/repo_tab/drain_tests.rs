@@ -152,6 +152,9 @@ fn a_commit_nobody_waits_for_falls_to_the_group() {
 fn a_merge_that_landed_answers_at_the_tip() {
     assert!(at_tip(&settled(K::Merge, "")));
     assert!(at_tip(&settled(K::CherryPick, "")));
+    // A pull lands the same way: whatever the far side brought in is on
+    // the branch now, and that is where the reader is put.
+    assert!(at_tip(&settled(K::Pull, "")));
     assert!(!at_tip(&settled(K::Merge, "fatal: refusing to merge")));
 }
 

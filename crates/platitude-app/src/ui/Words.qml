@@ -60,6 +60,18 @@ QtObject {
     /// row is on the screen already — a line that sent them there would be longer than the menu it explains.
     readonly property string remoteOnAnotherCommit: qsTr("The remote is on another commit")
 
+    /// Why the `pull` row is greyed: both sides have moved, and bringing two lines together that way is a choice
+    /// nobody made — so the row says where the choice is, which is the remote branch's own rows
+    /// (デザイン規約 §取り込んで合流させる). **The second half is the way on**, because the row is a dead end
+    /// otherwise: greyed, with nothing on screen saying what to do instead. Said with one voice from both entrances
+    /// (`RefRowMenu` / `CommitRowMenu`).
+    ///
+    /// **No dash in it**: the run that reads this line back matches ASCII only (verify-ui §Windows の罠 — a `—`
+    /// reaches the harness as broken bytes), so the sentence is punctuated with a comma and the whole of it can be
+    /// claimed.
+    readonly property string pullDiverged: qsTr(
+        "The branches have diverged, so pick the remote branch and rebase onto it")
+
     /// The window band's badge words (BandStateGroup measures and draws them, BandStateCard titles them);
     /// the WIP pane's conflicts bucket header shares the first.
     readonly property string badgeConflicts: qsTr("CONFLICTS")

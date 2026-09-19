@@ -135,7 +135,9 @@ AppMenu {
             branchCard.workTree.branch, branchCard.workTree.detached,
             branchCard.workTree.opText, branchCard.workTree.conflictCount,
             state.heldByWorktree, state.remoteCounterpart, state.remoteDrifted,
-            branchCard.repoTab.defaultRemote, "").split(" ")
+            // The upstream the last one names is the `pull` row's, and that row is the level above's
+            // (`RefRowMenu`): nothing on this card reads it.
+            branchCard.repoTab.defaultRemote, "", "").split(" ")
         state.canDelete = offers.includes("delete")
         state.canDeleteRemote = offers.includes("delete-remote")
         state.canSetUpstream = offers.includes("set-upstream")

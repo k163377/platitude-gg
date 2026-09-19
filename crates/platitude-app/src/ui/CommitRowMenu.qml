@@ -73,6 +73,11 @@ Item {
     /// (offers::ref_menu — the same two answers the sidebar's row reads).
     required property bool canSwitch
     required property bool switchAsks
+    /// And whether that name has a far side to pull from — the third answer off those same rules.
+    required property bool canPull
+    /// Whether that press would be turned down before git did anything, which is what greys the row
+    /// (`RefRowMenu.pullBlocked` — the same answer at the other entrance).
+    required property bool pullBlocked
     /// How many files `--hard` takes besides the commits — the working tree's own, which that flag writes over
     /// (`status::Counts::hard_reset_takes`). Zero on a clean tree, and then the row says nothing extra.
     required property int hardResetTakes
@@ -113,6 +118,7 @@ Item {
     readonly property alias menu: commitMenu
     readonly property alias branchHereItem: branchHereCommitItem
     readonly property alias switchItem: switchCommitItem
+    readonly property alias pullItem: pullCommitItem
     readonly property alias tagHereItem: tagCommitMenu.tagHereItem
     readonly property alias dropItem: dropCommitItem
     readonly property alias stashDropItem: stashDeleteItem
@@ -332,6 +338,19 @@ Item {
                     rowMenu.resetRequested("hard")
                 }
             }
+        }
+        AppMenuSeparator {}
+        // **The chip's entrance to the row the sidebar draws, in the same seat** — a group of its own, right above
+        // the cards, wherever the menu is opened (`RefRowMenu` — デザイン規約 §取り込んで合流させる). The rows above
+        // are about the commit this row stands on; a pull is about the branch the working tree is on and the
+        // upstream it is measured against, which is why it keeps a seat of its own in both menus.
+        AppMenuItem {
+            id: pullCommitItem
+            code: "pull"
+            offered: rowMenu.canPull
+            // Greyed on the same answer the sidebar's row reads (`RefRowMenu`).
+            blockedReason: rowMenu.pullBlocked ? Words.pullDiverged : ""
+            onTriggered: rowMenu.repoTab.pull()
         }
         AppMenuSeparator {}
         // **The very card the sidebar's row opens** (RefBranchMenu): a branch met on a graph row and the same branch

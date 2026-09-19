@@ -28,6 +28,8 @@ Item {
     readonly property var tagsModel: driver.tagsModel
     readonly property var stashesModel: driver.stashesModel
     readonly property var refRebaseItem: driver.refRebaseItem
+    readonly property var refPullItem: driver.refPullItem
+    readonly property var refMenu: driver.refMenu
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
     readonly property var wipPane: driver.wipPane
@@ -168,6 +170,19 @@ Item {
             repoTab.rebase(clash, "", true)
         } else if (act === "integrate-menu") {
             acts.openIntegrateMenu(arg)
+        } else if (act === "pull-go" || act === "pull-ahead") {
+            // **Through the row itself**, which is the whole of what these verbs are for: the menu goes up on the
+            // branch the working tree is on and the row's own `triggered` is emitted — the signal a click makes,
+            // running the handler a click runs (verify-ui §壊れない動詞). Everything after it is git's, and the two
+            // verbs are the two things git does with a press this row will make: bring the far side in
+            // (`--preset behind`) and answer that there is nothing to bring (`--preset basic`, where this branch is
+            // the one ahead). **The third thing git would do is not this row's** — it refuses a divergence it has no
+            // orders for, and the row is out before the press (`pull-blocked`).
+            //
+            // The press waits for a tick with nothing running, the way every press off a menu row does: the opening
+            // fetch answers on a tick of its own, and a pull queued behind it would be judged on the wrong one.
+            pullPressTimer.after = act
+            pullPressTimer.start()
         } else if (act === "merge-branch" || act === "merge-stops" || act === "rebase-onto"
                    || act === "rebase-stops" || act === "replay-running" || act === "revert-commit"
                    || act === "revert-stops") {
@@ -207,7 +222,7 @@ Item {
                         replayRunningTimer.start()
                         // What a click on the row does next, which the other two never need: their picture is a
                         // landing the menu is long gone from, and this one is of the screen the press left behind.
-                        driver.refMenu.close()
+                        refMenu.close()
                     }
                     repoTab.rebase(arg, "", true)
                 }
@@ -368,6 +383,61 @@ Item {
     // Where an operation that answers at the tip left the reader — one report for the three of them. The write, its
     // refresh and the beat the viewport waits out all have to be behind it, and the picture cannot answer the second
     // half: a row can be selected and still be somewhere nobody can see.
+    /// The press behind `pull-go`: the card up on the branch the working tree is on, nothing else running, and the
+    /// row triggered from there. What it lands on is the tip, the way a merge's landing is
+    /// (`RepoTab::settle_write` — a pull answers at the tip), so `tipLandedTimer` is what finishes the run.
+    SampleTimer {
+        id: pullPressTimer
+        /// Which of the three landings this press is for — the verb's own name.
+        property string after: "pull-go"
+        onTriggered: {
+            // **The precondition is read here and nowhere else** (app-ui.md §UI 自動化の因果性).
+            if (repoTab.busyCount !== 0)
+                return
+            const branch = workTree.branch
+            if (!refMenu.opened)
+                page.openRefMenu("branch", branch, branch, branchesModel.oidOfName(branch))
+            if (!refMenu.opened || !refPullItem.offered)
+                return
+            pullPressTimer.stop()
+            // Where the branch stood before the press: the two verbs whose subject is git *not* moving it read it
+            // back, and a picture cannot say whether a graph was redrawn or never touched.
+            driver.headOidBefore = workTree.headOid
+            if (pullPressTimer.after === "pull-go")
+                tipLandedTimer.begin()
+            driver.pressWrite(pullPressTimer.after, () => {
+                refPullItem.triggered()
+                return true
+            })
+            if (pullPressTimer.after === "pull-ahead")
+                pullAheadTimer.start()
+            // The row a hand pressed takes the card down with it; this one has to be told, and the run is not
+            // complete while it is still on its way out (`menuGoing` — the census walks what is visible).
+            driver.menuGoing = refMenu
+            refMenu.close()
+        }
+    }
+    /// The branch that is ahead of its upstream: the pull lands, and what git brought back is nothing
+    /// (`Already up to date.`). **Nothing on screen changes**, which is why the panel is opened here — the row git
+    /// wrote is the only thing that says the press went anywhere at all.
+    SampleTimer {
+        id: pullAheadTimer
+        onTriggered: {
+            if (repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore)
+                return
+            if (!page.commandsShown) {
+                page.toggleCommands()
+                return
+            }
+            if (page.pageCommands.running)
+                return
+            pullAheadTimer.stop()
+            Harness.report("pull_ahead refused=" + repoTab.writeRefused
+                              + " log=" + page.commandsShown
+                              + " moved=" + (workTree.headOid !== driver.headOidBefore))
+            driver.complete()
+        }
+    }
     SampleTimer {
         id: tipLandedTimer
         /// The name this run's own write answered by, taken from the answer that carried

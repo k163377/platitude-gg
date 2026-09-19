@@ -82,6 +82,13 @@ pub struct WorkTreeModel {
     upstream_tracked: bool,
     ahead: i32,
     behind: i32,
+    /// Whether the `pull` row is out and greyed: the two sides have grown
+    /// apart, and a divergence is brought together by choosing — the
+    /// remote branch's own `rebase` row, or its `merge`
+    /// (デザイン規約 §取り込んで合流させる). Derived from the counts
+    /// beside it, so it is shown on exactly their terms — blank between a
+    /// move of HEAD and the status behind it.
+    pull_blocked: bool,
     /// Where this branch's own mark sends a push
     /// (`branch.<branch>.pushRemote`), empty where it marks none. It beats
     /// the repository's `RepoTab.pushDefault`, so the toolbar's
@@ -246,6 +253,7 @@ impl WorkTreeModel {
     );
     qproperty!("ahead", Member = ahead, Notify = changed);
     qproperty!("behind", Member = behind, Notify = changed);
+    qproperty!("pullBlocked", Member = pull_blocked, Notify = changed);
     qproperty!("pushRemote", Member = push_remote, Notify = changed);
     qproperty!("opText", Member = op_text, Notify = changed);
     qproperty!("opCommand", Member = op_command, Notify = changed);
@@ -458,11 +466,16 @@ impl WorkTreeModel {
             self.upstream_tracked = self.status_upstream_tracked;
             self.ahead = self.status_ahead;
             self.behind = self.status_behind;
+            // Both sides have moved: a pull there is not one gesture but
+            // a choice, so the row is out and the menu says where the
+            // choice is made (デザイン規約 §取り込んで合流させる).
+            self.pull_blocked = self.status_ahead > 0 && self.status_behind > 0;
         } else {
             self.upstream.clear();
             self.upstream_tracked = false;
             self.ahead = 0;
             self.behind = 0;
+            self.pull_blocked = false;
         }
     }
 

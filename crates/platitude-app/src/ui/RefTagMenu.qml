@@ -89,7 +89,8 @@ AppMenu {
             // The reading over there standing on another commit is what takes the two rows that reach it out — the
             // same answer that shapes the push row above, read the other way (デザイン規約 §左メニューの所作 の削除の表).
             "", "", state.tagDriftOid !== "",
-            state.pushRemote, tagMenu.tagsModel.tagSides(full)).split(" ")
+            // And the upstream the last one names belongs to the `pull` row, which no tag carries.
+            state.pushRemote, tagMenu.tagsModel.tagSides(full), "").split(" ")
         state.canPushTag = offers.includes("push-tag")
         state.canDelete = offers.includes("delete")
         state.canDeleteRemoteTag = offers.includes("delete-remote-tag")

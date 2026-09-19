@@ -119,6 +119,7 @@ Item {
             refUpstreamItem: harness.refRowMenu.upstreamItem
             refStashDropItem: harness.refRowMenu.stashDropItem
             refSwitchItem: harness.refRowMenu.switchItem
+            refPullItem: harness.refRowMenu.pullItem
             refRebaseItem: harness.refRowMenu.rebaseItem
             refPushTagItem: harness.refRowMenu.pushTagItem
             refTagDeleteItem: harness.refRowMenu.deleteTagItem
@@ -140,6 +141,7 @@ Item {
             commitTagCard: harness.commitRowMenu.tagCard
             commitDeleteItem: harness.commitRowMenu.branchCard.deleteItem
             switchCommitItem: harness.commitRowMenu.switchItem
+            pullCommitItem: harness.commitRowMenu.pullItem
             hardResetItem: harness.commitRowMenu.hardResetRow
             publishFlow: harness.publishFlow
             upstreamFlow: harness.upstreamFlow

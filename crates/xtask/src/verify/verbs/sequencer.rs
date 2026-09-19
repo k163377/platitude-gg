@@ -23,6 +23,31 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "tip_landed follows=true onscreen=true op=merge",
     },
+    // The pull's own landing, off the menu row rather than a call: what
+    // the picture holds is a graph with the far side's commit in it, and
+    // a graph that had fetched it frames the same. `op=pull` is what
+    // says the one command git was given was the pull — a fetch and a
+    // merge would answer twice, under two names.
+    Verb {
+        name: "pull-go",
+        when: &[],
+        plain: "tip_landed follows=true onscreen=true op=pull",
+    },
+    // The same press where git brings nothing back: this branch is the
+    // one ahead, so the pull lands having done nothing and **the screen
+    // is the screen from before it** — which is why the command log is
+    // opened here. `moved=false` is the claim the picture cannot make:
+    // a graph that was redrawn identically frames like one nothing
+    // touched.
+    Verb {
+        name: "pull-ahead",
+        when: &[],
+        plain: "pull_ahead refused=false log=true moved=false",
+    },
+    // The third thing git would do with that press — refuse a divergence
+    // it has no orders for — is not this row's any more: the row is out
+    // before the press and says why under the pointer
+    // (`pull-blocked`, in the remote table).
     // The other landing the same press has. Two halves the picture
     // cannot hold either: that no red line was written over an
     // ordinary conflict, and that the command log stayed down.

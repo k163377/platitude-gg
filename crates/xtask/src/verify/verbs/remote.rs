@@ -346,4 +346,46 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "there=true answerable=true",
     },
+    // The `pull` row, on the two ends of the comparison it stands on and
+    // on a remote row that is neither. **The picture cannot say whether
+    // the row was offered at all** — a card with one row fewer frames
+    // like a card that never had it — so the three forms are read here:
+    // the branch the working tree is on, the upstream it is measured
+    // against, and a remote nothing here tracks, which must *not* carry
+    // the row (a pull there would move a branch the row does not name).
+    // `sentence=false` is the other half: both offered rows run the same
+    // `git pull`, so both are the chip alone.
+    Verb {
+        name: "pull-menu",
+        when: &[
+            (
+                Arg::Is(""),
+                "pull_menu open=true kind=branch pull=true code=pull sentence=false",
+            ),
+            (
+                Arg::Is("origin/main"),
+                "pull_menu open=true kind=remote pull=true code=pull sentence=false",
+            ),
+        ],
+        plain: "pull_menu open=true kind=remote pull=false",
+    },
+    // The same row where both sides have moved: bringing those together
+    // is a choice, so the row is out and the line under the pointer is
+    // the only place saying where the choice is made. **None of it is in
+    // the picture**: a greyed row and a live one are a shade apart, and
+    // no shot carries the sentence a pointer raises.
+    //
+    // **Two runs, one claim**: the sidebar's row and the graph chip's are
+    // handed the answer from the same place, and a run through one says
+    // nothing about the other.
+    Verb {
+        name: "pull-blocked",
+        when: &[(
+            Arg::Is("chip"),
+            "pull_blocked where=chip offered=true blocked=true tip=true \
+             says=The branches have diverged, so pick the remote branch and rebase onto it",
+        )],
+        plain: "pull_blocked where=row offered=true blocked=true tip=true \
+                says=The branches have diverged, so pick the remote branch and rebase onto it",
+    },
 ];

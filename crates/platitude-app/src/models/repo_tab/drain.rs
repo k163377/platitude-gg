@@ -321,7 +321,10 @@ impl RepoTab {
             && !self.last_write_stopped
             && matches!(
                 kind,
-                OperationKind::Revert | OperationKind::CherryPick | OperationKind::Merge
+                OperationKind::Revert
+                    | OperationKind::CherryPick
+                    | OperationKind::Merge
+                    | OperationKind::Pull
             );
         self.write_seq += 1;
         // The middle of the write's three boundaries, for whoever is
