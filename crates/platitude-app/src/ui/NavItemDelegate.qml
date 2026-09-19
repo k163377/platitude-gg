@@ -561,17 +561,20 @@ Item {
     /// The branches' own section, which a working copy's row asks about the branch it holds (`upstreamOf` /
     /// `upstreamGoneOf`) — what that branch's own row would say of itself. Null in every other list.
     property var branchesModel: null
-    /// Whether this row answers a rest by opening. **The whole of the section the facts were handed to**, folder rows
-    /// included: a fold parent that answered with a tooltip while the rows under it opened would be the same question
-    /// answered two ways in one list (デザイン規約 §左メニューの所作).
+    /// Whether this row answers a rest by opening. **The whole of the section the facts were handed to, leaves
+    /// only**: what opens is about a ref — the copy holding it, the reading it is measured against — and a fold
+    /// parent is nothing but the shape of the names below it, so it has no line to open and opening it would leave
+    /// the hand on a row that answered by not moving. It says its own name instead (`hoverText`), which is the one
+    /// thing the row cannot show: the row shows the last segment, and the whole path is what the folds cost it.
     ///
-    /// **The one row of REMOTES that is left out is the remote's own** — it is a thing in itself rather than the
-    /// shape of the names under it, and what it has to say is the role it holds (the default remote), which is a
-    /// sentence and not a name (`hoverText`). Every other row of that section opens, as every row of BRANCHES does,
-    /// and so does every row of WORKTREES: what a working copy's row shows is a folder's name, and the whole of it is
-    /// the path git lists it under.
+    /// **The one leaf of REMOTES that is left out is the remote's own row** — it is a thing in itself rather than
+    /// the shape of the names under it, and what it has to say is the role it holds (the default remote), which is a
+    /// sentence and not a name. Every other leaf of that section opens, as every leaf of BRANCHES does, and so does
+    /// every row of WORKTREES: what a working copy's row shows is a folder's name, and the whole of it is the path
+    /// git lists it under.
     readonly property bool expands:
         navRow.opensFacts
+        && !navRow.folder
         && (navRow.kindHint === "branch"
             || navRow.kindHint === "worktree"
             || (navRow.kindHint === "remote" && !navRow.isRemoteRow))
@@ -601,7 +604,8 @@ Item {
         // A row that opens says it all under itself, name included — two things opening off one pointer would sit on
         // top of each other (the reading the line-ending mark's own row makes above). **Three sections answer this
         // way**, and a working copy's row is one of them: the state git noted on it is said by the line it opens
-        // (`NavRowFacts`), not from here.
+        // (`NavRowFacts`), not from here. **Their fold parents fall through to the folder rule below**: nothing
+        // opens under a folder, so nothing would be standing on top of anything.
         if (navRow.expands)
             return ""
         // The one folder row that is a thing in itself says what it is for when it holds the mark. The role
@@ -610,8 +614,10 @@ Item {
         // (§リモートを書き留める).
         if (navRow.pushesHere)
             return qsTr("Default remote (origin) — %1").arg(full)
-        // A folder in the working tree's list says its own path, the same as the file rows under it — the path rides
-        // in `orig_path` (`full` is the fold key, and a ref folder's fold key is its own path).
+        // **Every folder row says its own path** — the sections that open are no exception, because a fold parent
+        // has nothing to open (`expands`) and the path is the one thing the row cannot show: what it draws is the
+        // last segment, and the folders above it are what the reader lost to get it. In the working tree's list the
+        // path rides in `orig_path`; a ref folder's fold key is its own path, so `full` is it.
         if (navRow.folder)
             return navRow.kindHint === "wt" ? navRow.orig_path : full
         if (navRow.kindHint === "stash")

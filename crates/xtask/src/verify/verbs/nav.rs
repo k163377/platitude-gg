@@ -282,9 +282,18 @@ pub(super) const TABLE: &[Verb] = &[
     // **The rows left on this side are few**: the remote's own row,
     // stashes, tags and the working tree's files. A row of BRANCHES,
     // REMOTES or WORKTREES is read by `nav-open` instead.
+    // **A fold parent is judged on the words**, and only on a name the
+    // row itself does not already show: `--preset nested` row 2 is the
+    // folder `backend`, whose path is `team/backend`, so a tooltip built
+    // from the row's shown segment instead of its fold key parts from
+    // the claim here. Every folder at the top of a tree spells the two
+    // the same, which is why the claim cannot live on one of those.
     Verb {
         name: "nav-tip",
-        when: &[],
+        when: &[(
+            Arg::Is("branch:2"),
+            "lit=true wants=true tip=true open=false text=team/backend",
+        )],
         plain: "lit=true wants=true tip=true",
     },
     // Where one click on a left-panel row leads. **The picture cannot
