@@ -308,10 +308,39 @@ pub(super) const TABLE: &[Verb] = &[
     // repository's and the preset's, not the rule's — they go on the
     // line (`says=`) for the reader of the report, and the picture is
     // where a row that opened on nothing is caught.
+    // A REMOTES row opens on the same lines, and two of them are its
+    // own: the branch measured against the reading, and the copy
+    // holding **that** branch. Neither is anything the picture settles —
+    // a line drawn from the row's own name instead of from the join
+    // frames the same — so the words are judged.
+    //
+    // **`open=` rides inside them**: the sentence is empty until a row
+    // is open, so `says=` carrying a name is the row having opened.
     Verb {
         name: "nav-open",
-        when: &[],
+        when: &[
+            (
+                Arg::Is("remote:0:main"),
+                "says=origin/main local=main track=1/0 held=",
+            ),
+            (
+                Arg::Is("remote:0:topic-a"),
+                "says=origin/feature/topic-a local=feature/topic-a track=1/0 held=topic",
+            ),
+        ],
         plain: "wants=false tip=false open=true",
+    },
+    // The reader who does not wait out the rest: a press on a closed
+    // row's own line that starts to move. **Three answers in one line** —
+    // the lines came out at once (`open=`), the drag reached them
+    // (`copied=`), and the row did not take the gesture for a click
+    // (`clicked=false`). None of the three is anything the picture
+    // settles: a row that opened and then dropped the drag frames
+    // exactly like one that carried it.
+    Verb {
+        name: "nav-drag-open",
+        when: &[],
+        plain: "open=true caret=true copied=true clicked=false",
     },
     // The same rest, taken on the last row of a section holding more
     // rows than it has height for (`--preset stack`: 30 branches, 10 of

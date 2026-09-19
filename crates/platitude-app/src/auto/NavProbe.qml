@@ -147,6 +147,21 @@ QtObject {
         else if (what === "filter")
             probe.typeFilter("zzzz")
     }
+    /// PGG_AUTO_ACT=nav-drag-open: a press on a **closed** row's own line that starts to move. It goes in at the
+    /// row's own handlers, which is where a hand goes in, and says whether the view had built that row to press.
+    function dragRow(kind, row) {
+        const list = probe.listOf(kind)
+        return !!list && list.dragRow(row)
+    }
+    /// What that drag came away with, off the field the open row shows its name in (`NameCell.whole`).
+    function rowNameTook(kind, row) {
+        const list = probe.listOf(kind)
+        return list ? list.rowNameTook(row) : ""
+    }
+    function rowNameCaret(kind, row) {
+        const list = probe.listOf(kind)
+        return !!list && list.rowNameCaret(row)
+    }
     /// What the hand on those lines came away with, and where the click landed — the pad's own answers
     /// (`SweepPad`), read through the lines that are open.
     function factsCaret() {

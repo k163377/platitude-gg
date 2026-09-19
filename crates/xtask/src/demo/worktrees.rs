@@ -194,6 +194,43 @@ pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// A branch that reads a remote and is checked out somewhere else: the
+/// one shape in which a REMOTES row opens on all three of its lines —
+/// the reading's own name, the branch measured against it with the
+/// counts, and the working copy holding that branch
+/// (デザイン規約 §左メニューの所作).
+///
+/// **All three have to be true at once**, and no other preset has them:
+/// `worktrees` has copies and no remote, and the remote presets have
+/// readings and no second copy. The commit made over in the copy is what
+/// gives the line a count to draw — a branch level with its reading
+/// draws none.
+pub(super) fn tracked_elsewhere(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nA branch read from a remote and held by another copy.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+
+    repo.git(&["switch", "--create", "feature/topic-a"])?;
+    repo.commit("src/topic.txt", "topic draft\n", "feat: draft the topic")?;
+    repo.git(&["push", "--set-upstream", "origin", "feature/topic-a"])?;
+    repo.git(&["switch", "main"])?;
+
+    // Out in a copy of its own, and one commit past what the remote
+    // holds.
+    repo.git(&["worktree", "add", "../topic", "feature/topic-a"])?;
+    let topic = repo.root.join("topic");
+    std::fs::write(topic.join("src/topic.txt"), "topic ready\n")
+        .map_err(|e| format!("writing topic.txt: {e}"))?;
+    repo.git_at(&topic, &["add", "--", "src/topic.txt"])?;
+    repo.git_at(&topic, &["commit", "-m", "feat: finish the topic"])?;
+    Ok(())
+}
+
 /// A working copy standing where no ref reaches: detached, with a commit
 /// made in it. **That commit is in the graph only because the walk is
 /// told to name it** (`session::walk::walk_command`) — `git log` reads

@@ -75,6 +75,16 @@ Item {
             navTipTimer.then = arg
             navTipTimer.foot = true
             navTipTimer.begin("branch")
+        } else if (act === "nav-drag-open") {
+            // The reader who does not wait: a press on a **closed** row's own line that starts to move. The lines
+            // come out at once and the drag carries on into them, so the name can be taken away without sitting
+            // out the rest first (デザイン規約 §左メニューの所作).
+            const parts = ("" + arg).split(":")
+            dragOpenTimer.kind = parts[0] === "" ? "branch" : parts[0]
+            dragOpenTimer.row = parts.length > 1 ? Number(parts[1]) : 2
+            dragOpenTimer.held = parts.length > 2 ? parts[2] : ""
+            dragOpenTimer.acted = false
+            dragOpenTimer.start()
         } else if (act === "nav-open-held") {
             // The other order: the name box first, and **then** a hand on a row. Nothing may open — what opens moves
             // the rows under it, and the box is the only thing on screen saying what mode the reader is in.
@@ -277,6 +287,43 @@ Item {
             // in the ordinary voice (規約 §git 用語のコード表記 の 1:1 規則 — the same reading `move_ask` makes).
             Harness.report("rename_ask hold=" + graphPane.askHold
                               + " code=" + graphPane.askCode)
+            driver.complete()
+        }
+    }
+    // The press that does not wait out the rest: it lands on a closed row's own line, moves, and the lines have to
+    // be out and holding the drag by the time it is let go. **Nothing is pointed at first** — the rest is exactly
+    // what this gesture is skipping, so a run that rested on the row would be reading the other path.
+    SampleTimer {
+        id: dragOpenTimer
+        property string kind: "branch"
+        property int row: 2
+        /// A filter typed before the hand arrives, for a row that is folded away without one.
+        property string held: ""
+        property bool acted: false
+        property string name: ""
+        onTriggered: {
+            if (!dragOpenTimer.acted) {
+                if (dragOpenTimer.held !== "" && navProbe.typeFilter(dragOpenTimer.held) !== dragOpenTimer.held)
+                    return
+                // The rows have to be there to press: a delegate arrives on the layout after the model got them,
+                // and a miss reads exactly like a row that refused to open (`NavList.dragRow`).
+                dragOpenTimer.name = navProbe.tipNameAt(dragOpenTimer.kind, dragOpenTimer.row)
+                if (dragOpenTimer.name === "" || !navProbe.dragRow(dragOpenTimer.kind, dragOpenTimer.row))
+                    return
+                dragOpenTimer.acted = true
+                return
+            }
+            dragOpenTimer.stop()
+            const took = navProbe.rowNameTook(dragOpenTimer.kind, dragOpenTimer.row)
+            Harness.report("nav_drag_open section=" + dragOpenTimer.kind
+                + " row=" + dragOpenTimer.row + " name=" + dragOpenTimer.name
+                + " open=" + navProbe.rowFactsOpen
+                + " caret=" + navProbe.rowNameCaret(dragOpenTimer.kind, dragOpenTimer.row)
+                + " copied=" + (took !== "")
+                // A drag that took the name is not a click — the reader was copying, and the row's second click
+                // opens a name box (`NavItemDelegate.lineClicked`).
+                + " clicked=" + (sidebarPane.activeKey !== "")
+                + " took=" + took)
             driver.complete()
         }
     }

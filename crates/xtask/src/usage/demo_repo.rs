@@ -155,6 +155,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         worktree-detached  one linked copy, detached, with a commit made
                   in it: the one shape where a working copy stands
                   somewhere no branch, tag or remote reaches (nav-jump)
+        tracked-elsewhere  a branch that reads a remote and is checked
+                  out in another copy, one commit past that reading: the
+                  one shape where a REMOTES row opens on all three of
+                  its lines (nav-open)
         pictures  a picture in every bucket the diff pane previews from:
                   a logo changed in the tree (art/logo.png), a vector
                   mark changed beside it (art/mark.svg — rows and
