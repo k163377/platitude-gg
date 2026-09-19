@@ -30,6 +30,26 @@ Rectangle {
     /// — the gesture's own beat is the one place in the app where a press has landed and nothing has happened yet,
     /// and the reader is looking straight at this chip while it does.
     property bool waiting: false
+    /// What this name reads, or what reads it, drawn **inside this frame** under the name —
+    /// `{mark, markTint, text, tone, ahead, behind}`, or null where there is nothing to say. Only the card a chip
+    /// unfolds into sets it (`RefListPopup`): a graph row is one chip tall, and the card is where this frame has the
+    /// room. **One frame** — what the line names is this ref's own reading, so it belongs in the box the name is in,
+    /// the way a wrapped name does.
+    property var mate: null
+    /// What that line takes off the frame's floor: **a line box of its own, the same one the name has**. The frame
+    /// then holds two boxes of one height, so the room over the name is the room under the line — measured off the
+    /// box rather than the words, whose own ink leaves less under a `fontSm` line than over a `fontChip` one
+    /// (observed: the frame closed tighter under the second line than it opened over the first).
+    readonly property real mateRoom: chip.mate ? Theme.fontChipLine : 0
+    /// And what each line asks of the frame's width — the measure rides whichever of the two names the local
+    /// branch ([`trackOnName`]).
+    readonly property real mateWidth: chip.mate ? mateRow.implicitWidth : 0
+    readonly property real trackRoom: mateTrack.active ? Theme.spaceSm + mateTrack.width : 0
+    /// Whether the measure stands on the chip's own line. **It rides the line that names the local branch**, the way
+    /// the left panel's rows draw it: a branch's own row carries it, and a remote-tracking row carries it on the line
+    /// that names the branch reading it (デザイン規約 §左メニューの所作). So it is the chip's own line when the chip is
+    /// the branch, and the line under it when the chip is what that branch reads.
+    readonly property bool trackOnName: chip.recKind === "L"
 
     visible: records.length > 0
     // The name's own line box, and the frame drawn around it — nothing else is in the box, so nothing else sets its
@@ -42,13 +62,16 @@ Rectangle {
     // whose lines are taller than the box (the CJK ones are). **A one-line chip is the same eighteen it always
     // was** — the term is zero.
     height: Theme.fontChipLine + Math.max(0, chip.nameLines - 1) * chipFont.lineSpacing + 2 * Theme.borderWidth
+            + chip.mateRoom
     // **The frame is drawn on whole pixels.** Every term inside is fractional — glyph advances, and a mark's seat is
     // its ink — so the box lands wherever the sum does, and a box whose width stops just past a whole pixel **loses its
     // right border altogether**: the top and bottom rules and both corners are drawn, and the straight run between them
     // is not (measured — `main +4` came to 71.04 and drew three sides; the same chip at 72 draws four. The chip
     // clips, which is what puts its own frame under the cut). Rounded up, so the box is at least as wide as what it
     // holds; the pixel that buys goes where a layout's remainder goes anyway, into the padding at the end (§余白).
-    width: Math.min(Math.ceil(chipContent.implicitWidth) + 2 * Theme.spaceXs, maxWidth)
+    width: Math.min(Math.ceil(Math.max(chipContent.implicitWidth + (chip.trackOnName ? chip.trackRoom : 0),
+                                       chip.mateWidth + (chip.trackOnName ? 0 : chip.trackRoom)))
+                    + 2 * Theme.spaceXs, maxWidth)
     /// How many lines the name came out on. Only a wrapped chip can answer more than one.
     readonly property int nameLines: chip.wrapped ? Math.max(1, nameLabel.lineCount) : 1
     /// Everything in the chip that is not the name: the badge with its gap, the count with its own, and the mark in
@@ -71,6 +94,7 @@ Rectangle {
     /// column, whole columns narrower than the name it is already drawing (`tst_refstack.qml` holds it).
     function layOutNow() {
         chipContent.forceLayout()
+        mateRow.forceLayout()
     }
     /// Whether the row carries names this card is not showing, which is the whole of what the count is for.
     readonly property bool hasCount: chip.records.length > 1
@@ -95,6 +119,10 @@ Rectangle {
     /// come to the same width either way, so this is the only thing that can say they are in the drawn order.
     readonly property real badgeX: badgeSeat.x
     readonly property real countX: countLabel.x
+    /// And where the measure under, or beside, the name came out — the seat it shares with the count, which nothing
+    /// in the arithmetic above says out loud (`tests/qml/tst_refstack.qml`).
+    readonly property real countY: countLabel.y
+    readonly property real trackY: mateTrack.y
     /// What is left for the name inside `maxWidth`.
     readonly property real nameRoom: chip.maxWidth - 2 * Theme.spaceXs - chip.furnitureW
     radius: Theme.radiusSm
@@ -360,6 +388,71 @@ Rectangle {
             text: "+" + (chip.records.length - 1)
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSm
+        }
+    }
+    // What this name reads, or what reads it, under the name and inside the same frame ([`mate`]) — the same line the
+    // left panel's rows open under themselves, in the same order: the mark that stands for the fact, the name, and
+    // the measure that name is worth (デザイン規約 §左メニューの所作).
+    //
+    // **A step in from the name**, so the line hangs off it rather than standing beside it as a second name would.
+    Row {
+        id: mateRow
+        visible: chip.mate !== null
+        // Hard against the frame's own padding, the mark first: the panel's lines lead with the mark and this is the
+        // same line (デザイン規約 §左メニューの所作). Stepped in from the name above, it read as a second name rather than
+        // as what that name reads.
+        x: Theme.spaceXs
+        // The second line box, straight under the first — the border is already inside what each seat below asks
+        // for (`inkY`), so this is the box's own step and nothing more.
+        y: Theme.fontChipLine + Math.max(0, chip.nameLines - 1) * chipFont.lineSpacing
+        height: Theme.fontChipLine
+        // The panel's own gap between a line's mark and its words (`NavFactLine`) — the mark here is seated the way
+        // that one is, on its box rather than to its ink, so the half gap the first line spends is taken up by the
+        // mark's own air and the cloud lands against the name.
+        spacing: Theme.spaceXs
+        // The seat the panel's lines keep whether or not a mark stands in it, so the words begin in one column
+        // (`NavFactLine`). Here it always has one — a line with nothing to stand for is a line with nothing to say.
+        // **On its line's box**, the way the badge sits on the first one.
+        Item {
+            width: Theme.iconXs
+            height: Theme.iconXs
+            y: Theme.borderWidth + Math.round((Theme.fontChipLine - Theme.iconXs) / 2)
+            NavIcon {
+                anchors.centerIn: parent
+                anchors.horizontalCenterOffset: (Theme.iconSm - Theme.iconXs) / 2
+                kind: chip.mate ? chip.mate.mark : ""
+                tint: chip.mate ? chip.mate.markTint : Theme.textSecondary
+                width: Theme.iconSm
+                height: Theme.iconSm
+            }
+        }
+        // Seated to its ink in that box, the way every other word in this frame is (`inkY`): centred on the box, a
+        // `fontSm` line hangs low against the name over it, since a line box keeps more room over its ascender than
+        // under its descender.
+        Label {
+            id: mateText
+            y: chip.inkY(mateText, countInk)
+            text: chip.mate ? chip.mate.text : ""
+            color: chip.mate ? chip.mate.tone : Theme.textSecondary
+            font.pixelSize: Theme.fontSm
+        }
+    }
+    // How far that branch stands from what it reads. **At the frame's right-hand end, on the line that names the
+    // branch** ([`trackOnName`]) — the same seat and the same measure the panel's rows draw at their own right edge
+    // (`HeadTrack`), so the two places read as one answer.
+    Loader {
+        id: mateTrack
+        active: chip.mate !== null && (chip.mate.ahead > 0 || chip.mate.behind > 0)
+        visible: mateTrack.active
+        x: chip.width - Theme.spaceXs - mateTrack.width
+        // On its line, seated where that line's digits are. **The measure is a `fontSm` digit and its mark**, which
+        // is what the count at the end of the name already is, so it takes the count's own seat — centred on the box
+        // instead, it hangs below the name it is measuring, and the room that leaves makes the frame's own padding
+        // read as uneven.
+        y: (chip.trackOnName ? 0 : mateRow.y) + chip.inkY(countLabel, countInk)
+        sourceComponent: HeadTrack {
+            ahead: chip.mate ? chip.mate.ahead : 0
+            behind: chip.mate ? chip.mate.behind : 0
         }
     }
 }
