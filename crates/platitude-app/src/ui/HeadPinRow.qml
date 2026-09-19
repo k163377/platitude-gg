@@ -61,8 +61,10 @@ Rectangle {
     readonly property real nameOverflow:
         pinWhole.item ? Math.max(0, pinWhole.item.implicitHeight - pinWhole.item.lineHeight) : 0
     y: headPin.rowAbove ? 0 : headPin.viewHeight - height
-    // Dressed as the row it stands for, down to the margins: the current branch's own highlight.
-    color: Theme.accentMuted
+    // Dressed as the row it stands for, down to the margins — which leaves it the list's own ground, since a row of
+    // this list carries none of its own (`NavItemDelegate`). **Opaque all the same**: the rows scroll under it, and
+    // the hairline at its foot is what says they do.
+    color: Theme.bgSurface
     Rectangle {
         anchors.fill: parent
         color: Theme.bgHover

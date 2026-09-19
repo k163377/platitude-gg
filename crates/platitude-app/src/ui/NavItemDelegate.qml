@@ -164,13 +164,10 @@ Item {
     /// the whole of it fits the line it was already on (`NameCell.wholeOver`).
     readonly property real nameOverflow: rowLayout.nameWholeOver
 
-    // The current branch stays highlighted inside the list (the sidebar's sticky row only stands in for it while this
-    // row is scrolled off).
-    Rectangle {
-        anchors.fill: parent
-        color: Theme.accentMuted
-        visible: navRow.is_head && !navRow.folder
-    }
+    // **The grounds in this list answer the hand alone** — the click and the pointer. Where the reader is standing is
+    // said by the name (`NavRowBody`: `textLink` + DemiBold, デザイン規約 §ref の種別): a ground for that as well would
+    // wear the selection's own colour, and the click that lands on the current branch would have nothing left to show
+    // for it.
     // The row a click last landed on. Without it the second click of the rename gesture would be aimed at nothing, and
     // a click on a row whose commit is already the one being read — a worktree standing where the graph already is —
     // would look like it missed.
