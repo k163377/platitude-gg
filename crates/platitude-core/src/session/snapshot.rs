@@ -26,6 +26,25 @@ pub struct RefsSnapshot {
     /// and 45,901 tags would each pay for the field (CLAUDE.md 性能予算 — refs
     /// の本数から独立).
     pub tag_drifts: Vec<TagDrift>,
+    /// What the remotes last advertised under `refs/tags/`, shared with
+    /// the session that built this — **a pointer, not a copy**
+    /// ([`Self::tag_remotes`]).
+    ///
+    /// A tag's row opens on the remotes carrying its name
+    /// (デザイン規約 §左メニューの所作), and that answer is already held
+    /// here once: writing the carriers into the rows as well is every name
+    /// a second time, which on `JetBrains/kotlin`'s 45,901 tags is
+    /// megabytes of the memory budget for data this index has
+    /// (ci/baseline/code-costs-windows-x64.md §メモリの形). **One row is
+    /// open at a time**, so the reading is a search of one name's run
+    /// rather than anything built per tag.
+    ///
+    /// **Two snapshots sharing one index compare in constant time** — an
+    /// `Arc` over an `Eq` type answers on the pointer where both sides
+    /// point at the same allocation — so the listing weighed against the
+    /// one before it (`RepoSession::share_snapshot`) pays nothing for
+    /// this field while the remotes have not been read again.
+    pub remote_tags: std::sync::Arc<RemoteTagIndex>,
     pub head: Option<HeadState>,
     /// Names of the configured remotes, sorted. A branch with no upstream
     /// has to be told where to go, and this is the list to offer.
@@ -65,6 +84,19 @@ impl RefsSnapshot {
             .ok()
             .and_then(|found| self.tags_by_name.get(found))
             .and_then(|at| self.tags.get(*at as usize))
+    }
+
+    /// The remotes carrying the tag called `short`, each said once and in
+    /// name order, with whether it stands somewhere other than where
+    /// `against` has it — empty where no remote has the name, and where
+    /// nothing has read the remotes yet
+    /// ([`RemoteTagIndex::carriers_against`]).
+    ///
+    /// **This is the list [`TagItem::has_remote`] is the cloud for**: the
+    /// row wears one mark for "somebody out there has this", and the row
+    /// opened says who (デザイン規約 §左メニューの所作).
+    pub fn tag_remotes(&self, short: &str, against: &str) -> Vec<(&str, bool)> {
+        self.remote_tags.carriers_against(short, against)
     }
 
     fn branch_named<'a>(sorted: &'a [BranchItem], short: &str) -> Option<&'a BranchItem> {

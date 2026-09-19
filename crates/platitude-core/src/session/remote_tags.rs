@@ -20,8 +20,14 @@ use super::*;
 /// (ci/baseline/code-costs-windows-x64.md §メモリの形). The operations are
 /// the ones the two joins need — is this name out there, and walk the
 /// names in order — and both are as good on a sorted run as on a tree.
+/// **Public because the sidebar snapshot carries a pointer to it**
+/// ([`crate::session::RefsSnapshot::remote_tags`]): a tag's row opens on
+/// the remotes carrying its name, and copying those names into the
+/// snapshot is every name a second time (see `readings` below for what
+/// that costs). What is public is the reading
+/// ([`Self::carriers_against`]); the run itself is this module's.
 #[derive(Debug, Default, PartialEq, Eq)]
-pub(crate) struct RemoteTagIndex {
+pub struct RemoteTagIndex {
     /// Sorted by name, then by commit. Built once per merge and read many
     /// times, so it is sorted on the way in and never mutated after.
     entries: Vec<RemoteTagEntry>,
@@ -65,9 +71,11 @@ impl RemoteTagEntry {
 impl RemoteTagIndex {
     /// Collects readings into the sorted run. Each `(name, commit)` is one
     /// entry however many remotes carry it, and their names gather on it.
-    pub(crate) fn build(
-        readings: impl Iterator<Item = (crate::Name, Oid, bool, crate::Name)>,
-    ) -> Self {
+    ///
+    /// **The only constructor**, and public for the same reason the type
+    /// is: a snapshot standing on nothing but this index can only be built
+    /// by whoever can build one (`models::nav::testkit`).
+    pub fn build(readings: impl Iterator<Item = (crate::Name, Oid, bool, crate::Name)>) -> Self {
         let mut entries: Vec<RemoteTagEntry> = Vec::new();
         for (name, commit, annotated, remote) in readings {
             entries.push(RemoteTagEntry {
@@ -116,6 +124,45 @@ impl RemoteTagIndex {
         self.entries
             .binary_search_by(|e| e.name.as_str().cmp(name))
             .is_ok()
+    }
+
+    /// The remotes carrying this name, each said once and in name order,
+    /// with whether it stands somewhere other than where `against` has it
+    /// — what a tag's row opens under itself
+    /// (デザイン規約 §左メニューの所作).
+    ///
+    /// **`against` is the reading the others are read against** — the
+    /// remote this repository's tag rows act on. A name is one tag
+    /// wherever it is, and which of its readings is *the* one is not a
+    /// question the commits can answer: the reader's own copy is one
+    /// opinion among them, and calling it the reference puts the warning
+    /// on whichever remote disagrees with a local tag that may itself be
+    /// the odd one out.
+    ///
+    /// Nobody stands apart where `against` does not carry the name: with
+    /// no reading to be read against, the list is a list of names.
+    ///
+    /// One row at a time, so this walks the one name's run rather than
+    /// building anything: the rows that are not open are not asked.
+    pub fn carriers_against(&self, name: &str, against: &str) -> Vec<(&str, bool)> {
+        let start = self.entries.partition_point(|e| e.name.as_str() < name);
+        let run = || {
+            self.entries[start..]
+                .iter()
+                .take_while(|e| e.name.as_str() == name)
+        };
+        let reference = run()
+            .find(|e| e.remotes.iter().any(|c| c.remote.as_str() == against))
+            .map(|e| e.commit);
+        let mut out: Vec<(&str, bool)> = run()
+            .flat_map(|e| {
+                let apart = reference.is_some_and(|here| here != e.commit);
+                e.remotes.iter().map(move |c| (c.remote.as_str(), apart))
+            })
+            .collect();
+        out.sort_unstable();
+        out.dedup_by(|a, b| a.0 == b.0);
+        out
     }
 
     /// Whether the graph's cloud belongs on this repository's copy of the

@@ -58,11 +58,14 @@ fn head_at(commit: Oid) -> HeadState {
     }
 }
 
-fn index_of(remote: &str, tags: Vec<RemoteTag>) -> RemoteTagIndex {
-    RemoteTagIndex::build(
+/// Shared, because that is how the snapshot takes it: the rows are asked
+/// about the carriers of a name long after the join, off the one index
+/// (`RefsSnapshot::remote_tags`).
+fn index_of(remote: &str, tags: Vec<RemoteTag>) -> std::sync::Arc<RemoteTagIndex> {
+    std::sync::Arc::new(RemoteTagIndex::build(
         tags.into_iter()
             .map(|t| (t.name, t.commit, t.annotated, crate::Name::from(remote))),
-    )
+    ))
 }
 
 /// The row carries whether the reading it speaks for is standing where
@@ -505,6 +508,114 @@ fn a_tag_only_a_remote_has_is_listed_and_marked() {
         .expect("listed");
     assert!(!v9.here && v9.has_remote && v9.annotated);
     assert_eq!(v9.created_unix, 0, "an advertisement carries no date");
+}
+
+/// Which remotes carry a name is what its row opens on, and the snapshot
+/// answers it off the index it was built with rather than out of the rows
+/// (デザイン規約 §左メニューの所作).
+///
+/// **A name is one row however many remotes have it**, on however many
+/// commits, so all four shapes are asked here: held by two that agree,
+/// held by one somewhere else than here, held by nobody, and a name this
+/// repository does not have at all.
+///
+/// **The readings are read against one of themselves** — the remote this
+/// repository's tag rows act on — and never against the local tag: which
+/// of the readings is the one is not a question the commits answer, and
+/// the copy here is one opinion among them.
+#[test]
+fn the_snapshot_says_which_remotes_carry_a_tag() {
+    let refs = vec![
+        branch("main", oid(1)),
+        tag("v1", oid(1), false),
+        tag("v2", oid(2), false),
+        tag("v3-local", oid(1), false),
+    ];
+    let remote_tags = std::sync::Arc::new(RemoteTagIndex::build(
+        [
+            ("v1", oid(1), "origin"),
+            ("v1", oid(1), "fork"),
+            // The same name, standing where this repository does not have
+            // it: a carrier all the same.
+            ("v2", oid(5), "fork"),
+            ("v9", oid(9), "origin"),
+        ]
+        .into_iter()
+        .map(|(name, commit, remote)| {
+            (
+                crate::Name::from(name),
+                commit,
+                false,
+                crate::Name::from(remote),
+            )
+        }),
+    ));
+    let nobody = held_by_nobody();
+    let joins = RefJoins::new(&refs, &nobody);
+    let snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
+
+    assert_eq!(
+        snapshot.tag_remotes("v1", "origin"),
+        vec![("fork", false), ("origin", false)],
+        "both carriers, each said once and in name order, neither apart"
+    );
+    assert_eq!(
+        snapshot.tag_remotes("v2", "origin"),
+        vec![("fork", false)],
+        "nobody stands apart from a reading the reference does not have"
+    );
+    assert!(
+        snapshot.tag_remotes("v3-local", "origin").is_empty(),
+        "a tag nobody out there has opens on nothing"
+    );
+    assert_eq!(
+        snapshot.tag_remotes("v9", "origin"),
+        vec![("origin", false)],
+        "a name only a remote has is a row of its own, and says whose"
+    );
+    assert!(snapshot.tag_remotes("never", "origin").is_empty());
+
+    // The same name read against the other carrier: the one that answers
+    // is the reference, and it is the reading the rest are weighed
+    // against — the local tag has no say in it.
+    assert_eq!(
+        snapshot.tag_remotes("v2", "fork"),
+        vec![("fork", false)],
+        "the reference never stands apart from itself"
+    );
+}
+
+/// A name three remotes disagree about: the reference is one of them, and
+/// **every other reading is apart** whether or not it is the one this
+/// repository has.
+#[test]
+fn the_carriers_of_a_tag_stand_apart_from_the_reference_alone() {
+    let refs = vec![branch("main", oid(1)), tag("v1", oid(3), false)];
+    let remote_tags = std::sync::Arc::new(RemoteTagIndex::build(
+        [
+            ("v1", oid(2), "origin"),
+            ("v1", oid(3), "fork"),
+            ("v1", oid(4), "mirror"),
+        ]
+        .into_iter()
+        .map(|(name, commit, remote)| {
+            (
+                crate::Name::from(name),
+                commit,
+                false,
+                crate::Name::from(remote),
+            )
+        }),
+    ));
+    let nobody = held_by_nobody();
+    let joins = RefJoins::new(&refs, &nobody);
+    let snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
+
+    assert_eq!(
+        snapshot.tag_remotes("v1", "origin"),
+        vec![("fork", true), ("mirror", true), ("origin", false)],
+        "the reading here (fork's) is apart like any other"
+    );
 }
 
 /// Ignored: it needs a repository worth measuring. Run it with

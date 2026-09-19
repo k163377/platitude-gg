@@ -411,11 +411,15 @@ pub(super) fn join_key(
 pub(super) fn build_snapshot(
     refs: &[RefEntry],
     head: &HeadState,
-    remote_tags: &RemoteTagIndex,
+    remote_tags: &std::sync::Arc<RemoteTagIndex>,
     joins: &RefJoins<'_>,
 ) -> RefsSnapshot {
     let mut snapshot = RefsSnapshot {
         head: Some(head.clone()),
+        // The same index this join reads, carried on for the rows to be
+        // asked of later: which remotes have a tag is what its row opens
+        // on (`RefsSnapshot::remote_tags`).
+        remote_tags: std::sync::Arc::clone(remote_tags),
         ..Default::default()
     };
     for r in refs {

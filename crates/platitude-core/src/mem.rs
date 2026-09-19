@@ -284,6 +284,10 @@ impl Footprint for crate::session::RefsSnapshot {
             + self.tags.heap_bytes()
             + self.tags_by_name.heap_bytes()
             + self.tag_drifts.heap_bytes()
+            // Not `remote_tags`: the snapshot holds a pointer to the
+            // session's one index, which the report counts under its own
+            // name (`session::heap` の `remote-tag-index`). Counting it
+            // here says the same bytes twice.
             + self.head.heap_bytes()
             + self.remote_names.heap_bytes()
             + self.remote_urls.heap_bytes()

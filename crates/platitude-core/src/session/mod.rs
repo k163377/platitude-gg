@@ -128,7 +128,7 @@ use print::RowPrint;
 use published::PublishMarks;
 pub use query::{DiffReadOutcome, DiffRefreshTask};
 use read_flight::{ReadFlight, Stamp};
-pub(crate) use remote_tags::RemoteTagIndex;
+pub use remote_tags::RemoteTagIndex;
 pub use repo_session::RepoSession;
 pub use snapshot::{BranchItem, RefsSnapshot, TagDrift, TagItem};
 use standing::{HeadHold, HeadOffer, HeadPublished, Standing};
