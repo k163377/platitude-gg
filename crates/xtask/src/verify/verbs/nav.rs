@@ -382,6 +382,78 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "wants=false tip=false open=true",
     },
+    // A TAGS row, which opens on the remotes carrying its name. **The
+    // three shapes are one claim each**, and the picture settles none of
+    // them: a list of one, a list of two and an empty list all frame as
+    // the same row with lines under it, and a carrier drawn from the
+    // row's own name frames like one drawn from the readings.
+    //
+    // `sides=` is what the row's own cloud is drawn from and `remotes=`
+    // what the lines name — **the pair is the point**: a row wearing the
+    // cloud and opening on nothing is exactly the wiring this verb is
+    // here to catch. `against=` and `apart=` are the half no picture
+    // reaches: which reading the others are read against, and which of
+    // them stands somewhere else than it. Both come off the index alone
+    // (`RemoteTagIndex::carriers_against`), and the drawing of a line
+    // marked for the wrong reason frames like one marked for the right
+    // one.
+    //
+    // The local-only row is judged on the empty pair, and what makes
+    // that mean anything is the run: it fetches and waits for the
+    // reading to have been taken before it rests on the row
+    // (`AutoActNavBoxVerbs.navOpenTagTimer`), so an empty list is the
+    // answer rather than the question not having been asked.
+    Verb {
+        name: "nav-open-tag",
+        // **`says=` carrying the name is the row having opened** — the
+        // sentence is empty until one is, which is why `open=` is not
+        // spelled out in these four (a claim is read as one run of the
+        // line, and the geometry stands between them).
+        when: &[
+            // The supplement the marked line keeps: **the only place the
+            // reason for that line's colour is said**, and it names the
+            // reading it is apart from — a line saying only "another
+            // commit" would leave the reader to guess than what. The run
+            // rests on the **first** line, which in this preset is the
+            // one standing apart.
+            (
+                Arg::Is("v1.5:drift:tip"),
+                "tip=true text=On another commit than origin",
+            ),
+            // Carried by both remotes, on one commit.
+            (
+                Arg::Is("v1.0:remote"),
+                "says=v1.0 local= track=0/0 held= up= gone=false branch= state= \
+                 remotes=fork,origin against=origin apart=",
+            ),
+            // The row this preset is for: the two remotes have the name
+            // on different commits, under the one row. **The one that is
+            // marked is the one standing apart from the reading this
+            // window acts on** — the copy here has no say in it, and it
+            // is standing where the fork is.
+            (
+                Arg::Is("v1.5:drift"),
+                "says=v1.5 local= track=0/0 held= up= gone=false branch= state= \
+                 remotes=fork,origin against=origin apart=fork",
+            ),
+            // A name only one of them has — the one row of TAGS no local
+            // ref points at, and the lines are where it can be read at
+            // all. **Nobody stands apart**: the reference has not got the
+            // name, so there is no reading to be read against.
+            (
+                Arg::Is("v0.9-theirs:remote"),
+                "says=v0.9-theirs local= track=0/0 held= up= gone=false branch= state= \
+                 remotes=fork against=origin apart=",
+            ),
+            // And the row that opens on nothing at all.
+            (
+                Arg::Is("v2.0-local"),
+                "says=v2.0-local local= track=0/0 held= up= gone=false branch= state= \
+                 remotes= against=origin apart=",
+            ),
+        ],
+        plain: "open=true",
+    },
     // The rest on what a row opened, and the one thing those lines
     // keep for it: where the working copy stands. **`open=` rides with
     // it** — a tip that came up over a row that never opened is the

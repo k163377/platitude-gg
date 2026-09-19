@@ -188,6 +188,13 @@ QtObject {
         lines.tipPointed = on
         return true
     }
+    /// PGG_AUTO_ACT=nav-open-tag `:tip`: the same rest taken on **one** of those lines, which is where a tag's row
+    /// keeps the reason a carrier is wearing a warning (`NavRowFacts.pointLineTip`). Answers false until that line
+    /// is built.
+    function pointFactsLine(row, on) {
+        const lines = probe.sidebar.openFactsItem()
+        return lines !== null && lines.pointLineTip(row, on)
+    }
 
     /// PGG_AUTO_ACT=nav-peek-open: the same rest, taken on a row of the section the folded rail has open — the case
     /// where the row that grows is inside a popup, which has to make room for it without taking itself down.

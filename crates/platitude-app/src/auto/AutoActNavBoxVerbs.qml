@@ -108,6 +108,11 @@ Item {
             navTipTimer.opens = true
             navTipTimer.then = arg
             navTipTimer.begin("branch:2")
+        } else if (act === "nav-open-tag") {
+            // A TAGS row opening on the remotes carrying its name. **The row is named, not numbered** — the tags are
+            // sorted newest-first and a name only a remote has sorts last of all, so a number is the preset's
+            // business while the name is the run's.
+            navOpenTagTimer.begin(arg)
         } else if (act === "nav-rename" || act === "rename-branch"
                    || act === "rename-tag" || act === "rename-stash") {
             // Which row: the current branch, the first tag, the first stash. "nav-rename" leaves the box standing for
@@ -619,6 +624,111 @@ Item {
                 + (navTipTimer.opens ? " seat=" + sidebarPane.rowFactsGeom() : "")
                 + (navTipTimer.opens ? " says=" + navProbe.rowFactsWords() : "")
                 + (navTipTimer.head ? " pin=" + navProbe.headPinLit : ""))
+            driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=nav-open-tag: the lines a TAGS row opens under itself — one to a remote carrying the name
+    // (デザイン規約 §左メニューの所作).
+    //
+    // **The readings have to be in before the row is worth photographing.** Nothing local records what a remote
+    // carries under `refs/tags/` (`remote::tags::list_tags`), so a run that rested on the row the moment the window
+    // opened would photograph a tag that looks like nobody else's — which is a picture of the fetch not having
+    // happened. This waits for the answer itself, the way the tag menu's push row does
+    // (`AutoActRefVerbs.tagMenuTimer`).
+    SampleTimer {
+        id: navOpenTagTimer
+        property string tag: ""
+        /// What has to be known about the name first: `remote` waits until some remote is heard carrying it,
+        /// `drift` until one is heard carrying it somewhere else. Both are answers only `ls-remote --tags` brings, so
+        /// either one fetches. Left empty, the run is about a name nobody out there has — and it fetches too: an
+        /// empty row before the reading and an empty row after it are the same picture, so what that run waits on
+        /// is the reading having been taken at all (`ran`).
+        property string wants: ""
+        /// Whether the hand goes on from the open row to **the first of the lines it opened**. The rest is taken
+        /// there and nowhere else on purpose: a run that searched the lines for the one holding a supplement would
+        /// be asking the answer where to find itself. The lines stand in name order, so which line that is belongs
+        /// to the repository — in `--preset tagremotes` it is `fork`, the one standing apart from the reading the
+        /// window acts on (a line with nothing to add raises nothing, and the run waits out the ceiling).
+        property bool tip: false
+        property bool rested: false
+        /// A fetch has been seen running. **The edge, not the count**: the count is 0 before the ask as well, so a
+        /// run that read it on the beat after asking would go on before git had been started.
+        property bool ran: false
+        /// The geometry the last beat read, so a beat reading the same one knows the layout has come to rest.
+        property string stood: ""
+        function begin(arg) {
+            const parts = ("" + arg).split(":")
+            navOpenTagTimer.tag = parts[0]
+            navOpenTagTimer.wants = parts.length > 1 && parts[1] !== "tip" ? parts[1] : ""
+            navOpenTagTimer.tip = parts[parts.length - 1] === "tip"
+            navOpenTagTimer.stood = ""
+            navOpenTagTimer.rested = false
+            navOpenTagTimer.ran = false
+            repoTab.fetch("")
+            navOpenTagTimer.start()
+        }
+        /// Whether what this run waits on has arrived, asked of the same lookups the lines are drawn from
+        /// (`NavSectionModel`): the readings are in or they are not, and no count of fetches says which.
+        function ready() {
+            if (navOpenTagTimer.wants === "drift")
+                return tagsModel.remoteTagDrift(navOpenTagTimer.tag, repoTab.defaultRemote) !== ""
+            if (navOpenTagTimer.wants === "remote") {
+                const sides = tagsModel.tagSides(navOpenTagTimer.tag)
+                return sides === "remote" || sides === "both"
+            }
+            return navOpenTagTimer.ran
+        }
+        onTriggered: {
+            if (repoTab.busyCount !== 0) {
+                navOpenTagTimer.ran = true
+                return
+            }
+            if (!navOpenTagTimer.ready())
+                return
+            // Asked and re-applied every beat: the rows arrive on a read of their own, and the fetch above rebuilds
+            // the list under the hand — a row that was not there yet answers -1, which is also "the pointer is on no
+            // row" (`nav-open` の同じ歩き).
+            const row = tagsModel.rowOfName(navOpenTagTimer.tag)
+            if (row < 0)
+                return
+            navProbe.pointTipAt("tag", row)
+            if (!navProbe.rowFactsOpen)
+                return
+            // Nothing is read until the layout has stopped moving: what the row opened is measured on a layout and
+            // the section's height answers to that measurement in turn, so neither has arrived on the beat the row
+            // opened on (`nav-open` の同じ待ち).
+            const geom = sidebarPane.rowFactsGeom()
+            if (geom !== navOpenTagTimer.stood) {
+                navOpenTagTimer.stood = geom
+                return
+            }
+            // …and then the second rest, on the first of those lines. **Re-applied until it takes**: the lines are
+            // built on a later pass than the row that opened them, so a stand-in written before that answers
+            // nothing. The tip itself is the shared instance's to raise, on its own wait.
+            const tip = page.ToolTip.toolTip
+            if (navOpenTagTimer.tip) {
+                if (!navOpenTagTimer.rested) {
+                    navOpenTagTimer.rested = navProbe.pointFactsLine(0, true)
+                    return
+                }
+                if (!tip.visible)
+                    return
+            }
+            navOpenTagTimer.stop()
+            // `sides=` is what the row's own cloud is drawn from and `says=` carries the carriers the lines name —
+            // **the pair is the claim**: a row that wore the cloud and opened on nothing, and one that opened on a
+            // remote nobody heard of, frame exactly alike. The free fields of the sentence come last, as everywhere.
+            Harness.report("nav_open_tag tag=" + navOpenTagTimer.tag
+                + " row=" + row
+                + " sides=" + tagsModel.tagSides(navOpenTagTimer.tag)
+                + " open=" + navProbe.rowFactsOpen
+                + " shown=" + navProbe.rowFactsShown()
+                + " seat=" + sidebarPane.rowFactsGeom()
+                + " says=" + navProbe.rowFactsWords()
+                // The supplement one of those lines keeps, and the words it reached the reader as — last, after a
+                // sentence that carries free fields of its own. **Read off the shared instance**, which is where
+                // the value of a tooltip is (`nav-tip` の同じ読み方).
+                + " tip=" + tip.visible + " text=" + (tip.visible ? tip.text : ""))
             driver.complete()
         }
     }
