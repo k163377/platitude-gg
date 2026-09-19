@@ -305,6 +305,41 @@ pub(super) fn one_commit(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// Branch names three folders deep, with the current branch at the
+/// bottom of them — the one shape that shows where the stand-in for it
+/// sits when a fold anywhere along that path closes over its row
+/// (`HeadPinRow.seatedUnder`, デザイン規約 §左メニューの所作).
+///
+/// **Each level forks**, or a fold of one level cannot be told from a
+/// fold of the one under it: the rows left standing when
+/// `team/backend/api` closes are what says the fold was that one.
+///
+/// **`main` stands ahead of them all and has a line to open**: it is the
+/// row at depth 0 the stand-in's column is read against, and the one row
+/// above every fold here — so resting on it is how the seat is made to
+/// move while the stand-in is standing in it. A branch with no upstream
+/// and no other copy holding it opens nothing, which is why it is
+/// pushed.
+pub(super) fn nested(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nNames with folders in them.\n",
+        "docs: start the readme",
+    )?;
+    for name in [
+        "team/backend/api/add-cache",
+        "team/backend/db/migrate",
+        "team/web/landing",
+    ] {
+        repo.git(&["branch", name])?;
+    }
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+    repo.git(&["switch", "--create", "team/backend/api/fix-auth"])?;
+    repo.commit("src/auth.txt", "auth v1\n", "fix: the sign-in path")?;
+    Ok(())
+}
+
 /// A clone made with `--depth`, so the commit under the oldest row it
 /// holds was never fetched and a fold of the newest one is turned down
 /// before git is asked (`report::rewrite_unfetched_base`).

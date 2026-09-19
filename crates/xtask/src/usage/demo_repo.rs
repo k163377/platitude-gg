@@ -9,6 +9,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
       Build a throwaway repository (isolated from your git config) and
       print its path. Presets:
         basic     branches + remote (ahead) + tags + stash + dirty WIP
+        nested    branch names three folders deep, the current branch at
+                  the bottom of them: where the stand-in for it sits when
+                  a fold at any level closes over its row (nav-open head)
         dirty     every WIP bucket: staged, unstaged, untracked, renamed
         embedded  two repositories of their own in the working copy, one
                   with a commit and one without — the entries git answers

@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 
 use super::authorship::{authorship, co_authors};
 use super::basic::{
-    basic, detached, dirty, embedded, eol, noremote, one_commit, plan, rewrite_merge, shallow,
-    stashes,
+    basic, detached, dirty, embedded, eol, nested, noremote, one_commit, plan, rewrite_merge,
+    shallow, stashes,
 };
 use super::conflict::{
     cherry_pick_conflict, cherry_pick_quit, clashing, conflict, conflict_kinds, conflict_ours,
@@ -148,6 +148,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
     let mut repo = DemoRepo::init(root, name)?;
     match preset {
         "basic" => basic(&mut repo)?,
+        "nested" => nested(&mut repo)?,
         "dirty" => dirty(&mut repo)?,
         "embedded" => embedded(&mut repo)?,
         "eol" => eol(&mut repo)?,
