@@ -287,11 +287,13 @@ fn a_worktree_row_wears_the_state_of_its_checkout() {
     assert_eq!(says(&model, 4, Role::OrigPath), "release run");
 }
 
-/// The pair a branch row draws, and the row that draws none: a
-/// remote-tracking ref is the far side of somebody else's measurement,
-/// so it has no counts of its own to answer with.
+/// One measurement, answered from either end: a branch row carries its
+/// own, and the reading it names carries the same pair back — which is
+/// what the line naming that branch draws beside it
+/// (`NavRowFacts`, デザイン規約 §左メニューの所作). A reading nothing
+/// here names has no measurement to report.
 #[test]
-fn only_a_local_branch_answers_how_far_it_stands_from_its_upstream() {
+fn a_branch_and_the_reading_it_names_answer_the_same_pair() {
     let mut ours = local("main", true);
     ours.ahead = 2;
     ours.behind = 1;
@@ -300,13 +302,36 @@ fn only_a_local_branch_answers_how_far_it_stands_from_its_upstream() {
     assert_eq!(numbers(&mine, 0, Role::Ahead), 2);
     assert_eq!(numbers(&mine, 0, Role::Behind), 1);
 
+    let mut read = remote("origin/main");
+    read.tracked_by = "main".into();
+    read.ahead = 2;
+    read.behind = 1;
     let mut theirs = section(
         "remotes",
-        Source::Remotes(snapshot(vec![remote("origin/main")], Vec::new())),
+        // Name order, the way the join hands the list over: the lookups
+        // are a binary search over it (`RefsSnapshot::remote_named`).
+        Source::Remotes(snapshot(vec![remote("fork/main"), read], Vec::new())),
     );
+    // Flattened, so the rows addressed here are the readings and not the
+    // folders they fold under.
+    theirs.filter = "main".to_string();
     theirs.arrange();
-    assert_eq!(numbers(&theirs, 0, Role::Ahead), 0);
-    assert_eq!(numbers(&theirs, 0, Role::Behind), 0);
+    assert_eq!(says(&theirs, 0, Role::Name), "fork/main");
+    assert_eq!(
+        numbers(&theirs, 0, Role::Ahead),
+        0,
+        "a name alone joins nothing"
+    );
+    assert_eq!(says(&theirs, 1, Role::Name), "origin/main");
+    assert_eq!(numbers(&theirs, 1, Role::Ahead), 2);
+    assert_eq!(numbers(&theirs, 1, Role::Behind), 1);
+    assert_eq!(theirs.tracked_by("origin/main".to_string()), "main");
+    assert_eq!(theirs.tracked_by("fork/main".to_string()), "");
+    assert_eq!(
+        theirs.tracked_by("nobody".to_string()),
+        "",
+        "a name this section does not carry"
+    );
 }
 
 /// A branch row wears the state in the same slot the worktree rows
@@ -325,6 +350,7 @@ fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
         upstream_oid: None,
         upstream_drifted: false,
         held_elsewhere: held,
+        tracked_by: "".into(),
         ahead: 0,
         behind: 0,
     };
@@ -370,6 +396,7 @@ fn a_branch_carries_the_upstream_that_is_not_here_in_the_shared_slot() {
         upstream_oid: None,
         upstream_drifted: false,
         held_elsewhere: false,
+        tracked_by: "".into(),
         ahead: 0,
         behind: 0,
     };

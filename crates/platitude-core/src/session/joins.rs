@@ -27,6 +27,12 @@ pub(super) struct RefJoins<'a> {
     /// Where each local branch points, by refname — for the one upstream
     /// the remote index cannot answer, a branch here (`remote = .`).
     local_commit: HashMap<&'a str, Oid>,
+    /// The other direction of the upstream setting: the local branch
+    /// configured against each ref, by that ref's refname. **Built here
+    /// with the rest**, because the question is asked of a remote row
+    /// and answering it by walking the listing would be a scan per row
+    /// (CLAUDE.md §性能予算 — ref 同士の突き合わせは索引を 1 本作ってから回す).
+    tracked_by: HashMap<&'a str, &'a RefEntry>,
     /// The branches other working copies have checked out. A third join
     /// on the same listing, and the reason it is here: **the sidebar row
     /// and the graph chip ask the same question**, and answering it per
@@ -75,11 +81,21 @@ impl<'a> RefJoins<'a> {
             .filter(|r| r.kind == RefKind::LocalBranch)
             .map(|r| (r.name.as_str(), r.commit_oid()))
             .collect();
+        // First one wins: git lets two branches name one reading, and a
+        // row can only carry one name. The listing arrives in refname
+        // order, so the one carried is the same from read to read.
+        let mut tracked_by: HashMap<&'a str, &'a RefEntry> = HashMap::new();
+        for local in refs.iter().filter(|r| r.kind == RefKind::LocalBranch) {
+            if let Some(up) = local.upstream.as_deref() {
+                tracked_by.entry(up).or_insert(local);
+            }
+        }
         Self {
             remotes,
             folded,
             tag_commit,
             local_commit,
+            tracked_by,
             held,
         }
     }
@@ -118,6 +134,14 @@ impl<'a> RefJoins<'a> {
             .or_else(|| up.strip_prefix("refs/heads/"))
             .unwrap_or(up);
         crate::Name::from(short)
+    }
+
+    /// The local branch configured against this remote-tracking ref —
+    /// the far side of [`refs::RemoteBranches::spoken_for`], and the one
+    /// whose counts the reading is measured by. `None` where nothing here
+    /// names it.
+    fn tracked_by(&self, r: &RefEntry) -> Option<&'a RefEntry> {
+        self.tracked_by.get(r.name.as_str()).copied()
     }
 
     /// Whether another working copy has this ref out. Only a local branch
@@ -379,10 +403,17 @@ pub(super) fn build_snapshot(
                     upstream_oid: joins.upstream_commit(r),
                     upstream_drifted: spoken.is_some_and(|u| u.commit_oid() != r.commit_oid()),
                     held_elsewhere: joins.held_elsewhere(r),
+                    // The setting reads one way on this side: a local
+                    // branch names its reading, and nothing names it.
+                    tracked_by: crate::Name::default(),
                     ahead: r.ahead,
                     behind: r.behind,
                 });
             }
+            // The branch this reading is measured by, if any: the same
+            // setting read from the other end, and the counts with it —
+            // the row's opened lines name that branch and draw them
+            // beside it (デザイン規約 §左メニューの所作).
             RefKind::RemoteBranch => snapshot.remotes.push(BranchItem {
                 short: r.short.clone(),
                 full: r.name.clone(),
@@ -402,10 +433,15 @@ pub(super) fn build_snapshot(
                 // the menu's question, asked of the worktree list by the
                 // name it would take (`RefRowMenu`).
                 held_elsewhere: false,
+                tracked_by: joins
+                    .tracked_by(r)
+                    .map(|local| local.short.clone())
+                    .unwrap_or_default(),
                 // The measurement belongs to whichever local branch names
-                // this one as its upstream, and is drawn on that row.
-                ahead: 0,
-                behind: 0,
+                // this one as its upstream. The row's own line does not
+                // draw it — the line that names that branch does.
+                ahead: joins.tracked_by(r).map_or(0, |local| local.ahead),
+                behind: joins.tracked_by(r).map_or(0, |local| local.behind),
             }),
             RefKind::Tag => snapshot.tags.push(TagItem {
                 short: r.short.clone(),

@@ -173,15 +173,17 @@ impl NavSectionModel {
             }),
             Role::EolMark => Value::Flag(matches!(of, Entry::File { item, .. }
                 if self.eol_marks.iter().any(|mark| mark.path == item.path()))),
-            // **Only a local branch has an upstream of its own.** The
-            // pair drawn on a remote-tracking row would be the far side
-            // of somebody else's measurement, so that row draws none.
+            // **One measurement, read from either end.** A local branch
+            // carries its own; a remote-tracking ref carries the one made
+            // against it (`BranchItem::tracked_by`) — which its own line
+            // does not draw, the line naming that branch does
+            // (`NavRowFacts`).
             Role::Ahead => Value::Number(match of {
-                Entry::Local(branch) => counted(branch.ahead),
+                Entry::Local(branch) | Entry::Remote(branch) => counted(branch.ahead),
                 _ => 0,
             }),
             Role::Behind => Value::Number(match of {
-                Entry::Local(branch) => counted(branch.behind),
+                Entry::Local(branch) | Entry::Remote(branch) => counted(branch.behind),
                 _ => 0,
             }),
         }

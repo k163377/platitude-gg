@@ -255,6 +255,7 @@ impl Footprint for crate::session::BranchItem {
             + self.full.heap_bytes()
             + self.upstream.heap_bytes()
             + self.upstream_gone.heap_bytes()
+            + self.tracked_by.heap_bytes()
     }
 }
 

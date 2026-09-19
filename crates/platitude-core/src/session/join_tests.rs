@@ -105,6 +105,64 @@ fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
     assert!(snapshot.locals[0].upstream_drifted);
 }
 
+/// The same setting read from the other end: a remote-tracking row
+/// carries the branch measured against it and that branch's counts,
+/// which is what its opened lines name (デザイン規約 §左メニューの所作).
+///
+/// **A name alone joins nothing** — git declines to guess a pairing from
+/// matching names (`refs::RemoteBranches::spoken_for`) and so does this:
+/// the reading a branch never named answers with nothing on both fields.
+#[test]
+fn a_reading_carries_the_branch_that_is_measured_against_it() {
+    let tracking = |short: &str| RefEntry {
+        name: crate::Name::from(format!("refs/remotes/{short}")),
+        short: crate::Name::from(short),
+        kind: RefKind::RemoteBranch,
+        target: oid(1),
+        peeled: None,
+        upstream: None,
+        is_head: false,
+        created_unix: 0,
+        ahead: 0,
+        behind: 0,
+    };
+    let mut main = branch("main", oid(2));
+    main.upstream = Some(crate::Name::from("refs/remotes/origin/main"));
+    main.ahead = 2;
+    main.behind = 1;
+    // Named the same on both sides and joined by nothing: this one is a
+    // different branch, and the row says so by saying nothing.
+    let stray = branch("side", oid(2));
+
+    let refs = vec![main, stray, tracking("origin/main"), tracking("fork/side")];
+    let held = held_by_nobody();
+    let joins = RefJoins::new(&refs, &held);
+    let snapshot = build_snapshot(
+        &refs,
+        &head_at(oid(2)),
+        &index_of("origin", Vec::new()),
+        &joins,
+    );
+    let read = |short: &str| {
+        snapshot
+            .remote_named(short)
+            .expect("the listing holds this reading")
+    };
+    assert_eq!(read("origin/main").tracked_by, "main");
+    assert_eq!(
+        (read("origin/main").ahead, read("origin/main").behind),
+        (2, 1),
+        "the measurement is the branch's, read from the far side"
+    );
+    assert_eq!(read("fork/side").tracked_by, "");
+    assert_eq!((read("fork/side").ahead, read("fork/side").behind), (0, 0));
+    assert_eq!(
+        snapshot.local_named("main").expect("the branch").tracked_by,
+        "",
+        "the setting reads one way on this side"
+    );
+}
+
 /// A branch measured against a reading that is not here: the far side
 /// deleted the ref and a prune took the tracking copy with it, while the
 /// configuration goes on naming it — git's own `[gone]`. **The name has

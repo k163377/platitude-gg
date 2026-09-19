@@ -138,13 +138,26 @@ pub struct BranchItem {
     /// the same name, and whether *that* one is held is a question the
     /// menu asks of the worktree list by name.
     pub held_elsewhere: bool,
+    /// **The other side of [`Self::upstream`]**: on a remote-tracking
+    /// ref, the local branch configured against it — the one whose
+    /// measurement this ref is the far side of. Empty on every local
+    /// branch, and on a reading nothing here names.
+    ///
+    /// **git decides, and is not guessed at**
+    /// ([`crate::refs::RemoteBranches::spoken_for`]): a local branch that
+    /// happens to carry the same name is a different branch. Where two
+    /// branches name one reading the first in the listing's order is the
+    /// one carried — one row cannot name two.
+    pub tracked_by: crate::Name,
     /// How far this branch stands from its upstream, as of the last fetch
     /// ([`crate::refs::RefEntry::ahead`]) — the pair the sidebar row
     /// draws. **Both zero says nothing to draw**, whether the two are
     /// level or there is no upstream to measure against.
     ///
-    /// Local branches only. A remote-tracking ref is the far side of
-    /// somebody's measurement.
+    /// On a remote-tracking ref this is the same measurement read from
+    /// the other side: the counts of the branch in [`Self::tracked_by`],
+    /// which is the only line that draws them there (the row's own line
+    /// does not — デザイン規約 §左メニューの所作).
     pub ahead: u32,
     pub behind: u32,
 }

@@ -254,6 +254,22 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
+    /// The other way round: the local branch measured against this
+    /// remote-tracking ref (`BranchItem::tracked_by`). Empty where
+    /// nothing here names it, and for every section but the remotes.
+    ///
+    /// **What the row opens under itself names** (デザイン規約
+    /// §左メニューの所作): a remote row's lines lead with the branch
+    /// that reads it, and the counts beside that name ride the row
+    /// itself (`Role::Ahead`).
+    #[qslot]
+    pub(super) fn tracked_by(&self, name: String) -> String {
+        self.all
+            .branch_named(&name)
+            .map(|branch| branch.tracked_by.as_str().to_string())
+            .unwrap_or_default()
+    }
+
     /// The commit this branch's configured upstream stands on, hex —
     /// **the reference point `branch --delete` measures the tip against**
     /// (`BranchItem::upstream_oid`); empty where the branch has none or
