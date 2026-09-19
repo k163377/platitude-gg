@@ -395,6 +395,44 @@ impl NavSectionModel {
         self.all.tag_drift(&name, &remote)
     }
 
+    /// The remotes carrying this tag, packed one per unit separator —
+    /// **what the row opens on** (デザイン規約 §左メニューの所作), and the
+    /// list the row's own cloud stands for.
+    ///
+    /// Empty where no remote has the name, and empty until a fetch has
+    /// been through: nothing local records what a remote carries under
+    /// `refs/tags/`, so the badge and this list arrive together
+    /// (`remote::tags::list_tags`). Asked of the tags section, the only
+    /// one holding the readings.
+    ///
+    /// **One record to a remote, name order**, each the name and a digit:
+    /// whether that remote stands somewhere other than where `against`
+    /// has the tag. `against` is the remote this window's own tag rows act
+    /// on (`RepoTab.defaultRemote`) — sending a tag and taking one off a
+    /// remote both go to that one and no other
+    /// (デザイン規約 §タグを作る・送る), so it is the reading the others
+    /// are read against. **Not the copy here**: which of the readings is
+    /// the one is not a question the commits answer, and a local tag that
+    /// is itself the odd one out would put the mark on everybody else.
+    #[qslot]
+    pub(super) fn tag_remotes(&self, name: String, against: String) -> String {
+        if name.is_empty() || self.section != "tags" {
+            return String::new();
+        }
+        self.all
+            .tag_carriers(&name, &against)
+            .into_iter()
+            .map(|(remote, apart)| {
+                format!(
+                    "{remote}{sep}{}",
+                    u8::from(apart),
+                    sep = crate::encode::FIELD_SEP
+                )
+            })
+            .collect::<Vec<String>>()
+            .join(&crate::encode::RECORD_SEP.to_string())
+    }
+
     /// The other working copy holding this branch, by the path git lists
     /// it under; empty when no other one has it out.
     ///

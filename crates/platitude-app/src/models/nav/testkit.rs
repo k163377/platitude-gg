@@ -81,12 +81,31 @@ pub(super) fn drifted(
     tags: Vec<platitude_core::session::TagItem>,
     tag_drifts: Vec<platitude_core::session::TagDrift>,
 ) -> Arc<platitude_core::session::RefsSnapshot> {
+    carried(remotes, tags, tag_drifts, Vec::new())
+}
+
+/// The same again, with what the remotes were last heard to carry under
+/// `refs/tags/` — the list a tag's row opens on (`tag_remotes`). Each
+/// reading is a tag's name, the remote carrying it, and the digit the
+/// commit is spelled from: two readings on one digit are two remotes
+/// agreeing about where the name stands.
+pub(super) fn carried(
+    remotes: Vec<platitude_core::session::BranchItem>,
+    tags: Vec<platitude_core::session::TagItem>,
+    tag_drifts: Vec<platitude_core::session::TagDrift>,
+    readings: Vec<(&str, &str, &str)>,
+) -> Arc<platitude_core::session::RefsSnapshot> {
     let mut snapshot = platitude_core::session::RefsSnapshot {
         locals: Vec::new(),
         remotes,
         tags,
         tags_by_name: Vec::new(),
         tag_drifts,
+        remote_tags: Arc::new(platitude_core::session::RemoteTagIndex::build(
+            readings
+                .into_iter()
+                .map(|(name, remote, at)| (name.into(), oid(at), false, remote.into())),
+        )),
         head: None,
         remote_names: Vec::new(),
         remote_urls: Vec::new(),

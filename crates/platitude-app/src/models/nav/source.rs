@@ -100,6 +100,17 @@ impl Source {
         }
     }
 
+    /// The remotes carrying the tag called `name`, each said once and with
+    /// whether it stands somewhere other than where `against` has it —
+    /// what the row opens on (`RefsSnapshot::tag_remotes`). Empty for
+    /// every other section, and while nothing has read the remotes.
+    pub(super) fn tag_carriers(&self, name: &str, against: &str) -> Vec<(&str, bool)> {
+        match self {
+            Self::Tags(snapshot) => snapshot.tag_remotes(name, against),
+            _ => Vec::new(),
+        }
+    }
+
     /// Where `remote` carries `name` when that is not where this
     /// repository has the tag; empty when the two agree, when that remote
     /// does not carry the name, or when nothing has read the remotes yet.

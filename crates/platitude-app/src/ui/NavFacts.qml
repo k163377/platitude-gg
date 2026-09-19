@@ -42,6 +42,18 @@ QtObject {
                        : asked !== "" ? row.branchesModel.upstreamOf(asked) : ""
         const gone = kind === "branch" ? row.bucket
                    : asked !== "" ? row.branchesModel.upstreamGoneOf(asked) : ""
+        // The remotes carrying this name, and which of them stand somewhere other than where the one this window
+        // acts on has it. **A tag has no namespace**, so one row stands for every side of the name
+        // (`NavSectionModel.tagSides`) and what it folds is the list of who out there has it — which is what it
+        // opens on. One answer for both halves, because two would be two walks of the same run and a chance for
+        // them to disagree; the record is `<remote>\u1e<0|1>`.
+        const carried = kind === "tag" && leaf && row.sectionModel !== null
+                      ? row.sectionModel.tagRemotes(row.fullName, row.pushRemote) : ""
+        const remotes = carried === "" ? []
+                      : carried.split(String.fromCharCode(31)).map(record => {
+                            const said = record.split(String.fromCharCode(30))
+                            return { "remote": said[0], "apart": said[1] === "1" }
+                        })
         // The copy holding the branch this row is about: its own on a BRANCHES row, the one named above on a
         // REMOTES row. A working copy's row asks nobody — it is the copy.
         const holds = kind === "branch" ? row.fullName : kind === "remote" ? local : ""
@@ -52,6 +64,10 @@ QtObject {
             // showing the first. Every other row here is named by the whole of what git knows it by.
             "name": kind === "worktree" && leaf ? row.name : row.fullName,
             "path": kind === "worktree" && leaf ? row.fullName : "",
+            "remotes": remotes,
+            // The reading those are read against, which the lines name in the one place a line says why it is
+            // marked. Empty everywhere but TAGS.
+            "against": kind === "tag" ? row.pushRemote : "",
             "local": local,
             "branch": branch,
             // The section answers with the path git prints, and the rows of that section show the folder it ends
@@ -77,6 +93,9 @@ QtObject {
                     : kind === "remote" ? [navFacts.branchLine(a.local, a), navFacts.copyLine(a)]
                     : kind === "worktree" ? [navFacts.branchLine(a.branch, a), navFacts.readingLine(a),
                                              navFacts.stateLine(a)]
+                    // One line to a remote — the one section whose lines are a list rather than a fixed few, because
+                    // what a tag's row folds is however many of them have the name.
+                    : kind === "tag" ? a.remotes.map(carried => navFacts.carrierLine(carried, a.against))
                     : []
         return drawn.filter(line => line !== null)
     }
@@ -86,13 +105,13 @@ QtObject {
     function branchLine(name, a) {
         return name === "" ? null
              : { "mark": "branch", "markTint": Theme.accent, "text": name, "tone": Theme.textSecondary,
-                 "ahead": a.ahead, "behind": a.behind }
+                 "ahead": a.ahead, "behind": a.behind, "note": "" }
     }
     /// The working copy holding the branch this row is about — the WORKTREES section's own mark.
     function copyLine(a) {
         return a.heldBy === "" ? null
              : { "mark": "tree", "markTint": Theme.textSecondary, "text": a.heldBy,
-                 "tone": Theme.textSecondary, "ahead": 0, "behind": 0 }
+                 "tone": Theme.textSecondary, "ahead": 0, "behind": 0, "note": "" }
     }
     /// What that branch is measured against. **A reading git cannot reach wears the state whole** — git's own word
     /// for it is `gone`, and the name leads so every line begins in the same column.
@@ -102,7 +121,22 @@ QtObject {
         const tint = a.gone ? Theme.warning : Theme.textSecondary
         return { "mark": "remote", "markTint": tint,
                  "text": a.gone ? qsTr("%1 is gone").arg(a.upstream) : a.upstream,
-                 "tone": tint, "ahead": 0, "behind": 0 }
+                 "tone": tint, "ahead": 0, "behind": 0, "note": "" }
+    }
+    /// One remote carrying this tag — the cloud the row wears, said by name. **The list is a list of names, so the
+    /// name is all the line says**: whether that remote stands where the one this window acts on has the tag is a
+    /// second question, and the line answers it with colour alone (デザイン規約 §左メニューの所作 の TAGS の段).
+    /// The reason for that colour is the supplement a rest on the line opens (`note`), which is where a sentence
+    /// belongs: the lines are a column of names and one of them growing a clause would make the column ragged.
+    ///
+    /// **The sentence names the reading it is apart from**, because that is the whole of what the colour means
+    /// here — the reference is a remote and not the copy in this repository (`NavSectionModel.tagRemotes`), so a
+    /// line saying only "another commit" would leave the reader to guess another commit than what.
+    function carrierLine(carried, against) {
+        const tint = carried.apart ? Theme.warning : Theme.textSecondary
+        return { "mark": "remote", "markTint": tint, "text": carried.remote,
+                 "tone": tint, "ahead": 0, "behind": 0,
+                 "note": carried.apart ? qsTr("On another commit than %1").arg(against) : "" }
     }
     /// And the one state a mark cannot name. **The padlock says everything a lock has to say here** — what it was
     /// taken for is the words somebody gave `git worktree lock`, and those are theirs to keep rather than a line of
@@ -111,6 +145,6 @@ QtObject {
     function stateLine(a) {
         return a.state !== "PRUNABLE" ? null
              : { "mark": "", "markTint": Theme.warning, "text": qsTr("Folder is gone"),
-                 "tone": Theme.warning, "ahead": 0, "behind": 0 }
+                 "tone": Theme.warning, "ahead": 0, "behind": 0, "note": "" }
     }
 }

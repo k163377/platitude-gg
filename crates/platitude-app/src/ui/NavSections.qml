@@ -25,9 +25,9 @@ ColumnLayout {
     /// What the open row is saying under itself, and the lines themselves — for the runs alone
     /// (PGG_AUTO_ACT=nav-open). Asked of the row rather than of the model: the row is what a run has to find wired
     /// up. **The stand-in is asked first**: while it is the one on screen its own row is not (`HeadPinRow`).
-    /// **Four lists can hold the open row** — the stand-in, BRANCHES, REMOTES and WORKTREES — and one key names it
-    /// (`SidebarRowGestures.openKey`), so each of these asks them in turn and takes the first that answers.
-    readonly property var openable: [headPin, branchList, remoteList, worktreeList]
+    /// **Five lists can hold the open row** — the stand-in, BRANCHES, REMOTES, WORKTREES and TAGS — and one key
+    /// names it (`SidebarRowGestures.openKey`), so each of these asks them in turn and takes the first that answers.
+    readonly property var openable: [headPin, branchList, remoteList, worktreeList, tagList]
     function openWords() {
         for (const list of sections.openable) {
             const said = list.openWords()
@@ -48,7 +48,8 @@ ColumnLayout {
     /// pinned to an edge and what it opens grows the other way (`HeadPinRow.openShown`).
     function openGeom() {
         return branchList.openRow() !== null ? branchList.openGeom()
-             : remoteList.openRow() !== null ? remoteList.openGeom() : worktreeList.openGeom()
+             : remoteList.openRow() !== null ? remoteList.openGeom()
+             : worktreeList.openRow() !== null ? worktreeList.openGeom() : tagList.openGeom()
     }
     /// Whether the open row is showing whole, lines included — asked of whichever of the four is the open one.
     function openShown() {
@@ -315,6 +316,12 @@ ColumnLayout {
         expanded: tagHead.showsRows
         kindHint: "tag"
         gestures: sections.gestures
+        // These rows open too, on the remotes carrying the name (デザイン規約 §左メニューの所作). Nothing but its own
+        // section is asked: a tag names no branch and no working copy holds one. **The one thing that comes from
+        // outside it is which reading the rest are read against** — the remote this window's tag rows act on, so
+        // the lines and the row's own menu are standing against the same one.
+        offersFacts: true
+        pushRemote: sections.repoTab.defaultRemote
         Layout.verticalStretchFactor: sections.sectionPull
         onRefActivated: oidHex => sections.refActivated(oidHex)
         onRefMenuRequested: (kind, name, full, oidHex) => sections.refMenuRequested(kind, name, full, oidHex)

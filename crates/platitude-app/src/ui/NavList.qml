@@ -36,6 +36,10 @@ AppListView {
     /// The branches' own section, for the rows that open on somebody else's branch: a working copy's row says of the
     /// branch it holds what that branch's own row would (デザイン規約 §左メニューの所作). Null everywhere else.
     property var branchesModel: null
+    /// TAGS only: the remote this window's tag rows act on (`RepoTab.defaultRemote`) — **the reading the others
+    /// are read against** in what a tag's row opens on, since sending a tag and taking one off a remote both go
+    /// there and nowhere else (デザイン規約 §左メニューの所作 の TAGS の段). Empty in every other list.
+    property string pushRemote: ""
     /// The row that is holding a seat under itself for something standing over this list, or -1 for none: the row of
     /// the folded folder the current branch is behind, which is where its stand-in belongs (`HeadPinRow.seatedUnder`
     /// / `NavSections`). The row grows by that much at its foot, so the rows below it move down and the stand-in has
@@ -276,7 +280,13 @@ AppListView {
                + "/" + (row.factsBranch !== "" ? row.factsBehind : row.behind)
                + " held=" + row.factsHeldBy + " up=" + row.factsUpstream + " gone=" + row.factsGone
                + " branch=" + row.factsBranch
-               + " state=" + row.factsState + " why=" + row.factsWhy + " path=" + row.factsPath
+               + " state=" + row.factsState
+               // The carriers of a tag's name, the reading they are read against and which of them stand apart from
+               // it — comma-separated lists, so they sit with the judged fields: a remote is a ref path component
+               // and holds neither a space nor a comma (git refuses both).
+               + " remotes=" + row.factsRemotes
+               + " against=" + row.factsAgainst + " apart=" + row.factsApart
+               + " why=" + row.factsWhy + " path=" + row.factsPath
     }
     /// Where the open row and its lines actually landed, for a run that has to see the list make room rather than
     /// take the layout's word for it (PGG_AUTO_ACT=nav-open). `view=` is what the list is showing while they are
@@ -363,6 +373,7 @@ AppListView {
         sectionModel: navList.sectionModel
         worktreesModel: navList.worktreesModel
         branchesModel: navList.branchesModel
+        pushRemote: navList.pushRemote
         // Both margins of the panel are the one the bar asks for at the right edge, so the rows sit between equal
         // sides; the folds step in by that same value
         // (`NavItemDelegate.rowInset` / デザイン規約 §余白 の左メニューの行の項).

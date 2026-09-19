@@ -27,8 +27,28 @@ RowLayout {
     /// rows leave empty when there is no count worth a column.
     property int ahead: 0
     property int behind: 0
+    /// Whether this line keeps a supplement for a rest on it — **the reason it is wearing the colour it is**
+    /// (デザイン規約 §hover のツールチップ: 的が印や色を着ていて、その理由が的の上に無い時). The words are the
+    /// block's to raise, so that one pointer opens one thing (`NavRowFacts`); this says who the hand is on.
+    property bool noted: false
+    /// Stands in for the pointer where headless cannot put one, the way the row's own does
+    /// (PGG_AUTO_ACT=nav-open-tag `:tip`).
+    property bool tipPointed: false
+    readonly property bool pointed: lineHover.hovered || line.tipPointed
+    /// The hand arrived at this line, or left it.
+    signal handRested(bool on)
+    onPointedChanged: line.handRested(line.pointed)
 
     spacing: Theme.spaceXs
+
+    // **A handler, not an area** — handlers are passive, so the one that drives the sweep over the whole block goes
+    // on being answered while this reads the same pointer (rules-refs/app-ui.md 「行の hover は `HoverHandler`」).
+    // Declared on the line itself: put on an item stacked over the others, it would take the hover off every line
+    // below it (app-ui.md).
+    HoverHandler {
+        id: lineHover
+        enabled: line.noted
+    }
 
     // **The row's own seat, to the pixel** (`NameCell.seatSize` / `seatNudge` on a list with no change codes): the
     // seat is the trimmed one and the mark is drawn a step wider inside it, hard against its left edge, so the mark

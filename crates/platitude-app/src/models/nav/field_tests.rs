@@ -82,6 +82,72 @@ fn only_the_tags_section_answers_for_a_drift() {
     model.arrange();
     assert_eq!(model.remote_tag_drift("v1.0".into(), "origin".into()), "");
     assert_eq!(model.tag_sides("v1.0".into()), "");
+    assert_eq!(model.tag_remotes("v1.0".into(), "origin".into()), "");
+}
+
+/// The remotes a tag's row opens on, in name order and each with whether
+/// it stands where the one this window's tag rows act on has the tag
+/// (デザイン規約 §左メニューの所作 の TAGS の段). **The mark is about that
+/// reading and not about the copy here**: which of them is the one is not
+/// a question the commits answer.
+#[test]
+fn a_tag_row_opens_on_its_carriers_and_says_which_stand_apart() {
+    let mut model = section(
+        "tags",
+        Source::Tags(carried(
+            Vec::new(),
+            vec![
+                tag("v-agreed", true, true),
+                tag("v-apart", true, true),
+                tag("v-fork", true, true),
+                tag("v-here", false, true),
+            ],
+            Vec::new(),
+            vec![
+                // Both remotes on the one commit the testkit gives a
+                // reading, so nobody stands apart…
+                ("v-agreed", "fork", "a"),
+                ("v-agreed", "origin", "a"),
+                // …and here the fork has it somewhere else than the
+                // reference does.
+                ("v-apart", "fork", "b"),
+                ("v-apart", "origin", "a"),
+                ("v-fork", "fork", "b"),
+            ],
+        )),
+    );
+    model.arrange();
+    let said = |name: &str, against: &str| {
+        model
+            .tag_remotes(name.into(), against.into())
+            .split('\u{1f}')
+            .map(|record| record.replace('\u{1e}', ":"))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+
+    assert_eq!(said("v-agreed", "origin"), "fork:0,origin:0", "name order");
+    assert_eq!(
+        said("v-apart", "origin"),
+        "fork:1,origin:0",
+        "the reading that is not the reference's is the one marked"
+    );
+    assert_eq!(
+        said("v-apart", "fork"),
+        "fork:0,origin:1",
+        "read against the other one, the mark moves with it"
+    );
+    assert_eq!(
+        said("v-fork", "origin"),
+        "fork:0",
+        "nobody stands apart from a reading the reference has not got"
+    );
+    // **Empty, not a list of one empty record**: a tag nobody out there
+    // has opens on nothing at all, which is what the row with no lines
+    // under it is drawn from.
+    assert_eq!(model.tag_remotes("v-here".into(), "origin".into()), "");
+    assert_eq!(model.tag_remotes("v-nobody".into(), "origin".into()), "");
+    assert_eq!(model.tag_remotes(String::new(), "origin".into()), "");
 }
 
 /// Which sides a tag's name stands on — what tells the three delete rows
@@ -360,6 +426,7 @@ fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
         tags: Vec::new(),
         tags_by_name: Vec::new(),
         tag_drifts: Vec::new(),
+        remote_tags: Arc::default(),
         head: None,
         remote_names: Vec::new(),
         remote_urls: Vec::new(),
@@ -409,6 +476,7 @@ fn a_branch_carries_the_upstream_that_is_not_here_in_the_shared_slot() {
         tags: Vec::new(),
         tags_by_name: Vec::new(),
         tag_drifts: Vec::new(),
+        remote_tags: Arc::default(),
         head: None,
         remote_names: Vec::new(),
         remote_urls: Vec::new(),

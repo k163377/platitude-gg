@@ -583,6 +583,9 @@ Item {
     /// The branches' own section, which a working copy's row asks about the branch it holds (`upstreamOf` /
     /// `upstreamGoneOf`) — what that branch's own row would say of itself. Null in every other list.
     property var branchesModel: null
+    /// TAGS only: the remote this window's tag rows act on, which is the reading the list a tag's row opens on is
+    /// read against (`NavList.pushRemote`).
+    property string pushRemote: ""
     /// Whether this row answers a rest by opening. **The whole of the section the facts were handed to, leaves
     /// only**: what opens is about a ref — the copy holding it, the reading it is measured against — and a fold
     /// parent is nothing but the shape of the names below it, so it has no line to open and opening it would leave
@@ -594,11 +597,17 @@ Item {
     /// sentence and not a name. Every other leaf of that section opens, as every leaf of BRANCHES does, and so does
     /// every row of WORKTREES: what a working copy's row shows is a folder's name, and the whole of it is the path
     /// git lists it under.
+    ///
+    /// **A tag's row folds the remotes carrying its name.** A tag has no namespace, so one row stands for the name
+    /// on every side of it and the row's cloud says only that somebody out there has it; who that is takes a line
+    /// each (`NavFacts.carrierLine`). A tag nobody else carries opens on nothing, as a branch with no reading and
+    /// no other copy does — the name in full is reason enough to open.
     readonly property bool expands:
         navRow.opensFacts
         && !navRow.folder
         && (navRow.kindHint === "branch"
             || navRow.kindHint === "worktree"
+            || navRow.kindHint === "tag"
             || (navRow.kindHint === "remote" && !navRow.isRemoteRow))
     /// Whether this row is the open one. The marks it spells out go from the row's own line while it is, so the
     /// reader sees them move down rather than stand twice; the wash stays, because the row grew.
@@ -624,7 +633,7 @@ Item {
     readonly property string hoverText: {
         const full = navRow.fullName
         // A row that opens says it all under itself, name included — two things opening off one pointer would sit on
-        // top of each other (the reading the line-ending mark's own row makes above). **Three sections answer this
+        // top of each other (the reading the line-ending mark's own row makes above). **Four sections answer this
         // way**, and a working copy's row is one of them: the state git noted on it is said by the line it opens
         // (`NavRowFacts`), not from here. **Their fold parents fall through to the folder rule below**: nothing
         // opens under a folder, so nothing would be standing on top of anything.
@@ -684,6 +693,14 @@ Item {
     property int factsAhead: 0
     property int factsBehind: 0
     property string factsPath: ""
+    /// TAGS only: the remotes carrying this name, comma-separated — the same answer the lines are drawn from, in the
+    /// one shape a report line can carry (`NavList.openWords`) — which of them stand somewhere other than where the
+    /// reading they are read against has the tag, and which reading that is. **The last two are the half no picture
+    /// settles**: a line drawn from the row's own name and one drawn from the readings frame alike, and which
+    /// remote is the reference is not in the drawing at all (`NavSectionModel.tagRemotes`).
+    property string factsRemotes: ""
+    property string factsApart: ""
+    property string factsAgainst: ""
     /// Those answers as the lines to draw, in reading order (`NavFacts.lines`). The named fields above are the same
     /// answers one at a time — what a run reads back off the row (`NavList.openWords`).
     property var factsLines: []
@@ -708,6 +725,10 @@ Item {
         navRow.factsAhead = said.ahead
         navRow.factsBehind = said.behind
         navRow.factsPath = said.path
+        navRow.factsRemotes = said.remotes.map(carried => carried.remote).join(",")
+        navRow.factsApart = said.remotes.filter(carried => carried.apart)
+                                        .map(carried => carried.remote).join(",")
+        navRow.factsAgainst = said.against
         navRow.factsName = said.name
         navRow.factsLines = NavFacts.lines(navRow.kindHint, said)
         return navRow.factsName !== ""
