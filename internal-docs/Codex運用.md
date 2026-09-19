@@ -114,9 +114,10 @@ cwd と `turn_context.model` を確認。`event_msg/token_count/info` の最後�
 
 **予防は取得前のidentity bridge**。呼ぶのはIDが揃ってから。
 各shellは環境変数を引き継ぐとは限らないため、必要な呼び出しごとにbridgeする。
-所有者はsession/task IDで名乗る。session IDだけのclaimには終了時の
-生存判定がないので、land以外の終了時は同じIDで <!--cmd:seat.release-->`cargo xtask seat release` を行う。
-未マージのcommit/dirtyはallocatorが引き続き保護する。
+所有者はsession/task IDで名乗る。**claimはプロセスの死活で回収されない**ので、
+land以外の終了時は同じIDで <!--cmd:seat.release-->`cargo xtask seat release` を行う。
+IDのないclaimは誰とも一致せず、ユーザー指示による <!--cmd:seat.takeover-->`PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>`
+でしか動かせない。未マージのcommit/dirtyはallocatorが引き続き保護する。
 
 ## 既存ファイルの変更提案（未実施）
 

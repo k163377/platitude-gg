@@ -159,6 +159,12 @@ fn record_with(
     if let Some(refusal) = not_a_seat(&seat) {
         return Err(refusal);
     }
+    // A picture is work, and work holds the seat: a run from a letter
+    // its session no longer holds — landed, and going on — takes the
+    // claim back before the letter can be handed out from under it.
+    if let Some(note) = crate::seats::held_by_this_run(&seat) {
+        println!("{note}");
+    }
     let board = board_dir()?;
     let img = board.join("img");
     let runs = board.join("runs");

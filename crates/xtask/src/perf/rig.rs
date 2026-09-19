@@ -160,20 +160,16 @@ impl Claim {
     /// a time, and a claim left by a killed one is litter its dead pid
     /// gives away (`seats::standing`), whichever terminal meets it
     /// next. That is why this claim is read as `Held::ByRunner` — a
-    /// seat's number is a session's, and asking for one where the other
-    /// stands takes the rig out from under a measurement that is still
-    /// running.
+    /// seat's claim is a conversation's and its number is never asked,
+    /// while a measurement is one process, and a claim outliving it
+    /// would keep the rig from every measurement after.
     fn take(primary: &str, rig: &str, commit: &str, exists: bool) -> Result<Self, String> {
         // The session mark carries the pid too: a claim's reason is read
         // back as `<session> pid <pid>`, and an empty session leaves the
-        // pid unparsed (`seats::standing`). No marks beside it: this
-        // claim's number is this program's, which `Held::ByRunner` may
-        // name outright, and older builds still read the pid it keeps.
+        // pid unparsed (`seats::standing`).
         let me = Identity {
             session: format!("perf-{}", std::process::id()),
             pid: Some(std::process::id()),
-            image: None,
-            born: None,
         };
         if !exists {
             git_query(
@@ -183,7 +179,7 @@ impl Claim {
                     "add",
                     "--lock",
                     "--reason",
-                    &me.reason(Held::ByRunner),
+                    &me.reason(),
                     "--detach",
                     rig,
                     commit,

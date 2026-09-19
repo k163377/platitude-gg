@@ -109,8 +109,8 @@ mod tests {
     }
 
     /// Several operations share a verb, and that is the shape the
-    /// catalogue is for: `seat` and `seat release` are one verb and two
-    /// things a session may be told to do.
+    /// catalogue is for: `seat`, `seat release` and `seat takeover` are
+    /// one verb and three things a session may be told to do.
     #[test]
     fn one_verb_carries_as_many_operations_as_it_has() {
         let seat: Vec<&str> = all()
@@ -118,6 +118,6 @@ mod tests {
             .filter(|command| command.verb() == "seat")
             .map(|command| command.id)
             .collect();
-        assert_eq!(seat, ["seat.take", "seat.release"]);
+        assert_eq!(seat, ["seat.take", "seat.release", "seat.takeover"]);
     }
 }

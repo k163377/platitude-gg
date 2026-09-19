@@ -503,7 +503,7 @@ const TAIL: &str = "  shipped [--no-build]
       landing (`budget`, and it says so when it waited); the window
       itself holds none of it.
 
-  seat [release]
+  seat [release [<letter>]|takeover <letter>]
       Hands this session a worktree seat, and takes no argument: the
       letter is the answer (CLAUDE.md ビルド・テスト).
       Letters are tried until `git worktree lock` takes one, so the seat
@@ -516,15 +516,27 @@ const TAIL: &str = "  shipped [--no-build]
       twice gives the same seat. It prints the path EnterWorktree wants,
       and that is the only path the entry hook will let through, because
       the claim behind it is this session's. When every letter is held or
-      holds unmerged work it fails and says so — seats are not added
-      past f. `land` hands the seat back when the branch reaches main:
-      a session that goes on working in the tree takes it again at its
-      next edit, and one that is never asked for anything more leaves
-      the letter free. `seat release` hands it back without landing,
-      and names what the seat still carries. The SessionEnd the
-      machine's sleep hands out lifts nothing — that event reaches
-      every open conversation — and a claim whose Claude process is
-      gone the roster lifts by itself.
+      carries work it fails, names what stands in the way, and that is
+      where the session stops — seats are not added past f, and a letter
+      changes hands only on the user's word.
+      A claim is a conversation's, and no process is asked about it: the
+      app restarting under a session, the machine sleeping (the SessionEnd
+      every open conversation is handed), a tab left open — none of it
+      lifts a claim. Three things do. `land` hands the seat back when the
+      branch reaches main, whoever's claim was on it; a session that goes
+      on working in the tree takes it again at its next edit or picture.
+      `seat release [<letter>]` hands a seat back without landing and
+      names what it still carries; the letter is needed only when the
+      session holds more than one. And `seat takeover <letter>`, behind
+      PGG_ALLOW_TAKEOVER=1, moves the letter to this session whoever
+      holds it — a live session, one that is gone, nobody — with the tree
+      as it stands: nothing moved to main's tip, the board's pictures
+      kept, a tree that went away grown back on the letter's own branch.
+      The pre-shell hook lets that verb through only behind the flag,
+      which a session writes for an instruction that asked and for
+      nothing else. Freeing a letter somebody else holds is a takeover
+      followed by a release; a person's own `git worktree lock` is
+      nobody's to take, and comes off by hand.
 
   seats
       Where the six worktree seats a-f stand right now, one line each:
@@ -532,10 +544,13 @@ const TAIL: &str = "  shipped [--no-build]
       (main..HEAD), uncommitted changes (status --porcelain lines), and
       how long since the seat's own index was written. For reading how
       the roster stands — `seat` is what sits down, and nothing here is
-      a letter to choose from. A locked seat carries its claim past the
-      columns, and a claim whose Claude process is gone says so, so a
-      long-still seat needs no guess and no `git worktree unlock` by
-      hand. Ends with how to read the columns.
+      a letter to choose from. A claimed seat says whose it is past the
+      columns, session and pid, and that is all a reader is told: whether
+      the conversation behind it goes on is the user's to know, and a
+      letter the user wants back changes hands with `seat takeover`. A
+      letter with a branch but no tree says what that branch still
+      carries — work nothing can reach until a takeover grows the tree
+      back. Ends with how to read the columns.
 
   shots <add|crop|prune|open [--again]|list|path>
       The shot board: pictures land on a page that opens in a window of

@@ -41,13 +41,18 @@ pub(crate) const GUI_APPROVAL_FLAG: &str = "PGG_ALLOW_GUI";
 /// The same, for an instruction that approved stopping processes outside this worktree.
 const PROCESS_STOP_APPROVAL_FLAG: &str = "PGG_ALLOW_KILL";
 
-/// Every escape this hook reads — the four above, which
+/// The same, for an instruction that asked for a seat to be taken over
+/// from whoever holds it (`seats::takeover`).
+pub(crate) const TAKEOVER_APPROVAL_FLAG: &str = "PGG_ALLOW_TAKEOVER";
+
+/// Every escape this hook reads — the five above, which
 /// is what a flag spelled elsewhere is held to.
-pub(crate) const APPROVAL_FLAGS: [&str; 4] = [
+pub(crate) const APPROVAL_FLAGS: [&str; 5] = [
     MAIN_APPROVAL_FLAG,
     REBASE_APPROVAL_FLAG,
     GUI_APPROVAL_FLAG,
     PROCESS_STOP_APPROVAL_FLAG,
+    TAKEOVER_APPROVAL_FLAG,
 ];
 
 pub(crate) static HOOK: crate::command::Command = crate::command::Command {
@@ -111,8 +116,8 @@ fn stop(input: &str) -> Result<(), String> {
 /// seat its session is still sitting in, and the session meets its own
 /// tree as somebody else's on waking. The seat goes back where the work
 /// does: landing the branch hands the letter to the roster
-/// (`land::release_claim`), and a claim whose Claude process is gone is
-/// litter the next `cargo xtask seat` lifts (`seats::claim_is_dead`).
+/// (`land::release_claim`), the session hands it back itself (`cargo
+/// xtask seat release`), or the user has it taken over (`seats::takeover`).
 fn session_end(input: &str) -> Result<(), String> {
     chips::session_end(input);
     Ok(())
@@ -123,6 +128,7 @@ fn session_end(input: &str) -> Result<(), String> {
 /// guards run in order and the first refusal is the answer.
 fn pre_shell(input: &str) -> Result<(), String> {
     let _refused = git::pre_git(input)?
+        || seat::pre_takeover(input)?
         || still::pre_shell(input)?
         || attribution::pre_comment(input)?
         || kill::pre_kill(input)?

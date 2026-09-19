@@ -6,8 +6,8 @@
 use super::launch::resolve;
 use super::payload::{deny, printable, string_field};
 use crate::seats::{
-    self, Held, Identity, RIG, SEATS, Standing, WorktreeBlock, claim_liveness, commits_in, in_rig,
-    lock_reason, same_tree, standing, take_seat, worktree_blocks, worktree_root,
+    self, Held, Identity, RIG, SEATS, Standing, WorktreeBlock, commits_in, how_claims_move, in_rig,
+    lock_reason, same_tree, standing, take_seat, whose, worktree_blocks, worktree_root,
 };
 use crate::subprocess::git_query;
 
@@ -55,7 +55,7 @@ pub(super) fn pre_worktree(input: &str) -> Result<(), String> {
     let me = Identity::current(string_field(input, "session_id").as_deref());
     let entry = match target.as_deref() {
         Some(tree) if in_rig(tree) => Entry::Rig,
-        Some(tree) if roster_seat(tree).is_some() => {
+        Some(tree) if seats::roster_letter(tree).is_some() => {
             Entry::Seat(standing_here(&cwd, tree, &me), tree.to_string())
         }
         Some(_) => Entry::OffRoster,
@@ -167,10 +167,10 @@ fn entry_verdict(entry: &Entry, me: &Identity) -> Option<(&'static str, String)>
 fn refusal(entry: &Entry, me: &Identity) -> String {
     match entry {
         Entry::Seat(Standing::Foreign(reason) | Standing::Stale(reason), tree) => format!(
-            "This seat is claimed. The lock says: {}. This session is {}. {}{}",
-            printable(reason),
+            "This seat is claimed: {}. This session is {}. {}{}",
+            printable(&whose(reason)),
             printable(&me.mark()),
-            claim_liveness(reason),
+            how_claims_move(),
             work_already_there(tree),
         ),
         Entry::Seat(Standing::Free, _) => {
@@ -199,8 +199,8 @@ pub(super) fn post_worktree(input: &str) -> Result<(), String> {
     let entered = string_field(input, "path").and_then(|path| named_tree(&cwd, &path));
     let Some(seat) = entered
         .as_deref()
-        .and_then(roster_seat)
-        .or_else(|| roster_seat(&cwd))
+        .and_then(|root| seats::roster_letter(root))
+        .or_else(|| seats::roster_letter(&cwd))
     else {
         return Ok(());
     };
@@ -261,11 +261,55 @@ fn tree_named(trees: &[WorktreeBlock], cwd: &str, path: &str) -> Option<String> 
         .map(|tree| tree.path.clone())
 }
 
-/// The roster letter `path` points into, if it is a seat's tree at all.
-fn roster_seat(path: &str) -> Option<&'static str> {
-    let root = worktree_root(path)?;
-    let name = root.rsplit('/').next()?;
-    SEATS.iter().find(|seat| **seat == name).copied()
+/// PreToolUse(Bash|PowerShell): `cargo xtask seat takeover` moves a
+/// letter away from whoever holds it, and only the user may say so
+/// (CLAUDE.md ビルド・テスト). The escape in front is how a session
+/// says the user did — written for an instruction that asked, and for
+/// nothing else, like the rebase and launch flags beside it.
+pub(super) fn pre_takeover(input: &str) -> Result<bool, String> {
+    let Some(command) = string_field(input, "command") else {
+        return Ok(false);
+    };
+    if !takes_over_unasked(&command) {
+        return Ok(false);
+    }
+    deny(&format!(
+        "`cargo xtask seat takeover` moves a seat away from the session that holds it, and a \
+         letter changes hands only on the user's word (CLAUDE.md ビルド・テスト). If the \
+         user asked for this letter in so many words, run the same command with {}=1 in \
+         front of it; otherwise `cargo xtask seat` hands out a free letter, and when none is \
+         free, stop and tell the user what stands in the way (`cargo xtask seats`).",
+        super::TAKEOVER_APPROVAL_FLAG
+    ));
+    Ok(true)
+}
+
+/// Whether a shell line runs the takeover verb without the escape in
+/// front. Pure, so the shapes a session might spell it in can be
+/// asserted.
+///
+/// The word has to be the seat verb's own argument. Anywhere in the line
+/// would do for catching the verb, and would also refuse a plain `seat
+/// release` whose comment happens to say what it is not doing.
+fn takes_over_unasked(command: &str) -> bool {
+    let tokens: Vec<&str> = command.split_whitespace().collect();
+    super::git::xtask_verb(&tokens, "seat")
+        && seat_operation(&tokens) == Some("takeover")
+        && !command.contains(super::TAKEOVER_APPROVAL_FLAG)
+}
+
+/// The operation a `seat` line names: the first argument past the verb
+/// that is neither an option nor an option's value.
+fn seat_operation<'a>(tokens: &[&'a str]) -> Option<&'a str> {
+    let mut rest = tokens.iter().skip_while(|token| **token != "seat").skip(1);
+    while let Some(token) = rest.next() {
+        if *token == "--dir" {
+            rest.next();
+        } else if !token.starts_with('-') {
+            return Some(token);
+        }
+    }
+    None
 }
 
 /// The tree a roster letter already stands on, if it was ever created —
@@ -288,7 +332,7 @@ pub(super) fn write_objection(input: &str, path: &str) -> Option<(&'static str, 
     let me = Identity::current(string_field(input, "session_id").as_deref());
     let landing = match worktree_root(path) {
         Some(root) if in_rig(&root) => Landing::Rig,
-        Some(root) => match roster_seat(&root) {
+        Some(root) => match seats::roster_letter(&root) {
             Some(name) => Landing::Seat(
                 name,
                 standing(lock_reason(&root), &me, Held::BySession),
@@ -336,13 +380,13 @@ fn write_verdict(landing: &Landing, me: &Identity) -> Option<(&'static str, Stri
             "deny",
             format!(
                 "This edit would write in seat {name}, which this session does \
-                 not hold. The seat's lock says: {}. This session is {}. {}{} Run \
+                 not hold. The seat is {}. This session is {}. {}{} Run \
                  `cargo xtask seat` for a seat of this session's own and redo \
                  the edit there (CLAUDE.md \
                  ビルド・テスト).",
-                printable(reason),
+                printable(&whose(reason)),
                 printable(&me.mark()),
-                claim_liveness(reason),
+                how_claims_move(),
                 work_already_there(tree),
             ),
         )),
@@ -424,10 +468,7 @@ fn under(root: &str, path: &str) -> bool {
 /// warning when the seat belongs to somebody else.
 pub(super) fn reclaim(input: &str, path: &str) -> Option<String> {
     let root = worktree_root(path)?;
-    let name = root.rsplit('/').next()?.to_string();
-    if !SEATS.contains(&name.as_str()) {
-        return None;
-    }
+    let name = seats::roster_letter(&root)?;
     let me = Identity::current(string_field(input, "session_id").as_deref());
     let held = matches!(
         standing(lock_reason(&root), &me, Held::BySession),
@@ -439,10 +480,10 @@ pub(super) fn reclaim(input: &str, path: &str) -> Option<String> {
             "Seat {name} stood unclaimed and this edit re-claimed it for the \
              session — a seat being worked in carries its session's claim, \
              and this one had come off (CLAUDE.md ビルド・テスト). {}",
-            announce(&name)
+            announce(name)
         )),
         Standing::Foreign(reason) | Standing::Stale(reason) => {
-            Some(collision(&name, &reason, &root, &me))
+            Some(collision(name, &reason, &root, &me))
         }
         // git could not judge the seat at all; the tool call itself will
         // surface whatever is actually wrong with it.
@@ -460,13 +501,13 @@ pub(super) fn reclaim(input: &str, path: &str) -> Option<String> {
 fn collision(name: &str, reason: &str, tree: &str, me: &Identity) -> String {
     format!(
         "This edit landed in seat {name}, which this session does not hold. \
-         The seat's lock says: {}. This session is {}. {}{} Two sessions in one \
+         The seat is {}. This session is {}. {}{} Two sessions in one \
          seat trample each other's tree and commit on top of one another — take \
          a seat of this session's own with `cargo xtask seat` and carry over \
          only your own hunks (CLAUDE.md ビルド・テスト).",
-        printable(reason),
+        printable(&whose(reason)),
         printable(&me.mark()),
-        claim_liveness(reason),
+        how_claims_move(),
         work_already_there(tree),
     )
 }
@@ -489,7 +530,7 @@ fn worktree_objection(name: Option<&str>, path: Option<&str>) -> Option<&'static
 #[cfg(test)]
 mod tests {
     use super::{
-        Entry, Landing, entry_verdict, reclaims_on_entry, roster_seat, tree_named, under,
+        Entry, Landing, entry_verdict, reclaims_on_entry, takes_over_unasked, tree_named, under,
         worktree_objection, write_verdict,
     };
     use crate::hook::payload::printable;
@@ -549,8 +590,6 @@ mod tests {
         Identity {
             session: "mine".to_string(),
             pid: Some(std::process::id()),
-            image: None,
-            born: None,
         }
     }
 
@@ -667,9 +706,36 @@ mod tests {
     fn a_refusal_names_both_marks_so_the_reader_can_tell_them_apart() {
         let (_, reason) = entry_verdict(&Entry::Seat(theirs(), NO_TREE.into()), &me())
             .expect("somebody else's seat is refused");
-        assert!(reason.contains("claude-seat theirs"), "{reason}");
+        assert!(reason.contains("held by session theirs"), "{reason}");
         assert!(reason.contains("mine"), "{reason}");
         assert!(reason.contains("cargo xtask seat"), "{reason}");
+        // And the one thing the session can do about a claim: nothing
+        // by itself — the user's word moves it.
+        assert!(reason.contains("PGG_ALLOW_TAKEOVER=1"), "{reason}");
+        assert!(reason.contains("no process is asked"), "{reason}");
+    }
+
+    /// The takeover verb is the one seat verb a session may not run on
+    /// its own judgement, so the pre-shell hook reads for it in every
+    /// spelling and lets it through only behind the flag.
+    #[test]
+    fn the_takeover_verb_goes_through_only_behind_the_flag() {
+        for command in [
+            "cargo xtask seat takeover b",
+            "cargo run -p xtask -- seat takeover b",
+            "cd .. && cargo xtask seat --dir /x/repo takeover b",
+        ] {
+            assert!(takes_over_unasked(command), "{command}");
+        }
+        for command in [
+            "PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover b",
+            "cargo xtask seat",
+            "cargo xtask seat release",
+            "cargo xtask seats",
+            "git worktree lock --reason takeover x",
+        ] {
+            assert!(!takes_over_unasked(command), "{command}");
+        }
     }
 
     #[test]
@@ -688,29 +754,6 @@ mod tests {
             cfg!(windows),
             "one path spelled two ways is one path only where the OS says so"
         );
-    }
-
-    #[test]
-    fn knows_a_seat_path_from_the_rest() {
-        assert_eq!(
-            roster_seat("C:\\x\\platitude-gg\\.claude\\worktrees\\a"),
-            Some("a")
-        );
-        assert_eq!(
-            roster_seat("C:/x/platitude-gg/.claude/worktrees/b/crates"),
-            Some("b")
-        );
-        assert_eq!(
-            roster_seat("C:/x/platitude-gg/.claude/worktrees/tooltip"),
-            None
-        );
-        // The rig sits beside the seats and is none of them.
-        assert_eq!(roster_seat("C:/x/platitude-gg/.claude/worktrees/rig"), None);
-        assert_eq!(roster_seat("C:/x/platitude-gg"), None);
-        // Why a path goes through `named_tree` before it reaches this:
-        // the raw string a tool was given can spell a seat relatively,
-        // and that reads as no seat here.
-        assert_eq!(roster_seat(".claude/worktrees/e"), None);
     }
 
     #[test]

@@ -28,5 +28,6 @@ mod chips;
 mod hook;
 mod landing;
 mod permit;
+mod seats;
 mod selection;
 mod stamps;

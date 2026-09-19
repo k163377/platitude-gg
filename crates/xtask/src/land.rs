@@ -23,7 +23,8 @@
 use crate::command::{self, Permission, Where};
 use crate::gate::Gated;
 use crate::seats::{
-    Held, Identity, SEAT_CLAIM, Standing, WorktreeBlock, same_tree, standing, worktree_blocks,
+    Held, Identity, Standing, WorktreeBlock, is_a_seat_claim, same_tree, standing, whose,
+    worktree_blocks,
 };
 use crate::subprocess::git_query;
 
@@ -476,39 +477,37 @@ fn clear_the_board(listing: &str, branch: &str) {
 /// Only the hooks' own kind of lock is lifted; a lock a person wrote
 /// stays.
 ///
-/// Nothing here reads whether the conversation goes on, because nothing
-/// can: a session that lands and is never asked for anything more holds
-/// its letter for as long as its Claude process lives, and in the
-/// desktop app that is as long as the conversation is open at all — so
-/// the roster's own pickup of a claim whose process is gone never comes
-/// for it. A session that does go on working here takes the seat back
-/// at its next edit (the post-write hook), and if another session took
-/// the letter in between, `cargo xtask seat` hands out a fresh one.
-/// Only this session's claim and a dead one are handed back; a live
-/// claim of somebody else's stays where it is.
+/// Whoever's claim it is comes off. A landing is the user's word that
+/// this stretch of work is done, and the session that worked it is the
+/// usual lander; when the user has another session land the branch —
+/// the one that worked it being gone — the letter is freed all the
+/// same, rather than left under a claim nobody will hand back (a seat
+/// claim is never lifted for its process being gone, `seats::claim`).
+/// A session that goes on working here takes the seat back at its next
+/// edit or picture (the post-write hook, `seats::held_by_this_run`),
+/// and if another session took the letter in between, `cargo xtask
+/// seat` hands out a fresh one.
 fn release_claim(here: &str, trees: &[WorktreeBlock], branch: &str) {
     let Some(tree) = landed_claim(trees, branch) else {
         return;
     };
-    match claim_on(tree, &Identity::current(None)) {
-        Claim::Ours => hand_back(
-            here,
-            &tree.path,
-            "this stretch of work landed, so the letter is back on the roster; \
-             going on in this tree claims it back at the next edit, and `cargo \
-             xtask seat` hands out another if somebody took the letter meanwhile.",
+    let was = match standing(
+        Some(tree.reason.clone()),
+        &Identity::current(None),
+        Held::BySession,
+    ) {
+        Standing::Ours => "this session's own".to_string(),
+        _ => whose(&tree.reason),
+    };
+    hand_back(
+        here,
+        &tree.path,
+        &format!(
+            "it was {was}; this stretch of work landed, so the letter is back on the roster. \
+             Going on in this tree claims it back at the next edit or picture, and `cargo \
+             xtask seat` hands out another if somebody took the letter meanwhile."
         ),
-        Claim::Another => println!(
-            "the seat claim on {} is another session's and stays as it is: {}",
-            tree.path, tree.reason
-        ),
-        Claim::Litter => hand_back(
-            here,
-            &tree.path,
-            "the session that worked it is gone, and the roster can hand the \
-             letter out again.",
-        ),
-    }
+    );
 }
 
 fn release_already_landed(here: &str, branch: &str) -> Result<(), String> {
@@ -529,33 +528,10 @@ fn release_already_landed(here: &str, branch: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Whose a landed seat's claim is. Pure, so the line between a session
-/// that is gone and one that is merely elsewhere can be
-/// asserted.
-enum Claim {
-    /// Its session is gone: the letter goes back to the roster.
-    Litter,
-    /// This session's, which landed from the tree: the letter goes back
-    /// too, and going on working there takes it again.
-    Ours,
-    /// Somebody else's — or one written without a process to ask about,
-    /// which is left standing too: unjudgeable is not the same as gone
-    /// (`seats::claim_liveness`).
-    Another,
-}
-
-fn claim_on(tree: &WorktreeBlock, me: &Identity) -> Claim {
-    match standing(Some(tree.reason.clone()), me, Held::BySession) {
-        Standing::Stale(_) => Claim::Litter,
-        Standing::Ours => Claim::Ours,
-        Standing::Free | Standing::Foreign(_) => Claim::Another,
-    }
-}
-
 /// The unlock itself, and what to do when git will not do it. `why` says
-/// which kind of claim this was, because the two read differently to
-/// whoever meets the line: one seat is free again, the other is free
-/// again and this session may still be sitting in it.
+/// whose claim this was, because the two read differently to whoever
+/// meets the line: one seat is free again, the other is free again and
+/// this session may still be sitting in it.
 fn hand_back(here: &str, path: &str, why: &str) {
     if git_query(here, &["worktree", "unlock", path]).is_some() {
         println!("released the seat claim on {path} — {why}");
@@ -572,7 +548,7 @@ fn hand_back(here: &str, path: &str, why: &str) {
 fn landed_claim<'a>(trees: &'a [WorktreeBlock], branch: &str) -> Option<&'a WorktreeBlock> {
     trees
         .iter()
-        .find(|tree| tree.branch == branch && tree.locked && tree.reason.starts_with(SEAT_CLAIM))
+        .find(|tree| tree.branch == branch && tree.locked && is_a_seat_claim(&tree.reason))
 }
 
 /// The branch under the tree this runs from, when it is a seat branch —
@@ -642,9 +618,8 @@ fn reattach(primary: &WorktreeBlock) {
 
 #[cfg(test)]
 mod tests {
-    use super::{Claim, Identity, WorktreeBlock, build_slot_tree, claim_on, clock, landed_claim};
+    use super::{build_slot_tree, clock, landed_claim};
     use crate::seats::worktree_blocks;
-    use crate::subprocess::NO_SUCH_PID;
 
     /// A tree root spelled the way the running system spells one.
     fn tree() -> &'static str {
@@ -705,54 +680,6 @@ mod tests {
         assert!(
             landed_claim(&trees, "worktree-x").is_none(),
             "a branch checked out nowhere has no seat to hand back"
-        );
-    }
-
-    #[test]
-    fn a_landing_hands_back_only_a_seat_whose_session_is_gone() {
-        let seat = |reason: &str| WorktreeBlock {
-            path: "C:/x/platitude-gg/.claude/worktrees/a".to_string(),
-            branch: "worktree-a".to_string(),
-            locked: true,
-            reason: reason.to_string(),
-        };
-        // Marked by its id alone, so that the one live process this test
-        // can name — its own — is free to stand for a claim's number.
-        let me = Identity {
-            session: "mine".to_string(),
-            pid: None,
-            image: None,
-            born: None,
-        };
-        assert!(
-            matches!(claim_on(&seat("claude-seat mine pid 1"), &me), Claim::Ours),
-            "the seat this session landed from goes back to the roster"
-        );
-        assert!(
-            matches!(
-                claim_on(
-                    &seat(&format!(
-                        "claude-seat theirs pid {} as claude.exe",
-                        std::process::id()
-                    )),
-                    &me
-                ),
-                Claim::Litter
-            ),
-            "a seat is held by the program the claim recorded, and this \
-             process is the runner: a number handed on to something the \
-             claim did not name holds nothing"
-        );
-        assert!(
-            matches!(claim_on(&seat("claude-seat theirs"), &me), Claim::Another),
-            "a claim with no process to ask about is unjudgeable"
-        );
-        assert!(
-            matches!(
-                claim_on(&seat(&format!("claude-seat theirs pid {NO_SUCH_PID}")), &me),
-                Claim::Litter
-            ),
-            "the seat of a session that ended goes back to the roster"
         );
     }
 

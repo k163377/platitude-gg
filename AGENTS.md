@@ -43,9 +43,11 @@ Keep `seat` argumentless; report its letter, branch, and absolute path immediate
 Work only in the assigned tree. Apply the same identity bridge for <!--call:seat.release-->`seat release`.
 Follow `CLAUDE.md` for release, rebase, GUI launch, and land authorization.
 Before reporting a seat released, verify the unlock result and the worktree's
-lock state. A successful land is not proof of release: another or anonymous
-claim may remain. End without landing via <!--call:seat.release-->`seat release`; committed work remains
-on its branch and is still excluded from allocation until merged or discarded.
+lock state. A claim is the conversation's and no process is asked about it, so
+nothing lifts one but a landing, a release, and the takeover the user asks for
+(<!--cmd:seat.takeover-->`PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>`). End without landing via
+<!--call:seat.release-->`seat release`; committed work remains on its branch and is still excluded
+from allocation until merged or discarded.
 
 If assignment fails, find the cause; the message is the same for all. Check
 identity, `cargo xtask seats`, and `git worktree list --porcelain` read-only. If Git

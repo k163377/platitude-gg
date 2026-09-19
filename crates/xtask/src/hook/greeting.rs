@@ -3,7 +3,8 @@
 
 use super::payload::string_field;
 use crate::seats::{
-    self, Held, Identity, SEATS, Standing, claim_liveness, commits_in, take_seat, worktree_root,
+    self, Held, Identity, SEATS, Standing, commits_in, how_claims_move, take_seat, whose,
+    worktree_root,
 };
 use crate::subprocess::git_query;
 
@@ -92,11 +93,11 @@ fn claim_at_start(cwd: &str, session: &str) -> Option<String> {
     match take_seat(&root, &root, &me, Held::BySession) {
         Standing::Ours | Standing::Free => None,
         Standing::Foreign(reason) | Standing::Stale(reason) => Some(format!(
-            "This seat is held by another claim. The lock says: {reason}. This \
-             session is {}. {} Two sessions in one seat commit on top of one \
-             another, so move to a seat of your own.",
+            "This seat is {}. This session is {}. {} Two sessions in one seat commit on \
+             top of one another, so move to a seat of your own (`cargo xtask seat`).",
+            whose(&reason),
             me.mark(),
-            claim_liveness(&reason),
+            how_claims_move(),
         )),
     }
 }
@@ -176,11 +177,23 @@ fn seat_buckets(survey: &[seats::Seat]) -> SeatBuckets {
             buckets.missing.push(name);
             continue;
         };
-        // A claim whose process is gone is not a session in the seat, and
-        // saying so is what keeps anyone from unlocking one by hand and
-        // landing on top of a session that was only quiet.
-        if state.locked && !state.claim_dead {
-            buckets.in_use.push(format!("{name} (locked)"));
+        // A claim is a session in the seat whatever became of its
+        // process: the conversation behind it may be between processes,
+        // and only the user can say it is over (`seats::claim`).
+        if state.locked {
+            let tree = if state.on_disk { "" } else { ", no tree" };
+            buckets.in_use.push(format!("{name} (locked{tree})"));
+            continue;
+        }
+        // A letter whose tree went away is not one nobody has used: it
+        // is work nothing can reach until a takeover grows the tree
+        // back, and reading it as unused is how two of them sat there
+        // for days while the roster ran out of letters.
+        if !state.on_disk {
+            let ahead = state.ahead.unwrap_or(0);
+            buckets
+                .pending
+                .push(format!("{name} ({} +{ahead}, no tree)", state.branch));
             continue;
         }
         match (state.ahead, state.behind, state.dirty) {
@@ -228,9 +241,9 @@ mod tests {
     fn surveyed(branch: &str, locked: bool, ahead: u32, behind: u32, dirty: usize) -> SeatState {
         SeatState {
             branch: branch.to_string(),
+            on_disk: true,
             locked,
             lock_reason: String::new(),
-            claim_dead: false,
             ahead: Some(ahead),
             behind: Some(behind),
             dirty: Some(dirty),
@@ -238,26 +251,45 @@ mod tests {
         }
     }
 
-    #[test]
-    fn a_claim_whose_session_ended_is_not_a_seat_in_use() {
-        let mut state = surveyed("worktree-a", true, 0, 0, 0);
-        state.claim_dead = true;
-        let survey = vec![Seat {
-            name: "a",
+    /// A letter the survey measured, whatever it found.
+    fn seat(name: &'static str, state: SeatState) -> Seat {
+        Seat {
+            name,
             state: Some(state),
-        }];
-        let buckets = seat_buckets(&survey);
-        assert!(buckets.in_use.is_empty(), "{:?}", buckets.in_use);
-        assert_eq!(buckets.free, vec!["a (at main)"]);
+        }
+    }
+
+    /// A letter git lists and the disk does not have, carrying `ahead`
+    /// commits on its own branch.
+    fn treeless(name: &'static str, locked: bool, ahead: u32) -> Seat {
+        seat(
+            name,
+            SeatState {
+                on_disk: false,
+                behind: None,
+                dirty: None,
+                ..surveyed(&format!("worktree-{name}"), locked, ahead, 0, 0)
+            },
+        )
+    }
+
+    /// A letter nobody has used: no tree, and no branch carrying work.
+    fn never_used(name: &'static str) -> Seat {
+        Seat { name, state: None }
+    }
+
+    /// A claimed seat is in use whatever the survey says about its tree:
+    /// the claim is the session, and nothing here asks after a process.
+    #[test]
+    fn a_claimed_seat_is_in_use_even_at_main_with_nothing_in_it() {
+        let buckets = seat_buckets(&[seat("a", surveyed("worktree-a", true, 0, 0, 0))]);
+        assert_eq!(buckets.in_use, vec!["a (locked)"]);
+        assert!(buckets.free.is_empty(), "{:?}", buckets.free);
     }
 
     #[test]
     fn a_dirty_seat_is_in_use_not_free() {
-        let survey = vec![Seat {
-            name: "a",
-            state: Some(surveyed("worktree-a", false, 0, 0, 13)),
-        }];
-        let buckets = seat_buckets(&survey);
+        let buckets = seat_buckets(&[seat("a", surveyed("worktree-a", false, 0, 0, 13))]);
         assert_eq!(buckets.in_use, vec!["a (13 uncommitted change(s))"]);
         assert!(buckets.free.is_empty(), "{:?}", buckets.free);
     }
@@ -265,30 +297,12 @@ mod tests {
     #[test]
     fn sorts_a_survey_into_the_greeting_buckets() {
         let survey = vec![
-            Seat {
-                name: "a",
-                state: Some(surveyed("worktree-a", false, 1, 0, 13)),
-            },
-            Seat {
-                name: "b",
-                state: Some(surveyed("worktree-b", false, 0, 0, 0)),
-            },
-            Seat {
-                name: "c",
-                state: Some(surveyed("", false, 0, 3, 0)),
-            },
-            Seat {
-                name: "d",
-                state: None,
-            },
-            Seat {
-                name: "e",
-                state: Some(surveyed("worktree-e", false, 0, 2, 0)),
-            },
-            Seat {
-                name: "f",
-                state: Some(surveyed("worktree-f", true, 0, 0, 0)),
-            },
+            seat("a", surveyed("worktree-a", false, 1, 0, 13)),
+            seat("b", surveyed("worktree-b", false, 0, 0, 0)),
+            seat("c", surveyed("", false, 0, 3, 0)),
+            never_used("d"),
+            seat("e", surveyed("worktree-e", false, 0, 2, 0)),
+            seat("f", surveyed("worktree-f", true, 0, 0, 0)),
         ];
         let buckets = seat_buckets(&survey);
         assert_eq!(buckets.pending, vec!["a (worktree-a +1, 13 uncommitted)"]);
@@ -300,22 +314,33 @@ mod tests {
         assert_eq!(buckets.missing, vec!["d"]);
     }
 
+    /// A letter whose tree went away under a branch that still carries
+    /// commits reads as a merge waiting to happen, not as a letter nobody
+    /// has used: "not created yet" is what sent two of these unnoticed
+    /// for days while the roster ran out of letters. Claimed, it reads
+    /// as what it is — somebody's, and treeless.
+    #[test]
+    fn a_letter_whose_tree_went_away_is_waiting_for_merge_not_uncreated() {
+        let buckets = seat_buckets(&[treeless("c", false, 17)]);
+        assert_eq!(buckets.pending, vec!["c (worktree-c +17, no tree)"]);
+        assert!(buckets.missing.is_empty(), "{:?}", buckets.missing);
+
+        let buckets = seat_buckets(&[treeless("c", true, 17)]);
+        assert_eq!(buckets.in_use, vec!["c (locked, no tree)"]);
+        assert!(buckets.pending.is_empty(), "{:?}", buckets.pending);
+    }
+
     #[test]
     fn a_seat_git_cannot_answer_for_is_not_offered() {
-        let survey = vec![Seat {
-            name: "e",
-            state: Some(SeatState {
-                branch: "worktree-e".to_string(),
-                locked: false,
-                lock_reason: String::new(),
-                claim_dead: false,
+        let buckets = seat_buckets(&[seat(
+            "e",
+            SeatState {
                 ahead: None,
                 behind: None,
                 dirty: None,
-                index_age: None,
-            }),
-        }];
-        let buckets = seat_buckets(&survey);
+                ..surveyed("worktree-e", false, 0, 0, 0)
+            },
+        )]);
         assert_eq!(buckets.in_use, vec!["e (state unreadable)"]);
         assert!(buckets.free.is_empty(), "{:?}", buckets.free);
     }

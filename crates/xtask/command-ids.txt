@@ -29,6 +29,7 @@ qmltest.run
 seat.release
 seat.roster
 seat.take
+seat.takeover
 shipped.build
 shots.open
 shots.prune

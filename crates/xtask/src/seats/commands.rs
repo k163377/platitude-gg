@@ -1,6 +1,6 @@
-//! In a file of its own because seats.rs stands at the length backstop
-//! (.claude/rules/structure.md §長さの閾値); a seat's operations
-//! belong to the seat module.
+//! The seat verbs as the catalogue declares them (.claude/rules-refs/
+//! structure.md §コマンドの正本): every document and every refusal that
+//! names one spells it from here.
 
 use crate::command::{self, Permission, Where};
 
@@ -22,6 +22,15 @@ pub(crate) static RELEASE: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
+pub(crate) static TAKEOVER: command::Command = command::Command {
+    id: "seat.takeover",
+    call: "seat takeover <letter>",
+    purpose: "move a letter to this session whoever holds it, tree and board as they stand",
+    run_in: Where::Either,
+    needs: &["the user's instruction, in so many words, to take that letter over"],
+    permission: Permission::Escape(crate::hook::TAKEOVER_APPROVAL_FLAG),
+};
+
 pub(crate) static ROSTER: command::Command = command::Command {
     id: "seat.roster",
     call: "seats",
@@ -31,4 +40,4 @@ pub(crate) static ROSTER: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
-pub(crate) static COMMANDS: &[&command::Command] = &[&TAKE, &RELEASE, &ROSTER];
+pub(crate) static COMMANDS: &[&command::Command] = &[&TAKE, &RELEASE, &TAKEOVER, &ROSTER];

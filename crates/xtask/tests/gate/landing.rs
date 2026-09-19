@@ -285,8 +285,10 @@ fn land_commits_a_census_the_seat_was_holding_dirty() {
 /// tree is at main's tip, so the letter is free for whoever asks next
 /// without anybody having to say the words (CLAUDE.md ビルド・テスト).
 /// The session that landed takes it back at its next edit if it goes on
-/// working there. A live claim naming somebody else stays, and one whose
-/// process is gone goes back like the session's own.
+/// working there. Whoever's claim was on the seat comes off — a landing
+/// is the user's word that the stretch of work is done, and a claim is
+/// never lifted for its process being gone, so a letter the landing
+/// left claimed would be one nobody hands back.
 #[test]
 fn a_landed_seat_goes_back_to_the_roster() {
     let sb = Sandbox::new("claim");
@@ -302,47 +304,48 @@ fn a_landed_seat_goes_back_to_the_roster() {
     let (ok, text) = sb.land_as("worktree-a", "mine");
     assert!(ok, "{text}");
     assert!(text.contains("released the seat claim"), "{text}");
+    assert!(text.contains("this session's own"), "{text}");
     assert!(
         !locks().contains("locked"),
         "the seat the landing emptied stayed claimed"
     );
 
-    lock("claude-seat mine");
+    lock("claude-seat mine pid 4242");
     sb.write_refs(&sb.seat, 16);
     sb.commit_all(&sb.seat, "feat(core): sixteen", &[]);
     let (ok, text) = sb.land_as("worktree-a", "somebody-else");
     assert!(ok, "{text}");
-    assert!(text.contains("is another session's and stays"), "{text}");
+    assert!(text.contains("released the seat claim"), "{text}");
+    assert!(text.contains("held by session mine (pid 4242)"), "{text}");
     assert!(
-        locks().contains("locked claude-seat mine"),
-        "a session that is still running is still using its tree"
+        !locks().contains("locked"),
+        "the user had this branch landed, so the letter is theirs to hand out"
     );
 
-    // The number no process can have (`subprocess::NO_SUCH_PID`): odd,
-    // and above what either kernel hands out.
-    sb.git_ok(&sb.repo, &["worktree", "unlock", &seat]);
-    lock("claude-seat gone pid 2147483645");
+    // A lock a person wrote is nobody's to lift.
+    lock("parked by hand");
     sb.write_refs(&sb.seat, 32);
     sb.commit_all(&sb.seat, "feat(core): thirty-two", &[]);
     let (ok, text) = sb.land_as("worktree-a", "mine");
     assert!(ok, "{text}");
-    assert!(text.contains("released the seat claim"), "{text}");
+    assert!(!text.contains("released the seat claim"), "{text}");
     assert!(
-        !locks().contains("locked"),
-        "the seat of a session that ended goes back to the roster"
+        locks().contains("locked parked by hand"),
+        "a person's lock stays through a landing"
     );
 }
 
 #[test]
-fn landing_an_already_merged_seat_releases_only_our_clean_claim() {
+fn landing_an_already_merged_seat_releases_every_clean_claim() {
     let sb = Sandbox::new("land-again");
     let seat = sb.seat.display().to_string();
     let before = sb.main_sha();
     for (reason, dirty, released) in [
         ("claude-seat mine", false, true),
         ("claude-seat gone pid 2147483645", false, true),
-        ("claude-seat theirs", false, false),
-        ("claude-seat", false, false),
+        ("claude-seat theirs", false, true),
+        ("claude-seat", false, true),
+        ("parked by hand", false, false),
         ("claude-seat mine", true, false),
     ] {
         sb.git_ok(&sb.repo, &["worktree", "lock", "--reason", reason, &seat]);
