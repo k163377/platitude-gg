@@ -48,9 +48,13 @@ pub(super) struct RefJoins<'a> {
 /// reads.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct WorktreeHolders {
-    /// The branches they have out, by short name. What marks a row and a
-    /// chip as somewhere a move cannot go.
-    pub branches: std::collections::HashSet<String>,
+    /// The branches they have out, by short name, each with whether the
+    /// copy holding it is locked. What marks a row and a chip as
+    /// somewhere a move cannot go, and what the chip's padlock is read
+    /// from. **One lookup answers both** — the two are one question
+    /// about one copy, and a set beside a set would let a name be held
+    /// by nobody and locked all the same.
+    pub branches: std::collections::HashMap<String, bool>,
     /// The copies standing on no branch at all. **These carry their
     /// commit**, because nothing else in the repository names it: a
     /// branch is found again through the refs listing, and a detached
@@ -59,12 +63,14 @@ pub struct WorktreeHolders {
     pub detached: Vec<DetachedCheckout>,
 }
 
-/// One working copy standing on no branch: the commit it is on, and the
-/// name the WORKTREES row shows for it (the last segment of its path).
+/// One working copy standing on no branch: the commit it is on, the
+/// name the WORKTREES row shows for it (the last segment of its path),
+/// and whether `git worktree lock` is on it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DetachedCheckout {
     pub oid: Oid,
     pub name: crate::Name,
+    pub locked: bool,
 }
 
 impl<'a> RefJoins<'a> {
@@ -147,7 +153,23 @@ impl<'a> RefJoins<'a> {
     /// Whether another working copy has this ref out. Only a local branch
     /// can be — a remote-tracking ref is nobody's checkout.
     fn held_elsewhere(&self, r: &RefEntry) -> bool {
-        r.kind == RefKind::LocalBranch && self.held.branches.contains(r.short.as_str())
+        self.holder_of(r).is_some()
+    }
+
+    /// And whether that copy is locked, for the padlock the chip wears
+    /// beside the name (デザイン規約 §ref の種別). False where nobody is
+    /// holding it, so the two read together.
+    fn held_locked(&self, r: &RefEntry) -> bool {
+        self.holder_of(r) == Some(true)
+    }
+
+    /// The one lookup both of those are: `Some(locked)` while another
+    /// copy has this branch out, `None` otherwise.
+    fn holder_of(&self, r: &RefEntry) -> Option<bool> {
+        if r.kind != RefKind::LocalBranch {
+            return None;
+        }
+        self.held.branches.get(r.short.as_str()).copied()
     }
 
     /// The working copies standing on no branch, for the chips that say
@@ -209,6 +231,7 @@ pub(super) fn build_label_map(
                 here: r.kind != RefKind::RemoteBranch,
                 remote: String::new(),
                 held_elsewhere: joins.held_elsewhere(r),
+                locked: joins.held_locked(r),
             },
         ));
     }
@@ -237,8 +260,10 @@ pub(super) fn build_label_map(
                         .map(|c| c.remote.as_str())
                         .collect::<Vec<_>>()
                         .join(", "),
-                    // A tag is nobody's checkout.
+                    // A tag is nobody's checkout, so neither half of
+                    // "a working copy is standing here" is about it.
                     held_elsewhere: false,
+                    locked: false,
                 },
             ));
         }
@@ -258,6 +283,10 @@ pub(super) fn build_label_map(
                 // The marker for a detached HEAD names no branch, so
                 // there is none for another copy to be holding.
                 held_elsewhere: false,
+                // And the copy it is about is this window's own, which
+                // the holders never carry: both of these are "somebody
+                // else is standing here", and nobody else is.
+                locked: false,
             },
         ));
     }
@@ -279,8 +308,12 @@ pub(super) fn build_label_map(
                 remote: String::new(),
                 // The flag is about a branch being out somewhere else,
                 // and this chip names no branch. What it draws instead is
-                // its own kind.
+                // its own kind — the same green frame, off the kind
+                // letter rather than off this.
                 held_elsewhere: false,
+                // The padlock is the copy's either way, so this half is
+                // the marker's own (デザイン規約 §ref の種別).
+                locked: copy.locked,
             },
         ));
     }
@@ -545,7 +578,7 @@ impl RepoSession {
         for copy in mine {
             match &copy.branch {
                 Some(branch) => {
-                    fresh.branches.insert(branch.clone());
+                    fresh.branches.insert(branch.clone(), copy.locked);
                 }
                 // Nothing here names the commit but the entry itself, so
                 // the oid is carried along with the name the row shows.
@@ -560,6 +593,7 @@ impl RepoSession {
                         fresh.detached.push(DetachedCheckout {
                             oid,
                             name: shown_name(&copy.path),
+                            locked: copy.locked,
                         });
                     }
                 }

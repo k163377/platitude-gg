@@ -172,6 +172,7 @@ mod tests {
                 here: true,
                 remote: String::new(),
                 held_elsewhere: false,
+                locked: false,
             }],
             stash_ref: String::new(),
             published: false,

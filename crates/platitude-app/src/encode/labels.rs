@@ -199,6 +199,7 @@ mod tests {
                 here: true,
                 remote: String::new(),
                 held_elsewhere: false,
+                locked: false,
             },
             RefLabel {
                 text: "v1.0".into(),
@@ -208,6 +209,7 @@ mod tests {
                 here: true,
                 remote: String::new(),
                 held_elsewhere: false,
+                locked: false,
             },
         ];
         assert_eq!(encode_no_pr(&labels), "L11010main\u{1f}T00010v1.0");
@@ -225,6 +227,7 @@ mod tests {
             here: true,
             remote: String::new(),
             held_elsewhere: true,
+            locked: false,
         }];
         assert_eq!(encode_no_pr(&labels), "L00011feature/topic-a");
         // And the name still starts where the readers look for it.
@@ -279,6 +282,7 @@ mod tests {
             here: true,
             remote: String::new(),
             held_elsewhere: false,
+            locked: false,
         }];
         assert_eq!(encode_no_pr(&labels), "T01010v1.0");
     }
@@ -296,6 +300,7 @@ mod tests {
             here: true,
             remote: String::new(),
             held_elsewhere: false,
+            locked: false,
         };
         let labels = [
             branch("topic", LabelKind::LocalBranch),
@@ -319,6 +324,7 @@ mod tests {
             here: false,
             remote: "origin, fork".into(),
             held_elsewhere: false,
+            locked: false,
         }];
         assert_eq!(encode_no_pr(&labels), "T01000v9.9\u{1e}origin, fork");
     }
@@ -334,6 +340,7 @@ mod tests {
                 here: true,
                 remote: String::new(),
                 held_elsewhere: false,
+                locked: false,
             },
             RefLabel {
                 text: "v9.9".into(),
@@ -343,6 +350,7 @@ mod tests {
                 here: false,
                 remote: "origin, fork".into(),
                 held_elsewhere: false,
+                locked: false,
             },
         ];
         let encoded = encode_no_pr(&labels);
@@ -365,6 +373,7 @@ mod tests {
             here: true,
             remote: String::new(),
             held_elsewhere: false,
+            locked: false,
         }];
         assert!(!encode_no_pr(&labels).contains(FIELD_SEP));
     }

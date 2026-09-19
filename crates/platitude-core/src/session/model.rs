@@ -82,9 +82,14 @@ pub struct RefLabel {
     /// Another working copy has this branch checked out — the same bit
     /// the sidebar row reads (`BranchItem::held_elsewhere`), so the chip
     /// and the row cannot disagree about where a branch can be gone to.
-    /// The chip has no room for a mark of its own and does not need one:
-    /// it already has a way of saying "nowhere to go from here".
+    /// **The chip draws the green frame off this** (デザイン規約
+    /// §ref の種別): a working copy is standing here.
     pub held_elsewhere: bool,
+    /// And `git worktree lock` is on the copy that is standing here —
+    /// the branch's holder, or the copy the `Worktree` marker is. False
+    /// on every chip no copy is standing on, so it is only ever read
+    /// beside one of the two above.
+    pub locked: bool,
 }
 
 /// The chips every commit carries, as one sorted run.

@@ -276,7 +276,7 @@ fn a_branch_another_copy_holds_is_marked_on_the_row_and_the_chip() {
     let refs = vec![branch("main", oid(1)), branch("feature/topic-a", oid(2))];
     let remote_tags = index_of("origin", Vec::new());
     let mut held = WorktreeHolders::default();
-    held.branches.insert("feature/topic-a".to_string());
+    held.branches.insert("feature/topic-a".to_string(), false);
     let joins = RefJoins::new(&refs, &held);
 
     let snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
@@ -298,6 +298,29 @@ fn a_branch_another_copy_holds_is_marked_on_the_row_and_the_chip() {
     let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
     assert!(map.labels_of(&oid(2), true)[0].held_elsewhere);
     assert!(!map.labels_of(&oid(1), true)[0].held_elsewhere);
+    assert!(
+        !map.labels_of(&oid(2), true)[0].locked,
+        "the copy holding it was not locked, so the chip wears no padlock"
+    );
+}
+
+/// And the lock on the copy holding it rides with the mark: one lookup
+/// answers both, so a chip cannot say a branch is somewhere else and
+/// lose which copy that was (デザイン規約 §ref の種別).
+#[test]
+fn a_locked_copy_puts_the_padlock_on_the_branch_it_holds() {
+    let refs = vec![branch("main", oid(1)), branch("hotfix/urgent", oid(2))];
+    let remote_tags = index_of("origin", Vec::new());
+    let mut held = WorktreeHolders::default();
+    held.branches.insert("hotfix/urgent".to_string(), true);
+    let joins = RefJoins::new(&refs, &held);
+
+    let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
+    let chip = &map.labels_of(&oid(2), true)[0];
+    assert!(chip.held_elsewhere && chip.locked);
+    // The branch nobody holds carries neither half.
+    let here = &map.labels_of(&oid(1), true)[0];
+    assert!(!here.held_elsewhere && !here.locked);
 }
 
 /// A working copy standing on no branch is on the graph as a chip of its
@@ -311,6 +334,7 @@ fn a_copy_standing_on_no_branch_gets_a_chip_of_its_own() {
     held.detached.push(super::joins::DetachedCheckout {
         oid: oid(2),
         name: crate::Name::const_new("spike"),
+        locked: true,
     });
     let joins = RefJoins::new(&refs, &held);
     let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
@@ -322,6 +346,10 @@ fn a_copy_standing_on_no_branch_gets_a_chip_of_its_own() {
         .expect("the copy is on the row it is standing on");
     assert_eq!(copy.text.as_str(), "spike");
     assert!(!copy.held_elsewhere, "it names no branch to be holding");
+    assert!(
+        copy.locked,
+        "the padlock is the copy's, whether or not it has a branch out"
+    );
     // The commit a copy is not standing on carries no such chip.
     assert!(
         !map.labels_of(&oid(1), true)

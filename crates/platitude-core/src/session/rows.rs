@@ -299,6 +299,7 @@ impl CarriedRows {
                 here: true,
                 remote: String::new(),
                 held_elsewhere: false,
+                locked: false,
             }];
             row.carried = Some(wip.clone());
             out.push(row);
