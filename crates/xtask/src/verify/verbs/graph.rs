@@ -264,9 +264,16 @@ pub(super) const TABLE: &[Verb] = &[
     // column any more (デザイン規約 §グラフ行の右クリック). **`ref=`
     // is the one that stays away**: a picture of the ref menu
     // and a picture of this one differ by rows nobody counts by eye.
-    // **Read as a pair** — `switch` is offered on a branch the tree is
-    // not on and gone on the one it is, so either run alone would pass
-    // an implementation that always draws the row, or never does.
+    //
+    // **What a window is for here is the aim**, not the row: that the
+    // press reaches `CommitMenuState.askRefRows` with the name the chip
+    // drew and the branch the tree is on. Whether the row is then drawn
+    // from that answer is `tst_commitrowmenu.qml`, and which answer the
+    // state comes to is `offers::ref_menu`. So the two lines are the two
+    // aims — a name the tree is not on, and the one it is — and neither
+    // stands for the other: they read the lookup from opposite sides.
+    // A run naming no branch at all is not one of them; it aims at an
+    // empty name, which is a row the graph never draws.
     Verb {
         name: "chip-menu",
         when: &[],

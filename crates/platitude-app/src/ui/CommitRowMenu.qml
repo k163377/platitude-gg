@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import platitude
 import platitude.ui
 
 // The right-click on a graph row: one menu for a commit, another for a stash. A stash is a commit git keeps off to one
@@ -15,20 +14,15 @@ import platitude.ui
 // What either of them offers is decided as it opens and handed in here — the conditions are live (a timer fetch alone
 // moves `busyCount`), and a row that appears or vanishes under the pointer is a row clicked by accident (デザイン規約 §メニュー).
 //
+// **Nothing here is looked up and nothing here is run.** Every answer arrives as a plain value from the one place that
+// opens this menu (`CommitMenuState`), and every press leaves as a request for the page to answer
+// (`RepoPage`) — so what is left in this file is which rows there are, what each says, and what a press asks for, all
+// of which `tst_commitrowmenu.qml` drives on the real thing.
+//
 // An `Item` because a menu measures the window through the item it was declared under (`AppMenu.ownerItem`); it draws
 // nothing itself.
 Item {
     id: rowMenu
-
-    required property RepoTab repoTab
-    /// What the two cards need to work their own answers out — the same models the sidebar's ref menu hands them, so
-    /// the two entrances to a name cannot drift (RefBranchMenu / RefTagMenu).
-    required property WorkTreeModel workTree
-    /// The drawn rows — what the branch card puts the delete's safety valve to as it opens (`RefBranchMenu`).
-    required property GraphModel graphModel
-    required property NavSectionModel branchesModel
-    required property NavSectionModel worktreesModel
-    required property NavSectionModel tagsModel
 
     /// Why every row here is out, in one line, while the window's write doors are held — a write that replays is
     /// running behind the screen (`RepoPage.doorsHeldWhy`). Every card of this menu takes it: a reset, a fold, a drop
@@ -81,6 +75,13 @@ Item {
     /// How many files `--hard` takes besides the commits — the working tree's own, which that flag writes over
     /// (`status::Counts::hard_reset_takes`). Zero on a clean tree, and then the row says nothing extra.
     required property int hardResetTakes
+    /// git's answers about the branch card's delete, live while the card stands: the refusal and the landing it goes
+    /// or changes shape on, and the early check it dresses the row with. Passed straight through — the card reads
+    /// them by its own name (`RefBranchMenu`), and the sidebar's entrance hands it the same four.
+    property string refusedDelete: ""
+    property string landedDelete: ""
+    property string checkedBranch: ""
+    property string checkedMerged: ""
 
     /// Where the working tree goes, when the name this row draws is somewhere to go. The page owns the road, which is
     /// the one a double-click on the row already takes (`RepoPage.switchToRef`).
@@ -103,6 +104,22 @@ Item {
     /// answer is neither — that leaves with the write itself (`ops_delete`).
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal upstreamRequested(string branch, string counterpart)
+    /// The writes the rows of this menu run, in the words each takes. Nothing here runs git: what a press comes to is
+    /// the page's, which is where the tab this menu was opened over is (`RepoPage`).
+    signal cherryPickRequested(string oidHex)
+    signal revertRequested(string oidHex)
+    signal mergeRequested(string ref)
+    signal rebaseRequested(string ref)
+    signal pullRequested()
+    /// And the two cards' writes, passed up the same way — the branch card's four and the tag card's four.
+    signal checkDeleteRequested(string branch)
+    signal forceDeleteRequested(string branch)
+    signal deleteRemoteRequested(string remoteRef)
+    signal deleteEverywhereRequested(string branch, string remoteRef, bool forced)
+    signal pushTagRequested(string remote, string tag, bool lease)
+    signal deleteTagRequested(string tag)
+    signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere)
+    signal deleteTagEverywhereRequested(string tag, string remote)
     /// The menu went away — and the stacked list it may have been standing on is the pointer's to answer for again.
     signal dismissed()
 
@@ -136,87 +153,19 @@ Item {
     function offerStash() {
         stashMenu.offer()
     }
-    function offerCommit() {
+    /// `facts` is what the two cards stand on, read where the models are (`CommitMenuState.cardFacts`): `branch` and
+    /// `tag`, each already aimed at the target or emptied because the target is the other's kind.
+    function offerCommit(facts) {
         // Both cards are asked before the menu opens, the way every other row's answer is settled first — their own
         // `applies` is what decides whether a card's row is there to count (`AppMenu.offeredRows`). Each is handed the
         // target only when the target is its own kind, so the other comes up holding what can still be made here.
         const branchy = rowMenu.targetKind === "branch" || rowMenu.targetKind === "remote"
         const branchKind = branchy ? rowMenu.targetKind : ""
         const branchName = branchy ? rowMenu.targetName : ""
-        branchCommitMenu.standOn(branchKind, branchName, branchName, rowMenu.oid,
-                                 rowMenu.branchFacts(branchKind, branchName, rowMenu.oid))
+        branchCommitMenu.standOn(branchKind, branchName, branchName, rowMenu.oid, facts.branch)
         const tagged = rowMenu.targetKind === "tag"
-        tagCommitMenu.standOn(tagged ? "tag" : "", tagged ? rowMenu.targetName : "", rowMenu.oid,
-                              rowMenu.tagFacts(tagged ? "tag" : "",
-                                               tagged ? rowMenu.targetName : "", rowMenu.oid))
+        tagCommitMenu.standOn(tagged ? "tag" : "", tagged ? rowMenu.targetName : "", rowMenu.oid, facts.tag)
         commitMenu.offer()
-    }
-
-    /// What the BRANCH card stands on — the other entrance to it (`RefRowMenu.branchFacts` says why it is read here
-    /// and not in the card).
-    function branchFacts(kind, full, oidHex) {
-        if (kind !== "branch" && kind !== "remote")
-            return { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteDrifted": false,
-                     "offers": "", "open": false, "merged": "" }
-        const held = kind === "branch"
-            ? rowMenu.worktreesModel.worktreeHolding(full)
-            : rowMenu.worktreesModel.worktreeHolding(rowMenu.repoTab.localNameFor(full))
-        const counterpart = kind === "branch" ? rowMenu.branchesModel.upstreamOf(full) : ""
-        const drifted = kind === "branch" && rowMenu.branchesModel.upstreamDrifted(full)
-        const open = rowMenu.repoTab.state === "open"
-        return {
-            "heldByWorktree": held,
-            "holderLeaf": held === "" ? "" : GitFacts.pathLeaf(held),
-            "remoteCounterpart": counterpart,
-            "remoteDrifted": drifted,
-            "open": open,
-            "merged": !open || kind !== "branch" ? "" : rowMenu.graphModel.branchDeleteMerged(
-                oidHex, rowMenu.branchesModel.upstreamOidOf(full), rowMenu.workTree.headOid),
-            "offers": GitFacts.refMenuOffers(
-                kind, full, oidHex, open,
-                rowMenu.heldReason !== "" ? 0 : rowMenu.repoTab.busyCount,
-                rowMenu.workTree.branch, rowMenu.workTree.detached,
-                rowMenu.workTree.opText, rowMenu.workTree.conflictCount,
-                held, counterpart, drifted, rowMenu.repoTab.defaultRemote, "", "")
-        }
-    }
-
-    /// The reading over there gone on its own, and the pair at once — cut against the configured remote names, which
-    /// are the tab's (`RefRowMenu.deleteRemoteNow`).
-    function deleteRemoteNow(remoteRef) {
-        const remote = GitFacts.remoteOfRef(remoteRef, rowMenu.repoTab.remoteNames)
-        if (remote === "")
-            return
-        rowMenu.repoTab.deleteRemoteBranch(
-            remote, GitFacts.branchOfRef(remoteRef, rowMenu.repoTab.remoteNames))
-    }
-
-    function deleteEverywhereNow(branch, remoteRef, forced) {
-        const remote = GitFacts.remoteOfRef(remoteRef, rowMenu.repoTab.remoteNames)
-        if (remote === "")
-            return
-        rowMenu.repoTab.deleteBranchEverywhere(
-            branch, remote, GitFacts.branchOfRef(remoteRef, rowMenu.repoTab.remoteNames), forced)
-    }
-
-    /// What the TAG card stands on — the other entrance to it, reading the same section and asking core the same
-    /// question (`RefRowMenu.tagFacts` says why it is read here and not in the card).
-    function tagFacts(kind, full, oidHex) {
-        const remote = rowMenu.repoTab.defaultRemote
-        const drift = kind === "tag" ? rowMenu.tagsModel.remoteTagDrift(full, remote) : ""
-        const sides = kind === "tag" ? rowMenu.tagsModel.tagSides(full) : ""
-        return {
-            "pushRemote": remote,
-            "tagDriftOid": drift,
-            "tagOnlyThere": sides === "remote",
-            "offers": kind !== "tag" ? "" : GitFacts.refMenuOffers(
-                kind, full, oidHex,
-                rowMenu.repoTab.state === "open",
-                rowMenu.heldReason !== "" ? 0 : rowMenu.repoTab.busyCount,
-                rowMenu.workTree.branch, rowMenu.workTree.detached,
-                rowMenu.workTree.opText, rowMenu.workTree.conflictCount,
-                "", "", drift !== "", remote, sides, "")
-        }
     }
 
     AppMenu {
@@ -291,13 +240,13 @@ Item {
         AppMenuItem {
             code: "cherry-pick"
             offered: rowMenu.canSequence
-            onTriggered: rowMenu.repoTab.cherryPick(rowMenu.oid)
+            onTriggered: rowMenu.cherryPickRequested(rowMenu.oid)
         }
         // Both cherry-pick and revert only add a commit, so both are a plain click.
         AppMenuItem {
             code: "revert"
             offered: rowMenu.canSequence
-            onTriggered: rowMenu.repoTab.revert(rowMenu.oid)
+            onTriggered: rowMenu.revertRequested(rowMenu.oid)
         }
         AppMenuSeparator {}
         // The message is edited in the details pane's boxes, where the click that opens this menu has already put
@@ -348,7 +297,7 @@ Item {
             refSentence: qsTr("into %1")
             refName: rowMenu.branch
             offered: rowMenu.canIntegrate
-            onTriggered: rowMenu.repoTab.merge(rowMenu.integrateRef, false, false, "")
+            onTriggered: rowMenu.mergeRequested(rowMenu.integrateRef)
         }
         AppMenuItem {
             code: "rebase"
@@ -357,7 +306,7 @@ Item {
             refName: rowMenu.branch
             note: rowMenu.published ? Words.rewritesPushed : ""
             offered: rowMenu.canIntegrate
-            onTriggered: rowMenu.repoTab.rebase(rowMenu.integrateRef, "", true)
+            onTriggered: rowMenu.rebaseRequested(rowMenu.integrateRef)
         }
         AppMenu {
             id: resetMenu
@@ -420,7 +369,7 @@ Item {
             offered: rowMenu.canPull
             // Greyed on the same answer the sidebar's row reads (`RefRowMenu`).
             blockedReason: rowMenu.pullBlocked ? Words.pullDiverged : ""
-            onTriggered: rowMenu.repoTab.pull()
+            onTriggered: rowMenu.pullRequested()
         }
         AppMenuSeparator {}
         // **The very card the sidebar's row opens** (RefBranchMenu): a branch met on a graph row and the same branch
@@ -430,17 +379,17 @@ Item {
         RefBranchMenu {
             id: branchCommitMenu
             heldReason: rowMenu.heldReason
-            refusedDelete: rowMenu.repoTab.branchDeleteRefused
-            landedDelete: rowMenu.repoTab.branchDeleteLanded
-            checkedBranch: rowMenu.repoTab.branchDeleteAsked
-            checkedMerged: rowMenu.repoTab.branchDeleteMerged
+            refusedDelete: rowMenu.refusedDelete
+            landedDelete: rowMenu.landedDelete
+            checkedBranch: rowMenu.checkedBranch
+            checkedMerged: rowMenu.checkedMerged
             onDeleteRequested: (kind, id, name, oidHex) => rowMenu.deleteRequested(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart) => rowMenu.upstreamRequested(branch, counterpart)
-            onCheckDeleteRequested: branch => rowMenu.repoTab.checkBranchDelete(branch)
-            onForceDeleteRequested: branch => rowMenu.repoTab.deleteBranch(branch, true)
-            onDeleteRemoteRequested: remoteRef => rowMenu.deleteRemoteNow(remoteRef)
+            onCheckDeleteRequested: branch => rowMenu.checkDeleteRequested(branch)
+            onForceDeleteRequested: branch => rowMenu.forceDeleteRequested(branch)
+            onDeleteRemoteRequested: remoteRef => rowMenu.deleteRemoteRequested(remoteRef)
             onDeleteEverywhereRequested: (branch, remoteRef, forced) =>
-                rowMenu.deleteEverywhereNow(branch, remoteRef, forced)
+                rowMenu.deleteEverywhereRequested(branch, remoteRef, forced)
         }
         AppMenuSeparator {}
         // **The very card the tag's own chip opens** (RefTagMenu): the mark left on this commit, and — where the row
@@ -452,12 +401,12 @@ Item {
             heldReason: rowMenu.heldReason
             canBranchHere: rowMenu.canBranchHere
             onTagHereRequested: oidHex => rowMenu.tagHereRequested(oidHex)
-            onPushTagRequested: (remote, tag, lease) => rowMenu.repoTab.pushTag(remote, tag, lease)
-            onDeleteTagRequested: tag => rowMenu.repoTab.deleteTag(tag)
+            onPushTagRequested: (remote, tag, lease) => rowMenu.pushTagRequested(remote, tag, lease)
+            onDeleteTagRequested: tag => rowMenu.deleteTagRequested(tag)
             onDeleteRemoteTagRequested: (remote, tag, onlyThere) =>
-                rowMenu.repoTab.deleteRemoteTag(remote, tag, onlyThere)
+                rowMenu.deleteRemoteTagRequested(remote, tag, onlyThere)
             onDeleteTagEverywhereRequested: (tag, remote) =>
-                rowMenu.repoTab.deleteTagEverywhere(tag, remote)
+                rowMenu.deleteTagEverywhereRequested(tag, remote)
         }
     }
 }

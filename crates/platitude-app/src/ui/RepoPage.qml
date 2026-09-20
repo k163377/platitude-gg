@@ -1336,6 +1336,8 @@ FocusScope {
         workTree: workTree
         graphModel: graphModel
         worktreesModel: worktreesModel
+        branchesModel: branchesModel
+        tagsModel: tagsModel
         // Null until the menu is first raised; the one function that reads it is the door that raises it.
         menu: commitMenuSeat.item
     }
@@ -1348,12 +1350,6 @@ FocusScope {
             // The graph's rows are doors onto the same history the left pane's are, so they are held on the same
             // answer: a reset or a drop let go into the middle of a replay is the same accident a switch would be.
             heldReason: page.doorsHeldWhy
-            repoTab: repoTab
-            workTree: workTree
-            graphModel: graphModel
-            branchesModel: branchesModel
-            worktreesModel: worktreesModel
-            tagsModel: tagsModel
             branch: workTree.branch
             oid: commitMenuState.menuOid
             stashRef: commitMenuState.menuStashRef
@@ -1370,6 +1366,11 @@ FocusScope {
             stashCanWrite: commitMenuState.menuStashCanWrite
             hardResetTakes: commitMenuState.menuHardResetTakes
             tipHeldElsewhere: commitMenuState.menuTipHeldElsewhere
+            // git's answers to the branch card's delete, live while the card stands (`RefBranchMenu`).
+            refusedDelete: repoTab.branchDeleteRefused
+            landedDelete: repoTab.branchDeleteLanded
+            checkedBranch: repoTab.branchDeleteAsked
+            checkedMerged: repoTab.branchDeleteMerged
             // The same road the row's double-click takes, held on the same answers (`switchToRef`).
             onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
             // Straight to the graph row: this menu is only ever raised on one.
@@ -1385,6 +1386,23 @@ FocusScope {
             // The branch card's own three, answered exactly where the ref menu's are.
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart) => page.startUpstreamAsk(branch, counterpart)
+            // The writes its rows run. The tab is here, and the two cuts of a remote ref are kept beside the lookups
+            // the same cards' answers came from (`CommitMenuState`).
+            onCherryPickRequested: oidHex => repoTab.cherryPick(oidHex)
+            onRevertRequested: oidHex => repoTab.revert(oidHex)
+            onMergeRequested: ref => repoTab.merge(ref, false, false, "")
+            onRebaseRequested: ref => repoTab.rebase(ref, "", true)
+            onPullRequested: repoTab.pull()
+            onCheckDeleteRequested: branch => repoTab.checkBranchDelete(branch)
+            onForceDeleteRequested: branch => repoTab.deleteBranch(branch, true)
+            onDeleteRemoteRequested: remoteRef => commitMenuState.deleteRemoteNow(remoteRef)
+            onDeleteEverywhereRequested: (branch, remoteRef, forced) =>
+                commitMenuState.deleteEverywhereNow(branch, remoteRef, forced)
+            onPushTagRequested: (remote, tag, lease) => repoTab.pushTag(remote, tag, lease)
+            onDeleteTagRequested: tag => repoTab.deleteTag(tag)
+            onDeleteRemoteTagRequested: (remote, tag, onlyThere) =>
+                repoTab.deleteRemoteTag(remote, tag, onlyThere)
+            onDeleteTagEverywhereRequested: (tag, remote) => repoTab.deleteTagEverywhere(tag, remote)
             // The settle re-run is for a menu that stood on the stacked list's row: the list stayed up under it, and
             // whether it stays now is the pointer's to answer again.
             onDismissed: rowHost.settleRefList()

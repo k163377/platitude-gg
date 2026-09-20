@@ -11,7 +11,7 @@ import platitude.ui
 //
 // **The card reads no model and runs no write.** What a state may offer is core's rule (`offers::ref_menu`), the
 // readings the rows are told apart by live in their own sections, and the menu carrying this card is where all of
-// them are — so that is where they are read (`RefRowMenu.branchFacts` / `CommitRowMenu.branchFacts`), and the card
+// them are — so that is where they are read (`RefRowMenu.branchFacts` / `CommitMenuState.branchFacts`), and the card
 // says what was pressed instead of pressing it (規約 §コンポーネント配線規約). What is decided here is the table:
 // which row keeps a seat, which greys and **with which sentence**, which gesture each takes and what colour it
 // wears. That leaves the card standing on plain values, which is what lets `tests/qml/tst_branchcard.qml` drive the

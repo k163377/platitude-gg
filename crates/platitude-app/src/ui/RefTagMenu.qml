@@ -10,7 +10,7 @@ import platitude.ui
 //
 // **The card reads no model and runs no write.** What a state may offer is core's rule
 // (`offers::ref_menu`), and the menu carrying this card is where the models to ask it with are, so that is where it
-// is asked (`RefRowMenu.tagFacts` / `CommitRowMenu.tagFacts`) — data down, requests up, as every other part of this
+// is asked (`RefRowMenu.tagFacts` / `CommitMenuState.tagFacts`) — data down, requests up, as every other part of this
 // panel is wired (規約 §コンポーネント配線規約). What is decided here is what the rows do with the answer: which of
 // them has a seat, which of them greys, and which of the push row's two forms is drawn. That leaves the card
 // standing on plain values, which is what lets `tests/qml/tst_tagcard.qml` drive the real one.

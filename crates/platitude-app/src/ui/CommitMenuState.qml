@@ -18,6 +18,10 @@ QtObject {
     /// Which working copy has a branch checked out — the one answer the `switch` row reads that the commit's own
     /// rules cannot give (`RefRowMenu` asks it the same way at the other entrance).
     required property NavSectionModel worktreesModel
+    /// What the two cards at the foot need worked out for them: the reading a branch carries and where a tag stands
+    /// (`cardFacts`).
+    required property NavSectionModel branchesModel
+    required property NavSectionModel tagsModel
     /// The menu these answers are handed to, and the one this opens.
     required property CommitRowMenu menu
 
@@ -92,6 +96,87 @@ QtObject {
         menuState.menuPullBlocked = menuState.menuCanPull && menuState.workTree.pullBlocked
     }
 
+    /// What the two cards at the foot stand on, both aimed at the name the menu is aimed at — and each emptied where
+    /// that name is the other one's kind, so the card that cannot name it comes up holding only what can still be made
+    /// here. Read here rather than in the menu for the reason every other answer is: the models are this side of the
+    /// door, and a lookup arriving a frame later moves the card's edge out from under the hand (app-ui.md §メニュー).
+    function cardFacts(oidHex) {
+        const kind = menuState.menu.targetKind
+        const branchy = kind === "branch" || kind === "remote"
+        const name = menuState.menu.targetName
+        return {
+            "branch": menuState.branchFacts(branchy ? kind : "", branchy ? name : "", oidHex),
+            "tag": menuState.tagFacts(kind === "tag" ? "tag" : "", kind === "tag" ? name : "", oidHex)
+        }
+    }
+
+    /// What the BRANCH card stands on — the other entrance to it (`RefRowMenu.branchFacts` says why it is read here
+    /// and not in the card).
+    function branchFacts(kind, full, oidHex) {
+        if (kind !== "branch" && kind !== "remote")
+            return { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteDrifted": false,
+                     "offers": "", "open": false, "merged": "" }
+        const held = kind === "branch"
+            ? menuState.worktreesModel.worktreeHolding(full)
+            : menuState.worktreesModel.worktreeHolding(menuState.repoTab.localNameFor(full))
+        const counterpart = kind === "branch" ? menuState.branchesModel.upstreamOf(full) : ""
+        const drifted = kind === "branch" && menuState.branchesModel.upstreamDrifted(full)
+        const open = menuState.repoTab.state === "open"
+        return {
+            "heldByWorktree": held,
+            "holderLeaf": held === "" ? "" : GitFacts.pathLeaf(held),
+            "remoteCounterpart": counterpart,
+            "remoteDrifted": drifted,
+            "open": open,
+            "merged": !open || kind !== "branch" ? "" : menuState.graphModel.branchDeleteMerged(
+                oidHex, menuState.branchesModel.upstreamOidOf(full), menuState.workTree.headOid),
+            "offers": GitFacts.refMenuOffers(
+                kind, full, oidHex, open,
+                menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
+                menuState.workTree.branch, menuState.workTree.detached,
+                menuState.workTree.opText, menuState.workTree.conflictCount,
+                held, counterpart, drifted, menuState.repoTab.defaultRemote, "", "")
+        }
+    }
+
+    /// What the TAG card stands on — the other entrance to it, reading the same section and asking core the same
+    /// question (`RefRowMenu.tagFacts` says why it is read here and not in the card).
+    function tagFacts(kind, full, oidHex) {
+        const remote = menuState.repoTab.defaultRemote
+        const drift = kind === "tag" ? menuState.tagsModel.remoteTagDrift(full, remote) : ""
+        const sides = kind === "tag" ? menuState.tagsModel.tagSides(full) : ""
+        return {
+            "pushRemote": remote,
+            "tagDriftOid": drift,
+            "tagOnlyThere": sides === "remote",
+            "offers": kind !== "tag" ? "" : GitFacts.refMenuOffers(
+                kind, full, oidHex,
+                menuState.repoTab.state === "open",
+                menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
+                menuState.workTree.branch, menuState.workTree.detached,
+                menuState.workTree.opText, menuState.workTree.conflictCount,
+                "", "", drift !== "", remote, sides, "")
+        }
+    }
+
+    /// The reading over there gone on its own, and the pair at once — cut against the configured remote names, which
+    /// are the tab's (`RefRowMenu.deleteRemoteNow`).
+    function deleteRemoteNow(remoteRef) {
+        const remote = GitFacts.remoteOfRef(remoteRef, menuState.repoTab.remoteNames)
+        if (remote === "")
+            return
+        menuState.repoTab.deleteRemoteBranch(
+            remote, GitFacts.branchOfRef(remoteRef, menuState.repoTab.remoteNames))
+    }
+
+    function deleteEverywhereNow(branch, remoteRef, forced) {
+        const remote = GitFacts.remoteOfRef(remoteRef, menuState.repoTab.remoteNames)
+        if (remote === "")
+            return
+        menuState.repoTab.deleteBranchEverywhere(
+            branch, remote, GitFacts.branchOfRef(remoteRef, menuState.repoTab.remoteNames), forced)
+    }
+
     function openRowMenu(oidHex) {
         menuState.menuOid = oidHex
         menuState.menuStashRef = menuState.graphModel.stashRefOf(oidHex)
@@ -117,6 +202,6 @@ QtObject {
         menuState.menuCanMoveBranch = offers.includes("move-branch")
         menuState.menuCanBranchHere = offers.includes("branch-here")
         menuState.askRefRows(menuState.menu.targetKind, menuState.menu.targetName, oidHex)
-        menuState.menu.offerCommit()
+        menuState.menu.offerCommit(menuState.cardFacts(oidHex))
     }
 }
