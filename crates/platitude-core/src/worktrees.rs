@@ -31,6 +31,17 @@ pub struct WorktreeEntry {
     /// Why git would drop it, in git's own words (`gitdir file points to
     /// non-existent location`). Empty when `prunable` is false.
     pub prune_reason: String,
+    /// The repository's own working copy, the one the linked ones hang
+    /// off. **git says so by putting it first** — the listing opens on
+    /// the main worktree and the linked ones follow, wherever the
+    /// command is run from (git-worktree(1); measured from both ends of
+    /// one repository). There is no attribute for it, so the order is
+    /// the whole of the answer.
+    ///
+    /// A bare repository puts its bare entry in that place; the entry is
+    /// still the main one, and it is the caller that drops it for having
+    /// no working copy to show.
+    pub main: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -57,6 +68,10 @@ pub fn parse_worktrees(bytes: &[u8]) -> Result<Vec<WorktreeEntry>, WorktreeParse
             }
             cur = Some(WorktreeEntry {
                 path: path.to_string(),
+                // Read after the entry above was pushed, so this counts
+                // the entries already closed: nothing before it means
+                // this is the one git opened the listing with.
+                main: out.is_empty(),
                 branch: None,
                 head_hex: None,
                 bare: false,
@@ -162,6 +177,32 @@ mod tests {
         assert!(!list[0].detached);
         assert!(list[1].detached);
         assert_eq!(list[1].branch, None);
+    }
+
+    /// **The place in the listing is the whole of the answer** — git
+    /// writes no attribute for it, so the row that draws the house has
+    /// nothing else to read. Every other entry has to answer no,
+    /// including the bare one a caller drops later.
+    #[test]
+    fn the_entry_git_opens_the_listing_with_is_the_main_working_copy() {
+        let bytes = z(&[
+            "worktree C:/repo",
+            "HEAD 1111111111111111111111111111111111111111",
+            "branch refs/heads/main",
+            "",
+            "worktree C:/repo/../topic",
+            "HEAD 2222222222222222222222222222222222222222",
+            "branch refs/heads/feature/topic-a",
+            "",
+        ]);
+        let list = parse_worktrees(&bytes).unwrap();
+        assert!(list[0].main);
+        assert!(!list[1].main);
+
+        let bare = z(&["worktree /srv/repo.git", "bare", "", "worktree /srv/wt", ""]);
+        let list = parse_worktrees(&bare).unwrap();
+        assert!(list[0].main && list[0].bare);
+        assert!(!list[1].main);
     }
 
     #[test]
