@@ -45,6 +45,16 @@ AppCard {
     readonly property bool actsShown: authorCard.committerDiffers || authorCard.timeDiffers
     readonly property string wroteWord: qsTr("authored")
     readonly property string putWord: qsTr("committed")
+    readonly property var wroteAct: ({ word: authorCard.wroteWord, stamp: Words.stamp(authorCard.authoredAt) })
+    readonly property var putAct: ({ word: authorCard.putWord, stamp: Words.stamp(authorCard.committedAt) })
+    /// The lines under the author's name. **The same commit, put here later by the same hand, carries both** — one
+    /// person, two moments, and nobody else to name.
+    readonly property var authorActs: !authorCard.actsShown
+        ? []
+        : authorCard.committerDiffers ? [authorCard.wroteAct]
+                                      : [authorCard.wroteAct, authorCard.putAct]
+    /// ...and when somebody else put it here, the moment they did stands under *their* name.
+    readonly property var committerActs: authorCard.committerDiffers ? [authorCard.putAct] : []
     // The stamps line up under one another, so the two moments can be compared at a glance
     // (`AppMenu.codeColW` shares a column the same way). Measured off labels — `TextMetrics` comes out
     // a few pixels short of what a Label actually takes.
@@ -74,7 +84,7 @@ AppCard {
     // room beside a stamp (規約 §hover のツールチップ).
     textContent: cardBody
 
-    /// One person: face, name, address, and the moment their part happened. Laid out from the start —
+    /// One person: face, name, address, and when their part happened. Laid out from the start —
     /// see `CoAuthorCard` for what moves when a hover resizes its own target.
     component PersonBlock: Item {
         id: block
@@ -82,15 +92,14 @@ AppCard {
         required property string address
         required property int face
         required property string faceUrl
-        /// What this person did, and when. Empty word drops the line, which is the ordinary commit's whole
-        /// story.
-        required property string word
-        required property string stamp
+        /// What this person did, and when — `{ word, stamp }` to a line. An empty list drops them, which is the
+        /// ordinary commit's whole story.
+        required property var acts
         required property real wordWidth
         required property real cap
 
         readonly property bool hasAddress: block.address !== ""
-        readonly property bool hasAct: block.word !== ""
+        readonly property bool hasAct: block.acts.length > 0
         readonly property real textLeft: Theme.spaceSm + Theme.iconMd + Theme.spaceXs
         readonly property real textCap: block.cap - Theme.iconMd - Theme.spaceXs
         /// How tall the face-and-name line came out. A row's worth ordinarily; more when a name longer than the cap
@@ -98,14 +107,16 @@ AppCard {
         /// the pane's own row had to cut goes to be read in full and taken away (規約 §hover のツールチップ).
         readonly property real headHeight: Math.max(Theme.rowHeight, rowContent.implicitHeight)
 
-        // Only what is drawn is measured: an invisible Row still knows how wide its labels are, and letting that into
-        // the maximum makes an ordinary one-person card as wide as the act line it is not showing.
+        // Only what is drawn is measured: a column with no line in it still stands at the text inset, and letting
+        // that into the maximum makes an ordinary one-person card as wide as the act line it is not showing.
         implicitWidth: Math.max(rowContent.implicitWidth,
                                 block.hasAddress ? address.x - Theme.spaceSm + address.width : 0,
-                                block.hasAct ? act.x - Theme.spaceSm + act.width : 0)
+                                block.hasAct ? actLines.x - Theme.spaceSm + actLines.width : 0)
                        + 2 * Theme.spaceSm
+        // A block ends `spaceXs` under its own last line — what follows it is another person.
         implicitHeight: block.headHeight
-                        + (block.hasAddress ? address.height : 0) + (block.hasAct ? Theme.fontSmLine : 0)
+                        + (block.hasAddress ? address.height : 0)
+                        + (block.hasAct ? Theme.spaceXs + actLines.height : 0)
         width: implicitWidth
         height: implicitHeight
 
@@ -140,22 +151,30 @@ AppCard {
             color: Theme.textSecondary
             pixelSize: Theme.fontSm
         }
-        Row {
-            id: act
+        // A step under the address: the address belongs to the name over it, and the moments are their own fact.
+        // Nothing stands between the moments — two stamps are read against one another.
+        Column {
+            id: actLines
             visible: block.hasAct
-            spacing: Theme.spaceXs
             x: block.textLeft
-            y: address.y + (block.hasAddress ? address.height : 0)
-            CardText {
-                width: block.wordWidth
-                text: block.word
-                color: Theme.textSecondary
-                pixelSize: Theme.fontSm
-            }
-            CardText {
-                text: block.stamp
-                color: Theme.textSecondary
-                pixelSize: Theme.fontSm
+            y: address.y + (block.hasAddress ? address.height : 0) + Theme.spaceXs
+            Repeater {
+                model: block.acts
+                delegate: Row {
+                    required property var modelData
+                    spacing: Theme.spaceXs
+                    CardText {
+                        width: block.wordWidth
+                        text: parent.modelData.word
+                        color: Theme.textSecondary
+                        pixelSize: Theme.fontSm
+                    }
+                    CardText {
+                        text: parent.modelData.stamp
+                        color: Theme.textSecondary
+                        pixelSize: Theme.fontSm
+                    }
+                }
             }
         }
     }
@@ -170,8 +189,7 @@ AppCard {
             address: authorCard.authorEmail
             face: authorCard.authorFace
             faceUrl: authorCard.authorFaceUrl
-            word: authorCard.actsShown ? authorCard.wroteWord : ""
-            stamp: Words.stamp(authorCard.authoredAt)
+            acts: authorCard.authorActs
             wordWidth: authorCard.wordColW
             cap: authorCard.rowCap
         }
@@ -181,35 +199,9 @@ AppCard {
             address: authorCard.committerEmail
             face: authorCard.committerFace
             faceUrl: authorCard.committerFaceUrl
-            word: authorCard.actsShown ? authorCard.putWord : ""
-            stamp: Words.stamp(authorCard.committedAt)
+            acts: authorCard.committerActs
             wordWidth: authorCard.wordColW
             cap: authorCard.rowCap
-        }
-        // The same commit, put here later by the same hand: one person, two moments. The line belongs under them
-        // — there is nobody else to name.
-        Item {
-            visible: authorCard.timeDiffers && !authorCard.committerDiffers
-            implicitWidth: lateAct.x - Theme.spaceSm + lateAct.width + 2 * Theme.spaceSm
-            implicitHeight: visible ? Theme.fontSmLine : 0
-            width: implicitWidth
-            height: implicitHeight
-            Row {
-                id: lateAct
-                spacing: Theme.spaceXs
-                x: Theme.spaceSm + Theme.iconMd + Theme.spaceXs
-                CardText {
-                    width: authorCard.wordColW
-                    text: authorCard.putWord
-                    color: Theme.textSecondary
-                    pixelSize: Theme.fontSm
-                }
-                CardText {
-                    text: Words.stamp(authorCard.committedAt)
-                    color: Theme.textSecondary
-                    pixelSize: Theme.fontSm
-                }
-            }
         }
     }
 }
