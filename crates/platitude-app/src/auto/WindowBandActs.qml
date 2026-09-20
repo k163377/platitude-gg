@@ -204,6 +204,13 @@ Item {
     function stoppedYet(tab, timer) {
         if (tab.autoFetchSuspended)
             return true
+        // **Not before the repository is open.** A fetch asked of a tab still opening is refused by core before git
+        // is reached ("no repository is open"), and that refusal suspends the fetches like any other — so the panel
+        // the verb then opens holds no row at all, which is a different picture from the one it is about (measured
+        // under a 16-wide gate: `fetch-tip-link` photographed an empty panel and moved its census line). The same
+        // reading the page makes before it asks anything of the tab (`repoTab.state`).
+        if (tab.state !== "open")
+            return false
         if (timer.askSeq >= 0 && tab.writeSeq <= timer.askSeq)
             return false
         timer.askSeq = tab.writeSeq
