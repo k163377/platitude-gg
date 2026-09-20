@@ -13,7 +13,7 @@ Item {
             blockWidth: 2 * Theme.spaceXxl + Theme.settingsRailWidth + 2 * Theme.spaceLg
                         + Theme.borderWidth + Theme.textWidth
             word: "Application"
-            categoryIcon: "window-maximize"
+            categoryIcon: "app-window"
             unsaved: false
             armed: false
             property int exits: 0

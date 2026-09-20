@@ -24,7 +24,7 @@ AppDialog {
 
     /// The categories, what each is called, and the mark each wears. **One list**: the rail lays it out and the title
     /// reads the current entry out of it, so the two can never come to call the same category by different names.
-    readonly property var categories: [{ key: "app", word: qsTr("Application"), icon: "window-maximize" },
+    readonly property var categories: [{ key: "app", word: qsTr("Application"), icon: "app-window" },
                                        { key: "git", word: qsTr("Git"), icon: "branch" }]
     /// The entry the reader is standing on, looked up once — the word and the mark are two halves of one row, and a
     /// second walk of the same list is a second place to keep in step with it. Undefined before `category` names a

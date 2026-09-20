@@ -51,6 +51,8 @@ InkCanvas {
         // Ring and bar are the same diameter, 2.5 to 13.5. Asked for because this one stands at the end of a line of
         // code and the gap to the last character is measured to the ink (§余白).
         case "no-entry": return 11
+        // The frame, 2.5 to 13.5 — the band inside it stops there too.
+        case "app-window": return 11
         default: return 16
         }
     }
@@ -437,6 +439,19 @@ InkCanvas {
             ctx.lineTo(12.5 * s, 3.5 * s)
             ctx.lineTo(12.5 * s, 10.5 * s)
             ctx.lineTo(10.5 * s, 10.5 * s)
+            ctx.stroke()
+        } else if (icon.kind === "app-window") {
+            // This program itself, worn by the settings screen's `Application` (規約 §設定の画面). **A window with
+            // a band, and both halves carry it**: the chrome's maximize is a bare square, so what tells this mark
+            // from that one is being landscape and having something inside.
+            ctx.strokeRect(2.5 * s, 3.5 * s, 11 * s, 9 * s)
+            // **The band is cut square.** The family's round cap hangs half a line off either end, so a band drawn
+            // to the frame's own centre line reaches the frame's outer edge exactly and reads as a line hanging out
+            // of the box (observed). Cut square, its ends are buried in the frame's stroke.
+            ctx.lineCap = "butt"
+            ctx.beginPath()
+            ctx.moveTo(2.5 * s, 6.5 * s)
+            ctx.lineTo(13.5 * s, 6.5 * s)
             ctx.stroke()
         } else if (icon.kind === "eye" || icon.kind === "eye-off") {
             // Lens and pupil — the visibility mark every layer list has used since Photoshop. Drawn here: U+2691
