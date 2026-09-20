@@ -51,8 +51,8 @@ RowLayout {
         folded: body.row.change === "FOLDED"
         showChange: body.row.kindHint === "wt"
         // A worktree row has no change code, so the seat carries the state of the checkout instead — the same
-        // shared slot a folder keeps its fold state in (`models::nav::item`). A lock is somebody's choice and
-        // wears the quiet colour every other row mark does; a folder git can no longer find is a warning.
+        // shared slot a folder keeps its fold state in (`models::nav::item`). A lock is somebody's choice and stays
+        // in the quiet colour; a folder git can no longer find is a warning.
         //
         // A branch row uses the same slot for the one question it shares with those rows: whether a move can land
         // here. Its mark is the WORKTREES section's own (`tree`) — where the branch actually is. **The padlock**
@@ -69,7 +69,12 @@ RowLayout {
                 : body.row.kindHint !== "worktree" ? ""
                 : body.row.change === "LOCKED" ? "lock"
                 : body.row.change === "PRUNABLE" ? "bang" : ""
-        seatTint: body.row.change === "PRUNABLE" ? Theme.warning : Theme.textSecondary
+        // **The tree mark wears the WORKTREES section's own colour** — the mark and that section say one thing, and
+        // a mark that says it in the quiet colour every other mark takes says it more faintly than the section it
+        // points at (規約 §ref の種別).
+        seatTint: body.row.change === "PRUNABLE" ? Theme.warning
+                : nameCell.seatMark === "tree" ? Theme.success
+                : Theme.textSecondary
         name: body.row.name
         // Where a renamed file came from, said the same way the commit's own file list says it: a rename is two
         // names, and a row that shows only the new one leaves the reader to work out what moved. Empty on

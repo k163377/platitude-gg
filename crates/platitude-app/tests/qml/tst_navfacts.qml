@@ -169,6 +169,21 @@ Item {
             row.destroy()
         }
 
+        /// The line a branch opens with while somebody else has it out. **Asked of the table itself**, which is the
+        /// one case in this file that cannot go through a row: what the row would answer with is the leaf of the
+        /// path git prints, and that cut is the application singleton's (the note at the top). What the call pins is
+        /// the colour — the mark names a row of WORKTREES, so it wears that section's own colour the way the line
+        /// naming a branch wears BRANCHES' (規約 §ref の種別), and no picture is judged on it.
+        function test_the_copy_holding_a_branch_is_named_in_the_worktrees_colour() {
+            const lines = NavFacts.lines("branch", { "heldBy": "topic", "upstream": "", "gone": false,
+                                                     "ahead": 0, "behind": 0 })
+            compare(lines.length, 1, "the copy, and no reading to measure against")
+            compare(lines[0].mark, "tree")
+            compare(lines[0].markTint, Theme.success, "the WORKTREES section's own colour")
+            compare(lines[0].text, "topic")
+            compare(lines[0].tone, Theme.textSecondary, "the name is the quiet half of the line")
+        }
+
         /// A branch with nothing beside it opens on its name alone: a line nobody filled is left out rather than
         /// drawn empty.
         function test_a_branch_with_nothing_beside_it_opens_on_its_name() {

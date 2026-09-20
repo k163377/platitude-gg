@@ -107,10 +107,11 @@ QtObject {
              : { "mark": "branch", "markTint": Theme.accent, "text": name, "tone": Theme.textSecondary,
                  "ahead": a.ahead, "behind": a.behind, "note": "" }
     }
-    /// The working copy holding the branch this row is about — the WORKTREES section's own mark.
+    /// The working copy holding the branch this row is about — the WORKTREES section's own mark, in that section's
+    /// own colour, the way the line above names a branch in the BRANCHES one (規約 §ref の種別).
     function copyLine(a) {
         return a.heldBy === "" ? null
-             : { "mark": "tree", "markTint": Theme.textSecondary, "text": a.heldBy,
+             : { "mark": "tree", "markTint": Theme.success, "text": a.heldBy,
                  "tone": Theme.textSecondary, "ahead": 0, "behind": 0, "note": "" }
     }
     /// What that branch is measured against. **A reading git cannot reach wears the state whole** — git's own word
