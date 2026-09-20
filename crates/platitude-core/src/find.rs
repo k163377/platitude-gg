@@ -19,7 +19,7 @@
 //! answer, so a query that answers none of them lights
 //! nothing.
 //!
-//! **What is searched is what the row is.** Two things are
+//! **What is searched is what the row is.** Three things are
 //! deliberately out:
 //!
 //! - **The description** (everything after the subject). Searching it
@@ -30,9 +30,18 @@
 //! - **The domain half of an address.** Everybody in one repository tends
 //!   to share it, so any part of it lights every row. Addresses match
 //!   from the start, which is how somebody pastes one.
+//! - **A stash's reflog selector** (`stash@{n}`). Nothing that names a
+//!   row spells it: the row and its entry in the list are the message,
+//!   and the details pane's band names itself `STASH`. Only the command
+//!   log carries it, after a `stash apply` has already been run — which
+//!   is a record of what was done, not a name for a row. So a row lit
+//!   for it is lit for a reason the rows do not give, which is the
+//!   description's fault read on a second field. It is not a name the
+//!   reader carries either: the number shifts down the moment the next
+//!   stash is pushed in front of this one.
 //!
-//! Both come back by name in the advanced search (P3-確認事項), where
-//! asking for them is the point.
+//! The first two come back by name in the advanced search (P3-確認事項),
+//! where asking for them is the point.
 
 /// One typed line, ready to be asked of a row.
 ///
@@ -72,8 +81,8 @@ pub struct Row<'a> {
     pub people: &'a [&'a str],
     /// Their addresses. Identifiers: matched from the start.
     pub addresses: &'a [&'a str],
-    /// The names standing on this row: branches, tags, the HEAD marker,
-    /// and `stash@{n}` where the row is a stash. Searched anywhere
+    /// The names standing on this row: branches, tags and the HEAD
+    /// marker — the ones the row draws as chips. Searched anywhere
     /// inside, but a query with whitespace can never land here — git
     /// refuses a refname with any in it (`check-ref-format`).
     pub tokens: &'a [&'a str],
@@ -295,10 +304,13 @@ mod tests {
     }
 
     #[test]
-    fn a_stash_is_found_by_its_selector() {
-        let r = row("WIP on main", &[], &[], &["stash@{0}"]);
-        assert!(hits("stash@{0}", &r));
-        assert!(hits("stash@", &r));
+    fn a_stash_is_found_by_the_message_the_row_shows() {
+        // Which fields reach here is the caller's (`GraphModel::hits`),
+        // and that the selector is not one of them is tested where that
+        // choice is made — a row with no tokens could not answer to one
+        // whatever this module did.
+        let r = row("On main: the login refactor", &[], &[], &[]);
+        assert!(hits("login refactor", &r));
     }
 
     #[test]

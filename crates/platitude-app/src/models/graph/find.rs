@@ -19,13 +19,11 @@ impl GraphModel {
                 addresses.push(address);
             }
         }
-        let mut tokens: Vec<&str> = label_names(&item.labels).collect();
-        if !item.stash_ref.is_empty() {
-            tokens.push(item.stash_ref.as_str());
-        }
-        // `body` is not passed: the description is not searched (see
-        // `platitude-core::find`). The row still carries it for the hover
-        // card.
+        let tokens: Vec<&str> = label_names(&item.labels).collect();
+        // Two of the row's fields are withheld, each for its own reason
+        // (`platitude-core::find`): `body` is the hover card's and does
+        // not stand on the row, and `stash_ref` is the handle `apply`
+        // and `pop` are run on and is not drawn on any row at all.
         query.matches(&Row {
             oid_hex: &item.oid_hex,
             subject: &item.subject,
@@ -90,5 +88,29 @@ impl GraphModel {
             .enumerate()
             .filter(|(_, r)| r.matched)
             .map(|(i, _)| i as i32)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hits(text: &str, item: &GraphRowItem) -> bool {
+        GraphModel::hits(&Query::new(text).expect("a query"), item)
+    }
+
+    #[test]
+    fn a_stash_row_answers_to_its_message_and_not_to_its_selector() {
+        let row = GraphRowItem {
+            oid_hex: "3f2a1b0cdeadbeef".into(),
+            subject: "On main: the login refactor".into(),
+            stash_ref: "stash@{0}".into(),
+            ..GraphRowItem::default()
+        };
+        assert!(hits("login refactor", &row), "the row is its message");
+        // The selector is drawn nowhere: the pane's band says `STASH`,
+        // and the list on the left shows the message.
+        assert!(!hits("stash@{0}", &row));
+        assert!(!hits("stash@", &row));
     }
 }
