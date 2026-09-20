@@ -77,6 +77,9 @@ Item {
     readonly property var tipInstance: facts.ToolTip.toolTip
     readonly property bool tipShown: !!facts.tipInstance && facts.tipInstance.visible
                                      && facts.tipInstance.parent === facts
+    /// The hand is on these lines — the whole block's answer, which the row reads as its own hover
+    /// (`NavItemDelegate.factsPointed` says why the row cannot read it off its own handler).
+    readonly property bool pointed: factsHover.hovered
     /// When the button went down, so the row's gesture takes the time it was held off the wait it has left — Qt
     /// measures a double-click press to press, and the click arrives at the release (`NavItemDelegate`).
     property real heldFrom: 0

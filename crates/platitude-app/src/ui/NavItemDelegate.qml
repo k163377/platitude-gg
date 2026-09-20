@@ -269,9 +269,17 @@ Item {
     /// Read a turn later, when every handler that event reached has run: a row asked in the middle of the delivery
     /// answers with the hover it had before it (and the count coalesces, so a hand crossing the list asks once).
     onHandMovesChanged: Qt.callLater(navRow.syncHover)
+    /// What "the hand is on this row" is made of — the one place it is spelled out, for both roads to it (the count
+    /// above, and the event a list nobody counts for reads).
     function syncHover() {
-        navRow.pointed = rowHover.hovered || navRow.factsTipOut
+        navRow.pointed = rowHover.hovered || navRow.factsPointed || navRow.factsTipOut
     }
+    /// The hand is on the lines this row has open under it (`NavRowFacts.pointed`). **Read as the row's own hover,
+    /// because `rowGround` cannot see it**: the lines stand inside the row's ground, but they take hover of their own
+    /// and are stacked over that ground as a sibling, and a hover-taking sibling above takes the pointer off the
+    /// handler below the moment the hand walks down into them (rules-refs/app-ui.md 「奪うのは覆う `MouseArea` の
+    /// 子孫でない hover 持ちだけ」; measured, `tests/qml/tst_openrowholdshand.qml`).
+    readonly property bool factsPointed: factsSeat.item ? factsSeat.item.pointed : false
     /// Whether the supplement these lines put out is standing (`NavRowFacts.tipShown`). **A row whose own tip is up
     /// is still the row the reader is on**: that tip is a popup over the panel and takes the pointer as the hand
     /// walks into it, and a row that closed then would take the lines, the tip's own target and the words the reader
@@ -365,7 +373,7 @@ Item {
         HoverHandler {
             id: rowHover
             enabled: !navRow.editing
-            onHoveredChanged: if (!navRow.handCounted) navRow.pointed = rowHover.hovered
+            onHoveredChanged: if (!navRow.handCounted) navRow.syncHover()
         }
     }
     // The row that carries the mark tells the model it is the one being read, so the sentence can be built for it
@@ -393,8 +401,9 @@ Item {
         else
             eolRest.restart()
     }
-    // The row's own facts sit out the same rest, and go the moment the pointer leaves: they are **inside** the row,
-    // so the hand reading them never leaves it and there is no beat to keep (規約 §hover のツールチップ).
+    // The row's own facts sit out the same rest, and go the moment the pointer leaves: they are **inside** the row
+    // and the row reads their hover as its own (`factsPointed`), so the hand reading them never leaves it and there
+    // is no beat to keep (規約 §hover のツールチップ).
     function pointFacts() {
         if (!navRow.expands)
             return
