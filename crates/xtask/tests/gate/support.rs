@@ -209,6 +209,49 @@ impl Sandbox {
         text.lines().map(str::to_string).collect()
     }
 
+    /// The ledger the newest gate run left in this tree, as `(side, id,
+    /// outcome)` — the table a reader does arithmetic over
+    /// (`gate::record::ledger`).
+    ///
+    /// **Newest by the clock, not by the name.** A run is filed under
+    /// `<epoch>-<pid>`, and two gates of one test land in the same
+    /// second, so the pid decides — as text, where `10236` sorts before
+    /// `9999`. Sorted by name, which run a test reads then turns on the
+    /// pids the machine happened to hand out (observed: the second gate
+    /// of `a_run_that_ran_nothing_still_files_a_row_for_every_step` read
+    /// the first gate's table and saw its verbs as `ran`).
+    pub fn ledger(&self, dir: &Path) -> Vec<(String, String, String)> {
+        let runs = dir.join("target").join("gate-runs");
+        let mut names: Vec<(std::time::SystemTime, PathBuf)> = std::fs::read_dir(&runs)
+            .unwrap_or_else(|e| panic!("{}: {e}", runs.display()))
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.to_string_lossy().ends_with(".units.tsv"))
+            .map(|path| {
+                let wrote = path
+                    .metadata()
+                    .and_then(|meta| meta.modified())
+                    .unwrap_or(std::time::UNIX_EPOCH);
+                (wrote, path)
+            })
+            .collect();
+        names.sort();
+        let (_, newest) = names.last().expect("a ledger beside the record");
+        std::fs::read_to_string(newest)
+            .expect("the ledger")
+            .lines()
+            .skip(1)
+            .map(|line| {
+                let mut fields = line.split('\t');
+                (
+                    fields.next().unwrap_or_default().to_string(),
+                    fields.next().unwrap_or_default().to_string(),
+                    fields.next().unwrap_or_default().to_string(),
+                )
+            })
+            .collect()
+    }
+
     /// The steps that were told to reuse a release
     /// (`--no-build`), since the last look. Kept beside the fake log
     /// in its own file, because every other test reads that as a set

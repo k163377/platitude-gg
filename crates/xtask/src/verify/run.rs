@@ -89,9 +89,14 @@ fn room_for(opts: &super::options::Options) -> Result<crate::budget::Admitted, S
 pub fn run(args: &[String]) -> Result<(), String> {
     let opts = parse(args)?;
     let _room = room_for(&opts)?;
+    // waits(measured): the run's own wall clock, said on the `spent` line and judged by nothing
+    let whole = std::time::Instant::now();
     let (root, _busy) = crate::still::announced("verify-ui")?;
     let path = crate::qt::path_with_qt()?;
+    // waits(measured): what the fixture took, said on the `spent` line and judged by nothing
+    let at = std::time::Instant::now();
     let repos = repos::for_run(&opts)?;
+    let fixture = at.elapsed();
 
     // Explicit resources survive across sequential runs, and belong to
     // one verify-ui process at a time. Two at once would mix Git
@@ -114,7 +119,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     // The build's PATH: the git shim below goes onto the child's PATH
     // only, so the build never sees it.
+    // waits(measured): what the build took, said on the `spent` line and judged by nothing
+    let at = std::time::Instant::now();
     let exe = crate::tree::app_exe(&root, &path, opts.build, &[])?;
+    let build = at.elapsed();
 
     // The claim below answers for this machine only, and inside a
     // container that machine is one run wide: `/out` is the same path in
@@ -231,7 +239,48 @@ pub fn run(args: &[String]) -> Result<(), String> {
             println!("demo repositories given back: {gone}");
         }
     }
+    say_what_it_spent(whole, fixture, build, ran.elapsed);
     outcome::announce(&opts, &shot_dir, &ran, &verdict)
+}
+
+/// The three parts of a run that are worth telling apart, and what is
+/// left over — said in one line the gate's ledger reads back off this
+/// log (`gate::record`).
+///
+/// **Why they are separate.** A block of verbs shares one release: the
+/// first uncached verb builds it and the rest are handed `--no-build`
+/// (`gate::verbs`), so a verb's wall clock is that build plus the verb
+/// wherever it happened to come first. Ranked by wall clock, the verb
+/// that built would read as the expensive one, and the thing to look at
+/// would be whichever verb the ordering put in front. `fixture` is the
+/// repositories the run stands on — built once per preset and copied
+/// after that (`demo::template`), so the first run of a preset carries
+/// the building of it. `app` is the window itself, which is what the
+/// verb costs when nothing else is on its bill.
+///
+/// **`rest` is named, not split.** It is the seeds, the git shim, the
+/// judging, the census write and the pictures — a handful of small
+/// things, and calling any one of them out would be claiming a
+/// measurement nobody took.
+fn say_what_it_spent(
+    whole: std::time::Instant,
+    fixture: std::time::Duration,
+    build: std::time::Duration,
+    app: std::time::Duration,
+) {
+    let whole = whole.elapsed();
+    let rest = whole
+        .saturating_sub(fixture)
+        .saturating_sub(build)
+        .saturating_sub(app);
+    println!(
+        "spent fixture={}ms build={}ms app={}ms rest={}ms whole={}ms",
+        fixture.as_millis(),
+        build.as_millis(),
+        app.as_millis(),
+        rest.as_millis(),
+        whole.as_millis(),
+    );
 }
 
 /// A passing run tells the census what it showed, so the gate can pick

@@ -13,7 +13,16 @@
 //! before-and-after wants both halves; these files are what the second
 //! half is compared against. They are under a kilobyte, and the newest
 //! [`KEEP`] stay.
+//!
+//! **Beside the block is the ledger** ([`ledger`]): one row per unit of
+//! either side, with the room it waited for, when in the run it stood,
+//! how long it held the machine, and the step's own account of what the
+//! time went to. The block's `longest` is five rows chosen by this run's
+//! selection and ordering — enough to see whether one unit is the
+//! ceiling, and not a bill. What a group of verbs costs is arithmetic
+//! over the table.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
@@ -43,6 +52,8 @@ pub(crate) struct Waited {
     nanos: AtomicU64,
     /// Every unit that ran, longest first, kept to [`LONGEST`].
     longest: std::sync::Mutex<Vec<Unit>>,
+    /// Every unit of this side, in the order they ended ([`Row`]).
+    rows: std::sync::Mutex<Vec<Row>>,
 }
 
 /// One unit of work the gate ran, as the record names it.
@@ -50,6 +61,39 @@ pub(crate) struct Unit {
     pub id: String,
     pub weight: u32,
     pub ran: Duration,
+}
+
+/// One unit as the ledger names it: every unit of the run, not the five
+/// the record has room for.
+///
+/// **The five longest are not the bill.** Which of them a run prints
+/// depends on what that run selected, what a stamp answered for, and
+/// where in the block a verb happened to fall — so the same verb is in
+/// one run's list and out of the next one's, and a reader who ranks by
+/// that is ranking by the ordering. The ledger is every unit, with what
+/// it waited for, when it ran, and — where the step's own log says so —
+/// what inside it the time went to.
+pub(crate) struct Row {
+    pub id: String,
+    pub weight: u32,
+    /// What became of it: `ran`, `cached` (a stamp the plan found),
+    /// `cached-late` (one another tree wrote while this unit queued),
+    /// `FAIL`, or `not-run` — a step a red earlier in its group stopped
+    /// this run short of. **The last one is a row and not an absence**:
+    /// a step nothing says anything about is the bookkeeping having lost
+    /// one, which is a different fault ([`Waited::unaccounted`]).
+    pub outcome: &'static str,
+    /// Room the machine made it wait for, before it started.
+    pub waited: Duration,
+    /// From the first step of the run to this unit's start, so two rows
+    /// say whether they overlapped.
+    pub from_start: Duration,
+    pub ran: Duration,
+    /// The step's own `spent` line, where the step writes one
+    /// (`verify::run::say_what_it_spent`) — empty for every step that
+    /// does not, because a split nobody measured is not one to write
+    /// down.
+    pub spent: String,
 }
 
 /// How many of the longest units a record names. Enough to see whether
@@ -85,6 +129,48 @@ impl Waited {
             },
         );
         longest.truncate(LONGEST);
+    }
+
+    /// Notes what one unit came to, whether it ran or a stamp answered
+    /// for it. Every unit of the side, which is what the ledger is.
+    pub(crate) fn filed(&self, row: Row) {
+        self.rows
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push(row);
+    }
+
+    /// Where the plan and the ledger disagree: a step the plan gave this
+    /// side that no row answers for, or one two rows answer for.
+    ///
+    /// **The ledger checking itself, not the run.** A step a red stopped
+    /// the group short of has a row of its own (`super::not_run`), and a
+    /// cached one has a row saying it was cached, so every step of the
+    /// plan is answered for however the run went. What is left over is a
+    /// path through the runner that files nothing — and the cost of that
+    /// is a count read off a file with holes in it, which is a wrong
+    /// number nobody can see is wrong.
+    pub(crate) fn unaccounted(&self, planned: &[String]) -> Vec<String> {
+        let rows = self
+            .rows
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut filed: BTreeMap<&str, usize> = BTreeMap::new();
+        for row in rows.iter() {
+            *filed.entry(row.id.as_str()).or_default() += 1;
+        }
+        let mut notes = Vec::new();
+        for id in planned {
+            match filed.remove(id.as_str()) {
+                Some(1) => {}
+                Some(twice) => notes.push(format!("has {twice} rows for {id}")),
+                None => notes.push(format!("has no row for {id}")),
+            }
+        }
+        for (id, _) in filed {
+            notes.push(format!("has a row for {id}, which the plan never gave it"));
+        }
+        notes
     }
 
     pub(crate) fn read(&self) -> (usize, Duration) {
@@ -155,6 +241,10 @@ pub(crate) struct Spent {
     /// The longest units of the run, longest first: what a landing
     /// arriving mid-run has to wait out.
     pub longest: Vec<Unit>,
+    /// Every unit of both sides, as the table [`ledger`] writes
+    /// ([`Row`]). Kept beside the record; empty for a run that started
+    /// no side (a dry run, or one a refusal stopped).
+    pub ledger: String,
 }
 
 /// What a run was asked to do and what came of it, beside its timings.
@@ -236,6 +326,16 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::Shift) -> Stri
             .collect();
         out.push_str(&format!("  longest {}\n", units.join(" / ")));
     }
+    // And where the whole of it is. The five above are the landing's
+    // wait; ranking by them is ranking by what this run happened to
+    // select and in what order, which is what the table beside this
+    // block is for ([`ledger`]).
+    if !spent.ledger.is_empty() {
+        out.push_str(&format!(
+            "  ledger  {} unit(s) beside this block, in <this file>.units.tsv\n",
+            spent.ledger.lines().count().saturating_sub(1),
+        ));
+    }
     // What the run's verbs did to the census, by name: one name every
     // line gained is the whole file's diff, and the row that says so is
     // what keeps the one line that moved on its own readable beside it
@@ -256,36 +356,194 @@ pub(crate) fn keep(dir: &Path, run: &Run<'_>, spent: &Spent, shift: &super::Shif
     let at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |since| since.as_secs());
-    let path = records.join(format!("{at}-{}.txt", std::process::id()));
+    let name = format!("{at}-{}", std::process::id());
+    let path = records.join(format!("{name}.txt"));
     let _ = std::fs::write(&path, render(run, spent, shift));
+    if !spent.ledger.is_empty() {
+        let _ = std::fs::write(records.join(format!("{name}.units.tsv")), &spent.ledger);
+    }
     sweep(&records);
+}
+
+/// The header the ledger's columns are read by, and the order [`ledger`]
+/// writes them in.
+const COLUMNS: &str = "side\tid\toutcome\tweight\twaited_ms\tfrom_start_ms\tran_ms\tspent\n";
+
+/// Every unit of both sides as one table.
+///
+/// **A table and not prose**, because what it is for is arithmetic
+/// somebody else does: how much of a side's wall clock one group of
+/// verbs is, what a step waited for, which units overlapped. `spent` is
+/// the step's own words where it said any, and empty where it did not —
+/// the parts of a unit nobody measured stay unmeasured here.
+pub(crate) fn ledger(sides: [(&str, &Waited); 2]) -> String {
+    let mut out = String::from(COLUMNS);
+    for (name, waited) in sides {
+        let rows = waited
+            .rows
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        for row in rows.iter() {
+            out.push_str(&format!(
+                "{name}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                row.id,
+                row.outcome,
+                row.weight,
+                row.waited.as_millis(),
+                row.from_start.as_millis(),
+                row.ran.as_millis(),
+                row.spent,
+            ));
+        }
+    }
+    out
 }
 
 /// All but the newest [`KEEP`] records, by the name they carry — the
 /// epoch second sorts as it counts, so the oldest names come first.
+///
+/// Swept by run and not by file: a run leaves a block and, where it ran
+/// anything, the ledger beside it, and the two go together — a ledger
+/// whose block has been taken away names a run nothing else remembers.
 fn sweep(records: &Path) {
     let Ok(entries) = std::fs::read_dir(records) else {
         return;
     };
-    let mut names: Vec<std::path::PathBuf> = entries
+    let mut runs: Vec<String> = entries
         .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|e| e == "txt"))
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter_map(|name| name.strip_suffix(".txt").map(str::to_string))
         .collect();
-    if names.len() <= KEEP {
+    if runs.len() <= KEEP {
         return;
     }
-    names.sort();
-    let over = names.len() - KEEP;
-    for stale in names.into_iter().take(over) {
-        let _ = std::fs::remove_file(stale);
+    runs.sort();
+    let over = runs.len() - KEEP;
+    for stale in runs.into_iter().take(over) {
+        let _ = std::fs::remove_file(records.join(format!("{stale}.txt")));
+        let _ = std::fs::remove_file(records.join(format!("{stale}.units.tsv")));
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Run, Spent, Unit, Waited, moment, render};
+    use super::{Row, Run, Spent, Unit, Waited, ledger, moment, render};
     use std::time::Duration;
+
+    /// Every unit of both sides, and the words that tell a stamp from a
+    /// run — the five longest say neither, and a reader who took them
+    /// for the bill would be reading this run's ordering.
+    #[test]
+    fn the_ledger_holds_every_unit_of_both_sides_with_what_each_one_came_to() {
+        let host = Waited::default();
+        let linux = Waited::default();
+        host.filed(Row {
+            id: "verify amend".to_string(),
+            weight: 4,
+            outcome: "ran",
+            waited: Duration::from_millis(1200),
+            from_start: Duration::from_millis(300),
+            ran: Duration::from_millis(66_000),
+            spent: "fixture=1673ms build=20874ms app=1812ms rest=402ms whole=24761ms".to_string(),
+        });
+        host.filed(Row {
+            id: "fmt".to_string(),
+            weight: 0,
+            outcome: "cached",
+            waited: Duration::ZERO,
+            from_start: Duration::from_millis(10),
+            ran: Duration::ZERO,
+            spent: String::new(),
+        });
+        linux.filed(Row {
+            id: "verify-linux amend".to_string(),
+            weight: 4,
+            outcome: "FAIL",
+            waited: Duration::from_millis(50),
+            from_start: Duration::from_millis(900),
+            ran: Duration::from_millis(80_000),
+            spent: String::new(),
+        });
+        let table = ledger([("host", &host), ("linux", &linux)]);
+        let rows: Vec<&str> = table.lines().collect();
+        assert_eq!(rows.len(), 4, "a header and one row per unit: {table}");
+        assert!(rows[0].starts_with("side\tid\toutcome\t"));
+        assert_eq!(
+            rows[1],
+            "host\tverify amend\tran\t4\t1200\t300\t66000\tfixture=1673ms build=20874ms \
+             app=1812ms rest=402ms whole=24761ms"
+        );
+        // A stamp's row is still a row: what a plan did not run is as
+        // much of what a gate came to as what it did.
+        assert_eq!(rows[2], "host\tfmt\tcached\t0\t0\t10\t0\t");
+        assert_eq!(
+            rows[3],
+            "linux\tverify-linux amend\tFAIL\t4\t50\t900\t80000\t"
+        );
+    }
+
+    /// One row per unit with nothing said twice, filed for this test.
+    fn filed(side: &Waited, id: &str, outcome: &'static str) {
+        side.filed(Row {
+            id: id.to_string(),
+            weight: 0,
+            outcome,
+            waited: Duration::ZERO,
+            from_start: Duration::ZERO,
+            ran: Duration::ZERO,
+            spent: String::new(),
+        });
+    }
+
+    /// The plan against the ledger. What this is for is a path through
+    /// the runner that files nothing, and the two it has to keep apart
+    /// are a step the run did not reach — which has a row of its own —
+    /// and a step nobody wrote anything about.
+    #[test]
+    fn the_ledger_says_which_of_the_plans_steps_it_does_not_answer_for() {
+        let side = Waited::default();
+        let planned: Vec<String> = ["fmt", "clippy", "test it", "shipped"]
+            .iter()
+            .map(|id| (*id).to_string())
+            .collect();
+        filed(&side, "fmt", "ran");
+        filed(&side, "clippy", "FAIL");
+        // Not reached, and saying so: the group stopped at the red above.
+        filed(&side, "test it", "not-run");
+        assert_eq!(
+            side.unaccounted(&planned),
+            ["has no row for shipped"],
+            "a step nothing filed is the one thing this is for"
+        );
+
+        // And the two ways a row can be wrong about the plan.
+        filed(&side, "shipped", "ran");
+        filed(&side, "shipped", "ran");
+        filed(&side, "deny", "ran");
+        assert_eq!(
+            side.unaccounted(&planned),
+            [
+                "has 2 rows for shipped",
+                "has a row for deny, which the plan never gave it"
+            ]
+        );
+    }
+
+    /// A side every step of which a stamp answered for is the shape the
+    /// hole was in: it ran nothing, and it owes a row for each of them
+    /// all the same.
+    #[test]
+    fn a_side_that_ran_nothing_still_answers_for_every_step() {
+        let side = Waited::default();
+        let planned: Vec<String> = ["fmt", "verify stash --preset basic"]
+            .iter()
+            .map(|id| (*id).to_string())
+            .collect();
+        for id in &planned {
+            filed(&side, id, "cached");
+        }
+        assert!(side.unaccounted(&planned).is_empty());
+    }
 
     #[test]
     fn a_moment_reads_in_tenths_under_a_minute_and_in_minutes_over_one() {

@@ -595,3 +595,89 @@ fn a_file_the_product_opens_is_owed_though_no_scan_could_find_it() {
         );
     }
 }
+
+/// Every step the plan gave a side has a row in the ledger, **whatever
+/// the run did with it** — and the shape that had none was the one where
+/// a stamp answered for all of them.
+///
+/// The second gate of one commit runs nothing, so the block of verbs is
+/// a block of stamps. That block printed its `cached` lines on a path of
+/// its own and filed nothing, so the table a reader adds up was short by
+/// exactly the verbs it never ran. The gate reads its own books against
+/// the plan now, so a return to that path is a red run rather than a
+/// quiet subtraction.
+#[test]
+fn a_run_that_ran_nothing_still_files_a_row_for_every_step() {
+    let sb = Sandbox::new("ledger-cached");
+    // A change the census's verb answers for, so the block of verbs is
+    // in the plan at all (`selection::a_core_change_owes_what_reads_it`).
+    sb.write(
+        &sb.seat,
+        "crates/platitude-core/src/stash.rs",
+        "pub fn stash() { let _ = 41; }\n#[cfg(test)]\nmod tests {\n    use super::*;\n    \
+         #[test]\n    fn t() { stash() }\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(core): forty-one", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = sb.ran();
+    assert!(
+        ran.iter().any(|id| id.starts_with("verify ")),
+        "the first run owes the census's verb: {ran:?}"
+    );
+
+    sb.gate_ok(&sb.seat, &[]);
+    assert!(
+        without_always(&sb.ran()).is_empty(),
+        "the second run of one commit runs nothing a stamp answers for"
+    );
+    let ledger = sb.ledger(&sb.seat);
+    assert!(!ledger.is_empty(), "a ledger beside the record");
+    let verbs: Vec<&(String, String, String)> = ledger
+        .iter()
+        .filter(|(_, id, _)| id.starts_with("verify"))
+        .collect();
+    assert!(verbs.len() >= 2, "the verb on both sides: {ledger:?}");
+    for row in &verbs {
+        assert_eq!(row.2, "cached", "{row:?}");
+    }
+    // Nothing else ran either, the always-steps apart: they carry no
+    // stamp of their own, being seconds each.
+    assert!(
+        ledger
+            .iter()
+            .all(|(_, id, outcome)| outcome == "cached" || ALWAYS.contains(&id.as_str())),
+        "a run that ran nothing has nothing else to say: {ledger:?}"
+    );
+}
+
+/// A red stops the group it is in, and the steps behind it are answered
+/// for by a row saying they were not reached — so the books are still
+/// whole, and `not-run` is the word that keeps a skipped step apart from
+/// a lost one.
+#[test]
+fn a_red_leaves_the_steps_behind_it_named_rather_than_missing() {
+    let sb = Sandbox::new("ledger-red");
+    sb.write_refs(&sb.seat, 43);
+    sb.commit_all(&sb.seat, "feat(core): forty-three", &[]);
+    let (ok, text) = sb.gate(
+        &sb.seat,
+        &[],
+        &[("PGG_GATE_FAKE_FAIL", "test platitude-core 1")],
+    );
+    assert!(!ok, "{text}");
+    assert!(
+        !text.contains("side's ledger"),
+        "the books are whole, so the run says nothing about them:\n{text}"
+    );
+    let ledger = sb.ledger(&sb.seat);
+    assert!(
+        ledger
+            .iter()
+            .any(|(_, id, outcome)| id == "test platitude-core 1" && outcome == "FAIL"),
+        "{ledger:?}"
+    );
+    assert!(
+        ledger.iter().any(|(_, _, outcome)| outcome == "not-run"),
+        "the steps the red stopped it short of: {ledger:?}"
+    );
+}

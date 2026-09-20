@@ -34,6 +34,7 @@ mod runner;
 mod stamp;
 
 use std::path::Path;
+use std::time::Duration;
 
 use plan::{Plan, Required, Side};
 use record::{Spent, Waited};
@@ -588,6 +589,7 @@ fn run_sides(
         copy: None,
         run: &run,
         waited: &host_waited,
+        since: started,
         pool: &pool,
         seat: &seat,
         rank: rank(landing),
@@ -598,7 +600,7 @@ fn run_sides(
         waited: &linux_waited,
         ..host_ground
     };
-    let failures: Vec<String> = std::thread::scope(|scope| {
+    let mut failures: Vec<String> = std::thread::scope(|scope| {
         let host = scope.spawn(|| side(&host_ground, &host, jobs));
         // On this side and not ahead of both, so the host side starts
         // now: what the preparation owes is only that it is in before
@@ -628,6 +630,22 @@ fn run_sides(
     spent.host_budget = host_waited.read();
     spent.linux_budget = linux_waited.read();
     spent.longest = Waited::longest_of([&host_waited, &linux_waited]);
+    spent.ledger = record::ledger([("host", &host_waited), ("linux", &linux_waited)]);
+    // The ledger against the plan, before either is read as a number.
+    // Every step has a row whichever way the run went — cached, run,
+    // failed, or not reached — so a step with none is a path through the
+    // runner that files nothing, and the arithmetic somebody does over
+    // this table would be short by exactly the steps nobody can see are
+    // missing. A red for the gate, because it is the gate's own books.
+    for (name, waited, steps) in [
+        ("host", &host_waited, &host),
+        ("linux", &linux_waited, &linux),
+    ] {
+        let planned: Vec<String> = steps.iter().map(|r| r.step.id.clone()).collect();
+        for note in waited.unaccounted(&planned) {
+            failures.push(format!("the {name} side's ledger {note}"));
+        }
+    }
     Ok(failures)
 }
 
@@ -698,6 +716,10 @@ struct Ground<'a> {
     /// record, beside the longest units, which are what a landing's
     /// wait is made of.
     waited: &'a Waited,
+    /// When the sides started, which every unit's row is an offset from
+    /// — two rows of the ledger say whether they overlapped, and a side
+    /// says where in its own run the time went.
+    since: std::time::Instant,
     /// The machine's budget, which both sides and every seat draw on.
     pool: &'a crate::budget::Pool,
     /// The tree, which is what the fairness between equals is over.
@@ -744,6 +766,7 @@ fn side(ground: &Ground<'_>, steps: &[&Required], jobs: usize) -> Vec<String> {
     let mut at = 0;
     while at < steps.len() && steps[at].step.always {
         if let Err(why) = run_one(ground, at, steps[at], false) {
+            not_run(ground, steps[at + 1..].iter().map(|r| r.step.id.clone()));
             return vec![why];
         }
         at += 1;
@@ -767,12 +790,38 @@ fn side(ground: &Ground<'_>, steps: &[&Required], jobs: usize) -> Vec<String> {
 
 /// The checks group: one at a time, stopping at the first red.
 fn in_order(ground: &Ground<'_>, steps: &[(usize, &Required)]) -> Vec<String> {
-    for (index, required) in steps {
+    for (n, (index, required)) in steps.iter().enumerate() {
         if let Err(why) = run_one(ground, *index, required, false) {
+            not_run(
+                ground,
+                steps[n + 1..].iter().map(|(_, r)| r.step.id.clone()),
+            );
             return vec![why];
         }
     }
     Vec::new()
+}
+
+/// The steps a side stopped short of, filed as what they are.
+///
+/// **A step the run did not reach and a step the ledger lost are two
+/// different things**, and only one of them is a fault of the runner:
+/// a red stops the group it is in, and the plan's other steps are then
+/// answered for by a row saying so. Anything the ledger still has no row
+/// for after that is a path through here that files nothing, which is
+/// what `record::Waited::unaccounted` refuses.
+fn not_run(ground: &Ground<'_>, ids: impl IntoIterator<Item = String>) {
+    for id in ids {
+        ground.waited.filed(record::Row {
+            id,
+            weight: 0,
+            outcome: "not-run",
+            waited: Duration::ZERO,
+            from_start: ground.since.elapsed(),
+            ran: Duration::ZERO,
+            spent: String::new(),
+        });
+    }
 }
 
 /// The built-app group: each run of verbs as one block ([`verbs`]) and
@@ -793,6 +842,7 @@ fn against_the_build(
                 .map_or(steps.len(), |n| at + n);
             let failures = verbs(ground, &steps[at..end], jobs);
             if !failures.is_empty() {
+                not_run(ground, steps[end..].iter().map(|(_, r)| r.step.id.clone()));
                 return failures;
             }
             at = end;
@@ -800,6 +850,10 @@ fn against_the_build(
         }
         let (index, required) = steps[at];
         if let Err(why) = run_one(ground, index, required, false) {
+            not_run(
+                ground,
+                steps[at + 1..].iter().map(|(_, r)| r.step.id.clone()),
+            );
             return vec![why];
         }
         at += 1;
@@ -828,8 +882,14 @@ fn against_the_build(
 /// stop itself.
 fn verbs(ground: &Ground<'_>, block: &[(usize, &Required)], jobs: usize) -> Vec<String> {
     let name = ground.name;
-    for (_, required) in block.iter().filter(|(_, r)| r.cached) {
-        println!("[{name}] cached {}", required.step.id);
+    // **Through the same door as every other unit**, cached or not: the
+    // line a stamped verb prints and the row it files are one path
+    // ([`run_one`]), and a block that said `cached` here and filed
+    // nothing left the ledger with no answer for a step the plan had —
+    // which is a number read off a file with holes in it
+    // (`record::Waited::unaccounted` is what refuses that now).
+    for (index, required) in block.iter().filter(|(_, r)| r.cached) {
+        let _ = run_one(ground, *index, required, false);
     }
     // What the side had waited before this block, so that the line below
     // says this block's own wait.
@@ -854,9 +914,16 @@ fn verbs(ground: &Ground<'_>, block: &[(usize, &Required)], jobs: usize) -> Vec<
             Err(why) => {
                 failures.push(why);
                 if app_did_not_build(&log_of(ground, *index)) {
-                    let left = queue.count();
-                    println!("[{name}] the app did not build — {left} verb(s) not run");
-                    failures.push(format!("{left} verb(s) not run: the app did not build"));
+                    let left: Vec<String> = queue.map(|(_, r)| r.step.id.clone()).collect();
+                    println!(
+                        "[{name}] the app did not build — {} verb(s) not run",
+                        left.len()
+                    );
+                    failures.push(format!(
+                        "{} verb(s) not run: the app did not build",
+                        left.len()
+                    ));
+                    not_run(ground, left);
                     return failures;
                 }
             }
@@ -939,7 +1006,7 @@ fn run_one(
     let id = &required.step.id;
     if required.cached {
         println!("[{name}] cached {id}");
-        return Ok(Ran::Stamped);
+        return Ok(stamp_answered(ground, id, "cached", 0, Duration::ZERO));
     }
     let weight = crate::budget::weight_of(&required.step.command, no_build);
     let room = ground
@@ -973,10 +1040,17 @@ fn run_one(
     }
     if !ground.fresh && !required.key.is_empty() && ground.store.step_green(&required.key) {
         println!("[{name}] cached {id} (stamped elsewhere while this waited)");
-        return Ok(Ran::Stamped);
+        return Ok(stamp_answered(
+            ground,
+            id,
+            "cached-late",
+            weight,
+            room.waited,
+        ));
     }
     let log = log_of(ground, index);
     println!("[{name}] run    {id} … (log: {})", log.display());
+    let from_start = ground.since.elapsed();
     // waits(measured): the step's wall clock, said on its line and judged by nothing
     let at = std::time::Instant::now();
     let mut command = required.step.command.clone();
@@ -991,6 +1065,19 @@ fn run_one(
     // make room (`budget`), so the longest unit is the interruption's
     // own ceiling.
     ground.waited.ran(id, weight, ran);
+    ground.waited.filed(record::Row {
+        id: id.clone(),
+        weight,
+        outcome: if outcome.is_ok() { "ran" } else { "FAIL" },
+        waited: room.waited,
+        from_start,
+        ran,
+        // Off the step's own log, where the step wrote one: a verb says
+        // what its fixture, its build and its window took, and the wall
+        // clock above says nothing about which of the three it was
+        // (`verify::run::say_what_it_spent`).
+        spent: spent_in(&log),
+    });
     match outcome {
         Ok(()) => {
             println!("[{name}] ok     {id} ({secs}s)");
@@ -1031,6 +1118,47 @@ fn run_one(
             }
         }
     }
+}
+
+/// A unit a stamp answered for, filed in the ledger under the word that
+/// says which stamp it was: one found when the plan was made, or one
+/// another tree wrote while this unit stood in the queue. It ran
+/// nothing, and the room it waited for is the only machine it took.
+fn stamp_answered(
+    ground: &Ground<'_>,
+    id: &str,
+    outcome: &'static str,
+    weight: u32,
+    waited: Duration,
+) -> Ran {
+    ground.waited.filed(record::Row {
+        id: id.to_string(),
+        weight,
+        outcome,
+        waited,
+        from_start: ground.since.elapsed(),
+        ran: Duration::ZERO,
+        spent: String::new(),
+    });
+    Ran::Stamped
+}
+
+/// What a step said it spent, off its own log, or empty where it said
+/// nothing.
+///
+/// **The step is the one that can split its own time.** From out here a
+/// unit is one wall clock, and a verb's is a release build plus a
+/// fixture plus a window in whatever proportion the block's ordering
+/// gave it. The line is the step's words verbatim, so nothing is
+/// invented on the way into the ledger.
+fn spent_in(log: &Path) -> String {
+    let Ok(text) = std::fs::read_to_string(log) else {
+        return String::new();
+    };
+    text.lines()
+        .find(|line| line.starts_with("spent "))
+        .map(|line| line.trim_start_matches("spent ").to_string())
+        .unwrap_or_default()
 }
 
 /// Stop hook: where the seat's gate stands, for the user's eyes. A seat
