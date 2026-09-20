@@ -111,6 +111,31 @@ Item {
             verify(!below.pointed, "and nothing else takes it")
         }
 
+        /// **The rest on the row's own name is what asks for the supplement**: a reader hovering a working copy is
+        /// asking what that copy is, and where it stands is the one answer the row cannot show. The hand never
+        /// leaves the name for it — walking down to the lines would be a second rest paid for an answer the first
+        /// one had earned (デザイン規約 §左メニューの所作).
+        function test_the_rest_on_the_rows_own_line_asks_for_the_supplement() {
+            rows.firstOpen = false
+            root.handMoves = 0
+            top.opensFacts = true
+            top.rowKey = "worktree:topic"
+            top.openKey = "worktree:topic"
+            verify(top.factsItem !== null, "the row has its lines open")
+
+            // The hand is somewhere else in the list to begin with, so what the row answers below is the rest and
+            // not whatever the run before this one left the pointer standing on.
+            mouseMove(below, 100, Theme.rowHeight / 2)
+            root.handMoves++
+            tryVerify(() => top.factsItem.says === "", undefined, "nothing is asked for off a row nobody is on")
+
+            mouseMove(top, 100, Theme.rowHeight / 2)
+            root.handMoves++
+            tryVerify(() => top.factsItem.says === top.factsPath, undefined,
+                      "the hand on the row's own line asks for where the copy stands")
+            tryVerify(() => top.factsTipOut, undefined, "and the box comes out on the rest already taken")
+        }
+
         /// The supplement a row opens keeps the row: **the tip is a popup over the panel and takes the pointer as
         /// the hand walks into it**, so a row that read only its own hover would close under the words the reader
         /// was reaching for (デザイン規約 §hover のツールチップ「出したものは持ち帰れる」).
@@ -118,14 +143,14 @@ Item {
             rows.firstOpen = false
             root.handMoves = 0
 
-            // The row opens on its own name, and the lines it opened put the path out — the stand-in stands for the
-            // hand resting on them, which is the state a reader is in when they set off towards the words.
+            // The row opens on its own name and puts the path out — the stand-in stands for the hand resting on it,
+            // which is the state a reader is in when they set off towards the words.
             top.opensFacts = true
             top.rowKey = "worktree:topic"
             top.openKey = "worktree:topic"
             verify(top.factsItem !== null, "the row has its lines open")
-            top.factsItem.tipPointed = true
-            tryVerify(() => top.factsTipOut, undefined, "and the supplement is standing on them")
+            top.pointedTipRow = top.index
+            tryVerify(() => top.factsTipOut, undefined, "and the supplement is standing on it")
 
             // The hand walks off the row and into the tip: nothing of the panel is under the pointer any more, and
             // the panel says so.
@@ -134,7 +159,7 @@ Item {
             verify(top.pointed, "the row stays the row the reader is on while its own supplement stands")
 
             // And it lets go when the supplement does.
-            top.factsItem.tipPointed = false
+            top.pointedTipRow = -1
             tryVerify(() => !top.pointed, undefined, "the row gives up the light with the words it put out")
         }
 
@@ -151,13 +176,16 @@ Item {
             top.rowKey = "worktree:topic"
             top.openKey = "worktree:topic"
             verify(top.factsItem !== null, "the row has its lines open")
-            top.factsItem.tipPointed = true
-            tryVerify(() => top.factsTipOut, undefined, "the supplement is standing on this row's lines")
+            top.pointedTipRow = top.index
+            tryVerify(() => top.factsTipOut, undefined, "the supplement is standing on this row")
 
             // Somewhere else asks for the same box — the one instance moves, words and target together.
             elsewhere.asking = true
             tryVerify(() => !top.factsTipOut, undefined, "the box standing is no longer this row's")
             tryVerify(() => !top.pointed, undefined, "so the row gives the light up")
+            // The hand is taken off the row again: the stand-in is the pointer, and one left standing here would be
+            // the next case's opening state.
+            top.pointedTipRow = -1
         }
 
         /// And when the hand does move, the light is wherever the pointer now is — one row, whatever the events did

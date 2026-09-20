@@ -272,8 +272,14 @@ Item {
     /// What "the hand is on this row" is made of — the one place it is spelled out, for both roads to it (the count
     /// above, and the event a list nobody counts for reads).
     function syncHover() {
-        navRow.pointed = rowHover.hovered || navRow.factsPointed || navRow.factsTipOut
+        navRow.handOn = rowHover.hovered || navRow.factsPointed
+        navRow.pointed = navRow.handOn || navRow.factsTipOut
     }
+    /// The hand itself, on this row: its own line or the lines it has open under it. **The light and the supplement
+    /// part here** — the light stays while what the row put out is standing (`pointed`), and what asks for that
+    /// supplement must not, or the box would be the only reason it is still being asked for and nothing could ever
+    /// take it down.
+    property bool handOn: false
     /// The hand is on the lines this row has open under it (`NavRowFacts.pointed`). **Read as the row's own hover,
     /// because `rowGround` cannot see it**: the lines stand inside the row's ground, but they take hover of their own
     /// and are stacked over that ground as a sibling, and a hover-taking sibling above takes the pointer off the
@@ -801,8 +807,14 @@ Item {
             // The lines, already in reading order (`NavFacts.lines`) — the part below draws what it is handed and
             // knows nothing about which section handed it over.
             lines: navRow.factsLines
-            // And the one answer that is not a line: where a working copy stands, said on a rest over them.
+            // And the one answer that is not a line: where a working copy stands, said on a rest anywhere in the
+            // open row.
             path: navRow.factsPath
+            // **The rest on the row's own line asks for it too** — the reader hovering the name is already asking
+            // what this copy is, and walking down to the lines to be told where it stands is a second rest paid
+            // for an answer the first one had earned. One box either way: the hand crosses from the name into the
+            // lines without it going down, because both roads write the same ask.
+            rowPointed: navRow.handOn || navRow.tipPointedAt
         }
     }
 }

@@ -11,8 +11,10 @@ import platitude.ui
 // opens, and where their words come from, is one table for the three of them (`NavFacts`), so BRANCHES, REMOTES and
 // WORKTREES cannot drift apart in the drawing.
 //
-// **What these lines have of their own is said on a rest over them** — a working copy's path (`path`), which is
-// the supplement to what is already open rather than a line of its own (デザイン規約 §左メニューの所作).
+// **What these lines have of their own is said on a rest anywhere in the open row** — a working copy's path
+// (`path`), which is the supplement to what is already open rather than a line of its own
+// (デザイン規約 §左メニューの所作). The rest over these lines is one road to it and the rest on the row's own line
+// (`rowPointed`) is the other; the box is the same box, so the hand crosses between them without it going down.
 //
 // **The name is not here.** It stays in the row's own place and is shown whole there (`NameCell.whole`): what the
 // reader was looking at does not move when a hand rests on it.
@@ -35,12 +37,15 @@ Item {
     property var lines: []
     /// WORKTREES only: where this working copy stands — the path git lists it under. **Not a line**: the row is
     /// named by the folder that path ends in, and a reader who has already opened the row is asking about the copy
-    /// and not about where it sits on the disk. It comes out as the supplement to what is open, on a rest over
-    /// these lines (デザイン規約 §左メニューの所作), which is the one place it answers a question somebody asked.
+    /// and not about where it sits on the disk. It comes out as the supplement to what is open
+    /// (デザイン規約 §左メニューの所作), which is the one place it answers a question somebody asked.
     /// Empty on every other kind of row.
     property string path: ""
-    /// Stands in for the pointer on these lines where headless cannot put one (PGG_AUTO_ACT=nav-open-tip).
-    property bool tipPointed: false
+    /// The hand is on the row's own line — the name this supplement is about (`NavItemDelegate.handOn`). **The same
+    /// rest, read a line higher**: the reader who hovers a working copy's name is asking what that copy is, and the
+    /// path is the one thing neither the row nor these lines show, so it comes out there rather than waiting for
+    /// the hand to walk down here.
+    property bool rowPointed: false
     /// Which line the hand is on, of those that keep a supplement, or -1 for none — **the line's own answer, held
     /// here** because one pointer opens one thing and the box that opens is this block's (デザイン規約 §hover の
     /// ツールチップ). A line going out clears it only if it is still the one holding it: the hand reaches the next
@@ -142,12 +147,15 @@ Item {
     /// rows under it do not move for it (the name is shown in the row's own place — `NameCell.whole`).
     implicitHeight: lines.implicitHeight > 0 ? lines.implicitHeight + Theme.spaceXs : 0
 
-    // The supplement itself: what these lines keep for a hand that rests on them, on the same wait every other one
-    // of them opens after. **Two kinds and one box** — the whole block's (a working copy's path) and one line's
-    // (why that line is wearing a warning). A row never has both: the path rides on WORKTREES rows and the notes on
-    // TAGS ones, and one pointer opens one thing either way (デザイン規約 §hover のツールチップ).
-    readonly property string says: facts.noted !== "" ? facts.noted
-                                 : (factsHover.hovered || facts.tipPointed) && facts.path !== "" ? facts.path : ""
+    // The supplement itself: what the open row keeps for a hand that rests on it, on the same wait every other one
+    // of them opens after. **Two kinds and one box** — the whole block's (a working copy's path, which the row's
+    // own line asks for as well) and one line's (why that line is wearing a warning). A row never has both: the
+    // path rides on WORKTREES rows and the notes on TAGS ones, and one pointer opens one thing either way
+    // (デザイン規約 §hover のツールチップ). **The note wins where a row somehow had both** — it is about the line the
+    // hand is actually on, and the path is about the row it is anywhere in.
+    readonly property string says:
+        facts.noted !== "" ? facts.noted
+        : (factsHover.hovered || facts.rowPointed) && facts.path !== "" ? facts.path : ""
     /// The words the box is wearing — **the last thing asked for, not what is being asked for now**. The ask falls
     /// the instant the hand leaves for the box, which is the first step of the walk into it, and the attached
     /// property writes `text` straight through to the shared instance while this is its target: bound to the ask,
@@ -203,10 +211,11 @@ Item {
             }
         }
     }
-    // The rest over what is open, and the one thing these lines keep for it: where that working copy stands.
-    // **A handler, not the area below** — handlers are passive, so the hand that sweeps the words goes on being
-    // answered by the same area while this reads the same pointer (rules-refs/app-ui.md 「行の hover は
-    // `HoverHandler`」). The stand-in beside it is for the runs, which have no pointer to rest (verify-ui スキル).
+    // The rest over these lines — one of the two roads to the supplement, the row's own line being the other
+    // (`rowPointed`). **A handler, not the area below** — handlers are passive, so the hand that sweeps the words
+    // goes on being answered by the same area while this reads the same pointer (rules-refs/app-ui.md 「行の hover
+    // は `HoverHandler`」). A run has no pointer to rest here (verify-ui スキル): it comes in at the row's own
+    // stand-in, which writes the same ask.
     HoverHandler {
         id: factsHover
     }

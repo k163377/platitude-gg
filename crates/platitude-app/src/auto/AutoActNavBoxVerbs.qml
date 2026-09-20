@@ -86,13 +86,12 @@ Item {
             dragOpenTimer.acted = false
             dragOpenTimer.start()
         } else if (act === "nav-open-tip") {
-            // The row opens, and then the hand rests on what it opened: the one thing those lines keep for that
-            // rest is where the working copy stands (デザイン規約 §左メニューの所作). **Two pointers, in order** —
-            // the row's own stand-in opens it, the lines' stand-in asks them.
+            // The rest that opens a row, held: the one thing the open row keeps for it is where the working copy
+            // stands (デザイン規約 §左メニューの所作). **One pointer, two things in order** — the row opens under it
+            // and the supplement follows a rest later, from the hand that never moved.
             const parts = ("" + arg).split(":")
             openTipTimer.kind = parts[0] === "" ? "worktree" : parts[0]
             openTipTimer.row = parts.length > 1 ? Number(parts[1]) : 3
-            openTipTimer.step = 0
             openTipTimer.start()
         } else if (act === "nav-open-held") {
             // The other order: the name box first, and **then** a hand on a row. Nothing may open — what opens moves
@@ -341,31 +340,21 @@ Item {
             driver.complete()
         }
     }
-    // PGG_AUTO_ACT=nav-open-tip: the supplement the open lines keep for a hand that rests on them — a working
-    // copy's path. **The picture answers half of it** (the words are in the overlay), and the other half is that
-    // they came from the row that is open: `says=` carries the same path off the row, so a tip drawn from anywhere
-    // else is caught by the two not matching.
+    // PGG_AUTO_ACT=nav-open-tip: the supplement the open row keeps for the hand that opened it — a working copy's
+    // path. **The picture answers half of it** (the words are in the overlay), and the other half is that they came
+    // from the row that is open: `says=` carries the same path off the row, so a tip drawn from anywhere else is
+    // caught by the two not matching.
     SampleTimer {
         id: openTipTimer
         property string kind: "worktree"
         property int row: 3
-        property int step: 0
         onTriggered: {
             const tip = page.ToolTip.toolTip
-            if (openTipTimer.step === 0) {
-                // The row first: the lines have to be there before a hand can rest on them.
-                navProbe.pointTipAt(openTipTimer.kind, openTipTimer.row)
-                if (!navProbe.rowFactsOpen)
-                    return
-                openTipTimer.step = 1
+            // Re-applied every beat: the delegate arrives on a later layout than the rows the model got, and a miss
+            // reads exactly like a row that answers a rest with nothing (`nav-open` の同じ歩き).
+            navProbe.pointTipAt(openTipTimer.kind, openTipTimer.row)
+            if (!navProbe.rowFactsOpen)
                 return
-            }
-            if (openTipTimer.step === 1) {
-                if (!navProbe.pointFactsTip(true))
-                    return
-                openTipTimer.step = 2
-                return
-            }
             // The shared instance comes up after the same rest every other supplement waits out, so the beat that
             // reads it is the one where it is standing.
             if (!tip.visible)
@@ -375,6 +364,11 @@ Item {
                 + " row=" + openTipTimer.row
                 + " open=" + navProbe.rowFactsOpen
                 + " tip=" + tip.visible
+                // **The box is wearing what this row is asking for.** A box that is standing says nothing about
+                // what is in it — an empty frame answers `tip=true` as well as a full one does, and that is the
+                // shape the words went missing in (`NavRowFacts.said`). The two are a machine's to weigh, since
+                // the path is this machine's own.
+                + " same=" + (tip.text === navProbe.factsSays())
                 // The row's own answer beside the instance's: the path the lines were handed, and the words the
                 // tip came up with. Last, since a path carries anything.
                 + " says=" + navProbe.rowFactsWords()
@@ -408,8 +402,10 @@ Item {
     //
     // **The control answers by opening**, not with a tooltip: a working copy's row opens under itself like the rest
     // of them now (デザイン規約 §左メニューの所作), and the one section that is never empty is the one that had to
-    // carry the control. What the shared instance can still do is said by the runs that claim `tip=true` — the
-    // remote's own row is the one this section has left (`verify/verbs/nav.rs`).
+    // carry the control. **The hand leaves it on the beat it opened**, which is before the supplement that row
+    // would go on to put out could reach the screen — so the control lights a row and raises nothing. What the
+    // shared instance can still do is said by the runs that claim `tip=true` — the remote's own row is the one this
+    // section has left (`verify/verbs/nav.rs`).
     SampleTimer {
         id: navTipTimer
         property string kind: "branch"
@@ -563,6 +559,12 @@ Item {
                     navTipTimer.stood = geom
                     return
                 }
+                // **And nothing until the supplement has answered either way.** The rest that opened the row goes on
+                // to ask for what the row keeps (a working copy's path — デザイン規約 §左メニューの所作), and that
+                // box comes up a rest after the lines do: read in between, the picture has it half out on one run
+                // and not at all on the next. The rows that keep nothing answer this on the beat they open.
+                if (!navTipTimer.acted && (navProbe.factsSays() !== "") !== tip.visible)
+                    return
             }
             navTipTimer.stop()
             // The row at the foot of a section that had to scroll to reach it, and — with `away` — the list after

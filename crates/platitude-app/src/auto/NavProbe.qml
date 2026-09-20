@@ -178,15 +178,13 @@ QtObject {
         const list = probe.listOf(kind)
         return !!list && list.rowWashLit(row)
     }
-    /// PGG_AUTO_ACT=nav-open-tip: the rest **on the lines the row opened**, which is where a working copy's path
-    /// comes out (`NavRowFacts.tipPointed`). Hover cannot be injected (verify-ui スキル), so it goes in at the
-    /// stand-in the lines carry for it. Answers false while no row is open.
-    function pointFactsTip(on) {
+    /// PGG_AUTO_ACT=nav-open / nav-open-tip: the supplement the open row is being asked for — a working copy's
+    /// path (`NavRowFacts.says`). **The ask, not the box**: it stands the moment the hand comes to rest and the
+    /// box follows it a rest later, so this is what a run holds the shared instance against before reading its
+    /// line. Empty where the open row keeps nothing, and where no row is open.
+    function factsSays() {
         const lines = probe.sidebar.openFactsItem()
-        if (lines === null)
-            return false
-        lines.tipPointed = on
-        return true
+        return lines === null ? "" : lines.says
     }
     /// PGG_AUTO_ACT=nav-open-tag `:tip`: the same rest taken on **one** of those lines, which is where a tag's row
     /// keeps the reason a carrier is wearing a warning (`NavRowFacts.pointLineTip`). Answers false until that line

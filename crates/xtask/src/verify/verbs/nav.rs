@@ -505,15 +505,23 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "open=true",
     },
-    // The rest on what a row opened, and the one thing those lines
-    // keep for it: where the working copy stands. **`open=` rides with
-    // it** — a tip that came up over a row that never opened is the
+    // The rest that opened a row, held: the one thing the open row
+    // keeps for it is where the working copy stands. **`open=` rides
+    // with it** — a tip that came up over a row that never opened is the
     // shared instance answering for something else, and the overlay
     // frames the same either way.
+    //
+    // **`same=` is the box's own words against what the row is asking
+    // for.** A box that is standing says nothing about what is in it:
+    // an empty frame answers `tip=true` exactly as a full one does, and
+    // the picture of one is a box-shaped smudge at the edge of the panel
+    // — which is how the words came to be missing for a while
+    // (`NavRowFacts.said`). The path is this machine's own, so the claim
+    // cannot be a literal; weighing the two is what is left.
     Verb {
         name: "nav-open-tip",
         when: &[],
-        plain: "open=true tip=true",
+        plain: "open=true tip=true same=true",
     },
     // The reader who does not wait out the rest: a press on a closed
     // row's own line that starts to move. **Three answers in one line** —
