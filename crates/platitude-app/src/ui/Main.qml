@@ -141,6 +141,8 @@ ApplicationWindow {
 
     FocusRelease {
         window: root
+        // Over the safe-area inset the chrome also covers, so presses on the band are heard too.
+        reachUp: root.contentItem.y
         // The page on screen, so an Escape after the caret was walked away from still reaches the one handler that
         // puts this window's standing things away.
         home: root.curPage

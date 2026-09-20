@@ -22,6 +22,11 @@ Dialog {
     /// (規約 §右のペインの字は掴める).
     property alias textContent: dialogFace.textContent
 
+    /// The hand that hands the keyboard back, named so a run can say it is standing (`caretHand.stands`). An
+    /// automation-only exposure, the same one `GraphPane.view` is (app-ui.md): whether a press *reaches* it is
+    /// Qt's to answer and only a real pointer can ask (`tests/qml/tst_fieldrelease.qml`).
+    readonly property alias caretHand: caretHand
+
     anchors.centerIn: parent
     // The card is set to the width a run of prose is read at (規約 §レイアウト初期値 — the per-screen tier's
     // `textWidth`, shared with the screen a repository would not open on and the settings screen's chapters).
@@ -39,5 +44,23 @@ Dialog {
         id: dialogFace
         radius: dialog.fills ? 0 : Theme.radiusMd
         border.width: dialog.fills ? 0 : Theme.borderWidth
+
+        // A press that landed on this dialog but not on whatever is holding the caret hands the keyboard back, so
+        // the selection a reader made goes out with the gesture they made next (規約 §右のペインの字は掴める
+        // 「選択は窓に 1 つだけ」). **QML never drops a field's focus on its own**, and the window's own watcher
+        // cannot answer for a dialog — a modal stands in the overlay above it.
+        //
+        // **On the face, behind everything the dialog draws.** What accepts a press above this either takes the
+        // focus itself (a box, a tick, a button, a chooser) or is a reading surface's own hand, which puts the
+        // caret where the press was; the only presses that reach here are the ones that would otherwise leave a
+        // caret standing — a row that answers with a handler of its own, and the plain air
+        // (measured, `tests/qml/tst_fieldrelease.qml`).
+        FocusRelease {
+            id: caretHand
+            window: Window.window
+            // The dialog's own content, so a key pressed after the caret was walked away from is still delivered
+            // inside this screen.
+            home: dialog.contentItem
+        }
     }
 }
