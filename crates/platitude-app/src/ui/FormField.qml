@@ -47,7 +47,16 @@ TextField {
         enabled: form.choosing
         onTapped: form.picking()
     }
-    Keys.onReturnPressed: if (form.choosing) form.picking()
-    Keys.onEnterPressed: if (form.choosing) form.picking()
-    Keys.onSpacePressed: if (form.choosing) form.picking()
+    // **A handler for a named key accepts the event by being connected, whatever its body does** (Qt's attached
+    // `Keys`: a key it specifically handles defaults to accepted). So the typing box has to hand the key back
+    // itself, or a space typed between two names and the Return that submits a box go nowhere (`tst_formfield`).
+    function answerKey(event) {
+        if (form.choosing)
+            form.picking()
+        else
+            event.accepted = false
+    }
+    Keys.onReturnPressed: event => form.answerKey(event)
+    Keys.onEnterPressed: event => form.answerKey(event)
+    Keys.onSpacePressed: event => form.answerKey(event)
 }
