@@ -142,9 +142,17 @@ impl Options {
         if !self.arg.is_empty() {
             words.push(self.arg.clone());
         }
-        for preset in &self.preset {
-            words.push("--preset".to_string());
-            words.push(preset.clone());
+        // The flag goes in only where it changes the run. A preset that
+        // names exactly what leaving it off would have built is the same
+        // run under a second spelling, and the census is keyed by the
+        // line: two keys is the verb recorded twice and run twice by
+        // every gate that owes it, on both sides
+        // (`repos::preset_is_the_default`).
+        if !super::repos::preset_is_the_default(&self.verb, &self.arg, &self.preset) {
+            for preset in &self.preset {
+                words.push("--preset".to_string());
+                words.push(preset.clone());
+            }
         }
         if self.select {
             words.push("--select".to_string());
@@ -364,6 +372,69 @@ mod tests {
         let typed = parse(&words[..words.len() - 1]).expect("the same line, boarded");
         assert!(!typed.no_board);
         assert_eq!(opts.census_line(), typed.census_line());
+    }
+
+    /// A preset naming what the run would have built anyway is that run
+    /// under a second spelling, and the census is keyed by the line: the
+    /// two have to come to one key, or the file holds the verb twice and
+    /// every gate that owes it runs it twice on each side
+    /// (`repos::preset_is_the_default`).
+    #[test]
+    fn the_default_preset_named_and_left_off_is_one_census_line() {
+        let named = parse(&[
+            "delete-gone".to_string(),
+            "v0.3-local".to_string(),
+            "--preset".to_string(),
+            "basic".to_string(),
+        ])
+        .expect("a verb, its argument and the default preset");
+        let unsaid = parse(&["delete-gone".to_string(), "v0.3-local".to_string()])
+            .expect("the same run with the flag left off");
+        // The run itself is untouched: what was named is still what is
+        // built, and only the line the census is keyed by is the same.
+        assert_eq!(named.preset, ["basic"]);
+        assert!(unsaid.preset.is_empty());
+        assert_eq!(named.census_line(), unsaid.census_line());
+        // The container files no census at all, so the text is only there
+        // to be read on the side that does (`census_line`).
+        if std::env::var_os(crate::linux::IN_CONTAINER).is_none() {
+            assert_eq!(
+                named.census_line().as_deref(),
+                Some("delete-gone v0.3-local")
+            );
+        }
+    }
+
+    /// And a preset that is not that default keeps its words: a second
+    /// preset is a second tab, and a verb whose fixture the flag does not
+    /// decide is not one this rule has measured — its line stays as typed.
+    #[test]
+    fn a_preset_the_default_does_not_answer_for_stays_in_the_line() {
+        let two = parse(&[
+            "tab-carry".to_string(),
+            "--preset".to_string(),
+            "basic".to_string(),
+            "--preset".to_string(),
+            "stashes".to_string(),
+        ])
+        .expect("two presets, two tabs");
+        let strip = parse(&[
+            "tab-widths".to_string(),
+            "short".to_string(),
+            "--preset".to_string(),
+            "basic".to_string(),
+        ])
+        .expect("a verb that builds its own strip");
+        if std::env::var_os(crate::linux::IN_CONTAINER).is_none() {
+            assert_eq!(
+                two.census_line().as_deref(),
+                Some("tab-carry --preset basic --preset stashes")
+            );
+            assert_eq!(
+                strip.census_line().as_deref(),
+                Some("tab-widths short --preset basic")
+            );
+        }
     }
 
     /// The app is started in a directory of its own, so a path that stayed

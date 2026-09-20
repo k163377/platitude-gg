@@ -133,10 +133,19 @@ pub(super) fn band_state_repos(count: usize, presets: &[String]) -> Result<Vec<P
     named_strip(count, front, "badges")
 }
 
+/// The one repository a run stands on where it names no preset.
+///
+/// **Two readers, one value.** The other is the line the census files a
+/// passing run under: naming this preset and leaving it off build the
+/// same fixture, so two spellings of it there would be two lines, and
+/// every gate that owed the verb would run the same thing twice on each
+/// side (`options::census_line`, [`preset_is_the_default`]).
+pub(super) const DEFAULT_PRESET: &str = "basic";
+
 /// One fresh demo repository per preset, in the order they were asked
 /// for — which is the order the tabs come up in.
 fn preset_repos(presets: &[String]) -> Result<Vec<PathBuf>, String> {
-    let default = ["basic".to_string()];
+    let default = [DEFAULT_PRESET.to_string()];
     let presets = if presets.is_empty() {
         &default[..]
     } else {
@@ -391,33 +400,62 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
                 .into(),
         );
     }
-    // Named repositories win outright; otherwise one fresh demo repository
-    // per preset, in the order they were asked for — which is the order
-    // the tabs come up in.
+    // Named repositories win outright; otherwise the route decides, and
+    // it is the route that knows whether the preset flag is read at all.
     let repos = if !opts.repo.is_empty() {
         opts.repo.clone()
-    } else if opts.verb == "tab-widths" {
-        tab_width_repos(&opts.arg)?
-    } else if opts.verb == "tab-mark" {
+    } else {
+        match route_of(&opts.verb, &opts.arg)? {
+            Route::Strip(None) => tab_width_repos(&opts.arg)?,
+            Route::Strip(Some(count)) => tab_width_repos(count)?,
+            Route::Colliding => tab_name_repos()?,
+            Route::BandStrip(count) => band_state_repos(count, &opts.preset)?,
+            Route::Presets => preset_repos(&opts.preset)?,
+        }
+    };
+    Ok(repos)
+}
+
+/// Which fixture a run of this verb stands on.
+///
+/// **Decided once and read twice** — by the builder above, and by the
+/// line the census files the run under, which leaves a `--preset` off
+/// only where the route would have built the same thing without it
+/// ([`preset_is_the_default`]). A second reading of "does this verb read
+/// the flag" is the one that drifts, and what it would cost is a verb
+/// recorded under two lines and run twice by every gate that owes it.
+enum Route {
+    /// A strip off the ladder of names — `None` for as many tabs as the
+    /// run's own argument asks for, `Some` where the verb writes the
+    /// count out. **The `--preset` flag is not read**: what these verbs
+    /// are about is how a strip of that shape lays out, so the shape is
+    /// the fixture.
+    Strip(Option<&'static str>),
+    /// The one strip whose names collide, which the ladder deliberately
+    /// has none of.
+    Colliding,
+    /// A strip with the run's own preset on the tab in front.
+    BandStrip(usize),
+    /// One fresh demo repository per preset, [`DEFAULT_PRESET`] where the
+    /// run names none.
+    Presets,
+}
+
+fn route_of(verb: &str, arg: &str) -> Result<Route, String> {
+    Ok(match verb {
+        "tab-widths" => Route::Strip(None),
         // Same ladder, eight of them; the argument here names the tab the
         // hand is on, so the count is written out rather than taken from
         // the other verb's default — which is a state name now, and the
         // strip this one photographs has no business moving with it.
-        tab_width_repos("8")?
-    } else if opts.verb == "tab-name" {
+        "tab-mark" => Route::Strip(Some("8")),
         // A different strip entirely: names that collide, which the
         // ladder above deliberately has none of.
-        tab_name_repos()?
-    } else if opts.verb == "tab-drag" || opts.verb == "tab-hold" {
-        // Same ladder of names, four of them: the order is what this one
-        // is about, and four differently named tabs say an order a
-        // picture can be read for. The argument names two of them.
-        tab_width_repos("4")?
-    } else if opts.verb == "tab-edge"
-        || opts.verb == "tab-pin"
-        || opts.verb == "tab-pin-go"
-        || opts.verb == "tab-open-go"
-    {
+        "tab-name" => Route::Colliding,
+        // Same ladder of names, four of them: the order is what these are
+        // about, and four differently named tabs say an order a picture
+        // can be read for. The argument names two of them.
+        "tab-drag" | "tab-hold" => Route::Strip(Some("4")),
         // A strip that has to overflow, against a window these put down
         // on its floor. Twelve, because tabs give their names up only as
         // far as their own floor and stand at whatever the run divides
@@ -434,20 +472,29 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
         // that one is built by [`folder_for`]: everything handed over
         // here is opened at startup, and a tab already in the strip
         // cannot arrive in it.
-        tab_width_repos("12")?
-    } else if badges {
+        "tab-edge" | "tab-pin" | "tab-pin-go" | "tab-open-go" => Route::Strip(Some("12")),
         // The one verb whose fixture is both at once: a strip of named
         // tabs *and* a page with a state on it. Which of the group's
         // three shapes the band lands in is what the two of them settle
         // between them, so the count rides in the argument beside the
         // width (`band_tab_count`) and a run that names none stands on
         // the ordinary one repository.
-        match band_tab_count(&opts.arg)? {
-            Some(count) => band_state_repos(count, &opts.preset)?,
-            None => preset_repos(&opts.preset)?,
-        }
-    } else {
-        preset_repos(&opts.preset)?
-    };
-    Ok(repos)
+        "badges" | "badges-hover" | "badges-hover-early" => match band_tab_count(arg)? {
+            Some(count) => Route::BandStrip(count),
+            None => Route::Presets,
+        },
+        _ => Route::Presets,
+    })
+}
+
+/// Whether the `--preset` flag as typed asks for exactly the fixture
+/// leaving it off would have built.
+///
+/// Only [`Route::Presets`] has that default to compare against, so the
+/// answer is the route's; every other route either ignores the flag or
+/// reads it for something that has no default of its own, and a run on
+/// one of them keeps the words it was typed with.
+pub(super) fn preset_is_the_default(verb: &str, arg: &str, presets: &[String]) -> bool {
+    matches!(presets, [one] if one == DEFAULT_PRESET)
+        && matches!(route_of(verb, arg), Ok(Route::Presets))
 }
