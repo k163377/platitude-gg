@@ -315,38 +315,79 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "same=true lit=true marked=true wip=false",
     },
-    // A branch row opens its facts under itself rather than raising the
-    // shared tooltip (`NavRowFacts`), so the pair judged here is the
-    // other way round: nothing in the tooltip, the row open.
+    // A row of the left panel opens its facts under itself rather than
+    // raising the shared tooltip (`NavRowFacts`), so the pair judged
+    // here is the other way round: nothing in the tooltip, the row open.
     //
-    // **The words it carries stay out of the claim.** The name, the
-    // upstream and the working copy holding the branch are the
-    // repository's and the preset's, not the rule's — they go on the
-    // line (`says=`) for the reader of the report, and the picture is
-    // where a row that opened on nothing is caught.
-    // A REMOTES row opens on the same lines, and two of them are its
-    // own: the branch measured against the reading, and the copy
-    // holding **that** branch. Neither is anything the picture settles —
-    // a line drawn from the row's own name instead of from the join
-    // frames the same — so the words are judged.
+    // **The words are judged, one state per section.** What a row's
+    // answers come out as is a table over values already in hand, and
+    // `tests/qml/tst_navfacts.qml` drives the real row over it with the
+    // three models stood in for — every section, every state, and the
+    // lines and colours they draw. What no such run reaches is the
+    // lookups themselves: whether the real model answered, and answered
+    // for the row that asked. That is what `says=` claims here, and it
+    // is why one run per section is the whole of what the window is
+    // still owed. **A picture cannot stand in for it** — a line drawn
+    // from the row's own name instead of from the join frames exactly
+    // like the right one.
     //
-    // A WORKTREES row opens on the same lines, and the one it fills is
-    // the state git noted on the checkout — the answer its own mark
-    // stands for, which goes from the row's seat while the row is open.
-    // **The words are judged there too**: a padlock drawn with no
-    // sentence beside it and one drawn with the wrong sentence frame the
-    // same to a claim that stopped at `open=`, and the reason a lock was
-    // taken for is the half that comes off the row's other slot.
+    // The four states below are one per lookup a section makes: the
+    // reading a branch is measured against, the same asked of the
+    // stand-in that has no row, the branch that reads a remote-tracking
+    // ref together with the copy holding it, and a working copy's own
+    // pair — what the branch it holds reads, asked of the branches'
+    // section rather than its own.
     //
     // **`open=` rides inside them**: the sentence is empty until a row
     // is open, so `says=` carrying a name is the row having opened.
     Verb {
         name: "nav-open",
         when: &[
+            // **Every one of these claims the wiring and nothing else.**
+            // What a row's answers come out as — which line, in which
+            // order, in which colour — is one table over values already
+            // in hand, and `tests/qml/tst_navfacts.qml` drives the real
+            // row over it with the models stood in for. What is left for
+            // a window is that the real models answer the lookups the
+            // table makes, which is what `says=` is read for here.
+            //
+            // The ordinary branch row, whose reading comes off the
+            // section's own lookup — **the only claim that reaches it**:
+            // the row below stands on a reading that is gone, and that
+            // one is a role, so `upstreamOf` is never asked there
+            // (measured: with the list handing its section down as
+            // `null`, `branch:1 --preset gone` still passes and this one
+            // fails).
             (
-                Arg::Is("remote:0:main"),
-                "says=origin/main local=main track=1/0 held=",
+                Arg::Is("branch:2"),
+                "says=main local= track=1/0 held= up=origin/main gone=false",
             ),
+            // A reading git can no longer reach: `gone` is a role and
+            // `upstreamOf` answers only with refs that are there, so a
+            // row reading one of the two would lose this state whole
+            // (`up=` empty and `gone=false`), and the picture reads the
+            // same either way.
+            (
+                Arg::Is("branch:1"),
+                "says=release-1.2 local= track=0/0 held= up=origin/release-1.2 gone=true",
+            ),
+            // The stand-in for the current branch's row asks the same
+            // table with a row's worth of answers it builds itself
+            // (`HeadPinRow.gatherFacts`), off the branches' own model
+            // rather than off a row — a second way in, and the only one
+            // whose counts are the section's `headAhead` / `headBehind`.
+            (
+                Arg::Is("head:topic"),
+                "says=main local= track=1/0 held= up=origin/main gone=false",
+            ),
+            // The other way that stand-in comes to exist: a fold shut
+            // over the branch's own row, with a hand on the stand-in
+            // afterwards. `nav-pin-seat` claims the seat with no hand on
+            // it; this one claims that the seat holds while the lines
+            // are open under it — opening pushes the rows below, and a
+            // stand-in placed by counting whole rows parts from the seat
+            // exactly here.
+            (Arg::Is("head::1"), "open=true under=1 sat=true"),
             (
                 Arg::Is("remote:0:topic-a"),
                 "says=origin/feature/topic-a local=feature/topic-a track=1/0 held=topic",
@@ -374,10 +415,6 @@ pub(super) const TABLE: &[Verb] = &[
             (
                 Arg::Is("worktree:2"),
                 "says=gone local= track=0/0 held= up= gone=false branch=gone/branch state=PRUNABLE",
-            ),
-            (
-                Arg::Is("worktree:3"),
-                "says=hotfix local= track=0/0 held= up= gone=false branch=hotfix/urgent state=LOCKED",
             ),
         ],
         plain: "wants=false tip=false open=true",
