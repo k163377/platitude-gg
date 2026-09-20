@@ -217,6 +217,7 @@ mod tests {
                 tags_shown: false,
                 wip_tree: false,
                 details_tree: true,
+                diff_split: true,
                 sections: Sections {
                     branches: true,
                     remotes: false,

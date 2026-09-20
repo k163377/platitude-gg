@@ -73,6 +73,10 @@ pub struct LayoutState {
     pub tags_shown: bool,
     pub wip_tree: bool,
     pub details_tree: bool,
+    /// Whether a diff is read side by side — the old side on the left,
+    /// the new on the right — rather than as one column. A way of
+    /// reading, so the machine's (デザイン規約 §diff を 2 列で読む).
+    pub diff_split: bool,
     pub sections: Sections,
 }
 
@@ -88,6 +92,7 @@ impl Default for LayoutState {
             tags_shown: true,
             wip_tree: true,
             details_tree: true,
+            diff_split: false,
             sections: Sections::default(),
         }
     }
@@ -143,6 +148,7 @@ impl State {
                 tags_shown: flag(l, "tags_shown", d.tags_shown),
                 wip_tree: flag(l, "wip_tree", d.wip_tree),
                 details_tree: flag(l, "details_tree", d.details_tree),
+                diff_split: flag(l, "diff_split", d.diff_split),
                 sections: match sub_table(l, "sections") {
                     Some(s) => Sections {
                         branches: flag(s, "branches", d.sections.branches),
@@ -227,6 +233,7 @@ impl State {
         layout.insert("tags_shown".into(), Value::Boolean(l.tags_shown));
         layout.insert("wip_tree".into(), Value::Boolean(l.wip_tree));
         layout.insert("details_tree".into(), Value::Boolean(l.details_tree));
+        layout.insert("diff_split".into(), Value::Boolean(l.diff_split));
         let mut sections = Table::new();
         sections.insert("branches".into(), Value::Boolean(l.sections.branches));
         sections.insert("remotes".into(), Value::Boolean(l.sections.remotes));

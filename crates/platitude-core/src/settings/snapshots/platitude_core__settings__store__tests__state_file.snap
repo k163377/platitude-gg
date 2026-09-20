@@ -8,6 +8,7 @@ version = 1
 commands_height = 280
 details_tree = true
 details_width = 400
+diff_split = false
 graph_labels_width = -1
 graph_lanes_width = -1
 sidebar_collapsed = false
