@@ -8,16 +8,16 @@
 //! from outside the roster (the entry hooks, `land`, the perf rig).
 //!
 //! A seat's claim is a conversation's, and no process is asked about
-//! it. The Claude process behind a conversation ends every time the app
-//! restarts, and the conversation goes on without it — so a claim judged
-//! dead by its process was lifted from under a session that was merely
-//! between processes, its letter handed to a stranger and its pictures
-//! swept off the board (observed 2026-09-19). A seat claim moves three
-//! ways and no other: the branch lands (`land::release_claim`), the
-//! session hands the letter back (`seats::release`), or the user has
-//! another session take it over (`seats::takeover`). The rig's claim is
-//! the one that is a process's — this program's own — and it is asked
-//! after as such (`Held::ByRunner`).
+//! it: the Claude process behind a conversation ends whenever the app
+//! restarts, and the conversation goes on without it, so a claim judged
+//! by its process is lifted from under a session that is merely between
+//! processes — its letter handed to a stranger and its pictures swept
+//! off the board. A seat claim moves three ways and no other: the branch
+//! lands (`land::release_claim`), the session hands the letter back
+//! (`seats::release`), or the user has another session take it over
+//! (`seats::takeover`). The rig's claim is the one that is a process's —
+//! this program's own — and it is asked after as such
+//! (`Held::ByRunner`).
 
 /// The mark a seat claim carries in `git worktree lock`'s reason,
 /// followed by the session id and the Claude process the claim was

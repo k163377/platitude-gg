@@ -142,7 +142,7 @@ pub(crate) fn survey(cwd: &str) -> Option<Vec<Seat>> {
                 )),
                 // And one with no record left either, whose branch still
                 // carries work: a letter nobody can see is a letter
-                // nobody lands (observed 2026-09-19, seats b and c).
+                // nobody lands.
                 None => {
                     stranded_work(cwd, name).map(|ahead| without_a_tree(None, name, Some(ahead)))
                 }
@@ -184,9 +184,8 @@ fn without_a_tree(record: Option<&WorktreeBlock>, name: &str, ahead: Option<u32>
 ///
 /// A tree can go away under a branch — removed by a hand, or pruned once
 /// the directory went — and what is left is a letter the roster will not
-/// hand out and a reader cannot see: `(not created)` reads as a letter
-/// never used, so twice the work sat there for days while the roster ran
-/// out of letters (observed 2026-09-19, seats b and c).
+/// hand out and a reader cannot see: read as a letter nobody has used,
+/// the work on it sits there while the roster runs out of letters.
 pub(super) fn stranded_work(cwd: &str, seat: &str) -> Option<u32> {
     commits_in(cwd, &format!("main..worktree-{seat}")).filter(|ahead| *ahead > 0)
 }
