@@ -46,8 +46,9 @@ Before reporting a seat released, verify the unlock result and the worktree's
 lock state. A claim is the conversation's and no process is asked about it, so
 nothing lifts one but a landing, a release, and the takeover the user asks for
 (<!--cmd:seat.takeover-->`PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>`). End without landing via
-<!--call:seat.release-->`seat release`; committed work remains on its branch and is still excluded
-from allocation until merged or discarded.
+<!--call:seat.release-->`seat release`; committed work remains on its branch, which goes to no other
+session until merged, taken over or discarded — and asking for a seat from that
+tree takes it back, work and all.
 
 If assignment fails, find the cause; the message is the same for all. Check
 identity, `cargo xtask seats`, and `git worktree list --porcelain` read-only. If Git

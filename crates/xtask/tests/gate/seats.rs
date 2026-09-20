@@ -3,14 +3,14 @@
 //! release` and `seat takeover` move, and what the hooks hold back at
 //! every door a seat has.
 //!
-//! A seat claim is a conversation's, and no process is asked about it.
-//! The Claude process behind a conversation ends every time the app
-//! restarts, and a claim judged dead by its process was lifted from
-//! under a session that was merely between processes — its letter
-//! handed to a stranger and its pictures swept (observed 2026-09-19).
-//! So the shapes pinned here are the ones the roster has to get right
-//! whatever the processes do: a claim with a dead number is still a
-//! claim, and only landing, releasing and the user's takeover move one.
+//! A seat claim is a conversation's, and no process is asked about it:
+//! the Claude process behind a conversation ends whenever the app
+//! restarts, so a claim judged by its process is lifted from under a
+//! session that is merely between processes. The shapes pinned here are
+//! the ones the roster has to get right whatever the processes do — a
+//! claim with a dead number is still a claim, the tree a session stands
+//! in is that session's, and only landing, releasing and the user's
+//! takeover move a letter.
 
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -26,19 +26,40 @@ const GONE_PID: u32 = 0x7FFF_FFFD;
 /// The marks are set explicitly because the run that started this suite
 /// may be a session itself, and its id would otherwise be the answer.
 fn seat(sb: &Sandbox, args: &[&str], session: &str) -> (bool, String) {
-    xtask(sb, "seat", args, session)
+    xtask(sb, &sb.repo, "seat", args, session)
+}
+
+/// The same from a session standing in one of the letters, and with no
+/// `--dir`: where the call is made from is the working directory, which
+/// is what the roster turns on outside the suite too.
+fn seat_from(sb: &Sandbox, tree: &Path, args: &[&str], session: &str) -> (bool, String) {
+    run_xtask(sb, tree, None, "seat", args, session)
 }
 
 /// `cargo xtask seats` against the sandbox.
 fn roster(sb: &Sandbox) -> String {
-    xtask(sb, "seats", &[], "a-reader").1
+    xtask(sb, &sb.repo, "seats", &[], "a-reader").1
 }
 
-fn xtask(sb: &Sandbox, verb: &str, args: &[&str], session: &str) -> (bool, String) {
+fn xtask(sb: &Sandbox, from: &Path, verb: &str, args: &[&str], session: &str) -> (bool, String) {
+    run_xtask(sb, from, Some(from), verb, args, session)
+}
+
+fn run_xtask(
+    sb: &Sandbox,
+    from: &Path,
+    dir: Option<&Path>,
+    verb: &str,
+    args: &[&str],
+    session: &str,
+) -> (bool, String) {
     let mut command = Command::new(EXE);
-    command.arg(verb).arg("--dir").arg(&sb.repo);
+    command.arg(verb);
+    if let Some(dir) = dir {
+        command.arg("--dir").arg(dir);
+    }
     command.args(args);
-    command.current_dir(&sb.repo);
+    command.current_dir(from);
     sb.env(&mut command);
     command.env("CLAUDE_CODE_SESSION_ID", session);
     command.env("CLAUDE_PID", "4242");
@@ -249,6 +270,86 @@ fn a_letter_is_handed_out_once_per_session_and_stays_that_sessions() {
     assert!(ok, "{other}");
     assert_ne!(letter_of(&other), taken, "{other}");
     assert_eq!(lock_on(&sb, &letter_of(&other)), "claude-seat two pid 4242");
+}
+
+/// The letter a session is standing in comes back to that session with
+/// everything in it. Emptiness is what a letter is asked for before it
+/// is handed to somebody, and it is a question about somebody else's
+/// work: the session in the tree is not somebody else. A claim comes off
+/// a tree its session never left whenever that session lands or
+/// releases, and a letter answered with a different letter there leaves
+/// the work in one the roster can hand to nobody.
+#[test]
+fn the_letter_a_session_stands_in_comes_back_with_its_work() {
+    let sb = Sandbox::new("seat-standing-in");
+    let tree = letter_carrying_work(&sb, "b");
+    let carried = sb.head(&tree);
+    let run = picture_on_the_board(&sb, "b");
+
+    let (ok, text) = seat_from(&sb, &tree, &[], "mine");
+    assert!(ok, "{text}");
+    assert!(text.contains("seat b is this session's now"), "{text}");
+    assert!(
+        text.contains("it carries 1 commit(s) main does not have"),
+        "what it carries is said, not silently left behind: {text}"
+    );
+    assert_eq!(lock_on(&sb, "b"), "claude-seat mine pid 4242");
+    assert_eq!(sb.head(&tree), carried, "nothing was moved: {text}");
+    assert!(run.exists(), "and the board kept this letter's pictures");
+
+    // Asked again from the same tree, the same letter, now by its claim.
+    let (ok, again) = seat_from(&sb, &tree, &[], "mine");
+    assert!(
+        ok && again.contains("seat b was already this session's"),
+        "{again}"
+    );
+}
+
+/// Standing in a tree is not a claim on it. A letter somebody else holds
+/// is passed over wherever the asking session happens to be, and the
+/// claim it holds is left exactly as it was — this is the one path by
+/// which the answer above could hand out a seat it should not.
+#[test]
+fn a_letter_somebody_else_holds_is_passed_over_even_from_inside_it() {
+    let sb = Sandbox::new("seat-standing-in-theirs");
+    let tree = letter_carrying_work(&sb, "b");
+    let theirs = format!("claude-seat theirs pid {GONE_PID}");
+    lock(&sb, &tree, &theirs);
+    let carried = sb.head(&tree);
+
+    let (ok, text) = seat_from(&sb, &tree, &[], "mine");
+    assert!(ok, "{text}");
+    assert_ne!(letter_of(&text), "b", "the letter is theirs: {text}");
+    assert_eq!(lock_on(&sb, "b"), theirs, "their claim stood: {text}");
+    assert_eq!(sb.head(&tree), carried, "and their work: {text}");
+}
+
+/// A letter is empty when its branch is, not only when its tree looks
+/// it. A seat detached at main's tip reads as clean by every figure a
+/// tree answers for, while `worktree-<letter>` carries the commits —
+/// and a fresh stretch there resets that branch onto main.
+#[test]
+fn a_detached_seat_over_a_branch_that_carries_work_begins_nothing() {
+    let sb = Sandbox::new("seat-detached");
+    let tree = letter_carrying_work(&sb, "b");
+    let carried = sb.head(&tree);
+    sb.git_ok(&tree, &["switch", "--detach", "main"]);
+    assert_eq!(sb.head(&tree), sb.main_sha(), "the tree looks empty");
+
+    let (ok, text) = seat_from(&sb, &tree, &[], "mine");
+    assert!(
+        ok && text.contains("seat b is this session's now"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("started at main's tip"),
+        "nothing begins here: {text}"
+    );
+    assert_eq!(
+        sb.git_ok(&sb.repo, &["rev-parse", "worktree-b"]),
+        carried,
+        "the letter's branch kept its commits: {text}"
+    );
 }
 
 /// The rule the roster hangs on. A claim whose process is gone is still

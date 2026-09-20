@@ -107,23 +107,29 @@ pub fn take(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// `--dir <path>` in front of a roster verb: the repository whose roster
-/// this is, when it is not the one the runner was built in
-/// (`tree::workspace_root`). The suite's sandboxes are what it is for —
-/// a roster that can only ever be this checkout's cannot be put a
-/// question to — and `land` takes the same flag for the same reason.
+/// Where this call is being made from: `--dir <path>` when it is given,
+/// and the working directory otherwise.
+///
+/// It says both which repository's roster is being asked and where the
+/// session asking stands, and the roster turns on the second as much as
+/// the first (`assign`). The working directory is what answers that, not
+/// the tree this binary was built in (`tree::workspace_root`): the two
+/// agree when `cargo xtask` is run from inside a seat and part company
+/// the moment it is not, and the other doors a seat has all read the
+/// directory the session is actually in. `--dir` is for a roster that is
+/// not the one around this call — the suite's sandboxes — and `land`
+/// takes the same flag.
 fn rooted(args: &[String]) -> Result<(String, &[String]), String> {
     match args.split_first() {
         Some((flag, rest)) if flag == "--dir" => {
             let (path, rest) = rest.split_first().ok_or("--dir needs a path")?;
             Ok((path.replace('\\', "/"), rest))
         }
-        _ => Ok((
-            crate::tree::workspace_root()
-                .to_string_lossy()
-                .replace('\\', "/"),
-            args,
-        )),
+        _ => {
+            let here = std::env::current_dir()
+                .map_err(|e| format!("this call has no working directory to read: {e}"))?;
+            Ok((slashed(&here), args))
+        }
     }
 }
 
@@ -136,10 +142,12 @@ fn rooted(args: &[String]) -> Result<(String, &[String]), String> {
 /// SessionEnd the machine's sleep hands out lifts nothing, because that
 /// event reaches every open conversation (CLAUDE.md ビルド・テスト).
 /// What the seat still carries is named on the way out: the roster hands
-/// out no seat with work in it, so a release leaves that work for a
-/// reader to land, take over or drop. The letter is needed only when
-/// the session holds more than one — a takeover on top of its own —
-/// and stands in neither.
+/// a letter with work in it to nobody else, so a release leaves that
+/// work for a reader to land, take over or drop — and for the releasing
+/// session to pick up again by asking from that tree
+/// (`claim_where_it_stands`). The letter is needed only when the session
+/// holds more than one — a takeover on top of its own — and stands in
+/// neither.
 fn release(root: &str, me: &Identity, letter: Option<&str>) -> Result<(), String> {
     me.require_session()?;
     let (primary, trees) = primary_checkout(root)?;
@@ -213,8 +221,9 @@ fn left_behind(path: &str) -> String {
     }
     format!(
         " — it still carries {ahead} commit(s) main does not have and {dirty} \
-         uncommitted file(s), so the roster will not hand it to anybody until \
-         those land, are taken over, or go"
+         uncommitted file(s), so the roster hands it to nobody else until those \
+         land, are taken over, or go. Asking for a seat from that tree takes it \
+         back, work and all"
     )
 }
 
@@ -451,9 +460,10 @@ fn grow_back(
 /// The seat this session holds, taking one if it holds none.
 ///
 /// Every refusal on the way is a seat somebody else is in, so the loop
-/// walks the whole roster. What it hands
-/// back is a tree that is ready to be worked in: claimed, empty, and at
-/// main's tip.
+/// walks the whole roster. What it hands back is a tree ready to be
+/// worked in and claimed: a letter it took from the roster is empty at
+/// main's tip, and the tree the session is already standing in is
+/// whatever that session left in it (`claim_where_it_stands`).
 pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
     me.require_session()?;
     let (primary, trees) = primary_checkout(cwd)?;
@@ -462,25 +472,24 @@ pub(crate) fn assign(cwd: &str, me: &Identity) -> Result<Assigned, String> {
     if let Some(held) = held_seat(&entries, me, here.as_deref()) {
         return Ok(held);
     }
-    // The tree the session is standing in comes first when it is free to
-    // take: a landed seat is empty at main's tip with its claim handed
-    // back (`land`), and a session that goes on working there wants that
-    // tree — its warm target/. A tree somebody else holds is passed over
-    // like any other; the claim below is still what decides, and the
-    // listing is only where the letters come from.
+    // The tree the session is standing in comes first, and on terms of
+    // its own: a landed seat is empty at main's tip with its claim
+    // handed back (`land`), and a session that goes on working there
+    // wants that tree — its warm target/, and whatever it has put in it
+    // since. A tree somebody else holds is passed over like any other;
+    // the claim is still what decides.
     let standing_in = here.as_deref().and_then(|root| {
         entries
             .iter()
             .find(|entry| same_tree(&entry.tree.path, root))
     });
     if let Some(entry) = standing_in
-        && let Some(taken) = claim_existing(&primary, &entry.tree.path, entry.seat, me)
+        && let Some(taken) = claim_where_it_stands(&primary, &entry.tree.path, entry.seat, me)
     {
         return Ok(taken);
     }
-    // A tree that refused the claim above (ahead, or dirty) is skipped
-    // on its turn: the answer would be the same, at the cost of a
-    // second lock and unlock on it.
+    // A letter that refused the claim above is somebody else's, and the
+    // walk would only ask it the same question again.
     let asked = standing_in.map(|entry| entry.seat);
     for name in spread_order()
         .into_iter()
@@ -557,12 +566,10 @@ fn claim_existing(
     ) {
         return None;
     }
-    let ahead = commits_in(path, "main..HEAD");
-    let dirty = dirty_lines(path);
     // Commits main does not have are a merge waiting to happen, and
     // uncommitted files are somebody's afternoon: neither is this
     // session's to start on top of.
-    if ahead != Some(0) || dirty != Some(0) {
+    if !nothing_to_lose(path, seat) {
         unlock_seat(primary, path);
         return None;
     }
@@ -574,25 +581,92 @@ fn claim_existing(
     })
 }
 
+/// Claims the seat the session is standing in, whatever it carries.
+///
+/// Emptiness is what the roster asks of a letter before handing it to
+/// somebody, and it is a question about *somebody else's* work. There is
+/// nobody else here: what this tree holds is what this session was doing
+/// in it, and a claim comes off a tree its session never left every time
+/// that session lands or hands the letter back. So the work is left
+/// exactly where it is, board and branch alike, and only an empty seat
+/// at main's tip begins a fresh stretch.
+///
+/// This is the rule the other doors hold: a session standing in an
+/// unclaimed tree claims it back by entering it
+/// (`hook::seat::reclaims_on_entry`), by editing in it
+/// (`hook::seat::reclaim`), by putting a picture on the board from it
+/// (`held_by_this_run`) and by starting there (`hook::greeting`). Asking
+/// the roster is the fifth door and the only one that answers before a
+/// session has done anything, so a rule of its own here is a session
+/// handed a different letter while its own work sits in one the roster
+/// can then hand to nobody.
+fn claim_where_it_stands(
+    primary: &str,
+    path: &str,
+    seat: &'static str,
+    me: &Identity,
+) -> Option<Assigned> {
+    if !matches!(
+        take_seat(primary, path, me, Held::BySession),
+        Standing::Ours
+    ) {
+        return None;
+    }
+    Some(Assigned {
+        seat,
+        path: path.to_string(),
+        note: match nothing_to_lose(path, seat) {
+            true => start_at_main(path, seat),
+            false => format!(
+                ", and {} — nothing was moved to main's tip, and the board keeps this \
+                 letter's pictures",
+                carrying(path)
+            ),
+        },
+        held: false,
+    })
+}
+
+/// Whether beginning a fresh stretch in this seat would throw nothing
+/// away — the one question `start_at_main` may not be asked without.
+///
+/// Three things, not two. That the tree holds nothing is two of them:
+/// HEAD at main's tip, and no uncommitted file. The third is the
+/// letter's own branch, asked after separately because that is the name
+/// `start_at_main` resets: a seat left detached at main's tip over a
+/// branch that carries commits reads as clean by its tree alone, and
+/// resetting the branch there is the work gone. A figure git would not
+/// give is not a zero — what cannot be measured is left alone.
+fn nothing_to_lose(path: &str, seat: &str) -> bool {
+    commits_in(path, "main..HEAD") == Some(0)
+        && dirty_lines(path) == Some(0)
+        && commits_in(path, &format!("main..worktree-{seat}")) == Some(0)
+}
+
 /// Puts a claimed seat on its own letter's branch at main's tip, which is
 /// where a stretch of work begins (CLAUDE.md ビルド・テスト). Safe only
 /// because the caller proved the seat merged and clean behind its lock.
 fn start_at_main(path: &str, seat: &str) -> String {
     // Whatever this letter still has on the shot board belongs to the
     // work that just ended here, and a stretch of work beginning is the
-    // one moment the board can be sure of that (shots/sweep.rs).
-    crate::shots::seat_reused(seat);
+    // one moment the board can be sure of that (shots/sweep.rs). Said
+    // out loud when there was anything to take: the session beginning
+    // here is often the session that took those pictures.
+    let swept = match crate::shots::seat_freed(seat) {
+        Ok((gone, _)) if gone > 0 => format!(", and {gone} run(s) of this letter left the board"),
+        _ => String::new(),
+    };
     let branch = format!("worktree-{seat}");
     let on_branch = crate::subprocess::git_query(path, &["rev-parse", "--abbrev-ref", "HEAD"])
         .is_some_and(|head| head == branch);
     if on_branch && commits_in(path, "HEAD..main") == Some(0) {
-        return String::new();
+        return swept;
     }
     match crate::subprocess::git_query(path, &["switch", "-C", &branch, "main"]) {
-        Some(_) => format!(", started at main's tip on {branch}"),
+        Some(_) => format!("{swept}, started at main's tip on {branch}"),
         None => format!(
-            ", but it could not be put at main's tip — run `git switch -C {branch} main` there \
-             before working"
+            "{swept}, but it could not be put at main's tip — run `git switch -C {branch} main` \
+             there before working"
         ),
     }
 }

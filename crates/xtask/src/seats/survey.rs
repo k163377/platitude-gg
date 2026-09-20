@@ -223,11 +223,12 @@ fn index_age(dir: &str, now: SystemTime) -> Option<Duration> {
 /// The reading, one line, the way CLAUDE.md ビルド・テスト has it.
 fn guide() -> String {
     format!(
-        "reading: a letter is free when it is unclaimed with ahead=0 and dirty=0, and `{}` is \
-         what takes one — it claims the seat and puts it at main's tip itself. A claimed seat \
-         is its session's until that session lands, hands it back (`{}`) or the user has it \
-         taken over (`{}`); no process is asked. A letter with a branch but no tree is work \
-         nothing can reach until a takeover grows the tree back.",
+        "reading: a letter is free for somebody else when it is unclaimed with ahead=0 and \
+         dirty=0, and `{}` is what takes one — it claims the letter and puts it at main's tip. \
+         The tree the asking session is standing in comes back to it whatever it carries, \
+         untouched. A claimed seat is its session's until that session lands, hands it back \
+         (`{}`) or the user has it taken over (`{}`); no process is asked. A letter with a \
+         branch but no tree is work nothing can reach until a takeover grows the tree back.",
         commands::TAKE.line(),
         commands::RELEASE.line(),
         commands::TAKEOVER.line()

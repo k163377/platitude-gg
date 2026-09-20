@@ -519,15 +519,21 @@ const TAIL: &str = "  shipped [--no-build]
       comes back already claimed — the lock is the only step that ever
       decided which of two sessions got a seat, and a session that picks
       a letter off a survey first is deciding from something the other
-      session can read the same way. What comes back is a tree ready to
-      work in: claimed, with nothing uncommitted, on its own letter's
-      branch at main's tip, created if the roster never made it. Asking
-      twice gives the same seat. It prints the path EnterWorktree wants,
-      and that is the only path the entry hook will let through, because
-      the claim behind it is this session's. When every letter is held or
-      carries work it fails, names what stands in the way, and that is
-      where the session stops — seats are not added past f, and a letter
-      changes hands only on the user's word.
+      session can read the same way. A letter taken from the roster comes
+      back ready for a fresh stretch: claimed, with nothing uncommitted,
+      on its own branch at main's tip, its board runs swept, created if
+      the roster never made it. The tree this session is already standing
+      in comes back instead, and comes back as it stands — emptiness is
+      asked of a letter before it is handed to somebody, and the session
+      in the tree is not somebody, so its own work stays where it is,
+      branch and pictures alike, whether the claim came off by landing or
+      by a release. A letter somebody else's claim is on is passed over
+      either way. Asking twice gives the same seat. It prints the path
+      EnterWorktree wants, and that is the only path the entry hook will
+      let through, because the claim behind it is this session's. When
+      every letter is held or carries work it fails, names what stands in
+      the way, and that is where the session stops — seats are not added
+      past f, and a letter changes hands only on the user's word.
       A claim is a conversation's, and no process is asked about it: the
       app restarting under a session, the machine sleeping (the SessionEnd
       every open conversation is handed), a tab left open — none of it
