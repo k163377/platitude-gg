@@ -409,10 +409,13 @@ Item {
                 return
             escapeTimer.stop()
             // The two halves of `unsaved` are named apart: a way out that stopped says nothing about *which* of the
-            // two chapters thought it was holding an edit, and they are read out of different files.
+            // two chapters thought it was holding an edit, and they are read out of different files. `save=` is the
+            // global chapter's Save, read off the button: boxes nobody typed in hold what git holds, and a Save lit
+            // over them would be offering to hand git its own answer.
             Harness.report("settings_escape unsaved=" + settingsDialog.unsavedIdentities
                               + " global=" + acts.gitPane.unsavedIsGlobal
                               + " repo=" + acts.gitPane.unsavedIsRepo
+                              + " save=" + acts.gitPane.autoSaveOffered
                               + " was_open=" + escapeTimer.wasOpen
                               + " now_open=" + settingsDialog.opened)
             window.finishAutoAct()
@@ -438,7 +441,12 @@ Item {
                     return
                 }
                 // The boxes have to be holding git's answer before one of them is changed, or the "edit" is only
-                // the read that had not landed yet.
+                // the read that had not landed yet — and boxes typed into stop following it, so the address
+                // would stay empty and the Save dark over a name git was never going to be given (observed:
+                // `save=false` with the address box showing its placeholder). Both reads, because the count
+                // below is over both chapters.
+                if (AppBackend.identityState !== "ready" || !acts.repoPane.autoRepoReady)
+                    return
                 if (settingsDialog.unsavedIdentities !== 0)
                     return
                 acts.gitPane.autoTypeIdentity("Someone Else")
@@ -450,7 +458,10 @@ Item {
             if (!settingsDialog.askingLeave)
                 return
             leaveTimer.stop()
+            // `save=` is the other half of the edit: the typing that stops the way out is the typing that lights
+            // the Save, and the button is what the reader is being sent to.
             Harness.report("settings_leave unsaved=" + settingsDialog.unsavedIdentities
+                              + " save=" + acts.gitPane.autoSaveOffered
                               + " asked=" + settingsDialog.askingLeave
                               + " open=" + settingsDialog.opened)
             window.finishAutoAct()

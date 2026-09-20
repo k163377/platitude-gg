@@ -136,6 +136,10 @@ ColumnLayout {
             return
         AppBackend.saveIdentity(identityFields.nameText, identityFields.emailText)
     }
+    /// The Save's own `enabled`, read off the button. An automation-only exposure, the same one `GraphPane.view`
+    /// is (app-ui.md): a run that worked the rule out from the boxes would be reporting its own arithmetic, and
+    /// what it is asked to say is whether the button a hand would press is live (`WindowSettingsActs`).
+    readonly property alias autoSaveOffered: identityActions.acceptEnabled
 
     // ---- what the way out has to stop for -------------------------------
     /// How many identity chapters are holding an edit git has not been given. **The only thing on this screen a
@@ -200,11 +204,16 @@ ColumnLayout {
             // The two keys cannot be written in one go (core.md), so this chapter keeps the button that asks for
             // them. Everything else on the screen writes as it is finished with, which is why the screen's only
             // way out is the `✕`.
+            //
+            // **Lit by an edit, and by both boxes holding something.** A Save over boxes that say what git already
+            // holds has nothing to hand git (`IdentityFields.dirty` — the same reading the line above it and the
+            // way out are about); and unlike the repository chapter's, an emptied box here is not an answer — the
+            // global pair has nothing to fall back to (`IdentityFields.filled`).
             DialogActions {
                 id: identityActions
                 acceptKind: "check"
                 acceptText: AppBackend.identityBusy ? qsTr("Saving…") : qsTr("Save")
-                acceptEnabled: !AppBackend.identityBusy && identityFields.filled
+                acceptEnabled: !AppBackend.identityBusy && identityFields.filled && identityFields.dirty
                 onAccepted: pane.submitIdentity()
             }
         }

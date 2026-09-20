@@ -20,20 +20,30 @@ ColumnLayout {
     /// What is typed, for the caller that hands it to git.
     property alias nameText: nameField.text
     property alias emailText: emailField.text
-    /// Both boxes hold something. What a Save is enabled by, wherever that button stands — except where empty is an
-    /// answer in its own right (the repository chapter, where it means "not set here").
+    /// Both boxes hold something. Half of what the gate's Save is enabled by, and of the global chapter's — the
+    /// global pair has nothing to fall back to. Not asked where empty is an answer in its own right (the repository
+    /// chapter, where it means "not set here").
     readonly property bool filled: nameField.text.trim() !== "" && emailField.text.trim() !== ""
+    /// **The boxes say something other than what git holds**, whoever put it there. What the picked repository's
+    /// boxes are judged by (`SettingsRepoPane.repoTally`), and the second half of an edit.
+    ///
+    /// **Compared trimmed**, because that is what git is handed (`identity::set_identity` trims before writing)
+    /// and what it answers with (`identity::read` trims what it reports): a space typed after a name is not a
+    /// difference git would keep, so a Save lit by it would go out and change nothing.
+    readonly property bool differs: nameField.text.trim() !== fields.heldName
+                                    || emailField.text.trim() !== fields.heldEmail
     /// **Somebody typed, and what they typed is not what git holds.** The one thing on the settings screen that can
     /// be left half-done — everything else there writes as it is finished with, so this is the only edit a reader
-    /// can walk away from and lose (`SettingsDialog.escapeOut`).
+    /// can walk away from and lose (`SettingsDialog.escapeOut`) — and **what both Saves are lit by**.
     ///
-    /// **Both halves are required, and `touched` is the half that matters.** A difference between a box and git's
+    /// **Both halves are required, and `touched` is the one asked first.** A difference between a box and git's
     /// answer is not by itself somebody's edit: git answers late, answers again on its own, and empties these boxes
-    /// on the way to answering about another repository — and a way out that stopped for any of that would be
-    /// warning about work nobody did (observed). What the Save is lit by stays the plain difference, since a Save
-    /// has to go out when the boxes and git disagree however they came to (`SettingsRepoPane.dirty`).
-    readonly property bool dirty: fields.touched
-                                  && (nameField.text !== fields.heldName || emailField.text !== fields.heldEmail)
+    /// on the way to answering about another repository — and a Save lit by any of that offers to hand git the
+    /// answer git just gave. Asking the touch first also keeps the resting screen off the comparison entirely:
+    /// **a form nobody has typed in is dark because nobody typed**, not because two strings were found equal at the
+    /// right moment (measured: a real window lit a Save read off the comparison alone, over boxes holding git's own
+    /// answer, while the same build headless did not).
+    readonly property bool dirty: fields.touched && fields.differs
 
     /// What `load()` fills the boxes from: what git holds now, wherever the caller reads it.
     property string heldName: AppBackend.identityName

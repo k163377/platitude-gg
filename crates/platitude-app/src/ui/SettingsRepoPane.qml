@@ -67,17 +67,10 @@ ColumnLayout {
     /// Something has been typed since the boxes were last filled from git. What keeps a late answer — the read that
     /// follows a save, or a `changed` for something else entirely — from overwriting it.
     property bool touched: false
-    /// The boxes say something other than what this repository's file holds. What the Save is enabled by: empty is an
-    /// answer here, so "both filled" would refuse the very thing that takes an override
-    /// back out.
-    readonly property bool dirty: identityFields.nameText.trim() !== repoConfig.localName
-                                  || identityFields.emailText.trim() !== repoConfig.localEmail
-
-    /// The boxes hold an edit **somebody made** that this repository's file has not been given — a different
-    /// question from `dirty` above. That one lights the Save and asks only whether the boxes and git disagree;
-    /// this one is what the way out of the screen stops for, so it also asks whether anybody typed
-    /// (`IdentityFields.dirty`). Guarded on the read as well: before git has answered there is nothing to disagree
-    /// with.
+    /// The boxes hold an edit **somebody made** that this repository's file has not been given: what the way out of
+    /// the screen stops for, and **what the Save is lit by** (`IdentityFields.dirty`). Guarded on the read as well:
+    /// before git has answered there is nothing to disagree with, and an empty box is the same shape as a read that
+    /// has not landed.
     readonly property bool unsaved: repoConfig.state === "ready" && identityFields.dirty
     /// The whole chapter, for the way out that puts the reader in front of what is holding it — the heading and its
     /// rule included, since a column landing on the boxes alone arrives with the chapter's name already off the top.
@@ -145,13 +138,21 @@ ColumnLayout {
              + " busy=" + repoEndings.busy
              + " error=" + repoEndings.error
     }
+    /// This chapter's Save, read off the button. An automation-only exposure, the same one `GraphPane.view` is
+    /// (app-ui.md), and the same one the group above keeps (`SettingsGitPane.autoSaveOffered`): **the two chapters
+    /// are lit by deliberately different rules** — this one takes an empty box as an answer — so each says whether
+    /// its own button is live rather than a run working either out from the boxes.
+    readonly property alias autoSaveOffered: identityActions.acceptEnabled
     /// The group in one reading, the same way and for the same reason. The boxes say what git holds: **a photograph
     /// cannot check it** — they belong to whichever repository was picked last, and ones showing another
-    /// repository's values, or none at all, is a screen offering to write the wrong thing.
+    /// repository's values, or none at all, is a screen offering to write the wrong thing. `matches=` is the plain
+    /// comparison (`IdentityFields.differs`) and `save=` is what the button makes of it, which is not the same
+    /// question: boxes that came from git match *and* leave the Save dark, and only one of the two says so.
     function repoTally() {
         return "rows=" + pane.autoRepoRows
              + " state=" + repoConfig.state
-             + " matches=" + !pane.dirty
+             + " matches=" + !identityFields.differs
+             + " save=" + pane.autoSaveOffered
              + " open=" + pane.autoRepoComboOpen
              + " local=" + repoConfig.localName + "|" + repoConfig.localEmail
              + " shown=" + identityFields.nameText + "|" + identityFields.emailText
@@ -255,11 +256,15 @@ ColumnLayout {
         }
         // The two keys cannot be written in one go (core.md), so this chapter keeps the button that asks for them —
         // the same reason the git category's identity chapter has one.
+        //
+        // **Lit by an edit somebody made** (`unsaved`, which carries the read having landed). No `filled` here:
+        // empty is an answer in this chapter, and asking for both boxes would refuse the very thing that takes an
+        // override back out.
         DialogActions {
             id: identityActions
             acceptKind: "check"
             acceptText: repoConfig.writeBusy ? qsTr("Saving…") : qsTr("Save")
-            acceptEnabled: !repoConfig.writeBusy && repoConfig.state === "ready" && pane.dirty
+            acceptEnabled: !repoConfig.writeBusy && pane.unsaved
             onAccepted: pane.submitIdentity()
         }
     }

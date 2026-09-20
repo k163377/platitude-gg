@@ -161,19 +161,23 @@ pub(super) const TABLE: &[Verb] = &[
     // answers late, and answers again — and a screen that called any of
     // that an edit would warn about work nobody did. The argument names
     // the category, because the git one is where both such chapters are.
+    // `save=false` is the fourth: boxes nobody typed in say what git
+    // holds, and a Save lit over them offers to hand git its own answer.
     Verb {
         name: "settings-escape",
         when: &[],
-        plain: "settings_escape unsaved=0 global=false repo=false was_open=true now_open=false",
+        plain: "settings_escape unsaved=0 global=false repo=false save=false was_open=true now_open=false",
     },
     // The same way out, taken over an identity that has not been saved.
     // **Neither half is a picture**: a screen that stayed is drawn like
     // one nobody asked to close, and the question in its foot is drawn
-    // like any other foot until it is read.
+    // like any other foot until it is read. `save=true` is the pair of
+    // the line above: the one typing that stops the way out is the one
+    // that lights the button the reader is sent to.
     Verb {
         name: "settings-leave",
         when: &[],
-        plain: "settings_leave unsaved=1 asked=true open=true",
+        plain: "settings_leave unsaved=1 save=true asked=true open=true",
     },
     // The git category's two groups, which is the tallest this screen
     // gets. **The pair splits the claim**, because a row is one
@@ -193,7 +197,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "settings-repo",
         when: &[(Arg::Is(""), "settings_fit reach=true")],
-        plain: "repo_config rows=2 state=ready matches=true",
+        plain: "repo_config rows=2 state=ready matches=true save=false",
     },
     // And this one takes the read and the list. `state=ready` is what
     // empty boxes cannot say for themselves — "this repository sets
@@ -201,10 +205,16 @@ pub(super) const TABLE: &[Verb] = &[
     // while `rows=2` says both open repositories reached the chooser,
     // since a chooser offering only the one it landed on is a chooser
     // nobody can use.
+    //
+    // `save=false` is this chapter's own button, and it is a second
+    // claim rather than a spelling of `matches=`: this Save asks for no
+    // filled boxes — an emptied one is how an override is taken out —
+    // so what keeps it dark over a screen nobody has typed in is the
+    // touch alone.
     Verb {
         name: "settings-repo-pick",
         when: &[],
-        plain: "repo_config rows=2 state=ready matches=true open=true",
+        plain: "repo_config rows=2 state=ready matches=true save=false open=true",
     },
     // The same group's line-ending chapter, picked. **The picture is a
     // chooser holding one of four sentences of the same shape**, so it
