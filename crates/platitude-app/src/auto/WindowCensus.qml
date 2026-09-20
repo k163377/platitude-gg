@@ -3,42 +3,41 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import platitude
 
-/// Every QML component the window is showing as a verb's run finishes, by type name.
+/// Every QML component a verb's run showed, by type name.
 ///
 /// The gate (`cargo xtask gate`) owes a change the verbs that show what it touched, and this is how a verb says what it
-/// shows: the item tree is walked once, on the picture the run saved, and every type met is reported as
-/// `census=A,B,C` for verify-ui to record against the line that ran (`crates/xtask/verb-census.txt`).
+/// shows: the item tree is walked and every type met is reported as `census=A,B,C` for verify-ui to record against the
+/// line that ran (`crates/xtask/verb-census.txt`).
 ///
-/// **One walk, on a window that has stopped arriving.** A sampled walk records where its ticks landed: a
-/// row a run raises and takes away again is in the census of the machine whose tick caught it and out of
-/// the census of the machine whose tick came late, so the file the gate reads moves under work that
-/// never touched the application (measured: `avatar-remove` names `AvatarAssignRow` for its ticks
-/// and nothing else).
+/// **The run has two edges, and the census is both of them together.** A walk is one instant, and the file it writes is
+/// checked in, so an instant the run does not choose is an instant the machine chooses — and the file then moves under
+/// work that never touched the application. The run owns exactly two moments:
 ///
-/// **The point is past the verb's edge.** A verb is finished when what it acted on answers, and the repository is
-/// still being read behind it: the opening walks the log before the first status has said whether anything is
-/// uncommitted, so the working-tree row — and the tallies on it — arrive with the pass that status asks for. A walk
-/// taken at the picture is on the near side of that read about as often as the far side, and the two answers differ
-/// by a name, so the checked-in file moved under every gate that ran (measured 2026-09-05: `settings-eol true` lost
-/// `WipTallyRow` in 4 runs of 10 taken one after another and in 9 of 10 taken at once, and `file-menu-conflict
-/// both.txt --preset conflict-kinds` in 10 of 10 taken at once — each time writing its line, because each run
-/// answered that its page had settled).
+/// - **the picture** — the window the run photographed, which is the window a person judges. Walked in the same turn
+///   the picture is saved in (`AutoShotDriver.appPictured`), before anything the verb left running has had a turn.
+/// - **the settled edge** — the window once its reads have landed (`PageSettled`), on a polished frame. A verb is
+///   finished when what it acted on answers, and the repository is still being read behind it: the opening walks the
+///   log before the first status has said whether anything is uncommitted, so the working-tree row — and the tallies on
+///   it — arrive with the pass that status asks for (measured 2026-09-05: `settings-eol true` lost `WipTallyRow` in 4
+///   runs of 10 taken one after another, and `file-menu-conflict both.txt --preset conflict-kinds` in 10 of 10 taken at
+///   once). Its frame is the window's word that every item has been polished, which two nearer moments are not: the
+///   picture's callback comes as a posted event, so a model reset queued ahead of it leaves a list holding no delegate
+///   at all, and the data edge itself lands before the nav list has built a row from it (measured: `tab-hold 0` lost
+///   `NameCell NavItemDelegate NavRowBody` on the runs whose refs were the last read to land).
 ///
-/// So the walk waits for `settled`, and the run's ending waits for the walk (`AutoShotDriver.waitsForCensus`). A verb
-/// that photographs a state on its way somewhere still photographs it — the picture is taken at the same edge as
-/// before — but what it is recorded as showing is the whole of what it brought up, which is the same on every
-/// machine. A window that never settles is the watchdog's to report; there is no clock here that would let one pass.
+/// **Neither moment alone is a verb's answer, and together they are.** What is between them is a stretch of wall clock
+/// the run does not hold — hundreds of milliseconds under a loaded machine — and every beat the verb left running gets
+/// a turn in it: the hover keep (`HoverCardHost`, `Metrics.hoverKeepMs`), a popup's exit, a list's rebuild. Recorded
+/// from the settled edge alone, a card the picture holds is in the census of the fast run and out of the census of the
+/// slow one (measured 2026-09-20: `nav-peek-out branch`, 24 runs at once, lost `SectionPeekPopup AppCardFace` in 5 of
+/// them and photographed the card in all 24). Recorded from the picture alone, the rows a read was still bringing are
+/// out. So both are walked and the names are added together: a name has to be met by neither walk to be out, and
+/// nothing that happens between them can put it there.
 ///
-/// **And the walk is taken from a frame.** What the tree holds is what the views have built, and a view
-/// builds its rows when the window polishes its items for a frame. Two nearer moments each record a list
-/// with no rows in it. The picture's callback comes as a posted event, so whatever was queued ahead of it
-/// runs first — a diff's rows arriving is a model reset, and a list met between its reset and the next
-/// polish holds no delegate at all. And the edge on which the window settles is a data edge: the refs land
-/// and the nav list has yet to build a row from them, so a walk taken in the same call as that edge records
-/// a sidebar with no rows in it (measured: `tab-hold 0` lost `NameCell NavItemDelegate NavRowBody` on the
-/// runs whose refs were the last read to land). So once the picture has been called for and the window has
-/// settled, a frame is asked for, and the walk is taken at `afterAnimating` — the window's word, on this
-/// thread, that every item has been polished for the frame about to be synced, with nothing able to run in between.
+/// **What the picture had and the settled edge did not is the run saying it left something moving** — reported as
+/// `lost=`, the one thing a verb can do about its own census. A verb waits for what it set in motion
+/// (app-ui.md §UI 自動化の因果性); a `lost=` is the name of what it did not. (`went=` is spoken for: one verb's own
+/// report line uses it for which of two bars went, and `must_say` reads a line by substring.)
 ///
 /// A QML-defined type answers `String(item)` with `<File>_QMLTYPE_<n>(0x…)`, so the file's name is the part before the
 /// mark; an inline component answers with its bare name and a C++ type with its class, and neither names a file, so
@@ -51,12 +50,15 @@ Item {
     /// The window whose tree is walked. `var` because `Main` is the file the engine loads.
     required property var window
 
-    /// The names met, as an object used for its keys.
+    /// Every name any walk of this run met, as an object used for its keys — the census itself.
     property var seen: ({})
+    /// The names this walk alone met, so the two walks can be held against each other.
+    property var met: ({})
 
     /// One walk: the window itself (a Window is no item, so the root item's tree never names `Main`), then from the
-    /// root item down.
+    /// root item down. Adds to `seen` and answers in `met`.
     function walk() {
+        census.met = ({})
         if (!census.window || !census.window.contentItem)
             return
         note(census.window)
@@ -72,8 +74,11 @@ Item {
     function note(object) {
         const text = String(object)
         const mark = text.indexOf("_QMLTYPE_")
-        if (mark > 0)
-            census.seen[text.substring(0, mark)] = true
+        if (mark > 0) {
+            const name = text.substring(0, mark)
+            census.seen[name] = true
+            census.met[name] = true
+        }
     }
 
     /// Down the object tree: a Popup (every dialog, every menu) is an object under the item that declares it and no
@@ -155,21 +160,27 @@ Item {
         return PageSettled.settled(census.window ? census.window.curPage : null)
     }
 
-    /// The run is finishing: the walk once the window has settled, then the report lines. Held open by the shot
-    /// driver until this says it is done, so every walk is taken from a window whose reads have landed.
+    /// The run is finishing: the picture's walk now, the settled edge's when the reads have landed, then the report
+    /// lines. Held open by the shot driver until this says it is done, so the second walk is never quit out from under.
     signal walked()
     property bool waiting: false
-    /// The picture was called for before the window had settled, so the walk is from a later moment than the
-    /// photograph. Held past `waiting`, which the walk clears before it says anything.
+    /// The picture was called for before the window had settled, so the second walk is from a later moment than the
+    /// photograph. Held past `waiting`, which that walk clears before it says anything.
     property bool waited: false
-    /// A frame has been asked for, and the walk is taken at its `afterAnimating` — unless a read goes out first, in
-    /// which case the settled edge that follows arms the next one.
+    /// A frame has been asked for, and the settled walk is taken at its `afterAnimating` — unless a read goes out
+    /// first, in which case the settled edge that follows arms the next one.
     property bool armed: false
+    /// What the picture's walk met, kept to be held against the settled edge's (`lost`).
+    property var atShot: ({})
     function report() {
         if (Harness.autoAct === "")
             return
         census.waiting = true
         census.waited = !census.settled
+        // The picture's own turn. Taken here rather than from a frame of its own, because a frame is asked for and
+        // waited on, and that wait is the stretch the beats the verb left running fire in.
+        census.walk()
+        census.atShot = census.met
         census.arm()
     }
     onSettledChanged: {
@@ -222,14 +233,22 @@ Item {
             + " wipRowStands=" + page.pageWt.wipRowStands
     }
 
-    /// The walk and the two lines, taken once however many times the window settles.
+    /// What the picture held and this walk did not meet — the beats the verb left running, by the name of what they
+    /// took away. Nothing here means the window the run photographed was the window it left behind.
+    function lost() {
+        return Object.keys(census.atShot).filter(name => census.met[name] !== true).sort()
+    }
+
+    /// The settled edge's walk and the two lines, taken once however many times the window settles.
     function take() {
         census.waiting = false
         census.armed = false
         walk()
+        const left = census.lost()
         // Said first, and on a line of its own: everything after `census=` is a name. The terms ride on the answer's
         // line, which is read one word at a time (`gate::census::page_settled_in`).
-        Harness.report("census page=" + (census.settled ? "settled" : "arriving") + " " + census.terms())
+        Harness.report("census page=" + (census.settled ? "settled" : "arriving") + " " + census.terms()
+                       + " lost=" + (left.length === 0 ? "none" : left.join("/")))
         Harness.report("census=" + Object.keys(census.seen).sort().join(","))
         // Said from the event loop: the ending this releases may quit the application, and the frame is left to
         // finish first.
