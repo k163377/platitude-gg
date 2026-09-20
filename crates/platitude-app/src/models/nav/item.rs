@@ -87,6 +87,12 @@ pub const LOCKED: &str = "LOCKED";
 /// `git worktree prune` would drop this entry — the folder it names is
 /// gone from where git's administrative file says it is.
 pub const PRUNABLE: &str = "PRUNABLE";
+/// The repository's own working copy — the one every linked copy hangs
+/// off (`WorktreeEntry::main`). **Last of the three**, and never in
+/// anybody's way: git refuses `worktree lock` on the main working tree
+/// and `worktree prune` only ever looks at the linked ones, so the two
+/// states above cannot land on this entry.
+pub const MAIN: &str = "MAIN";
 /// What a **branch** row puts in the slot: another working copy has it
 /// checked out, so no move can land here (`BranchItem::held_elsewhere`).
 /// The same seat, and the same one question the WORKTREES rows answer —

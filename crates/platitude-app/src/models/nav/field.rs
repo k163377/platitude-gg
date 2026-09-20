@@ -108,6 +108,8 @@ impl NavSectionModel {
                     LOCKED
                 } else if entry.prunable {
                     PRUNABLE
+                } else if entry.main {
+                    MAIN
                 } else {
                     ""
                 }),

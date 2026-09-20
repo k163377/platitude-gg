@@ -269,6 +269,10 @@ fn the_short_sections_read_out_of_what_arrived() {
             lock_reason: String::new(),
             prunable: false,
             prune_reason: String::new(),
+            // git opens the listing with the repository's own copy, so
+            // a fixture where none of them is it could not be read off
+            // a real one.
+            main: path.ends_with("repo"),
         }
     };
     let mut model = section(
@@ -318,12 +322,14 @@ fn a_worktree_row_wears_the_state_of_its_checkout() {
             } else {
                 String::new()
             },
+            main: path.ends_with("home"),
         }
     };
     let mut model = section(
         "worktrees",
         Source::Worktrees {
             list: vec![
+                entry("C:\\work\\home", false, "", false),
                 entry("C:\\work\\plain", false, "", false),
                 entry("C:\\work\\held", true, "release run", false),
                 entry("C:\\work\\quiet", true, "", false),
@@ -336,21 +342,26 @@ fn a_worktree_row_wears_the_state_of_its_checkout() {
         },
     );
     model.arrange();
-    assert_eq!(says(&model, 0, Role::Change), "");
+    // The repository's own working copy, which wears the house — and
+    // has no words behind it: being the main copy is not a state
+    // somebody took, so there is nothing to explain.
+    assert_eq!(says(&model, 0, Role::Change), "MAIN");
     assert_eq!(says(&model, 0, Role::OrigPath), "");
-    assert_eq!(says(&model, 1, Role::Change), "LOCKED");
-    assert_eq!(says(&model, 1, Role::OrigPath), "release run");
+    assert_eq!(says(&model, 1, Role::Change), "");
+    assert_eq!(says(&model, 1, Role::OrigPath), "");
+    assert_eq!(says(&model, 2, Role::Change), "LOCKED");
+    assert_eq!(says(&model, 2, Role::OrigPath), "release run");
     // A lock taken without a reason is still a lock: the mark comes
     // out and there is nothing to say beside it.
-    assert_eq!(says(&model, 2, Role::Change), "LOCKED");
-    assert_eq!(says(&model, 2, Role::OrigPath), "");
-    assert_eq!(says(&model, 3, Role::Change), "PRUNABLE");
+    assert_eq!(says(&model, 3, Role::Change), "LOCKED");
+    assert_eq!(says(&model, 3, Role::OrigPath), "");
+    assert_eq!(says(&model, 4, Role::Change), "PRUNABLE");
     assert_eq!(
-        says(&model, 3, Role::OrigPath),
+        says(&model, 4, Role::OrigPath),
         "gitdir file points to non-existent location"
     );
-    assert_eq!(says(&model, 4, Role::Change), "LOCKED");
-    assert_eq!(says(&model, 4, Role::OrigPath), "release run");
+    assert_eq!(says(&model, 5, Role::Change), "LOCKED");
+    assert_eq!(says(&model, 5, Role::OrigPath), "release run");
 }
 
 /// One measurement, answered from either end: a branch row carries its
@@ -509,6 +520,7 @@ fn the_worktree_holding_a_branch_answers_for_every_other_copy() {
         lock_reason: String::new(),
         prunable: false,
         prune_reason: String::new(),
+        main: path.ends_with("repo"),
     };
     let mut model = section(
         "worktrees",

@@ -38,7 +38,7 @@ mod walk_tests;
 //
 // The folded marker is written through `fold_state` and read back where
 // a fold has to be told from an open folder (`view::folded_over_head`).
-use item::{FOLDED, HELD, LOCKED, NavItem, PRUNABLE, fold_state};
+use item::{FOLDED, HELD, LOCKED, MAIN, NavItem, PRUNABLE, fold_state};
 use role::{Arranged, Role, Row, Value};
 use source::{Bucket, Entry, Source, letters_of, pr_key};
 
