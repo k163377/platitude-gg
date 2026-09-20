@@ -127,6 +127,31 @@ Item {
 
     anchors.fill: parent
 
+    /// What the TAG card stands on: the readings its rows are told apart by, and core's answer over them
+    /// (`RefTagMenu.standOn`). **Read here because this is where the models are** — the card is handed values and
+    /// hands requests back, so a menu carrying it is the one boundary the typed models cross.
+    ///
+    /// `remoteTagDrift` and `tagSides` live in the TAGS section alone. The drifted reading is what takes the two
+    /// rows that reach the remote out — the same answer that shapes the push row, read the other way
+    /// (デザイン規約 §左メニューの所作 の削除の表) — and the upstream the last argument names belongs to the `pull`
+    /// row, which no tag carries.
+    function tagFacts(kind, full, oidHex) {
+        const remote = refRowMenu.repoTab.defaultRemote
+        const drift = kind === "tag" ? refRowMenu.tagsModel.remoteTagDrift(full, remote) : ""
+        const sides = kind === "tag" ? refRowMenu.tagsModel.tagSides(full) : ""
+        return {
+            "pushRemote": remote,
+            "tagDriftOid": drift,
+            "tagOnlyThere": sides === "remote",
+            "offers": kind !== "tag" ? "" : GitFacts.refMenuOffers(
+                kind, full, oidHex,
+                refRowMenu.repoTab.state === "open", refRowMenu.askBusy,
+                refRowMenu.workTree.branch, refRowMenu.workTree.detached,
+                refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
+                "", "", drift !== "", remote, sides, "")
+        }
+    }
+
     /// Opens on that ref, deciding there and then what it offers. Says whether it opened at all: a ref with nothing to
     /// offer — the current branch met as a chip — falls back to the row's own menu.
     function offerOn(kind, name, full, oidHex) {
@@ -136,7 +161,7 @@ Item {
         // Both cards are their own question, and each works its answers out for itself — the very cards the graph
         // row's menu carries, asked the same way (RefBranchMenu / RefTagMenu).
         branchMenu.offerOn(kind, name, full, oidHex)
-        tagMenu.offerOn(kind, full, oidHex)
+        tagMenu.standOn(kind, full, oidHex, refRowMenu.tagFacts(kind, full, oidHex))
         // Whether another working copy has this row's branch out. **git refuses `switch` for one** (measured), and
         // the row wears the `!` for it — this level's one use of the answer; the delete rows read their own copy
         // inside the card. A remote row lands on the local branch of the same name, so it is that one another copy
@@ -290,11 +315,15 @@ Item {
         RefTagMenu {
             id: tagMenu
             heldReason: refRowMenu.heldReason
-            repoTab: refRowMenu.repoTab
-            workTree: refRowMenu.workTree
-            tagsModel: refRowMenu.tagsModel
             canBranchHere: refRowMenu.canBranchHere
             onTagHereRequested: oidHex => refRowMenu.tagHereRequested(oidHex)
+            // The card says what was pressed; the tab this menu holds is what runs it.
+            onPushTagRequested: (remote, tag, lease) => refRowMenu.repoTab.pushTag(remote, tag, lease)
+            onDeleteTagRequested: tag => refRowMenu.repoTab.deleteTag(tag)
+            onDeleteRemoteTagRequested: (remote, tag, onlyThere) =>
+                refRowMenu.repoTab.deleteRemoteTag(remote, tag, onlyThere)
+            onDeleteTagEverywhereRequested: (tag, remote) =>
+                refRowMenu.repoTab.deleteTagEverywhere(tag, remote)
         }
     }
 }

@@ -98,12 +98,22 @@ pub(super) const TABLE: &[Verb] = &[
     // card that never offered it. `sides=` is the reading they come off,
     // so a wrong row and a wrong reading are not the same failure.
     //
-    // **Read as a set of four.** A name held only here offers the local
-    // delete alone (git would report success for deleting nothing —
-    // measured), one held only over there offers the remote rows alone
-    // (there is nothing to name), one held on both offers all three,
-    // and the drifted run is the push row's own second form. Any
-    // single one proves none of that.
+    // **Two runs, and what each is here for.** Which rows a state may
+    // offer is core's (`offers::each_delete_row_needs_the_side_it_names`
+    // covers every side a name can stand on), and what the card does
+    // with core's answer is `tests/qml/tst_tagcard.qml`, which drives
+    // the real card on plain values. What no test off a window reaches
+    // is the two lookups the menu carrying the card makes for it
+    // (`RefRowMenu.tagFacts`), so that is what these claim: `:remote`
+    // that `tagSides` arrived — a reading nobody read answers `here`,
+    // which draws one delete row instead of three — and `:drift` that
+    // `remoteTagDrift` did, which is the push row's second form and the
+    // two greyed rows in one line.
+    //
+    // The runs on a name held only here and on one held only over there
+    // went with the card's table (2026-09-20): they asserted rows off
+    // words core had already decided, through a card that now stands on
+    // plain values.
     Verb {
         name: "tag-menu",
         when: &[
@@ -116,10 +126,6 @@ pub(super) const TABLE: &[Verb] = &[
             (
                 Arg::Ends(":drift"),
                 "blocked=remote,both tag_here=true push=true code=push --force held=true lease=",
-            ),
-            (
-                Arg::Starts("v0.9-theirs"),
-                "sides=remote local_del=false remote_del=true both_del=false blocked=none",
             ),
             (
                 Arg::Ends(":remote"),

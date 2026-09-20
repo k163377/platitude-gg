@@ -144,9 +144,31 @@ Item {
         branchCommitMenu.offerOn(branchy ? rowMenu.targetKind : "",
                                  branchy ? rowMenu.targetName : "",
                                  branchy ? rowMenu.targetName : "", rowMenu.oid)
-        tagCommitMenu.offerOn(rowMenu.targetKind === "tag" ? "tag" : "",
-                              rowMenu.targetKind === "tag" ? rowMenu.targetName : "", rowMenu.oid)
+        const tagged = rowMenu.targetKind === "tag"
+        tagCommitMenu.standOn(tagged ? "tag" : "", tagged ? rowMenu.targetName : "", rowMenu.oid,
+                              rowMenu.tagFacts(tagged ? "tag" : "",
+                                               tagged ? rowMenu.targetName : "", rowMenu.oid))
         commitMenu.offer()
+    }
+
+    /// What the TAG card stands on — the other entrance to it, reading the same section and asking core the same
+    /// question (`RefRowMenu.tagFacts` says why it is read here and not in the card).
+    function tagFacts(kind, full, oidHex) {
+        const remote = rowMenu.repoTab.defaultRemote
+        const drift = kind === "tag" ? rowMenu.tagsModel.remoteTagDrift(full, remote) : ""
+        const sides = kind === "tag" ? rowMenu.tagsModel.tagSides(full) : ""
+        return {
+            "pushRemote": remote,
+            "tagDriftOid": drift,
+            "tagOnlyThere": sides === "remote",
+            "offers": kind !== "tag" ? "" : GitFacts.refMenuOffers(
+                kind, full, oidHex,
+                rowMenu.repoTab.state === "open",
+                rowMenu.heldReason !== "" ? 0 : rowMenu.repoTab.busyCount,
+                rowMenu.workTree.branch, rowMenu.workTree.detached,
+                rowMenu.workTree.opText, rowMenu.workTree.conflictCount,
+                "", "", drift !== "", remote, sides, "")
+        }
     }
 
     AppMenu {
@@ -376,11 +398,14 @@ Item {
         RefTagMenu {
             id: tagCommitMenu
             heldReason: rowMenu.heldReason
-            repoTab: rowMenu.repoTab
-            workTree: rowMenu.workTree
-            tagsModel: rowMenu.tagsModel
             canBranchHere: rowMenu.canBranchHere
             onTagHereRequested: oidHex => rowMenu.tagHereRequested(oidHex)
+            onPushTagRequested: (remote, tag, lease) => rowMenu.repoTab.pushTag(remote, tag, lease)
+            onDeleteTagRequested: tag => rowMenu.repoTab.deleteTag(tag)
+            onDeleteRemoteTagRequested: (remote, tag, onlyThere) =>
+                rowMenu.repoTab.deleteRemoteTag(remote, tag, onlyThere)
+            onDeleteTagEverywhereRequested: (tag, remote) =>
+                rowMenu.repoTab.deleteTagEverywhere(tag, remote)
         }
     }
 }
