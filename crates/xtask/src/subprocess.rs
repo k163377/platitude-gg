@@ -55,23 +55,53 @@ pub(crate) enum Answer {
 /// is that file; `None` for a diagnostic whose words are not wanted.
 pub(crate) fn bounded(
     what: &str,
-    mut command: Command,
+    command: Command,
     ceiling: Duration,
     said: Option<&Path>,
 ) -> Answer {
-    let stdout = match said.map(File::create) {
-        None => Stdio::null(),
-        Some(Ok(file)) => Stdio::from(file),
+    run_bounded(what, command, ceiling, said, false)
+}
+
+/// [`bounded`], with the diagnostic's stderr written into the same file
+/// as its stdout. For a program whose refusal is on stderr and *is* the
+/// answer — a docker that will not start, list or remove a container
+/// says why there and nothing on stdout (`linux::container`). Not the
+/// default: a listing that is parsed off the file
+/// (`verify::look`) must not have a warning interleaved with its rows.
+pub(crate) fn bounded_both_streams(
+    what: &str,
+    command: Command,
+    ceiling: Duration,
+    said: &Path,
+) -> Answer {
+    run_bounded(what, command, ceiling, Some(said), true)
+}
+
+fn run_bounded(
+    what: &str,
+    mut command: Command,
+    ceiling: Duration,
+    said: Option<&Path>,
+    stderr_too: bool,
+) -> Answer {
+    let (stdout, stderr) = match said.map(File::create) {
+        None => (Stdio::null(), Stdio::null()),
+        Some(Ok(file)) if stderr_too => match file.try_clone() {
+            Ok(twin) => (Stdio::from(file), Stdio::from(twin)),
+            Err(error) => {
+                return Answer::Unstarted(format!(
+                    "{what} could not be given a file for what it says: {error}"
+                ));
+            }
+        },
+        Some(Ok(file)) => (Stdio::from(file), Stdio::null()),
         Some(Err(error)) => {
             return Answer::Unstarted(format!(
                 "{what} could not be given a file for what it says: {error}"
             ));
         }
     };
-    command
-        .stdin(Stdio::null())
-        .stdout(stdout)
-        .stderr(Stdio::null());
+    command.stdin(Stdio::null()).stdout(stdout).stderr(stderr);
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => return Answer::Unstarted(format!("{what} could not be started: {error}")),
