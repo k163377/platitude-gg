@@ -148,9 +148,18 @@ Item {
     // TAGS ones, and one pointer opens one thing either way (デザイン規約 §hover のツールチップ).
     readonly property string says: facts.noted !== "" ? facts.noted
                                  : (factsHover.hovered || facts.tipPointed) && facts.path !== "" ? facts.path : ""
-    // **The words are bound before the box is asked for**: an attached `ToolTip` hands the shared instance whatever
-    // `text` says when `visible` goes up (rules-refs/app-ui.md), and both of these answer to the one string.
-    ToolTip.text: facts.says
+    /// The words the box is wearing — **the last thing asked for, not what is being asked for now**. The ask falls
+    /// the instant the hand leaves for the box, which is the first step of the walk into it, and the attached
+    /// property writes `text` straight through to the shared instance while this is its target: bound to the ask,
+    /// that write empties the box, and what the walk arrives at is an empty frame (observed — the box put back for
+    /// the walk carries whatever the instance holds, `SharedToolTip.reopen`). Every other site in this window is
+    /// this shape already; here the two happened to answer to one string.
+    ///
+    /// **Written before the ask falls**, since a handler runs ahead of the bindings the same property feeds
+    /// (rules-refs/app-ui.md) — so the box never opens on the words of the rest before it.
+    property string said: ""
+    onSaysChanged: if (facts.says !== "") facts.said = facts.says
+    ToolTip.text: facts.said
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.visible: facts.says !== ""
 
