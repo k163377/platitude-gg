@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
@@ -184,9 +183,8 @@ ColumnLayout {
         // write with `--global` (`identity` / `conflict` in core), so what is being replaced is the configuration
         // every repository on this account is read through — the one kind of reach the state colours are for. Full
         // size: the application category's line is help text, this one is the warning.
-        Label {
+        CardText {
             Layout.fillWidth: true
-            wrapMode: Text.Wrap
             color: Theme.warning
             text: qsTr("Saved to your global git configuration, replacing what is set there. Every other git on this computer, in every repository, reads the same values.")
         }

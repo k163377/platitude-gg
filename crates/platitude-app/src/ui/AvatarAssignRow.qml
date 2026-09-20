@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
@@ -51,22 +50,26 @@ RowLayout {
     /// hold — its own glyphs, and nothing for the column's
     /// spare width, which stays air.
     readonly property real nameSeat: nameLabel.implicitWidth
-    Label {
+    // **Fields, and cut by clipping** (`LineText`, 規約 §右のペインの字は掴める): a name and an address are values
+    // the reader takes away, and a value put through an `elide` hands over `Yuki Tana…` when it is dragged over. The
+    // whole of each stays in its field, the width cuts what is on screen, and the mark stands on the screen's own
+    // ground (`bgElevated` — this row is drawn on the settings screen's face, not on a pane's).
+    LineText {
         id: nameLabel
         text: avatarRow.modelData.name
         color: Theme.textPrimary
-        font.pixelSize: Theme.fontMd
+        pixelSize: Theme.fontMd
+        ground: Theme.bgElevated
         Layout.preferredWidth: avatarRow.nameColW
-        elide: Text.ElideRight
     }
     // The address beside the name is supporting information, which is `textSecondary` — `textMuted` is
     // what a row nobody may touch looks like (デザイン規約 §テキスト / §無効).
-    Label {
+    LineText {
         Layout.fillWidth: true
         text: avatarRow.modelData.email
-        elide: Text.ElideRight
         color: Theme.textSecondary
-        font.pixelSize: Theme.fontSm
+        pixelSize: Theme.fontSm
+        ground: Theme.bgElevated
     }
     // Held: this card writes as it is worked, so the
     // gesture is the only thing standing between a stray

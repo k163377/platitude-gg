@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui

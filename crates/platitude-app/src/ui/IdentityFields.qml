@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
@@ -182,18 +181,17 @@ ColumnLayout {
     // (規約 §可否・警告の出し場所 — the warning goes where the
     // operation is). The Save that answers it is the next thing under this line, which is the whole reason the way
     // out puts the reader here (`SettingsDialog.escapeOut`).
-    Label {
+    CardText {
         Layout.fillWidth: true
         visible: fields.dirty
-        wrapMode: Text.Wrap
         color: Theme.warning
         text: qsTr("Not given to git yet.")
     }
-    // What went wrong, in the caller's words or git's (`errorText`).
-    Label {
+    // What went wrong, in the caller's words or git's (`errorText`) — and a field, because git's half of it is the
+    // kind of line a reader takes away with them (規約 §右のペインの字は掴める).
+    CardText {
         Layout.fillWidth: true
         visible: text !== ""
-        wrapMode: Text.Wrap
         color: Theme.danger
         text: fields.errorText
     }

@@ -1,9 +1,12 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
 // A word above whatever answers it, and the air between the two. The dialogs' forms are stacks of these.
+//
+// **The word is a field** (`CardText`, 規約 §右のペインの字は掴める): on a surface whose words can be dragged over,
+// a caption that took no press would be a dead strip in the middle of them — a press on it would start its selection
+// in whatever line stood nearest instead (`SweepPad.nearestTo`).
 //
 // The word is the label of a control and reads as one: `textPrimary`, `Font.Normal`, and the same step as the value
 // under it, because the step is chosen by what a thing is for (デザイン規約 §タイポグラフィ). **Primary ink** — the explanations
@@ -20,9 +23,9 @@ ColumnLayout {
     Layout.fillWidth: true
     spacing: Theme.spaceXs
 
-    Label {
+    CardText {
         text: field.caption
         color: Theme.textPrimary
-        font.pixelSize: Theme.fontMd
+        pixelSize: Theme.fontMd
     }
 }

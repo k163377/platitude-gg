@@ -468,6 +468,52 @@ Item {
         }
     }
 
+    // PGG_AUTO_ACT=settings-sweep: this screen's own words, taken from the air around them — the step between two
+    // lines, the room beside a short one, the air the column leaves to the right of itself
+    // (規約 §右のペインの字は掴める). The argument names the category, because the two carry different words and only
+    // one of them is on screen at a time.
+    //
+    // **Waited on the category's own answer, not on the screen opening.** The lines here are written out of what git
+    // said — the version the chosen binary printed, the identity a commit made there would carry — and a run that
+    // sampled the air before those landed would be sampling a column about to grow lines.
+    SampleTimer {
+        id: sweepTimer
+        running: Harness.autoAct === "settings-sweep"
+        /// The category asked for, and the one the screen is opened on.
+        readonly property string cat: Harness.autoActArg === "" ? "app" : Harness.autoActArg
+        /// That category is the one showing. **The setup's own side**: `SweepPad` steps over a hidden item, so a
+        /// sweep of the category that is not on screen would walk an empty column — and an empty column is not a
+        /// green run, it is a run with nothing in it.
+        readonly property bool shown: sweepTimer.cat === "git" ? acts.gitPane.visible
+                                                               : acts.appPane.autoAppShown
+        onTriggered: {
+            if (!settingsDialog.opened) {
+                settingsDialog.openAt(sweepTimer.cat)
+                return
+            }
+            if (!sweepTimer.shown)
+                return
+            // The git category's own two reads — the repository group's identity and its line endings, which is the
+            // one that grows a line when it lands; the application category's is the version probe, which stands as
+            // a sentence of its own until it answers.
+            if (sweepTimer.cat === "git"
+                ? (!acts.repoPane.autoRepoReady || !acts.repoPane.autoEndingsReady)
+                : AppBackend.gitPathState === "checking")
+                return
+            sweepTimer.stop()
+            // `release=` is the other hand on this screen: the one that hands the keyboard back when a press lands
+            // where nothing takes it. **A picture cannot say it** — a field that kept its blue through every press
+            // after the drag is drawn exactly like one that was just swept — and neither can a run, which has no
+            // pointer to press with. What is said here is that the hand is standing; that a press reaches it is
+            // Qt's to answer, and `tests/qml/tst_fieldrelease.qml` asks with a real one.
+            Harness.report("settings_sweep "
+                + settingsDialog.autoChapterHand.sweepAir(7, "cat=" + sweepTimer.cat
+                                                             + " shown=" + sweepTimer.shown
+                                                             + " release=" + settingsDialog.caretHand.stands))
+            window.finishAutoAct()
+        }
+    }
+
     // The same card's avatar half, whose four shots the page opens and this finishes. Each waits on what its own verb
     // produced: the row the store answered the filing with and the picture inside it, that row's `lit`, the candidate
     // list's `opened`, and — for the removal — the row leaving the store on the far side of a hold that runs at its own

@@ -1,10 +1,12 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
 // One chapter of a settings screen: the word that names it, the rule under that word, and whatever the caller lays
 // out below.
+//
+// **The word is a field** (`CardText`, 規約 §右のペインの字は掴める) — the same reason a caption is
+// (`LabeledField`): a heading that took no press would be a dead strip inside a surface whose words are dragged over.
 //
 // Upper case, `fontMd`, `DemiBold`, `textPrimary` — the band heading's spelling with the ink of a heading
 // (規約 §設定の画面). A sidebar band wears `textSecondary` among rows that are `textPrimary`, so it is the quiet
@@ -25,11 +27,11 @@ ColumnLayout {
     ColumnLayout {
         Layout.fillWidth: true
         spacing: Theme.spaceXs
-        Label {
+        CardText {
             text: section.caption
             color: Theme.textPrimary
-            font.pixelSize: Theme.fontMd
-            font.weight: Font.DemiBold
+            pixelSize: Theme.fontMd
+            weight: Font.DemiBold
         }
         Rectangle {
             Layout.fillWidth: true

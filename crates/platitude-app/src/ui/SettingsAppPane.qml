@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import QtQuick.Dialogs
 import QtQuick.Layouts
 import platitude
@@ -388,13 +387,12 @@ ColumnLayout {
                 // On the first line — the tail may wrap to two.
                 Layout.alignment: Qt.AlignTop
             }
-            Label {
+            CardText {
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignTop
                 visible: pane.gitPathWord !== ""
-                wrapMode: Text.Wrap
                 color: pane.gitPathInk
-                font.pixelSize: Theme.fontMd
+                pixelSize: Theme.fontMd
                 text: pane.gitPathWord
             }
         }
@@ -402,12 +400,11 @@ ColumnLayout {
         // restart with nowhere to leave to, a reader's question is what they lose — and the answer is nothing, so it
         // is one short line (the chip cannot flow inside wrapping text, so the sentence it heads is kept to one line
         // and anything more comes here). Comes and goes with the button.
-        Label {
+        CardText {
             Layout.fillWidth: true
             visible: AppBackend.gitPathOffersRestart
-            wrapMode: Text.Wrap
             color: Theme.warning
-            font.pixelSize: Theme.fontMd
+            pixelSize: Theme.fontMd
             text: qsTr("The window comes back with the same repositories open.")
         }
 
@@ -466,7 +463,7 @@ ColumnLayout {
                     onEditingFinished: pane.applyFetch()
                     onAccepted: pane.accepted()
                 }
-                Label {
+                CardText {
                     text: qsTr("minutes")
                     color: Theme.textSecondary
                 }
@@ -504,7 +501,7 @@ ColumnLayout {
                     onEditingFinished: pane.applyConcurrency()
                     onAccepted: pane.accepted()
                 }
-                Label {
+                CardText {
                     text: qsTr("commands")
                     color: Theme.textSecondary
                 }
@@ -532,7 +529,7 @@ ColumnLayout {
                     onEditingFinished: pane.applyCopies()
                     onAccepted: pane.accepted()
                 }
-                Label {
+                CardText {
                     text: qsTr("seconds")
                     color: Theme.textSecondary
                 }
@@ -570,7 +567,7 @@ ColumnLayout {
                     onEditingFinished: pane.applyCommits()
                     onAccepted: pane.accepted()
                 }
-                Label {
+                CardText {
                     text: qsTr("commits")
                     color: commitsField.enabled ? Theme.textSecondary : Theme.textMuted
                 }
@@ -655,12 +652,11 @@ ColumnLayout {
                 onActivated: avatarPicker.open()
             }
         }
-        Label {
+        CardText {
             Layout.fillWidth: true
             visible: AppBackend.avatarErrorKind !== ""
-            wrapMode: Text.Wrap
             color: Theme.danger
-            font.pixelSize: Theme.fontSm
+            pixelSize: Theme.fontSm
             // The words are this side's, off the kind core answered with — the numbers it takes come with it, and
             // the two failures the operating system made carry its own line under ours (`Words.avatarFailure`).
             text: Words.avatarFailure(AppBackend.avatarErrorKind,

@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
@@ -120,10 +119,10 @@ ColumnLayout {
         visible: field.ready
         text: field.effectiveLine
     }
-    Label {
+    // git's words, and a field like every other line on this screen (規約 §右のペインの字は掴める).
+    CardText {
         Layout.fillWidth: true
         visible: text !== ""
-        wrapMode: Text.Wrap
         color: Theme.danger
         text: field.errorText
     }

@@ -1,10 +1,11 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
 // One group of a settings category: the word that names how far its values reach, the rule under that word, and the
 // chapters the caller lays out below (規約 §設定の画面).
+//
+// **The word is a field**, the same as the chapter heading under it (`SettingsSection`).
 //
 // The level above `SettingsSection`, ranked at the same step: both are `fontMd` + `DemiBold` + upper case +
 // `textPrimary`, because a heading is made by weight, colour and case
@@ -30,11 +31,11 @@ ColumnLayout {
     ColumnLayout {
         Layout.fillWidth: true
         spacing: Theme.spaceXs
-        Label {
+        CardText {
             text: group.caption
             color: Theme.textPrimary
-            font.pixelSize: Theme.fontMd
-            font.weight: Font.DemiBold
+            pixelSize: Theme.fontMd
+            weight: Font.DemiBold
         }
         Rectangle {
             Layout.fillWidth: true

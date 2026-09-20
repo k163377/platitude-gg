@@ -1,9 +1,14 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
 
 // The sentence that says what a chapter is for, where its value is written, or what git is doing right now.
+//
+// **A field** (`CardText`, 規約 §右のペインの字は掴める). A settings screen is mostly these, and what they carry is
+// git's own words as often as this application's — the version the chosen binary answered with, the identity a commit
+// made there would be attributed to, the keys a chapter writes. **The screen covers the window**, so the command log
+// that holds git's words everywhere else cannot be reached while it stands: a sentence nobody can drag over is one
+// that has to be copied out by hand.
 //
 // **`fontMd`**. A settings screen is mostly these, so this text is most of the reading; a step down is "a note
 // beside the thing being read". What tells it from the label above it is the ink, which is how VS
@@ -18,11 +23,10 @@ import platitude.ui
 // right margin read off the parent's width is a loop, since that width is what the parent computes from its children
 // ("Detected recursive rearrange", measured). Capping the whole column is the way that holds, and the column
 // is capped at `Theme.textWidth` where the chapters stand (`SettingsDialog`).
-Label {
+CardText {
     id: help
 
     Layout.fillWidth: true
-    wrapMode: Text.Wrap
     color: Theme.textSecondary
-    font.pixelSize: Theme.fontMd
+    pixelSize: Theme.fontMd
 }

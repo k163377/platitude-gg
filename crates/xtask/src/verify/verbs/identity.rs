@@ -168,6 +168,47 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "settings_escape unsaved=0 global=false repo=false save=false was_open=true now_open=false",
     },
+    // The screen's own words, taken from the air around them. **The
+    // picture cannot answer it**: a column of settings with one line
+    // washed blue is drawn the same whichever gesture put the wash
+    // there, and what is being claimed is that every place in the air
+    // reaches a value — which is one press per place.
+    //
+    // `all=` is the claim and `reach=` the diagnosis: how much air a
+    // surface has depends on the words in it and the machine that drew
+    // them. `hand=` rides along because the run enters the pad's own
+    // functions, so a sweep would stay green with the `MouseArea` taken
+    // out. `shown=` is the setup's side — the category that is not on
+    // screen has its fields hidden, and `SweepPad` steps over a hidden
+    // one, so a sweep of the wrong one would walk an empty column. It is
+    // keyed on the argument because the argument is the category, and a
+    // row that claimed one of them for both would go on passing after the
+    // two stopped telling each other apart.
+    //
+    // `release=` is the second hand on that screen: the one that hands
+    // the keyboard back when a press lands where nothing takes it.
+    // Neither a picture nor a run can say it *works* — a field that kept
+    // its blue is drawn like one just swept, and the run has no pointer —
+    // so what rides here is that the hand is standing, and
+    // `tests/qml/tst_fieldrelease.qml` asks the rest with a real one.
+    //
+    // **One row per argument, each carrying the whole line.** A row wins
+    // outright over `plain`, so a row holding only the half that differs
+    // would quietly stop asking for `all=`.
+    Verb {
+        name: "settings-sweep",
+        when: &[
+            (
+                Arg::OneOf(&["", "app"]),
+                "settings_sweep all=true caret=true hand=true cat=app shown=true release=true",
+            ),
+            (
+                Arg::Is("git"),
+                "settings_sweep all=true caret=true hand=true cat=git shown=true release=true",
+            ),
+        ],
+        plain: "settings_sweep all=true caret=true hand=true",
+    },
     // The same way out, taken over an identity that has not been saved.
     // **Neither half is a picture**: a screen that stayed is drawn like
     // one nobody asked to close, and the question in its foot is drawn

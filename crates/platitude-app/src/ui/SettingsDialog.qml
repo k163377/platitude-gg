@@ -77,6 +77,9 @@ AppDialog {
     /// [`opened`] itself.
     readonly property alias autoAppPane: appPane
     readonly property alias autoGitPane: gitPane
+    /// The hand the chapters' words are dragged over from the air around them, named so a run can enter it
+    /// (`settings-sweep`, the way a card is reached at `<card>.background.pad`).
+    readonly property alias autoChapterHand: chapterHand
 
     /// Sends the chapters to their foot, where the group this run is about stands. The screen is two groups deep and
     /// the window is not that tall ([`chaptersContent`]), so a run that photographed the resting position would be
@@ -396,6 +399,27 @@ AppDialog {
                 ScrollBar.vertical: PaneScrollBar {
                     id: chaptersBar
                     idleColor: Theme.borderSubtle
+                }
+
+                // The hand the chapters' words are dragged over from the air around them
+                // (規約 §右のペインの字は掴める). **It lies under the column**, so a press reaches it only where
+                // nothing else took one — the step between two lines, the room beside a short one, the air the
+                // column leaves to the right of itself — and every box, chooser, tick and button keeps every press
+                // it had. That is what makes "no hit area changed" structural.
+                //
+                // **Inside the view.** A hand laid outside this `Flickable` would never see a press: the view hands
+                // one to its own children first and keeps whatever they leave. `SweepPad`'s own area is held against
+                // the view for the same reason `SweepBand` is held against the panes it stands in — a drag the view
+                // stole half-way through would take the selection with it.
+                //
+                // **This screen is the one that covers the window**, so the command log that holds git's words
+                // everywhere else cannot be reached while it stands: the version the chosen git answered with, the
+                // identity a commit made there would carry, the reason a write did not land are all written here and
+                // nowhere a reader can get at (規約 §右のペインの字は掴める の表).
+                SweepPad {
+                    id: chapterHand
+                    anchors.fill: parent
+                    content: chapterCol
                 }
 
                 ColumnLayout {

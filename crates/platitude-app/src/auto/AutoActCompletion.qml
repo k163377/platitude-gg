@@ -285,7 +285,7 @@ QtObject {
                 "old-git-fold", "state", "middle-close", "open-again",
                 "force-push-hold", "fetch-busy", "fetch-fail", "fetch-hover", "fetch-resume", "fetch-tip",
                 "stash-state",
-                "settings-tools", "settings-tools-loading", "settings-switch",
+                "settings-tools", "settings-tools-loading", "settings-switch", "settings-sweep",
                 "settings-repo", "settings-repo-pick", "settings-eol", "settings-git-path",
                 "settings-git-leave", "settings-processes",
                 "avatar-settings", "avatar-combo", "avatar-row-lit", "avatar-remove"].indexOf(act) >= 0
