@@ -230,6 +230,12 @@ FocusScope {
     readonly property var wipUnstaged: page.wipWritable ? worktreeModel : carriedModel
     /// Tree or flat paths, for both trios at once: the choice is the pane's, so stepping onto another copy and back
     /// keeps it — and what is saved at close is the one answer either trio would give.
+    /// Reads the diff as two columns or as one — the band's toggle, and the machine's saved choice as the page
+    /// opens (`PageLayout.applySavedLayout`). The model lays its rows out again; what the page owns is the choice
+    /// (デザイン規約 §diff を 2 列で読む).
+    function setDiffSplit(split) {
+        diffModel.setSplit(split)
+    }
     function setWipTreeView(tree) {
         conflictsModel.setTreeView(tree)
         worktreeModel.setTreeView(tree)
@@ -2381,6 +2387,7 @@ FocusScope {
         repoTab: repoTab
         worktreeModel: worktreeModel
         detailsModel: detailsModel
+        diffModel: diffModel
     }
 
     /// What the window reads off the page it is showing: the floor it may not be laid out under (`Main.floorWidth` /
@@ -3316,6 +3323,7 @@ FocusScope {
                                     repoTab.stagePath(page.diffPath)
                             }
                             onStageSelectionRequested: (hunk, line) => page.stageSelection(hunk, line)
+                            onSplitChosen: split => page.setDiffSplit(split)
                         }
 
                         // The plan's face is built when it takes the seat and taken down with it: it is a whole pane

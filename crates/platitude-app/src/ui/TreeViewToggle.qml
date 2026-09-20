@@ -25,34 +25,14 @@ RowLayout {
     // that air is what the eye measures the gap by (デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
     spacing: 0
 
-    // The depth comes from the band the toggle stands in; the mark and the wash stay square inside it. Both are written
-    // as padding and inset — a `Control` stretches its `contentItem` over whatever the
-    // padding leaves, so a width written on the mark is gone on the next layout.
-    component ViewButton: HoverToolButton {
-        id: viewButton
-        required property string mark
-        required property bool lit
-        implicitWidth: Theme.iconXl
-        implicitHeight: Theme.iconXl
-        padding: 0
-        topPadding: Math.round((viewButton.height - Theme.iconXl) / 2)
-        bottomPadding: viewButton.topPadding
-        topInset: viewButton.topPadding
-        bottomInset: viewButton.topPadding
-        contentItem: NavIcon {
-            kind: viewButton.mark
-            tint: viewButton.lit ? Theme.accent : Theme.accentDim
-        }
-    }
-
-    ViewButton {
+    ViewMarkButton {
         Layout.fillHeight: true
         mark: "hier"
         lit: toggle.treeView
         tip: qsTr("Tree view")
         onClicked: toggle.chosen(true)
     }
-    ViewButton {
+    ViewMarkButton {
         Layout.fillHeight: true
         mark: "list"
         lit: !toggle.treeView

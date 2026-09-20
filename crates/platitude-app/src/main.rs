@@ -282,6 +282,10 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/TabTitleFade.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TopBar.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/TreeViewToggle.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/ViewMarkButton.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/DiffViewToggle.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/DiffLineCell.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/DiffStageMark.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/UpstreamFlow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/UpstreamForm.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WaitRing.qml", "qt/qml/platitude");
@@ -491,6 +495,7 @@ fn embed_harness_qml() {
     qtbridge::include_bytes_qml!("auto/AutoActPublishVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/AutoActRefVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/AutoActStepVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActSplitVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/AutoActSwitchVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/AutoActTipVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/AutoActWipVerbs.qml", "qt/qml/platitude");

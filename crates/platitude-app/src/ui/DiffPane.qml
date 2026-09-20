@@ -47,6 +47,21 @@ Rectangle {
     readonly property bool partial: diffPane.fromWorkTree && diffPane.writable
                                     && !diffPane.diffModel.isNewFile && !diffPane.combined
 
+    // ---- one column or two ----------------------------------------
+    /// Whether the rows are read side by side — the old side on the left, the new on the right — rather than as one
+    /// column (デザイン規約 §diff を 2 列で読む). The model's: the rows are laid out by it, and the band's toggle asks
+    /// the page, which writes it there (`splitChosen`).
+    readonly property bool split: diffPane.diffModel.split
+    /// How wide the left column is; the right starts a hairline after it. The hairline is the row's, so the two
+    /// columns share the rows' width to the pixel and a row is never a pixel wider than the list.
+    readonly property real halfW: Math.floor((diffList.width - Theme.borderWidth) / 2)
+    /// The reader wants the rows the other way round — the band's toggle, forwarded to the page, which owns the
+    /// choice (app-ui.md 配線規約: state moves through the page).
+    signal splitChosen(bool split)
+    /// Automation: the toggle itself, so a run flips the view through the same press a hand makes
+    /// (`PGG_AUTO_ACT=diff-split`).
+    readonly property alias viewToggle: paneHeader.viewToggle
+
     // ---- a conflicted file's diff -----------------------------------
     /// This diff has more than one old side, so every row carries a marker
     /// column per side (`platitude_core::parse::diff`).
@@ -170,7 +185,9 @@ Rectangle {
             diffPane.showLineTools(-1, -1)
             return
         }
-        diffPane.showLineTools(row.hunk, row.kind === "hunk" ? -1 : row.line)
+        // The row answers which of its lines the point is over — side by side it has two (`pointedAt`).
+        const aim = row.pointedAt(at.x)
+        diffPane.showLineTools(aim[0], aim[1])
     }
     // A menu standing takes the marks away there and then: the pointer has not moved, so nothing else would ask again.
     onMenuStandingChanged: diffPane.settlePointedRow()
@@ -262,8 +279,9 @@ Rectangle {
     }
     /// Automation: the hand that picks text, without a pointer behind it (verify-ui). It enters the same three
     /// functions the `MouseArea`'s own handlers call, so a run cannot pass while the handlers do something else.
-    function pickText(fromRow, fromAt, toRow, toAt) {
-        textPick.pressText(fromRow, fromAt)
+    /// `side` is the column the drag is of: 0 for the rows' own lines, 1 for the right of a split row.
+    function pickText(side, fromRow, fromAt, toRow, toAt) {
+        textPick.pressText(side, fromRow, fromAt)
         textPick.dragText(toRow, toAt)
         textPick.releaseText()
     }
@@ -282,10 +300,12 @@ Rectangle {
     readonly property alias headerHand: paneHeader.pad
     /// Automation: whether that band ran out of room for the path — the half a picture of a wide pane cannot answer.
     readonly property alias headerCut: paneHeader.cut
-    /// Automation: the right-click, at a place in the text — which is where the menu's answer is settled.
-    function askCodeMenu(row, at) { textPick.askMenu(row, at) }
+    /// Automation: the right-click, at a place in the text of one column — which is where the menu's answer is
+    /// settled.
+    function askCodeMenu(side, row, at) { textPick.askMenu(side, row, at) }
     /// Automation: the first row of the view that is a removed line, or -1 — the one row the menu's second word is
-    /// about, and a drag that never reaches one proves half the rule.
+    /// about, and a drag that never reaches one proves half the rule. Side by side a removed line is the left of
+    /// its row, and the row is still the one.
     function firstRemovedRow() {
         for (let i = 0; i < diffList.count; i++) {
             const row = diffList.itemAtIndex(i)
@@ -294,12 +314,23 @@ Rectangle {
         }
         return -1
     }
-    /// Automation: what a row is wearing of the selection, and what the two menu rows would take.
+    /// Automation: the first row of the view read across — a removed line with the added one that replaced it on
+    /// its right — or -1. What `diff-split` is about (デザイン規約 §diff を 2 列で読む).
+    function firstPairedRow() {
+        for (let i = 0; i < diffList.count; i++) {
+            const row = diffList.itemAtIndex(i)
+            if (row && row.kind === "del" && row.pair_kind === "add")
+                return i
+        }
+        return -1
+    }
+    /// Automation: what a row is wearing of the selection, and what the two menu rows would take. Side by side a
+    /// row wears it on one column or the other, never both (`DiffModel::selection`).
     function pickTally() {
         let washed = 0
         for (let i = 0; i < diffList.count; i++) {
             const row = diffList.itemAtIndex(i)
-            if (row && row.sel !== "")
+            if (row && (row.sel !== "" || row.pair_sel !== ""))
                 washed++
         }
         return "new=" + diffPane.diffModel.selHasNew
@@ -327,8 +358,13 @@ Rectangle {
     function firstChangedLine(hunk) {
         for (let i = 0; i < diffList.count; i++) {
             const row = diffList.itemAtIndex(i)
-            if (row && row.hunk === hunk && (row.kind === "add" || row.kind === "del"))
+            if (!row || row.hunk !== hunk)
+                continue
+            if (row.kind === "add" || row.kind === "del")
                 return row.line
+            // Side by side, an added line nothing was removed for stands on the right of a row with an empty left.
+            if (row.pair_kind === "add")
+                return row.pair_line
         }
         return -1
     }
@@ -354,6 +390,7 @@ Rectangle {
         id: metrics
         diffModel: diffPane.diffModel
         partial: diffPane.partial
+        split: diffPane.split
     }
     /// Where a place in a row's line is drawn, and which place a point of it is over — asked of the line itself, laid
     /// out. One for the pane: the answer belongs to the line, so a ruler that has just been
@@ -393,8 +430,10 @@ Rectangle {
             busy: diffPane.busy
             writable: diffPane.writable
             copyName: diffPane.copyName
+            split: diffPane.split
             onStageFileRequested: diffPane.stageFileRequested()
             onCloseRequested: diffPane.closeRequested()
+            onSplitChosen: split => diffPane.splitChosen(split)
         }
         // The only thing this pane throws away is a hunk, and that is held down on the hunk's own
         // heading (デザイン規約 §その他の操作). What follows is what the pane has to say about the file
@@ -485,6 +524,8 @@ Rectangle {
                 theirsColor: diffPane.sideColor("theirs")
                 hoverHunk: diffPane.hoverHunk
                 hoverLine: diffPane.hoverLine
+                split: diffPane.split
+                halfW: diffPane.halfW
                 onLineStageRequested: (hunk, line) => diffPane.stageLine(hunk, line)
                 onDiscardRequested: hunk => diffPane.discardHunkRequested(hunk)
                 onStageHunkRequested: hunk => diffPane.stageSelectionRequested(hunk, -1)
@@ -498,6 +539,8 @@ Rectangle {
         view: diffList
         diffModel: diffPane.diffModel
         gutterW: metrics.gutterW
+        split: diffPane.split
+        halfW: diffPane.halfW
         barRoom: diffList.barRoom
         codeX: codeScroll.offset
         ruler: lineRuler
@@ -520,6 +563,9 @@ Rectangle {
         // The ink the rows and the picked lines came to, plus the room this pane holds past the last character of the
         // longest one — the one gap that is the pane's own.
         codeWidth: reachTally.width > 0 ? reachTally.width + Theme.spaceSm : 0
-        roomWidth: Math.max(0, diffList.width - metrics.gutterW)
+        // Side by side, a line has a column to be read in, not the row: both columns are sent by the one offset, so
+        // the room is the column's and the narrower right one is what runs out first.
+        roomWidth: Math.max(0, (diffPane.split ? diffList.width - diffPane.halfW - Theme.borderWidth : diffList.width)
+                               - metrics.gutterW)
     }
 }

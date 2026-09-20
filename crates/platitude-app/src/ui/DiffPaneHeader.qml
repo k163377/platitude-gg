@@ -26,10 +26,15 @@ Rectangle {
     required property string copyName
     required property bool conflicted
     required property bool busy
+    /// Whether the rows are read as two columns (`DiffModel.split`) — what the band's toggle shows, and the one
+    /// thing in this band that is not about the file (デザイン規約 §diff を 2 列で読む).
+    required property bool split
 
     /// The hand the path is dragged over from the band's own air, named so a run can enter it (the way a card is
     /// reached at `<card>.background.pad`).
     property alias pad: headerHand
+    /// Automation: the toggle itself, so a run flips the view where a press does (`PGG_AUTO_ACT=diff-split`).
+    readonly property alias viewToggle: viewToggle
     /// Whether the band ran out of room for the path and is showing the tail of it. The output side, and the half a
     /// picture of a wide pane cannot answer.
     readonly property alias cut: titleField.clipped
@@ -39,6 +44,8 @@ Rectangle {
 
     signal stageFileRequested()
     signal closeRequested()
+    /// The reader wants the rows the other way round.
+    signal splitChosen(bool split)
 
     implicitHeight: Theme.headerHeight
     color: Theme.bgElevated
@@ -142,12 +149,32 @@ Rectangle {
                 }
             }
         }
+        // How the rows are read — one column or two — ahead of the word that acts on the file. The same seat the
+        // file lists give their own view toggle: at the end of the band's air, in front of whatever acts
+        // (デザイン規約 §diff を 2 列で読む). It stands on every diff, pictures included: the choice is the
+        // machine's and outlives the file, and a band that gained and lost a control as files were opened would
+        // move everything to its right (§窓の床「誰も頼んでいないものが画面上で動く」).
+        //
+        // **The band's spare room goes here, and nowhere else.** The group above stops at the path's own width
+        // (`titleField`'s cap), and a layout with room left over that nothing can take *spreads it between its
+        // items* — the toggle stood a third of the way along the band and `Stage file` centred in the next third
+        // (measured, before this spacer). The file lists' bands hold their toggle at the end the same way
+        // (`DetailsChangesBand`, `WipBucketHeader`), and the three after this say `fillWidth: false` out loud: a
+        // layout inside a layout fills by default, and a control that grew would centre its word in the growth.
+        Item { Layout.fillWidth: true }
+        DiffViewToggle {
+            id: viewToggle
+            Layout.fillWidth: false
+            split: header.split
+            onChosen: split => header.splitChosen(split)
+        }
         // The file's own word, and the loudest thing in the pane: the pair colour the hunks and the file rows use, a
         // step up in size, and lit whether or not the pointer is near (デザイン規約 §diff の中のステージ). It is the only standing
         // colour word in the view — the hunks' wait for the pointer — which is what puts the scopes back in order:
         // staging a file is the larger of the two.
         ActionButton {
             id: stageFileButton
+            Layout.fillWidth: false
             visible: header.fromWorkTree && header.writable
             // The same `git add` on a conflicted file is how git is told the conflict has
             // been dealt with, so the word says that (デザイン規約 §diff の中のステージ).
@@ -159,7 +186,18 @@ Rectangle {
                  ? qsTr("Unstage the whole file at once") : qsTr("Stage the whole file at once")
             onActivated: header.stageFileRequested()
         }
+        // The way out, seated as the third of the three at the band's end (規約 §diff を 2 列で読む): the same
+        // `iconXl` width, the same band-tall reach and the same `iconXl` box for the mark as the pair beside it, so
+        // a hand coming along the end of the band meets three targets of one size and three marks of one family.
+        // The `✕` is drawn inset in its box (`NavIcon` `close`, 7 of the 16), so its ink stays the lighter of the
+        // three; the wash stays the disc every `✕` wears.
         CloseToolButton {
+            Layout.fillWidth: false
+            Layout.fillHeight: true
+            seat: Theme.iconXl
+            markSize: Theme.iconXl
+            topInset: Math.round((height - Theme.iconLg) / 2)
+            bottomInset: topInset
             onClicked: header.closeRequested()
         }
     }

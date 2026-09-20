@@ -31,6 +31,7 @@ QtObject {
     required property RepoTab repoTab
     required property NavSectionModel worktreeModel
     required property DetailsModel detailsModel
+    required property DiffModel diffModel
 
     /// The layout this page starts with: what the window is set to now, which after a restart is what the last session
     /// left. Read once — from here on the splitters own these, and a binding would fight the drag
@@ -61,6 +62,7 @@ QtObject {
         // the page's to hand the pane (`RepoPage.setWipTreeView`).
         layout.page.setWipTreeView(AppBackend.startWipTree())
         layout.detailsModel.setTreeView(AppBackend.startDetailsTree())
+        layout.page.setDiffSplit(AppBackend.startDiffSplit())
     }
 
     // ---- how narrow and how short this page may be laid out ------------
@@ -139,11 +141,16 @@ QtObject {
             // The dragged values: a column that nobody has moved reports -1 and goes on
             // following the default.
             layout.graphPane.labelWManual, layout.graphPane.graphColWManual)
+        // A page with no repository has no choices to report: its models stand at their defaults, and reporting
+        // those would write them over what the last real page chose (the split view, tags, the tree views).
+        if (layout.page.blank)
+            return
         AppBackend.saveLayoutFlags(layout.page.sidebarCollapsed,
                                    layout.page.commandsOpen,
                                    layout.repoTab.tagsShown,
                                    layout.worktreeModel.treeView,
-                                   layout.detailsModel.treeView)
+                                   layout.detailsModel.treeView,
+                                   layout.diffModel.split)
         AppBackend.saveSections(layout.sidebarPane.expBranches,
                                 layout.sidebarPane.expRemotes,
                                 layout.sidebarPane.expWorktree,

@@ -198,6 +198,10 @@ TabStrip 1.0 TabStrip.qml
 TabTitleFade 1.0 TabTitleFade.qml
 TopBar 1.0 TopBar.qml
 TreeViewToggle 1.0 TreeViewToggle.qml
+ViewMarkButton 1.0 ViewMarkButton.qml
+DiffViewToggle 1.0 DiffViewToggle.qml
+DiffLineCell 1.0 DiffLineCell.qml
+DiffStageMark 1.0 DiffStageMark.qml
 UpstreamFlow 1.0 UpstreamFlow.qml
 UpstreamForm 1.0 UpstreamForm.qml
 WaitRing 1.0 WaitRing.qml

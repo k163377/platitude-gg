@@ -378,3 +378,127 @@ fn a_note_after_an_unchanged_line_marks_that_line() {
     assert!(rows[3].no_newline);
     assert!(rows[1..3].iter().all(|r| !r.no_newline));
 }
+
+/// The two sides of every split row, as `(left kind, right kind)`.
+fn sides(rows: &[SplitRow]) -> Vec<(&str, &str)> {
+    rows.iter()
+        .map(|r| (r.left.kind, r.right.as_ref().map_or("", |s| s.kind)))
+        .collect()
+}
+
+#[test]
+fn a_removal_and_the_addition_that_replaced_it_share_a_split_row() {
+    let patch = "\
+--- a/f
++++ b/f
+@@ -1,3 +1,3 @@
+ same
+-old
++new
+ tail
+";
+    let rows = pair_rows(flatten_patches(
+        &parse_patch(patch.as_bytes()),
+        true,
+        &DiffColors::default(),
+        None,
+    ));
+    assert_eq!(
+        sides(&rows),
+        [("hunk", ""), ("ctx", "ctx"), ("del", "add"), ("ctx", "ctx")]
+    );
+    // Each side keeps its own line of the hunk — what a press on that
+    // side's mark stages — and the row's hunk is one number.
+    let paired = &rows[2];
+    assert_eq!((paired.left.line, paired.left.old_no), (1, 2));
+    let right = paired.right.as_ref().unwrap();
+    assert_eq!((right.line, right.new_no), (2, 2));
+    assert_eq!((paired.left.hunk, right.hunk), (0, 0));
+    // A context line is on both sides, with the same line of the hunk.
+    let ctx = &rows[1];
+    assert_eq!(ctx.right.as_ref().unwrap().line, ctx.left.line);
+}
+
+#[test]
+fn the_tail_of_the_longer_run_stands_alone() {
+    // Three removed against one added: the first pair is read across,
+    // the other two removals have nothing on their right. Then an
+    // addition nothing was removed for, which has nothing on its left.
+    let patch = "\
+--- a/f
++++ b/f
+@@ -1,4 +1,3 @@
+-one
+-two
+-three
++uno
+ same
++more
+";
+    let rows = pair_rows(flatten_patches(
+        &parse_patch(patch.as_bytes()),
+        true,
+        &DiffColors::default(),
+        None,
+    ));
+    assert_eq!(
+        sides(&rows),
+        [
+            ("hunk", ""),
+            ("del", "add"),
+            ("del", ""),
+            ("del", ""),
+            ("ctx", "ctx"),
+            ("", "add"),
+        ]
+    );
+    // The empty seat keeps the row's address and no line of its own.
+    let alone = &rows[5];
+    assert_eq!(
+        (alone.left.hunk, alone.left.line, alone.left.old_no),
+        (0, -1, -1)
+    );
+    assert_eq!(alone.right.as_ref().unwrap().line, 5);
+}
+
+#[test]
+fn the_pairing_reads_runs_the_way_the_emphasis_does() {
+    // Two removed, two added, in one run: paired by order. Then a lone
+    // addition after a context line starts a run of its own.
+    let patch = "\
+--- a/f
++++ b/f
+@@ -1,3 +1,4 @@
+-a
+-b
++A
++B
+ c
++d
+";
+    let rows = pair_rows(flatten_patches(
+        &parse_patch(patch.as_bytes()),
+        true,
+        &DiffColors::default(),
+        None,
+    ));
+    let texts: Vec<(&str, &str)> = rows
+        .iter()
+        .map(|r| {
+            (
+                r.left.text.as_str(),
+                r.right.as_ref().map_or("", |s| s.text.as_str()),
+            )
+        })
+        .collect();
+    assert_eq!(
+        texts,
+        [
+            ("@@&nbsp;-1,3&nbsp;+1,4&nbsp;@@", ""),
+            ("a", "A"),
+            ("b", "B"),
+            ("c", "c"),
+            ("", "d"),
+        ]
+    );
+}

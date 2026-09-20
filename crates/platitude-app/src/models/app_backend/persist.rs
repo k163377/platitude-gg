@@ -192,6 +192,7 @@ impl AppBackend {
         tags_shown: bool,
         wip_tree: bool,
         details_tree: bool,
+        diff_split: bool,
     ) {
         self.commands_shown = commands_shown;
         Hub::with(|hub| {
@@ -200,6 +201,7 @@ impl AppBackend {
             layout.tags_shown = tags_shown;
             layout.wip_tree = wip_tree;
             layout.details_tree = details_tree;
+            layout.diff_split = diff_split;
             hub.set_layout_state(layout);
         });
     }

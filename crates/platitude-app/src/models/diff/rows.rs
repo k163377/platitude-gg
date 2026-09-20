@@ -19,9 +19,9 @@ impl DiffModel {
         let Some(patches) = self.shown.clone() else {
             return;
         };
-        // `None` for the marks: this pass rewrites `text` only,
+        // `None` for the marks: this pass rewrites the text only,
         // so the emphasis columns it would compute go straight to waste.
-        let painted = flatten_patches(&patches, !self.shown_has_preview, colors, None);
+        let painted = line_items(&patches, !self.shown_has_preview, colors, None, self.split);
         if painted.len() != self.lines.len() {
             // The same patches were walked both times, so this cannot
             // happen — but addressing rows by position is only safe while
@@ -36,8 +36,28 @@ impl DiffModel {
         }
         for (row, fresh) in self.lines.iter_mut().zip(painted) {
             row.text = fresh.text;
+            row.pair_text = fresh.pair_text;
         }
         self.rows_changed();
+    }
+
+    /// Lays the rows out the other way round — as two columns, or back
+    /// to one (デザイン規約 §diff を 2 列で読む). The same patches and
+    /// the same colours: nothing is read again for it. The reader's
+    /// place is kept the way a re-read keeps it (`rows_replacing`).
+    pub(super) fn relay_rows(&mut self, split: bool) {
+        self.split = split;
+        if self.shown.is_none() {
+            return;
+        }
+        if !self.lines.is_empty() {
+            self.rows_replacing();
+        }
+        // Taken out and put back: the colours are this model's, and the
+        // layout borrows the whole of it.
+        let colors = std::mem::take(&mut self.shown_colors);
+        self.lay_out_rows(&colors);
+        self.shown_colors = colors;
     }
 
     /// Tells the view that every row's contents have been rewritten in
@@ -66,6 +86,7 @@ impl DiffModel {
             !self.shown_has_preview,
             colors,
             Some(&self.shown_marks),
+            self.split,
         );
         // Both sides at once: the two columns are laid out to one width,
         // and a file whose old side ran further than its new one would
@@ -209,7 +230,8 @@ impl DiffModel {
     }
 }
 
-/// The rows a read's patches make, in the shape the list holds them.
+/// The rows a read's patches make, in the shape the list holds them —
+/// one line a row, or side by side (`split`).
 ///
 /// Apart from [`DiffModel::lay_out_rows`] so that what a row carries can
 /// be checked without a view to hang it on: laying them out tells the
@@ -219,24 +241,69 @@ pub(super) fn line_items(
     binary_note: bool,
     colors: &platitude_core::highlight::DiffColors,
     marks: Option<&platitude_core::intraline::IntraMarks>,
+    split: bool,
 ) -> Vec<DiffLineItem> {
-    flatten_patches(patches, binary_note, colors, marks)
-        .into_iter()
-        .map(|r: DiffRow| DiffLineItem {
-            kind: r.kind.to_string(),
-            old_no: r.old_no,
-            new_no: r.new_no,
-            text: r.text,
-            emph: r.emph,
-            fence: r.fence,
-            no_newline: r.no_newline,
-            hunk: r.hunk,
-            line: r.line,
-            patch: r.patch,
-            sel: String::new(),
-            side: platitude_core::parse::diff::side_of_markers(&r.markers).to_string(),
-        })
-        .collect()
+    let rows = flatten_patches(patches, binary_note, colors, marks);
+    if split {
+        pair_rows(rows).into_iter().map(split_item).collect()
+    } else {
+        rows.into_iter().map(line_item).collect()
+    }
+}
+
+/// One line as one row. The right side is empty, and `pair_line` says
+/// so the way `line` does on a heading.
+fn line_item(r: DiffRow) -> DiffLineItem {
+    DiffLineItem {
+        kind: r.kind.to_string(),
+        old_no: r.old_no,
+        new_no: r.new_no,
+        marks: marks_of(&r),
+        text: r.text,
+        emph: r.emph,
+        hunk: r.hunk,
+        line: r.line,
+        patch: r.patch,
+        sel: String::new(),
+        pair_line: -1,
+        ..DiffLineItem::default()
+    }
+}
+
+/// A split row: the old side in the plain roles, the new side in the
+/// `pair_*` ones, and both sides' letters in `marks`.
+fn split_item(r: SplitRow) -> DiffLineItem {
+    let mut item = line_item(r.left);
+    item.marks.push('|');
+    if let Some(right) = r.right {
+        item.new_no = right.new_no;
+        item.pair_kind = right.kind.to_string();
+        item.marks.push_str(&marks_of(&right));
+        item.pair_text = right.text;
+        item.pair_emph = right.emph;
+        item.pair_line = right.line;
+    }
+    item
+}
+
+/// The small facts about one line as letters (`DiffLineItem::marks`):
+/// `f` fence, `n` no newline at the end, `o` / `t` the conflict side, by
+/// the parser's own rule (`side_of_markers`), so the rows and the tally
+/// cannot come to read the marker columns two ways.
+fn marks_of(r: &DiffRow) -> String {
+    let mut marks = String::new();
+    if r.fence {
+        marks.push('f');
+    }
+    if r.no_newline {
+        marks.push('n');
+    }
+    match platitude_core::parse::diff::side_of_markers(&r.markers) {
+        "ours" => marks.push('o'),
+        "theirs" => marks.push('t'),
+        _ => {}
+    }
+    marks
 }
 
 /// Which diff one of the working tree's four buckets asks for. Read by

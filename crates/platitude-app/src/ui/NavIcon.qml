@@ -53,6 +53,9 @@ InkCanvas {
         case "no-entry": return 11
         // The frame, 2.5 to 13.5 — the band inside it stops there too.
         case "app-window": return 11
+        // A frame of ten, 3 to 13 — the span `hier` and `list` take, since the three stand in one band's toggles.
+        case "unified":
+        case "split": return 10
         default: return 16
         }
     }
@@ -452,6 +455,26 @@ InkCanvas {
             ctx.beginPath()
             ctx.moveTo(2.5 * s, 6.5 * s)
             ctx.lineTo(13.5 * s, 6.5 * s)
+            ctx.stroke()
+        } else if (icon.kind === "unified" || icon.kind === "split") {
+            // The two shapes a diff's rows take, worn by the pane's view toggle (規約 §diff を 2 列で読む): a
+            // frame with one rule through it. Across the middle it is one column with the old and the new
+            // stacked (Octicons' `rows`); down the middle it is the two side by side (`columns`). **Ten of the
+            // grid wide, 3 to 13** — the span `hier` and `list` take, since the eye measures a toggle's marks by
+            // their ink and these stand in the same kind of band as those (§余白). **The rule is in the middle,
+            // not a third of the way down**, which tells `unified` from the settings screen's `app-window`,
+            // whose band is a title bar. The rule is cut square, as that band is: a round cap on a line drawn to
+            // the frame's centre line hangs out of the box.
+            ctx.strokeRect(3 * s, 4 * s, 10 * s, 8 * s)
+            ctx.lineCap = "butt"
+            ctx.beginPath()
+            if (icon.kind === "unified") {
+                ctx.moveTo(3 * s, 8 * s)
+                ctx.lineTo(13 * s, 8 * s)
+            } else {
+                ctx.moveTo(8 * s, 4 * s)
+                ctx.lineTo(8 * s, 12 * s)
+            }
             ctx.stroke()
         } else if (icon.kind === "eye" || icon.kind === "eye-off") {
             // Lens and pupil — the visibility mark every layer list has used since Photoshop. Drawn here: U+2691

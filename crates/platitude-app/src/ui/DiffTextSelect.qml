@@ -6,12 +6,17 @@ import platitude.ui
 // The hand that picks the diff's text out of its rows: a drag selects, a right-click asks for the menu, and a plain
 // click puts the selection down (デザイン規約 §diff の中身をコピーする).
 //
-// **It covers the code column, and stops short of the list's own bar.** The two numbers and the
-// seat between them are the row's own — the `+` a line puts out there has to keep taking presses — so this starts
-// where they end (`gutterW`); and the bar down the right edge is drawn over the rows, so a hand that ran to the frame
-// took every press on the trough and the bar could not be grabbed at all (`barRoom`, observed).
+// **It covers the code, and stops short of the list's own bar.** The first gutter — the numbers and the seat
+// between them, where the `+` a line puts out has to keep taking presses — is the row's, so this starts where it ends
+// (`gutterW`); and the bar down the right edge is drawn over the rows, so a hand that ran to the frame took every
+// press on the trough and the bar could not be grabbed at all (`barRoom`, observed).
 //
-// **Inside that column every place nobody else takes is a start**, the ground a file shorter than the frame leaves
+// **A drag is of one column.** Read side by side, the rows have two, and the one the press landed in is the file the
+// drag selects (デザイン規約 §diff を 2 列で読む): the pointer wandering over the hairline goes on naming places in the
+// column it started in, past the end of its lines. The second column's gutter stands inside this hand, and a press
+// there goes down to the row the way one in the first does (`takeAt`).
+//
+// **Inside a column every place nobody else takes is a start**, the ground a file shorter than the frame leaves
 // under its last row included (`rowAt`, 規約 §diff の中身をコピーする). The hunk headings are the one exception, and
 // they are one because something else is standing there.
 //
@@ -33,9 +38,13 @@ Item {
     required property var view
     /// Where the selection lives.
     required property var diffModel
-    /// How wide the gutter is, which is where the code column starts.
+    /// How wide a column's gutter is, which is where its code starts (`DiffTextMetrics.gutterW`).
     required property real gutterW
-    /// How much of the right edge belongs to the list's own scroll bar, which is where the code column ends
+    /// Whether the rows are read as two columns, and how wide the left one is — the right starts a hairline after
+    /// it (`DiffPane.halfW`).
+    required property bool split
+    required property real halfW
+    /// How much of the right edge belongs to the list's own scroll bar, which is where the code ends
     /// (`AppListView.barRoom` — the same strip the graph's stand-in gives back, `GraphHeadPin.barRoom`).
     required property real barRoom
     /// How far the code has been sent sideways (`DiffCodeScroll.offset`) — a press lands on the character
@@ -58,26 +67,49 @@ Item {
     /// Whether a drag is running. The press that started it is still held, so this and `hand.pressed` say the same
     /// thing — except during a right-click, which never starts one.
     property bool dragging: false
+    /// Which column the drag is of — the one the press landed in (`sideAt`).
+    property int side: 0
     /// Where the hand was last seen, in this item's own coordinates. Kept because the edge below re-reads it after
     /// every step it sends: the rows move under a pointer that is standing still.
     property real handX: 0
     property real handY: 0
 
+    // ---- columns ---------------------------------------------------------------------------------------------------
+    /// Where the hairline between the two columns stands, in this item's own coordinates — the first gutter is
+    /// left of this item, so it is the row's `halfW` less that.
+    readonly property real divider: pick.halfW - pick.gutterW
+    /// Which column an x of this item is in: 0 for the rows' own lines — the only column while the diff is one — and
+    /// 1 for the right of a split row.
+    function sideAt(x) {
+        return pick.split && x >= pick.divider ? 1 : 0
+    }
+    /// Where a column's code starts, in this item's own coordinates: the first column's at this item's own left
+    /// edge, the second's past the hairline and its gutter.
+    function codeStart(side) {
+        return side === 1 ? pick.divider + Theme.borderWidth + pick.gutterW : 0
+    }
+
     // ---- what the hand does, named so a headless run enters where it enters -------------------------------------
     /// A press at a point of this item, in its own coordinates: true where the text took it, false where it goes down
-    /// to whatever is under this — the hunk's own two words, or the list itself. **The `MouseArea` below and a run
-    /// enter here**, so a hand that was never wired up reports nothing (verify-ui §壊れない動詞の実装).
+    /// to whatever is under this — a gutter's own mark, the hunk's own two words, or the list itself. **The
+    /// `MouseArea` below and a run enter here**, so a hand that was never wired up reports nothing
+    /// (verify-ui §壊れない動詞の実装).
     function takeAt(x, y, button) {
         const row = pick.rowAt(y)
         if (row < 0 || !pick.takesPress(row))
             return false
+        const side = pick.sideAt(x)
+        // The second column's gutter is the row's, as the first's is: the number, and the seat the mark stands in.
+        if (x < pick.codeStart(side))
+            return false
         pick.handX = x
         pick.handY = y
         if (button === Qt.LeftButton)
-            pick.pressText(row, pick.byteAt(row, x))
+            pick.pressText(side, row, pick.byteAt(side, row, x - pick.codeStart(side)))
         return true
     }
-    /// The hand has reached here. A drag that has left the rows keeps the one it can still see (`rowAt`).
+    /// The hand has reached here. A drag that has left the rows keeps the one it can still see (`rowAt`), and one
+    /// that has left its column keeps that too.
     function followAt(x, y) {
         pick.handX = x
         pick.handY = y
@@ -85,22 +117,24 @@ Item {
             return
         const row = pick.rowAt(y)
         if (row >= 0)
-            pick.dragText(row, pick.byteAt(row, x))
+            pick.dragText(row, pick.byteAt(pick.side, row, x - pick.codeStart(pick.side)))
     }
     /// A right-click that has been let go of, at a point of this item.
     function answerAt(x, y) {
         const row = pick.rowAt(y)
+        const side = pick.sideAt(x)
         if (row >= 0)
-            pick.askMenu(row, pick.byteAt(row, x))
+            pick.askMenu(side, row, pick.byteAt(side, row, x - pick.codeStart(side)))
     }
-    /// A press on the text: the selection starts here and holds nothing until the hand moves.
-    function pressText(row, at) {
-        pick.diffModel.beginSelect(row, at)
+    /// A press on the text of one column: the selection starts here and holds nothing until the hand moves.
+    function pressText(side, row, at) {
+        pick.side = side
+        pick.diffModel.beginSelect(side, row, at)
         pick.dragging = true
     }
-    /// The hand has reached here.
+    /// The hand has reached here, in the column the press was in.
     function dragText(row, at) {
-        pick.diffModel.extendSelect(row, at)
+        pick.diffModel.extendSelect(pick.side, row, at)
     }
     /// The button is up. A press that never moved selected nothing, and a selection of nothing is no selection —
     /// saying so keeps `selActive` honest for whoever asks next.
@@ -110,10 +144,13 @@ Item {
             pick.diffModel.clearSelect()
     }
     /// A right-click. Inside the selection it leaves it alone; outside it, the row underneath becomes the selection —
-    /// the rule the file list already reads by (デザイン規約 §バケツごとの一覧: メニューは常に光っている行に効く).
-    function askMenu(row, at) {
-        if (!pick.diffModel.selectionHolds(row, at))
-            pick.diffModel.selectRow(row)
+    /// the rule the file list already reads by (デザイン規約 §バケツごとの一覧: メニューは常に光っている行に効く). Outside
+    /// includes the other column: a selection is of one.
+    function askMenu(side, row, at) {
+        if (!pick.diffModel.selectionHolds(side, row, at)) {
+            pick.side = side
+            pick.diffModel.selectRow(side, row)
+        }
         pick.menuWanted()
     }
 
@@ -139,21 +176,24 @@ Item {
         const last = first + pick.view.contentHeight - 1
         return Math.max(first, Math.min(y, last))
     }
-    /// Which byte of that row's line an x of this item lands on, in two steps: the row's own layout
+    /// Which byte of one side of that row's line an x of its column lands on, in two steps: the row's own layout
     /// says which place of the line is under the pointer (`LineRuler` — the only thing that knows where a line's
     /// characters are drawn), and the model says which byte of the file that place is (`DiffModel.sourceByteAt`).
     ///
     /// **The blank right of a row's last character is that row's end.** A layout asked about a point past the line
     /// answers with the line's length, so a press out there names the end and a drag inside it moves nothing — where
-    /// a walk of columns went on counting characters that were never drawn.
+    /// a walk of columns went on counting characters that were never drawn. An x left of the column — a drag that
+    /// wandered into the other one — is the line's head for the same reason.
     ///
     /// A row that is not a line of a file has no place to land on: the heading's words are the pane's own, set in the
     /// pane's own size, and the model answers about none of them either.
-    function byteAt(row, x) {
+    function byteAt(side, row, x) {
         const item = pick.view.itemAtIndex(row)
         if (!item || item.banded)
             return 0
-        return pick.diffModel.sourceByteAt(row, pick.ruler.placeAt(item.text, item.codeBold, pick.codeX + x))
+        return pick.diffModel.sourceByteAt(side, row,
+                                           pick.ruler.placeAt(item.textOf(side), item.boldOf(side),
+                                                              pick.codeX + Math.max(0, x)))
     }
     /// Whether this row is one the hand may take. A hunk heading is not: it is the pane's own words, and the press
     /// there belongs to the two that act on the hunk (デザイン規約 §diff の中のステージ).
@@ -170,11 +210,13 @@ Item {
     readonly property bool hasGround: pick.groundTop < pick.height - 2
     /// Automation: the gesture as a hand makes it — a press on that ground, and a drag up into the text. It enters the
     /// same two functions the `MouseArea` below calls, and it **starts in the ground**: an injection that began on a
-    /// row would go green with the whole of this taken back out (`SweepRoom`, the same rule).
+    /// row would go green with the whole of this taken back out (`SweepRoom`, the same rule). Across the first
+    /// column's code — side by side, the ground under the second column is the second column's.
     function sweepFromGround(fx, fy) {
         if (!pick.hasGround)
             return false
-        const x = Math.max(1, Math.min(pick.width - 1, pick.width * fx))
+        const to = pick.split ? pick.divider : pick.width
+        const x = Math.max(1, Math.min(to - 1, to * fx))
         const y = pick.groundTop + 1 + (pick.height - pick.groundTop - 2) * fy
         if (!pick.takeAt(x, y, Qt.LeftButton))
             return false
@@ -250,6 +292,21 @@ Item {
         onCanceled: pick.releaseText()
         onClicked: mouse => { if (mouse.button === Qt.RightButton) pick.answerAt(mouse.x, mouse.y) }
     }
+    // The second column's gutter keeps the arrow. The hand covers it so that one item reads every press by its
+    // column, but a press there is the row's (`takeAt`), and the cursor has to say so before the press: a beam over
+    // the `+` a line puts out reads as text nothing can select. No button, so the press goes down through this to
+    // the hand and on to the row; no hover, so the rows keep theirs. Built only side by side — as one column the
+    // one gutter is outside this hand altogether.
+    Loader {
+        active: pick.split
+        x: pick.divider + Theme.borderWidth
+        width: pick.gutterW
+        height: pick.height
+        sourceComponent: MouseArea {
+            acceptedButtons: Qt.NoButton
+            cursorShape: Qt.ArrowCursor
+        }
+    }
 
     // ---- the edge ----------------------------------------------------------------------------------------------
     /// How far past the frame the hand has reached, on each axis. Zero while it is inside, which is also what stops
@@ -271,7 +328,7 @@ Item {
             pick.scrollWanted(pick.pastY * Metrics.middleScrollGain, pick.pastX * Metrics.middleScrollGain)
             const row = pick.rowAt(pick.handY)
             if (row >= 0)
-                pick.dragText(row, pick.byteAt(row, pick.handX))
+                pick.dragText(row, pick.byteAt(pick.side, row, pick.handX - pick.codeStart(pick.side)))
         }
     }
 }

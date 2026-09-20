@@ -655,6 +655,7 @@ Item {
     AutoActPlanVerbs { id: planVerbs; driver: driver }
     AutoActFindVerbs { id: findVerbs; driver: driver }
     AutoActDiffVerbs { id: diffVerbs; driver: driver }
+    AutoActSplitVerbs { id: splitVerbs; driver: driver }
 
     function runAutoAct() {
         const act = Harness.autoAct
@@ -680,6 +681,7 @@ Item {
             || planVerbs.run(act, arg)
             || findVerbs.run(act, arg)
             || diffVerbs.run(act, arg)
+            || splitVerbs.run(act, arg)
         if (!known && !driver.completionDeferred && !driver.writeExpected) {
             // A misspelling: window verbs are in the completion
             // ledger (they defer to Main's own driver), so a verb in neither

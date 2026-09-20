@@ -339,6 +339,32 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "diff_blank quiet=true clamped=true backwards=true across=true sent=true",
     },
+    // The diff read side by side (規約 §diff を 2 列で読む). The picture
+    // is two columns; what it cannot say is whether the choice reached
+    // the store (`saved=`, read back off it after the page reported its
+    // layout) — the tally after these two is the fixture's own shape.
+    Verb {
+        name: "diff-split",
+        when: &[],
+        plain: "diff_split split=true saved=true",
+    },
+    // A line named on each side puts that side's mark out and not the
+    // other's: `crossed=false` is the half a picture of one mark cannot
+    // answer, since a mark out on both sides frames like one out on one.
+    Verb {
+        name: "split-tools",
+        when: &[],
+        plain: "split_tools left=true right=true crossed=false",
+    },
+    // A drag down each column copies that column's file: two lines each,
+    // the old column's copy already holding the removed line (nothing
+    // left for the menu's second word), the new column's offering it
+    // across — and the two agreeing on which line that is.
+    Verb {
+        name: "split-copy",
+        when: &[],
+        plain: "split_copy left=2 leftRemoved=0 right=2 rightRemoved=1 agree=true",
+    },
     // The same text taken from the ground under the last row — every
     // place in the code column that nobody else takes is a start
     // (規約 §diff の中身をコピーする). Three claims, and each answers

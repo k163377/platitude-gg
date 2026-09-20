@@ -18,6 +18,7 @@ AutoActStepVerbs 1.0 AutoActStepVerbs.qml
 AutoActSwitchVerbs 1.0 AutoActSwitchVerbs.qml
 AutoActTipVerbs 1.0 AutoActTipVerbs.qml
 AutoActWipVerbs 1.0 AutoActWipVerbs.qml
+AutoActSplitVerbs 1.0 AutoActSplitVerbs.qml
 AutoShotDriver 1.0 AutoShotDriver.qml
 NavProbe 1.0 NavProbe.qml
 singleton PageSettled 1.0 PageSettled.qml

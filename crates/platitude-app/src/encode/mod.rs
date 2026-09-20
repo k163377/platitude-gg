@@ -20,7 +20,9 @@ pub use labels::{
     label_name_of, label_names, labels_shown,
 };
 pub use markup::{plain_byte, plain_ranges, source_byte, spelled_ranges};
-pub use rows::{DiffRow, flatten_patches, is_combined, is_new_file, is_unmerged_only};
+pub use rows::{
+    DiffRow, SplitRow, flatten_patches, is_combined, is_new_file, is_unmerged_only, pair_rows,
+};
 pub use select::{diff_key, hunk_selection, worktree_target};
 // `EndingWords` itself is not re-exported: every caller takes it off
 // `ending_words` by inference, and a name nobody writes is an unused

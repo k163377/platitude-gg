@@ -109,7 +109,7 @@ Item {
     function pickDiffText(act) {
         const removedRow = diffPane.firstRemovedRow()
         const lastRow = Math.min(diffPane.view.count - 1, removedRow + 1)
-        diffPane.pickText(1, 0, lastRow, driver.pastLineEnd)
+        diffPane.pickText(0, 1, 0, lastRow, driver.pastLineEnd)
         // `door=` is the half a headless drag cannot make for itself: a run enters the hand's own functions and never
         // delivers a press, so what brings the keyboard — the sheet the pane watches presses from — is asked where it
         // stands. A selection nothing holds the keyboard for is not one `Ctrl+C` can take away.
@@ -124,7 +124,7 @@ Item {
         }
         // The right-click lands inside what was just dragged, so the selection stands as it is — which is the half of
         // the rule this verb is about (the other half is a click outside it, and that one takes its own row).
-        diffPane.askCodeMenu(removedRow, 0)
+        diffPane.askCodeMenu(0, removedRow, 0)
         if (act === "diff-copy-removed") {
             diffRowMenu.menu.close()
             diffRowMenu.copyRemovedNow()
@@ -545,7 +545,7 @@ Item {
     /// what keeps a run honest — a copy that put nothing out leaves the pad saying whatever it said last.
     function copyOfRow(row) {
         diffPane.diffModel.clearSelect()
-        diffPane.diffModel.selectRow(row)
+        diffPane.diffModel.selectRow(0, row)
         return diffPane.copySelection() ? driver.clipboard.lastCopied : ""
     }
     /// One drag from one point of the hand to another, and whether what it puts on the pad is `want`. The two ends

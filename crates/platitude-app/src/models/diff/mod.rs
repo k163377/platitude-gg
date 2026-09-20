@@ -10,8 +10,8 @@ use platitude_core::preview::{FilePreview, PreviewSide};
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{
-    DiffRow, diff_key, flatten_patches, human_size, is_combined, is_new_file, is_unmerged_only,
-    source_byte, spelled_ranges, widest_lines,
+    DiffRow, SplitRow, diff_key, flatten_patches, human_size, is_combined, is_new_file,
+    is_unmerged_only, pair_rows, source_byte, spelled_ranges, widest_lines,
 };
 use crate::hub::{DiffMsg, Feed};
 
@@ -29,11 +29,24 @@ use rows::bucket_target;
 pub(super) use rows::wanted;
 
 // ---------------------------------------------------------------------------
-// DiffModel: unified diff lines for one file
+// DiffModel: the diff's lines for one file, as one column or as two
 // ---------------------------------------------------------------------------
 
+/// One row of the pane. Read as one column, a row is one line of the diff
+/// and the `pair_*` roles are empty. Read side by side (`split`), a row
+/// holds the old side's line in the plain roles and the new side's in the
+/// `pair_*` ones, either of which can be nothing (`encode::pair_rows`);
+/// `hunk` and `patch` are the row's, and `new_no` is the right side's
+/// number in both readings.
+///
+/// **Fifteen roles, and all of them taken** (`QModelItem` holds no more).
+/// That is why the three small facts about a line — fence, no newline,
+/// which side of a conflict — are spelled together in `marks` rather
+/// than as a role each: two sides of them would be six.
 #[derive(QModelItem, Default, Clone)]
 pub struct DiffLineItem {
+    /// `hunk` / `ctx` / `add` / `del` / `meta` / `commit` — and `""` on a
+    /// split row whose old side has nothing.
     kind: String,
     old_no: i32,
     new_no: i32,
@@ -46,15 +59,14 @@ pub struct DiffLineItem {
     /// `"col:width,col:width"`, empty where nothing is emphasised
     /// (see `encode::DiffRow`).
     emph: String,
-    /// One of git's conflict fences: this says the line is a marker of
-    /// git's own, where `side` below says which side a line came from
-    /// (see `encode::DiffRow`).
-    fence: bool,
-    /// This line ends the file without a newline, on the side its own
-    /// numbers name. git says it in a note of its own; the pane says it
-    /// as a mark at the end of this line, which is the line the note was
-    /// about (デザイン規約 §行末の改行が無いこと. See `encode::DiffRow`).
-    no_newline: bool,
+    /// The small facts about the line, as letters: `f` for one of git's
+    /// conflict fences, `n` for a line that ends the file without a
+    /// newline (デザイン規約 §行末の改行が無いこと), `o` / `t` for the
+    /// side of a conflict it came from (`side_of_markers`). On a split
+    /// row the right side's letters follow a `|` — `"n|"`, `"fo|ft"` —
+    /// and as one column there is no `|` at all (`rows::marks_of`). The
+    /// row decodes it once (`DiffRowDelegate`).
+    marks: String,
     /// Where this row sits in the patch, so staging it needs no lookup.
     hunk: i32,
     line: i32,
@@ -75,22 +87,35 @@ pub struct DiffLineItem {
     /// **The wash is the answer** — what is washed is what is copied
     /// (デザイン規約 §diff の中身をコピーする).
     sel: String,
-    /// The side a combined diff's marker columns name — `"ours"` /
-    /// `"theirs"` / `""`, empty for a single-parent diff — read once as
-    /// the row is built, by the parser's own rule
-    /// (`platitude_core::parse::diff::side_of_markers` over
-    /// `encode::DiffRow.markers`), so the rows and the tally cannot come
-    /// to read the columns two ways.
-    side: String,
+    /// The new side of a split row — the same roles again, for the line
+    /// on the right (デザイン規約 §diff を 2 列で読む). `pair_kind` is
+    /// `ctx` / `add`, or `""` where the right has nothing: a removed line
+    /// nothing replaced, and every row that is not a line at all. Empty
+    /// throughout while the diff is read as one column.
+    pair_kind: String,
+    pair_text: String,
+    pair_emph: String,
+    /// The right side's line of the hunk, -1 for none. Its own: the
+    /// two sides of a paired row are two lines of the hunk, and a press
+    /// on the right's mark stages this one.
+    pair_line: i32,
+    /// The wash on the right side, spelled the way `sel` is. A selection
+    /// is of one column (`selection`), so at most one of the two is ever
+    /// written.
+    pair_sel: String,
 }
 
 impl platitude_core::mem::Footprint for DiffLineItem {
     fn heap_bytes(&self) -> usize {
         self.kind.heap_bytes()
             + self.text.heap_bytes()
-            + self.side.heap_bytes()
             + self.emph.heap_bytes()
+            + self.marks.heap_bytes()
             + self.sel.heap_bytes()
+            + self.pair_kind.heap_bytes()
+            + self.pair_text.heap_bytes()
+            + self.pair_emph.heap_bytes()
+            + self.pair_sel.heap_bytes()
     }
 }
 
@@ -120,6 +145,13 @@ pub struct DiffModel {
     /// above its patch (デザイン規約 §複数のコミットを選ぶ). 0 for every
     /// diff that is of one thing, which is all the others.
     commit_bands: i32,
+    /// Whether the rows are laid out side by side — the old side on the
+    /// left, the new on the right — rather than as one column
+    /// (デザイン規約 §diff を 2 列で読む). Set from the machine's saved
+    /// choice as the page opens, and by the band's toggle after that; the
+    /// rows are laid out again from `shown` on every change, so nothing
+    /// is read twice for it.
+    split: bool,
     title: String,
     is_binary: bool,
     /// The file has no old side: everything in the diff was added by it
@@ -200,6 +232,10 @@ pub struct DiffModel {
     /// What changed inside each shown row (`intraline`), kept beside
     /// `shown` for the same rebuilds.
     shown_marks: Arc<platitude_core::intraline::IntraMarks>,
+    /// The colours laid over the rows on screen, kept for the one rebuild
+    /// that is neither a read nor a repaint: the rows laid out the other
+    /// way round (`set_split`). Plain until the second message arrives.
+    shown_colors: platitude_core::highlight::DiffColors,
     /// Whether the diff on screen is one a picture stands in for, which is
     /// the other half of what `flatten_patches` is told.
     shown_has_preview: bool,
@@ -214,6 +250,11 @@ pub struct DiffModel {
     sel_from_at: i32,
     sel_to_row: i32,
     sel_to_at: i32,
+    /// Which column the selection is of: 0 for the rows' own lines —
+    /// the only column while the diff is one — and 1 for the new side of
+    /// a split row (`selection`). A drag is of one column, so its two
+    /// ends share this.
+    sel_side: i32,
     /// What the selection holds, published so the menu can leave out a
     /// row that would copy nothing (デザイン規約 §メニュー: 選べない行は消す).
     /// Read off the rows as the selection settles — the menu decides

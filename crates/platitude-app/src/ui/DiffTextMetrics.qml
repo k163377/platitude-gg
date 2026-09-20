@@ -20,6 +20,11 @@ Item {
     /// Whether the rows carry a per-line mark — the seat between the two
     /// numbers is that mark's, and a step of air where there is none.
     required property bool partial
+    /// Whether the rows are read as two columns, each with one number and
+    /// its own seat (デザイン規約 §diff を 2 列で読む). One column unless
+    /// told otherwise — the reading a diff opens in, and the one the rulers
+    /// are measured for on their own (`tst_diffreach.qml`).
+    property bool split: false
 
     /// How wide a line number is: the widest one this diff carries (デザイン規約 §レイアウト初期値). The columns are cut to it,
     /// so the row reads `gap 140 gap 153 gap }`; a fixed column leaves the slack of the numbers it
@@ -39,8 +44,14 @@ Item {
 
     /// The room between the two numbers where a changed line puts its mark out, and the whole gutter that room sits in.
     /// Worked out once here: the rows lay themselves out from it, and the pane subtracts it to know how much shows.
+    ///
+    /// **The gutter is the column's.** As one column it holds both numbers with the seat between them; as two, each
+    /// column holds its one number and the seat after it, so the code stands the same step from its number either
+    /// way round (デザイン規約 §diff を 2 列で読む).
     readonly property int seatW: metrics.partial ? Theme.iconMd + 2 * Theme.borderWidth : Theme.spaceXs
-    readonly property int gutterW: 2 * (Theme.spaceXs + metrics.numberW) + metrics.seatW
+    readonly property int gutterW: metrics.split
+                                   ? Theme.spaceXs + metrics.numberW + metrics.seatW
+                                   : 2 * (Theme.spaceXs + metrics.numberW) + metrics.seatW
     /// How wide the longest of the lines the model picked is drawn — **measured**, and **0 while none of
     /// them has been laid out**, which means "nothing measured yet": what reads this holds the
     /// reader's place through that gap (`DiffReach`).

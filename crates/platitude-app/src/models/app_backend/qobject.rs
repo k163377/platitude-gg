@@ -448,6 +448,11 @@ impl AppBackend {
     }
 
     #[qslot]
+    fn start_diff_split(&self) -> bool {
+        with_flag(|l| l.diff_split)
+    }
+
+    #[qslot]
     fn start_section(&self, name: String) -> bool {
         section_open(&name)
     }
@@ -492,6 +497,7 @@ impl AppBackend {
         tags_shown: bool,
         wip_tree: bool,
         details_tree: bool,
+        diff_split: bool,
     ) {
         self.write_layout_flags(
             sidebar_collapsed,
@@ -499,6 +505,7 @@ impl AppBackend {
             tags_shown,
             wip_tree,
             details_tree,
+            diff_split,
         )
     }
 

@@ -12,6 +12,7 @@ impl DiffModel {
     qproperty!("widestLines", Member = widest_lines, Notify = changed);
     qproperty!("rowsGen", Member = rows_gen, Notify = changed);
     qproperty!("commitBands", Member = commit_bands, Notify = changed);
+    qproperty!("split", Member = split, Notify = changed);
     qproperty!("title", Member = title, Notify = changed);
     qproperty!("isBinary", Member = is_binary, Notify = changed);
     qproperty!("isNewFile", Member = is_new_file, Notify = changed);
@@ -56,15 +57,54 @@ impl DiffModel {
     /// where they left it (`DiffScrollPlace`).
     ///
     /// **Return without calling back into this model.** It goes out from
-    /// inside `drain`, which is holding the borrow.
+    /// inside `drain`, which is holding the borrow — and from
+    /// `relay_rows`, which is the other swap of the same rows.
     #[qsignal]
-    fn rows_replacing(&mut self);
+    pub(super) fn rows_replacing(&mut self);
 
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
         let invoker = self.get_qml_method_invoker();
         self.feed = crate::hub::attach_feed(tab_id, |f| &f.diff, invoker);
+    }
+
+    /// Reads the diff as two columns, or as one — the band's toggle, and
+    /// the machine's saved choice as the page opens
+    /// (デザイン規約 §diff を 2 列で読む). The rows on screen are laid out
+    /// again there and then; nothing is read for it.
+    #[qslot]
+    fn set_split(&mut self, split: bool) {
+        if self.split == split {
+            return;
+        }
+        self.relay_rows(split);
+        self.changed();
+    }
+
+    /// How the split rows came out — for the smoke hook (`diff-split`):
+    /// a picture shows two columns, and not whether the removed line
+    /// and the added one that replaced it were read across from each
+    /// other rather than stacked. `pairs=` is the rows carrying a line
+    /// on both sides that are not context, `alone=` the changed lines
+    /// with an empty seat across from them, `both=` the context lines.
+    #[qslot]
+    fn split_tally(&self) -> String {
+        let mut pairs = 0;
+        let mut alone = 0;
+        let mut both = 0;
+        for line in &self.lines {
+            match (line.kind.as_str(), line.pair_kind.as_str()) {
+                ("ctx", "ctx") => both += 1,
+                ("del", "add") => pairs += 1,
+                ("del", "") | ("", "add") => alone += 1,
+                _ => {}
+            }
+        }
+        format!(
+            "split={} pairs={pairs} alone={alone} both={both}",
+            self.split
+        )
     }
 
     /// Diff of one file of a commit (vs its first parent).
@@ -214,20 +254,28 @@ impl DiffModel {
     /// and a picture cannot be asked whether every band that should be
     /// there is.
     #[qslot]
-    fn side_count(&self, side: String) -> i32 {
+    pub(super) fn side_count(&self, side: String) -> i32 {
+        // The letter the side is spelled by in `marks` (`rows::marks_of`);
+        // each side of a row carries it at most once, so a count of the
+        // letter over the whole row is a count of lines.
+        let letter = match side.as_str() {
+            "ours" => 'o',
+            "theirs" => 't',
+            _ => return 0,
+        };
         let mut count = 0;
         for line in &self.lines {
-            if line.side == side {
-                count += 1;
-            }
+            count += line.marks.matches(letter).count();
         }
-        count
+        i32::try_from(count).unwrap_or(i32::MAX)
     }
 
     // ---- the reader's own selection of the text --------------------
-    // The pane brings a row and a place along it; everything after that is
-    // read off the patches, because the file's own bytes are here
-    // (`selection`).
+    // The pane brings a column, a row and a place along it; everything
+    // after that is read off the patches, because the file's own bytes
+    // are here (`selection`). The column is 0 for the rows' own lines —
+    // the only column while the diff is one — and 1 for the new side of
+    // a split row.
 
     /// Which byte of row `row`'s line the place `at` of it stands on —
     /// `at` counted in the units the row's own layout counts a place in
@@ -236,8 +284,8 @@ impl DiffModel {
     /// knows where its characters are drawn, and only the file's own
     /// bytes are here.
     #[qslot]
-    fn source_byte_at(&self, row: i32, at: i32) -> i32 {
-        self.byte_at(row, at)
+    fn source_byte_at(&self, side: i32, row: i32, at: i32) -> i32 {
+        self.byte_at(side, row, at)
     }
 
     /// A press landed: the selection starts here and holds nothing yet.
@@ -248,16 +296,18 @@ impl DiffModel {
     /// each and a drag that has not left the character it is
     /// on costs none.
     #[qslot]
-    fn begin_select(&mut self, row: i32, at: i32) {
-        if self.start_select(row, at) {
+    fn begin_select(&mut self, side: i32, row: i32, at: i32) {
+        if self.start_select(side, row, at) {
             self.changed();
         }
     }
 
-    /// The hand has moved to here.
+    /// The hand has moved to here. The column is the press's: a drag is
+    /// of one column, so this one is read only to start a selection
+    /// where none stands.
     #[qslot]
-    fn extend_select(&mut self, row: i32, at: i32) {
-        if self.drag_select(row, at) {
+    fn extend_select(&mut self, side: i32, row: i32, at: i32) {
+        if self.drag_select(side, row, at) {
             self.changed();
         }
     }
@@ -265,8 +315,8 @@ impl DiffModel {
     /// One whole row becomes the selection — a right-click outside
     /// whatever was selected (デザイン規約 §diff の中身をコピーする).
     #[qslot]
-    fn select_row(&mut self, row: i32) {
-        if self.select_whole_row(row) {
+    fn select_row(&mut self, side: i32, row: i32) {
+        if self.select_whole_row(side, row) {
             self.changed();
         }
     }
@@ -274,8 +324,8 @@ impl DiffModel {
     /// Whether a place in the text is inside the selection, which is what
     /// a right-click asks before deciding whether to take its own row.
     #[qslot]
-    fn selection_holds(&self, row: i32, at: i32) -> bool {
-        self.holds(row, at)
+    fn selection_holds(&self, side: i32, row: i32, at: i32) -> bool {
+        self.holds(side, row, at)
     }
 
     #[qslot]
@@ -319,6 +369,7 @@ impl DiffModel {
         self.shown = None;
         self.shown_has_preview = false;
         self.shown_marks = Default::default();
+        self.shown_colors = Default::default();
         self.apply_endings(None);
         self.apply_preview(None);
         // The picture files the read wrote go with the pane: nothing
@@ -392,6 +443,7 @@ impl DiffModel {
                     self.shown_has_preview = preview.is_some();
                     self.shown = Some(patches);
                     self.shown_marks = marks;
+                    self.shown_colors = Default::default();
                     // Plain to begin with. The colours are a second
                     // message and may never come at all — a language the
                     // set has no rules for, a reader who has moved on.
@@ -409,6 +461,9 @@ impl DiffModel {
                         self.coloured = true;
                     }
                     self.repaint_rows(&colors);
+                    // Kept for the layout that is neither a read nor a
+                    // repaint: the rows turned round (`relay_rows`).
+                    self.shown_colors = colors;
                 }
             }
         }

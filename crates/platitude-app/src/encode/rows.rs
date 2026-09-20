@@ -7,9 +7,13 @@ use platitude_core::parse::diff::{DiffLineKind, FilePatch};
 use super::markup::{spelled_ranges, styled};
 
 /// One flattened row of the diff pane.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `Default` is the empty side of a split row (`pair_rows`): no kind, no
+/// number, no line — the seat a change left nothing in.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DiffRow {
-    /// `hunk` / `ctx` / `add` / `del` / `meta`.
+    /// `hunk` / `ctx` / `add` / `del` / `meta` / `commit` — and `""` for
+    /// the empty side of a split row.
     pub kind: &'static str,
     /// -1 when the side has no line number.
     pub old_no: i32,
@@ -228,6 +232,84 @@ pub fn flatten_patches(
         }
     }
     rows
+}
+
+/// One row of a diff read side by side: the old side's line on the left,
+/// the new side's on the right (デザイン規約 §diff を 2 列で読む).
+///
+/// A context line is on both sides at once. A removed line has nothing
+/// on its right, an added one nothing on its left — unless the two stand
+/// where a run of removals is followed by a run of additions, in which
+/// case the k-th of each is read against the k-th of the other, which is
+/// the pairing the emphasis inside the lines was already worked out by
+/// (`platitude_core::intraline::hunk_marks`). The tail of the longer
+/// run stands alone. Rows that are not lines — a hunk's heading, a
+/// commit's band, the binary note — keep the left and have no right.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SplitRow {
+    /// The old side, or `kind == ""` for nothing there.
+    pub left: DiffRow,
+    /// The new side, or `None` for nothing there — and for every row that
+    /// is not a line of the file.
+    pub right: Option<DiffRow>,
+}
+
+/// Lays the flattened rows out side by side.
+///
+/// A row's `hunk` and `patch` are shared across its two sides, since the
+/// pairing never crosses a heading; each side keeps its own `line`, which
+/// is what a press on that side's mark stages.
+pub fn pair_rows(rows: Vec<DiffRow>) -> Vec<SplitRow> {
+    let mut out = Vec::with_capacity(rows.len());
+    let mut rows = rows.into_iter().peekable();
+    while let Some(row) = rows.next() {
+        match row.kind {
+            "ctx" => out.push(SplitRow {
+                right: Some(row.clone()),
+                left: row,
+            }),
+            "del" => {
+                let mut dels = vec![row];
+                while let Some(next) = rows.next_if(|r| r.kind == "del") {
+                    dels.push(next);
+                }
+                let mut adds = Vec::new();
+                while let Some(next) = rows.next_if(|r| r.kind == "add") {
+                    adds.push(next);
+                }
+                let mut adds = adds.into_iter();
+                for del in dels {
+                    out.push(SplitRow {
+                        left: del,
+                        right: adds.next(),
+                    });
+                }
+                out.extend(adds.map(right_only));
+            }
+            "add" => out.push(right_only(row)),
+            _ => out.push(SplitRow {
+                left: row,
+                right: None,
+            }),
+        }
+    }
+    out
+}
+
+/// An added line with nothing across from it. The empty seat keeps the
+/// address — a press lands on rows, and a row's hunk is one number.
+fn right_only(add: DiffRow) -> SplitRow {
+    SplitRow {
+        left: DiffRow {
+            hunk: add.hunk,
+            patch: add.patch,
+            old_no: -1,
+            new_no: -1,
+            line: -1,
+            ..DiffRow::default()
+        },
+        right: Some(add),
+    }
 }
 
 /// The `@@` line as git writes it: one range per old side, and a run of
