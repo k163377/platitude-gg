@@ -96,9 +96,10 @@ pub(super) struct Options {
     /// the pictures, off PATH (`shim::stage_other_git`). The version
     /// it answers `--version` with is what is asked for here.
     pub(super) other_git: String,
-    /// What the pictures show, for the board. Empty falls back to the
-    /// verb and its argument, which is a poor name but a true one — the
-    /// board keeps the run, named as best it can.
+    /// What the pictures show, for the board, written in the language
+    /// the board is read in (`shots::written_label`). Empty falls back
+    /// to the verb and its argument, which is a poor name but a true one
+    /// — the board keeps the run, named as best it can.
     pub(super) label: String,
     /// Keep this run off the board. For every run nobody asked to look
     /// at — a sweep measuring flakiness, where ten identical pictures
@@ -209,6 +210,13 @@ fn typed_path(raw: &str) -> PathBuf {
     }
 }
 
+/// The name this run's pictures go up under, held to the board's own
+/// rule at the door it is typed at: a run is named in the language the
+/// board is read in (`shots::written_label`).
+fn typed_label(word: Option<&String>) -> Result<String, String> {
+    crate::shots::written_label(word.ok_or("--label needs a phrase")?)
+}
+
 pub(super) fn parse(args: &[String]) -> Result<Options, String> {
     let mut opts = Options {
         verb: String::new(),
@@ -257,7 +265,7 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
                 opts.scroll_to = where_to.clone();
             }
             "--system-title-bar" => opts.system_title_bar = true,
-            "--label" => opts.label = it.next().ok_or("--label needs a phrase")?.clone(),
+            "--label" => opts.label = typed_label(it.next())?,
             "--no-board" => opts.no_board = true,
             "--no-census" => opts.no_census = true,
             "--quit-ms" => {
@@ -372,6 +380,34 @@ mod tests {
         let typed = parse(&words[..words.len() - 1]).expect("the same line, boarded");
         assert!(!typed.no_board);
         assert_eq!(opts.census_line(), typed.census_line());
+    }
+
+    /// `--label` is the second door onto the board, `shots add` being
+    /// the first, and a name is held to the same rule at both: it is
+    /// written in the language the board is read in
+    /// (`shots::written_label`). A run filed under a name its reader
+    /// cannot read is the picture they asked for, on a page where they
+    /// cannot find it.
+    #[test]
+    fn a_run_is_named_in_the_language_the_board_is_read_in() {
+        let named = parse(&[
+            "tab-carry".to_string(),
+            "--label".to_string(),
+            "チップの余白".to_string(),
+        ])
+        .expect("a verb and the name its pictures go up under");
+        assert_eq!(named.label, "チップの余白");
+        let Err(refusal) = parse(&[
+            "tab-carry".to_string(),
+            "--label".to_string(),
+            "chip padding".to_string(),
+        ]) else {
+            panic!("a name written past the rule is refused where it is typed");
+        };
+        assert!(
+            refusal.contains("Japanese"),
+            "a refusal has to say the rule it is holding to: {refusal}"
+        );
     }
 
     /// A preset naming what the run would have built anyway is that run

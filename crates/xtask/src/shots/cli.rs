@@ -7,7 +7,7 @@ use super::{board, crop, sweep, window};
 const USAGE: &str = "\
 cargo xtask shots <command>
 
-  add --label \"<what these pictures show>\" [--verb <v>] <png>...
+  add --label \"<what to look at, in Japanese>\" [--verb <v>] <png>...
       Put pictures on the board under a name, and rebuild the page. The
       seat is not asked for: it is read from the working directory, so a
       run always says which tree took it — and it has to be a seat a-f,
@@ -15,9 +15,11 @@ cargo xtask shots <command>
       nothing outside the roster has such a moment (`cargo xtask seat`
       hands one over). --label is required — several
       pictures under no name leave nobody able to say which file was
-      which change.
+      which change — and the name is written in Japanese, the language
+      the board is read in: it is the first thing the reader reads off
+      a run. Identifiers inside the name keep their own spelling.
 
-  add --label \"<what changed>\" --before <png> --after <png>
+  add --label \"<what changed, in Japanese>\" --before <png> --after <png>
       The same, for two pictures of one thing: they go on the board as a
       single view holding both side by side under one magnifier, each
       with its word over it. Read one after the other they are not a
@@ -25,7 +27,7 @@ cargo xtask shots <command>
       while looking at the second — so a before/after goes on the
       board as one run.
 
-  add --label \"<what these show>\" --part <word> <png> [--part <word> <png>]...
+  add --label \"<what these show, in Japanese>\" --part <word> <png> [--part <word> <png>]...
       The same again, for a set of pictures of one part in its several
       states: they go on the board as a single view holding all of them
       in a row under one magnifier, each with its word over it. What a
@@ -145,7 +147,10 @@ fn add(args: &[String]) -> Result<(), String> {
     let mut rest = args.iter();
     while let Some(arg) = rest.next() {
         match arg.as_str() {
-            "--label" => label = rest.next().cloned().unwrap_or_default(),
+            // Refused here, before a picture is copied anywhere: a name
+            // the reader cannot read is the one thing about a run that
+            // cannot be fixed by looking at it again.
+            "--label" => label = board::written_label(rest.next().map_or("", String::as_str))?,
             "--verb" => verb = rest.next().cloned().unwrap_or_default(),
             "--before" => before = rest.next().map(PathBuf::from),
             "--after" => after = rest.next().map(PathBuf::from),

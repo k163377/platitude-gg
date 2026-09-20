@@ -29,7 +29,7 @@ mod page;
 mod sweep;
 mod window;
 
-pub(crate) use board::{record, record_dir, shown};
+pub(crate) use board::{record, record_dir, shown, written_label};
 pub(crate) use cli::run;
 pub(crate) use sweep::{seat_freed, seat_reused};
 
@@ -58,9 +58,10 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&OPEN, &PRUNE];
 /// One `add`: the pictures taken for one thing, under the name that says
 /// what to look at in them.
 pub(crate) struct Run {
-    /// What these pictures show, in the words of whoever took them. The
-    /// board refuses a run without one: several pictures under no name
-    /// leave nobody able to say which file was which change.
+    /// What these pictures show, in the words of whoever took them, and
+    /// in the language the board is read in (`board::written_label`).
+    /// The board refuses a run without one: several pictures under no
+    /// name leave nobody able to say which file was which change.
     pub(crate) label: String,
     /// The verify-ui verb behind them, when there was one.
     pub(crate) verb: String,

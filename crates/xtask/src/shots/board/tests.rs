@@ -1,6 +1,33 @@
 //! `board`'s own tests, in a file of their own (structure.md §分割).
 
-use super::{Run, Shot, load_runs, not_a_seat, one_line, parse_run, slug, write_run};
+use super::{
+    NEEDS_A_NAME, Run, Shot, load_runs, not_a_seat, one_line, parse_run, slug, write_run,
+    written_label,
+};
+
+/// The board's other door. A run is named in the language the board is
+/// read in, and the name is held to that where it is typed: by the time
+/// anybody sees a name they cannot read, the pictures are already on the
+/// board and the only way to rename a run is to take it again.
+#[test]
+fn a_run_is_named_in_the_language_the_board_is_read_in() {
+    let named = written_label("チップの余白").expect("a name its reader can read");
+    assert_eq!(named, "チップの余白");
+    // Identifiers, verbs and file names keep their own spelling inside
+    // the name — one Japanese character is the whole of the rule.
+    assert!(written_label("AskBar.settled を待った絵").is_ok());
+    let refusal = written_label("the chip's padding").expect_err("a name written past the rule");
+    assert!(
+        refusal.contains("Japanese"),
+        "a refusal has to say the rule it is holding to: {refusal}"
+    );
+    // A run nobody named is told what a name is for, not which language
+    // it is written in — the two are different mistakes.
+    assert_eq!(
+        written_label("   ").expect_err("a run with no name at all"),
+        NEEDS_A_NAME
+    );
+}
 
 /// The board's door. A picture may only be taken in a roster seat,
 /// because the only thing that ever takes one off the board again is
@@ -89,7 +116,9 @@ fn a_run_without_a_picture_is_not_a_run() {
 #[test]
 fn a_slug_keeps_to_ascii() {
     assert_eq!(slug("チップの余白"), "shot");
-    assert_eq!(slug("chip padding: top-left"), "chip-padding-top-left");
+    // The common shape: identifiers keeping their spelling inside a
+    // name written in Japanese, and every run of the rest collapsing.
+    assert_eq!(slug("AskBar.settled を待った絵"), "askbar-settled");
     assert!(slug(&"x".repeat(200)).len() <= 40);
 }
 

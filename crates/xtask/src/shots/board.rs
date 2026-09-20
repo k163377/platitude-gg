@@ -150,7 +150,7 @@ fn record_with(
 ) -> Result<PathBuf, String> {
     let label = one_line(label);
     if label.is_empty() {
-        return Err("a run needs --label \"<what these pictures show>\"".to_string());
+        return Err(NEEDS_A_NAME.to_string());
     }
     if pngs.is_empty() {
         return Err("a run needs at least one png".to_string());
@@ -347,10 +347,47 @@ fn png_size(path: &Path) -> Result<(u32, u32), String> {
     Ok((word(16), word(20)))
 }
 
+/// What a run with no name is told. The placeholder carries both halves
+/// of what a name is: what to look at, in the language it is read in.
+const NEEDS_A_NAME: &str =
+    "a run needs --label \"<what to look at in these pictures, written in Japanese>\"";
+
+/// A name somebody typed, for the board to show.
+///
+/// **A run's name is written in Japanese.** The board is read by the
+/// person the pictures were taken for, and the name is the first thing
+/// they read off it — so it is written in the language they read
+/// (verify-ui skill §board). One Japanese character is the whole of what
+/// is asked: identifiers, verbs and file names inside the name keep
+/// their own spelling.
+///
+/// Only a typed name comes through here. The name `verify-ui` falls back
+/// to when nobody gave one is its verb and argument — a machine's name
+/// for a picture nobody asked to be shown.
+pub(crate) fn written_label(text: &str) -> Result<String, String> {
+    if one_line(text).is_empty() {
+        return Err(NEEDS_A_NAME.to_string());
+    }
+    if !text.chars().any(reads_as_japanese) {
+        return Err(format!(
+            "--label {text:?}: a run's name is written in Japanese — it is read off the \
+             board by the person the pictures were taken for, and it is the first thing \
+             they read there (verify-ui skill §board). Identifiers inside the name keep \
+             their own spelling."
+        ));
+    }
+    Ok(text.to_string())
+}
+
+/// Hiragana, katakana, or a kanji — the three the name is recognised by.
+fn reads_as_japanese(ch: char) -> bool {
+    matches!(ch, '\u{3040}'..='\u{30ff}' | '\u{4e00}'..='\u{9fff}')
+}
+
 /// A label reduced to something safe in a file name. Labels are written
-/// in Japanese as often as not, and non-ASCII in a name is a portability
-/// problem nobody needs — the timestamp and seat already make the name
-/// unique, so this only has to be a hint.
+/// in Japanese, and non-ASCII in a name is a portability problem nobody
+/// needs — the timestamp and seat already make the name unique, so this
+/// only has to be a hint.
 fn slug(text: &str) -> String {
     let mut out = String::new();
     for ch in text.chars() {

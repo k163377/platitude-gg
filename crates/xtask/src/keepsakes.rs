@@ -145,15 +145,12 @@ mod tests {
             "verify-ui",
             "row-card",
             "--label",
-            "the chip's badge",
+            "チップのバッジ",
         ]
         .map(String::from);
         assert_eq!(
             naming(&told),
-            (
-                "the chip's badge — linux".to_string(),
-                "row-card".to_string()
-            )
+            ("チップのバッジ — linux".to_string(), "row-card".to_string())
         );
     }
 

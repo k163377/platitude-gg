@@ -213,7 +213,7 @@ fn shot(sb: &Sandbox, tree: &Path, session: &str) -> (bool, String) {
     bytes.extend([0, 0, 0, 1, 0, 0, 0, 1]);
     std::fs::write(&png, &bytes).expect("a picture");
     let mut command = Command::new(EXE);
-    command.args(["shots", "add", "--label", "what this run shows"]);
+    command.args(["shots", "add", "--label", "この run で何を見るか"]);
     command.arg(&png);
     command.current_dir(tree);
     sb.env(&mut command);
