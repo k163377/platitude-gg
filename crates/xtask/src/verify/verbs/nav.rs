@@ -617,6 +617,43 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "peek=true open=true",
     },
+    // The four ways the pointer leaves the section the folded rail has
+    // open, read as the one word that tells them apart: `peek=` empty is
+    // the section gone, `peek=<kind>` the section standing. **Only
+    // `-into` is the second** — the hand is inside what it opened, and a
+    // list that took itself down under it would be the bug
+    // (verbs.md §nav-peek-away / -into / -out / -shut).
+    //
+    // **The picture cannot carry any of it.** A folded rail with a
+    // section beside it is what all four frame while the section is on
+    // its way out: the hand leaving starts a beat and the section goes at
+    // the end of it (`HoverCardHost`), so a run judged by eye alone reads
+    // green on the state its verb is there to disprove — which all three
+    // of the going ones did until 2026-09-20, `popups=1` in 24 runs of
+    // 24. `top=` follows because `peek=` on its own is a prefix of
+    // `peek=branch`, and the rest of the line is left out of the claim:
+    // `width=` is the folded rail's, and a claim that reached it would
+    // fail for a change to the rail with nothing about the section moved.
+    Verb {
+        name: "nav-peek-away",
+        when: &[],
+        plain: "peek= top=",
+    },
+    Verb {
+        name: "nav-peek-out",
+        when: &[],
+        plain: "peek= top=",
+    },
+    Verb {
+        name: "nav-peek-shut",
+        when: &[],
+        plain: "peek= top=",
+    },
+    Verb {
+        name: "nav-peek-into",
+        when: &[],
+        plain: "peek=branch top=",
+    },
     // The current branch's stand-in riding the edge its own row went out
     // of, with the list scrolled out from under it. **The picture cannot
     // answer this**: on the top edge the stand-in draws the same whether

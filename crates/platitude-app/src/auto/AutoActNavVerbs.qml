@@ -59,6 +59,13 @@ Item {
             // into the opened list, "-out" on out the far side (the exit no cell can see), "-shut" clicks the cell;
             // only "-into" leaves the section standing. "nav-peek" on an empty section stays shut
             // (NavRail.enterAt decides — `--preset empty` reads that side).
+            //
+            // **The pointer leaving is not the section leaving.** It goes a beat after the hand is out of both
+            // (`HoverCardHost`, `Metrics.hoverKeepMs`), and a run finished on the rail's own answer is finished inside
+            // that beat: it frames the section still standing and says `peek=<kind>`, which is the answer verbs.md
+            // calls wrong for these three (measured 2026-09-20: `nav-peek-out branch` framed `popups=1` in 24 runs of
+            // 24). So the three whose subject is the section going wait for it to have gone.
+            acts.peekGoneWanted = act === "nav-peek-away" || act === "nav-peek-out" || act === "nav-peek-shut"
             if (arg === "no-tags")
                 repoTab.setTagsShown(false)
             page.foldByHand(true)
@@ -197,6 +204,8 @@ Item {
                                         workTree.branch)
             } else if (act !== "diff-fold")
                 page.closeDiff()
+            // None of these is about a section going: "-by-rename" opens one and holds it open for the box.
+            acts.peekGoneWanted = false
             navRailTimer.start()
         } else {
             return false
@@ -320,17 +329,25 @@ Item {
             driver.complete()
         }
     }
+    /// Whether the act this beat is running for is one whose subject is the open section going away. Written by
+    /// `run()` on every road that reaches the beat, so a later act never waits on an earlier one's answer.
+    property bool peekGoneWanted: false
     // The splitter has to have handed the pane its new width before the width can be reported — the fold sets it, the
     // layout takes it. And the diff these verbs open is a git subprocess away: `diff=true` is the verb's own word
     // that a file is open in the middle, and a pane still reading it frames like one that has, so the run waits for
     // the read to have landed — rows, a picture or a binary notice (`DiffPane.diffSettled`) — before the rail is read
-    // and the census walked.
+    // and the census walked. The section these verbs take down is the third: the pointer leaving starts a beat and
+    // the section goes at the end of it, so a run that did not wait frames it still standing.
     SampleTimer {
         id: navRailTimer
         onTriggered: {
             if (sidebarPane.width <= 0 || sidebarPane.height <= 0)
                 return
             if (page.diffShown && !diffPane.diffSettled())
+                return
+            // The section itself, not the name the rail holds: `kind` is cleared as the popup begins to go
+            // (`SectionPeekPopup.onAboutToHide`) and the card is on screen for as long as its exit takes.
+            if (acts.peekGoneWanted && sidebarPane.peekSection.visible)
                 return
             navRailTimer.stop()
             Harness.report(
