@@ -33,6 +33,10 @@ ColumnLayout {
     /// Which chapters this category is actually showing, for the verb that presses the rail — the screen's `category`
     /// is the input side, and a run that read it back would be reporting its own press.
     readonly property bool autoAppShown: fetchField.visible
+    /// The version git printed is in a field, so a reader can drag over it and take it away — **the one chip in this
+    /// window that is a value** (`CodeChip.grabbable`). A picture cannot say it: a chip that answers a press is drawn
+    /// exactly like one that does not.
+    readonly property bool autoVersionGrabbed: gitVersionChip.grabbed
     function autoAvatarRowLit(at) {
         const row = avatarRepeater.itemAt(at)
         return !!row && row.lit
@@ -381,9 +385,15 @@ ColumnLayout {
             spacing: Theme.spaceXs
             visible: pane.gitPathChip !== "" || pane.gitPathWord !== ""
             CodeChip {
+                id: gitVersionChip
                 visible: pane.gitPathChip !== ""
                 word: pane.gitPathChip
                 tint: pane.gitPathInk
+                // The one chip in this window that is a value rather than a dress: it is git's own spelling of the
+                // version the chosen binary answered with, and it is what a reader copies into a bug report
+                // (規約 §設定の画面). Nothing else wants the press here — the sentence beside it is a field of its
+                // own and the chapter's controls are elsewhere.
+                grabbable: true
                 // On the first line — the tail may wrap to two.
                 Layout.alignment: Qt.AlignTop
             }

@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude
 import platitude.ui
@@ -7,6 +6,11 @@ import platitude.ui
 // Which git is doing all this. It sits in the right pane's corner so the command log
 // can open without landing on top of it. A build made in a worktree adds which one — parallel sessions' windows are
 // otherwise identical (デザイン規約 §アプリ名).
+//
+// **Both are fields** (`LineText`, 規約 §右のペインの字は掴める). The version is what a reader copies into a bug
+// report and the letter is which tree a window was built from, and neither is written anywhere else in this window.
+// They stand on the pane's own empty room — this corner is hidden the moment the list reaches it — so nothing else
+// wants the press.
 RowLayout {
     id: gitCorner
 
@@ -29,20 +33,20 @@ RowLayout {
     visible: gitCorner.offered && AppBackend.gitVersion !== ""
              && gitCorner.roomLeft >= gitCorner.roomNeeded
 
-    Label {
+    LineText {
         text: qsTr("git %1").arg(AppBackend.gitVersion)
         color: Theme.textMuted
-        font.pixelSize: Theme.fontSm
+        pixelSize: Theme.fontSm
     }
     // Drawn: as a glyph the spacing here was a full-width cell's leftover (規約 §余白).
     DotMark {
         visible: AppBackend.buildTree !== ""
         Layout.alignment: Qt.AlignVCenter
     }
-    Label {
+    LineText {
         visible: AppBackend.buildTree !== ""
         text: AppBackend.buildTree
         color: Theme.textMuted
-        font.pixelSize: Theme.fontSm
+        pixelSize: Theme.fontSm
     }
 }

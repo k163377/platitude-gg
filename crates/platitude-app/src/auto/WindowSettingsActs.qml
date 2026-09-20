@@ -506,10 +506,15 @@ Item {
             // after the drag is drawn exactly like one that was just swept — and neither can a run, which has no
             // pointer to press with. What is said here is that the hand is standing; that a press reaches it is
             // Qt's to answer, and `tests/qml/tst_fieldrelease.qml` asks with a real one.
+            // `version=` is the one word on this screen that is not a sentence and not a box: git's own spelling of
+            // the version the chosen binary answered with, worn as a chip. A chip that answers a press is drawn
+            // exactly like one that does not, so the field behind it is said here (`CodeChip.grabbed`). Only the
+            // application category has one.
             Harness.report("settings_sweep "
                 + settingsDialog.autoChapterHand.sweepAir(7, "cat=" + sweepTimer.cat
                                                              + " shown=" + sweepTimer.shown
-                                                             + " release=" + settingsDialog.caretHand.stands))
+                                                             + " release=" + settingsDialog.caretHand.stands
+                                                             + " version=" + acts.appPane.autoVersionGrabbed))
             window.finishAutoAct()
         }
     }

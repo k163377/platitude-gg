@@ -34,6 +34,11 @@ Item {
     /// everything else is the window's. The two the design has, chosen by name — a family that came from a caller
     /// would skip the per-OS fallback Theme resolves (規約 §QML 実装ルール).
     property bool mono: false
+    /// What is added to the space between words. **Negative where a command and its flag are one thing said**
+    /// (`CodeChip` — a mono space is wider than the air a chip's ground keeps at its own ends, and left alone the
+    /// two drift apart until the chip reads as two words on one ground). Zero everywhere else, which is every value
+    /// that is one word or a sentence.
+    property real wordSpacing: 0
     /// What the cut mark is drawn on. The pane's own ground by default — the mark is drawn over the last glyphs it
     /// cuts, and needs something opaque under it.
     property color ground: Theme.bgBase
@@ -191,6 +196,7 @@ Item {
         font.family: line.mono ? Theme.monoFamily : Theme.uiFamily
         font.pixelSize: line.pixelSize
         font.weight: line.weight
+        font.wordSpacing: line.wordSpacing
         // One line: the value is a name, a stamp or a hash, and none of them is a paragraph. What does not fit is cut
         // by the item above; a second line would move the row it stands in.
         wrapMode: Text.NoWrap

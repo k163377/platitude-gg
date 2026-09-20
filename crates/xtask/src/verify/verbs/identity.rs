@@ -200,8 +200,12 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[
             (
                 Arg::OneOf(&["", "app"]),
-                "settings_sweep all=true caret=true hand=true cat=app shown=true release=true",
+                "settings_sweep all=true caret=true hand=true cat=app shown=true release=true version=true",
             ),
+            // The git category stops before `version=`: the chip belongs
+            // to the other one, and its word is the answer to a probe
+            // this run does not wait for — asked here it would be a claim
+            // about how fast a `git --version` came back.
             (
                 Arg::Is("git"),
                 "settings_sweep all=true caret=true hand=true cat=git shown=true release=true",

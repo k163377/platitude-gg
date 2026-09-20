@@ -31,6 +31,18 @@ Item {
     /// hands in what is left for it, because a branch name has no length git will not take.
     property real cap: 0
 
+    /// Whether the word answers its own press, so a reader can drag over it and take it away
+    /// (規約 §右のペインの字は掴める). **Off by default, and it has to be**: a chip stands inside buttons as their
+    /// `contentItem` (`ActionButtonLabel` / `StashActionsBand`), and a field takes the press wherever it is drawn —
+    /// measured, and measured the hard way: a click on the hash plate's digits stopped reaching the button under
+    /// them (`tests/qml/tst_hashplate.qml`). So a chip that answered for itself everywhere would leave those
+    /// buttons unable to be pressed at all.
+    ///
+    /// **On where the chip is the value and nothing else wants the press**: the git a settings screen says it is
+    /// running, which is git's own spelling of its own version and the one line on that screen a reader takes away
+    /// to a bug report (規約 §設定の画面).
+    property bool grabbable: false
+
     /// What the whole word would take, cap or no cap — what a caller sharing out room has to ask for, since the width
     /// below is already the answer to that sharing (reading it back closes a ring).
     readonly property real wantWidth: wordLabel.implicitWidth
@@ -55,6 +67,11 @@ Item {
     }
     Label {
         id: wordLabel
+        // Hidden where the field below is drawing the word, and kept all the same: **every measurement this chip
+        // makes is read off it** — the ground's width, the chip's own implicit size, what a caller sharing out room
+        // asks for — and a `Text` lays out while invisible. An invisible item is skipped by the delivery walk
+        // outright, so the word is drawn once and answers a press once.
+        visible: !chip.grabbable
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         // Bounded by the cap: the chip's width comes from this — reading it back closes a loop.
@@ -70,5 +87,37 @@ Item {
         font.wordSpacing: -Theme.spaceXs
         font.pixelSize: chip.size
         font.weight: chip.weight
+    }
+    /// The word is in a field, and the field has it. **A picture cannot say it** — a chip a reader can drag over is
+    /// drawn exactly like one they cannot — so a run says it instead (`settings-sweep`). An automation-only
+    /// exposure, the same one `GraphPane.view` is (app-ui.md).
+    readonly property bool grabbed: wordField.item !== null && wordField.item.grabs
+                                    && wordField.item.text === chip.word && chip.word !== ""
+
+    // The same word, in a field, for the chip a reader takes away (`grabbable`). **Loaded only where it is asked
+    // for**: a chip is drawn per plan row and per button in this window, and a field is six items.
+    //
+    // It is laid exactly where the word above is and spelled from the same values, so the ground measured off that
+    // word fits this one — **including the word spacing**, which is the chip's own and would otherwise leave the
+    // field four pixels wider than the ground under it.
+    Loader {
+        id: wordField
+        active: chip.grabbable
+        anchors.left: wordLabel.left
+        anchors.verticalCenter: wordLabel.verticalCenter
+        width: wordLabel.width
+        height: wordLabel.implicitHeight
+        sourceComponent: LineText {
+            text: chip.word
+            color: chip.tint
+            mono: true
+            pixelSize: chip.size
+            weight: chip.weight
+            wordSpacing: -Theme.spaceXs
+            // The same half the `Label` gives way in, and for the same reason.
+            cutAt: "middle"
+            // The chip's own ground, so a cut mark is drawn on the chip rather than on whatever is behind it.
+            ground: Theme.bgHover
+        }
     }
 }
