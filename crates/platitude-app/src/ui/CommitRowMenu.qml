@@ -141,14 +141,62 @@ Item {
         // `applies` is what decides whether a card's row is there to count (`AppMenu.offeredRows`). Each is handed the
         // target only when the target is its own kind, so the other comes up holding what can still be made here.
         const branchy = rowMenu.targetKind === "branch" || rowMenu.targetKind === "remote"
-        branchCommitMenu.offerOn(branchy ? rowMenu.targetKind : "",
-                                 branchy ? rowMenu.targetName : "",
-                                 branchy ? rowMenu.targetName : "", rowMenu.oid)
+        const branchKind = branchy ? rowMenu.targetKind : ""
+        const branchName = branchy ? rowMenu.targetName : ""
+        branchCommitMenu.standOn(branchKind, branchName, branchName, rowMenu.oid,
+                                 rowMenu.branchFacts(branchKind, branchName, rowMenu.oid))
         const tagged = rowMenu.targetKind === "tag"
         tagCommitMenu.standOn(tagged ? "tag" : "", tagged ? rowMenu.targetName : "", rowMenu.oid,
                               rowMenu.tagFacts(tagged ? "tag" : "",
                                                tagged ? rowMenu.targetName : "", rowMenu.oid))
         commitMenu.offer()
+    }
+
+    /// What the BRANCH card stands on — the other entrance to it (`RefRowMenu.branchFacts` says why it is read here
+    /// and not in the card).
+    function branchFacts(kind, full, oidHex) {
+        if (kind !== "branch" && kind !== "remote")
+            return { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteDrifted": false,
+                     "offers": "", "open": false, "merged": "" }
+        const held = kind === "branch"
+            ? rowMenu.worktreesModel.worktreeHolding(full)
+            : rowMenu.worktreesModel.worktreeHolding(rowMenu.repoTab.localNameFor(full))
+        const counterpart = kind === "branch" ? rowMenu.branchesModel.upstreamOf(full) : ""
+        const drifted = kind === "branch" && rowMenu.branchesModel.upstreamDrifted(full)
+        const open = rowMenu.repoTab.state === "open"
+        return {
+            "heldByWorktree": held,
+            "holderLeaf": held === "" ? "" : GitFacts.pathLeaf(held),
+            "remoteCounterpart": counterpart,
+            "remoteDrifted": drifted,
+            "open": open,
+            "merged": !open || kind !== "branch" ? "" : rowMenu.graphModel.branchDeleteMerged(
+                oidHex, rowMenu.branchesModel.upstreamOidOf(full), rowMenu.workTree.headOid),
+            "offers": GitFacts.refMenuOffers(
+                kind, full, oidHex, open,
+                rowMenu.heldReason !== "" ? 0 : rowMenu.repoTab.busyCount,
+                rowMenu.workTree.branch, rowMenu.workTree.detached,
+                rowMenu.workTree.opText, rowMenu.workTree.conflictCount,
+                held, counterpart, drifted, rowMenu.repoTab.defaultRemote, "", "")
+        }
+    }
+
+    /// The reading over there gone on its own, and the pair at once — cut against the configured remote names, which
+    /// are the tab's (`RefRowMenu.deleteRemoteNow`).
+    function deleteRemoteNow(remoteRef) {
+        const remote = GitFacts.remoteOfRef(remoteRef, rowMenu.repoTab.remoteNames)
+        if (remote === "")
+            return
+        rowMenu.repoTab.deleteRemoteBranch(
+            remote, GitFacts.branchOfRef(remoteRef, rowMenu.repoTab.remoteNames))
+    }
+
+    function deleteEverywhereNow(branch, remoteRef, forced) {
+        const remote = GitFacts.remoteOfRef(remoteRef, rowMenu.repoTab.remoteNames)
+        if (remote === "")
+            return
+        rowMenu.repoTab.deleteBranchEverywhere(
+            branch, remote, GitFacts.branchOfRef(remoteRef, rowMenu.repoTab.remoteNames), forced)
     }
 
     /// What the TAG card stands on — the other entrance to it, reading the same section and asking core the same
@@ -382,13 +430,17 @@ Item {
         RefBranchMenu {
             id: branchCommitMenu
             heldReason: rowMenu.heldReason
-            repoTab: rowMenu.repoTab
-            workTree: rowMenu.workTree
-            graphModel: rowMenu.graphModel
-            branchesModel: rowMenu.branchesModel
-            worktreesModel: rowMenu.worktreesModel
+            refusedDelete: rowMenu.repoTab.branchDeleteRefused
+            landedDelete: rowMenu.repoTab.branchDeleteLanded
+            checkedBranch: rowMenu.repoTab.branchDeleteAsked
+            checkedMerged: rowMenu.repoTab.branchDeleteMerged
             onDeleteRequested: (kind, id, name, oidHex) => rowMenu.deleteRequested(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart) => rowMenu.upstreamRequested(branch, counterpart)
+            onCheckDeleteRequested: branch => rowMenu.repoTab.checkBranchDelete(branch)
+            onForceDeleteRequested: branch => rowMenu.repoTab.deleteBranch(branch, true)
+            onDeleteRemoteRequested: remoteRef => rowMenu.deleteRemoteNow(remoteRef)
+            onDeleteEverywhereRequested: (branch, remoteRef, forced) =>
+                rowMenu.deleteEverywhereNow(branch, remoteRef, forced)
         }
         AppMenuSeparator {}
         // **The very card the tag's own chip opens** (RefTagMenu): the mark left on this commit, and — where the row

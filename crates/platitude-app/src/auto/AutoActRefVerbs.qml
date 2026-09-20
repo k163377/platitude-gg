@@ -337,6 +337,10 @@ Item {
             Harness.report(
             "delete_blocked code=" + acts.blockedTipRow.code
             + " tip=" + acts.blockedTipRow.ToolTip.visible
+            // The folder the copy holding this branch stands in, which is the lookup the row out for *that* reason
+            // stands on (`RefBranchMenu.holderLeaf`). The sentence itself cannot be claimed — it carries an em dash
+            // — so without this the run judged nothing about the reading it was run for. Empty on every other row.
+            + " holder=" + refBranchCard.holderLeaf
             + " reason=" + acts.blockedTipRow.blockedReason)
             driver.complete()
         }

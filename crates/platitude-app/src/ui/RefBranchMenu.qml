@@ -1,5 +1,4 @@
 import QtQuick
-import platitude
 import platitude.ui
 
 // Everything a branch's name answers for once it exists, behind the branch's own mark: the delete here, the delete over
@@ -7,22 +6,31 @@ import platitude.ui
 // the other moves — that is where the reader carries on from.
 //
 // **One card, two entrances.** The chip on a graph row and the row itself are two ways at the same branch, and what
-// they offer has to be the same thing — so the card is a component, and it works out its own
-// answers: `offerOn` freezes them as the menu opens, the way every other menu freezes
-// what it shows (デザイン規約 §メニュー).
+// they offer has to be the same thing — so the card is a component, and both entrances hand it what it stands on:
+// `standOn` freezes it as the menu opens, the way every other menu freezes what it shows (デザイン規約 §メニュー).
+//
+// **The card reads no model and runs no write.** What a state may offer is core's rule (`offers::ref_menu`), the
+// readings the rows are told apart by live in their own sections, and the menu carrying this card is where all of
+// them are — so that is where they are read (`RefRowMenu.branchFacts` / `CommitRowMenu.branchFacts`), and the card
+// says what was pressed instead of pressing it (規約 §コンポーネント配線規約). What is decided here is the table:
+// which row keeps a seat, which greys and **with which sentence**, which gesture each takes and what colour it
+// wears. That leaves the card standing on plain values, which is what lets `tests/qml/tst_branchcard.qml` drive the
+// real one — the only place those sentences are read at all, since a headless run cannot match a non-ASCII line
+// (verify-ui §Windows での実行・デバッグの罠).
 AppMenu {
     id: branchCard
 
-    required property RepoTab repoTab
-    required property WorkTreeModel workTree
-    /// Which remote reading a branch speaks for (`upstreamOf`), and which other working copy has one checked out
-    /// (`worktreeHolding`) — the lists live in those sections alone.
-    required property NavSectionModel branchesModel
-    required property NavSectionModel worktreesModel
-    /// The drawn rows, which answer whether the branch is merged as the menu opens (`reaches`).
-    required property GraphModel graphModel
+    /// git's answer to the plain delete this card stayed up for, and to the early check it asked — handed down by
+    /// the menu carrying the card, which is where the tab is. **Live, not frozen**: the whole point of the two is
+    /// that they land while the card stands (see `refusedDelete` below).
+    property string refusedDelete: ""
+    property string landedDelete: ""
+    /// The branch the early check was asked about and what git answered for it (`yes` / `no` / `unknown`, empty for
+    /// nobody asked) — `RepoTab.branchDeleteAsked` / `branchDeleteMerged` at the entrance.
+    property string checkedBranch: ""
+    property string checkedMerged: ""
 
-    /// The branch this card is about, frozen by `offerOn`. `kind` is `branch` or `remote`; empty on a row that names
+    /// The branch this card is about, frozen by `standOn`. `kind` is `branch` or `remote`; empty on a row that names
     /// no branch, which is what takes the card off the menu.
     readonly property alias kind: state.kind
     readonly property alias refId: state.refId
@@ -37,20 +45,22 @@ AppMenu {
     /// coming later either. The automation reads it as the answer to "did the input land"
     /// (app-ui.md §UI 自動化の因果性); nothing on screen needs it.
     readonly property alias deleteAsked: state.deleteAsked
+    /// The folder the other working copy stands in, as the blocked row names it. **The automation reads this and not
+    /// the sentence**: that one carries an em dash, and a non-ASCII `must_say` never matches on Windows
+    /// (verify-ui §Windows での実行・デバッグの罠), so a run claiming the sentence would be claiming nothing. The
+    /// sentence itself is read off the card in `tests/qml/tst_branchcard.qml`.
+    readonly property alias holderLeaf: state.holderLeaf
 
     /// The branch git has just refused to delete, while the card that asked is still standing — so the delete row
     /// turns into the held `-D` where the hand already is (デザイン規約 §左メニューの所作). Written by the card itself
     /// off git's answer (`refusedDelete`), and cleared as the card next opens.
+    ///
+    /// The two answers above stand at the entrance until the next delete is asked, so a fetch answering in the same
+    /// drain cannot take one down before this card has seen it. **The card answers for itself**: refused, its row
+    /// turns into the held `-D`; taken, there is nothing left to catch and the card goes, and the menu it hangs off
+    /// with it (`dismiss()` is Qt's, and walks every level down). Whichever of the two entrances raised this card, it
+    /// is the one standing, so nothing above it has to know which one asked (app-ui.md §メニューを閉じるのは自分).
     property string forceDeleteBranch: ""
-    /// git's answer to the plain delete this card stayed up for, read off the tab by the card's own name — the same
-    /// place the early check's answer already comes from (`RepoTab.branchDeleteRefused` / `branchDeleteLanded`), and
-    /// standing there until the next delete is asked, so a fetch answering in the same drain cannot take it down
-    /// before this card has seen it. **The card answers for itself**: refused, its row turns into the held `-D`;
-    /// taken, there is nothing left to catch and the card goes, and the menu it hangs off with it (`dismiss()` is
-    /// Qt's, and walks every level down). Whichever of the two entrances raised this card, it is the one standing,
-    /// so nothing above it has to know which one asked (app-ui.md §メニューを閉じるのは自分).
-    readonly property string refusedDelete: branchCard.repoTab.branchDeleteRefused
-    readonly property string landedDelete: branchCard.repoTab.branchDeleteLanded
 
     /// What the page answers for: the delete git may still refuse opens a question there.
     ///
@@ -63,6 +73,14 @@ AppMenu {
     /// speaks for goes with it: that is where the question opens, and it is read here while the row still answers to
     /// its own name.
     signal upstreamRequested(string branch, string counterpart)
+    /// What this card asks the menu carrying it to run: the early check git answers `merged` with, the held `-D`
+    /// after a refusal, the reading over there on its own, and the pair at once. **Requests and not writes** — the
+    /// tab belongs to that menu (規約 §コンポーネント配線規約), and the remote name a ref path has to be cut into is
+    /// read there too, against the remotes this repository has configured.
+    signal checkDeleteRequested(string branch)
+    signal forceDeleteRequested(string branch)
+    signal deleteRemoteRequested(string remoteRef)
+    signal deleteEverywhereRequested(string branch, string remoteRef, bool forced)
 
     /// The automation's handles into these rows, passed on by whichever menu carries the card (app-ui.md).
     readonly property alias deleteItem: refDeleteItem
@@ -83,6 +101,9 @@ AppMenu {
         /// That reading is standing on another commit, so the two rows that reach it say why.
         property bool remoteDrifted: false
         property string heldByWorktree: ""
+        /// The folder that copy stands in — the leaf of the path git prints, cut at the entrance (the whole path is
+        /// the only unambiguous form and nobody reads a tooltip that wide).
+        property string holderLeaf: ""
         property bool canDelete: false
         property bool canDeleteRemote: false
         property bool canSetUpstream: false
@@ -96,7 +117,14 @@ AppMenu {
         property bool deleteAsked: false
     }
 
-    function offerOn(kind, name, full, oidHex) {
+    /// Opens on that branch, off answers already in hand.
+    ///
+    /// `facts` is what the menu carrying this card read for it: `heldByWorktree` the other working copy holding this
+    /// row's local branch and `holderLeaf` the folder it stands in, `remoteCounterpart` the reading a local branch
+    /// speaks for and `remoteDrifted` whether that reading stands on another commit, `offers` the words core
+    /// answered with, `open` whether the tab is, and `merged` what the drawn rows already say about the everyday
+    /// delete (`yes` / `no`, empty for a tip or a reference older than the window, whose answer only git has).
+    function standOn(kind, name, full, oidHex, facts) {
         branchCard.forceDeleteBranch = ""
         state.kind = kind
         state.refName = name
@@ -109,53 +137,35 @@ AppMenu {
             state.remoteCounterpart = ""
             state.remoteDrifted = false
             state.heldByWorktree = ""
+            state.holderLeaf = ""
             state.canDelete = false
             state.canDeleteRemote = false
             state.canSetUpstream = false
             state.onCurrentBranch = false
             return
         }
-        // A remote row lands on the local branch of the same name, so it is that one another copy can be holding.
-        state.heldByWorktree = kind === "branch"
-            ? branchCard.worktreesModel.worktreeHolding(full)
-            : branchCard.worktreesModel.worktreeHolding(branchCard.repoTab.localNameFor(full))
-        state.remoteCounterpart = kind === "branch" ? branchCard.branchesModel.upstreamOf(full) : ""
-        // And whether that reading is standing where this branch is. **Drifted, the two rows that reach it are out**
-        // — what a delete over there would take away is not what this row stands on, and the reading has a row of its
-        // own where it does stand (デザイン規約 §左メニューの所作 の削除の表).
-        state.remoteDrifted = kind === "branch" && branchCard.branchesModel.upstreamDrifted(full)
-        // The lookups above are the models'; what the rows may offer on them is core's rule, with the measured
-        // refusals it encodes — the current branch keeps its delete table and says why (offers::ref_menu).
-        const offers = GitFacts.refMenuOffers(
-            kind, full, oidHex,
-            // Nothing running, while the doors are held: the hold answers for every row of this card, and a row the
-            // busy count took away would be a row the reader never sees come back (`RefRowMenu.askBusy`).
-            branchCard.repoTab.state === "open",
-            branchCard.heldReason !== "" ? 0 : branchCard.repoTab.busyCount,
-            branchCard.workTree.branch, branchCard.workTree.detached,
-            branchCard.workTree.opText, branchCard.workTree.conflictCount,
-            state.heldByWorktree, state.remoteCounterpart, state.remoteDrifted,
-            // The upstream the last one names is the `pull` row's, and that row is the level above's
-            // (`RefRowMenu`): nothing on this card reads it.
-            branchCard.repoTab.defaultRemote, "", "").split(" ")
+        state.heldByWorktree = facts.heldByWorktree
+        state.holderLeaf = facts.holderLeaf
+        state.remoteCounterpart = facts.remoteCounterpart
+        state.remoteDrifted = facts.remoteDrifted
+        // What the rows may offer is core's rule, with the measured refusals it encodes — the current branch keeps
+        // its delete table and says why (offers::ref_menu).
+        const offers = facts.offers.split(" ")
         state.canDelete = offers.includes("delete")
         state.canDeleteRemote = offers.includes("delete-remote")
         state.canSetUpstream = offers.includes("set-upstream")
         state.onCurrentBranch = offers.includes("current")
         // Whether the everyday delete would be refused, answered as the menu opens so the delete row wears `-D` from
-        // the start (§左メニューの所作). Put to the graph's rows first — in hand
-        // in the same frame for every branch the window draws, with git's own reference point worked out on that side
-        // (`GraphModel.branchDeleteMerged`, 規約 §行が読む答えはどこから来るか) — and to git only for a tip or a
-        // reference older than the window, whose answer lands as `branchDeleteAsked` / `branchDeleteMerged`. The chip
-        // column is settled at open, so the swap moves no other row.
-        if (branchCard.repoTab.state === "open" && kind === "branch" && state.canDelete) {
-            const merged = branchCard.graphModel.branchDeleteMerged(
-                oidHex, branchCard.branchesModel.upstreamOidOf(full), branchCard.workTree.headOid)
-            if (merged !== "") {
-                state.deleteMerged = merged === "yes"
+        // the start (§左メニューの所作). The drawn rows answer first — in hand in the same frame for every branch the
+        // window draws (規約 §行が読む答えはどこから来るか) — and git is asked only where they cannot, its answer
+        // landing on `checkedBranch` / `checkedMerged`. The chip column is settled at open, so the swap moves no
+        // other row.
+        if (facts.open && kind === "branch" && state.canDelete) {
+            if (facts.merged !== "") {
+                state.deleteMerged = facts.merged === "yes"
                 state.deleteAnswered = true
             } else {
-                branchCard.repoTab.checkBranchDelete(full)
+                branchCard.checkDeleteRequested(full)
             }
             state.deleteAsked = true
         }
@@ -175,17 +185,6 @@ AppMenu {
             branchCard.dismiss()
     }
 
-    /// The remote reading gone without touching the local branch. The configured names say where the cut is (a
-    /// remote's own name may contain `/`); an unconfigured remote still cuts at the first slash, so the press acts and
-    /// git answers (`GitFacts.remoteOfRef`).
-    function deleteRemoteNow(remoteRef) {
-        const remote = GitFacts.remoteOfRef(remoteRef, branchCard.repoTab.remoteNames)
-        if (remote === "")
-            return
-        branchCard.repoTab.deleteRemoteBranch(
-            remote, GitFacts.branchOfRef(remoteRef, branchCard.repoTab.remoteNames))
-    }
-
     /// Why the delete table's rows are out — worn as the rows' `blockedReason` (デザイン規約 §無効).
     readonly property string deleteBlockedOnCurrent:
         qsTr("Switch away first — this is the branch you are on")
@@ -195,7 +194,7 @@ AppMenu {
     // whole path is what git answers with and is the only unambiguous form, but nobody reads a tooltip that wide.
     //: %1 is the folder of the other working copy that has this branch checked out.
     readonly property string blockedByWorktree:
-        qsTr("Checked out in another working copy — %1").arg(GitFacts.pathLeaf(state.heldByWorktree))
+        qsTr("Checked out in another working copy — %1").arg(state.holderLeaf)
 
     titleKind: "branch"
     titleTint: Theme.accent
@@ -236,8 +235,8 @@ AppMenu {
             branchRow
             && (branchCard.forceDeleteBranch === state.refId
                 || (state.deleteAnswered ? !state.deleteMerged
-                    : (branchCard.repoTab.branchDeleteAsked === state.refId
-                       && branchCard.repoTab.branchDeleteMerged === "no")))
+                    : (branchCard.checkedBranch === state.refId
+                       && branchCard.checkedMerged === "no")))
         readonly property bool heldRow: remoteRow || refusedRow
         /// The same answer as the press under way was given it: `refusedRow` follows git's answer to the *last* press,
         /// which is exactly what a hand on this row is waiting for, so read live the row re-words itself and changes
@@ -270,9 +269,9 @@ AppMenu {
         onHeld: {
             branchCard.dismiss()
             if (remoteRow) {
-                branchCard.deleteRemoteNow(state.refId)
+                branchCard.deleteRemoteRequested(state.refId)
             } else {
-                branchCard.repoTab.deleteBranch(state.refId, true)
+                branchCard.forceDeleteRequested(state.refId)
             }
         }
     }
@@ -294,7 +293,7 @@ AppMenu {
         holdTone: Theme.warning
         onHeld: {
             branchCard.dismiss()
-            branchCard.deleteRemoteNow(state.remoteCounterpart)
+            branchCard.deleteRemoteRequested(state.remoteCounterpart)
         }
     }
     // A composite of two commands is no one command, so the row says it in words (§git 用語のコード表記 の 1:1 規則).
@@ -330,15 +329,11 @@ AppMenu {
         holdTone: refBothDeleteItem.forces ? Theme.danger : Theme.warning
         onHeld: {
             branchCard.dismiss()
-            const c = state.remoteCounterpart
-            const remote = GitFacts.remoteOfRef(c, branchCard.repoTab.remoteNames)
-            if (remote === "")
-                return
-            // Both halves go at once: the pair is one write with one answer, so it is one thing to put back.
-            branchCard.repoTab.deleteBranchEverywhere(
-                state.refId, remote,
-                GitFacts.branchOfRef(c, branchCard.repoTab.remoteNames),
-                refBothDeleteItem.forces)
+            // Both halves go at once: the pair is one write with one answer, so it is one thing to put back. Where
+            // the reading's name is cut into a remote and a branch is the entrance's to say — it is the configured
+            // names that decide, and they are the tab's (`RefRowMenu.deleteRemoteNow`).
+            branchCard.deleteEverywhereRequested(state.refId, state.remoteCounterpart,
+                                                 refBothDeleteItem.forces)
         }
     }
 }

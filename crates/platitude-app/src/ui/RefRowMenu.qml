@@ -127,6 +127,58 @@ Item {
 
     anchors.fill: parent
 
+    /// What the BRANCH card stands on: the readings its rows are told apart by, and core's answer over them
+    /// (`RefBranchMenu.standOn`). **Read here because this is where the models are** — a remote row lands on the
+    /// local branch of the same name, so it is that one another copy can be holding, and the reading a local branch
+    /// speaks for is the branches' section's. The `merged` the drawn rows can answer is the graph's
+    /// (規約 §行が読む答えはどこから来るか); empty is a tip or a reference older than the window, which only git
+    /// answers for.
+    function branchFacts(kind, full, oidHex) {
+        if (kind !== "branch" && kind !== "remote")
+            return { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteDrifted": false,
+                     "offers": "", "open": false, "merged": "" }
+        const held = kind === "branch"
+            ? refRowMenu.worktreesModel.worktreeHolding(full)
+            : refRowMenu.worktreesModel.worktreeHolding(refRowMenu.repoTab.localNameFor(full))
+        const counterpart = kind === "branch" ? refRowMenu.branchesModel.upstreamOf(full) : ""
+        const drifted = kind === "branch" && refRowMenu.branchesModel.upstreamDrifted(full)
+        const open = refRowMenu.repoTab.state === "open"
+        return {
+            "heldByWorktree": held,
+            "holderLeaf": held === "" ? "" : GitFacts.pathLeaf(held),
+            "remoteCounterpart": counterpart,
+            "remoteDrifted": drifted,
+            "open": open,
+            "merged": !open || kind !== "branch" ? "" : refRowMenu.graphModel.branchDeleteMerged(
+                oidHex, refRowMenu.branchesModel.upstreamOidOf(full), refRowMenu.workTree.headOid),
+            "offers": GitFacts.refMenuOffers(
+                kind, full, oidHex, open, refRowMenu.askBusy,
+                refRowMenu.workTree.branch, refRowMenu.workTree.detached,
+                refRowMenu.workTree.opText, refRowMenu.workTree.conflictCount,
+                held, counterpart, drifted, refRowMenu.repoTab.defaultRemote, "", "")
+        }
+    }
+
+    /// The reading over there gone without touching the local branch. The configured names say where the cut is (a
+    /// remote's own name may contain `/`); an unconfigured remote still cuts at the first slash, so the press acts
+    /// and git answers (`GitFacts.remoteOfRef`).
+    function deleteRemoteNow(remoteRef) {
+        const remote = GitFacts.remoteOfRef(remoteRef, refRowMenu.repoTab.remoteNames)
+        if (remote === "")
+            return
+        refRowMenu.repoTab.deleteRemoteBranch(
+            remote, GitFacts.branchOfRef(remoteRef, refRowMenu.repoTab.remoteNames))
+    }
+
+    /// Both halves at once, cut the same way: one write with one answer, so it is one thing to put back.
+    function deleteEverywhereNow(branch, remoteRef, forced) {
+        const remote = GitFacts.remoteOfRef(remoteRef, refRowMenu.repoTab.remoteNames)
+        if (remote === "")
+            return
+        refRowMenu.repoTab.deleteBranchEverywhere(
+            branch, remote, GitFacts.branchOfRef(remoteRef, refRowMenu.repoTab.remoteNames), forced)
+    }
+
     /// What the TAG card stands on: the readings its rows are told apart by, and core's answer over them
     /// (`RefTagMenu.standOn`). **Read here because this is where the models are** — the card is handed values and
     /// hands requests back, so a menu carrying it is the one boundary the typed models cross.
@@ -160,7 +212,7 @@ Item {
         refRowMenu.refOid = oidHex
         // Both cards are their own question, and each works its answers out for itself — the very cards the graph
         // row's menu carries, asked the same way (RefBranchMenu / RefTagMenu).
-        branchMenu.offerOn(kind, name, full, oidHex)
+        branchMenu.standOn(kind, name, full, oidHex, refRowMenu.branchFacts(kind, full, oidHex))
         tagMenu.standOn(kind, full, oidHex, refRowMenu.tagFacts(kind, full, oidHex))
         // Whether another working copy has this row's branch out. **git refuses `switch` for one** (measured), and
         // the row wears the `!` for it — this level's one use of the answer; the delete rows read their own copy
@@ -301,13 +353,18 @@ Item {
         RefBranchMenu {
             id: branchMenu
             heldReason: refRowMenu.heldReason
-            repoTab: refRowMenu.repoTab
-            graphModel: refRowMenu.graphModel
-            workTree: refRowMenu.workTree
-            branchesModel: refRowMenu.branchesModel
-            worktreesModel: refRowMenu.worktreesModel
+            // git's two answers, live: the card turns its own row on them while it stands.
+            refusedDelete: refRowMenu.repoTab.branchDeleteRefused
+            landedDelete: refRowMenu.repoTab.branchDeleteLanded
+            checkedBranch: refRowMenu.repoTab.branchDeleteAsked
+            checkedMerged: refRowMenu.repoTab.branchDeleteMerged
             onDeleteRequested: (kind, id, name, oidHex) => refRowMenu.deleteRequested(kind, id, name, oidHex)
             onUpstreamRequested: (branch, counterpart) => refRowMenu.upstreamRequested(branch, counterpart)
+            onCheckDeleteRequested: branch => refRowMenu.repoTab.checkBranchDelete(branch)
+            onForceDeleteRequested: branch => refRowMenu.repoTab.deleteBranch(branch, true)
+            onDeleteRemoteRequested: remoteRef => refRowMenu.deleteRemoteNow(remoteRef)
+            onDeleteEverywhereRequested: (branch, remoteRef, forced) =>
+                refRowMenu.deleteEverywhereNow(branch, remoteRef, forced)
         }
         AppMenuSeparator {}
         // Everything a tag's name answers for, behind its own mark — the very card the graph row's menu carries

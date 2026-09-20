@@ -184,25 +184,39 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "delete_row asked=true",
     },
-    // The delete table's greyed rows, each saying why it is out. **The
-    // picture cannot answer this**: a tooltip is words, and a row that
-    // greyed for the wrong reason frames exactly like one that greyed
-    // for the right one. The two runs are a pair — the local row is out
-    // because of where the working tree is standing, the remote row
-    // because the two names are standing on different commits
-    // (デザイン規約 §左メニューの所作 の削除の表), and either alone
-    // would pass an implementation that gave both rows one reason.
+    // The delete table's greyed rows, standing where the pointer would
+    // put a line under them. **The sentences are not claimed here** —
+    // two of the three carry an em dash, and a non-ASCII `must_say`
+    // never matches on Windows (verify-ui §Windows での実行・デバッグの罠)
+    // — so `tests/qml/tst_branchcard.qml` reads them off the real card,
+    // which is the only place they are read at all.
     //
-    // The local row's own line is not in here: it is git's refusal
-    // written out with an em dash, and a non-ASCII `must_say` never
-    // matches on Windows (verify-ui §Windows での実行・デバッグの罠).
+    // **What is left for a window is the two lookups the card's rows are
+    // told apart by**, and one run each: `:remote` that
+    // `upstreamDrifted` arrived, and the `worktrees` one that the copy
+    // holding the branch did, cut to the folder it stands in. The run on
+    // the branch the tree is on went in 2026-09-20: `current` is a word
+    // core answers with, so that row stood on no lookup of its own, and
+    // its claim was the other one's to the letter.
     Verb {
         name: "delete-blocked-tip",
-        when: &[(
-            Arg::Ends(":remote"),
-            "delete_blocked code=push --delete tip=true \
-             reason=The remote is on another commit",
-        )],
+        when: &[
+            (
+                Arg::Ends(":remote"),
+                "delete_blocked code=push --delete tip=true holder= \
+                 reason=The remote is on another commit",
+            ),
+            // `holder=` is the folder the copy holding this branch
+            // stands in, and the whole of what this run is for: the
+            // sentence beside it is the one thing a claim cannot reach,
+            // so without this the run passed a card that had never
+            // looked the copy up (measured — blanking the cut at the
+            // entrance left it green).
+            (
+                Arg::Is("feature/topic-a"),
+                "delete_blocked code=branch --delete tip=true holder=topic",
+            ),
+        ],
         plain: "delete_blocked code=branch --delete tip=true",
     },
     // The fourth: an elided row whose hover says the whole name.
