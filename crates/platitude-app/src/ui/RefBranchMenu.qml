@@ -259,6 +259,10 @@ AppMenu {
                      : state.onCurrentBranch ? branchCard.deleteBlockedOnCurrent
                      : state.heldByWorktree !== "" ? branchCard.blockedByWorktree
                      : branchCard.deleteBlockedWhileBusy
+        // The folder that line names, on the line that names one: the mark stands against it in the tip
+        // (`AppMenuItem.tipMarkWord`). Asked of the line this row is actually showing, not of the state — a row
+        // blocked for another reason names no copy.
+        tipMarkWord: refDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
         holdMs: heldRow ? Metrics.holdMs : 0
         // A branch's plain delete keeps the menu up: git's answer has nowhere to land otherwise, and this row is where
         // it lands.
@@ -323,6 +327,8 @@ AppMenu {
                      : state.heldByWorktree !== "" ? branchCard.blockedByWorktree
                      : state.remoteDrifted ? Words.remoteOnAnotherCommit
                      : branchCard.deleteBlockedWhileBusy
+        // The same, on the row that runs both halves (see the local row above).
+        tipMarkWord: refBothDeleteItem.blockedReason === branchCard.blockedByWorktree ? state.holderLeaf : ""
         holdMs: Metrics.holdMs
         // The colour of the half that decides: reaching past this machine is warning, but once the local half runs as
         // `-D` this row throws away commits that live nowhere else, and that is danger (デザイン規約 §状態).

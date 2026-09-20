@@ -85,6 +85,9 @@ Item {
                     tag: "held by another working copy",
                     fields: { offers: root.held, heldByWorktree: "C:/copies/topic", holderLeaf: "topic" },
                     reason: "Checked out in another working copy — topic",
+                    // The one line of the three that names something from outside this repository, so the one that
+                    // hands the tip a word to stand the tree mark against (デザイン規約 §ref の種別).
+                    marks: "topic",
                 },
                 {
                     tag: "something running",
@@ -99,6 +102,9 @@ Item {
             verify(card.deleteItem.offered, "the table keeps its seats")
             compare(card.deleteItem.blockedReason, data.reason)
             compare(card.deleteBothItem.blockedReason, data.reason, "and the pair names the half that runs first")
+            const marks = data.marks === undefined ? "" : data.marks
+            compare(card.deleteItem.tipMarkWord, marks, "the word the tip stands a mark against")
+            compare(card.deleteBothItem.tipMarkWord, marks)
         }
 
         /// The reading over there is the one row with a reason of its own, and **the local delete can be pressable at

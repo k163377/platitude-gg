@@ -44,6 +44,14 @@ Item {
         const at = shared.sharedTip.parent
         return at !== null && at.tipHref !== undefined ? at.tipHref : ""
     }
+    /// The word inside the tip that the **drawn** tree mark stands in front of — read off the target the way the two
+    /// above are. A working copy's name wears that mark wherever it is said (規約 §ref の種別), and a tooltip is the
+    /// one place that name is a string: the markup opens a gap for the mark (`Words.roomInSentence`) and the mark is
+    /// drawn over it. **One kind, because one thing is said this way** — a name from outside this repository.
+    readonly property string tipMarkWord: {
+        const at = shared.sharedTip.parent
+        return at !== null && at.tipMarkWord !== undefined ? at.tipMarkWord : ""
+    }
     /// The word inside the tip that is a place to go was pressed. Only the href is said — what it names belongs to
     /// the page that owns the thing it points at, and `Main` hands it there.
     signal linkAsked(string href)
@@ -376,12 +384,34 @@ Item {
     Component {
         id: tipWord
         CardText {
+            id: tipWords
             text: shared.sharedTip.text
+            /// How many spaces the mark's ink takes, in the one character the markup can spend. **The space the
+            /// sentence already has in front of the word is the gap**; these are for the ink alone, which is why the
+            /// mark below is set against the word rather than centred in what they open.
+            readonly property int markRoom:
+                shared.tipMarkWord === "" || spaceRuler.advanceWidth <= 0
+                ? 0 : Math.ceil(tipMark.inkWidth / spaceRuler.advanceWidth)
+            /// Where that gap came out, and whether there is one to draw in. Read in one binding, the way
+            /// `CardText.markLeft` is: `charRect` is a call, and a call tells QML nothing about when its answer went
+            /// stale (規約 §QML 実装ルール).
+            readonly property rect markSeat: {
+                const at = shared.sharedTip.text.indexOf(shared.tipMarkWord)
+                if (tipWords.markRoom <= 0 || at < 0 || tipWords.markup === ""
+                        || tipWords.width <= 0 || tipWords.height <= 0)
+                    return Qt.rect(0, 0, 0, 0)
+                return tipWords.charRect(at + tipWords.markRoom)
+            }
             // Built here, because the step under the pointer is a colour and the colour has
             // to ride inside the markup (`Words.placeInSentence`). The step itself is the one a graph row's card
             // makes on its note (`CommitHoverCard`).
-            markup: Words.placeInSentence(shared.sharedTip.text, shared.tipPlace, shared.tipHref,
-                                          pointedLink !== "" ? Theme.textSecondary : Theme.textMuted)
+            //
+            // **A tip carries one of the two**: a place to go is a word this application can open, a marked word is a
+            // name from somewhere else, and no sentence here says both.
+            markup: shared.tipMarkWord !== ""
+                    ? Words.roomInSentence(shared.sharedTip.text, shared.tipMarkWord, tipWords.markRoom)
+                    : Words.placeInSentence(shared.sharedTip.text, shared.tipPlace, shared.tipHref,
+                                            pointedLink !== "" ? Theme.textSecondary : Theme.textMuted)
             onLinkAsked: href => shared.linkAsked(href)
             pixelSize: Theme.fontMd
             color: Theme.textPrimary
@@ -391,6 +421,26 @@ Item {
             // name nobody can read anywhere.
             width: Math.min(implicitWidth, shared.host.width / 2)
             onPointedChanged: shared.wordPointed = pointed
+            /// The one character the gap above is measured in. Off the field's own font, so a family that sets its
+            /// space wider opens a wider gap and the mark still fits.
+            TextMetrics {
+                id: spaceRuler
+                font.family: Theme.uiFamily
+                font.pixelSize: tipWords.pixelSize
+                text: " "
+            }
+            /// **Set against the word**, so the mark and the name read as one (規約 §ref の種別「印は名前の頭」):
+            /// the ink ends where the word begins, and the space the sentence already had stands in front of it.
+            NavIcon {
+                id: tipMark
+                visible: tipWords.markSeat.width > 0 || tipWords.markSeat.height > 0
+                kind: "tree"
+                tint: Theme.textSecondary
+                width: Theme.iconSm
+                height: Theme.iconSm
+                x: tipWords.markSeat.x - (Theme.iconSm + tipMark.inkWidth) / 2
+                y: tipWords.markSeat.y + (tipWords.markSeat.height - Theme.iconSm) / 2
+            }
         }
     }
 }

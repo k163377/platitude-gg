@@ -76,6 +76,12 @@ MenuItem {
     readonly property string blockedWhy:
         menuItem.blockedReason !== "" ? menuItem.blockedReason : menuItem.menuHeldReason
     readonly property bool blocked: menuItem.blockedWhy !== ""
+    /// A word inside that line which is a working copy's folder — the shared tooltip reads it off this row and
+    /// stands the tree mark against it (`SharedToolTip.tipMarkWord`). A copy's name wears that mark wherever it is
+    /// said (デザイン規約 §ref の種別), and a tooltip is the one place the name is a string rather than something with
+    /// a seat beside it.
+    property string tipMarkWord: ""
+
     /// Automation: show the tooltip with no pointer behind it. The same property the real hover drives, so a run that
     /// never reached the row photographs a row without one (verify-ui §hover の絵の撮り方).
     property bool tipForced: false

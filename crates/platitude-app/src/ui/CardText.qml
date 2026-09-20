@@ -107,6 +107,15 @@ Item {
         return Math.max(0, Math.min(want, left))
     }
 
+    /// Where one character of the text stands, in this part's own coordinates — the field fills it and keeps no
+    /// margin of its own, so the two are the same frame. **What a mark drawn inside the sentence is placed against**
+    /// (`SharedToolTip`): a mark is not a character, so the markup opens a gap for it (`Words.roomInSentence`) and
+    /// this says where that gap came out. A call, so a caller binding to it reads the field's own answers
+    /// (`width`, `text`) in the same binding — the way `markLeft` above does.
+    function charRect(pos) {
+        return field.positionToRectangle(pos)
+    }
+
     /// Puts the whole field in the selection, for the automation and for `Ctrl+A` (see `selectByKeyboard`).
     function selectAll() {
         field.selectAll()

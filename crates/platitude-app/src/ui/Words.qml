@@ -395,6 +395,19 @@ QtObject {
              + "<a href=\"" + href + "\"><font color=\"" + tint + "\">" + Words.inked(place) + "</font></a>"
              + Words.inked(sentence.substring(seat + place.length))
     }
+    /// The same sentence with room opened in front of one of its words, for a **drawn** mark to stand in
+    /// (`SharedToolTip`). A tooltip is one string and a mark is not a character (規約 §ref の種別), so what the markup
+    /// can give it is a gap of its own width; where that gap is, is the field's to answer (`CardText.charRect`).
+    ///
+    /// **Empty where the word is not in the sentence** — which is what a translation that moved or reworded it looks
+    /// like. The caller then draws the sentence as it came, with no mark and no gap, rather than a mark standing on
+    /// the wrong word.
+    function roomInSentence(sentence, word, spaces) {
+        const seat = sentence.indexOf(word)
+        if (word === "" || spaces <= 0 || seat < 0)
+            return ""
+        return Words.inked(sentence.substring(0, seat) + " ".repeat(spaces) + sentence.substring(seat))
+    }
     /// Words as markup reads them. **Rich text folds a run of spaces the way HTML does** (`encode::markup`), so all
     /// but the last space of a run is pinned — and **only those**: one of the two fields this is drawn in wraps
     /// (`NoticeLine`), and a sentence pinned at every space has nowhere left to break, so it breaks
