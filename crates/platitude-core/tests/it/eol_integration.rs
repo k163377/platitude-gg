@@ -295,6 +295,14 @@ async fn a_whole_tree_diff_names_every_file_it_has_something_about() {
 }
 
 // --------------------------------------------------------------- baselines
+//
+// Which neighbours are picked, in what order, and what their readings come
+// to are a rule over two listings and a handful of endings, and are held in
+// the unit tests beside `platitude_core::eol::sample` — an arrangement there
+// costs nothing rather than a repository apiece. **What is left here is what
+// only git can answer**: that the listing really is the index and the
+// endings really are what `ls-files --eol` prints, and that a file with no
+// single ending to give declines to vote rather than voting for one.
 
 #[tokio::test]
 async fn neighbours_in_the_same_directory_answer_for_a_new_file() {
@@ -316,38 +324,6 @@ async fn neighbours_in_the_same_directory_answer_for_a_new_file() {
 }
 
 #[tokio::test]
-async fn the_same_extension_elsewhere_widens_what_the_notice_may_claim() {
-    let mut repo = TestRepo::init();
-    for dir in ["one", "two", "three"] {
-        repo.commit_file(&format!("{dir}/f.kt"), "fun x() {}\r\n", "code");
-    }
-    // Nothing sits beside the new file, so the sample had to leave the
-    // directory and the notice may not say "here".
-    assert_eq!(
-        baseline(&repo, "fresh/new.kt").await,
-        Some(Baseline {
-            eol: Eol::Crlf,
-            scope: Scope::Ext("kt".to_string())
-        })
-    );
-}
-
-#[tokio::test]
-async fn a_file_with_no_extension_is_measured_against_the_repository() {
-    let mut repo = TestRepo::init();
-    for name in ["a.kt", "b.md", "c.txt"] {
-        repo.commit_file(name, "line\n", "content");
-    }
-    assert_eq!(
-        baseline(&repo, "Makefile").await,
-        Some(Baseline {
-            eol: Eol::Lf,
-            scope: Scope::Repo
-        })
-    );
-}
-
-#[tokio::test]
 async fn a_neighbour_that_cannot_vote_is_replaced_rather_than_counted() {
     // Mixed has no single answer to give and a file with no ending at all
     // has nothing to say; both have to drop out and be made up for.
@@ -364,16 +340,6 @@ async fn a_neighbour_that_cannot_vote_is_replaced_rather_than_counted() {
             scope: Scope::Here("kt".to_string())
         })
     );
-}
-
-#[tokio::test]
-async fn too_few_files_to_read_means_no_answer_at_all() {
-    // Two neighbours are not a house style, and answering from them would
-    // be the app inventing one.
-    let mut repo = TestRepo::init();
-    repo.commit_file("only.kt", "fun x() {}\n", "code");
-    repo.commit_file("second.kt", "fun y() {}\n", "code");
-    assert_eq!(baseline(&repo, "third.kt").await, None);
 }
 
 #[tokio::test]
