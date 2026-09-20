@@ -157,15 +157,24 @@ commands:
 
   qmltest
       The QtTest files under crates/platitude-app/tests/qml, run through
-      Qt's own qmltestrunner (offscreen, one process per file). They hold
-      what only QML can be asked — whether a Canvas that owes the
-      screenshot a paint has painted — and no Rust test reaches it. The
-      product's whole QML module is staged under target/qmltest with its
-      shipped qmldir, because `import platitude.ui` resolves by directory
-      name and the product's directory is called `ui`. Nothing of the app
-      is compiled, so a file answers in a fraction of a second. `gate`
-      runs it, on both sides, when the change reaches that module or the
-      tests themselves; `cargo xtask linux qmltest` is the container.
+      Qt's own qmltestrunner (offscreen). They hold what only QML can be
+      asked — whether a Canvas that owes the screenshot a paint has
+      painted — and no Rust test reaches it. The product's whole QML
+      module is staged under target/qmltest with its shipped qmldir,
+      because `import platitude.ui` resolves by directory name and the
+      product's directory is called `ui`. Nothing of the app is
+      compiled, so a file answers in a fraction of a second.
+      They run in one process. Every TestCase every file declares has to
+      be in the log finished — a file may declare several, an
+      initTestCase without its cleanup is a run that went down inside
+      that case, and nothing here is optional, so a case simply absent is
+      a run that fell short rather than one that was allowed to. A run
+      that is not green is then run one file per process, which is what
+      says which file; the verdict stays the first run's either way, so
+      files that pass apart and fail together are not independent of
+      each other, and that is a failure of its own. `gate` runs it, on
+      both sides, when the change reaches that module or the tests
+      themselves; `cargo xtask linux qmltest` is the container.
 
   deny
       cargo-deny over deny.toml: the bans that keep networking crates and
