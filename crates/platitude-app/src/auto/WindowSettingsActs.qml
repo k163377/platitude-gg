@@ -512,6 +512,14 @@ Item {
             if (act === "avatar-remove" && acts.appPane.autoAvatarRows >= avatarCardTimer.rowsBefore)
                 return
             avatarCardTimer.stop()
+            // Last, so the picture holds the chapter these verbs are about. `AVATARS` is the foot of this category
+            // and the window does not reach it from where the screen opens, so a run that photographed the resting
+            // position photographed the chapters above the list — the same thing `settings-eol` scrolls for.
+            //
+            // **Not for the candidate list.** Its popup is placed where the field stood when it opened, and sending
+            // the chapters out from under it would leave the list hanging off its own box.
+            if (act !== "avatar-combo")
+                settingsDialog.autoShowChapterFoot()
             Harness.report("avatar_card rows=" + acts.appPane.autoAvatarRows
                               + " painted=" + acts.appPane.autoAvatarRowPainted(0)
                               + " lit=" + acts.appPane.autoAvatarRowLit(0)
