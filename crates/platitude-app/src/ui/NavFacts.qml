@@ -91,8 +91,13 @@ QtObject {
     function lines(kind, a) {
         const drawn = kind === "branch" ? [navFacts.copyLine(a), navFacts.readingLine(a)]
                     : kind === "remote" ? [navFacts.branchLine(a.local, a), navFacts.copyLine(a)]
-                    : kind === "worktree" ? [navFacts.branchLine(a.branch, a), navFacts.readingLine(a),
-                                             navFacts.stateLine(a)]
+                    // **The repository's own copy names its branch on its own line**, so the line that would name
+                    // it again is left out — the row is named by that branch rather than by its folder
+                    // (`NavRowBody.homeCopy`), and a row whose one word is repeated directly under itself reads as
+                    // a stutter (observed). The measure that line carries is on the BRANCHES row for the same
+                    // branch, which draws it wherever that branch has an upstream (デザイン規約 §左メニューの所作).
+                    : kind === "worktree" ? [a.state === "MAIN" ? null : navFacts.branchLine(a.branch, a),
+                                             navFacts.readingLine(a), navFacts.stateLine(a)]
                     // One line to a remote — the one section whose lines are a list rather than a fixed few, because
                     // what a tag's row folds is however many of them have the name.
                     : kind === "tag" ? a.remotes.map(carried => navFacts.carrierLine(carried, a.against))

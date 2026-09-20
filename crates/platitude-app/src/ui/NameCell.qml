@@ -72,8 +72,10 @@ RowLayout {
     /// §余白「印が自分で持っている余白は、隣の詰めに数える」). A change code fills its box, so a list that shows one takes the box
     /// outright (`iconMd`); the marks that stand here where no change can — the fold arrow and the sidebar's state
     /// marks — are drawn on the `iconSm` grid and none of them reaches its edge, so that seat comes down a step
-    /// further and the air stops being paid for twice (by design: the widest of them, the padlock, spans 9 of the
-    /// 16, so with the line it carries it fills an `iconXs` seat almost exactly).
+    /// further and the air stops being paid for twice (by design: the widest of them, the house a repository's own
+    /// working copy wears, spans 11 of the 16 and is filled rather than stroked, which comes to the same ink as
+    /// the padlock's 9 and the line it carries — so the seat holds both at one width, and that width is the
+    /// ceiling a mark drawn for this seat is designed against).
     ///
     /// **One answer per list.** `showChange` is a section's kind, so every row's name begins in the same column as
     /// its neighbours' — the invariant the seat is held open for in the first place. It is the same reason the seat

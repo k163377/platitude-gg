@@ -280,6 +280,38 @@ Item {
             locked.destroy()
         }
 
+        /// The repository's own copy is **named by the branch it has out** (`NavRowBody.homeCopy`), so the column
+        /// at the far end of the row stays empty and the line that would name that branch a second time is left
+        /// out of what the row opens. **On no branch it falls back to its folder** — the main checkout can sit on
+        /// a detached HEAD like any other, and it is the one row with nothing else to draw.
+        function test_the_repositorys_own_copy_is_named_by_the_branch_it_has_out() {
+            root.branchUpstream = ""
+            root.branchGone = ""
+            const home = root.rowOf({ "kindHint": "worktree", "name": "repo", "full": "C:/work/repo",
+                                      "bucket": "main", "change": "MAIN" })
+            const named = root.drawn(home, "cutAt")
+            compare(named.length, 1, "the name, and no column at the far end of the row")
+            compare(named[0].text, "main", "the branch it has out")
+            verify(home.gatherFacts())
+            compare(home.factsLines.length, 0, "and no line under it saying that branch again")
+            home.destroy()
+
+            const loose = root.rowOf({ "kindHint": "worktree", "name": "repo", "full": "C:/work/repo",
+                                       "bucket": "", "change": "MAIN" })
+            const fallen = root.drawn(loose, "cutAt")
+            compare(fallen.length, 1)
+            compare(fallen[0].text, "repo", "its folder, where it holds no branch to be named by")
+            loose.destroy()
+
+            const linked = root.rowOf({ "kindHint": "worktree", "name": "topic", "full": "C:/copies/topic",
+                                        "bucket": "feature/topic-a" })
+            const both = root.drawn(linked, "cutAt")
+            compare(both.length, 2, "every other copy is named by its folder and shows its branch beside it")
+            compare(both[0].text, "topic")
+            compare(both[1].text, "feature/topic-a")
+            linked.destroy()
+        }
+
         // ---- TAGS ----------------------------------------------------
 
         /// A tag has no namespace, so one row stands for every side of the name and what it folds is the list of who

@@ -30,6 +30,21 @@ RowLayout {
     /// below the row's own line (`NameCell.whole`).
     readonly property Item nameWhole: nameCell.wholeField
     readonly property real nameWholeOver: nameCell.wholeOver
+    /// The repository's own working copy — the row every linked one hangs off (`models::nav::MAIN`). **It is named
+    /// by the branch it has out, not by its folder**, and the house in the seat is what tells the row apart.
+    readonly property bool homeCopy: body.row.kindHint === "worktree" && body.row.change === "MAIN"
+    /// The branch that row is named by — **empty while that copy is on no branch at all**, which the repository's
+    /// own can be like any other (a detached HEAD in the main checkout: a bisect, a rebase stopped, a commit read
+    /// out). git lists it with no `branch` line and the slot comes through empty. **The folder name comes back
+    /// there**: this row draws nothing else, so without it the reader is left with a house and a blank line.
+    readonly property string homeName: body.homeCopy ? body.row.bucket : ""
+    /// The colour a row wears where this window is standing. A branch says it in the link colour everywhere a name
+    /// of it is drawn (デザイン規約 §ref の種別), and the main working copy keeps that colour — it is the one row
+    /// that answers with a branch. **A linked copy says it in the WORKTREES section's own green**: the two are the
+    /// two kinds of place a reader can be standing in, and the colour is what tells them apart without reading a
+    /// word (デザイン規約 §ref の種別 の名前の色).
+    readonly property color hereTone:
+        body.row.kindHint === "worktree" && !body.homeCopy ? Theme.success : Theme.textLink
 
     spacing: Theme.spaceXs
     // The mark and the name, in the part both file lists share (`NameCell`): the slot every row opens with — a
@@ -44,7 +59,10 @@ RowLayout {
         showName: !body.row.editing
         // **While the row is open its name is shown whole, in its own place** — the arrangement the reader was
         // looking at does not move, and what could not be said on one line wraps downward (`NameCell.whole`).
-        whole: body.row.factsOpen ? body.row.factsName : ""
+        // **Whichever name the row is drawing**: the main copy's row is named by its branch, so that is the one
+        // the field carries too (below).
+        whole: !body.row.factsOpen ? ""
+             : body.homeName !== "" ? body.homeName : body.row.factsName
         folder: body.row.folder
         change: body.row.change
         // A sidebar folder keeps its fold state in the change slot it has no change code for (`models::nav::item`).
@@ -64,26 +82,39 @@ RowLayout {
         // only says what the lock was taken for, and a row whose state came and went as a hand passed over it
         // would answer "is this one locked" differently depending on where the pointer is. The seat stays open
         // either way, so no name moves.
+        //
+        // **The house is the third tenant of that seat** — the repository's own working
+        // copy, in the place a linked one wears its padlock. It never contends for the seat: git refuses
+        // `worktree lock` on the main working tree, and `worktree prune` only ever looks at the linked ones.
         seatMark: body.row.kindHint === "branch"
                     ? (body.row.change === "HELD" && !body.row.factsOpen ? "tree" : "")
                 : body.row.kindHint !== "worktree" ? ""
                 : body.row.change === "LOCKED" ? "lock"
-                : body.row.change === "PRUNABLE" ? "bang" : ""
+                : body.row.change === "PRUNABLE" ? "bang"
+                : body.row.change === "MAIN" ? "home" : ""
         // **The tree mark wears the WORKTREES section's own colour** — the mark and that section say one thing, and
         // a mark that says it in the quiet colour every other mark takes says it more faintly than the section it
         // points at (規約 §ref の種別).
         seatTint: body.row.change === "PRUNABLE" ? Theme.warning
                 : nameCell.seatMark === "tree" ? Theme.success
                 : Theme.textSecondary
-        name: body.row.name
+        // **The main working copy is named by its branch** — the folder it stands in is the tab's name and the
+        // window title's, so a row repeating it spends its own line on what the window already says. The branch
+        // goes in the name's own place rather than the column at the far end (`branchSeat`, which this row leaves
+        // empty): every other name in this panel begins in this column, and a row whose only word sat at the other
+        // edge read as a row with no name and a note beside it. **Its folder is what is left when it holds no
+        // branch** (`homeName`).
+        name: body.homeName !== "" ? body.homeName : body.row.name
         // Where a renamed file came from, said the same way the commit's own file list says it: a rename is two
         // names, and a row that shows only the new one leaves the reader to work out what moved. Empty on
         // everything else — the model fills it for staged files alone, which is the only side git names a source
         // on, and a folder row keeps its own path in the slot beside it (`orig_path`, which this is not).
         origPath: body.row.orig_name
         // The name says where the ref is, the way a chip's does: grey for one this repository does not hold (デザイン規約
-        // §ref の種別).
-        tone: body.row.is_head ? Theme.textLink : body.row.only_remote ? Theme.textSecondary : Theme.textPrimary
+        // §ref の種別), and the colour of the place the reader is standing in where this is that place
+        // (`body.hereTone`).
+        tone: body.row.is_head ? body.hereTone
+            : body.row.only_remote ? Theme.textSecondary : Theme.textPrimary
         weight: body.row.is_head ? Font.DemiBold : Font.Normal
         // A pending file whose change says something about its line endings wears the mark on the name's shoulder.
         // What it is about is the row's hover; the sentence in full is the diff pane's.
@@ -104,9 +135,12 @@ RowLayout {
     // once. **A copy on no branch shows nothing here** — a word in this column reads as a branch's name, since
     // every other row in it holds one, and the column is no place to say that there is none
     // (デザイン規約 §左メニューの所作).
+    //
+    // **The main copy's row leaves it empty** — that row is named by the branch already (`homeCopy`, above), and a
+    // second copy of the name at the far edge would be the one fact this row has, said twice.
     Loader {
         id: branchSeat
-        active: !body.row.folder && body.row.kindHint === "worktree" && body.row.bucket !== ""
+        active: !body.row.folder && body.row.kindHint === "worktree" && body.row.bucket !== "" && !body.homeCopy
                 && !(body.row.factsOpen && body.row.factsBranch !== "")
         visible: branchSeat.active
         Layout.maximumWidth: body.row.listWidth / 2

@@ -3,6 +3,10 @@ import platitude.ui
 
 // Hand-drawn 16px-grid icons in the common git-client style (branch fork, cloud remote, price-tag, archive box, tree,
 // clock). Scaled by the item size; single stroke color.
+//
+// **`home` is the one kind drawn as a filled shape** — its doorway is a hole cut in the fill, and no stroked form
+// of one survives at the size this family is read at (the kind's own comment in `onPaint` carries the measurements;
+// デザイン規約 §ref の種別 carries the decision).
 InkCanvas {
     id: icon
     property string kind: "branch"
@@ -26,6 +30,12 @@ InkCanvas {
         // The padlock's body, 3.5 to 12.5; the shackle is 5.6..10.4 and stands inside it. Said out loud because a
         // graph chip seats this mark beside a name and the gap is measured to its ink (デザイン規約 §余白).
         case "lock": return 9
+        // The house, 2.5 to 13.5. **Filled, so there is no line to add to that** — 8.25px at `iconSm`, which is
+        // exactly what the padlock's 9 and its stroke come to, so the two stand in one column at one width. 11 is
+        // the ceiling the seat puts on it: a step wider starts eating the gap the name after it keeps (§余白).
+        // **`inkWidth` adds a stroke this kind does not draw**, so a caller seating it against a word by its ink
+        // would measure one line too many — no caller does, since the seat it stands in takes its own size.
+        case "home": return 11
         case "plus":
         case "minus":
         case "copyicon": return 9
@@ -330,6 +340,38 @@ InkCanvas {
             ctx.lineTo(10.4 * s, 8.2 * s)
             ctx.stroke()
             ctx.strokeRect(3.5 * s, 8.2 * s, 9 * s, 5.3 * s)
+        } else if (icon.kind === "home") {
+            // A house, **and the one mark of this family that is filled rather than stroked** (デザイン規約
+            // §ref の種別 の家の印 — a written exception, not a slip). The reason is the doorway: a house is read
+            // by its doorway as much as by its roof, both of the marks this one can be read against carry one, and
+            // **a doorway cannot be stroked at this size** — the mark is drawn at `iconSm`, where two jambs far
+            // enough apart to leave an opening do not fit between the walls, and a doorway drawn as a filled patch
+            // inside a stroked outline comes out as ink standing in the house rather than a way into it (both
+            // measured). Filled, it is a hole the way the sources cut theirs.
+            //
+            // **The proportions come off those sources, read rather than remembered**: octicons' `home-16` is 14
+            // wide by 14.34 tall with the roof taking 38.8% of the height, Feather's is 18 by 20 with 35%, and the
+            // doorway is 14% of the width by 42% of the height in the first. **Neither is wider than it is tall**,
+            // and a house drawn that way is the one that reads as squashed. The seat is what caps the width at 11
+            // (`inkGrid`), so the height is what comes up to meet it: 11 by 11.4, the roof 37% of it.
+            //
+            // **The apex keeps the family's miter join** — rounded, the two slopes close into a dome at this size
+            // (observed).
+            ctx.beginPath()
+            ctx.moveTo(2.5 * s, 6.5 * s)
+            ctx.lineTo(8 * s, 2.3 * s)
+            ctx.lineTo(13.5 * s, 6.5 * s)
+            ctx.lineTo(13.5 * s, 13.7 * s)
+            ctx.lineTo(2.5 * s, 13.7 * s)
+            ctx.closePath()
+            // The doorway. **Wound against the outline**, so the non-zero fill leaves it open — a second `fill()`
+            // in the background's colour would need a colour this part is never told.
+            ctx.moveTo(6.9 * s, 13.7 * s)
+            ctx.lineTo(9.1 * s, 13.7 * s)
+            ctx.lineTo(9.1 * s, 9.3 * s)
+            ctx.lineTo(6.9 * s, 9.3 * s)
+            ctx.closePath()
+            ctx.fill()
         } else if (icon.kind === "folder") {
             ctx.beginPath()
             ctx.moveTo(2.5 * s, 12.5 * s)
