@@ -188,16 +188,17 @@ Item {
     readonly property real wipRoom:
         rowItem.width - rowItem.labelsW - (ListView.view ? ListView.view.graphColWidth : 0)
         - 2 * Theme.spaceSm - 2 * Theme.borderWidth - 5 * Theme.spaceXs - tallySeat.implicitWidth
-    /// And what is left of that for the copy's own name, once the words in front of it have theirs and the two
-    /// things between them have taken their seats: **the dot, which is two hairlines across** (`DotMark`), **and the
-    /// mark, which is a whole `iconSm` box** (the sentence is set at `fontMd`, where a box seat reads as the gap the
-    /// pane's own heading keeps), with a gap either side of the pair.
+    /// And what is left of that for the copy's own name, once the words in front of it have theirs and what stands
+    /// between them has taken its seat — **the dash and the mark, measured by the row that draws them**
+    /// (`carriedSeat.item.furnitureW`). Neither is a number this file can write down: the dash is a character, so
+    /// its width is the font's, and the mark is seated to its own ink rather than to its box (規約 §余白).
     ///
     /// **The words never cut** — they are the same fixed phrase on every one of these rows, and a sentence
     /// that lost its end to a folder name would stop saying what the row is (規約 §未コミット行が名乗るもの). So the
     /// whole of the overrun is the name's, which is the one thing here that keeps both of its ends when cut.
     readonly property real carriedNameMax:
-        rowItem.wipRoom - wordsCut.implicitWidth - 2 * Theme.borderWidth - Theme.iconSm - 2 * Theme.spaceXs
+        rowItem.wipRoom - wordsCut.implicitWidth
+        - (carriedSeat.item ? carriedSeat.item.furnitureW : 0)
 
     RowLayout {
         anchors.fill: parent
@@ -283,39 +284,66 @@ Item {
                        : Theme.textPrimary
             }
             // Whose tree the words are about, on the rows that are about somebody else's
-            // (デザイン規約 §未コミット行が名乗るもの). **A dot, not a preposition** — this is the device the window
-            // already separates a caption from its value with (`CarriedPane`, `DiffPaneHeader`), and the copy *is*
-            // that folder name, which is apposition: `in here` read as "in this place" rather than as the name of
-            // the copy called `here`. **And the mark is what says the name is a folder's**
+            // (デザイン規約 §未コミット行が名乗るもの). **A dash, not a preposition** — the copy *is* that folder name,
+            // which is apposition: `in here` read as "in this place" rather than as the name of the copy called
+            // `here`. **And the mark is what says the name is a folder's**
             // — the column of names beside it is full of refs, and a bare word in a sentence about a checkout looks
-            // like one of those (規約 §ref の種別). Same mark, same size and same three-part phrase as the pane this
+            // like one of those (規約 §ref の種別). Same mark, same size and same phrase as the pane this
             // row opens, so a reader meets one spelling of a working copy's name.
             //
             // Built only on the rows that wear it, for the reason the counts below are: a canvas per graph row is
             // heap the rows are measured by (rules-refs/app-ui.md, the Loader rule).
             Loader {
+                id: carriedSeat
                 active: rowItem.carried
                 visible: rowItem.carried
                 sourceComponent: RowLayout {
                     spacing: Theme.spaceXs
-                    DotMark { tint: Theme.textSecondary }
-                    NavIcon {
-                        kind: "tree"
-                        // The ink every mark in this app takes, the padlock on a chip included: what a mark says is
-                        // its shape (規約 §ref の種別).
-                        tint: Theme.textSecondary
-                        Layout.preferredWidth: Theme.iconSm
-                        Layout.preferredHeight: Theme.iconSm
+                    /// The dash and the mark — what the row's ceiling for the name takes off (`carriedNameMax`),
+                    /// read here because this is where the two of them are drawn.
+                    readonly property real furnitureW:
+                        carriedDash.implicitWidth + Theme.spaceXs + carriedMark.inkWidth
+                    // The dash the window sets between a caption and its value, as a character: it is the one
+                    // piece of punctuation that came out the same length and in the same place on both OSes
+                    // (規約 §余白「字で出ていた記号は 5 種」).
+                    Label {
+                        id: carriedDash
+                        text: "—"
+                        font.pixelSize: Theme.fontMd
+                        color: Theme.textSecondary
                         Layout.alignment: Qt.AlignVCenter
                     }
-                    // Cut in the middle, the way this copy's name is cut everywhere else it is shown
-                    // (規約 §別の作業コピーを読む): a folder can be called anything, and the ends are what one is
-                    // told apart by. The whole of it is in the pane this row opens.
-                    CutName {
-                        Layout.maximumWidth: rowItem.carriedNameMax
-                        text: rowItem.carriedName
-                        pixelSize: Theme.fontMd
-                        color: Theme.textSecondary
+                    // **The mark and the name are one word** (規約 §未コミット行が名乗るもの) — the seat is the
+                    // mark's own ink, so the air its box holds past that does not read as a gap nobody wrote
+                    // (規約 §余白「印が自分で持っている余白は、隣の詰めに数える」). A layout inside a layout fills
+                    // by default, and this pair is only ever as wide as what it holds.
+                    RowLayout {
+                        Layout.fillWidth: false
+                        spacing: 0
+                        Item {
+                            Layout.preferredWidth: carriedMark.inkWidth
+                            Layout.preferredHeight: Theme.iconSm
+                            Layout.alignment: Qt.AlignVCenter
+                            NavIcon {
+                                id: carriedMark
+                                anchors.centerIn: parent
+                                kind: "tree"
+                                // The ink every mark in this app takes, the padlock on a chip included: what a mark
+                                // says is its shape (規約 §ref の種別).
+                                tint: Theme.textSecondary
+                                width: Theme.iconSm
+                                height: Theme.iconSm
+                            }
+                        }
+                        // Cut in the middle, the way this copy's name is cut everywhere else it is shown
+                        // (規約 §別の作業コピーを読む): a folder can be called anything, and the ends are what one is
+                        // told apart by. The whole of it is in the pane this row opens.
+                        CutName {
+                            Layout.maximumWidth: rowItem.carriedNameMax
+                            text: rowItem.carriedName
+                            pixelSize: Theme.fontMd
+                            color: Theme.textSecondary
+                        }
                     }
                 }
             }

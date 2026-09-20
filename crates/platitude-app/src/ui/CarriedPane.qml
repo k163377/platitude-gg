@@ -93,39 +93,59 @@ ColumnLayout {
                 font.weight: Font.DemiBold
                 color: Theme.textSecondary
             }
-            // **A dot**, which is the device this window already separates a caption from
-            // its value with (`DiffPaneHeader`). `on` is git's own word for the branch a tree is on (`On branch
-            // main`), and what follows here is the copy's own folder name — a reader told `WORKING COPY ON topic`
-            // would look for a branch called topic. The copy *is* that name, which is apposition
-            // and takes no preposition at all.
-            DotMark { tint: Theme.textSecondary }
-            // The same mark the copy's chip and its sidebar row wear — one印 for one idea (規約 §ref の種別).
-            NavIcon {
-                kind: "tree"
-                tint: Theme.textSecondary
-                Layout.preferredWidth: Theme.iconSm
-                Layout.preferredHeight: Theme.iconSm
-                Layout.alignment: Qt.AlignVCenter
+            // **A dash**, which is what this window sets between this caption and its value (`GraphRowDelegate`).
+            // As a character: it is the one piece of punctuation that came out the same length and in the same
+            // place on both OSes (規約 §余白「字で出ていた記号は 5 種」). `on` is git's own word for the branch a tree
+            // is on (`On branch main`), and what follows here is the copy's own folder name — a reader told
+            // `WORKING COPY ON topic` would look for a branch called topic. The copy *is* that name, which is
+            // apposition and takes no preposition at all.
+            Label {
+                text: "—"
+                font.pixelSize: Theme.fontMd
+                color: Theme.textSecondary
             }
-            // **Cut in the middle, whole on the hover** (規約 §hover のツールチップ): a copy can be called anything and
-            // the right pane's floor is 300px, so a long name loses its middle and keeps the ends it is told apart
-            // by. The hover is the only place the whole of it is, which is why the seat under it takes a pointer.
-            Item {
-                id: nameSeat
+            // **The mark and the name are one word** (規約 §別の作業コピーを読む): the seat is the mark's own ink, so
+            // the air its box holds past that does not read as a gap nobody wrote (規約 §余白). The mark itself is the
+            // one the copy's chip and its sidebar row wear — one印 for one idea (規約 §ref の種別).
+            RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Theme.rowHeight
-                CutName {
-                    id: nameLabel
-                    anchors.fill: parent
-                    text: carriedPane.copyName
-                    pixelSize: Theme.fontMd
-                    weight: Font.DemiBold
-                    color: Theme.textPrimary
+                spacing: 0
+                Item {
+                    Layout.preferredWidth: nameMark.inkWidth
+                    Layout.preferredHeight: Theme.iconSm
+                    Layout.alignment: Qt.AlignVCenter
+                    NavIcon {
+                        id: nameMark
+                        anchors.centerIn: parent
+                        kind: "tree"
+                        tint: Theme.textSecondary
+                        width: Theme.iconSm
+                        height: Theme.iconSm
+                    }
                 }
-                HoverHandler { id: nameHover }
-                ToolTip.visible: (nameHover.hovered || carriedPane.namePointedAt) && nameLabel.cutting
-                ToolTip.delay: Metrics.tipDelayMs
-                ToolTip.text: carriedPane.copyName
+                // **Cut in the middle, whole on the hover** (規約 §hover のツールチップ): a copy can be called anything
+                // and the right pane's floor is 300px, so a long name loses its middle and keeps the ends it is told
+                // apart by. The hover is the only place the whole of it is, which is why the seat under it takes a
+                // pointer.
+                Item {
+                    id: nameSeat
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Theme.rowHeight
+                    CutName {
+                        id: nameLabel
+                        anchors.fill: parent
+                        text: carriedPane.copyName
+                        pixelSize: Theme.fontMd
+                        weight: Font.DemiBold
+                        // The caption's own colour: the band names a copy, and nothing in it is the loud half of a
+                        // caption-and-value pair (規約 §別の作業コピーを読む).
+                        color: Theme.textSecondary
+                    }
+                    HoverHandler { id: nameHover }
+                    ToolTip.visible: (nameHover.hovered || carriedPane.namePointedAt) && nameLabel.cutting
+                    ToolTip.delay: Metrics.tipDelayMs
+                    ToolTip.text: carriedPane.copyName
+                }
             }
         }
     }
