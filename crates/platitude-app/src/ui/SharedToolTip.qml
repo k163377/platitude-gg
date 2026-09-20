@@ -86,6 +86,11 @@ Item {
     /// when the tip comes out**: a seat that followed the pointer would slide out from under the hand walking into it.
     property real anchorX: 0
     property bool anchorKnown: false
+    /// The same for the other axis, which only a box standing **beside** its target reads (`tipBeside`). Kept apart
+    /// from the pair above because the stand-in a run writes is a share of the target's width and says nothing
+    /// about height: those runs seat the box at the target's own top, the way this always did.
+    property real anchorY: 0
+    property bool anchorDown: false
 
     /// Whether a hand could be walking into the tip, which is the whole of what the beat below waits for.
     ///
@@ -196,10 +201,19 @@ Item {
         if (at === null)
             return 0
         const p = shared.targetAt()
-        // Beside it: level with the target's own top, and lifted only as far as the window's foot asks.
+        // Beside it: **level with the hand**, and lifted only as far as the window's foot asks.
+        //
+        // **The hand, not the target's top.** What asks for one of these boxes is not always the item it is seated
+        // against — the left panel's open row asks from its own line, a row's height above the lines the box stands
+        // on — and a box seated up there can only be reached by a walk that leaves both. The reader goes straight
+        // sideways instead, drops off the panel on the way, and the box falls under a hand that was walking
+        // towards it (observed). Sat on the hand's own line it is one sideways move away, whichever part of the
+        // target asked for it. A run has no hand to read (the stand-in is a share of the width — `handAcross`),
+        // and those keep the target's top.
         if (shared.tipBeside) {
             const last = shared.host.height - tip.implicitHeight - Theme.spaceXs
-            return Math.max(Theme.spaceXs, Math.min(p.y, last)) - p.y
+            const want = shared.anchorDown ? shared.anchorY - tip.implicitHeight / 2 : p.y
+            return Math.max(Theme.spaceXs, Math.min(want, last)) - p.y
         }
         const above = p.y
         const below = shared.host.height - (p.y + at.height)
@@ -230,16 +244,21 @@ Item {
         const at = shared.sharedTip.parent
         if (at === null) {
             shared.anchorKnown = false
+            shared.anchorDown = false
             return
         }
         if (shared.handAcross >= 0) {
             shared.anchorKnown = true
+            shared.anchorDown = false
             shared.anchorX = shared.targetAt().x + at.width * shared.handAcross
             return
         }
         shared.anchorKnown = shared.hand.known
-        if (shared.anchorKnown)
+        shared.anchorDown = shared.anchorKnown
+        if (shared.anchorKnown) {
             shared.anchorX = shared.hand.handX
+            shared.anchorY = shared.hand.handY
+        }
     }
 
     /// Whether anything still wants the tip where it is: the hand inside it, the hand back on the target, or the

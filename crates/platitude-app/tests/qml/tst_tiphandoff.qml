@@ -45,6 +45,27 @@ Item {
         ToolTip.delay: Metrics.tipDelayMs
         ToolTip.visible: onB.hovered
     }
+    // The left panel's own shape: a box that stands **beside** its target instead of over it, and is asked for from
+    // the line above that target as well as from the target itself (`NavRowFacts` — the open row's name is one road
+    // to it and the lines it opened are the other, and those lines are what the box is seated against).
+    Item {
+        id: nameLine
+        y: 20
+        width: 300
+        height: 24
+        HoverHandler { id: onName }
+    }
+    Item {
+        id: aside
+        y: 44
+        width: 300
+        height: 42
+        readonly property bool tipBeside: true
+        HoverHandler { id: onAside }
+        ToolTip.text: "beside"
+        ToolTip.delay: Metrics.tipDelayMs
+        ToolTip.visible: onName.hovered || onAside.hovered
+    }
 
     TestCase {
         name: "TipHandoff"
@@ -106,6 +127,26 @@ Item {
             tryVerify(() => shared.pointed && tip.visible, undefined,
                       "the hand is inside the box, and the box is the one that was already out")
             compare(tip.parent, rowA, "still the row's")
+        }
+
+        // A box that stands **beside** its target opens level with the hand, not with the target. What asks for one
+        // of these is not always the item it is seated against — the panel's open row asks from its own name, a
+        // line above the lines the box sits beside — and a box up on the target's top is a diagonal walk away: the
+        // reader goes straight sideways, leaves both, and it falls (デザイン規約 §hover のツールチップ「手の傍に」).
+        function test_d_a_box_beside_its_target_opens_level_with_the_hand() {
+            const tip = shared.sharedTip
+            const at = middleOf(nameLine)
+            mouseMove(root, 150, at)
+            tryVerify(() => tip.visible, undefined, "the rest on the line above opens the box")
+            compare(tip.parent, aside, "seated against the target under that line")
+            const top = aside.y + tip.y
+            verify(top <= at && at <= top + tip.height,
+                   "the hand's own line is inside the box: " + top + ".." + (top + tip.height) + " for " + at)
+
+            // Which is the whole of what the seat is for: the walk into it is one sideways move.
+            mouseMove(root, aside.x + tip.x + tip.width / 2, at)
+            tryVerify(() => shared.pointed && tip.visible, undefined,
+                      "a hand that only went sideways is inside the box, and the box is still out")
         }
     }
 }
