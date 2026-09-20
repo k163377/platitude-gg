@@ -53,6 +53,10 @@ Item {
             // The hand comes to rest on the lines and does not move again.
             mouseMove(facts, 100, 30)
             tryVerify(() => facts.ToolTip.visible, undefined, "the rest over the lines opens the path")
+            // The watch above is a sampler, so the count is settled only once it has met the tip standing. Read
+            // before that, the tip's own arrival lands inside the window below and is counted there as the blink
+            // this test is about.
+            tryVerify(() => root.pointed, undefined, "and the watch has met it standing")
 
             const stood = root.flips
             // Long enough for a tip that took the pointer to lose it, go down, and come back — the blink this is
