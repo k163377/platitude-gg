@@ -282,7 +282,9 @@ fn the_command_runs_bracketed_by_a_look_at_what_a_resolve_reads() {
 /// that is a `docker rm` on this side with no ceiling over it. What it
 /// was for is gone: an interrupted container can no longer reach this
 /// checkout's copies (`linux::runner::SCRIPT`), and the cargo lock it
-/// still holds is waited out under the step's own ceiling.
+/// still holds is waited out under the step's own ceiling. The one
+/// container that is named and removed is the gate's own, and both
+/// happen under a ceiling in `container` (`remove_container`).
 #[test]
 fn no_container_started_here_is_named_or_reaped() {
     assert!(
@@ -300,6 +302,41 @@ fn no_container_started_here_is_named_or_reaped() {
             "linux.rs removes a container ({reaping}) outside any ceiling"
         );
     }
+}
+
+/// `--container` is a prepared copy's road and a marked one: a line
+/// with either flag and not its partner, or a container without a
+/// copy, is one nobody spelled on purpose — and so is `--rebuild`
+/// beside a container already running from an image.
+#[test]
+fn a_container_line_needs_a_copy_and_a_mark_and_nothing_to_rebuild() {
+    assert!(options(&words("--container c verify-ui wip")).is_err());
+    assert!(options(&words("--runner r --container c verify-ui wip")).is_err());
+    assert!(options(&words("--runner r --step m verify-ui wip")).is_err());
+    assert!(
+        options(&words(
+            "--rebuild --runner r --container c --step m verify-ui wip"
+        ))
+        .is_err()
+    );
+    let all = options(&words("--runner r --container c --step m verify-ui wip"))
+        .expect("the copy, the container and the mark");
+    assert_eq!(all.copy.as_deref(), Some("r"));
+    assert_eq!(all.container.as_deref(), Some("c"));
+    assert_eq!(all.step.as_deref(), Some("m"));
+    assert_eq!(all.at, 6, "the command begins after the options");
+    // Without a container the line is what it was.
+    let copy = options(&words("--runner r verify-ui wip")).expect("a copy alone");
+    assert!(copy.container.is_none() && copy.step.is_none());
+    // `stop` is the one line that names a container and no copy: it is
+    // about what is already in there.
+    let stop = options(&words("--container c --step m stop")).expect("a stop needs no copy");
+    assert_eq!(stop.container.as_deref(), Some("c"));
+    assert_eq!(stop.step.as_deref(), Some("m"));
+    assert!(
+        options(&words("--container c stop")).is_err(),
+        "a stop with no mark"
+    );
 }
 
 #[test]

@@ -91,9 +91,22 @@ pub(super) fn execute_step(
         }
         return Ok(());
     }
+    // A verb of the Linux side that goes into the gate's container is
+    // marked for it, by this run and this log's name: what a stop is
+    // addressed to when the step is ended out here.
+    let mark = ground
+        .container
+        .filter(|_| into_the_container(command))
+        .map(|_| step_mark(ground.run, log));
     match crate::check::run_step(
         dir,
-        &launched(command, ground.runner, ground.copy),
+        &launched(
+            command,
+            ground.runner,
+            ground.copy,
+            ground.container,
+            mark.as_deref(),
+        ),
         log,
         room,
     ) {
@@ -103,8 +116,69 @@ pub(super) fn execute_step(
             log.display(),
             crate::check::log_tail(log)
         )),
-        Err(why) => Err(why),
+        // A ceiling out here reaps the host side of the step. The
+        // process in the container is not under that, and is reached
+        // by its mark instead — said in the same failure, so the reader
+        // has both ends.
+        Err(why) => match (ground.container, mark) {
+            (Some(container), Some(mark)) => Err(format!(
+                "{why}; inside the container, {}",
+                // Either way it came back, the line is what the reader
+                // needs: the step is red for the ceiling already.
+                crate::linux::container::stop_step(container, &mark, ground.logs)
+                    .unwrap_or_else(|line| line)
+            )),
+            _ => Err(why),
+        },
     }
+}
+
+/// The mark a step's processes carry inside the gate's container: this
+/// run's name and the step's log name, which together name one step of
+/// one gate and are letters, digits and dashes (`linux::runner::spelled`).
+fn step_mark(run: &str, log: &Path) -> String {
+    format!(
+        "{run}-{}",
+        log.file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    )
+}
+
+/// Whether a plan's step is one that starts from the copy inside the
+/// container — `linux` and then one of this program's own verbs.
+fn into_the_container(command: &[String]) -> bool {
+    command
+        .iter()
+        .position(|word| word == "linux")
+        .is_some_and(|at| crate::linux::a_runner_verb(&command[at + 1..]))
+}
+
+/// The container the Linux side will have if its preparation goes
+/// through — the one [`linux_runner`]'s step starts after the copy, on
+/// a host that is not Linux. Named here and nowhere else: the side
+/// execs into it only once the preparation came back green, and takes
+/// it down afterwards whether or not it did — a start that failed half
+/// way may have left it.
+pub(super) fn container_expected(ground: &Ground<'_>, steps: &[&Required]) -> Option<String> {
+    if cfg!(target_os = "linux") || ground.runner.is_none() || !a_copy_is_wanted(steps) {
+        return None;
+    }
+    Some(crate::linux::container::container_of(
+        ground.dir, ground.run,
+    ))
+}
+
+/// Takes the gate's container down once its side is over, and says
+/// what became of it. Never a failure of the gate: a container that
+/// would not go is said, and leaves on its own or with the next gate
+/// (`linux::container::remove_container`).
+pub(super) fn dismiss_container(ground: &Ground<'_>, name: &str) {
+    println!(
+        "[{}] the gate's container: {}",
+        ground.name,
+        crate::linux::container::remove_container(ground.dir, name)
+    );
 }
 
 /// What a runner copy is called, beside the logs; the pid follows.
@@ -294,9 +368,17 @@ fn a_copy_is_wanted(steps: &[&Required]) -> bool {
 /// A step of the Linux side whose verb is one of this program's own is
 /// handed the name of the copy prepared inside the container
 /// ([`linux_runner`]), so that the line in there starts from a binary as
-/// well. Only those: a `linux test` in there is cargo's work and stays
-/// cargo's (`linux::runner`).
-fn launched(command: &[String], runner: Option<&Path>, copy: Option<&str>) -> Vec<String> {
+/// well — and, where the side has a container of the gate's own, that
+/// container's name and this step's mark, so the line goes in by exec
+/// (`linux::container::exec_in`). Only those: a `linux test` in there is
+/// cargo's work and stays cargo's (`linux::runner`).
+fn launched(
+    command: &[String],
+    runner: Option<&Path>,
+    copy: Option<&str>,
+    container: Option<&str>,
+    mark: Option<&str>,
+) -> Vec<String> {
     const THROUGH_CARGO: [&str; 6] = ["cargo", "run", "--locked", "-p", "xtask", "--"];
     let through_cargo = command.len() >= THROUGH_CARGO.len()
         && command
@@ -318,6 +400,14 @@ fn launched(command: &[String], runner: Option<&Path>, copy: Option<&str>) -> Ve
                 "--runner".to_string(),
                 name.to_string(),
             ]);
+            if let (Some(container), Some(mark)) = (container, mark) {
+                line.extend([
+                    "--container".to_string(),
+                    container.to_string(),
+                    "--step".to_string(),
+                    mark.to_string(),
+                ]);
+            }
             line.extend(verb[1..].iter().cloned());
         }
         _ => line.extend(verb.iter().cloned()),
@@ -402,6 +492,8 @@ mod tests {
                     "--no-build"
                 ]),
                 Some(runner),
+                None,
+                None,
                 None
             ),
             words(&[
@@ -412,17 +504,20 @@ mod tests {
             ])
         );
         let test = words(&["cargo", "test", "--locked", "-p", "xtask", "--lib"]);
-        assert_eq!(launched(&test, Some(runner), None), test);
+        assert_eq!(launched(&test, Some(runner), None, None, None), test);
         let verb = words(&["cargo", "run", "--locked", "-p", "xtask", "--", "structure"]);
         assert_eq!(
-            launched(&verb, None, None),
+            launched(&verb, None, None, None, None),
             verb,
             "without a copy the plan's spelling stands"
         );
         // An older spelling, without the lock, is not this runner's line
         // any more: it is started as spelled, and cargo answers for it.
         let unlocked = words(&["cargo", "run", "-p", "xtask", "--", "structure"]);
-        assert_eq!(launched(&unlocked, Some(runner), None), unlocked);
+        assert_eq!(
+            launched(&unlocked, Some(runner), None, None, None),
+            unlocked
+        );
     }
 
     /// The container's cargo comes off the road the way the host's did:
@@ -444,7 +539,7 @@ mod tests {
             "--no-build",
         ]);
         assert_eq!(
-            launched(&verb, Some(runner), Some("1758-40")),
+            launched(&verb, Some(runner), Some("1758-40"), None, None),
             words(&[
                 "C:/x/target/gate-logs/xtask-runner-7.exe",
                 "linux",
@@ -458,7 +553,7 @@ mod tests {
         // No copy prepared — this is the host side, or a Linux side that
         // runs nothing needing one — and the line is what it always was.
         assert_eq!(
-            launched(&verb, Some(runner), None),
+            launched(&verb, Some(runner), None, None, None),
             words(&[
                 "C:/x/target/gate-logs/xtask-runner-7.exe",
                 "linux",
@@ -485,12 +580,79 @@ mod tests {
                 "cargo", "run", "--locked", "-p", "xtask", "--", "linux", "bare",
             ]),
         ] {
-            let started = launched(&line, Some(runner), Some("1758-40"));
+            let started = launched(&line, Some(runner), Some("1758-40"), None, None);
             assert!(
                 !started.contains(&"--runner".to_string()),
                 "{started:?} is cargo's line"
             );
         }
+    }
+
+    /// With the gate's container up, a container verb's line names it
+    /// and the step's mark beside the copy — and only a container verb:
+    /// a cargo line in there is as spelled, whatever is up.
+    #[test]
+    fn a_container_verb_goes_into_the_gates_container_under_its_mark() {
+        let runner = Path::new("C:/x/target/gate-logs/xtask-runner-7.exe");
+        let verb = words(&[
+            "cargo",
+            "run",
+            "--locked",
+            "-p",
+            "xtask",
+            "--",
+            "linux",
+            "verify-ui",
+            "wip",
+            "--no-build",
+        ]);
+        assert_eq!(
+            launched(
+                &verb,
+                Some(runner),
+                Some("1758-40"),
+                Some("pgg-linux-gate-c-1758-40"),
+                Some("1758-40-linux-12")
+            ),
+            words(&[
+                "C:/x/target/gate-logs/xtask-runner-7.exe",
+                "linux",
+                "--runner",
+                "1758-40",
+                "--container",
+                "pgg-linux-gate-c-1758-40",
+                "--step",
+                "1758-40-linux-12",
+                "verify-ui",
+                "wip",
+                "--no-build"
+            ])
+        );
+        let cargo = words(&[
+            "cargo",
+            "run",
+            "--locked",
+            "-p",
+            "xtask",
+            "--",
+            "linux",
+            "test",
+            "-p",
+            "platitude-core",
+        ]);
+        let started = launched(
+            &cargo,
+            Some(runner),
+            Some("1758-40"),
+            Some("pgg-linux-gate-c-1758-40"),
+            Some("1758-40-linux-03"),
+        );
+        assert!(!started.contains(&"--container".to_string()), "{started:?}");
+        assert!(super::into_the_container(&verb));
+        assert!(!super::into_the_container(&cargo));
+        // The mark: this run and this log's name, spelled as a name.
+        let mark = super::step_mark("1758-40", Path::new("C:/x/target/gate-logs/linux-12.log"));
+        assert_eq!(mark, "1758-40-linux-12");
     }
 
     #[test]

@@ -215,7 +215,13 @@ pub(crate) fn prepare(root: &Path, name: &str, gate: u32) -> Result<(), String> 
     // built from this one (ci/linux/Dockerfile).
     let tag = super::ensure_image(root, "core", false)?;
     let line = line(root, name, NOTE_MOUNT, Some(super::DEMO_MOUNT));
-    super::in_container(root, &tag, &line, false, None, Some(&note_of(root)))
+    super::in_container(root, &tag, &line, false, None, Some(&note_of(root)))?;
+    // And the container the copy's verbs go into, from the image they
+    // need — after the copy, so that a build that went red starts
+    // nothing. In this same step, under its ceiling (`super::container`).
+    let app = super::ensure_image(root, "app", false)?;
+    super::container::take_down_earlier_gates(root)?;
+    super::container::start_container(root, name, gate, &app)
 }
 
 /// The preparation as a line: [`SCRIPT`], and then the three things it

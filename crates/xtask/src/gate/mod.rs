@@ -587,6 +587,7 @@ fn run_sides(
         logs,
         runner,
         copy: None,
+        container: None,
         run: &run,
         waited: &host_waited,
         since: started,
@@ -605,16 +606,29 @@ fn run_sides(
         // On this side and not ahead of both, so the host side starts
         // now: what the preparation owes is only that it is in before
         // the first step of *this* side (`runner::linux_runner`).
-        let linux = scope.spawn(|| match linux_runner(&linux_ground, &linux) {
-            Ok(copy) => side(
-                &Ground {
-                    copy: copy.as_deref(),
-                    ..linux_ground
-                },
-                &linux,
-                jobs,
-            ),
-            Err(why) => vec![why],
+        let linux = scope.spawn(|| {
+            // Named before the preparation, so that it is taken down
+            // after the side however the preparation went
+            // (`runner::container_expected`).
+            let container = runner::container_expected(&linux_ground, &linux);
+            let failures = match linux_runner(&linux_ground, &linux) {
+                // The container is there for the verbs exactly when the
+                // preparation that starts it came back with the copy.
+                Ok(copy) => side(
+                    &Ground {
+                        copy: copy.as_deref(),
+                        container: copy.as_ref().and(container.as_deref()),
+                        ..linux_ground
+                    },
+                    &linux,
+                    jobs,
+                ),
+                Err(why) => vec![why],
+            };
+            if let Some(name) = &container {
+                runner::dismiss_container(&linux_ground, name);
+            }
+            failures
         });
         let mut failures = Vec::new();
         for handle in [host, linux] {
@@ -707,6 +721,10 @@ struct Ground<'a> {
     /// `runner::linux_runner` prepared it under — `None` on the host
     /// side, and on a Linux side whose every step a stamp answers for.
     copy: Option<&'a str>,
+    /// The gate's own container the copy's verbs go into, by name —
+    /// `None` wherever `copy` is, and on a Linux host, where the verbs
+    /// run where they stand (`linux::container::exec_in`).
+    container: Option<&'a str>,
     /// What this run is called where its red steps' logs are kept
     /// (`evidence::keep`): a step's log is named by its index, so the
     /// next gate in this tree writes over it.

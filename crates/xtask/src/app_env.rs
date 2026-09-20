@@ -13,7 +13,13 @@ const AUTOMATION_PREFIX: &str = "PGG_";
 /// Everything else under the prefix is cleared by predicate, so an
 /// automation knob added to the app later cannot leak a parent shell's
 /// value into a harness child by being missing from a list here.
-const NOT_AUTOMATION: &[&str] = &["PGG_CONFIG_DIR", "PGG_LOG", "PGG_ALLOW_GUI"];
+///
+/// `PGG_STEP` rides through because it is the mark every process of a
+/// gate's verb carries inside the gate's container, the app and what
+/// the app starts included: a stop is a walk for that mark, and a
+/// child it was cleared from is a child the walk cannot end
+/// (`linux::container`).
+const NOT_AUTOMATION: &[&str] = &["PGG_CONFIG_DIR", "PGG_LOG", "PGG_ALLOW_GUI", "PGG_STEP"];
 
 /// Whether one environment variable is an automation input to clear.
 /// Compared case-folded: Windows resolves environment names without
@@ -66,6 +72,14 @@ mod tests {
         assert!(!is_automation("pgg_config_dir"));
         assert!(!is_automation("PGG_LOG"));
         assert!(!is_automation("PGG_ALLOW_GUI"));
+        // The step's mark rides through to the app and to what the app
+        // starts: a stop addresses every process of a verb by it.
+        assert!(!is_automation("PGG_STEP"));
+        assert_eq!(
+            NOT_AUTOMATION.len(),
+            4,
+            "core's list is the same four, kept by hand"
+        );
         assert!(!is_automation("PATH"));
     }
 

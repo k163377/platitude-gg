@@ -430,7 +430,8 @@ const TAIL: &str = "  shipped [--no-build]
       killed holder with (crates/xtask/tests/gate/budget.rs) — both edges
       are the caller's, so nothing there waits on a clock.
 
-  linux [--rebuild] [--shell] [--stage core|app] <command…>
+  linux [--rebuild] [--shell] [--stage core|app] [--runner <name>
+        [--container <name> --step <mark>]] <command…>
       Run a command against this checkout on Ubuntu, in a container built
       from ci/linux/Dockerfile. On Linux it skips the container and runs
       the command where it stands.
@@ -438,7 +439,14 @@ const TAIL: &str = "  shipped [--no-build]
         cargo xtask linux verify-ui commit --preset basic
         cargo xtask linux bare
         cargo xtask linux offline
+        cargo xtask linux --container <name> --step <mark> stop
       A cargo command goes to cargo; an xtask verb goes to cargo xtask.
+      `--runner <name>` starts an xtask verb from the copy a gate
+      prepared; with `--container <name> --step <mark>` beside it the
+      verb goes into the gate's own container by docker exec, every
+      process of it carrying the mark. `stop` ends what still carries a
+      mark in that container — what the gate does at a ceiling, by hand —
+      and says what went and what would not.
       `runner <name> --gate <pid>` is the gate's own step and not one to
       type: it builds in the checkout's volume, so it runs only when the
       pid it names is the live gate of this tree. What it clears under

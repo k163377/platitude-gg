@@ -18,8 +18,21 @@ pub(crate) struct Keepsake {
     _claim: Option<crate::verify::ResourceClaim>,
 }
 
-/// The arguments that send a run's pictures out to `mount`, and where
-/// they land on this side. None when the command leaves nothing.
+/// Where a run's directory lands inside the container.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Landing<'a> {
+    /// The directory is the mount itself: a container of the run's own
+    /// mounts it there (`linux::in_container`).
+    Whole(&'a str),
+    /// The mount is the whole [`keepsake_base`], and the run's directory
+    /// is a leaf under it: the gate's container mounts the base once
+    /// and every run in it names its own leaf (`linux::container::exec_in`).
+    Leaf(&'a str),
+}
+
+/// The arguments that send a run's pictures out to where `landing`
+/// says, and where they land on this side. None when the command leaves
+/// nothing.
 ///
 /// `--no-board` rides along: the board is the host's. The run in there
 /// keeps its census and its board out of the tree by itself
@@ -30,20 +43,42 @@ pub(crate) struct Keepsake {
 /// **The claim is taken on this side.** The run inside makes
 /// one too (`verify::run` claims its `--shot-dir`), but it writes that
 /// lock into the container's own `/tmp`, which is empty in every
-/// container — a claim that can never refuse anybody. What two runs can
-/// actually collide over is this directory, and it is only on this side
-/// that a second asker can be told so.
-pub(crate) fn bridge(command: &mut Vec<String>, mount: &str) -> Result<Option<Keepsake>, String> {
+/// container of a run's own — a claim that can never refuse anybody.
+/// What two runs can actually collide over is this directory, and it
+/// is only on this side that a second asker can be told so.
+pub(crate) fn bridge(
+    command: &mut Vec<String>,
+    landing: Landing<'_>,
+) -> Result<Option<Keepsake>, String> {
     let Some(dir) = keepsakes(command)? else {
         return Ok(None);
     };
     let mut mine = BTreeSet::new();
     let claim = crate::verify::claim_resource(&dir, "shot directory", &mut mine)?;
+    let inside = match landing {
+        Landing::Whole(mount) => mount.to_string(),
+        Landing::Leaf(mount) => format!(
+            "{mount}/{}",
+            dir.file_name()
+                .ok_or_else(|| format!("{} has no name to land under", dir.display()))?
+                .to_string_lossy()
+        ),
+    };
     command.push("--shot-dir".to_string());
-    command.push(mount.to_string());
+    command.push(inside);
     command.push("--no-board".to_string());
     println!("screenshots and settings: {}", dir.display());
     Ok(Some(Keepsake { dir, _claim: claim }))
+}
+
+/// The directory every container run's leaf is claimed under
+/// ([`keepsake_dir`]), made if it is not there: what the gate's
+/// container mounts whole.
+pub(crate) fn keepsake_base() -> Result<PathBuf, String> {
+    let base = std::env::temp_dir().join("pgg-linux");
+    std::fs::create_dir_all(&base)
+        .map_err(|e| format!("could not make {}: {e}", base.display()))?;
+    Ok(base)
 }
 
 /// Whatever the run left behind, onto the host's board. Nothing left is
@@ -120,12 +155,12 @@ fn keepsakes(command: &[String]) -> Result<Option<PathBuf>, String> {
 }
 
 pub(crate) fn keepsake_dir(kind: &str) -> Result<PathBuf, String> {
-    crate::verify::claim_dir(&std::env::temp_dir().join("pgg-linux"), kind)
+    crate::verify::claim_dir(&keepsake_base()?, kind)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{boarding, bridge, keepsakes, naming};
+    use super::{Landing, boarding, bridge, keepsakes, naming};
 
     fn words(line: &str) -> Vec<String> {
         line.split_whitespace().map(String::from).collect()
@@ -162,10 +197,35 @@ mod tests {
         let typed = words("cargo xtask verify-ui commit");
         assert!(boarding(&typed));
         let mut sent = typed.clone();
-        let out = bridge(&mut sent, "/out")
+        let out = bridge(&mut sent, Landing::Whole("/out"))
             .expect("a bridged run")
             .expect("a directory to bring the pictures back to");
         assert!(!boarding(&sent), "bridge says it whether the caller did");
+        assert!(
+            sent.windows(2).any(|pair| pair == ["--shot-dir", "/out"]),
+            "a container of the run's own mounts the directory at /out: {sent:?}"
+        );
+        std::fs::remove_dir_all(&out.dir).expect("the directory bridge just made");
+
+        // In the gate's container the mount is the whole base, and the
+        // run's directory is named as a leaf of it — the leaf being the
+        // directory this side claimed, so the settings store in there is
+        // this run's alone.
+        let mut leafed = typed.clone();
+        let out = bridge(&mut leafed, Landing::Leaf("/out"))
+            .expect("a bridged run")
+            .expect("a directory to bring the pictures back to");
+        let leaf = out.dir.file_name().expect("a leaf").to_string_lossy();
+        assert!(
+            leafed
+                .windows(2)
+                .any(|pair| pair[0] == "--shot-dir" && pair[1] == format!("/out/{leaf}")),
+            "the run in the gate's container names its own leaf: {leafed:?}"
+        );
+        assert!(
+            out.dir
+                .starts_with(super::keepsake_base().expect("the base"))
+        );
         std::fs::remove_dir_all(&out.dir).expect("the directory bridge just made");
 
         let suite = crate::verify::suite_words("commit");

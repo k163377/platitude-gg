@@ -69,8 +69,11 @@ const AUTOMATION_PREFIX: &str = "PGG_";
 /// settings survive it. `PGG_ALLOW_GUI` is the same shape from the other
 /// end: it is how somebody says "I asked for a window" to the
 /// pre-shell guard (CLAUDE.md ビルド・テスト), so it rides on the launch
-/// that most needs the person's own tabs to come back.
-const NOT_AUTOMATION: [&str; 3] = [CONFIG_DIR_ENV, "PGG_LOG", "PGG_ALLOW_GUI"];
+/// that most needs the person's own tabs to come back. `PGG_STEP` is the
+/// mark a gate's verb carries inside its container, on the app and on
+/// what the app starts — an address for a stop, not a driver (the task
+/// runner keeps the same list by hand: `xtask::app_env`).
+const NOT_AUTOMATION: [&str; 4] = [CONFIG_DIR_ENV, "PGG_LOG", "PGG_ALLOW_GUI", "PGG_STEP"];
 
 /// Failure to write. Reading has no error type: it cannot fail loudly
 /// enough to matter, and the caller has nothing to do about it but carry

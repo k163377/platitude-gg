@@ -76,6 +76,15 @@ pub(crate) static RUNNER: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
+pub(crate) static STOP: command::Command = command::Command {
+    id: "linux.stop",
+    call: "linux --container <name> --step <mark> stop",
+    purpose: "end what a verb left running in the gate's container, by the mark it carries",
+    run_in: Where::Seat,
+    needs: &["the container's name and the step's mark, off the gate's failure line"],
+    permission: Permission::Plain,
+};
+
 pub(crate) static BARE: command::Command = command::Command {
     id: "linux.bare",
     call: "linux bare --discover",
@@ -85,9 +94,10 @@ pub(crate) static BARE: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
-pub(crate) static COMMANDS: &[&command::Command] = &[&RUN, &VERIFY, &RUNNER, &BARE];
+pub(crate) static COMMANDS: &[&command::Command] = &[&RUN, &VERIFY, &RUNNER, &STOP, &BARE];
 
 mod bare;
+pub(crate) mod container;
 mod offline;
 pub(crate) mod runner;
 #[cfg(test)]
@@ -179,6 +189,15 @@ struct Options {
     /// `--runner`: the name of a prepared copy to start the verb from
     /// ([`runner`]).
     copy: Option<String>,
+    /// `--container`: the gate's own container to start the verb in,
+    /// by `docker exec`, instead of a container of the verb's own
+    /// ([`container::exec_in`]). Only with `--runner`: what runs in
+    /// there is a prepared copy and nothing else.
+    container: Option<String>,
+    /// `--step`: the mark every process of this verb carries inside
+    /// that container, which is what a stop is addressed to
+    /// ([`container::stop_step`]). Only with `--container`.
+    step: Option<String>,
     at: usize,
 }
 
@@ -190,6 +209,8 @@ fn options(args: &[String]) -> Result<Options, String> {
         shell: false,
         stage: None,
         copy: None,
+        container: None,
+        step: None,
         at: 0,
     };
     while let Some(arg) = args.get(opts.at) {
@@ -201,6 +222,22 @@ fn options(args: &[String]) -> Result<Options, String> {
                 opts.copy = Some(
                     args.get(opts.at)
                         .ok_or("--runner needs the name a `linux runner <name>` prepared")?
+                        .clone(),
+                );
+            }
+            "--container" => {
+                opts.at += 1;
+                opts.container = Some(
+                    args.get(opts.at)
+                        .ok_or("--container needs the name of the gate's container")?
+                        .clone(),
+                );
+            }
+            "--step" => {
+                opts.at += 1;
+                opts.step = Some(
+                    args.get(opts.at)
+                        .ok_or("--step needs the mark this step's processes carry")?
                         .clone(),
                 );
             }
@@ -231,6 +268,33 @@ fn options(args: &[String]) -> Result<Options, String> {
             rest.join(" ")
         ));
     }
+    // A container to exec into is for a prepared copy and nothing else,
+    // and a mark is for a process in such a container: either one
+    // without the other is a line nobody spelled on purpose. The one
+    // line that names a container with no copy is `stop`, which is
+    // about what is already in there.
+    let stopping = rest.first().is_some_and(|verb| verb == "stop");
+    if opts.container.is_some() && opts.copy.is_none() && !stopping {
+        return Err(
+            "--container starts a prepared copy in the gate's container: it needs \
+                    --runner <name> beside it"
+                .into(),
+        );
+    }
+    if opts.step.is_some() != opts.container.is_some() {
+        return Err(
+            "--container <name> and --step <mark> go together: a verb in the gate's container \
+             is addressed by the mark its processes carry, and a mark is for nothing else"
+                .into(),
+        );
+    }
+    if opts.rebuild && opts.container.is_some() {
+        return Err(
+            "--rebuild builds an image, and --container names a container already \
+                    running from one: a line cannot ask for both"
+                .into(),
+        );
+    }
     Ok(opts)
 }
 
@@ -240,10 +304,34 @@ pub fn run(args: &[String]) -> Result<(), String> {
         shell,
         stage: forced_stage,
         copy,
+        container,
+        step,
         at,
     } = options(args)?;
     let rest = &args[at..];
     let root = crate::tree::workspace_root();
+    // Both are written into a shell script and a container name, so
+    // they are names and nothing else (`runner::spelled`).
+    if let Some(name) = &container {
+        runner::spelled(name)?;
+    }
+    if let Some(mark) = &step {
+        runner::spelled(mark)?;
+    }
+    // `stop`: end what carries the mark in the gate's container, by
+    // hand — what the gate does at a ceiling (`gate::runner`), for a
+    // person standing at a gate that was killed with a verb still in.
+    // It never falls back to anything: what it found and what would
+    // not go is the line it prints.
+    if rest.first().is_some_and(|verb| verb == "stop") {
+        return stop(
+            &root,
+            container.as_deref(),
+            step.as_deref(),
+            copy.is_some() || shell,
+            rest,
+        );
+    }
     // A prepared copy starts the task runner's own verbs and nothing
     // else: a cargo command in there is cargo's work, and a line that
     // silently dropped the flag would be a line nobody could read the
@@ -325,19 +413,63 @@ pub fn run(args: &[String]) -> Result<(), String> {
         if shell {
             return Err("--shell has nothing to enter: this is already Linux".into());
         }
+        if let Some(name) = &container {
+            return Err(format!(
+                "--container {name} has nothing to exec into: this is already Linux, and the \
+                 command runs where it stands"
+            ));
+        }
         println!("already on Linux — running here, no container");
         return here(&root, &command);
     }
 
+    // Announced here as well (its own xtask is under the announcement);
+    // a verb run where it stands announces itself.
+    let _busy = crate::still::busy(&root, "linux")?;
+    // The gate's own container, already up: no image to ensure and no
+    // container of this verb's own — the line goes in by `docker exec`
+    // (`container::exec_in`). A container that is not there is a red
+    // step saying so, never a `docker run` in its place.
+    if let (Some(name), Some(mark)) = (&container, &step) {
+        return container::exec_in(name, &command, mark);
+    }
     let stage = match &forced_stage {
         Some(name) => name.clone(),
         None => stage_for(rest).to_string(),
     };
-    // Announced here as well (its own xtask is under the announcement);
-    // a verb run where it stands announces itself.
-    let _busy = crate::still::busy(&root, "linux")?;
     let tag = ensure_image(&root, &stage, rebuild)?;
     in_container(&root, &tag, &command, shell, copy.as_deref(), None)
+}
+
+/// `stop`, typed: the container and the mark are the line's, and
+/// nothing else on it may ask to start something.
+fn stop(
+    root: &Path,
+    container: Option<&str>,
+    mark: Option<&str>,
+    starting: bool,
+    rest: &[String],
+) -> Result<(), String> {
+    let (Some(name), Some(mark)) = (container, mark) else {
+        return Err(
+            "stop takes --container <name> --step <mark>: the container the verb is in \
+             and the mark its processes carry (the step's log name after the run's)"
+                .into(),
+        );
+    };
+    if let Some(extra) = rest.get(1) {
+        return Err(format!("stop takes no arguments (got {extra:?})"));
+    }
+    if starting {
+        return Err("stop starts nothing: drop --runner and --shell".into());
+    }
+    // Exits as it found things: a walk that left something carrying
+    // the mark is this command's failure, said in the same line.
+    println!(
+        "{}",
+        container::stop_step(name, mark, &root.join("target").join("gate-logs"))?
+    );
+    Ok(())
 }
 
 fn ensure_image(root: &Path, stage: &str, rebuild: bool) -> Result<String, String> {
@@ -637,7 +769,7 @@ fn in_container(
     let mut inside = command.to_vec();
     // Kept in scope past the run below: the directory behind `/out` is
     // this run's for as long as this value lives.
-    let keepsake = keepsakes::bridge(&mut inside, OUT_MOUNT)?;
+    let keepsake = keepsakes::bridge(&mut inside, keepsakes::Landing::Whole(OUT_MOUNT))?;
     if let Some(out) = &keepsake {
         cmd.arg("--volume")
             .arg(format!("{}:{OUT_MOUNT}", mount_path(&out.dir)));
@@ -768,14 +900,22 @@ fn watched_from_inside(inside: &[String], copy: Option<&str>) -> Vec<String> {
 /// queues for weight of its own, and a machine of such pairs where
 /// neither half can move. Three roads run a container (the command,
 /// `bare`, `offline`); the fourth (`here`, on a Linux host) marks its
-/// child the same way through `budget::under`.
+/// child the same way through `budget::under`; and the fifth, a `docker
+/// exec` into the gate's own container, takes the same marks from
+/// [`marked`] (`container::exec_line`).
 pub(super) fn carried() -> Command {
     let mut cmd = Command::new("docker");
     cmd.arg("run").arg("--rm");
+    marked(&mut cmd);
+    cmd
+}
+
+/// The two marks, on a `docker run` or a `docker exec` — one place, so
+/// that no road can carry one and forget the other.
+pub(super) fn marked(cmd: &mut Command) {
     for mark in [crate::still::UNDER, crate::budget::HELD] {
         cmd.arg("--env").arg(format!("{mark}=1"));
     }
-    cmd
 }
 
 fn here(root: &Path, command: &[String]) -> Result<(), String> {
@@ -812,6 +952,12 @@ fn mount_path(path: &Path) -> String {
 /// directory would put back exactly what worktrees exist to prevent: one
 /// lock, one incremental cache, two sessions.
 pub(super) fn volume(root: &Path, kind: &str) -> String {
+    format!("{IMAGE}-{kind}-{}", checkout_name(root))
+}
+
+/// The checkout's own name, as docker may spell it: the volumes and the
+/// gate's container are named after it (`runner::container_of`).
+pub(super) fn checkout_name(root: &Path) -> String {
     // The last segment after either separator: the path being named is
     // a Windows one whenever the host is Windows, and everywhere else a
     // backslash is an ordinary character in a name, so `file_name` would
@@ -823,8 +969,7 @@ pub(super) fn volume(root: &Path, kind: &str) -> String {
         .rsplit(['/', '\\'])
         .find(|segment| !segment.is_empty())
         .unwrap_or("root");
-    let name: String = name
-        .chars()
+    name.chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-') {
                 c
@@ -832,6 +977,5 @@ pub(super) fn volume(root: &Path, kind: &str) -> String {
                 '-'
             }
         })
-        .collect();
-    format!("{IMAGE}-{kind}-{name}")
+        .collect()
 }

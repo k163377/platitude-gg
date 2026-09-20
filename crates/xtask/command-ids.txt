@@ -23,6 +23,7 @@ land.branch
 linux.bare
 linux.run
 linux.runner
+linux.stop
 linux.verify
 perf.measure
 qmltest.run
