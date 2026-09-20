@@ -195,10 +195,19 @@ Item {
 
     // The three pieces. Head and tail fill the item and let their own alignment hold them to its edges — the same
     // shape a single Label had, so a column that stretches this part draws its name exactly where it drew it before.
+    //
+    // **Down the middle of whatever box the caller gives.** A `Label` left to itself draws at the top of what it
+    // fills, and a box taller than the line is the normal case here: a name in a pointer's seat (`CarriedPane`,
+    // `Theme.rowHeight` so the hover has something to land on), a path in a framed field (`CloneDialog`,
+    // `Theme.controlHeight`). Top-drawn, the name rises by half of what that box holds past the line, and stands
+    // off the baseline of the caption it answers and of the mark it is one word with — 3px in the `WORKING COPY`
+    // band, real window, Yu Gothic UI `fontMd` (デザイン規約 §別の作業コピーを読む).
+    // A caller whose box is the name's own height is unmoved: half of nothing is nothing.
     Label {
         id: headLabel
         visible: cut.inked
         anchors.fill: parent
+        verticalAlignment: Text.AlignVCenter
         text: cut.headText
         color: cut.color
         font.pixelSize: cut.pixelSize
@@ -211,6 +220,7 @@ Item {
         id: tailLabel
         anchors.fill: parent
         horizontalAlignment: Text.AlignRight
+        verticalAlignment: Text.AlignVCenter
         visible: cut.inked && cut.tailText !== ""
         text: cut.tailText
         color: cut.color
@@ -221,6 +231,7 @@ Item {
         y: 0
         height: cut.height
         visible: cut.inked && cut.cutting
+        verticalAlignment: Text.AlignVCenter
         text: "…"
         color: cut.color
         font: headLabel.font
