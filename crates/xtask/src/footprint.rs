@@ -87,10 +87,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     docker_listing(&kept, "docker-before.txt");
     let mut watching = Watching::start(&kept)?;
+    // When the command ran and when the window closed, in the seconds
+    // the docker events carry, so a reader can cut every file at the
+    // command's end and read the run apart from the window after it.
+    let mut timeline = format!("started {}\n", crate::note::now_secs());
     // The command as the person typed it, through this runner so the
     // line reads the same as it would alone.
     let exe = std::env::current_exe().map_err(|e| format!("this runner's own path: {e}"))?;
     let outcome = Command::new(exe).args(args).status();
+    timeline.push_str(&format!("ended {}\n", crate::note::now_secs()));
     // The reading the question needs is what is *still* held once the
     // work is over, and that is not the last tick of the run: a VM
     // hands pages back to Windows on its own schedule. So the samplers
@@ -102,6 +107,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // produces are the evidence for what the run left behind.
     std::thread::sleep(settle);
     watching.stop();
+    timeline.push_str(&format!("settled {}\n", crate::note::now_secs()));
+    let _ = std::fs::write(kept.join("timeline.txt"), timeline);
     docker_listing(&kept, "docker-after.txt");
     summarise(&kept);
 
@@ -124,9 +131,11 @@ impl Watching {
     fn start(kept: &Path) -> Result<Self, String> {
         let host = kept.join("host.csv");
         let vm = kept.join("vm.txt");
+        let events = kept.join("docker-events.txt");
         Self::gather(vec![
             Box::new(move || host_side(&host)),
             Box::new(move || vm_side(&vm)),
+            Box::new(move || docker_side(&events)),
         ])
     }
 
@@ -289,6 +298,27 @@ fn vm_side(to: &Path) -> Result<Child, String> {
         .map_err(|e| format!("could not start the VM sampler: {e}"))
 }
 
+/// What docker did while this ran, one line an event: the time in
+/// seconds, the kind, the action and the container's name. **The count
+/// of containers made and torn down is read off this**, not off the
+/// cgroup samples: a container that lived for less than a tick is in
+/// here and in no sample, and `docker events --since` cannot be asked
+/// afterwards for more than the daemon's short memory of them.
+fn docker_side(to: &Path) -> Result<Child, String> {
+    let out = std::fs::File::create(to).map_err(|e| format!("{}: {e}", to.display()))?;
+    Command::new("docker")
+        .args([
+            "events",
+            "--format",
+            "{{.Time}} {{.Type}} {{.Action}} {{.Actor.Attributes.name}}",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(out))
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("could not start the docker events sampler: {e}"))
+}
+
 /// Every container this machine has, running or not — the two ends of
 /// the question "did the run leave any".
 fn docker_listing(kept: &Path, name: &str) {
@@ -310,13 +340,18 @@ fn docker_listing(kept: &Path, name: &str) {
 /// What the VM's columns are worth reading. `MemAvailable` is the one
 /// that says whether memory is gone; the others say which kind grew,
 /// and `MemFree` is here only so that a reading that looks alarming in
-/// it can be seen not to be.
-const VM_KEYS: [&str; 7] = [
+/// it can be seen not to be. `Percpu` and `SUnreclaim` are the two that
+/// move with cgroups made and torn down — a container's own cost to the
+/// kernel, apart from any cache it filled.
+const VM_KEYS: [&str; 10] = [
     "MemAvailable",
     "MemFree",
     "AnonPages",
     "Cached",
+    "Buffers",
     "SReclaimable",
+    "SUnreclaim",
+    "Percpu",
     "Shmem",
     "SwapFree",
 ];
@@ -372,8 +407,40 @@ fn summarise(kept: &Path) {
         );
     }
     containers(&vm);
+    events(&std::fs::read_to_string(kept.join("docker-events.txt")).unwrap_or_default());
     stalls(&vm);
     readers(&vm);
+}
+
+/// How many containers docker made and tore down while this ran, and
+/// the most that were up at once — off the events, which see every
+/// one of them ([`docker_side`]).
+fn events(events: &str) {
+    let (mut created, mut destroyed, mut up, mut most) = (0usize, 0usize, 0i64, 0i64);
+    for line in events.lines() {
+        let mut words = line.split_whitespace();
+        let (Some(_time), Some(kind), Some(action)) = (words.next(), words.next(), words.next())
+        else {
+            continue;
+        };
+        if kind != "container" {
+            continue;
+        }
+        match action {
+            "create" => created += 1,
+            "destroy" => destroyed += 1,
+            "start" => {
+                up += 1;
+                most = most.max(up);
+            }
+            "die" => up -= 1,
+            _ => {}
+        }
+    }
+    println!(
+        "footprint: docker                {created} container(s) created, {destroyed} destroyed, \
+         at most {most} up at once"
+    );
 }
 
 /// Who read the disk while this ran, by name and by how much.
