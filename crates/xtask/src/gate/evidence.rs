@@ -277,14 +277,11 @@ fn sweep(kept: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::yard::Yard;
 
-    /// A directory of this test's own: the suite runs in parallel by
-    /// rule (CLAUDE.md Rust 規約), so the name carries the test's.
-    fn ours(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("pgg-evidence-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a directory of our own");
-        dir
+    /// A directory of this test's own, gone when the test is.
+    fn ours(name: &str) -> Yard {
+        Yard::new(&format!("evidence-{name}"))
     }
 
     fn log_saying(dir: &Path, name: &str, text: &str) -> PathBuf {
@@ -356,7 +353,8 @@ mod tests {
             ]
         );
         // A tree with no crates/ at all is the three at the root.
-        assert_eq!(read_to_resolve(&ours("bare")).len(), 3);
+        let bare = ours("bare");
+        assert_eq!(read_to_resolve(&bare).len(), 3);
     }
 
     /// The same digest on both sides, cut to the same width: the

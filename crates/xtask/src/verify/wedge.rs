@@ -459,20 +459,17 @@ fn is_held(path: &Path) -> Option<bool> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use std::time::Duration;
 
     use super::{
         Counted, TRAIL_FILE, account, at_a_ceiling, clear_any_account, held_in, last_station,
         stopped_in, trail,
     };
+    use crate::yard::Yard;
 
-    /// A lanes directory of this test's own.
-    fn lanes(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("pgg-wedge-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a directory to hold lanes in");
-        dir
+    /// A lanes directory of this test's own, gone when the test is.
+    fn lanes(name: &str) -> Yard {
+        Yard::new(&format!("wedge-{name}"))
     }
 
     /// A lock this test holds until it drops it — through [`Locked`], so
@@ -572,7 +569,8 @@ mod tests {
     /// answer.
     #[test]
     fn a_ledger_nobody_has_written_is_not_an_error() {
-        let dir = lanes("untaken").join("never-made");
+        let yard = lanes("untaken");
+        let dir = yard.join("never-made");
         assert_eq!(held_in(&dir), Ok(Counted::default()));
         assert_eq!(Counted::default().line(), "nothing is running on it");
     }
@@ -826,7 +824,8 @@ mod tests {
     /// Clearing what is not there is what every fresh run does.
     #[test]
     fn clearing_an_account_nobody_left_is_quiet() {
-        clear_any_account(&lanes("nothing-to-clear"));
+        let dir = lanes("nothing-to-clear");
+        clear_any_account(&dir);
     }
 
     #[test]

@@ -528,10 +528,10 @@ fn dump_of(_pid: u32, _shot_dir: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use std::time::Duration;
 
     use super::{Answer, Threads, bounded, listing, stand_in};
+    use crate::yard::Yard;
 
     /// The stacks come after the threads as `stack <tid> <frames>` lines,
     /// and the main thread's is the one the verdict shows — by its name,
@@ -778,6 +778,11 @@ mod tests {
     /// left behind holds nothing here. The child left behind writes
     /// `done.txt` as its last act, so whether the answer waited for it
     /// is read off the disk.
+    ///
+    /// **This tree outlives the test**, alone among the suite's: the
+    /// child is holding `said.txt` inside it and has to be, so Windows
+    /// refuses the removal the yard makes on its way out
+    /// ([`crate::yard::Yard`]'s `Drop`, where the rest of that is).
     #[test]
     fn a_child_the_diagnostic_leaves_behind_does_not_hold_the_answer() {
         let dir = lanes("left-behind");
@@ -829,11 +834,8 @@ mod tests {
         command
     }
 
-    /// A lanes directory of this test's own.
-    fn lanes(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("pgg-wedge-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a directory to hold lanes in");
-        dir
+    /// A lanes directory of this test's own, gone when the test is.
+    fn lanes(name: &str) -> Yard {
+        Yard::new(&format!("look-{name}"))
     }
 }
