@@ -99,9 +99,18 @@ pub async fn checkout(
         CheckoutTarget::Track { remote_ref, local } => {
             cmd.args(["--create", local, "--track", remote_ref])
         }
-        // No `--track`: a branch that already exists keeps whatever
-        // upstream it was given, and moving it says nothing about that.
-        CheckoutTarget::ForceCreate { local, start } => cmd.args(["--force-create", local, start]),
+        // **`--no-track`, and it is load-bearing.** Moving a branch says
+        // nothing about what it reads, but `branch.autoSetupMerge` is on
+        // by default and `--force-create` honours it for a
+        // remote-tracking start point **even where the branch already
+        // exists** — it overwrites `branch.<local>.remote` / `.merge`
+        // with the start point (measured 2.55; `reset --hard` and
+        // `branch -f` onto the same ref leave them alone). The reflog
+        // says only `reset: moving to <start>`, so an upstream lost this
+        // way is named nowhere.
+        CheckoutTarget::ForceCreate { local, start } => {
+            cmd.args(["--no-track", "--force-create", local, start])
+        }
     };
     match executor.run(cmd, cancel).await {
         Ok(_) => Ok(CheckoutOutcome::Moved),

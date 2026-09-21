@@ -119,6 +119,62 @@ async fn a_diverged_local_branch_is_moved_onto_the_remote_one() {
     );
 }
 
+/// Moving a branch says nothing about what it reads, so the move must not
+/// re-point it.
+///
+/// **`switch --force-create` applies `branch.autoSetupMerge` to a
+/// remote-tracking start point, existing branch or not** (measured 2.55:
+/// `origin/topic` became `up/2.21`, and `checkout -B` does the same; plain
+/// `reset --hard` and `branch -f` leave it alone). The reflog says only
+/// `reset: moving to <start>`, so nothing on screen or in the log names
+/// the upstream that was thrown away — which is why `--no-track` is on the
+/// command and not left to the default.
+#[tokio::test]
+async fn moving_a_branch_onto_a_remote_ref_leaves_its_upstream_alone() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("a.txt", "one\n", "root");
+    origin.git(&["checkout", "-b", "topic"]);
+    origin.commit_file("b.txt", "two\n", "what the remote has");
+    origin.git(&["checkout", "main"]);
+    origin.commit_file("c.txt", "three\n", "where the branch is moved to");
+
+    let mut clone = TestRepo::init();
+    let url = origin.file_url();
+    clone.git(&["remote", "add", "origin", &url]);
+    clone.git(&["fetch", "origin"]);
+    clone.git(&["checkout", "-b", "topic", "origin/topic"]);
+    let (exec, cancel) = env();
+
+    assert_eq!(
+        upstream_of(&mut clone, "topic").as_deref(),
+        Some("refs/remotes/origin/topic"),
+        "the branch reads its own remote before the move"
+    );
+
+    branch::checkout(
+        &exec,
+        &clone.path,
+        &CheckoutTarget::ForceCreate {
+            local: "topic".into(),
+            start: "origin/main".into(),
+        },
+        &cancel,
+    )
+    .await
+    .expect("force-create");
+
+    assert_eq!(
+        clone.git(&["rev-parse", "HEAD"]),
+        clone.git(&["rev-parse", "origin/main"]),
+        "the branch stands where it was moved"
+    );
+    assert_eq!(
+        upstream_of(&mut clone, "topic").as_deref(),
+        Some("refs/remotes/origin/topic"),
+        "and still reads what it read before"
+    );
+}
+
 /// The reference point `branch --delete` measures "merged" against: the
 /// configured upstream where there is one, HEAD otherwise. `upstream_of`
 /// resolves the first half; the pairing pinned here is the side git's

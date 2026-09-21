@@ -78,7 +78,7 @@
 | `show` | `-z` / `-r` / `--name-status` / `--find-renames` / `--diff-merges=first-parent` / `--format=` / `--format=%(trailers:key=,valueonly,unfold,separator=)` | 古参 + `--diff-merges=` は **2.31**(`first-parent` は導入時からの値)。diff 系オプションは `diff-tree` の行と同じ出処(diff-options)。**trailers の 4 オプションとも 2.43.0 ✓**(pretty-formats に `key=<key>`「Matching is done case-insensitively」= `Co-Authored-By` も拾う・`valueonly`・`unfold`・`separator=<sep>`「may contain the literal formatting codes described above」= `%x1F` が書ける、を確認)。**最低バージョンのコンテナで実測**(`cargo xtask linux test -p platitude-core` の `details_diff` = マージ・root・rename・空コミット) |
 | `stash` | `list -z --format=` / `push -m --include-untracked --keep-index --staged` / `pop --index` / `apply` / `drop` / `store -m` | 2.43.0 ✓(`push --staged` 2.35) |
 | `status` | `--porcelain=v2` / `-z` / `--branch` / `-uall` | 2.43.0 ✓(v2 は 2.11) |
-| `switch` | `--create` / `--force-create` / `--track` | 2.43.0 ✓(2.23 導入。EXPERIMENTAL 表記は restore と同様) |
+| `switch` | `--create` / `--force-create` / `--track` / `--no-track` | 2.43.0 ✓(2.23 導入。EXPERIMENTAL 表記は restore と同様)。`--no-track` は 2.43.0 のマニュアルに記載(「even if the `branch.autoSetupMerge` configuration variable is true」)。**`--force-create` との併用はマニュアルが明示しない**ので最低バージョンのコンテナで実測(`cargo xtask linux test -p platitude-core --test it upstream_integration`) |
 | `symbolic-ref` | `-q` / `--short` | 古参(1.7.10) |
 | `tag` | `--delete` / `--end-of-options` | 2.42.0 ✓ |
 | `worktree` | `list --porcelain -z` | 2.42.1 ✓(`-z` 2.36) |
