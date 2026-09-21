@@ -335,34 +335,66 @@ pub(super) fn status_key(status: &WorkTreeStatus) -> u64 {
     hasher.finish()
 }
 
-/// Fingerprints where every ref points, so two reads can be compared
-/// without keeping the listing around.
+/// The two fingerprints one listing answers for, so two reads can be
+/// compared without keeping the listing around.
 ///
-/// Only what moves the walk counts: a renamed upstream or a changed sort
-/// date redraws chips through the label diff, and rebuilding for those
-/// would repaint the graph over nothing. `git for-each-ref` lists in
-/// refname order, so equal layouts hash equal.
-pub(super) fn refs_key(refs: &[RefEntry], head: &HeadState) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    for entry in refs {
-        entry.name.hash(&mut hasher);
-        entry.target.hash(&mut hasher);
-        entry.peeled.hash(&mut hasher);
-    }
-    head.branch.hash(&mut hasher);
-    head.oid.hash(&mut hasher);
-    head.detached.hash(&mut hasher);
-    hasher.finish()
+/// **They are not the same question, and a listing can move one without
+/// the other.** `git for-each-ref` lists in refname order, so equal
+/// listings hash equal either way.
+pub(super) struct RefsKeys {
+    /// Where every ref points, and where HEAD is — **what the walk asks
+    /// about**. Only what moves the walk counts: a renamed upstream or a
+    /// changed sort date redraws chips through the label diff, and
+    /// walking again for those would repaint the graph over nothing.
+    pub walk: u64,
+    /// That, and the rest of what each entry carries — **what the joins
+    /// are built out of** (`join_key`). A branch that changed what it
+    /// reads moves no ref at all: the walk stays put and the rows still
+    /// have to be built again, or the badge and the counts beside a name
+    /// go on saying what they said before the write (`Set upstream…`,
+    /// observed).
+    pub listing: u64,
 }
 
-/// Everything the two joins read, [`refs_key`] included.
+pub(super) fn refs_keys(refs: &[RefEntry], head: &HeadState) -> RefsKeys {
+    use std::hash::{Hash, Hasher};
+    let mut walk = std::collections::hash_map::DefaultHasher::new();
+    // The fields the joins read past the three above, in one pass beside
+    // them: the badge a row wears and the name under it (`upstream`), the
+    // pair at its right edge (`ahead` / `behind`), the mark on the branch
+    // HEAD is on, and the date the lists are ordered by. `short` and
+    // `kind` are read off `name`, so hashing the name says them too.
+    let mut rest = std::collections::hash_map::DefaultHasher::new();
+    for entry in refs {
+        entry.name.hash(&mut walk);
+        entry.target.hash(&mut walk);
+        entry.peeled.hash(&mut walk);
+        entry.upstream.hash(&mut rest);
+        entry.is_head.hash(&mut rest);
+        entry.created_unix.hash(&mut rest);
+        entry.ahead.hash(&mut rest);
+        entry.behind.hash(&mut rest);
+    }
+    head.branch.hash(&mut walk);
+    head.oid.hash(&mut walk);
+    head.detached.hash(&mut walk);
+    let walk = walk.finish();
+    let mut listing = std::collections::hash_map::DefaultHasher::new();
+    walk.hash(&mut listing);
+    rest.finish().hash(&mut listing);
+    RefsKeys {
+        walk,
+        listing: listing.finish(),
+    }
+}
+
+/// Everything the two joins read, [`RefsKeys::listing`] included.
 ///
 /// **A second key.** The two answer different questions and only one of
 /// them reaches the walk:
 ///
-/// - `refs_key` moving means commits the graph has never seen, so the
-///   history is walked again.
+/// - [`RefsKeys::walk`] moving means commits the graph has never seen, so
+///   the history is walked again.
 /// - this moving means the snapshot and the chip map have to be rebuilt —
 ///   which what the remotes carry does on its own, because it decides the
 ///   cloud badges and adds the tags only they have. **The rows stand**,
@@ -370,18 +402,23 @@ pub(super) fn refs_key(refs: &[RefEntry], head: &HeadState) -> u64 {
 ///   ends in "the same picture" pays for the whole walk to find that
 ///   out.
 ///
+/// **So this one takes the listing key, not the walk's.** The listing is
+/// what the joins are built out of, and the parts of it no ref move shows
+/// up in — what a branch reads, how far it stands from it — are on the
+/// rows this decides to rebuild.
+///
 /// Takes a counter the session bumps when the index became
 /// different readings, so this stays O(1) on top of the key it
 /// wraps.
 pub(super) fn join_key(
-    refs: u64,
+    listing: u64,
     remote_tags_gen: u64,
     worktrees_gen: u64,
     remotes: &remote::Remotes,
 ) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    refs.hash(&mut hasher);
+    listing.hash(&mut hasher);
     remote_tags_gen.hash(&mut hasher);
     // A working copy taken or given back moves no ref, so nothing else
     // here would notice it — and the mark it decides is on rows the

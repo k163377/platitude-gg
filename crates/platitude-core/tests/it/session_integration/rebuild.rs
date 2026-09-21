@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, is_stream_event, open_unawaited, scenario};
+use crate::support::session::{CaptureSink, is_stream_event, open_unawaited, opened, scenario};
 use platitude_core::OperationKind;
 use platitude_core::session::{Recording, RefreshOutcome, RepoSession, SessionEvent};
 
@@ -487,6 +487,63 @@ async fn a_rebuild_taken_over_before_it_started_never_walks() {
         1,
         "only the pass that still owned the stream walked: {:?}",
         commands(&sink)
+    );
+    session.close();
+}
+
+/// **The snapshot is built out of more than where the refs point.**
+/// Setting an upstream moves no ref at all — it is two config keys — but
+/// the listing carries what each branch reads and how far it stands from
+/// it, and the sidebar's badge and the row's chips are built from that.
+///
+/// A key that answered only for positions republished the snapshot from
+/// before the write, so the answer just given was nowhere on screen until
+/// something else moved a ref (observed: `Set upstream…` redrew nothing).
+#[tokio::test(flavor = "multi_thread")]
+async fn setting_an_upstream_rebuilds_what_the_rows_read() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("a.txt", "one\n", "root");
+    origin.git(&["branch", "other"]);
+
+    let mut work = TestRepo::init();
+    let url = origin.file_url();
+    work.git(&["remote", "add", "origin", &url]);
+    work.git(&["fetch", "origin"]);
+    work.git(&["checkout", "-b", "topic", "origin/main"]);
+
+    let (sink, session) = opened(&work).await;
+    sink.opening_snapshots().await;
+
+    session.set_upstream("topic".into(), "origin".into(), "other".into());
+
+    let upstream = sink
+        .wait_for("the snapshot published after the upstream write", |evs| {
+            let done = evs.iter().position(|e| match e {
+                SessionEvent::WriteFinished {
+                    kind: OperationKind::Branch,
+                    error,
+                    ..
+                } => {
+                    assert!(error.is_none(), "the write failed: {error:?}");
+                    true
+                }
+                _ => false,
+            })?;
+            evs[done..].iter().find_map(|e| match e {
+                SessionEvent::RefsLoaded { snapshot, .. } => Some(
+                    snapshot
+                        .local_named("topic")
+                        .map(|branch| branch.upstream.as_str().to_string())
+                        .unwrap_or_default(),
+                ),
+                _ => None,
+            })
+        })
+        .await;
+
+    assert_eq!(
+        upstream, "origin/other",
+        "the rows read what the write said, not what they read before it"
     );
     session.close();
 }

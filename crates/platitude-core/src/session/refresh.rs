@@ -3,7 +3,7 @@
 //! identity reads are [`super::author`], and the head-reachability record
 //! and walk [`super::head_reach`].
 
-use super::joins::{RefJoins, build_label_map, build_snapshot, join_key, refs_key};
+use super::joins::{RefJoins, build_label_map, build_snapshot, join_key, refs_keys};
 use super::*;
 
 impl RepoSession {
@@ -105,7 +105,8 @@ impl RepoSession {
                 // commit, a fetch, a poll tick that found a ref moved.
                 self.record_head_from_refs(looked, &refs, &head);
                 let remote_tags = self.remote_tag_index();
-                let key = refs_key(&refs, &head);
+                let keys = refs_keys(&refs, &head);
+                let key = keys.walk;
                 let previous = relock(&self.refs_key).replace(key);
                 // **The joins have a key of their own** (`join_key`), and
                 // an unmoved repository does not build them at all —
@@ -118,7 +119,7 @@ impl RepoSession {
                 // already published, so the sidebar reads it by pointer
                 // and rebuilds nothing (`share_snapshot`).
                 let inputs = join_key(
-                    key,
+                    keys.listing,
                     self.remote_tag_gen.load(Ordering::SeqCst),
                     self.worktree_gen.load(Ordering::SeqCst),
                     &remotes,
