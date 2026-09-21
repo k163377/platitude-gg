@@ -123,3 +123,4 @@ cargo が置き換えた成果物を消さないことの代金。**1 世代 = �
 | Linux 側のボリューム `pgg-linux-target-<席>`(積もった席) | 11.3GB = `debug/incremental` 4.8 + `debug/deps` 2.6 + `debug/build` 2.0 + `release` 1.4。6 席で 56GB、1 世代は 6GB |
 | incremental セッションの日付 | `<crate>-<id>/` の 2 段下の最新ファイルが、そのディレクトリ自身の日付と秒まで一致(40 件中 39 件。残り 1 件は 1 秒差)。artifact との差は ±5 秒 |
 | fresh なビルドが `.fingerprint/*/invoked.timestamp` に触るか | 触らない(`target/hooks` で hook が朝から数百回走っても、時刻は最後の再ビルドのまま)= **古さは「死んでいる」の証拠にならない** |
+| 正規集合を続けて 2 回読んだ時に relink する unit(listing 1 回あたり) | 2。どちらも `pgg-todo-editor` — feature 解決の違う 2 行(`test --locked --workspace --no-run` と `test --locked -p platitude-core --no-run`)が hash 無しの同じ bin を書くので、listing 1 回につき 1 回ずつ相手を上書きする。他の 15 行は全部 fresh |

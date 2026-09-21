@@ -185,16 +185,20 @@ fn the_runner(package: &str) -> bool {
     package == "xtask"
 }
 
+/// **A bin cargo writes without a hash is one file, however many lines
+/// build it.** The bin of a workspace member is uplifted, so cargo gives
+/// rustc no `extra-filename` for it and every configuration of it lands
+/// on `deps/platitude_gg.exe`, `deps/pgg_todo_editor.exe`,
+/// `deps/xtask.exe` — one name each. Two lines here that resolve
+/// features differently therefore relink that one file past each other,
+/// once per listing apiece, and the tree is left holding whichever ran
+/// last. So **the line whose configuration this runner's own tools read
+/// stands last of the lines that write the bin**: the per-package test
+/// lines, which is how the gate runs them (`gate::plan`), after the
+/// workspace one; `build -p xtask` last of all in `debug`; and the
+/// harness release, which is what verify-ui and every window drive
+/// (`tree::app_exe`), alone in `release`.
 const CANONICAL: &[Line] = &[
-    // The task runner the gate's steps start from (`gate::runner`), and
-    // the one a session builds to run any verb at all. No `cargo test`
-    // line covers it: a bin built for tests is a unit of its own.
-    Line {
-        host_only: false,
-        profile: "debug",
-        words: &["build", "--locked", "-p", "xtask"],
-        packages: no_package,
-    },
     // What a session runs while writing, crate by crate. Out here only:
     // nothing types a bare `check` into the container, and a line in
     // there that has never been built is a compile of the whole of it.
@@ -257,35 +261,44 @@ const CANONICAL: &[Line] = &[
         ],
         packages: no_package,
     },
-    // The gate's unit and integration tests. `--no-run` is the whole
-    // difference from the gate's line: which tests run is a filter, and
-    // filters never decide which units are built.
-    Line {
-        host_only: false,
-        profile: "debug",
-        words: &["test", "--locked", "-p", "{package}", "--no-run"],
-        packages: tested_here,
-    },
     Line {
         host_only: true,
         profile: "debug",
         words: &["test", "--locked", "--workspace", "--no-run"],
         packages: no_package,
     },
+    // The gate's unit and integration tests. `--no-run` is the whole
+    // difference from the gate's line: which tests run is a filter, and
+    // filters never decide which units are built. Behind the workspace
+    // line, because the bin a package's integration tests are handed is
+    // these lines' to leave behind (`pgg-todo-editor`).
+    Line {
+        host_only: false,
+        profile: "debug",
+        words: &["test", "--locked", "-p", "{package}", "--no-run"],
+        packages: tested_here,
+    },
+    // The task runner the gate's steps start from (`gate::runner`), and
+    // the one a session builds to run any verb at all. No `cargo test`
+    // line covers it: a bin built for tests is a unit of its own, and
+    // the plain one a test line builds alongside it is this line's to
+    // leave behind.
+    Line {
+        host_only: false,
+        profile: "debug",
+        words: &["build", "--locked", "-p", "xtask"],
+        packages: no_package,
+    },
     // The release every verify-ui run and every window drives
-    // (`tree::app_exe`), which `bare` then reads out of the volume.
+    // (`tree::app_exe`), which `bare` then reads out of the volume. The
+    // only line in this profile: `cargo build --release` without the
+    // harness writes the same bin under the same name, and what a
+    // session builds the product with is `shipped` (CLAUDE.md
+    // ビルド・テスト).
     Line {
         host_only: false,
         profile: "release",
         words: &["build", "--locked", "--release", "--features", HARNESS],
-        packages: no_package,
-    },
-    // The same profile without the harness, which is what a session
-    // types when it wants the product rather than a driven one.
-    Line {
-        host_only: true,
-        profile: "release",
-        words: &["build", "--locked", "--release", "-p", "platitude-app"],
         packages: no_package,
     },
     // Host only, as the gate's `shipped` step is: the container never

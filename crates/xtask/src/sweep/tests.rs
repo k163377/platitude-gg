@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use super::{
-    Alive, CANONICAL, Gone, IF_MOVED, ONLY_IF_MOVED, Tail, asks, crate_of, generation, profiles_in,
-    read_artifacts, stamp, stamped, sweep_profile, unit_key,
+    Alive, CANONICAL, Gone, HARNESS, IF_MOVED, ONLY_IF_MOVED, Tail, asks, crate_of, generation,
+    profiles_in, read_artifacts, stamp, stamped, sweep_profile, unit_key,
 };
 
 /// The tree this test's files stand in, taken away when it is done with.
@@ -541,6 +541,49 @@ fn every_canonical_line_is_one_this_can_run() {
             );
         }
     }
+}
+
+/// A bin of a workspace member is uplifted, so cargo gives rustc no
+/// `extra-filename` for it and every configuration of it lands on one
+/// name under `deps/`. The line whose configuration this runner's own
+/// tools read therefore has to stand last of the lines that write it,
+/// or the tree is left holding somebody else's and the next tool
+/// relinks (`CANONICAL`).
+#[test]
+fn the_configuration_this_runners_tools_read_is_written_last() {
+    let of = |profile: &str| -> Vec<&[&str]> {
+        CANONICAL
+            .iter()
+            .filter(|line| line.profile == profile)
+            .map(|line| line.words)
+            .collect()
+    };
+    assert_eq!(
+        of("debug").last().copied(),
+        Some(["build", "--locked", "-p", "xtask"].as_slice()),
+        "the task runner every gate step starts from is the last debug line"
+    );
+    assert_eq!(
+        of("release"),
+        [["build", "--locked", "--release", "--features", HARNESS].as_slice()],
+        "the release verify-ui drives is the only line in that profile — one without the \
+         harness writes the same bin under the same name, and the product comes from `shipped`"
+    );
+    // Both stood for, and then compared: `None` sorts ahead of every
+    // `Some`, so a line this went looking for and did not find would
+    // read as "early enough" and the order would go unguarded.
+    let at = |words: &[&str]| {
+        CANONICAL
+            .iter()
+            .position(|line| line.words == words)
+            .unwrap_or_else(|| panic!("{words:?} is a line of the canonical set"))
+    };
+    assert!(
+        at(&["test", "--locked", "--workspace", "--no-run"])
+            < at(&["test", "--locked", "-p", "{package}", "--no-run"]),
+        "the per-package test lines, which is how the gate runs them, leave the bin a \
+         package's integration tests are handed"
+    );
 }
 
 /// The stamp stands inside the build directory it answers for, so a
