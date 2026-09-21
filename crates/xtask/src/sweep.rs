@@ -17,11 +17,13 @@
 //! stand on, fresh units and compiled ones alike. A line off that list
 //! is not kept for: what it built is built again next time it is typed.
 //!
-//! **A generation has a key**, made of what actually leaves one behind:
-//! `rustc -vV`, `Cargo.lock`, the manifest's profile settings and the
-//! toolchain pin, hashed into one ([`generation`]). Every sweep leaves
-//! its tree's key and the moment it ran behind, which is what the floor
-//! below is read against.
+//! **Run when the generation moves**, which is what actually leaves one
+//! behind: `rustc -vV`, `Cargo.lock`, the manifest's profile settings and
+//! the toolchain pin are hashed into one key ([`generation`]), each tree
+//! keeps the key its last sweep ran under, and the tail of a gate or a
+//! landing sweeps only when the two differ. A full gate sweeps whatever
+//! the key says, because stage 3 is where the tree is asked for
+//! everything anyway (CLAUDE.md 確認は 3 段).
 //!
 //! **What was written since the last sweep stays**, live set or not: a
 //! configuration somebody used this week is one they are using, and
@@ -314,6 +316,76 @@ pub fn run(args: &[String]) -> Result<(), String> {
     };
     let (root, _busy) = crate::still::announced("sweep")?;
     sweep(&root, dry_run)
+}
+
+/// What the tail of a gate or a landing hands the sweep.
+pub(crate) struct Tail {
+    /// Sweep whatever the generation key says. Stage 3 has asked the
+    /// tree for everything already, so the reading costs it nothing it
+    /// was not going to pay.
+    pub whatever_the_key_says: bool,
+    /// The container's build volume is this run's to sweep as well.
+    /// **False for a tier that started no container**: the daily one
+    /// promises not to, and a sweep is no reason to break that
+    /// (CLAUDE.md 確認は 3 段). The volume then waits for the next run
+    /// that has a Linux side.
+    pub the_volume_too: bool,
+}
+
+impl Tail {
+    /// A landing's: it rebased onto whatever main brought and gated both
+    /// sides, so the volume is its to sweep — and the key decides, as it
+    /// does for every tier but the full one.
+    pub(crate) fn after_a_landing() -> Self {
+        Self {
+            whatever_the_key_says: false,
+            the_volume_too: true,
+        }
+    }
+}
+
+/// The sweep a passing gate or landing ends with.
+///
+/// **The key is what makes it happen at all.** A seat runs the full tier
+/// a handful of times a month while a generation is left behind by every
+/// `Cargo.lock` that lands — five of them in three weeks, measured — so
+/// a sweep hung on stage 3 alone would run long after the disk was gone.
+///
+/// Never a failure of the gate or the landing that calls it: the tests
+/// have answered, and a sweep that could not read the tree is a sweep,
+/// not a verdict.
+pub(crate) fn at_a_tail(dir: &Path, tail: &Tail) {
+    let was = stamped(dir).map(|(key, _)| key);
+    match generation(dir) {
+        Ok(key) if !tail.whatever_the_key_says && was.as_deref() == Some(key.as_str()) => {
+            println!("sweep: generation unchanged ({key}) — nothing to take away");
+            return;
+        }
+        // Said before the reading, because the reading is where the
+        // minutes are: a line this tree has never built is compiled
+        // here, once.
+        Ok(key) => println!(
+            "sweep: generation {} — reading the canonical lines",
+            match &was {
+                Some(was) => format!("{was} -> {key}"),
+                None => format!("{key}, unswept"),
+            }
+        ),
+        Err(why) => {
+            println!("sweep: the generation could not be read — {why}");
+            return;
+        }
+    }
+    if let Err(why) = sweep(dir, false) {
+        println!("sweep: nothing taken away — {why}");
+        return;
+    }
+    if !tail.the_volume_too {
+        return;
+    }
+    if let Err(why) = crate::linux::sweep_the_volume(dir) {
+        println!("sweep: the container's build volume was left alone — {why}");
+    }
 }
 
 /// Reads the live set, walks each profile directory it answers for, and

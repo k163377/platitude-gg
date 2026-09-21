@@ -118,10 +118,12 @@ commands:
       unpredictable moments, so neither is touched, and nothing under
       target/ that is not cargo's is either. A profile cargo is building
       in is left whole, and a run that left one alone writes no stamp, so
-      the next sweep does it again. Every removal is printed with its
-      size, and so is anything that would not go. The container's build
-      directory is a volume of its own, swept by the same verb run in
-      there: `cargo xtask linux sweep`.
+      the next tail does it again. Every removal is printed with its
+      size, and so is anything that would not go. The tail of a gate and
+      of a landing runs this by itself when the generation key has moved;
+      `gate --all` runs it whatever the key says. The container's build
+      volume is swept through the same verb, by a tier that has a Linux
+      side — never by --host-only, which starts no container at all.
       options:
         --dry-run     print what would go, and take nothing
 

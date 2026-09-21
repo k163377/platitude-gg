@@ -275,7 +275,23 @@ fn gate(args: &[String]) -> Result<(), String> {
         &shift,
     );
     match outcome? {
-        Gated::Stamped => Ok(()),
+        Gated::Stamped => {
+            // Green, and nothing else is running in this tree: where the
+            // sweep belongs (`crate::sweep`). Stage 3 sweeps whatever
+            // the generation says, because it has asked the tree for
+            // everything anyway; every other tier sweeps only when the
+            // generation has moved since the last one. The daily tier
+            // sweeps this tree and not the container's volume — it has
+            // started no container, and this is no place to.
+            crate::sweep::at_a_tail(
+                &plan.dir,
+                &crate::sweep::Tail {
+                    whatever_the_key_says: opts.all,
+                    the_volume_too: !opts.host_only,
+                },
+            );
+            Ok(())
+        }
         // A tree left dirty without a word is the next gate refusing to
         // run over a change nobody made — which is the whole complaint
         // the recording answers. Said as the failure it is for the

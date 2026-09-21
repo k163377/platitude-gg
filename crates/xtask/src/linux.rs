@@ -472,6 +472,44 @@ fn stop(
     Ok(())
 }
 
+/// The container's half of a full gate's sweep (`crate::sweep`): the
+/// same verb, run against the build volume this checkout's Linux side
+/// compiles in.
+///
+/// **In a container of its own, not the gate's.** The gate takes its
+/// container down with the side that used it, and what this reads is the
+/// volume — which outlives every container that ever mounted it. A start
+/// here is seconds against an image already built, and it is one start
+/// per sweep.
+///
+/// **It never builds an image.** Housekeeping is no reason to spend the
+/// minutes an image costs, and a tag that is not there is a tag nothing
+/// has run the Linux side under — so the volume behind it holds nothing
+/// this would take away either.
+pub(crate) fn sweep_the_volume(root: &Path) -> Result<(), String> {
+    if cfg!(target_os = "linux") {
+        // There is no volume: the container drops out here and both
+        // sides build in the one directory the caller has just swept.
+        return Ok(());
+    }
+    let rest = [crate::sweep::SWEEP.call.to_string()];
+    let tag = image_tag(root, stage_for(&rest))?;
+    if !image_exists(&tag)? {
+        return Err(format!(
+            "{tag} is not built, so nothing here has built in the volume either"
+        ));
+    }
+    let command = command_line(&rest, None);
+    let _room = crate::budget::standalone(
+        root,
+        crate::budget::weight_of(&command, false),
+        crate::budget::Rank::Normal,
+        "the container's sweep",
+    )?;
+    let _busy = crate::still::busy(root, "linux")?;
+    in_container(root, &tag, &command, false, None, None)
+}
+
 fn ensure_image(root: &Path, stage: &str, rebuild: bool) -> Result<String, String> {
     let tag = image_tag(root, stage)?;
     if rebuild || !image_exists(&tag)? {

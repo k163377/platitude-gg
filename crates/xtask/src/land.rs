@@ -152,6 +152,12 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     // leave the old copy answering until some later session start.
     println!("{}", crate::gate::install(&root)?);
     println!("landed {branch}: main {before} -> {after} ({ahead} commit(s)).");
+    // After the landing is said and while the claim still stands, so
+    // nothing else is building here: a rebase onto a main carrying a new
+    // Cargo.lock is exactly the event that leaves a generation of build
+    // products behind, and the seat has just done one (`crate::sweep`).
+    crate::sweep::at_a_tail(seat_dir, &crate::sweep::Tail::after_a_landing());
+    phases.mark("sweep");
     // The claim comes off last: from the moment it does, another session
     // may take the letter, and the board this landing still has to clear
     // is the one the next stretch there would be clearing for itself.
