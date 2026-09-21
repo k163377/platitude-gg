@@ -13,9 +13,10 @@
   枝 `pgg-copy-1..8` に立つ(detached にすると開いた時の listing が walk を頼み、開幕の stream が
   最初の chunk の前に取られて harness が「walk が無い」と refuse する = `session::joins::WorktreeNews`)。
   枝が 8 本増えるので **corpus token は `fb3d090c4261f4500bd61c8db7389485d515feab`(refs 50,012)**
-  — perf 記録の token とは別物で、この記録の中でだけ比較する。**コピーは立てたままにしてある**(この記録を
-  撃ち直すのに要る)。perf 記録の token に戻すなら各コピーを `git worktree remove` して
-  `git branch -D pgg-copy-<n>`
+  — perf 記録の token とは別物で、この記録の中でだけ比較する。**コピーは計測の入口で建てて出口で畳む** —
+  立てたままだと各 547MB を占めた上に corpus token がこの記録の側に固定され、
+  [perf-windows-x64.md](perf-windows-x64.md) §判定 を撃ち直せない。畳むのは
+  `cargo xtask corpus --copies 0`(畳んだコピーと token の戻り先を印字する)
 - 撃ち方(1 変種 1 行。**exe は rig に建てた `1896aff9` の 1 本**で、下の 3 つの表はどれも同じバイナリ
   — 予約の分け方の A/B だけが 2 本を交互に撃つ):
 
@@ -205,7 +206,7 @@ pass(全コピー)と、ペインのファイル一覧(`RepoSession::read_carrie
 
 ## 再実行
 
-コピーが立っていれば §条件 の 1 行だけ。立っていなければ `cargo xtask corpus --copies 8`(8 × 109,652
-ファイルのチェックアウトで数分)。内訳は同じ行に `--log debug --runs 2 --cycles 6`、probe は
-`cargo xtask corpus --probe`(コピー 1 が要る)。**変種を跨いで比べるなら同じ座りで背中合わせに撮る**
-(§条件 の最後 — p95 と max は run の揺れで動く)。
+**入口で `cargo xtask corpus --copies 8`**(8 × 109,652 ファイルのチェックアウトで数分)→ §条件 の 1 行 →
+**出口で `cargo xtask corpus --copies 0`**。内訳は同じ行に `--log debug --runs 2 --cycles 6`、probe は
+`cargo xtask corpus --probe`(コピー 1 が要る = 入口を通っていれば立っている)。**変種を跨いで比べるなら
+同じ座りで背中合わせに撮る**(§条件 の最後 — p95 と max は run の揺れで動く)。

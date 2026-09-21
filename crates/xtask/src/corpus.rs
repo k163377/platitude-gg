@@ -87,10 +87,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
             }
             "--copies" => {
                 i += 1;
-                wanted =
-                    Some(args.get(i).and_then(|n| n.parse::<usize>().ok()).ok_or(
-                        "--copies takes how many working copies to stand beside the corpus",
-                    )?);
+                wanted = Some(args.get(i).and_then(|n| n.parse::<usize>().ok()).ok_or(
+                    "--copies takes how many working copies stand beside the corpus, 0 for none",
+                )?);
             }
             other => return Err(format!("corpus does not take {other:?}")),
         }
@@ -116,7 +115,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         build(&at)?;
     }
     if let Some(count) = wanted {
-        copies::stand_copies(&at, count)?;
+        copies::set_copies(&at, count)?;
     }
     if probe {
         return probe::run(&at, &copies::copy_path(&at, 1));
