@@ -11,6 +11,16 @@ use crate::wait::{Budget, LOOK_AGAIN, Wait};
 pub const EXE: &str = env!("CARGO_BIN_EXE_xtask");
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
+/// Where the suites' trees stand under the system temp — `xtask`'s own
+/// `yard::BASE`, spelled again because an integration binary is a crate
+/// of its own and cannot read the runner's modules. **The two have to
+/// say the same thing**: the name is what the day-old sweep looks under
+/// (`verify::ownership::RUN_BASES`), and a root outside it is one
+/// nothing ever takes away. A sandbox whose removal is refused — git
+/// still holding the tree, the process killed before the `Drop` — is
+/// what this is for; the ordinary road removes its own.
+const YARD: &str = "pgg-tests";
+
 /// The steps every gate runs regardless of the diff.
 pub const ALWAYS: [&str; 5] = ["structure", "waits", "docs", "verbs", "fmt"];
 
@@ -73,7 +83,9 @@ pub struct Sandbox {
 impl Sandbox {
     pub fn new(name: &str) -> Self {
         let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-        let root = std::env::temp_dir().join(format!("pgg-gate-{name}-{}-{n}", std::process::id()));
+        let root = std::env::temp_dir()
+            .join(YARD)
+            .join(format!("gate-{name}-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&root).expect("temp root");
         let gitconfig = root.join("gitconfig");
         std::fs::write(

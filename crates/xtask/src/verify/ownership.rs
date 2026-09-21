@@ -121,13 +121,23 @@ pub(super) fn fresh_shot_dir(verb: &str) -> Result<PathBuf, String> {
     claim_dir(&std::env::temp_dir().join("pgg-verify"), verb)
 }
 
-/// The directories under the system temp a run leaves something in. Four
-/// it claims its own directory in (`claim_dir`'s callers): a verb's
-/// pictures and settings, its demo repositories (`demo::claim_root`), a
-/// container run's mount (`keepsakes::keepsake_dir`), and the roots the
-/// tests claim. And one it leaves a file in — [`LOCKS`], where a claim
-/// is taken and which nothing else ever clears.
-const RUN_BASES: [&str; 5] = ["pgg-verify", "pgg-demo", "pgg-linux", "pgg-census", LOCKS];
+/// The directories under the system temp a run leaves something in.
+/// Five it claims its own directory in (`claim_dir`'s callers): a
+/// verb's pictures and settings, its demo repositories
+/// (`demo::claim_root`), a container run's mount
+/// (`keepsakes::keepsake_dir`), the roots the tests claim, and the
+/// trees the suite stands its files in ([`crate::yard`]) — which their
+/// own guards remove, so only a killed run leaves one here. And one it
+/// leaves a file in — [`LOCKS`], where a claim is taken and which
+/// nothing else ever clears.
+const RUN_BASES: [&str; 6] = [
+    "pgg-verify",
+    "pgg-demo",
+    "pgg-linux",
+    "pgg-census",
+    crate::yard::BASE,
+    LOCKS,
+];
 
 /// How long a run's directory stands before it is litter. A run is
 /// minutes long — its watchdog is two, a cold build ten — and the
@@ -591,11 +601,7 @@ mod tests {
     /// whether somebody asked for one to be kept.
     #[test]
     fn a_passing_run_gives_back_its_roots_and_spares_a_marked_one() {
-        let base = std::env::temp_dir().join(format!(
-            "pgg-giveback-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let base = crate::yard::Yard::new("giveback");
         let made = |leaf: &str| {
             let dir = base.join(leaf);
             std::fs::create_dir_all(&dir).expect("a root");
@@ -622,7 +628,6 @@ mod tests {
         assert!(!scaffolding.exists(), "a passing run's root was left");
         assert!(!another.exists(), "a passing run's second root was left");
         assert!(marked.exists(), "a tree somebody asked to keep was taken");
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// **A reading that failed reaches the removal as a refusal.** The
@@ -635,11 +640,7 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn a_reading_that_failed_keeps_the_roots() {
-        let base = std::env::temp_dir().join(format!(
-            "pgg-unreadable-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let base = crate::yard::Yard::new("unreadable");
         let root = base.join("basic-1-2-0");
         std::fs::create_dir_all(&root).expect("a root to keep");
 
@@ -678,7 +679,6 @@ mod tests {
         );
         assert_eq!(kept, 0, "a root went on a reading that had failed");
         assert!(root.exists(), "a root went on a reading that had failed");
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// **A process that outlives the app is seen.** This is the whole of

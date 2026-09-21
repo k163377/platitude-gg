@@ -42,6 +42,7 @@ mod usage;
 mod verify;
 mod wait;
 mod waits;
+mod yard;
 
 use std::process::ExitCode;
 
