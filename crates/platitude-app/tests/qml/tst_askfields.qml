@@ -24,6 +24,18 @@ Item {
         branch: "feature/new-thing"
     }
 
+    // The other question that asks in this row, and **the one whose name box also carries a list**: an `AppCombo`
+    // keeps back the width of the arrow whether it draws one or not (`AppCombo.wantedWidth`), so the box being typed
+    // into asks the row for more than the plain field beside it does for the same word.
+    UpstreamForm {
+        id: upstream
+        width: root.width
+        remotes: [root.longRemote, "origin"]
+        branches: ["main", "feature/topic-a"]
+        remote: "origin"
+        branch: "feature/new-thing"
+    }
+
     TestCase {
         name: "AskFields"
         when: windowShown
@@ -111,6 +123,43 @@ Item {
             tryVerify(() => b.name.x + b.name.width - form.width <= Theme.spaceXs)
             verify(b.remote.width < b.remote.wantedWidth, "it wanted more: " + b.remote.wantedWidth)
             verify(b.name.width >= Metrics.askFieldMinW, "and the name keeps its floor: " + b.name.width)
+        }
+
+        /// **The upstream question shares its row by the same three rules**, with a list on the box being typed into
+        /// as well: an `AppCombo` keeps back the arrow's width whether it draws one or not, so the name asks the row
+        /// for more than the plain field beside it does for the same word — and the ceiling that holds the
+        /// destination inside the bar is worked out from what the name asked for.
+        ///
+        /// The three the arithmetic can get wrong on its own, at the widths where each is the contract: the pair
+        /// reaches the end, the destination stops before the name loses its floor, and both come to rest on that
+        /// floor. **Not that the pair fits a bar narrower than the two floors and the `/` between them** — nothing
+        /// shrinks past the floor, so there the row overflows on purpose (the window has a floor of its own:
+        /// デザイン規約 §窓の床).
+        function test_the_upstream_row_shares_by_the_same_rules() {
+            const remote = upstream.remotePick
+            const name = upstream.branchPick
+            upstream.width = root.width
+            tryVerify(() => remote.width === Metrics.askFieldMinW)
+            verify(name.x + name.width >= upstream.width - 1,
+                   "the pair reaches " + (name.x + name.width) + " of " + upstream.width)
+            verify(name.width > Metrics.askFieldMinW, "the name has the slack: " + name.width)
+
+            // A destination longer than the bar can give it, at a bar exactly as wide as it asks for: it comes down
+            // to where the name still has its floor, and neither box is left standing past the end.
+            upstream.remote = root.longRemote
+            tryVerify(() => remote.wantedWidth > Metrics.askFieldMinW)
+            upstream.width = remote.wantedWidth
+            tryVerify(() => name.x + name.width - upstream.width <= Theme.spaceXs)
+            verify(remote.width < remote.wantedWidth, "it wanted more: " + remote.wantedWidth)
+            verify(name.width >= Metrics.askFieldMinW, "and the name keeps its floor: " + name.width)
+
+            // Both too long for one bar: the two come to rest on the floor they share, and what does not fit scrolls
+            // inside the box being typed into.
+            upstream.branch = root.longBranch
+            upstream.width = 2 * Metrics.askFieldMinW
+            tryVerify(() => name.width === Metrics.askFieldMinW)
+            compare(remote.width, Metrics.askFieldMinW, "and the destination is on the same floor")
+            verify(name.wantedWidth > name.width, "with more text than box, which is where it scrolls")
         }
 
         /// **Both too long for one bar**: the destination is on the floor the two share, the name has everything

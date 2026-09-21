@@ -330,19 +330,33 @@ pub(super) const TABLE: &[Verb] = &[
     // The question about what a branch is measured against. **The
     // picture holds two boxes and a pill and cannot say what any of them
     // are worth**: whether the name answered with is one this repository
-    // actually holds is the whole of what decides the press, and a pill
-    // greyed for that reason frames like one greyed for any other.
+    // actually holds is what the bar's line is about, and a pill greyed
+    // for one reason frames like a pill greyed for any other.
     //
-    // **`:missing` is the refused half.** The reserved name is one no
-    // demo repository carries, so the run photographs the frame and the
-    // line a name that was never fetched puts up — and both halves are
-    // needed: the plain side alone passes for an implementation that
-    // never checks, and the refused side alone for one that always
-    // refuses.
+    // **`:missing` is the half that is not here.** The reserved name is
+    // one no demo repository carries, so the run photographs the line a
+    // name that was never fetched puts up — and it is **answerable all
+    // the same**, which is the rule itself (デザイン規約
+    // §ブランチが測られる相手を決める): the branch is measured against a
+    // remote branch the next push makes. Both halves are needed — the
+    // plain side alone passes for an implementation that refuses
+    // nothing and reads nothing, and this side alone for one that never
+    // looks at the refs at all.
     Verb {
         name: "set-upstream",
-        when: &[(Arg::Ends(":missing"), "there=false answerable=false")],
+        when: &[(Arg::Ends(":missing"), "there=false answerable=true")],
         plain: "there=true answerable=true",
+    },
+    // The other half of the name box: the rows it offers past typing
+    // one. **`open=true` is the whole of what the report can say and
+    // the picture cannot** — a list nothing plumbed and a list with no
+    // rows in it both come down as nothing, and the box only opens one
+    // it has rows for (`AppCombo.hasList`). What is *in* it is the
+    // picture's (overlay.png), with `rows=` on the line to count by.
+    Verb {
+        name: "set-upstream-list",
+        when: &[],
+        plain: "open=true",
     },
     // Answered, and judged before the press: the write barrier says the
     // config landed, and this says the question was answerable when it
@@ -351,6 +365,22 @@ pub(super) const TABLE: &[Verb] = &[
         name: "set-upstream-go",
         when: &[],
         plain: "there=true answerable=true",
+    },
+    // **What the toolbar does with an upstream the far side has not got
+    // yet.** The counts are silent there (`tracked=false`), which is the
+    // standing that used to send the press back to a question about a
+    // destination nobody had written down — so what is read is where
+    // that question *opened*: the name the branch was just pointed at,
+    // not the guess. A picture of the bar cannot say which of the two it
+    // is holding, because both are a remote and a name in two boxes.
+    Verb {
+        name: "publish-upstream",
+        when: &[(
+            Arg::Is(""),
+            "publish upstream=origin/brand-new tracked=false state=publish \
+             remote=origin branch=brand-new",
+        )],
+        plain: "tracked=false state=publish",
     },
     // The `pull` row, on the two ends of the comparison it stands on and
     // on a remote row that is neither. **The picture cannot say whether

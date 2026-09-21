@@ -11,24 +11,28 @@ import platitude.ui
 // local says which of a remote's branches this one belongs with, and a wrong guess is a branch quietly measured
 // against somebody else's work.
 //
-// **The name is typed**. A list of what the remote already carries
-// would put picked names and typed ones in one box, and the two are not the same answer — a picked row is whatever
-// happened to be fetched, which is not what the reader came to say.
+// **The name is typed, and the list is a shortcut past typing it.** What the remote already carries is a set of
+// suggestions — a name outside it is a branch the next push makes, which is an answer this question takes
+// (デザイン規約 §ブランチが測られる相手を決める).
 ColumnLayout {
     id: upstreamForm
 
     /// The remotes this repository has. The whole set of answers — a branch cannot be measured against a remote that
     /// is not written down — so this half only ever picks.
     required property var remotes
+    /// The branches the chosen remote carries here, by the name half alone. Suggestions, not the set of answers.
+    required property var branches
     /// Where the question opens: the remote and branch already configured, or the branch's own name where nothing is.
     required property string remote
     required property string branch
-    /// Nothing here answers to that name. The frame says so where the typing is and the bar's line says why
-    /// (デザイン規約 §可否・警告の出し場所).
-    required property bool refused
 
     signal remotePicked(int index)
     signal branchEdited(string name)
+
+    /// Automation only: neither list can be opened by an injected click on the offscreen platform, and how the two
+    /// boxes share the row is a thing only a laid-out row can answer (`tst_askfields`).
+    property alias remotePick: remotePick
+    property alias branchPick: upstreamBranchField
 
     spacing: Theme.spaceXs
 
@@ -63,15 +67,19 @@ ColumnLayout {
         }
         // The question opens on a name: an empty box would read as though there were nothing
         // to point at.
-        SlimField {
+        //
+        // **`wanted` is the box's own once a key lands in it** — the binding below is where the question opens, and
+        // the field takes the value over from there (`AppCombo.wanted`). A remote picked after that swaps the list
+        // and leaves the name standing, which is what the two halves being one answer means.
+        AppCombo {
             id: upstreamBranchField
             Layout.minimumWidth: Metrics.askFieldMinW
             Layout.maximumWidth: Math.max(Metrics.askFieldMinW, askRow.room - Metrics.askFieldMinW)
             Layout.preferredWidth: askRow.nameWidth
             Layout.fillWidth: true
-            text: upstreamForm.branch
-            refused: upstreamForm.refused
-            onTextEdited: upstreamForm.branchEdited(text)
+            model: upstreamForm.branches
+            wanted: upstreamForm.branch
+            onWantedChanged: upstreamForm.branchEdited(upstreamBranchField.wanted)
             Component.onCompleted: upstreamBranchField.forceActiveFocus()
         }
     }

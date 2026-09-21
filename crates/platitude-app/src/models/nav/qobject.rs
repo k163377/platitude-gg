@@ -240,6 +240,26 @@ impl NavSectionModel {
         }
     }
 
+    /// The branches `remote` carries here, by the name half alone — the
+    /// rows the upstream question offers past typing one
+    /// (`Source::branches_on`). Empty for every section but the remotes.
+    ///
+    /// **The whole section, whatever the sidebar is filtering to**: the
+    /// filter is about the list somebody is reading, and this is a set of
+    /// answers to a question standing somewhere else.
+    ///
+    /// `remote_names` is the configured names, for the same cut the rest
+    /// of the window makes (`GitFacts.remoteOfRef`).
+    #[qslot]
+    pub(super) fn branches_on(&self, remote: String, remote_names: Vec<String>) -> Vec<String> {
+        let names: Vec<&str> = remote_names.iter().map(String::as_str).collect();
+        self.all
+            .branches_on(&remote, &names)
+            .into_iter()
+            .map(str::to_string)
+            .collect()
+    }
+
     /// Which row on show this ref sits on; -1 when it is on none. What a
     /// list asks before scrolling to a row nobody clicked on.
     #[qslot]

@@ -300,8 +300,22 @@ Item {
     }
 
     function startPublishAsk() {
-        publishFlow.publishRemote = publishFlow.repoTab.defaultRemote
-        publishFlow.publishBranch = publishFlow.workTree.branch
+        // **Where the branch already says it belongs is where the question opens.** A branch measured against a
+        // remote branch this repository has no ref for is still a branch with its destination written down — the
+        // upstream question puts it there, and a push is what makes the far side of it (デザイン規約
+        // §ブランチが測られる相手を決める) — so opening on the default remote under the branch's own name would ask
+        // again for an answer already given, and take the one it was given away.
+        //
+        // Only a remote this repository still has: the cut falls back to the first slash for a name configuration
+        // has lost (`GitFacts.remoteOfRef`), and a chooser standing on a row it does not hold cannot be picked back.
+        const upstream = publishFlow.workTree.upstream
+        const on = upstream !== ""
+                 ? GitFacts.remoteOfRef(upstream, publishFlow.repoTab.remoteNames) : ""
+        const tracked = on !== "" && publishFlow.publishRemotes.indexOf(on) >= 0
+        publishFlow.publishRemote = tracked ? on : publishFlow.repoTab.defaultRemote
+        publishFlow.publishBranch = tracked
+            ? GitFacts.branchOfRef(upstream, publishFlow.repoTab.remoteNames)
+            : publishFlow.workTree.branch
         // `push` goes untranslated — it is the command's spelling.
         // The name's seat stays open: the bar draws it in the colour it wears everywhere else (デザイン規約 §ref の種別).
         publishFlow.askRequested(

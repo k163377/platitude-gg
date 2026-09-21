@@ -33,7 +33,7 @@ QtObject {
                 "delete-branch-go", "delete-tag-go", "delete-stash-go",
                 "delete-remote-go", "remote-refused", "delete-force", "delete-branch-refused",
                 "delete-branch-chip", "delete-stood-down",
-                "set-upstream-go",
+                "set-upstream-go", "publish-upstream",
                 "delete-stash-row", "stash-apply-row", "stash-pop-row",
                 "branch-at-tag", "dbl-local", "dbl-remote", "ref-list-pick", "graph-rename", "move-branch",
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
@@ -160,12 +160,15 @@ QtObject {
                 "switch-remote-twice",
                 // Stops at its question, so the ask bar settling is the completion — the write is
                 // the "-go" half, which stays a write act above.
-                "rename-remote", "set-upstream",
+                "rename-remote", "set-upstream", "set-upstream-list",
                 // A write does come, but the subject is the question its answer raises,
                 // so the bar settling is the completion (the bar takes 200ms to come down).
                 "rename-local-upstream",
                 // The write barrier is behind this one: the question is answered from the timer, after it.
                 "set-upstream-go",
+                // And behind this one twice over: the upstream goes down first, and what the run is about is the
+                // press made once the status behind that write has been read back.
+                "publish-upstream",
                 "move-ask", "ask-sweep", "switch-conflicted", "switch-held", "switch-mark",
                 // Nothing is written for this one either: a report raised through the page's door and a question
                 // raised over it, and the completion is both bars having stopped moving after the press.

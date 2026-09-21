@@ -35,12 +35,28 @@ Item {
     property string branch: ""
     property string remote: ""
     property string branchName: ""
-    /// Whether that pair names a remote-tracking branch this repository holds. **git refuses an upstream it cannot
-    /// find** (`fatal: the requested upstream branch … does not exist`, measured), and the answer is here
-    /// — the refs are already on this side — so the pill goes quiet.
+    /// Whether that pair names a remote-tracking branch this repository holds. **Not a refusal** — a name not here is
+    /// a branch the next push makes (デザイン規約 §ブランチが測られる相手を決める) — but it is what the counts hang
+    /// off, so the bar's line says which of the two was answered.
     property bool targetIsThere: false
 
     readonly property var remotes: upstreamFlow.repoTab.remoteNames
+    /// What the chosen remote already carries here, for the name box to offer past typing one. **`total` is touched
+    /// on purpose**: what answers is a slot call, and a slot call is not something a binding follows
+    /// (`PublishFlow.remoteBranchAsked` — the same shape), so the count that moves with every refs read is what asks
+    /// again.
+    ///
+    /// **And only while the question stands.** A binding is evaluated whenever what it reads moves, whether or not
+    /// anything is reading it back — so without this the remote's whole branch list was built again on every refs
+    /// read for as long as the tab was open, which is work in the number of refs on the path a click takes
+    /// (CLAUDE.md §性能予算). The list lands a frame after the bar does, which is the arrangement `AppCombo` keeps
+    /// the typed name apart from its model for (`AppCombo.wanted`).
+    readonly property var branches: {
+        upstreamFlow.remotesModel.total
+        return upstreamFlow.asking
+             ? upstreamFlow.remotesModel.branchesOn(upstreamFlow.remote, upstreamFlow.repoTab.remoteNames)
+             : []
+    }
     readonly property string target: upstreamFlow.remote + "/" + upstreamFlow.branchName
     readonly property bool filled: upstreamFlow.remote !== "" && upstreamFlow.branchName !== ""
 
@@ -103,7 +119,7 @@ Item {
     Binding {
         target: upstreamFlow.graphPane
         property: "askAnswerable"
-        value: upstreamFlow.targetIsThere
+        value: upstreamFlow.filled
         when: upstreamFlow.asking
         restoreMode: Binding.RestoreNone
     }
@@ -121,21 +137,36 @@ Item {
                ? qsTr("Pick the upstream.")
                : !upstreamFlow.targetIsThere
                  //: %1 is a remote branch, e.g. origin/main.
-                 ? qsTr("%1 has not been fetched here.").arg(upstreamFlow.target)
+                 ? qsTr("%1 has not been fetched here; a push sends this branch there.")
+                   .arg(upstreamFlow.target)
                  //: %1 is a remote branch, e.g. origin/main.
                  : qsTr("Ahead and behind are counted against %1.").arg(upstreamFlow.target)
         when: upstreamFlow.asking
         restoreMode: Binding.RestoreNone
     }
 
+    /// Automation: the name box's list, which no injected click can reach. The same door a press uses
+    /// (`AppCombo.pressField`), so what answers is the wiring.
+    function openBranches() {
+        const form = upstreamFlow.graphPane.askForm
+        if (!form || !form.branchPick)
+            return false
+        form.branchPick.pressField()
+        return true
+    }
+    /// Automation reads the popup itself: the call that requested it may not have put it on screen.
+    function branchesOpen() {
+        const form = upstreamFlow.graphPane.askForm
+        return Boolean(form && form.branchPick && form.branchPick.popup.visible)
+    }
+
     Component {
         id: upstreamForm
         UpstreamForm {
             remotes: upstreamFlow.remotes
+            branches: upstreamFlow.branches
             remote: upstreamFlow.remote
             branch: upstreamFlow.branchName
-            // An empty box is a question not yet answered (デザイン規約 §可否・警告の出し場所).
-            refused: upstreamFlow.filled && !upstreamFlow.targetIsThere
             onRemotePicked: index => upstreamFlow.pickRemote(index)
             onBranchEdited: name => upstreamFlow.setBranchName(name)
         }

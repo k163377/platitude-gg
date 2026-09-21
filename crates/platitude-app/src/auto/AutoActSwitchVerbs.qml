@@ -113,7 +113,7 @@ Item {
             sidebarPane.beginRename("branch", local, local)
             sidebarPane.submitEdit(arg)
             localUpstreamAskTimer.start()
-        } else if (act === "set-upstream" || act === "set-upstream-go") {
+        } else if (act === "set-upstream" || act === "set-upstream-go" || act === "set-upstream-list") {
             // `<branch>[:<name to answer with>]` — `:` cannot be in a ref name (`check-ref-format`), so it separates
             // the two without ambiguity. Without the second half the question stands as it opened, on whatever the
             // branch already speaks for.
@@ -121,7 +121,9 @@ Item {
             const on = want[0]
             upstreamAskTimer.wantName = want.length > 1 ? want[1] : ""
             upstreamAskTimer.answers = act === "set-upstream-go"
+            upstreamAskTimer.lists = act === "set-upstream-list"
             upstreamAskTimer.typed = false
+            upstreamAskTimer.dropped = false
             // Through the row itself, so a build where that row stopped reaching the
             // question waits here.
             page.openRefMenu("branch", on, on, branchesModel.oidOfName(on))
@@ -384,6 +386,11 @@ Item {
         id: upstreamAskTimer
         /// Whether this run answers the question or only photographs it.
         property bool answers: false
+        /// Whether it drops the name box's list first — no injected click can reach a popup on the offscreen
+        /// platform, so the same door a press uses is called instead (`UpstreamFlow.openBranches`).
+        property bool lists: false
+        /// Whether that door has been through: the press is made once, and the card comes down after it.
+        property bool dropped: false
         property string wantName: ""
         property bool typed: false
         onTriggered: {
@@ -394,16 +401,32 @@ Item {
                 upstreamAskTimer.typed = true
                 return
             }
+            if (upstreamAskTimer.lists) {
+                if (!upstreamAskTimer.dropped) {
+                    // Only where the door was there to go through: a form with no name box in it is asked again on
+                    // the next tick, where marking it done would wait out the watchdog instead.
+                    upstreamAskTimer.dropped = upstreamFlow.openBranches()
+                    return
+                }
+                // The popup opens a turn of the loop after the press (`AppCombo.pressField`), so the run reads the
+                // popup itself rather than the call that asked for it.
+                if (!upstreamFlow.branchesOpen())
+                    return
+            }
             if (upstreamAskTimer.answers && !graphPane.askAnswerable)
                 return
             upstreamAskTimer.stop()
-            // `there=` is whether this repository actually holds what was answered, which is what decides the pill —
-            // and the refused form is the frame and the line, neither of which a full-window picture settles.
+            // `there=` is whether this repository actually holds what was answered — **not what decides the pill**
+            // (a name not here is an answer: デザイン規約 §ブランチが測られる相手を決める), but what the bar's line
+            // says, which a full-window picture does not settle. `rows=` is the list the box offers past typing one,
+            // and `open=` whether it came down: a list with nothing in it and a list nothing plumbed frame alike.
             Harness.report("upstream branch=" + upstreamFlow.branch
                               + " remote=" + upstreamFlow.remote
                               + " name=" + upstreamFlow.branchName
                               + " there=" + upstreamFlow.targetIsThere
-                              + " answerable=" + graphPane.askAnswerable)
+                              + " answerable=" + graphPane.askAnswerable
+                              + " rows=" + upstreamFlow.branches.length
+                              + " open=" + upstreamFlow.branchesOpen())
             if (!upstreamAskTimer.answers) {
                 driver.complete()
                 return

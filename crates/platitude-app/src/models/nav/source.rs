@@ -91,6 +91,39 @@ impl Source {
         }
     }
 
+    /// The branches `remote` carries here, by the name half alone
+    /// (`main`, `feature/x`) and in the section's own name order — what
+    /// the upstream question offers to pick from (デザイン規約
+    /// §ブランチが測られる相手を決める). Empty for every other section.
+    ///
+    /// **The cut is by configured name, not by the first slash**: a
+    /// remote called `my` does not carry `my/fork/main`, and the run
+    /// under the `<remote>/` prefix holds both
+    /// ([`crate::refs::split_remote_ref`] — the same reading the rest of
+    /// the window makes). The rows are name-ordered, so that run is where
+    /// the scan starts and where it stops.
+    pub(super) fn branches_on<'a>(&'a self, remote: &str, remotes: &[&'a str]) -> Vec<&'a str> {
+        let Self::Remotes(snapshot) = self else {
+            return Vec::new();
+        };
+        let prefix = format!("{remote}/");
+        let from = snapshot
+            .remotes
+            .partition_point(|branch| branch.short.as_str() < prefix.as_str());
+        snapshot.remotes[from..]
+            .iter()
+            .take_while(|branch| branch.short.as_str().starts_with(&prefix))
+            .filter_map(|branch| {
+                platitude_core::refs::split_remote_ref(
+                    branch.short.as_str(),
+                    remotes.iter().copied(),
+                )
+                .filter(|(on, _)| *on == remote)
+                .map(|(_, name)| name)
+            })
+            .collect()
+    }
+
     /// The tag row named `short`, the same way (`RefsSnapshot::tag_named`
     /// — the tags keep their own order, so the index is a separate one).
     pub(super) fn tag_named(&self, short: &str) -> Option<&platitude_core::session::TagItem> {

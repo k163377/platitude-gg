@@ -66,6 +66,17 @@ Item {
                               + " branch=" + publishFlow.publishBranch
                               + " dialog=" + remoteDialog.visible
                               + " name=" + remoteDialog.wantedName)
+        } else if (act === "publish-upstream") {
+            // **What a push does with an upstream the far side does not have yet.** The branch is pointed at a name
+            // nothing here answers to — the answer the upstream question now takes (デザイン規約
+            // §ブランチが測られる相手を決める) — and then the toolbar's own press is made: the question it raises
+            // has to open on that name, or the answer just given is asked for again and thrown away.
+            //
+            // The write goes in at the slot the question's pill calls, not through the question: **the question is
+            // `set-upstream-go`'s subject** and this run's is the press after it.
+            publishUpstreamTimer.want = arg === "" ? "brand-new" : arg
+            repoTab.setUpstream(workTree.branch, repoTab.defaultRemote, publishUpstreamTimer.want)
+            publishUpstreamTimer.start()
         } else if (act === "push-target") {
             // The destination is a binding, and this run is about what it says once the repository
             // it is about has finished arriving.
@@ -170,6 +181,38 @@ Item {
                               + " marked=" + repoTab.pushDefault
                               + " target=" + repoTab.defaultRemote
                               + " remotes=" + repoTab.remoteCount)
+            driver.complete()
+        }
+    }
+    /// PGG_AUTO_ACT=publish-upstream: the press after an upstream nothing here answers to was recorded.
+    ///
+    /// **The status the branch is read back with is the barrier**: the write lands, the read behind it re-reads
+    /// `branch.upstream`, and only then does the button have the destination to open on. `tracked=` is the half that
+    /// says the far side is not here yet — the shape this verb is about — and `remote=` / `branch=` are what the
+    /// question opened on, which is the whole of what a picture of two boxes cannot say.
+    SampleTimer {
+        id: publishUpstreamTimer
+        property string want: ""
+        property bool pressed: false
+        onTriggered: {
+            if (!publishUpstreamTimer.pressed) {
+                const target = repoTab.defaultRemote + "/" + publishUpstreamTimer.want
+                if (!workTree.countsSettled || workTree.upstream !== target || repoTab.busyCount > 0)
+                    return
+                page.pushNow()
+                publishUpstreamTimer.pressed = true
+                return
+            }
+            // The bar has to be all the way down before the boxes it opened on are on screen, and that is the
+            // picture's own moment as well (`AskBar.settled`).
+            if (!graphPane.askCard.settled)
+                return
+            publishUpstreamTimer.stop()
+            Harness.report("publish upstream=" + workTree.upstream
+                              + " tracked=" + workTree.upstreamTracked
+                              + " state=" + page.pushState
+                              + " remote=" + publishFlow.publishRemote
+                              + " branch=" + publishFlow.publishBranch)
             driver.complete()
         }
     }
