@@ -325,8 +325,7 @@ mod tests {
 
     #[test]
     fn the_shelf_keeps_the_newest_builds() {
-        let dir = std::env::temp_dir().join(format!("pgg-rig-shelf-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = crate::yard::Yard::new("rig-shelf");
         for (name, age) in [("old", 30), ("middle", 20), ("new", 10), ("newest", 0)] {
             let build = dir.join(name);
             std::fs::create_dir_all(&build).expect("a shelf entry");
@@ -345,6 +344,5 @@ mod tests {
         );
         assert!(stale_builds(&dir, 10).is_empty());
         assert!(stale_builds(&dir.join("nowhere"), 1).is_empty());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

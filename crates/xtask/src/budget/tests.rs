@@ -12,20 +12,18 @@
 //! against another program's — is `tests/gate/budget.rs`, where the
 //! runner can be started as itself.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
 use super::ledger::{self, DIR, Pool, SEQ, now};
 use super::unit;
 use super::{Admitted, Ask, LIGHT, Rank, demand, under, weight_of};
+use crate::yard::Yard;
 
-/// A `.git`-shaped directory of this test's own.
-fn common(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("pgg-budget-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("a directory to hold a ledger in");
-    dir
+/// A `.git`-shaped directory of this test's own, gone when the test is.
+fn common(name: &str) -> Yard {
+    Yard::new(&format!("budget-{name}"))
 }
 
 /// The waits under test say every look they take on a channel, so a look
@@ -120,7 +118,6 @@ fn a_unit_takes_the_room_the_one_before_it_gives_back() {
     first.let_go();
     assert!(second.taken() > Duration::ZERO, "the wait is reported");
     second.let_go();
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The room a unit gives back goes to the landing that was waiting for
@@ -144,7 +141,6 @@ fn a_landing_is_handed_the_room_a_gate_s_unit_was_waiting_for() {
     landing.let_go();
     ordinary.taken();
     ordinary.let_go();
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The admission stop: while a landing's unit is short of room, the room
@@ -175,7 +171,6 @@ fn ordinary_work_is_not_admitted_into_room_a_waiting_landing_is_short_of() {
     landing.let_go();
     small.taken();
     small.let_go();
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// What is left over after the landing's units fit is handed on.
@@ -192,7 +187,6 @@ fn room_a_landing_will_not_use_goes_on_down_the_queue() {
     );
     ordinary.let_go();
     landing.let_go();
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// Landings go one at a time in the order they arrived, and the turn
@@ -210,7 +204,7 @@ fn landings_take_their_turn_in_the_order_they_arrived() {
         "an empty ledger cost the first landing a look"
     );
     let (second_looks, second_polled) = polls();
-    let waiting_in = dir.clone();
+    let waiting_in = dir.to_path_buf();
     let second = std::thread::spawn(move || {
         let pool = Pool::at(&waiting_in, 4);
         pool.turn_polled("b", "land b", &second_polled)
@@ -228,7 +222,6 @@ fn landings_take_their_turn_in_the_order_they_arrived() {
         .expect("the second landing's thread")
         .expect("the turn, once the first landing was done");
     assert!(waited > Duration::ZERO, "the wait is reported");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A ticket whose holder is gone holds nothing: the next process to read
@@ -262,7 +255,6 @@ fn a_ticket_nobody_holds_the_lock_beside_gives_the_machine_back() {
     assert!(!ledger.join("t-0.lock").exists(), "its lock file stands");
     assert!(!ledger.join("t-9.lock").exists(), "the empty name stands");
     drop(mine);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A ticket a killed unit left, with the process it had started still
@@ -285,7 +277,6 @@ fn a_killed_unit_s_room_is_held_while_what_it_started_runs() {
     );
     assert!(text.contains("LEFTOVER"), "{text}");
     assert!(ledger.join("t-0").exists(), "the leftover was swept");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// And it is held for the work itself. A pid is handed out again
@@ -314,7 +305,6 @@ fn a_leftover_lets_the_room_go_when_the_number_carries_a_stranger() {
         "a stranger at the number held the room: {text}"
     );
     assert!(!ledger.join("t-0").exists(), "the leftover stands");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// And a leftover that has run past the longest a step may run is
@@ -345,7 +335,6 @@ fn a_leftover_past_the_ceiling_is_reported_and_its_room_is_not_handed_out() {
         ticket_at(&ledger.join("t-0")).told,
         "the ledger did not remember that it had said so"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A leftover past the ceiling whose child has gone is nobody's: the
@@ -366,7 +355,6 @@ fn a_leftover_past_the_ceiling_gives_the_room_back_when_its_child_has_gone() {
         "the room is still held for a child that is gone: {text}"
     );
     assert!(!ledger.join("t-0").exists(), "the leftover stands");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// That ceiling is measured from the second the unit was handed the
@@ -397,7 +385,6 @@ fn a_ticket_is_dated_from_the_run_and_not_from_the_registration() {
         "the date was not written when the unit was handed the machine"
     );
     queued.let_go();
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// One ticket file as the ledger holds it.
@@ -453,7 +440,6 @@ fn a_ticket_takes_its_own_files_with_it() {
     assert_eq!(files(), 2, "a ticket is its file and its lock");
     drop(mine);
     assert_eq!(files(), 0, "the ticket outlived its holder");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A gate whose ticket is refused by nothing still says what it is
@@ -480,7 +466,6 @@ fn the_standing_names_what_is_holding_the_machine() {
     }
     drop(turn);
     drop(held);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A pool named outright answers to its arguments and to nothing in the
@@ -492,7 +477,6 @@ fn a_pool_named_outright_carries_nothing_from_the_environment() {
     let dir = common("no-ambient");
     let pool = Pool::at(&dir, 4);
     assert!(!pool.carried, "a named pool read the environment's mark");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The gate suite cannot `use` this crate's modules, so it spells the

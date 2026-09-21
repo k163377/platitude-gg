@@ -295,13 +295,7 @@ mod tests {
 
     #[test]
     fn saved_rows_keep_axes_and_comparison_rejects_environment_drift() {
-        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let output = std::env::temp_dir().join(format!(
-            "pgg-perf-evidence-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        ));
-        std::fs::create_dir(&output).unwrap();
+        let output = crate::yard::Yard::new("perf-evidence");
         let opts = super::super::options::parse(&["--repo", "x"].map(str::to_owned)).unwrap();
         let mut reading = Reading {
             os_peak_working_set: Some(900),
@@ -338,6 +332,5 @@ mod tests {
         assert_eq!(comparison_identity(&output).unwrap(), original);
         std::fs::write(&manifest, "commit=B\nos=linux\ncache=warm\ncorpus=fixed\n").unwrap();
         assert_ne!(comparison_identity(&output).unwrap(), original);
-        std::fs::remove_dir_all(output).unwrap();
     }
 }

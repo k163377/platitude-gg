@@ -768,13 +768,11 @@ mod tests {
         BUILT, BUSY, HOLD, Note, STAMP_FOR, busy_in, hold_in, live_notes, lock_beside_polled,
         lock_of, open_lock, stamps_ended_since,
     };
+    use crate::yard::Yard;
 
-    /// A `.git`-shaped directory of this test's own.
-    fn common(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("pgg-still-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a directory to hold in");
-        dir
+    /// A `.git`-shaped directory of this test's own, gone when the test is.
+    fn common(name: &str) -> Yard {
+        Yard::new(&format!("still-{name}"))
     }
 
     /// The waits under test say every look they take on a channel, so a
@@ -815,7 +813,7 @@ mod tests {
         let dir = common("hold-waits");
         let build = busy_in(&dir, "gate", &|| {}).expect("a build announced");
         let (count, polled) = polls();
-        let held_in = dir.clone();
+        let held_in = dir.to_path_buf();
         let held = std::thread::spawn(move || hold_in(&held_in, "perf", &polled).map(|_| ()));
         // The hold polled while the build stood: it was waiting for it.
         until_polled(&count);
@@ -831,7 +829,6 @@ mod tests {
                 .exists(),
             "the build that ended stamped its end under its pid"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -839,7 +836,7 @@ mod tests {
         let dir = common("build-waits");
         let hold = hold_in(&dir, "perf", &|| {}).expect("the hold");
         let (count, polled) = polls();
-        let building_in = dir.clone();
+        let building_in = dir.to_path_buf();
         let build = std::thread::spawn(move || busy_in(&building_in, "check", &polled).map(|_| ()));
         until_polled(&count);
         assert!(!build.is_finished());
@@ -853,7 +850,6 @@ mod tests {
             (0, 0),
             "an announcement is withdrawn with its guard, lock file included"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The hold's lock file stands at a name every process opens, so it
@@ -874,7 +870,6 @@ mod tests {
         let refused = hold_in(&dir, "another perf", &|| {}).expect_err("a second measurement");
         assert!(refused.contains("another measurement"), "{refused}");
         drop(waiter);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// What the unlock is for. A child handed the hold's lock
@@ -925,7 +920,6 @@ mod tests {
         carrier.kill().expect("the child that carried it");
         carrier.wait().expect("the child that carried it");
         drop(waiter);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A killed xtask never unwinds, so a note can be left behind — but
@@ -950,7 +944,6 @@ mod tests {
         let _hold = hold_in(&dir, "perf", &|| {}).expect("a dead build is not waited for");
         assert!(!dir.join(BUSY).join("1-0").exists());
         assert!(!dir.join(BUSY).join("1-9.lock").exists());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// An announcement locked but not yet readable is read
@@ -974,7 +967,6 @@ mod tests {
             under_way[0].line()
         );
         drop(held);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The instant before that one: the lock is taken and the note is
@@ -1004,7 +996,6 @@ mod tests {
             "the lock file was taken from under the announcer"
         );
         drop(held);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The other side of that instant. A lock file at an announcement's
@@ -1042,7 +1033,6 @@ mod tests {
             "the announcement holds a lock that is not at its name"
         );
         drop(lock);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1052,7 +1042,6 @@ mod tests {
         let refused = hold_in(&dir, "perf again", &|| {}).expect_err("two measurements at once");
         assert!(refused.contains("another measurement"), "{refused}");
         assert!(refused.contains("perf (pid"), "{refused}");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A verb's announcement covers the compiles inside it: the same
@@ -1069,7 +1058,6 @@ mod tests {
         assert_eq!(standing(&dir).0, 1, "the inner drop withdraws nothing");
         drop(outer);
         assert_eq!(standing(&dir), (0, 0));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Only another process's build ended since `secs` is a build that
@@ -1098,7 +1086,6 @@ mod tests {
             "a stamp a day old is swept"
         );
         assert!(!stamps.join("2").exists());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A plain file standing where the stamps' directory goes is cleared
@@ -1114,7 +1101,6 @@ mod tests {
                 .is_file(),
             "the stamp is under the directory"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

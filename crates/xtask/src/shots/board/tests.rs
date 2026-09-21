@@ -132,8 +132,7 @@ fn a_value_never_carries_a_separator() {
 /// order the directory hands the files back in.
 #[test]
 fn runs_come_back_in_the_order_they_went_up() {
-    let runs = std::env::temp_dir().join(format!("pgg-shots-order-{}", std::process::id()));
-    std::fs::create_dir_all(&runs).expect("a runs directory to write into");
+    let runs = crate::yard::Yard::new("shots-order");
     let run = |at| Run {
         label: "x".to_string(),
         verb: String::new(),
@@ -157,5 +156,4 @@ fn runs_come_back_in_the_order_they_went_up() {
         load_runs(&runs).iter().map(|r| r.at).collect::<Vec<_>>(),
         vec![1, 2, 3]
     );
-    std::fs::remove_dir_all(&runs).expect("the temporary board goes");
 }

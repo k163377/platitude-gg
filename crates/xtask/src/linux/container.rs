@@ -702,11 +702,11 @@ mod tests {
 
     /// A root of this test's own with a state directory in it, and the
     /// mark its processes carry. **The copy's path is spelled into the
-    /// wrapper**, so the name carries nothing a shell reads: no thread
-    /// id, whose `Debug` form has parentheses in it.
+    /// wrapper**, so the name carries nothing a shell reads — which is
+    /// the yard's rule too ([`crate::yard::Yard`]).
     #[cfg(target_os = "linux")]
-    fn a_marked_root(what: &str) -> (std::path::PathBuf, std::path::PathBuf, String) {
-        let root = std::env::temp_dir().join(format!("pgg-marked-{what}-{}", std::process::id()));
+    fn a_marked_root(what: &str) -> (crate::yard::Yard, std::path::PathBuf, String) {
+        let root = crate::yard::Yard::new(&format!("marked-{what}"));
         let state = root.join("state");
         std::fs::create_dir_all(&state).expect("a state directory");
         (root, state, format!("t{}-{what}-01", std::process::id()))
@@ -741,7 +741,7 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn the_stop_takes_what_carries_the_mark_and_spares_the_rest() {
-        let (root, state, mark) = a_marked_root("stop");
+        let (_root, state, mark) = a_marked_root("stop");
         let mut marked = a_sleeper_marked(&mark);
         let mut unmarked = a_sleeper_marked(&format!("{mark}-other"));
         let stop = std::process::Command::new("sh")
@@ -762,7 +762,6 @@ mod tests {
         );
         let _ = unmarked.kill();
         let _ = unmarked.wait();
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// **The wrapper carries the verb's own exit code and takes the
@@ -828,7 +827,6 @@ mod tests {
             said.contains("pgg-probe ran"),
             "a red verb's line is printed:\n{said}"
         );
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// **The container's own process leaves once nothing has been in**:
@@ -864,6 +862,5 @@ mod tests {
         let wrote = std::fs::read_to_string(&log).unwrap_or_default();
         assert!(wrote.contains("up: leaves after 1s"), "{wrote}");
         assert!(wrote.contains("leaving: no verb for"), "{wrote}");
-        let _ = std::fs::remove_dir_all(&root);
     }
 }

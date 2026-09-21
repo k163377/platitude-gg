@@ -2,23 +2,12 @@ use super::{
     Counted, check_ledger, code_lines, comment_share, ledger_entries, names, read_baseline,
     write_baseline,
 };
+use crate::yard::Yard;
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 
-fn test_dir(label: &str) -> std::io::Result<std::path::PathBuf> {
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-    loop {
-        let serial = NEXT.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!(
-            "pgg-structure-{label}-{}-{serial}",
-            std::process::id()
-        ));
-        match std::fs::create_dir(&dir) {
-            Ok(()) => return Ok(dir),
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(error) => return Err(error),
-        }
-    }
+/// A directory of this test's own, gone when the test is.
+fn test_dir(label: &str) -> Yard {
+    Yard::new(&format!("structure-{label}"))
 }
 
 fn paths(entries: &[String]) -> Vec<&str> {
@@ -122,7 +111,7 @@ fn fails_an_entry_whose_file_was_split_away() {
 
 #[test]
 fn round_trips_a_baseline_through_the_file_it_writes() {
-    let dir = test_dir("baseline-test").unwrap();
+    let dir = test_dir("baseline-test");
     let path = dir.join("baseline.txt");
     let entries = BTreeMap::from([
         ("crates/a/src/b.rs".to_string(), 501),
@@ -134,13 +123,11 @@ fn round_trips_a_baseline_through_the_file_it_writes() {
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(!text.contains('\r'), "baseline must stay LF: {text:?}");
     assert!(text.ends_with("501 crates/a/src/b.rs\n1200 crates/a/tests/it/c.rs\n"));
-    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]
 fn reads_a_missing_baseline_as_the_first_run() {
-    let dir = test_dir("baseline-absent").unwrap();
+    let dir = test_dir("baseline-absent");
     let path = dir.join("baseline.txt");
     assert_eq!(read_baseline(&path).unwrap(), None);
-    std::fs::remove_dir_all(&dir).unwrap();
 }

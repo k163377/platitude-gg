@@ -657,8 +657,7 @@ mod tests {
 
     #[test]
     fn a_build_that_failed_is_read_off_the_verbs_log() {
-        let dir = std::env::temp_dir().join(format!("pgg-gate-build-{}", std::process::id()));
-        let _ = std::fs::create_dir_all(&dir);
+        let dir = crate::yard::Yard::new("gate-build");
         let log = dir.join("host-08.log");
         std::fs::write(
             &log,
@@ -680,6 +679,5 @@ mod tests {
             !app_did_not_build(&dir.join("host-99.log")),
             "no log, no build to have failed"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

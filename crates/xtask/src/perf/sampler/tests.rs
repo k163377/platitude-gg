@@ -342,7 +342,8 @@ fn a_window_that_came_up_on_another_screen_is_refused() {
 fn the_children_of_the_watched_process_are_counted_as_its_own() {
     use std::os::windows::process::CommandExt;
     use std::time::Duration;
-    let csv = std::env::temp_dir().join(format!("pgg-sampler-{}.csv", std::process::id()));
+    let yard = crate::yard::Yard::new("sampler");
+    let csv = yard.join("samples.csv");
     let file = std::fs::File::create(&csv).expect("a csv to write");
     let armed = super::arm(Duration::from_secs(30), file, false).expect("an armed sampler");
     let mut child = std::process::Command::new("cmd")
@@ -362,7 +363,6 @@ fn the_children_of_the_watched_process_are_counted_as_its_own() {
     child.wait().expect("the process ends on its own");
     let series = sampler.finish().expect("the sampler ran to the end");
     let last = series.last.expect("at least one sample");
-    let _ = std::fs::remove_file(csv);
     assert!(
         series.conditions.children_counted,
         "the process joined the job object"

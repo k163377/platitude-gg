@@ -12,32 +12,15 @@ use super::{
     Alive, CANONICAL, Gone, HARNESS, IF_MOVED, ONLY_IF_MOVED, Tail, asks, crate_of, generation,
     profiles_in, read_artifacts, stamp, stamped, sweep_profile, unit_key,
 };
+use crate::yard::Yard;
 
-/// The tree this test's files stand in, taken away when it is done with.
-/// Named for the test as well as the process: two tests of one run must
-/// not meet at a name, and a run must not meet the last run's leavings
-/// (CLAUDE.md Rust 規約: tests run in parallel).
-struct Yard(PathBuf);
-
+/// What a sweep test writes into its tree, beside the tree itself
+/// ([`crate::yard`]): the file shapes are this suite's subject, and
+/// nothing else has asked for them.
 impl Yard {
-    fn new(what: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "pgg-sweep-{what}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        let _ = std::fs::remove_dir_all(&path);
-        std::fs::create_dir_all(&path).expect("a tree of this test's own");
-        Self(path)
-    }
-
-    fn at(&self, relative: &str) -> PathBuf {
-        self.0.join(relative)
-    }
-
     /// A file of `bytes` bytes, its parents made on the way.
     fn file(&self, relative: &str, bytes: usize) -> PathBuf {
-        let path = self.at(relative);
+        let path = self.join(relative);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).expect("the parents");
         }
@@ -56,12 +39,6 @@ impl Yard {
             .and_then(|file| file.set_modified(at))
             .expect("its date");
         path
-    }
-}
-
-impl Drop for Yard {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
@@ -259,12 +236,12 @@ fn only_what_the_live_set_names_stays() {
         &["platitude_core-10e1c651a9583edf", "xtask"],
         &["cc-1a10f7f7bb5602bf", "cc-7801b9b6db4fe7b8"],
     );
-    let freed = sweep_profile(&yard.at(debug), "debug", &alive, None, false)
+    let freed = sweep_profile(&yard.join(debug), "debug", &alive, None, false)
         .expect("the sweep")
         .freed;
 
     assert_eq!(
-        names_under(&yard.at(&format!("{debug}/deps"))),
+        names_under(&yard.join(format!("{debug}/deps"))),
         [
             "libplatitude_core-10e1c651a9583edf.rlib",
             "libplatitude_core-10e1c651a9583edf.rmeta",
@@ -274,11 +251,11 @@ fn only_what_the_live_set_names_stays() {
         ]
     );
     assert_eq!(
-        names_under(&yard.at(&format!("{debug}/build"))),
+        names_under(&yard.join(format!("{debug}/build"))),
         ["cc-1a10f7f7bb5602bf", "cc-7801b9b6db4fe7b8"]
     );
     assert_eq!(
-        names_under(&yard.at(&format!("{debug}/.fingerprint"))),
+        names_under(&yard.join(format!("{debug}/.fingerprint"))),
         ["platitude-core-7fed29d0757554ac"]
     );
     // Four dead files under deps and one dead build directory, eight
@@ -306,7 +283,7 @@ fn what_was_written_since_the_last_sweep_stays() {
         floor + Duration::from_secs(60 * 60),
     );
     let freed = sweep_profile(
-        &yard.at(debug),
+        &yard.join(debug),
         "debug",
         &alive(&[], &[]),
         Some(floor),
@@ -316,7 +293,7 @@ fn what_was_written_since_the_last_sweep_stays() {
     .freed;
     assert_eq!(freed, 16);
     assert_eq!(
-        names_under(&yard.at(&format!("{debug}/deps"))),
+        names_under(&yard.join(format!("{debug}/deps"))),
         ["libx-1111111111111111.rlib"]
     );
 }
@@ -329,12 +306,12 @@ fn a_dry_run_leaves_the_tree_as_it_found_it() {
     yard.file(&format!("{debug}/deps/libx-0000000000000000.rlib"), 16);
     yard.file(&format!("{debug}/deps/libx-1111111111111111.rlib"), 16);
     let alive = alive(&["x-0000000000000000"], &[]);
-    let would = sweep_profile(&yard.at(debug), "debug", &alive, None, true)
+    let would = sweep_profile(&yard.join(debug), "debug", &alive, None, true)
         .expect("the dry run")
         .freed;
     assert_eq!(would, 16);
     assert_eq!(
-        names_under(&yard.at(&format!("{debug}/deps"))),
+        names_under(&yard.join(format!("{debug}/deps"))),
         ["libx-0000000000000000.rlib", "libx-1111111111111111.rlib"]
     );
 }
@@ -381,15 +358,15 @@ fn an_incremental_session_stands_or_falls_by_its_compile() {
     );
 
     let alive = alive(&["platitude_core-10e1c651a9583edf"], &[]);
-    sweep_profile(&yard.at(debug), "debug", &alive, None, false).expect("the sweep");
+    sweep_profile(&yard.join(debug), "debug", &alive, None, false).expect("the sweep");
 
     assert_eq!(
-        names_under(&yard.at(&format!("{debug}/incremental"))),
+        names_under(&yard.join(format!("{debug}/incremental"))),
         [live],
         "the stale session and the crate with nothing live both go"
     );
     assert_eq!(
-        names_under(&yard.at(&format!("{debug}/incremental/{live}"))),
+        names_under(&yard.join(format!("{debug}/incremental/{live}"))),
         ["s-hmh4rz10dj-120hg0f"],
         "the interrupted session goes and the finished one stays"
     );
@@ -401,7 +378,7 @@ fn an_incremental_session_stands_or_falls_by_its_compile() {
 fn a_directory_that_is_not_there_is_not_swept() {
     let yard = Yard::new("absent");
     let swept = sweep_profile(
-        &yard.at("target/release"),
+        &yard.join("target/release"),
         "release",
         &alive(&["x"], &[]),
         None,
@@ -431,13 +408,13 @@ fn a_profile_cargo_is_building_in_is_left_whole() {
     let held = std::fs::File::open(&lock).expect("the lock");
     held.lock().expect("this test holding it, as cargo would");
 
-    let swept = sweep_profile(&yard.at(debug), "debug", &alive(&[], &[]), None, false)
+    let swept = sweep_profile(&yard.join(debug), "debug", &alive(&[], &[]), None, false)
         .expect("a sweep that took nothing");
 
     assert_eq!(swept.freed, 0);
     assert!(!swept.walked);
     assert_eq!(
-        names_under(&yard.at(&format!("{debug}/deps"))),
+        names_under(&yard.join(format!("{debug}/deps"))),
         ["libx-1111111111111111.rlib"]
     );
     held.unlock().expect("letting go");
@@ -500,12 +477,12 @@ inherits = \"release\"
 #[test]
 fn the_generation_moves_with_the_lock() {
     let yard = Yard::new("generation");
-    std::fs::write(yard.at("Cargo.lock"), "version = 4\n").expect("a lock");
-    std::fs::write(yard.at("rust-toolchain.toml"), "[toolchain]\n").expect("a pin");
-    std::fs::write(yard.at("Cargo.toml"), "[workspace]\n").expect("a manifest");
-    let first = generation(&yard.0).expect("a key");
-    std::fs::write(yard.at("Cargo.lock"), "version = 4\n# one more\n").expect("a lock");
-    assert_ne!(generation(&yard.0).expect("a key"), first);
+    std::fs::write(yard.join("Cargo.lock"), "version = 4\n").expect("a lock");
+    std::fs::write(yard.join("rust-toolchain.toml"), "[toolchain]\n").expect("a pin");
+    std::fs::write(yard.join("Cargo.toml"), "[workspace]\n").expect("a manifest");
+    let first = generation(&yard).expect("a key");
+    std::fs::write(yard.join("Cargo.lock"), "version = 4\n# one more\n").expect("a lock");
+    assert_ne!(generation(&yard).expect("a key"), first);
 }
 
 /// The canonical set is the whole of what a tree is kept buildable for,
@@ -598,19 +575,19 @@ fn a_stamp_answers_for_the_directory_it_stands_in() {
         (&here, "version = 4\n"),
         (&volume, "version = 4\n# in there\n"),
     ] {
-        std::fs::write(yard.at("Cargo.lock"), lock).expect("a lock");
-        std::fs::write(yard.at("rust-toolchain.toml"), "[toolchain]\n").expect("a pin");
-        std::fs::write(yard.at("Cargo.toml"), "[workspace]\n").expect("a manifest");
-        std::fs::create_dir_all(yard.at("target/sweep")).expect("somewhere to stamp");
+        std::fs::write(yard.join("Cargo.lock"), lock).expect("a lock");
+        std::fs::write(yard.join("rust-toolchain.toml"), "[toolchain]\n").expect("a pin");
+        std::fs::write(yard.join("Cargo.toml"), "[workspace]\n").expect("a manifest");
+        std::fs::create_dir_all(yard.join("target/sweep")).expect("somewhere to stamp");
     }
-    stamp(&here.0).expect("this tree's stamp");
+    stamp(&here).expect("this tree's stamp");
     assert_eq!(
-        stamped(&here.0).map(|(key, _)| key),
-        Some(generation(&here.0).expect("this tree's key")),
+        stamped(&here).map(|(key, _)| key),
+        Some(generation(&here).expect("this tree's key")),
         "the directory that was swept carries the key it was swept under"
     );
     assert_eq!(
-        stamped(&volume.0),
+        stamped(&volume),
         None,
         "and the other one carries nothing, so its next tail reads it as unswept"
     );

@@ -555,11 +555,11 @@ mod tests {
     fn a_checkout_whose_path_has_a_space_still_gets_its_copy() {
         use std::os::unix::fs::PermissionsExt;
 
-        let root = std::env::temp_dir().join(format!(
-            "pgg runner {}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        // The space is the subject, and it is on the checkout's own
+        // directory — the yard above it is named by the machine
+        // ([`crate::yard`]) and has none.
+        let yard = crate::yard::Yard::new("runner-space");
+        let root = yard.join("pgg runner");
         let stub = root.join("bin");
         std::fs::create_dir_all(&stub).expect("a directory with a space in its name");
         let cargo = stub.join("cargo");
@@ -599,7 +599,6 @@ mod tests {
             held.join("xtask-1750-40").exists(),
             "the live gate's copy was taken — the emptying has to spare its pid"
         );
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// **The demo volume's leavings go, and three kinds stay.** What the
@@ -616,11 +615,7 @@ mod tests {
     fn the_demo_volumes_run_directories_go_and_the_templates_stay() {
         use std::os::unix::fs::PermissionsExt;
 
-        let root = std::env::temp_dir().join(format!(
-            "pgg-sweep-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let root = crate::yard::Yard::new("runner-sweep");
         let stub = root.join("bin");
         std::fs::create_dir_all(&stub).expect("a tree");
         let cargo = stub.join("cargo");
@@ -679,7 +674,6 @@ mod tests {
             "the sweep did not say what it took:\n{}",
             String::from_utf8_lossy(&out.stdout)
         );
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// A gate note naming `pid`, at the path the run would read it at,
@@ -724,12 +718,7 @@ mod tests {
             ("pid with a tail", Some("pid 22x\nsince 1\n"), false),
             ("absent", None, false),
         ] {
-            let root = std::env::temp_dir().join(format!(
-                "pgg-nopid-{}-{}-{:?}",
-                what.replace(' ', "-"),
-                std::process::id(),
-                std::thread::current().id()
-            ));
+            let root = crate::yard::Yard::new(&format!("nopid-{}", what.replace(' ', "-")));
             let stub = root.join("bin");
             std::fs::create_dir_all(&stub).expect("a tree");
             let cargo = stub.join("cargo");
@@ -784,7 +773,6 @@ mod tests {
                 !std::path::Path::new(&at(&root, "1758-40")).exists(),
                 "{what}: it installed a copy after failing to read the note"
             );
-            let _ = std::fs::remove_dir_all(&root);
         }
     }
 
@@ -802,11 +790,7 @@ mod tests {
     fn a_preparation_that_outlived_its_gate_cannot_reach_a_later_copy() {
         use std::os::unix::fs::PermissionsExt;
 
-        let root = std::env::temp_dir().join(format!(
-            "pgg-stale-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
+        let root = crate::yard::Yard::new("runner-stale");
         let stub = root.join("bin");
         std::fs::create_dir_all(&stub).expect("a tree");
         std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).expect("+x");
@@ -846,7 +830,7 @@ mod tests {
         std::fs::write(held.join("xtask-1700-99"), "x").expect("a dead run's copy");
 
         let line = line(&root, "1700-11", &note, None);
-        let (root_for, stub_for) = (root.clone(), stub.clone());
+        let (root_for, stub_for) = (root.to_path_buf(), stub.clone());
         let stale = std::thread::spawn(move || ran(&line, &root_for, &stub_for));
         crate::wait::until(
             "the stale preparation's reading",
@@ -875,13 +859,12 @@ mod tests {
             std::path::Path::new(&at(&root, "1700-11")).is_file(),
             "the stale one still installed its own, which is the litter it is allowed"
         );
-        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// A tree, with the gate note and lock that `lanes::sole` leaves
     /// there, held or not as the caller asks.
-    fn a_tree(what: &str, holding: Option<u32>) -> (std::path::PathBuf, Option<std::fs::File>) {
-        let root = std::env::temp_dir().join(format!("pgg-owned-{what}-{}", std::process::id()));
+    fn a_tree(what: &str, holding: Option<u32>) -> (crate::yard::Yard, Option<std::fs::File>) {
+        let root = crate::yard::Yard::new(&format!("owned-{what}"));
         let note = super::note_of(&root);
         std::fs::create_dir_all(note.parent().expect("target")).expect("a tree");
         let lock = holding.map(|pid| {
@@ -933,7 +916,6 @@ mod tests {
         // held, so the gate is over and nothing here may clear anything.
         let over = super::owned_by_the_gate(&held, 4242).expect_err("a freed lock is no gate");
         assert!(over.contains("no gate is running"), "{over}");
-        let _ = std::fs::remove_dir_all(&held);
 
         // A tree no gate ever ran in has no lock file at all.
         let (fresh, _) = a_tree("fresh", None);
@@ -941,7 +923,6 @@ mod tests {
             super::owned_by_the_gate(&fresh, 1).is_err(),
             "a tree with no gate refuses"
         );
-        let _ = std::fs::remove_dir_all(&fresh);
     }
 
     /// A copy starts the task runner's own verbs. Everything else in

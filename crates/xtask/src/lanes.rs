@@ -127,16 +127,12 @@ fn open_lock(path: &Path) -> Result<File, String> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use super::{open_lock, sole};
+    use crate::yard::Yard;
 
-    /// A `.git`-shaped directory of this test's own.
-    fn common(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("pgg-lanes-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("a directory to hold a gate's note in");
-        dir
+    /// A `.git`-shaped directory of this test's own, gone when the test is.
+    fn common(name: &str) -> Yard {
+        Yard::new(&format!("lanes-{name}"))
     }
 
     #[test]
@@ -150,7 +146,6 @@ mod tests {
         drop(first);
         assert!(!note.exists(), "the note comes down with the gate");
         let _again = sole(&note, "gate").expect("the tree, once the first gate is done");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// What the unlock is for. A child handed the lock's open file
@@ -194,7 +189,6 @@ mod tests {
         );
         carrier.kill().expect("the child that carried it");
         carrier.wait().expect("the child that carried it");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A note left by a gate that was killed names a process that holds
@@ -208,7 +202,6 @@ mod tests {
         let _mine = sole(&note, "gate --host-only").expect("a dead gate holds nothing");
         let text = std::fs::read_to_string(&note).expect("the note");
         assert!(text.contains("what gate --host-only"), "{text}");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The refusal is worded by whoever asks. A gate that spent the span
@@ -230,6 +223,5 @@ mod tests {
             "{refused}"
         );
         drop(held);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

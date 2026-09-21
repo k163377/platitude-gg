@@ -426,7 +426,7 @@ mod tests {
 
     #[test]
     fn a_permit_survives_the_file_and_only_an_open_one_is_spent() {
-        let dir = std::env::temp_dir().join(format!("pgg-permit-{}", std::process::id()));
+        let dir = crate::yard::Yard::new("permit");
         let path = dir.join("session.land");
         assert!(load(&path).is_none());
         spend(&path);
@@ -457,6 +457,5 @@ mod tests {
         );
         spend(&path);
         assert_eq!(load(&path).expect("permit").standing, Standing::Spent);
-        std::fs::remove_dir_all(dir).expect("cleanup");
     }
 }
