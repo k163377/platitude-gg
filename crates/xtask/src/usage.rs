@@ -99,6 +99,32 @@ commands:
                                  how a file got there, what the last n
                                  commits would have owed
 
+  sweep [--dry-run]
+      Takes away every build product in target/ but the generation the
+      canonical cargo lines stand on (internal-docs/反映前テストの
+      機械化.md §世代の掃除). cargo never removes what it has replaced,
+      so a Cargo.lock, a toolchain or a profile setting that moves leaves
+      the whole of the last generation behind, named by nothing. What is
+      live is asked of cargo, never of the clock: a written-down list of
+      lines — the gate's, the ones a session types between gates, and the
+      two builds the runner makes for itself — is run with
+      --message-format=json, and what their artifacts and build-script
+      directories name is what stays. A unit this tree has not built is
+      compiled to be read; the count is printed, and it is once per
+      generation. Everything written since the last sweep here stays
+      whatever the lines said. Under debug/, release/ and shipped/ only,
+      and within them deps/, build/ and incremental/: .fingerprint/ is
+      kilobytes and the hook's own target/hooks is in use at
+      unpredictable moments, so neither is touched, and nothing under
+      target/ that is not cargo's is either. A profile cargo is building
+      in is left whole, and a run that left one alone writes no stamp, so
+      the next sweep does it again. Every removal is printed with its
+      size, and so is anything that would not go. The container's build
+      directory is a volume of its own, swept by the same verb run in
+      there: `cargo xtask linux sweep`.
+      options:
+        --dry-run     print what would go, and take nothing
+
   structure
       The per-file length backstop of .claude/rules/structure.md (1000
       code lines — blank and comment-only lines do not count) over

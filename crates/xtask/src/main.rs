@@ -36,6 +36,7 @@ mod shots;
 mod still;
 mod structure;
 mod subprocess;
+mod sweep;
 mod tree;
 mod usage;
 mod verify;
@@ -52,6 +53,7 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("check") => check::run(&args[1..]),
         Some("gate") => gate::run(&args[1..]),
+        Some("sweep") => sweep::run(&args[1..]),
         Some("structure") => structure::run(&args[1..]),
         Some("docs") => docs::run(&args[1..]),
         Some("waits") => waits::run(&args[1..]),

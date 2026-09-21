@@ -131,7 +131,7 @@ pub(crate) const IN_CONTAINER: &str = "PGG_IN_CONTAINER";
 
 /// Task-runner verbs worth running in there. Naming one means `cargo xtask
 /// <verb>`, so the command reads the same as on the host.
-const XTASK_VERBS: [&str; 3] = ["verify-ui", "demo-repo", "qmltest"];
+const XTASK_VERBS: [&str; 4] = ["verify-ui", "demo-repo", "qmltest", "sweep"];
 
 /// Cargo verbs that build something, and so care which stage they run
 /// in. A list of what needs Qt can be short without being unsafe: a verb

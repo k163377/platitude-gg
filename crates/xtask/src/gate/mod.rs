@@ -114,6 +114,7 @@ pub(crate) use census::Census;
 pub(crate) use census::{FILE as CENSUS_FILE, names_in, page_settled_in, record};
 pub(crate) use graph::qml_files;
 pub(crate) use hooks::{SESSION, SKIP, install};
+pub(crate) use plan::tested_on_linux;
 
 pub fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {

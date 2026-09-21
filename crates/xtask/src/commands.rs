@@ -10,6 +10,7 @@ pub(crate) fn all() -> Vec<&'static Command> {
     [
         crate::check::COMMANDS,
         crate::gate::COMMANDS,
+        crate::sweep::COMMANDS,
         crate::structure::COMMANDS,
         crate::waits::COMMANDS,
         crate::docs::COMMANDS,

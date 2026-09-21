@@ -490,7 +490,11 @@ struct Sorted {
 /// code behind `cfg(not(windows))`, which the host never so much as
 /// compiles. The app needs Qt in the image and is not among them, as it
 /// was not in `check`.
-fn tested_on_linux(package: &str) -> bool {
+///
+/// Read by the sweep as well: a test binary the container never builds
+/// is one no line in there may ask for, because asking is building
+/// (`crate::sweep::replays`).
+pub(crate) fn tested_on_linux(package: &str) -> bool {
     matches!(package, "platitude-core" | "xtask")
 }
 
