@@ -42,6 +42,7 @@
 //! on stands there — `verify-ui` starts the app outside every checkout,
 //! on a git configuration of its own (`verify::run`).
 
+use std::collections::BTreeSet;
 use std::io::IsTerminal;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -107,6 +108,21 @@ pub(crate) use runner::a_runner_verb;
 
 /// The image. Its tag names the stage and fingerprints what built it.
 const IMAGE: &str = "pgg-linux";
+
+/// Every stage ci/linux/Dockerfile builds, which is every stage a line
+/// can ask for ([`stage_for`], `bare`, `offline`, `runner`). The
+/// accounting that decides which images are still somebody's has to name
+/// them all: a stage missing from here is one whose images no checkout
+/// is seen to need, and the next build takes them away from the checkout
+/// that was using them. A test reads the Dockerfile's own targets back
+/// against this.
+const STAGES: [&str; 4] = ["core", "app", "bare", "runtime"];
+
+/// The kinds of volume a checkout mounts ([`volume`]), and so the kinds
+/// a checkout that is gone leaves behind. `{IMAGE}-registry` is the one
+/// volume that belongs to the machine rather than to a checkout, and
+/// nothing here names it.
+const VOLUME_KINDS: [&str; 2] = ["target", "demo"];
 
 /// Where the checkout, the build directory, the download cache and anything
 /// a run means to leave behind land inside the container.
@@ -526,7 +542,6 @@ fn ensure_image(root: &Path, stage: &str, rebuild: bool) -> Result<String, Strin
     let tag = image_tag(root, stage)?;
     if rebuild || !image_exists(&tag)? {
         build_image(root, stage, &tag)?;
-        forget_older_images(stage, &tag);
     }
     Ok(tag)
 }
@@ -726,10 +741,38 @@ fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Removes the older images of this stage once a new one has built. The
-/// tag is a fingerprint, so every edit to the Dockerfile leaves the last
-/// image behind — gigabytes a stage, the app one the larger of the two —
-/// and nothing else would ever name them again.
+/// The tags of `stage` that no checkout on this machine names.
+///
+/// Pure, because this is the rule and the caller only says what exists:
+/// which tag is nobody's is decided here and held by a test, where a
+/// docker run would decide it against whatever the machine happened to
+/// hold that day.
+fn stale_images<'a>(listed: &'a str, stage: &str, keep: &BTreeSet<String>) -> Vec<&'a str> {
+    let prefix = format!("{IMAGE}:{stage}-");
+    listed
+        .lines()
+        .map(str::trim)
+        .filter(|tag| tag.starts_with(&prefix) && !keep.contains(*tag))
+        .collect()
+}
+
+/// Removes the images that no checkout names. The tag is a fingerprint,
+/// so every edit to the Dockerfile leaves the last image behind —
+/// gigabytes a stage, the app one the larger of the two — and nothing
+/// would ever name them again.
+///
+/// **`keep` is every living checkout's tags, not the tags of the one
+/// running this.** A seat is normally behind main (CLAUDE.md §Git 運用),
+/// so on the day ci/linux/Dockerfile, ci.yml or the toolchain pin moves
+/// there are two generations of images alive at once and each is the
+/// only one some tree can use. Keeping only this tree's would take the
+/// other seat's 4.3 GB away, and the next line typed over there would
+/// build it again from nothing.
+///
+/// **Whether this line built anything decides nothing.** A tag is dead
+/// when the last checkout that named it is gone, which is a thing that
+/// happens to a tree and not to a build — tied to a build, the
+/// generation nobody uses would stand until the Dockerfile moved again.
 ///
 /// Two things keep this from taking something out from under anybody.
 /// Docker refuses to remove an image a container is still running, so a
@@ -737,32 +780,201 @@ fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
 /// costs after this is the layer cache, because the layers stay. Every
 /// removal is printed: a command that quietly frees gigabytes is one
 /// nobody can audit.
-fn forget_older_images(stage: &str, keep: &str) {
-    let prefix = format!("{IMAGE}:{stage}-");
+fn forget_older_images(listed: &str, stage: &str, keep: &BTreeSet<String>) {
+    for tag in stale_images(listed, stage, keep) {
+        let Ok(done) = Command::new("docker")
+            .args(["image", "rm", tag])
+            .stdout(Stdio::null())
+            .output()
+        else {
+            return;
+        };
+        if done.status.success() {
+            println!("removed the older image {tag}");
+            continue;
+        }
+        // The seat next door swept it between the listing and this
+        // line: the state this wanted, reached by somebody else.
+        let said = String::from_utf8_lossy(&done.stderr);
+        if !said.contains("No such image") {
+            println!(
+                "left {tag} alone — docker would not remove it ({})",
+                said.trim()
+            );
+        }
+    }
+}
+
+/// What the checkouts on this machine still name: the volumes their
+/// mounts are spelled with ([`volume`]) and the image tags their builds
+/// answer to ([`image_tag`]).
+///
+/// **Every tree `git worktree list` shows, read when it is used.** The
+/// trees are the primary checkout, the seats, the measurement's rig and
+/// whatever fresh worktree a task is standing in — a set that changes
+/// while the machine runs, so a roster of letters written down anywhere
+/// would be wrong about it. Nothing here knows what a seat is.
+struct Alive {
+    /// [`checkout_name`] of every tree.
+    names: BTreeSet<String>,
+    /// Every stage's tag for every tree, or `None` when one tree would
+    /// not say. **An accounting with a hole in it keeps every image**:
+    /// the hole is exactly where the one tree that still needs a tag
+    /// would have stood, and what a wrong removal costs is the
+    /// cold rebuild [`forget_older_images`] exists to prevent. The
+    /// volumes are unaffected — a name is the path's, and a tree that
+    /// will not open still has one.
+    tags: Option<BTreeSet<String>>,
+}
+
+/// The names in a `git worktree list --porcelain` listing.
+///
+/// Pure, and the reason the trees are passed rather than the root: the
+/// naming is what a test can hold, and a tree inside the container
+/// cannot run git at all (the module doc's one thing that does not
+/// survive the boundary).
+fn checkout_names(trees: &[crate::seats::WorktreeBlock]) -> BTreeSet<String> {
+    trees
+        .iter()
+        .map(|tree| checkout_name(Path::new(&tree.path)))
+        .collect()
+}
+
+fn alive(root: &Path) -> Result<Alive, String> {
+    let listing = crate::subprocess::git_query(
+        &crate::seats::slashed(root),
+        &["worktree", "list", "--porcelain"],
+    )
+    .ok_or("git worktree list failed — is git on PATH and this a repository?")?;
+    let trees = crate::seats::worktree_blocks(&listing);
+    if trees.is_empty() {
+        return Err("git worktree list named no tree at all".into());
+    }
+    let mut known = BTreeSet::new();
+    let mut whole = true;
+    for tree in &trees {
+        for stage in STAGES {
+            match image_tag(Path::new(&tree.path), stage) {
+                Ok(tag) => {
+                    known.insert(tag);
+                }
+                Err(trouble) => {
+                    println!(
+                        "left every {IMAGE} image alone — {} would not say which it needs \
+                         ({trouble})",
+                        tree.path
+                    );
+                    whole = false;
+                    break;
+                }
+            }
+        }
+    }
+    Ok(Alive {
+        names: checkout_names(&trees),
+        tags: whole.then_some(known),
+    })
+}
+
+/// The volumes on this machine that no checkout names any more.
+///
+/// Pure, for the reason [`stale_images`] is. **A name is the checkout
+/// directory's last segment and nothing more** ([`checkout_name`]), so a
+/// second clone of this repository in another directory of the same name
+/// would have its volumes read as this machine's orphans. There is no
+/// such clone; the trap is written down in P3-確認事項.
+fn orphan_volumes<'a>(listed: &'a str, names: &BTreeSet<String>) -> Vec<&'a str> {
+    listed
+        .lines()
+        .map(str::trim)
+        .filter(|volume| {
+            VOLUME_KINDS.iter().any(|kind| {
+                volume
+                    .strip_prefix(&format!("{IMAGE}-{kind}-"))
+                    .is_some_and(|whose| !names.contains(whose))
+            })
+        })
+        .collect()
+}
+
+/// Takes away what no checkout on this machine names any more — the
+/// volumes of checkouts that are gone, and the images of the generations
+/// they were the last to need — once per process, ahead of the container
+/// about to mount this checkout's own.
+///
+/// **Here rather than where an image is made sure of.** A run that
+/// mounts a volume is the whole of what leaves one behind, and one of
+/// them reaches a container without asking for an image at all
+/// ([`sweep_the_volume`] looks the tag up itself). Not on a Linux host
+/// and not inside the container: in there the names belong to the
+/// machine outside, which this one cannot see.
+///
+/// Two seats sweeping at once go for the same orphan, so a volume that
+/// is already gone is the state this wanted, reached by somebody else.
+/// One that a container still has mounted docker refuses, and that is
+/// printed — a command that frees gigabytes without saying so is one
+/// nobody can audit.
+fn housekeeping(root: &Path) {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    if cfg!(target_os = "linux") || std::env::var_os(IN_CONTAINER).is_some() {
+        return;
+    }
+    ONCE.call_once(|| {
+        let alive = match alive(root) {
+            Ok(alive) => alive,
+            Err(trouble) => {
+                println!("{trouble} — this run takes no image and no volume away");
+                return;
+            }
+        };
+        forget_orphan_volumes(&alive.names);
+        // Nothing when the accounting has a hole in it: `alive` has
+        // already said which checkout would not answer, and a tag
+        // removed off a half-read list is the one that tree still needs.
+        let Some(keep) = &alive.tags else {
+            return;
+        };
+        let Ok(out) = Command::new("docker")
+            .args(["images", IMAGE, "--format", "{{.Repository}}:{{.Tag}}"])
+            .stderr(Stdio::null())
+            .output()
+        else {
+            return;
+        };
+        let listed = String::from_utf8_lossy(&out.stdout);
+        for stage in STAGES {
+            forget_older_images(&listed, stage, keep);
+        }
+    });
+}
+
+fn forget_orphan_volumes(names: &BTreeSet<String>) {
     let Ok(out) = Command::new("docker")
-        .args(["images", IMAGE, "--format", "{{.Repository}}:{{.Tag}}"])
+        .args(["volume", "ls", "--format", "{{.Name}}"])
         .stderr(Stdio::null())
         .output()
     else {
         return;
     };
     let listed = String::from_utf8_lossy(&out.stdout);
-    let stale: Vec<&str> = listed
-        .lines()
-        .map(str::trim)
-        .filter(|tag| tag.starts_with(&prefix) && *tag != keep)
-        .collect();
-    for tag in stale {
-        let removed = Command::new("docker")
-            .args(["image", "rm", tag])
+    for orphan in orphan_volumes(&listed, names) {
+        let Ok(done) = Command::new("docker")
+            .args(["volume", "rm", orphan])
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|status| status.success());
-        if removed {
-            println!("removed the older image {tag}");
-        } else {
-            println!("left {tag} alone — docker would not remove it (in use?)");
+            .output()
+        else {
+            return;
+        };
+        if done.status.success() {
+            println!("removed the orphan volume {orphan} — no checkout here names it");
+            continue;
+        }
+        let said = String::from_utf8_lossy(&done.stderr);
+        if !said.contains("no such volume") {
+            println!(
+                "left the volume {orphan} alone — docker would not remove it ({})",
+                said.trim()
+            );
         }
     }
 }
@@ -786,6 +998,10 @@ fn in_container(
     copy: Option<&str>,
     note: Option<&Path>,
 ) -> Result<(), String> {
+    // Ahead of the mounts below, because they are what this is about:
+    // every host-side container that names a checkout's volumes starts
+    // here, and a checkout that is gone left the same two behind.
+    housekeeping(root);
     let mut cmd = carried();
     // The tree's gate note, read-only, for the one line that has to
     // read it late (`runner::note_of`). It cannot come in through

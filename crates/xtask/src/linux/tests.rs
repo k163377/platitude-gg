@@ -350,6 +350,124 @@ fn volume_names_survive_a_windows_path() {
     );
 }
 
+/// A listing as `git worktree list --porcelain` gives it: the primary
+/// checkout, a roster seat, the measurement's rig (detached, and there
+/// only while a measurement runs) and the fresh worktree a task is
+/// standing in. Nothing here is a seat letter — what makes a name alive
+/// is that git named the tree, not where it stands.
+const LISTING: &str = "\
+worktree C:/Users/x/IdeaProjects/platitude-gg
+HEAD 1111111111111111111111111111111111111111
+branch refs/heads/main
+
+worktree C:/Users/x/IdeaProjects/platitude-gg/.claude/worktrees/a
+HEAD 2222222222222222222222222222222222222222
+branch refs/heads/worktree-a
+
+worktree C:/Users/x/IdeaProjects/platitude-gg/.claude/worktrees/rig
+HEAD 3333333333333333333333333333333333333333
+detached
+
+worktree C:/Users/x/IdeaProjects/platitude-gg/.claude/worktrees/wizardly-ellis-7b042a
+HEAD 4444444444444444444444444444444444444444
+branch refs/heads/claude/competent-benz-7dd4b1
+";
+
+#[test]
+fn every_tree_git_names_is_a_live_name() {
+    let names = checkout_names(&crate::seats::worktree_blocks(LISTING));
+    assert_eq!(
+        names.iter().map(String::as_str).collect::<Vec<_>>(),
+        vec!["a", "platitude-gg", "rig", "wizardly-ellis-7b042a"]
+    );
+}
+
+/// The volumes of a checkout that is gone are orphans; the ones of every
+/// tree git still names are not, whatever kind of tree it is. The
+/// registry volume belongs to the machine and is nobody's to remove, and
+/// so is anything that is not this project's.
+#[test]
+fn only_the_volumes_of_a_checkout_that_is_gone_are_orphans() {
+    let listed = "\
+pgg-linux-target-platitude-gg
+pgg-linux-demo-platitude-gg
+pgg-linux-target-a
+pgg-linux-demo-a
+pgg-linux-target-rig
+pgg-linux-demo-wizardly-ellis-7b042a
+pgg-linux-target-b
+pgg-linux-demo-tooltip
+pgg-linux-registry
+some-other-project-target-a
+";
+    assert_eq!(
+        orphan_volumes(
+            listed,
+            &checkout_names(&crate::seats::worktree_blocks(LISTING))
+        ),
+        vec!["pgg-linux-target-b", "pgg-linux-demo-tooltip"]
+    );
+}
+
+/// The two generations of 2026-09-21, from the day ci/linux/Dockerfile
+/// moved and one seat was still behind: the tree that is building names
+/// one tag and the seat behind it names the other, and a keep set of
+/// only the builder's would take 4.3 GB away from a checkout that is
+/// using it.
+#[test]
+fn a_tag_a_checkout_that_is_behind_still_names_is_kept() {
+    let listed = "\
+pgg-linux:app-3306fab788288e20
+pgg-linux:app-d3f3924bdfb2ec3c
+pgg-linux:app-0000000000000000
+pgg-linux:core-f12dad52a4b651e6
+pgg-linux:bare-3306fab788288e20
+";
+    let keep: BTreeSet<String> = [
+        "pgg-linux:app-3306fab788288e20",
+        "pgg-linux:app-d3f3924bdfb2ec3c",
+        "pgg-linux:core-f12dad52a4b651e6",
+        "pgg-linux:bare-3306fab788288e20",
+    ]
+    .iter()
+    .map(|tag| (*tag).to_string())
+    .collect();
+    assert_eq!(
+        stale_images(listed, "app", &keep),
+        vec!["pgg-linux:app-0000000000000000"]
+    );
+    // A stage whose tag nobody names is a stage this leaves alone
+    // entirely, and the prefix is what keeps `app` out of `bare`'s
+    // answer: the two carry the same fingerprint.
+    assert!(stale_images(listed, "core", &keep).is_empty());
+    assert!(stale_images(listed, "bare", &keep).is_empty());
+}
+
+/// The accounting has to name every stage the Dockerfile builds, and the
+/// Dockerfile is the witness for that — a stage added there and forgotten
+/// here is one whose images no checkout is ever seen to need.
+#[test]
+fn the_stages_are_the_ones_the_dockerfile_builds() {
+    let path = crate::tree::workspace_root()
+        .join("ci")
+        .join("linux")
+        .join("Dockerfile");
+    let text = std::fs::read_to_string(&path).expect("ci/linux/Dockerfile");
+    // The name `--target` takes, which is the word after `AS` and not
+    // simply the last one: a `FROM <image>` with no name at all would
+    // otherwise be read as a stage called after the image.
+    let built: Vec<&str> = text
+        .lines()
+        .filter(|line| line.starts_with("FROM "))
+        .filter_map(|line| {
+            let mut words = line.split_whitespace();
+            words.find(|word| word.eq_ignore_ascii_case("AS"))?;
+            words.next()
+        })
+        .collect();
+    assert_eq!(built, STAGES);
+}
+
 #[test]
 fn mount_paths_are_forward_slashed() {
     assert_eq!(
