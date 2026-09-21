@@ -255,12 +255,26 @@ pub async fn rename(
 /// Records which remote branch a local one is measured against
 /// (`branch.<name>.remote` / `.merge`).
 ///
-/// **`upstream` has to be the full refname** (`refs/remotes/origin/main`).
-/// The shorthand git prints and takes elsewhere is a rev-parse spelling,
-/// and a local branch literally named `origin/main` makes it *ambiguous*
-/// — git refuses the whole command (measured). The full form names one
-/// ref and cannot be read two ways; what it writes into the config is
-/// identical either way.
+/// **Two ways to write one pair of keys, and which one runs is whether
+/// the ref is here.** `branch --set-upstream-to` is git's own, and it
+/// refuses a name this repository holds no remote-tracking ref for
+/// (`fatal: the requested upstream branch … does not exist`, measured —
+/// git's own hint there points at `push -u`). A name not here is an
+/// answer all the same: the branch is then measured against a remote
+/// branch the next push makes, and nothing else can say so, so the pair
+/// is written straight (デザイン規約 §ブランチが測られる相手を決める).
+///
+/// **The flag takes the full refname** (`refs/remotes/origin/main`). The
+/// shorthand git prints and takes elsewhere is a rev-parse spelling, and
+/// a local branch literally named `origin/main` makes it *ambiguous* —
+/// git refuses the whole command (measured). The full form names one ref
+/// and cannot be read two ways; what lands in the config is identical
+/// either way.
+///
+/// **`.remote` goes down first.** A `.merge` standing on its own is read
+/// against whatever remote git falls back to, where a `.remote` on its
+/// own leaves the branch measured against nothing at all — so the half
+/// a failed second write leaves behind is the harmless one.
 ///
 /// Nothing about the working tree stands in its way: this is
 /// configuration about a branch, so **a branch another working copy has
@@ -270,16 +284,54 @@ pub async fn set_upstream(
     executor: &GitExecutor,
     workdir: &Path,
     name: &str,
-    upstream: &str,
+    remote: &str,
+    remote_branch: &str,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let cmd = GitCommand::new().cwd(workdir).args([
-        "branch",
-        &format!("--set-upstream-to={upstream}"),
+    let upstream = format!("refs/remotes/{remote}/{remote_branch}");
+    if ref_is_here(executor, workdir, &upstream, cancel).await? {
+        let cmd = GitCommand::new().cwd(workdir).args([
+            "branch",
+            &format!("--set-upstream-to={upstream}"),
+            "--end-of-options",
+            name,
+        ]);
+        return executor.run(cmd, cancel).await.map(drop);
+    }
+    for (key, value) in [
+        (format!("branch.{name}.remote"), remote.to_string()),
+        (
+            format!("branch.{name}.merge"),
+            format!("refs/heads/{remote_branch}"),
+        ),
+    ] {
+        let cmd = GitCommand::new()
+            .cwd(workdir)
+            .args(["config", "--local", &key, &value]);
+        executor.run(cmd, cancel).await?;
+    }
+    Ok(())
+}
+
+/// Whether this repository holds `full`, which is what decides the two
+/// halves of [`set_upstream`].
+///
+/// Exit 1 is the answer "no such ref", not a failure — left unmarked the
+/// command log would raise itself over it (規約 §git が言ったことを読む場所).
+async fn ref_is_here(
+    executor: &GitExecutor,
+    workdir: &Path,
+    full: &str,
+    cancel: &CancellationToken,
+) -> Result<bool, GitError> {
+    let cmd = GitCommand::new().cwd(workdir).answers_by_code(1).args([
+        "rev-parse",
+        "--verify",
+        "--quiet",
         "--end-of-options",
-        name,
+        full,
     ]);
-    executor.run(cmd, cancel).await.map(drop)
+    Ok(executor.run_unchecked(cmd, cancel).await?.code == 0)
 }
 
 /// True when every commit of `rev` is already reachable from `into`.

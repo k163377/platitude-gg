@@ -818,17 +818,16 @@ impl RepoTab {
     }
 
     /// Records the remote branch `branch` is measured against. The two
-    /// halves the question was answered with are joined here: what git
-    /// is given is the full remote-tracking refname, the one spelling
-    /// a local branch of the same name cannot make ambiguous
-    /// (`branch::set_upstream`).
+    /// halves the question was answered with go down as they were
+    /// answered: **a name this repository has not fetched is one of the
+    /// answers**, and which of git's two writes records it is core's to
+    /// decide (`branch::set_upstream`).
     #[qslot]
     fn set_upstream(&mut self, branch: String, remote: String, remote_branch: String) {
         if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
             return;
         }
-        let upstream = format!("refs/remotes/{remote}/{remote_branch}");
-        self.ask_session(|s| s.set_upstream(branch.clone(), upstream.clone()));
+        self.ask_session(|s| s.set_upstream(branch.clone(), remote.clone(), remote_branch.clone()));
     }
 
     /// Puts a lightweight tag on `commit` (HEAD when empty). Always

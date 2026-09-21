@@ -145,9 +145,8 @@ pub async fn rename_remote_branch(
     };
     push(executor, workdir, &spec, timeout, cancel).await?;
     delete_remote_branch(executor, workdir, remote, from, timeout, cancel).await?;
-    let moved = format!("refs/remotes/{remote}/{to}");
     for branch in tracking_branches(executor, workdir, remote, from, cancel).await? {
-        crate::branch::set_upstream(executor, workdir, &branch, &moved, cancel).await?;
+        crate::branch::set_upstream(executor, workdir, &branch, remote, to, cancel).await?;
     }
     Ok(())
 }

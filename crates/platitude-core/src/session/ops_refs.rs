@@ -91,12 +91,25 @@ impl RepoSession {
     /// write: the counts beside the branch, the delete's reference point
     /// and where a push goes all come off this setting, so the reads
     /// behind it are the ones that put the new answer on screen.
-    pub fn set_upstream(self: &Arc<Self>, branch: String, upstream: String) -> Option<OperationId> {
+    pub fn set_upstream(
+        self: &Arc<Self>,
+        branch: String,
+        remote: String,
+        remote_branch: String,
+    ) -> Option<OperationId> {
         self.write(
             OperationKind::Branch,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                branch::set_upstream(&exec, &repo.workdir, &branch, &upstream, &cancel).await
+                branch::set_upstream(
+                    &exec,
+                    &repo.workdir,
+                    &branch,
+                    &remote,
+                    &remote_branch,
+                    &cancel,
+                )
+                .await
             },
         )
     }

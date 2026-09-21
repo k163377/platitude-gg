@@ -8,6 +8,10 @@
 use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::branch::{self, CheckoutOutcome, CheckoutTarget};
+use platitude_core::remote::{self, PushForce};
+
+/// A `file://` remote answers instantly; the budget just has to exist.
+const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 
 /// What `%(upstream)` prints for a local branch — the spelling the refs
 /// listing carries (`RefEntry::upstream`) and joins the delete's
@@ -324,15 +328,9 @@ async fn the_upstream_is_named_by_the_one_spelling_that_reads_one_way() {
     clone.git(&["branch", "origin/feature/x", "origin/main"]);
     let (exec, cancel) = env();
 
-    branch::set_upstream(
-        &exec,
-        &clone.path,
-        "topic",
-        "refs/remotes/origin/feature/x",
-        &cancel,
-    )
-    .await
-    .expect("set upstream");
+    branch::set_upstream(&exec, &clone.path, "topic", "origin", "feature/x", &cancel)
+        .await
+        .expect("set upstream");
     assert_eq!(
         upstream_of(&mut clone, "topic").as_deref(),
         Some("refs/remotes/origin/feature/x"),
@@ -360,17 +358,91 @@ async fn a_branch_another_working_copy_holds_still_takes_an_upstream() {
     clone.git(&["worktree", "add", &held_arg, "topic"]);
     let (exec, cancel) = env();
 
-    branch::set_upstream(
-        &exec,
-        &clone.path,
-        "topic",
-        "refs/remotes/origin/main",
-        &cancel,
-    )
-    .await
-    .expect("the other working copy is no refusal here");
+    branch::set_upstream(&exec, &clone.path, "topic", "origin", "main", &cancel)
+        .await
+        .expect("the other working copy is no refusal here");
     assert_eq!(
         upstream_of(&mut clone, "topic").as_deref(),
         Some("refs/remotes/origin/main")
     );
+}
+
+/// **A name nothing here answers to is an answer all the same.** git's
+/// own command refuses one (`fatal: the requested upstream branch … does
+/// not exist`, measured — its hint points at `push -u` instead), so the
+/// two keys go down straight; the branch is then measured against a
+/// remote branch the next push makes (デザイン規約
+/// §ブランチが測られる相手を決める).
+///
+/// The whole way through, because the halves prove nothing apart: the
+/// pair git reads back, the `[gone]` it reads it as until the far side
+/// exists, the destination the next push plans off those keys, and that
+/// the push makes the branch and starts the counts.
+#[tokio::test]
+async fn an_upstream_the_next_push_has_to_make_is_recorded_all_the_same() {
+    let mut origin = TestRepo::init();
+    origin.commit_file("a.txt", "one\n", "root");
+
+    let mut clone = TestRepo::init();
+    let url = origin.file_url();
+    clone.git(&["remote", "add", "origin", &url]);
+    clone.git(&["fetch", "origin"]);
+    clone.git(&["checkout", "-b", "topic", "origin/main"]);
+    clone.commit_file("b.txt", "two\n", "work of our own");
+    let (exec, cancel) = env();
+    // The refusal this stands in for, from git's own command.
+    clone.git_expect_failure(&[
+        "branch",
+        "--set-upstream-to=refs/remotes/origin/brand-new",
+        "topic",
+    ]);
+
+    branch::set_upstream(&exec, &clone.path, "topic", "origin", "brand-new", &cancel)
+        .await
+        .expect("a name not here is still an answer");
+
+    assert_eq!(
+        upstream_of(&mut clone, "topic").as_deref(),
+        Some("refs/remotes/origin/brand-new"),
+        "the pair git writes for a fetched name, written for one that is not"
+    );
+    assert_eq!(
+        track_of(&mut clone, "topic"),
+        "[gone]",
+        "nothing here answers to the name until the push makes it"
+    );
+
+    let plan = remote::plan_current_push(&exec, &clone.path, "origin", PushForce::None, &cancel)
+        .await
+        .expect("a plan off the keys just written");
+    assert_eq!(
+        (plan.remote.as_str(), plan.remote_branch.as_str()),
+        ("origin", "brand-new"),
+        "the push goes where the branch says it belongs"
+    );
+    remote::push(&exec, &clone.path, &plan, NET, &cancel)
+        .await
+        .expect("the push makes the far side of it");
+
+    assert_eq!(
+        origin.git(&["rev-parse", "--abbrev-ref", "brand-new"]),
+        "brand-new",
+        "made over there under the name that was answered with"
+    );
+    assert_eq!(
+        track_of(&mut clone, "topic"),
+        "",
+        "and the counts start speaking, level"
+    );
+}
+
+/// What `%(upstream:track)` prints for a local branch: `[gone]` where
+/// the upstream it names is not here, and empty where the two are level
+/// (`refs::parse_track`).
+fn track_of(repo: &mut TestRepo, branch: &str) -> String {
+    repo.git(&[
+        "for-each-ref",
+        "--format=%(upstream:track)",
+        &format!("refs/heads/{branch}"),
+    ])
 }
