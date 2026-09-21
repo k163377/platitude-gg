@@ -61,6 +61,7 @@
 | `GraphLaneCell` の full-width canvas(行に 2 枚) | 42.6MB(グラフを一度スクロールさせた後の working set)。**直した後の差**(見える幅で建てる = 約 10MB)は [rules-refs/app-ui.md](../../.claude/rules-refs/app-ui.md) の `Canvas` の行が持つ — 別の量なので両方を読む |
 | `GraphRowChips`(名前のある行だけに建てて recycle ごとに作り直す案) | 1 スクロールで +35MB(chip 自身ではなく作り直しのヒープ) |
 | `corpus` の loose refs | 5 万本で slack 80MB、`pack-refs` 後は 6MB |
+| `encode::wire`(橋の値を行の隣に持つ案 = 組んだ時に `QVariant` を 1 度作り、読みは共有ハンドルのコピー) | 合成コーパスの 2,000 行の窓(レーン p50 29 本 / 行、chip 766)で WorkingSet 中央 318.9 → 377.8MB(+59)、private 296.2 → 361.7MB(+65)、settled 312.7 → 371.2MB(+58)= net が予算 300MB の外。同じ座りの fps 177.8 → 176.5、起動 1662 → 1706ms、応答は 5 run の揺れの中 — 読む時に組む形と差なし。型付き化だけ(読む時に組む)は main と同じ 319.8MB。**読む時に組む最終形と main の ABBA**(`--compare`、5 ブロック = 各 10 サンプル、固定ケース 2 本 × 3 周): WorkingSet 中央 320.0 対 316.8(+3.3、5 ブロック中 4 で上 — 5 run の散り 2〜10MB の内側で、見えているデリゲートが持つ JS オブジェクトぶんが上限)、private 295.8 対 292.7、fps 177.5 対 177.7、起動 1733 対 1762ms、details / diff の p50 は 2 ケース × 2 点で上下が混在 = 差なし(2026-09-21、rig の `0bfa34f5` / `3b6fe627` / `d751706e` / `fb67ecd8`。corpus token `fb3d090c` = 作業コピーの refs 8 本が立った状態で、判定記録の座りとは別。起動と walk がその分遅い) |
 
 ## 着色(`highlight`)
 
