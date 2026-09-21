@@ -52,8 +52,15 @@ Item {
             // window's** — which shape it is comes from real git, the name the page reads it under from
             // `repo_tab::drain_report_tests`, and the sentence from `tst_reportdress.qml`; what is left here
             // is the press reaching core and the bar coming back, which is the same road for all of them.
-            // The tip without an argument, and any row with one.
+            // The tip without an argument, and any row with one. **Opened first**: the fold is a replay over a
+            // tree that keeps its rows, and a replay takes the work into a stash while it runs — a pass that
+            // catches it half-way finds no working-tree row to keep the reader on and lands them on a commit,
+            // while a replay no pass catches leaves the reader where the page opened, on the working-tree row.
+            // Which of the two is the machine's to decide, and they are different pages. Read from the commit,
+            // both roads end on a commit's page (the one standing where it stood, `followVanishedCommit`) — the
+            // reset verbs open their commit for the same reason.
             const foldOid = driver.autoActOid(arg)
+            acts.readCommit(foldOid)
             page.openRowMenu(foldOid)
             page.squashCommit(foldOid)
             // The refusals are waited on all the way down: the answer raises the bar, and a picture taken on the
@@ -130,8 +137,13 @@ Item {
         } else if (act === "drop-commit" || act === "drop-commit-go" || act === "drop-stops"
                    || act === "drop-last-commit") {
             // The plan is built by object name, the way a graph row hands one
-            // over.
-            page.openRowMenu(driver.autoActOid(arg))
+            // over. Opened first where a replay follows, as the fold above is and for the same reason: the drop
+            // is the same replay. The bare menu is left where the page opened — nothing runs after it that could
+            // move the reader, and a read started here would race the picture instead.
+            const dropOid = driver.autoActOid(arg)
+            if (act !== "drop-commit")
+                acts.readCommit(dropOid)
+            page.openRowMenu(dropOid)
             Harness.report("drop_row " + dropCommitItem.code
                               + " " + dropCommitItem.text
                               + " oid=" + commitMenuState.menuOid.substring(0, 8)
