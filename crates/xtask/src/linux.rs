@@ -472,9 +472,16 @@ fn stop(
     Ok(())
 }
 
-/// The container's half of a full gate's sweep (`crate::sweep`): the
-/// same verb, run against the build volume this checkout's Linux side
+/// The container's half of a tail's sweep (`crate::sweep`): the same
+/// verb, run against the build volume this checkout's Linux side
 /// compiles in.
+///
+/// **What runs in there decides whether it sweeps.** The volume is a
+/// build directory of its own and carries its own stamp, so a tail with
+/// a Linux side starts this whatever this machine's key says, and the
+/// verb compares the keys the volume answers to (`sweep::asks`).
+/// `whatever_the_key_says` — stage 3 — is the one case that skips the
+/// comparison, on both sides alike.
 ///
 /// **In a container of its own, not the gate's.** The gate takes its
 /// container down with the side that used it, and what this reads is the
@@ -486,13 +493,18 @@ fn stop(
 /// minutes an image costs, and a tag that is not there is a tag nothing
 /// has run the Linux side under — so the volume behind it holds nothing
 /// this would take away either.
-pub(crate) fn sweep_the_volume(root: &Path) -> Result<(), String> {
+pub(crate) fn sweep_the_volume(root: &Path, whatever_the_key_says: bool) -> Result<(), String> {
     if cfg!(target_os = "linux") {
         // There is no volume: the container drops out here and both
         // sides build in the one directory the caller has just swept.
         return Ok(());
     }
-    let rest = [crate::sweep::SWEEP.call.to_string()];
+    let told = if whatever_the_key_says {
+        &crate::sweep::SWEEP
+    } else {
+        &crate::sweep::IF_MOVED
+    };
+    let rest: Vec<String> = told.call.split_whitespace().map(str::to_string).collect();
     let tag = image_tag(root, stage_for(&rest))?;
     if !image_exists(&tag)? {
         return Err(format!(

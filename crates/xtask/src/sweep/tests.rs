@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use super::{
-    Alive, CANONICAL, Gone, crate_of, generation, profiles_in, read_artifacts, sweep_profile,
-    unit_key,
+    Alive, CANONICAL, Gone, IF_MOVED, ONLY_IF_MOVED, Tail, asks, crate_of, generation, profiles_in,
+    read_artifacts, stamp, stamped, sweep_profile, unit_key,
 };
 
 /// The tree this test's files stand in, taken away when it is done with.
@@ -541,4 +541,64 @@ fn every_canonical_line_is_one_this_can_run() {
             );
         }
     }
+}
+
+/// The stamp stands inside the build directory it answers for, so a
+/// sweep out here writes nothing the container's volume reads: neither
+/// `gate --host-only` nor a hand-typed `cargo xtask sweep` can close the
+/// volume's generation behind its back (`sweep::asks`).
+#[test]
+fn a_stamp_answers_for_the_directory_it_stands_in() {
+    let here = Yard::new("stamp-here");
+    let volume = Yard::new("stamp-volume");
+    for (yard, lock) in [
+        (&here, "version = 4\n"),
+        (&volume, "version = 4\n# in there\n"),
+    ] {
+        std::fs::write(yard.at("Cargo.lock"), lock).expect("a lock");
+        std::fs::write(yard.at("rust-toolchain.toml"), "[toolchain]\n").expect("a pin");
+        std::fs::write(yard.at("Cargo.toml"), "[workspace]\n").expect("a manifest");
+        std::fs::create_dir_all(yard.at("target/sweep")).expect("somewhere to stamp");
+    }
+    stamp(&here.0).expect("this tree's stamp");
+    assert_eq!(
+        stamped(&here.0).map(|(key, _)| key),
+        Some(generation(&here.0).expect("this tree's key")),
+        "the directory that was swept carries the key it was swept under"
+    );
+    assert_eq!(
+        stamped(&volume.0),
+        None,
+        "and the other one carries nothing, so its next tail reads it as unswept"
+    );
+}
+
+/// **A tail with a Linux side asks the volume whatever this tree's key
+/// says.** The volume has a rustc, a key and a stamp of its own, and the
+/// verb that runs in there is what compares them; a tail that let this
+/// tree's key answer for both skipped the container on every day
+/// something out here had already swept.
+#[test]
+fn a_tail_with_a_linux_side_asks_the_volume_on_the_volumes_own_terms() {
+    let tier = |whatever_the_key_says, the_volume_too| {
+        asks(&Tail {
+            whatever_the_key_says,
+            the_volume_too,
+        })
+    };
+    assert_eq!(tier(false, true), Some(false), "gate, and the key decides");
+    assert_eq!(tier(true, true), Some(true), "gate --all, on both sides");
+    assert_eq!(
+        tier(false, false),
+        None,
+        "gate --host-only starts no container, and a sweep is no reason to"
+    );
+    assert_eq!(asks(&Tail::after_a_landing()), Some(false));
+}
+
+/// What the container is told with, and what the verb parses, are one
+/// word: the call is what `linux::sweep_the_volume` hands it.
+#[test]
+fn the_containers_half_is_told_with_the_option_this_verb_parses() {
+    assert_eq!(IF_MOVED.options().collect::<Vec<_>>(), [ONLY_IF_MOVED]);
 }

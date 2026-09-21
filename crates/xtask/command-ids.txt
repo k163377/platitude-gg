@@ -37,6 +37,7 @@ shots.prune
 still.standing
 structure.lengths
 sweep.dry-run
+sweep.if-the-generation-moved
 sweep.now
 verify.ui
 verify.verbs

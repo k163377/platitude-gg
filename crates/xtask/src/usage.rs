@@ -99,7 +99,7 @@ commands:
                                  how a file got there, what the last n
                                  commits would have owed
 
-  sweep [--dry-run]
+  sweep [--dry-run | --if-the-generation-moved]
       Takes away every build product in target/ but the generation the
       canonical cargo lines stand on (internal-docs/反映前テストの
       機械化.md §世代の掃除). cargo never removes what it has replaced,
@@ -123,9 +123,16 @@ commands:
       of a landing runs this by itself when the generation key has moved;
       `gate --all` runs it whatever the key says. The container's build
       volume is swept through the same verb, by a tier that has a Linux
-      side — never by --host-only, which starts no container at all.
+      side — never by --host-only, which starts no container at all. The
+      volume is a build directory of its own, with its own rustc, key and
+      stamp, so a tail starts the verb in there whatever this machine's
+      key says and the run in there decides.
       options:
         --dry-run     print what would go, and take nothing
+        --if-the-generation-moved
+                      sweep only if this build directory's own key has
+                      moved since its own last sweep — what a tail runs
+                      in the container
 
   structure
       The per-file length backstop of .claude/rules/structure.md (1000

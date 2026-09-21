@@ -68,7 +68,24 @@ pub(crate) static DRY: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
-pub(crate) static COMMANDS: &[&command::Command] = &[&SWEEP, &DRY];
+/// What the tail of a gate or a landing runs **in the container**, where
+/// the volume it is looking at is a build directory with a rustc, a
+/// generation key and a stamp of its own ([`asks`]).
+pub(crate) static IF_MOVED: command::Command = command::Command {
+    id: "sweep.if-the-generation-moved",
+    call: "sweep --if-the-generation-moved",
+    purpose: "sweep this build directory, and only if its own generation key has moved since \
+              its own last sweep",
+    run_in: Where::Seat,
+    needs: &[],
+    permission: Permission::Plain,
+};
+
+/// [`IF_MOVED`]'s option, spelled once. The command's own call is held
+/// to carrying it (`tests`).
+const ONLY_IF_MOVED: &str = "--if-the-generation-moved";
+
+pub(crate) static COMMANDS: &[&command::Command] = &[&SWEEP, &DRY, &IF_MOVED];
 
 /// The profile directories under `target/` this walks, in the order a
 /// reader meets them.
@@ -304,27 +321,47 @@ impl Line {
 }
 
 pub fn run(args: &[String]) -> Result<(), String> {
-    let dry_run = match args {
-        [] => false,
-        [one] if one == "--dry-run" => true,
+    let told = match args {
+        [] => Told::Now,
+        [one] if one == "--dry-run" => Told::DryRun,
+        [one] if one == ONLY_IF_MOVED => Told::IfTheGenerationMoved,
         other => {
             return Err(format!(
-                "unknown option {:?} (sweep takes --dry-run)",
+                "unknown option {:?} (sweep takes --dry-run or {ONLY_IF_MOVED})",
                 other.join(" ")
             ));
         }
     };
     let (root, _busy) = crate::still::announced("sweep")?;
-    sweep(&root, dry_run)
+    match told {
+        Told::Now => sweep(&root, false),
+        Told::DryRun => sweep(&root, true),
+        // The tail's half, run against the build directory this process
+        // is in — which out here is a seat's `target/` and in the
+        // container is the mounted volume. Never a verdict: it is
+        // called by a gate or a landing that has already answered
+        // ([`at_a_tail`]).
+        Told::IfTheGenerationMoved => {
+            here(&root, false);
+            Ok(())
+        }
+    }
+}
+
+/// What the verb was told to do.
+enum Told {
+    Now,
+    DryRun,
+    IfTheGenerationMoved,
 }
 
 /// What the tail of a gate or a landing hands the sweep.
 pub(crate) struct Tail {
-    /// Sweep whatever the generation key says. Stage 3 has asked the
-    /// tree for everything already, so the reading costs it nothing it
-    /// was not going to pay.
+    /// Sweep whatever the generation key says — on both sides, each
+    /// against its own. Stage 3 has asked the tree for everything
+    /// already, so the reading costs it nothing it was not going to pay.
     pub whatever_the_key_says: bool,
-    /// The container's build volume is this run's to sweep as well.
+    /// The container's build volume is this run's to ask as well.
     /// **False for a tier that started no container**: the daily one
     /// promises not to, and a sweep is no reason to break that
     /// (CLAUDE.md 確認は 3 段). The volume then waits for the next run
@@ -344,7 +381,8 @@ impl Tail {
     }
 }
 
-/// The sweep a passing gate or landing ends with.
+/// The sweep a passing gate or landing ends with — **two build
+/// directories, and each one's own key answers for it** ([`asks`]).
 ///
 /// **The key is what makes it happen at all.** A seat runs the full tier
 /// a handful of times a month while a generation is left behind by every
@@ -353,11 +391,45 @@ impl Tail {
 ///
 /// Never a failure of the gate or the landing that calls it: the tests
 /// have answered, and a sweep that could not read the tree is a sweep,
-/// not a verdict.
+/// not a verdict. That holds per side as well — a tree out here that
+/// could not be read says nothing about the volume, so the volume is
+/// asked either way.
 pub(crate) fn at_a_tail(dir: &Path, tail: &Tail) {
+    here(dir, tail.whatever_the_key_says);
+    let Some(whatever_the_key_says) = asks(tail) else {
+        return;
+    };
+    if let Err(why) = crate::linux::sweep_the_volume(dir, whatever_the_key_says) {
+        println!("sweep: the container's build volume was left alone — {why}");
+    }
+}
+
+/// On what terms a tail asks the container's build volume, or `None`
+/// for a tier that started no container.
+///
+/// **Never on this tree's key.** The volume is a build directory of its
+/// own — its own rustc, its own generation key, its own stamp inside it
+/// — and the verb that runs in there is what reads them ([`IF_MOVED`]).
+/// A tail that let this tree's key answer for both would skip the
+/// container every time something out here had already swept, which is
+/// most days: `gate --host-only` and a hand-typed `cargo xtask sweep`
+/// both write this tree's stamp and start nothing. Measured while that
+/// was the rule: a volume of 10.9GB with no stamp in it at all, beside a
+/// tree out here swept twice
+/// (internal-docs/反映前テストの機械化.md §世代の掃除).
+///
+/// The start costs seconds against an image already built, so it is one
+/// per tail whatever the answer turns out to be in there.
+fn asks(tail: &Tail) -> Option<bool> {
+    tail.the_volume_too.then_some(tail.whatever_the_key_says)
+}
+
+/// The half of a tail that sweeps the build directory this process is
+/// looking at, against that directory's own stamp.
+fn here(dir: &Path, whatever_the_key_says: bool) {
     let was = stamped(dir).map(|(key, _)| key);
     match generation(dir) {
-        Ok(key) if !tail.whatever_the_key_says && was.as_deref() == Some(key.as_str()) => {
+        Ok(key) if !whatever_the_key_says && was.as_deref() == Some(key.as_str()) => {
             println!("sweep: generation unchanged ({key}) — nothing to take away");
             return;
         }
@@ -378,13 +450,6 @@ pub(crate) fn at_a_tail(dir: &Path, tail: &Tail) {
     }
     if let Err(why) = sweep(dir, false) {
         println!("sweep: nothing taken away — {why}");
-        return;
-    }
-    if !tail.the_volume_too {
-        return;
-    }
-    if let Err(why) = crate::linux::sweep_the_volume(dir) {
-        println!("sweep: the container's build volume was left alone — {why}");
     }
 }
 
