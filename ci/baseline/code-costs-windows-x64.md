@@ -124,3 +124,15 @@ cargo が置き換えた成果物を消さないことの代金。**1 世代 = �
 | incremental セッションの日付 | `<crate>-<id>/` の 2 段下の最新ファイルが、そのディレクトリ自身の日付と秒まで一致(40 件中 39 件。残り 1 件は 1 秒差)。artifact との差は ±5 秒 |
 | fresh なビルドが `.fingerprint/*/invoked.timestamp` に触るか | 触らない(`target/hooks` で hook が朝から数百回走っても、時刻は最後の再ビルドのまま)= **古さは「死んでいる」の証拠にならない** |
 | 正規集合を続けて 2 回読んだ時に relink する unit(listing 1 回あたり) | 2。どちらも `pgg-todo-editor` — feature 解決の違う 2 行(`test --locked --workspace --no-run` と `test --locked -p platitude-core --no-run`)が hash 無しの同じ bin を書くので、listing 1 回につき 1 回ずつ相手を上書きする。他の 15 行は全部 fresh |
+
+## コンテナのイメージと build cache(`xtask::linux`)
+
+イメージの tag は入力(Dockerfile / rust-toolchain.toml / ci.yml)の指紋なので、それが動くたびに
+**1 世代まるごと**積む。**何が何を掴んでいるかを決めるのは tag で、cache の上限ではない**。
+
+| 対象 | 読み |
+|---|---|
+| `docker builder prune --max-used-space` が数える範囲 | **image が共有していない記録だけ**。未参照 6.328GB に上限 6.0GB を当てて消えたのは 11 日前の 616.3MB 1 本で、shared 6.38GB は不動(buildkit v0.33 `cache/manager.go`: 総和は `if ui.Shared { continue }` の後で、shared は削除候補に入らない) |
+| build cache 1 世代 | 6.38GB(Qt install 1.821 + bare への Qt 複写 1.519 + toolchain 0.847 + apt 群 2.1 + 端数)。世代が 1 つ死ぬと同じだけ未参照として残る |
+| `--rebuild` を cache 全ヒットで撃った代金 | core の unique size が 7.17kB → 1.376GB。**再 export が新しい層の digest を作り**、app は古い core の層を持ったままなので 1 世代分が二重になる。動作確認の手段には使えない |
+| 同じ入力から建った app の tag 2 本 | unique size は各 2.402kB(shared 4.295GB)。**片方を消しても戻るのは kB で、4.3GB は残る側へ移るだけ** |

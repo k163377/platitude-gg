@@ -46,6 +46,7 @@ use std::collections::BTreeSet;
 use std::io::IsTerminal;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::command::{self, Permission, Where};
 use crate::keepsakes;
@@ -379,6 +380,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         crate::budget::Rank::Normal,
         &format!("linux {}", rest.join(" ")),
     )?;
+    // Declared after the ticket and so dropped before it: whatever this
+    // line builds, the cache is cut back once, past the last stage of
+    // it, on every road out of here including the failing ones.
+    let _cache = TrimTheCache;
     // The verb that prepares what the others start from. Before the two
     // below it for the same reason they are before the road out: it is
     // this side's work whichever machine the host is, and on Linux it
@@ -535,6 +540,10 @@ pub(crate) fn sweep_the_volume(root: &Path, whatever_the_key_says: bool) -> Resu
         "the container's sweep",
     )?;
     let _busy = crate::still::busy(root, "linux")?;
+    // The housekeeping this road's container passes through can take the
+    // last image of a generation away ([`TrimTheCache`]), and this road
+    // starts no other command that would notice.
+    let _cache = TrimTheCache;
     in_container(root, &tag, &command, false, None, None)
 }
 
@@ -721,6 +730,10 @@ fn image_exists(tag: &str) -> Result<bool, String> {
 
 fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
     println!("building {tag} — the first one takes a while");
+    // Ahead of the build, not after it: a build that stops halfway has
+    // written cache entries all the same, and those are the ones with
+    // no image to belong to.
+    SHARING_MOVED.store(true, Ordering::Relaxed);
     let mut cmd = Command::new("docker");
     cmd.arg("build")
         .arg("--file")
@@ -790,6 +803,7 @@ fn forget_older_images(listed: &str, stage: &str, keep: &BTreeSet<String>) {
             return;
         };
         if done.status.success() {
+            SHARING_MOVED.store(true, Ordering::Relaxed);
             println!("removed the older image {tag}");
             continue;
         }
@@ -976,6 +990,97 @@ fn forget_orphan_volumes(names: &BTreeSet<String>) {
                 said.trim()
             );
         }
+    }
+}
+
+/// What the build cache may hold of what no image holds, and so what a
+/// `linux` line that built something trims it back to.
+///
+/// **The ceiling counts the unreferenced cache and nothing else.**
+/// buildkit measures a prune's total over the records an image does not
+/// share and never makes a shared record a candidate at all (v0.33
+/// `cache/manager.go`; measured here 2026-09-21 — a ceiling of 6.0 GB
+/// against 6.328 GB unreferenced took one 616 MB record out of the
+/// generation nobody holds, and the 6.38 GB shared with the images did
+/// not move: ci/baseline/code-costs-windows-x64.md). So **a cache
+/// ceiling is not what keeps the checkout that is behind from building
+/// cold** — its generation is shared because [`forget_older_images`]
+/// keeps its image, and what protects it is that keep set.
+///
+/// What is left for the ceiling to decide is how much dead cache to
+/// hoard, and the answer is none: every stage this Dockerfile builds is
+/// tagged, so cache an image does not share is the layers of a
+/// generation whose tag has been taken away plus the build context's
+/// snapshots — and once the tags kept are every living checkout's,
+/// nothing is left that would read them. Not zero, which reads as no
+/// ceiling at all.
+///
+/// **A size and not an age.** `--filter unused-for=<days>` would be the
+/// same shape as a clock that clears a cache on a timer, and the thing
+/// being bounded here is disk.
+const CACHE_CEILING: u64 = 64 * 1024 * 1024;
+
+/// Set when this line moved what the build cache is shared with: it
+/// built an image ([`build_image`]) or took one away
+/// ([`forget_older_images`]). Nothing else on a `linux` line can, and a
+/// line that moved neither would be asking docker a question whose
+/// answer it already knows.
+///
+/// **Removing counts, and it is the one that usually fires.** The tag a
+/// generation answered to is what held its cache records down as shared;
+/// the moment the last checkout naming it is gone and the image with it,
+/// every record behind it is nobody's — and the line that took the image
+/// away is not, in general, a line that built anything.
+static SHARING_MOVED: AtomicBool = AtomicBool::new(false);
+
+/// The build cache, cut back to [`CACHE_CEILING`] when the line that
+/// moved the sharing ([`SHARING_MOVED`]) is done.
+///
+/// **Not between the stages of one line.** `bare` builds three images
+/// and the second is built out of the first's cache, so a trim in
+/// [`ensure_image`] would take away what the next stage is about to ask
+/// for. A guard, because the roads out of a command are many and this
+/// belongs after every one of them — and declared under the ticket, so
+/// the docker it ends with is counted like the docker it followed.
+///
+/// **Two commands hold one**: [`run`], and [`sweep_the_volume`], which
+/// reaches a container of its own without passing through the other.
+/// Without the second, a housekeeping that took the last image of a
+/// generation away on a tail sweep would leave that generation's cache
+/// standing with nobody left to notice it.
+struct TrimTheCache;
+
+impl Drop for TrimTheCache {
+    fn drop(&mut self) {
+        if !SHARING_MOVED.load(Ordering::Relaxed) {
+            return;
+        }
+        let ceiling = CACHE_CEILING.to_string();
+        let Ok(out) = Command::new("docker")
+            .args(["builder", "prune", "--force", "--max-used-space", &ceiling])
+            .output()
+        else {
+            return;
+        };
+        if !out.status.success() {
+            println!(
+                "left the build cache alone — docker would not trim it ({})",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+            return;
+        }
+        // docker's own last line, which is the only place it says how
+        // much came out.
+        let said = String::from_utf8_lossy(&out.stdout);
+        let freed = said
+            .lines()
+            .rev()
+            .find_map(|line| line.trim().strip_prefix("Total:"))
+            .map_or("nothing", str::trim);
+        println!(
+            "trimmed the unreferenced build cache to {} MiB — freed {freed}",
+            CACHE_CEILING >> 20
+        );
     }
 }
 
