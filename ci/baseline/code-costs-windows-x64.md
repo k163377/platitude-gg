@@ -110,3 +110,15 @@
 | `cargo test --workspace` 下の git 1 往復(コアごとにスレッド、全部が git を spawn) | 単独時の約 25 倍。**壁時計の上限は負荷で判定を決める**ので、テストのハーネスは stock timeout を外して自前の backstop を持つ |
 | `perf` の warm 判定(`perf::warmth`) | invocation 1 本目の 1 run 目だけ突出(startup 1226ms)、2 本目以降の 1 run 目は採用 run(1096–1178ms)に混ざる(1081–1177ms)= 毎回 1 run 捨てるのは 14 秒の無駄 |
 | `xtask::gui` の起動見張り | Qt プラットフォームプラグインの失敗はほぼ即死(約 10ms)。`FIRST_MOMENT` の残りはコールドスタートの余白 |
+
+## build directory の世代(`xtask::sweep`)
+
+cargo が置き換えた成果物を消さないことの代金。**1 世代 = 席 1 つが正規集合を建てた時の量**で、そこから先は `Cargo.lock` / rustc / profile が動くたびに同じだけ積む。
+
+| 対象 | 読み |
+|---|---|
+| 席 1 つの `target/`(6 席の合計) | 148GB(51 / 47 / 15 / 12 / 12 / 5)。1 世代は 12〜15GB |
+| その内訳(積もった席の `target/debug` 42.7GB) | `incremental` 24.7GB(設定 250 個、生きているのは十数個)/ `deps` 12.8GB(外部 crate の rlib が典型 6 世代・最大 14 世代、テスト exe が 7〜9 世代)/ `build` 5.2GB(`qtbridge-type-lib` の出力 146MB × 8 世代) |
+| Linux 側のボリューム `pgg-linux-target-<席>`(積もった席) | 11.3GB = `debug/incremental` 4.8 + `debug/deps` 2.6 + `debug/build` 2.0 + `release` 1.4。6 席で 56GB、1 世代は 6GB |
+| incremental セッションの日付 | `<crate>-<id>/` の 2 段下の最新ファイルが、そのディレクトリ自身の日付と秒まで一致(40 件中 39 件。残り 1 件は 1 秒差)。artifact との差は ±5 秒 |
+| fresh なビルドが `.fingerprint/*/invoked.timestamp` に触るか | 触らない(`target/hooks` で hook が朝から数百回走っても、時刻は最後の再ビルドのまま)= **古さは「死んでいる」の証拠にならない** |
