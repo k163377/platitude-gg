@@ -7,6 +7,7 @@
 use qtbridge::qobject;
 
 use super::qml_register;
+use crate::encode::{Chips, Mates};
 
 /// The singleton every QML file can ask a rule of without wiring a model
 /// through: which id is the synthetic WIP row's, which chips a gone set
@@ -25,63 +26,34 @@ impl GitFacts {
         platitude_core::oid::Oid::hex_is_zero(&hex)
     }
 
-    /// The chip records still standing once the page's gone set has
-    /// spoken (`encode::labels_shown`): `packed` as the row carries it,
-    /// less the chips `gone` names.
+    /// The chips still standing once the page's gone set has spoken
+    /// (`encode::chips_shown`): `chips` as the row carries them, less the
+    /// ones `gone` names by key.
     #[qslot]
-    fn labels_shown(&self, packed: String, gone: String) -> String {
-        crate::encode::labels_shown(&packed, &gone)
+    fn chips_shown(&self, chips: Chips, gone: Vec<String>) -> Chips {
+        crate::encode::chips_shown(&chips, &gone)
     }
 
-    /// The ref kind a chip record's letter names, in the word the menus
-    /// branch on — `""` for the HEAD marker, which names nothing to act
-    /// on.
+    /// The kind a chip's word names as a ref the menus can act on
+    /// (`encode::ref_kind_word`): `branch` / `remote` / `tag`, and `""`
+    /// for the two markers, which name nothing to act on.
     #[qslot]
-    fn record_kind(&self, record: String) -> String {
-        crate::encode::label_kind_word(&record).to_string()
-    }
-
-    /// The name on a chip record (`encode::label_name_of`).
-    #[qslot]
-    fn record_name(&self, record: String) -> String {
-        crate::encode::label_name_of(&record).to_string()
-    }
-
-    /// What a chip record answers to across the two places it is drawn:
-    /// its kind letter and its name, without the flag digits between
-    /// them (`encode::label_key`). **The flags are how the chip is
-    /// drawn** — a background pass that learns the branch now has a
-    /// remote rewrites the record and would lose a gesture keyed on the
-    /// whole of it, and the row and the card its chip unfolds into have
-    /// to agree on what "the same target" means
-    /// (デザイン規約 §グラフ行のダブルクリック).
-    #[qslot]
-    fn record_key(&self, record: String) -> String {
-        crate::encode::label_key(&record)
-    }
-
-    /// How many records a packed list holds (`encode::RECORD_SEP`
-    /// between them); `""` holds none.
-    #[qslot]
-    fn record_count(&self, packed: String) -> i32 {
-        if packed.is_empty() {
-            return 0;
-        }
-        packed.split(crate::encode::RECORD_SEP).count() as i32
+    fn ref_kind(&self, kind: String) -> String {
+        crate::encode::ref_kind_word(&kind).to_string()
     }
 
     /// The remote half of a remote-tracking name (`origin/main`), read
-    /// against the configured names (`\u{1f}`-packed,
-    /// `RepoTab.remoteNames`): the longest configured name wins — a
-    /// remote's own name may contain `/` — and where none owns the ref
-    /// the first slash answers, so the gesture still acts and git gets
-    /// to refuse loudly (`refs::split_remote_ref_or_first_slash` — the
-    /// list may still be loading, or the remote may be gone from
-    /// configuration while its refs remain). `""` only where there is no
-    /// slash at all: that name is not a remote branch.
+    /// against the configured names (`RepoTab.remoteNames`): the longest
+    /// configured name wins — a remote's own name may contain `/` — and
+    /// where none owns the ref the first slash answers, so the gesture
+    /// still acts and git gets to refuse loudly
+    /// (`refs::split_remote_ref_or_first_slash` — the list may still be
+    /// loading, or the remote may be gone from configuration while its
+    /// refs remain). `""` only where there is no slash at all: that name
+    /// is not a remote branch.
     #[qslot]
-    fn remote_of_ref(&self, full: String, remote_names: String) -> String {
-        platitude_core::refs::split_remote_ref_or_first_slash(&full, packed_names(&remote_names))
+    fn remote_of_ref(&self, full: String, remote_names: Vec<String>) -> String {
+        platitude_core::refs::split_remote_ref_or_first_slash(&full, names(&remote_names))
             .map(|(remote, _)| remote.to_string())
             .unwrap_or_default()
     }
@@ -89,11 +61,8 @@ impl GitFacts {
     /// The branch half of the same cut. A name no slash divides is all
     /// branch — the shape a rename box is typed in.
     #[qslot]
-    fn branch_of_ref(&self, full: String, remote_names: String) -> String {
-        match platitude_core::refs::split_remote_ref_or_first_slash(
-            &full,
-            packed_names(&remote_names),
-        ) {
+    fn branch_of_ref(&self, full: String, remote_names: Vec<String>) -> String {
+        match platitude_core::refs::split_remote_ref_or_first_slash(&full, names(&remote_names)) {
             Some((_, branch)) => branch.to_string(),
             None => full,
         }
@@ -117,7 +86,7 @@ impl GitFacts {
         behind: i32,
         push_remote: String,
         push_default: String,
-        remote_names: String,
+        remote_names: Vec<String>,
     ) -> String {
         platitude_core::remote::push_standing(
             unborn,
@@ -129,7 +98,7 @@ impl GitFacts {
             behind,
             &push_remote,
             &push_default,
-            packed_names(&remote_names),
+            names(&remote_names),
         )
         .as_str()
         .to_string()
@@ -152,7 +121,7 @@ impl GitFacts {
         push_remote: String,
         push_default: String,
         default_remote: String,
-        remote_names: String,
+        remote_names: Vec<String>,
     ) -> String {
         platitude_core::remote::push_target(
             &branch,
@@ -160,13 +129,13 @@ impl GitFacts {
             &push_remote,
             &push_default,
             &default_remote,
-            packed_names(&remote_names),
+            names(&remote_names),
         )
     }
 
     /// What the right-click menu on a ref may offer
-    /// (`platitude_core::offers::ref_menu`), as the packed words
-    /// `RefRowMenu.offerOn` splits back apart — asked once as the menu
+    /// (`platitude_core::offers::ref_menu`), as the words the opening
+    /// function reads (`RefRowMenu.offerOn`) — asked once as the menu
     /// opens, so the answers freeze while it stands (app-ui.md §メニュー).
     /// The lookups behind `held_by_worktree` / `remote_counterpart` /
     /// `remote_drifted` stay the models'; this only weighs what they
@@ -190,9 +159,9 @@ impl GitFacts {
         default_remote: String,
         tag_sides: String,
         current_upstream: String,
-    ) -> String {
+    ) -> Vec<String> {
         let Some(kind) = platitude_core::offers::RefKind::from_word(&kind) else {
-            return String::new();
+            return Vec::new();
         };
         platitude_core::offers::ref_menu(
             kind,
@@ -212,12 +181,14 @@ impl GitFacts {
             &current_upstream,
         )
         .words()
+        .into_iter()
+        .map(str::to_string)
+        .collect()
     }
 
     /// What the right-click menu on a commit row may offer
-    /// (`platitude_core::offers::commit_menu`), the same packed-words
-    /// shape and the same freeze-at-open contract
-    /// (`CommitMenuState.openRowMenu`).
+    /// (`platitude_core::offers::commit_menu`), the same words and the
+    /// same freeze-at-open contract (`CommitMenuState.openRowMenu`).
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn commit_menu_offers(
@@ -230,7 +201,7 @@ impl GitFacts {
         oid_hex: String,
         head_oid: String,
         stash_ref: String,
-    ) -> String {
+    ) -> Vec<String> {
         platitude_core::offers::commit_menu(
             open,
             busy_count,
@@ -242,6 +213,9 @@ impl GitFacts {
             &stash_ref,
         )
         .words()
+        .into_iter()
+        .map(str::to_string)
+        .collect()
     }
 
     /// What the details pane's message boxes do with the commit on
@@ -274,18 +248,19 @@ impl GitFacts {
     /// The move a press on a ref adds up to
     /// (`platitude_core::offers::switch_action`), in the word
     /// `RepoPage.switchToRef` branches on: `switch` / `materialize` /
-    /// `move` / `holder`, `""` for a ref nothing moves onto.
+    /// `move` / `holder`, `""` for a ref nothing moves onto. `kind` is
+    /// the chip's word (`branch` / `remote`; any other moves nothing).
     #[qslot]
     fn switch_action(
         &self,
-        kind_letter: String,
+        kind: String,
         local: String,
         current_branch: String,
         held_by_worktree: String,
         local_oid: String,
     ) -> String {
         platitude_core::offers::switch_action(
-            &kind_letter,
+            &kind,
             &local,
             &current_branch,
             &held_by_worktree,
@@ -367,13 +342,13 @@ impl GitFacts {
         crate::urlpath::path_leaf(&path).to_string()
     }
 
-    /// Whoever a message being typed credits, packed the way a commit's
-    /// own trailers are packed for the details pane
-    /// (`encode::encode_co_authors`). Whether a line counts is
+    /// Whoever a message being typed credits, in the same records a
+    /// commit's own trailers reach the details pane as
+    /// (`encode::mates_of`). Whether a line counts is
     /// `platitude_core::trailers` — the one place that rule is written.
     #[qslot]
-    fn co_authors_of(&self, body: String) -> String {
-        crate::encode::encode_co_authors(&platitude_core::trailers::co_authors_in(&body))
+    fn co_authors_of(&self, body: String) -> Mates {
+        crate::encode::mates_of(&platitude_core::trailers::co_authors_in(&body))
     }
 
     /// Whether a name is one git would take for a branch or a tag —
@@ -399,9 +374,9 @@ impl GitFacts {
     }
 }
 
-/// The names in a `\u{1f}`-packed list, none for `""`.
-fn packed_names(packed: &str) -> impl Iterator<Item = &str> {
-    packed.split('\u{1f}').filter(|name| !name.is_empty())
+/// The configured names as core reads them.
+fn names(remote_names: &[String]) -> impl Iterator<Item = &str> {
+    remote_names.iter().map(String::as_str)
 }
 
 qml_register!(GitFacts, "GitFacts", singleton = true);

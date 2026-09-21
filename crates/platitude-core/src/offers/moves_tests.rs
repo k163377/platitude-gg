@@ -7,27 +7,34 @@ use crate::opstate::OpState;
 use crate::status::Counts;
 
 #[test]
-fn switch_lands_where_the_letter_and_the_local_branch_say() {
+fn switch_lands_where_the_kind_and_the_local_branch_say() {
     use SwitchAction::*;
-    assert_eq!(switch_action("L", "main", "main", "", ""), None);
-    assert_eq!(switch_action("L", "feat", "main", "", ""), Switch);
+    assert_eq!(switch_action("branch", "main", "main", "", ""), None);
+    assert_eq!(switch_action("branch", "feat", "main", "", ""), Switch);
     assert_eq!(
-        switch_action("L", "feat", "main", "C:/work/other", ""),
+        switch_action("branch", "feat", "main", "C:/work/other", ""),
         OpenHolder
     );
-    assert_eq!(switch_action("R", "feat", "main", "", ""), Materialize);
-    assert_eq!(switch_action("R", "feat", "main", "", "abc123"), MoveBranch);
+    assert_eq!(switch_action("remote", "feat", "main", "", ""), Materialize);
     assert_eq!(
-        switch_action("R", "feat", "main", "C:/work/other", "abc123"),
+        switch_action("remote", "feat", "main", "", "abc123"),
+        MoveBranch
+    );
+    assert_eq!(
+        switch_action("remote", "feat", "main", "C:/work/other", "abc123"),
         OpenHolder
     );
     // Landing the current branch on its remote ref is the one move that
-    // is not a no-op for `R`: git answers what it would cost.
-    assert_eq!(switch_action("R", "main", "main", "", "abc123"), MoveBranch);
-    // A tag could only detach HEAD, and the detached marker names no
-    // branch: neither moves.
-    assert_eq!(switch_action("T", "v1.0", "main", "", ""), None);
-    assert_eq!(switch_action("H", "", "main", "", ""), None);
+    // is not a no-op for a remote: git answers what it would cost.
+    assert_eq!(
+        switch_action("remote", "main", "main", "", "abc123"),
+        MoveBranch
+    );
+    // A tag could only detach HEAD, and the two markers name no branch:
+    // none of them moves.
+    assert_eq!(switch_action("tag", "v1.0", "main", "", ""), None);
+    assert_eq!(switch_action("head", "", "main", "", ""), None);
+    assert_eq!(switch_action("worktree", "rig", "main", "", ""), None);
     assert_eq!(
         switch_action("", "", "", "", ""),
         None,

@@ -25,9 +25,12 @@ impl RepoTab {
         Notify = changed
     );
     qproperty!("remoteNames", Member = remote_names, Notify = changed);
+    // The pair itself is `remoteBranchAsked()`: a property cannot hold
+    // nothing (`encode::Optional`), so the revision is what a binding
+    // follows.
     qproperty!(
-        "remoteBranchAsked",
-        Member = remote_branch_asked,
+        "remoteBranchRevision",
+        Member = remote_branch_revision,
         Notify = changed
     );
     qproperty!(
@@ -1088,11 +1091,19 @@ impl RepoTab {
 
     /// Asks what a push under this branch name would meet on that remote.
     /// Reaches the network, so it is asked while the question stands.
-    /// The answer arrives as `remoteBranchAsked` /
-    /// `remoteBranchState`.
+    /// The answer arrives as `remoteBranchAsked()` on the next
+    /// `remoteBranchRevision`, with `remoteBranchState`.
     #[qslot]
     fn check_remote_branch(&mut self, remote: String, branch: String) {
         self.look_up_remote_branch(remote, branch)
+    }
+
+    /// The pair the last answer is about — what `checkRemoteBranch` was
+    /// asked for — and nothing from the moment a question goes out until
+    /// its answer lands. Read on `remoteBranchRevision`.
+    #[qslot]
+    fn remote_branch_asked(&self) -> Optional<RemoteBranch> {
+        self.remote_branch_asked.clone()
     }
 
     /// Asks git whether `branch --delete` would refuse this branch (not

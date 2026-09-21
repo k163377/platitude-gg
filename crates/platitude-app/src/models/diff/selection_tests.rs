@@ -5,7 +5,23 @@ use std::sync::Arc;
 
 use platitude_core::parse::diff::parse_patch;
 
-use super::DiffModel;
+use super::{DiffModel, Washed};
+use crate::encode::Optional;
+
+/// One side's wash the way the tests read it: `""` for none, `*` for
+/// the whole line, and the runs as `from:len,…` for a cut one.
+fn said(sel: &Optional<Washed>) -> String {
+    match sel.as_ref() {
+        None => String::new(),
+        Some(w) if w.whole => "*".to_string(),
+        Some(w) => w
+            .runs
+            .iter()
+            .map(|r| format!("{}:{}", r.from, r.len))
+            .collect::<Vec<_>>()
+            .join(","),
+    }
+}
 
 /// `\t` written out, so the tabs these cases turn on are visible in the
 /// source of the test itself.
@@ -59,7 +75,7 @@ fn only_the_rows_the_copy_takes_are_washed() {
     let mut model = one_change();
     model.start_select(0, 0, 0);
     model.drag_select(0, 4, 1);
-    let washed: Vec<&str> = model.lines.iter().map(|row| row.sel.as_str()).collect();
+    let washed: Vec<String> = model.lines.iter().map(|row| said(&row.sel)).collect();
     // The heading and the removed line stay bare; the rest is whole.
     assert_eq!(washed, vec!["", "*", "", "*", "*"]);
 }
@@ -72,7 +88,7 @@ fn the_two_ends_are_cut_and_the_rows_between_them_are_not() {
     assert_eq!(model.copied_new(), "main() {\n    let");
     // The far end is a run of places along the line, cut where the drag
     // stopped.
-    assert_eq!(model.lines[3].sel, "0:7");
+    assert_eq!(said(&model.lines[3].sel), "0:7");
 }
 
 #[test]
@@ -94,10 +110,7 @@ fn one_removed_row_taken_whole_offers_the_old_line_and_nothing_new() {
     assert_eq!(model.sel_removed, 1);
     assert_eq!(model.copied_removed(), "    let a = 1;");
     assert!(model.copied_new().is_empty());
-    assert!(
-        model.lines[2].sel.is_empty(),
-        "a removed line is not washed"
-    );
+    assert!(model.lines[2].sel.is_none(), "a removed line is not washed");
 }
 
 #[test]
@@ -214,7 +227,7 @@ fn a_wash_on_a_wide_line_names_places_and_not_columns() {
     );
     model.start_select(0, 2, 10);
     model.drag_select(0, 2, 14);
-    assert_eq!(model.lines[2].sel, "4:4");
+    assert_eq!(said(&model.lines[2].sel), "4:4");
     assert_eq!(model.copied_new(), "torn");
 }
 
@@ -248,14 +261,18 @@ fn one_change_split() -> DiffModel {
 }
 
 /// What every row wears, on each side.
-fn washes(model: &DiffModel) -> (Vec<&str>, Vec<&str>) {
+fn washes(model: &DiffModel) -> (Vec<String>, Vec<String>) {
     (
-        model.lines.iter().map(|row| row.sel.as_str()).collect(),
-        model
-            .lines
-            .iter()
-            .map(|row| row.pair_sel.as_str())
-            .collect(),
+        model.lines.iter().map(|row| said(&row.sel)).collect(),
+        model.lines.iter().map(|row| said(&row.pair_sel)).collect(),
+    )
+}
+
+/// The two sides as a test spells them, in [`washes`]'s own shape.
+fn sides(own: &[&str], pair: &[&str]) -> (Vec<String>, Vec<String>) {
+    (
+        own.iter().map(|s| s.to_string()).collect(),
+        pair.iter().map(|s| s.to_string()).collect(),
     )
 }
 
@@ -273,7 +290,7 @@ fn a_drag_down_the_old_column_takes_the_old_file() {
     assert!(model.copied_removed().is_empty());
     assert_eq!(
         washes(&model),
-        (vec!["", "*", "*", "*"], vec!["", "", "", ""])
+        sides(&["", "*", "*", "*"], &["", "", "", ""])
     );
 }
 
@@ -289,7 +306,7 @@ fn a_drag_down_the_new_column_takes_the_new_file_and_offers_the_removed_line_acr
     assert_eq!(model.copied_removed(), "    let a = 1;");
     assert_eq!(
         washes(&model),
-        (vec!["", "", "", ""], vec!["", "*", "*", "*"])
+        sides(&["", "", "", ""], &["", "*", "*", "*"])
     );
 }
 
@@ -304,7 +321,7 @@ fn a_press_in_the_other_column_moves_the_whole_wash_across() {
     model.drag_select(1, 2, 3);
     assert_eq!(
         washes(&model),
-        (vec!["", "", "", ""], vec!["", "", "0:3", ""])
+        sides(&["", "", "", ""], &["", "", "0:3", ""])
     );
     assert_eq!(model.copied_new(), "   ");
 }
@@ -371,8 +388,8 @@ fn an_empty_seat_takes_nothing_and_breaks_nothing() {
 #[test]
 fn the_marks_spell_each_side_s_facts() {
     // A conflict's combined diff read side by side: the fence and the
-    // side it came from ride the row as letters, one side either side
-    // of the bar (`rows::marks_of`), and the tally reads both.
+    // side it came from ride the row as the `own` and `pair` records of
+    // its marks (`encode::Marks`), and the tally reads both.
     let model = split_model(
         "\
 diff --cc f
@@ -388,21 +405,31 @@ index 1111111,2222222..0000000
 ++>>>>>>> topic
 ",
     );
-    let marks: Vec<&str> = model.lines.iter().map(|row| row.marks.as_str()).collect();
-    assert_eq!(
-        marks[1], "|",
-        "a context line carries nothing on either side"
+    let marks: Vec<super::super::super::encode::Marks> =
+        model.lines.iter().map(|row| (*row.marks).clone()).collect();
+    let context = &marks[1];
+    assert!(
+        !context.own.fence && context.own.side.is_empty(),
+        "a context line carries nothing on its own side: {context:?}"
     );
     assert!(
-        marks.iter().any(|m| m.ends_with("|f")),
+        context
+            .pair
+            .as_ref()
+            .is_some_and(|p| !p.fence && p.side.is_empty()),
+        "nor on the other: {context:?}"
+    );
+    let pairs = || marks.iter().filter_map(|m| m.pair.as_ref());
+    assert!(
+        pairs().any(|p| p.fence),
         "a fence is on the new side: {marks:?}"
     );
     assert!(
-        marks.iter().any(|m| m.ends_with("|o")),
+        pairs().any(|p| p.side == "ours"),
         "our line is on the new side: {marks:?}"
     );
     assert!(
-        marks.iter().any(|m| m.ends_with("|t")),
+        pairs().any(|p| p.side == "theirs"),
         "their line is on the new side: {marks:?}"
     );
     assert_eq!(model.side_count("ours".into()), 1);

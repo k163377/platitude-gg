@@ -463,10 +463,13 @@ Item {
             // middle, and it is the only one wearing it. `cut=`/`tip=` are
             // the long name's whole claim: the band cut it, and the hover behind it carries it. The diff's own line
             // count goes last, after the part the table pins: a line pinned through it could not be written down at
-            // all (`verify::outcome` matches a substring).
+            // all (`verify::outcome` matches a substring). The tally is written in the order the row draws it.
+            const tally = graphModel.carriedTally(page.selectedRow)
+            const counts = tally ? [tally.added, tally.modified, tally.deleted,
+                                    tally.renamed, tally.copied, tally.conflicted] : []
             Harness.report("carried_read copy=" + files.carriedName
                               + " files=" + files.total
-                              + " tally=" + graphModel.carriedTally(page.selectedRow)
+                              + " tally=" + counts.join(",")
                               + " lit=" + lit
                               + " litRows=" + litRows
                               + " cut=" + driver.carriedPane.nameCut

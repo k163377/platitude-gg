@@ -41,7 +41,7 @@ Item {
         canPull: true
         pullBlocked: false
         hardResetTakes: 0
-        onSwitchRequested: (kindLetter, name) => root.asked = "switch " + kindLetter + " " + name
+        onSwitchRequested: (kind, name) => root.asked = "switch " + kind + " " + name
         onCherryPickRequested: oidHex => root.asked = "cherry-pick " + oidHex
         onRevertRequested: oidHex => root.asked = "revert " + oidHex
         onMergeRequested: ref => root.asked = "merge " + ref
@@ -101,16 +101,16 @@ Item {
             compare(menu.switchItem.blockedReason, "", "a move that cannot be made is not a greyed row")
         }
 
-        /// **Which kind the press is sent as is this file's alone**: a remote reading is landed on with `R`, and
-        /// everything else with `L`. Nothing outside can see the letter, and the two roads part on it.
+        /// **Which kind the press is sent as is this file's alone**: the word the menu was aimed with, `remote` for
+        /// a remote reading and `branch` for everything else, and the two roads part on it (`offers::switch_action`).
         function test_the_move_is_aimed_with_the_kind_the_chip_drew() {
             root.aimAt({})
             menu.switchItem.triggered()
-            compare(root.asked, "switch L feature/topic-a")
+            compare(root.asked, "switch branch feature/topic-a")
 
             root.aimAt({ targetKind: "remote", targetName: "origin/feature/topic-a" })
             menu.switchItem.triggered()
-            compare(root.asked, "switch R origin/feature/topic-a")
+            compare(root.asked, "switch remote origin/feature/topic-a")
         }
 
         /// The `pull` row is the far side of the tree's own comparison, and **greying it is the only thing this file
@@ -183,14 +183,14 @@ Item {
         function test_each_card_is_aimed_only_at_a_name_of_its_own_kind_data() {
             const branchy = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
                               "remoteDrifted": false, "open": true, "merged": "yes",
-                              "offers": "switch branch-here integrate delete set-upstream" }
+                              "offers": ["switch", "branch-here", "integrate", "delete", "set-upstream"] }
             const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteDrifted": false,
-                            "open": false, "merged": "", "offers": "" }
-            // The words core packs for a tag standing here only (`offers::RefMenuOffers::words`, as
+                            "open": false, "merged": "", "offers": [] }
+            // The words core answers for a tag standing here only (`offers::RefMenuOffers::words`, as
             // `tst_tagcard.qml` spells them — what the card does with them is covered there).
             const tagged = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false,
-                             "offers": "branch-here integrate delete push-tag" }
-            const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": "" }
+                             "offers": ["branch-here", "integrate", "delete", "push-tag"] }
+            const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
             return [
                 {
                     tag: "the chip drew a branch",

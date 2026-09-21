@@ -6,6 +6,7 @@ use platitude_core::Oid;
 use platitude_core::session::SelectionRead;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
+use crate::encode::{Landed, Landing};
 use crate::hub::{DetailsMsg, Feed, Hub};
 
 use super::pathtree::DirNode;
@@ -73,8 +74,8 @@ pub struct DetailsModel {
     /// none. Refreshed on every details read and whenever an assignment
     /// changes, so the card follows the settings list without a reload.
     avatar_url: String,
-    /// Packed `Co-authored-by` trailers (see `encode::encode_co_authors`).
-    co_authors: String,
+    /// The `Co-authored-by` trailers (`encode::mates_of`).
+    co_authors: crate::encode::Mates,
     committer_name: String,
     committer_email: String,
     committer_avatar: i32,
@@ -129,7 +130,7 @@ impl Default for DetailsModel {
             author_time: 0,
             avatar: 0,
             avatar_url: String::new(),
-            co_authors: String::new(),
+            co_authors: crate::encode::Mates::default(),
             committer_name: String::new(),
             committer_email: String::new(),
             committer_avatar: 0,
@@ -195,7 +196,7 @@ impl DetailsModel {
         self.author_time = 0;
         self.avatar = 0;
         self.avatar_url.clear();
-        self.co_authors.clear();
+        self.co_authors = crate::encode::Mates::default();
         self.committer_name.clear();
         self.committer_email.clear();
         self.committer_avatar = 0;

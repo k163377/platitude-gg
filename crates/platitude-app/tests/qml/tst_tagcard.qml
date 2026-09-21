@@ -22,15 +22,16 @@ Item {
     /// What a press asked for, last one wins: the card runs nothing itself.
     property string asked: ""
 
-    /// The words core answers with for a tag standing on each of its sides, packed as
-    /// `offers::RefMenuOffers::words` packs them. **Data, not a rule** — the mapping from a repository's state to
-    /// these is core's and is tested there (`offers::tests::each_delete_row_needs_the_side_it_names`).
-    readonly property string here: "branch-here integrate delete push-tag"
-    readonly property string overThere: "branch-here integrate delete-remote-tag"
-    readonly property string both: "branch-here integrate delete push-tag delete-remote-tag delete-tag-everywhere"
+    /// The words core answers with for a tag standing on each of its sides, the list
+    /// `offers::RefMenuOffers::words` is. **Data, not a rule** — the mapping from a repository's state to these is
+    /// core's and is tested there (`offers::tests::each_delete_row_needs_the_side_it_names`).
+    readonly property var here: ["branch-here", "integrate", "delete", "push-tag"]
+    readonly property var overThere: ["branch-here", "integrate", "delete-remote-tag"]
+    readonly property var both: ["branch-here", "integrate", "delete", "push-tag", "delete-remote-tag",
+                                 "delete-tag-everywhere"]
     /// The same name with the remote's copy on another commit: core keeps the local delete and the push and takes
     /// both rows that reach the remote away.
-    readonly property string drifted: "branch-here integrate delete push-tag"
+    readonly property var drifted: ["branch-here", "integrate", "delete", "push-tag"]
 
     RefTagMenu {
         id: card
@@ -113,7 +114,7 @@ Item {
         function test_a_row_that_names_no_tag_holds_the_one_row_about_the_commit() {
             root.asked = ""
             card.standOn("branch", "feature/topic-a", "abc123",
-                         { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": "" })
+                         { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] })
             verify(card.applies, "a branch row still offers the mark")
             verify(card.tagHereItem.offered)
             for (const row of [card.pushTagItem, card.deleteTagItem, card.deleteRemoteTagItem,
@@ -121,7 +122,7 @@ Item {
                 verify(!row.offered, "nothing a name answers for")
             }
             card.standOn("stash", "stash@{0}", "abc123",
-                         { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": "" })
+                         { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] })
             verify(!card.applies, "and a stash has no card at all")
         }
 

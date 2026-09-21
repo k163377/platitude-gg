@@ -158,7 +158,7 @@ impl DiffModel {
             self.embedded = false;
             self.embedded_sha8 = String::new();
             self.widest_no = 0;
-            self.widest_lines = String::new();
+            self.widest_lines = Candidates::default();
             self.forget_selection();
             self.shown_marks = Default::default();
             self.apply_preview(None);
@@ -258,52 +258,37 @@ fn line_item(r: DiffRow) -> DiffLineItem {
         kind: r.kind.to_string(),
         old_no: r.old_no,
         new_no: r.new_no,
-        marks: marks_of(&r),
+        marks: One::new(Marks {
+            own: LineMarks::of(&r),
+            pair: None,
+        }),
         text: r.text,
         emph: r.emph,
         hunk: r.hunk,
         line: r.line,
         patch: r.patch,
-        sel: String::new(),
+        sel: Optional::none(),
         pair_line: -1,
         ..DiffLineItem::default()
     }
 }
 
 /// A split row: the old side in the plain roles, the new side in the
-/// `pair_*` ones, and both sides' letters in `marks`.
+/// `pair_*` ones, and both sides' marks in `marks`.
 fn split_item(r: SplitRow) -> DiffLineItem {
     let mut item = line_item(r.left);
-    item.marks.push('|');
     if let Some(right) = r.right {
         item.new_no = right.new_no;
         item.pair_kind = right.kind.to_string();
-        item.marks.push_str(&marks_of(&right));
+        item.marks = One::new(Marks {
+            own: item.marks.own.clone(),
+            pair: Some(LineMarks::of(&right)),
+        });
         item.pair_text = right.text;
         item.pair_emph = right.emph;
         item.pair_line = right.line;
     }
     item
-}
-
-/// The small facts about one line as letters (`DiffLineItem::marks`):
-/// `f` fence, `n` no newline at the end, `o` / `t` the conflict side, by
-/// the parser's own rule (`side_of_markers`), so the rows and the tally
-/// cannot come to read the marker columns two ways.
-fn marks_of(r: &DiffRow) -> String {
-    let mut marks = String::new();
-    if r.fence {
-        marks.push('f');
-    }
-    if r.no_newline {
-        marks.push('n');
-    }
-    match platitude_core::parse::diff::side_of_markers(&r.markers) {
-        "ours" => marks.push('o'),
-        "theirs" => marks.push('t'),
-        _ => {}
-    }
-    marks
 }
 
 /// Which diff one of the working tree's four buckets asks for. Read by

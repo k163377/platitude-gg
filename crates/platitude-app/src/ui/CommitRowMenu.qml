@@ -85,7 +85,7 @@ Item {
 
     /// Where the working tree goes, when the name this row draws is somewhere to go. The page owns the road, which is
     /// the one a double-click on the row already takes (`RepoPage.switchToRef`).
-    signal switchRequested(string kindLetter, string name)
+    signal switchRequested(string kind, string name)
     /// The rows the page owns the answer to: they rewrite history or move the selection, which is the page's to do
     /// (`RepoPage`).
     signal branchHereRequested(string oidHex)
@@ -234,7 +234,7 @@ Item {
             // is made — the same rule the sidebar's row follows (`RefRowMenu`).
             blockedReason: ""
             asks: rowMenu.switchAsks
-            onTriggered: rowMenu.switchRequested(rowMenu.targetKind === "remote" ? "R" : "L", rowMenu.targetName)
+            onTriggered: rowMenu.switchRequested(rowMenu.targetKind, rowMenu.targetName)
         }
         AppMenuSeparator {}
         AppMenuItem {

@@ -19,7 +19,7 @@ mod start;
 
 pub use build_id::build_tree;
 
-use start::{packed_avatars, section_open, with_flag, with_layout, with_window};
+use start::{Assignments, assignments, section_open, with_flag, with_layout, with_window};
 // The directory the application's own configuration reads are made in.
 // Shared with the settings screen's `GLOBAL` identity chapter, which reads
 // and writes the same file (`identity` in core).
@@ -184,16 +184,17 @@ pub struct AppBackend {
     /// look at. Read once — the binary is settled for the length of the
     /// run (`Hub::git_program`).
     git_path_in_use: String,
-    /// Assigned pictures, packed one per record: address, name, URL.
-    /// The settings list is the only reader, and it is a handful of rows.
-    avatars: String,
+    /// Assigned pictures, one record each: address, name, URL
+    /// (`Assignment`). The settings list is the only reader, and it is a
+    /// handful of rows.
+    avatars: Assignments,
     /// How the last assignment was refused, as the card writes its line
-    /// from it: which refusal it was, the numbers that sentence takes
-    /// (U+001F-joined), and the operating system's own words where the
-    /// failure is one it made. All three empty means it worked
+    /// from it: which refusal it was, the numbers that sentence takes,
+    /// and the operating system's own words where the failure is one it
+    /// made. All three empty means it worked
     /// (`avatar::AvatarRefusal`, `Words.avatarFailure`).
     avatar_error_kind: String,
-    avatar_error_facts: String,
+    avatar_error_facts: Vec<String>,
     avatar_error_said: String,
     /// The patterns the picker offers, built from the kinds the store
     /// accepts so the dialog and the store cannot drift apart. Patterns

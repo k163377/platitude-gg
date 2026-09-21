@@ -23,12 +23,8 @@ impl AppBackend {
         // themselves are the screen's (`Words.avatarFailure`) —
         // app-ui.md「Rust に文言を置かない」.
         let (kind, facts, said) = match refused {
-            Some(refusal) => (
-                refusal.kind.to_string(),
-                refusal.facts.join("\u{1f}"),
-                refusal.said,
-            ),
-            None => (String::new(), String::new(), String::new()),
+            Some(refusal) => (refusal.kind.to_string(), refusal.facts, refusal.said),
+            None => (String::new(), Vec::new(), String::new()),
         };
         self.avatar_error_kind = kind;
         self.avatar_error_facts = facts;
@@ -52,7 +48,7 @@ impl AppBackend {
     }
 
     fn reload_avatars(&mut self) {
-        self.avatars = packed_avatars();
+        self.avatars = assignments();
         self.avatars_changed();
     }
 }

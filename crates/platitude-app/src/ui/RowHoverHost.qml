@@ -90,9 +90,9 @@ Item {
     /// spaced, has no signal here**: the wait it opens is the graph's own
     /// (`GraphPane.noteRowClick`), because the card and the row it stands
     /// on are one target.
-    signal recordActivated(string record)
+    signal recordActivated(var chip)
     signal recordChosen(string oidHex, int atRow)
-    signal recordMenuAsked(string oidHex, string record)
+    signal recordMenuAsked(string oidHex, var chip)
 
     /// The note under a cut message was pressed in the row's card: the
     /// reader is asking for the whole of it, and the whole of it is in
@@ -233,7 +233,7 @@ Item {
     function matesFor(records) {
         const here = ({})
         for (let i = 0; i < records.length; ++i)
-            here[GitFacts.recordName(records[i])] = 1
+            here[records[i].name] = 1
         const out = []
         for (let j = 0; j < records.length; ++j)
             out.push(host.mateOf(records[j], here))
@@ -251,10 +251,9 @@ Item {
     /// **The working copy holding the branch has no line here**: the
     /// chip's own frame is already green for it (デザイン規約 §ref の種別),
     /// where a panel row has no colour of its own to say it with.
-    function mateOf(record, here) {
-        const kind = record[0]
-        const name = GitFacts.recordName(record)
-        if (kind === "L") {
+    function mateOf(chip, here) {
+        const name = chip.name
+        if (chip.kind === "branch") {
             const gone = host.branchesModel.upstreamGoneOf(name)
             const reads = gone !== ""
                         ? gone : host.branchesModel.upstreamOf(name)
@@ -269,7 +268,7 @@ Item {
             line.behind = host.branchesModel.behindOf(name)
             return line
         }
-        if (kind === "R") {
+        if (chip.kind === "remote") {
             const local = host.remotesModel.trackedBy(name)
             if (local === "" || here[local] === 1)
                 return null
@@ -307,11 +306,11 @@ Item {
         // it is standing on (see the card's `rowClicks`).
         rowClicks: host.graphPane
         rowOid: host.refListOid
-        onPicked: record => host.recordActivated(record)
+        onPicked: chip => host.recordActivated(chip)
         onChose: host.recordChosen(host.refListOid, host.refListRow)
         // The row this card stands on travels with the name: the menu it raises is that row's, aimed at the name that
         // was pressed (デザイン規約 §グラフ行の右クリック).
-        onMenuAsked: record => host.recordMenuAsked(host.refListOid, record)
+        onMenuAsked: chip => host.recordMenuAsked(host.refListOid, chip)
         // The card is drawn over the chip that raised it, so the chip
         // stops being able to say the hand is still on it — the row
         // under a popup sees no hover at all. Until the card itself has

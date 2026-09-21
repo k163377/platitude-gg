@@ -35,30 +35,29 @@ Rectangle {
     /// say its width again: the pane files widths per reading, and a row whose text came out the same width would
     /// otherwise never speak for the new one.
     required property int rowsGen
-    /// Where what changed inside this row falls in the line as this row spells it — `"from:len,…"` in the places a
-    /// layout counts, empty for nothing (`encode::DiffRow.emph`).
-    required property string emph
-    /// The small facts about the line as letters — `f` fence, `n` no newline at the end, `o` / `t` the side of a
-    /// conflict — and after a `|` the same for the right side of a split row (`DiffLineItem::marks`). Decoded once
-    /// below.
-    required property string marks
-    /// Where the reader's own selection falls on this row (`DiffModel.sel`): `"*"` for a line taken end to end —
-    /// which is what almost every selected row is — and otherwise the same `from:len` runs `emph` carries, for the
-    /// one or two rows a drag cuts through.
+    /// Where what changed inside this row falls in the line as this row spells it — runs of places a layout counts
+    /// (`[{ from, len }, …]`), empty for nothing (`encode::DiffRow.emph`).
+    required property var emph
+    /// The small facts about the line — `{fence, noNewline, side}` — and, on a split row with a line on the right,
+    /// the same for that line under `pair` (`encode::Marks`). Read once below.
+    required property var marks
+    /// Where the reader's own selection falls on this row (`DiffModel.sel` — `{whole, runs}`): the line taken end
+    /// to end — which is what almost every selected row is — or the same runs `emph` carries, for the one or two
+    /// rows a drag cuts through.
     ///
-    /// Empty on every row the plain `Copy` does not take: outside the selection, and on the lines of the other
+    /// Nothing on every row the plain `Copy` does not take: outside the selection, and on the lines of the other
     /// side and hunk headings inside it. **The wash is the answer** — what is not washed is not copied
     /// (デザイン規約 §diff の中身をコピーする).
-    required property string sel
+    required property var sel
     required property int hunk
     required property int line
     /// The right side of a split row: the same again for the line across from this one, `pair_kind` empty where
     /// there is none (`DiffLineItem`). Empty throughout as one column.
     required property string pair_kind
     required property string pair_text
-    required property string pair_emph
+    required property var pair_emph
     required property int pair_line
-    required property string pair_sel
+    required property var pair_sel
 
     required property real rowWidth
     /// How far the file's own text has been sent sideways (`DiffCodeScroll.offset`). The gutter and the hunk headings
@@ -114,22 +113,19 @@ Rectangle {
     // does. `null` on every row that is not a heading with tools on it — the tools are built only there (`hunkTools`).
     readonly property var discardButton: hunkTools.item ? hunkTools.item.discardButton : null
 
-    // ---- the letters, read once ---------------------------------------------------------------------------------
-    readonly property var marksOf: diffRow.marks.split("|")
-    readonly property string ownMarks: diffRow.marksOf[0]
-    readonly property string pairMarks: diffRow.marksOf.length > 1 ? diffRow.marksOf[1] : ""
+    // ---- the marks, read once -----------------------------------------------------------------------------------
+    readonly property var ownMarks: diffRow.marks.own
+    /// The right side's, or nothing where the row has no line on the right.
+    readonly property var pairMarks: diffRow.marks.pair
     /// One of git's conflict fences (`encode::DiffRow`).
-    readonly property bool fence: diffRow.ownMarks.indexOf("f") >= 0
+    readonly property bool fence: diffRow.ownMarks.fence
     /// This line ends the file without a newline (デザイン規約 §行末の改行が無いこと).
-    readonly property bool noNewline: diffRow.ownMarks.indexOf("n") >= 0
+    readonly property bool noNewline: diffRow.ownMarks.noNewline
     /// "ours" / "theirs" / "" — which side of a conflict the line came from (`side_of_markers`).
-    readonly property string side: diffRow.sideOf(diffRow.ownMarks)
-    readonly property bool pairFence: diffRow.pairMarks.indexOf("f") >= 0
-    readonly property bool pairNoNewline: diffRow.pairMarks.indexOf("n") >= 0
-    readonly property string pairSide: diffRow.sideOf(diffRow.pairMarks)
-    function sideOf(letters) {
-        return letters.indexOf("o") >= 0 ? "ours" : letters.indexOf("t") >= 0 ? "theirs" : ""
-    }
+    readonly property string side: diffRow.ownMarks.side
+    readonly property bool pairFence: diffRow.pairMarks ? diffRow.pairMarks.fence : false
+    readonly property bool pairNoNewline: diffRow.pairMarks ? diffRow.pairMarks.noNewline : false
+    readonly property string pairSide: diffRow.pairMarks ? diffRow.pairMarks.side : ""
 
     width: diffRow.rowWidth
     height: Theme.rowHeight
@@ -397,8 +393,8 @@ Rectangle {
                 required property string kindHere
                 required property int number
                 required property string textHere
-                required property string emphHere
-                required property string selHere
+                required property var emphHere
+                required property var selHere
                 required property bool fenceHere
                 required property bool noNewlineHere
                 required property bool boldHere

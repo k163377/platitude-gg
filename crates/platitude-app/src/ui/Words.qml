@@ -117,8 +117,8 @@ QtObject {
     }
 
     /// Why a picture was not filed against an address, from the kind core answered with
-    /// (`avatar::AvatarRefusal`). `facts` carries the numbers the sentence takes, U+001F-joined in the order it
-    /// takes them; `said` is the operating system's own line, for the two failures it made and empty for the rest.
+    /// (`avatar::AvatarRefusal`). `facts` carries the numbers the sentence takes, in the order it takes them;
+    /// `said` is the operating system's own line, for the two failures it made and empty for the rest.
     ///
     /// **Five of the seven are this application's own refusals**, and their words belong here, like every other
     /// word on screen (app-ui.md「Rust に文言を置かない」). The other two are the reverse
@@ -128,15 +128,14 @@ QtObject {
     /// The size is named on the one about pixels because the ceiling a reader was told about is the *file* size:
     /// without the dimensions, a two-megabyte file being refused has no explanation at all.
     function avatarFailure(kind, facts, said) {
-        const numbers = facts === "" ? [] : facts.split(String.fromCharCode(31))
         switch (kind) {
         case "too-large":
-            return qsTr("This file is larger than %1 MB.").arg(numbers[0])
+            return qsTr("This file is larger than %1 MB.").arg(facts[0])
         case "unreadable":
             return qsTr("This file is not a PNG or a JPEG that can be read.")
         case "too-many-pixels":
             return qsTr("This file is %1, past the %2 megapixels this can take.")
-                     .arg(numbers[0]).arg(numbers[1])
+                     .arg(facts[0]).arg(facts[1])
         case "unstorable":
             return qsTr("The picture could not be stored.")
         case "no-store":

@@ -110,7 +110,7 @@ Item {
 
     /// What the page answers for: moving the working tree, the delete git may still refuse, and the stash drop that two
     /// menus share.
-    signal switchRequested(string kindLetter, string name)
+    signal switchRequested(string kind, string name)
     /// A new branch on whatever commit this row stands on — the page owns where the box for its name opens, which is
     /// wherever the menu was opened from.
     signal branchHereRequested(string oidHex)
@@ -234,7 +234,7 @@ Item {
             // (`RefBranchMenu`). The last one is the working tree's own upstream, which is what the `pull` row reads
             // — the row it stands on is one of that comparison's two ends (offers::ref_menu).
             held, "", false, refRowMenu.repoTab.defaultRemote, "",
-            refRowMenu.workTree.upstream).split(" ")
+            refRowMenu.workTree.upstream)
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
         refRowMenu.canBranchHere = offers.includes("branch-here")
@@ -288,7 +288,7 @@ Item {
             blockedReason: ""
             asks: refRowMenu.switchAsks
             // Through the chips' dispatcher: a remote branch whose local one already exists cannot simply be created.
-            onTriggered: refRowMenu.switchRequested(refRowMenu.kind === "remote" ? "R" : "L", refRowMenu.refId)
+            onTriggered: refRowMenu.switchRequested(refRowMenu.kind, refRowMenu.refId)
         }
         AppMenuSeparator {}
         AppMenuItem {

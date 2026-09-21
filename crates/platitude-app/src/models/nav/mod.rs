@@ -8,10 +8,39 @@ use std::sync::Arc;
 use qtbridge::qtbridge_type_lib::{QByteArray, QHash, QModelIndex, QVariant};
 use qtbridge::{QAbstractItemModel, QAbstractItemModelBase, QModelItem, QObjectHolder, qobject};
 
+use crate::encode::{Fields, Landed, Landing, Listed, Record, field};
 use crate::hub::{CarriedStatusMsg, Feed, Hub, RefsMsg, StatusMsg, attached};
 
 use super::pathtree::DirNode;
 use super::qml_register;
+
+/// One remote carrying a tag's name, and whether it stands somewhere
+/// other than where the remote this window acts on has it
+/// (`NavSectionModel::tag_remotes`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TagCarrier {
+    pub remote: String,
+    pub apart: bool,
+}
+
+/// Every remote carrying the name, in name order.
+pub type TagCarriers = Listed<TagCarrier>;
+
+impl Record for TagCarrier {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        Fields::new()
+            .put("remote", &self.remote)
+            .put("apart", &self.apart)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            remote: field(map, "remote")?,
+            apart: field(map, "apart")?,
+        })
+    }
+}
 
 mod attach;
 mod drain;

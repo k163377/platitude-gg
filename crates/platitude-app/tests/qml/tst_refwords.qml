@@ -82,24 +82,23 @@ Item {
         /// (app-ui.md「Rust に文言を置かない」). The numbers come with the kind and have to land in the right seats —
         /// a wrong index reads as `undefined` in the card, which nothing else would catch.
         function test_an_avatar_refusal_takes_its_numbers_in_the_order_it_was_given_them() {
-            const sep = String.fromCharCode(31)
-            compare(Words.avatarFailure("too-large", "10", ""), "This file is larger than 10 MB.")
-            compare(Words.avatarFailure("too-many-pixels", "8000x6000" + sep + "32", ""),
+            compare(Words.avatarFailure("too-large", ["10"], ""), "This file is larger than 10 MB.")
+            compare(Words.avatarFailure("too-many-pixels", ["8000x6000", "32"], ""),
                     "This file is 8000x6000, past the 32 megapixels this can take.")
-            verify(Words.avatarFailure("unreadable", "", "").indexOf("undefined") < 0)
-            compare(Words.avatarFailure("", "", ""), "")
+            verify(Words.avatarFailure("unreadable", [], "").indexOf("undefined") < 0)
+            compare(Words.avatarFailure("", [], ""), "")
         }
 
         /// **The two the operating system made carry its own line, under ours.** The rest quote nobody, which is how
         /// the card tells the two apart — the same division a report makes (デザイン規約 §長さ).
         function test_the_failures_the_system_made_quote_it_and_the_rest_do_not() {
-            const said = Words.avatarFailure("read", "", "The system cannot find the file specified. (os error 2)")
+            const said = Words.avatarFailure("read", [], "The system cannot find the file specified. (os error 2)")
             verify(said.indexOf("could not be read") >= 0, said)
             verify(said.indexOf("os error 2") >= 0, said)
             compare(said.split("\n").length, 2, said)
             // The same kind with nothing said leaves no empty second line behind.
-            compare(Words.avatarFailure("read", "", "").split("\n").length, 1)
-            compare(Words.avatarFailure("no-store", "", "").split("\n").length, 1)
+            compare(Words.avatarFailure("read", [], "").split("\n").length, 1)
+            compare(Words.avatarFailure("no-store", [], "").split("\n").length, 1)
         }
     }
 }

@@ -273,10 +273,8 @@ QtObject {
         if (gestures.held && kind !== "worktree")
             return
         const id = full !== "" ? full : name
-        if (kind === "branch")
-            gestures.host.refSwitchRequested("L", id)
-        else if (kind === "remote")
-            gestures.host.refSwitchRequested("R", id)
+        if (kind === "branch" || kind === "remote")
+            gestures.host.refSwitchRequested(kind, id)
         else if (kind === "worktree")
             gestures.host.worktreeActivated(full)
         else if (kind === "tag")

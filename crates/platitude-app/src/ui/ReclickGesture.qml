@@ -21,7 +21,7 @@ QtObject {
     /// it before the next click could read what it was.
     property string activeKey: ""
     /// The target of the wait now running, and what that click was aimed at — the caller's own value, handed back
-    /// untouched when the wait runs out (a chip record for the graph, the row's own fields for the sidebar).
+    /// untouched when the wait runs out (a chip for the graph, the row's own fields for the sidebar).
     /// **Read at the click**: by the time the wait ends the row may be showing something else.
     property string armedKey: ""
     property var armedNames: null

@@ -89,7 +89,7 @@ QtObject {
             // remote are the card's (`RefBranchMenu`). The last one is the working tree's own upstream, the same
             // value the sidebar's entrance hands in — what the `pull` row reads (`RefRowMenu.offerOn`).
             held, "", false, menuState.repoTab.defaultRemote, "",
-            menuState.workTree.upstream).split(" ")
+            menuState.workTree.upstream)
         menuState.menuCanSwitch = offers.includes("switch")
         menuState.menuSwitchAsks = offers.includes("asks")
         menuState.menuCanPull = offers.includes("pull")
@@ -115,7 +115,7 @@ QtObject {
     function branchFacts(kind, full, oidHex) {
         if (kind !== "branch" && kind !== "remote")
             return { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteDrifted": false,
-                     "offers": "", "open": false, "merged": "" }
+                     "offers": [], "open": false, "merged": "" }
         const held = kind === "branch"
             ? menuState.worktreesModel.worktreeHolding(full)
             : menuState.worktreesModel.worktreeHolding(menuState.repoTab.localNameFor(full))
@@ -149,7 +149,7 @@ QtObject {
             "pushRemote": remote,
             "tagDriftOid": drift,
             "tagOnlyThere": sides === "remote",
-            "offers": kind !== "tag" ? "" : GitFacts.refMenuOffers(
+            "offers": kind !== "tag" ? [] : GitFacts.refMenuOffers(
                 kind, full, oidHex,
                 menuState.repoTab.state === "open",
                 menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
@@ -187,7 +187,7 @@ QtObject {
             menuState.repoTab.state === "open",
             menuState.menu.heldReason !== "" ? 0 : menuState.repoTab.busyCount,
             menuState.workTree.branch, menuState.workTree.detached, menuState.workTree.opText,
-            oidHex, menuState.workTree.headOid, menuState.menuStashRef).split(" ")
+            oidHex, menuState.workTree.headOid, menuState.menuStashRef)
         if (menuState.menuStashRef !== "") {
             menuState.menuStashCanWrite = offers.includes("stash-write")
             menuState.menu.offerStash()

@@ -26,7 +26,7 @@ import platitude.ui
 AppCard {
     id: refList
 
-    /// Chip records (kind + flags + name, see encode.rs), as shown.
+    /// The chips (`encode::Chip` — `kind`, `name`, `isHead`, `held`, … — see `RefChip`), as shown.
     property var records: []
     /// One entry per record: the ref this one reads, or the one that reads it, where that counterpart is not a row of
     /// this card — `{mark, markTint, text, tone, ahead, behind}`, or null where the record has no counterpart to
@@ -35,20 +35,20 @@ AppCard {
     property var mates: []
     /// The branch the working tree is on; that one leads nowhere.
     property string currentBranch: ""
-    /// One was double-clicked: that is where the reader is going. The whole record, so its kind travels with it.
+    /// One was double-clicked: that is where the reader is going. The whole chip, so its kind travels with it.
     ///
     /// **A single click stays put.** The card lands on the chip's own seat and opens on a rest, so a hand that
     /// stopped over a branch has one under it a beat later — with a click to go, the click a reader aims at the chip
     /// switches the working tree instead. These rows answer a click the
     /// way every other ref row in the app does (デザイン規約 §左メニューの所作: 行き先はダブルクリック、名前は間を空けた 2 回目).
-    signal picked(string record)
+    signal picked(var chip)
     /// One was clicked once, plainly: the row it is on becomes the one being read. **The second click has no signal
     /// of its own** — the wait it opens belongs to the graph, and so does the box it turns into (`rowClicks`) — and
     /// neither has a held click: that one goes in at the graph's own row (`rowClicks.heldRowClick`).
-    signal chose(string record)
+    signal chose(var chip)
     /// One was right-clicked: its menu is asked for, the same one the chip itself answers with. The rows that lead
     /// nowhere still have one — a tag goes nowhere but deletes fine — except the marker, which names no ref at all.
-    signal menuAsked(string record)
+    signal menuAsked(var chip)
 
     /// What a row has to divide between the chip and the reading's remote. **Handed over by the owner, measured from
     /// where this opens** (規約 §hover のツールチップ「hover で開いたものの幅は、開く位置から測る」) — a card that starts partway
@@ -279,7 +279,7 @@ AppCard {
             }
             delegate: Rectangle {
                 id: refRow
-                required property string modelData
+                required property var modelData
                 /// Which record this row draws — what its counterpart is looked up by (`refList.mates`).
                 required property int index
                 // The row now holds a different ref: whatever was resting on the one before it is not resting on
@@ -300,8 +300,7 @@ AppCard {
                 // the sidebar says it in (§ref の種別). Only the move comes off. A tag leads nowhere for its own
                 // reason (§タグのダブルクリックは入力欄へ) and keeps its colour too.
                 readonly property bool current:
-                    refRow.modelData[0] === "L"
-                    && GitFacts.recordName(refRow.modelData) === refList.currentBranch
+                    refRow.modelData.kind === "branch" && refRow.modelData.name === refList.currentBranch
                 // The two markers are the rows that are only markers: nowhere to go and no ref to read — the detached
                 // HEAD, and a working copy standing on this commit with no branch of its own. A branch another
                 // working copy has out is unavailable for the other reason there is — git refuses the move outright
@@ -312,10 +311,9 @@ AppCard {
                 // colour is a state rather than a kind: muting that one here would make the same marker amber on the
                 // row and grey in the card it unfolds into. What this answers is the move and the menu, below.
                 readonly property bool unavailable:
-                    refRow.modelData[0] === "H" || refRow.modelData[0] === "W"
-                    || refRow.modelData[5] === "1"
+                    refRow.modelData.kind === "head" || refRow.modelData.kind === "worktree" || refRow.modelData.held
                 readonly property bool leadsNowhere:
-                    refRow.unavailable || refRow.current || refRow.modelData[0] === "T"
+                    refRow.unavailable || refRow.current || refRow.modelData.kind === "tag"
 
                 /// Lays this row's chip out now, so that the width the card's measuring pass reads off it is the one
                 /// the room it has just been given asks for (`layOutRows`; `RefChip.layOutNow` says why it is a pass
@@ -403,7 +401,7 @@ AppCard {
                 // A name that can be changed: every kind of ref has one, and only the detached-HEAD marker names no
                 // ref to change. **Its own question, apart from `leadsNowhere`** — the branch the reader is on
                 // and the tag that is a mark both keep their names (the same split the sidebar's rows make).
-                readonly property bool nameable: GitFacts.recordKind(refRow.modelData) !== ""
+                readonly property bool nameable: GitFacts.refKind(refRow.modelData.kind) !== ""
                 /// A left click and a double-click on this row, as the row answers them. Named so that a run with no
                 /// pointer to press with puts its clicks in at the row itself
                 /// (PGG_AUTO_ACT=graph-reclick-list / ref-list-pick).
@@ -424,7 +422,7 @@ AppCard {
                     // the marker names no ref, so it goes in as a row with nothing on it.
                     if (refList.rowClicks
                             && !refList.rowClicks.noteRowClick(
-                                refList.rowOid, refRow.nameable ? refRow.modelData : "", held))
+                                refList.rowOid, refRow.nameable ? refRow.modelData : null, held))
                         return
                     if (refRow.nameable)
                         refList.chose(refRow.modelData)

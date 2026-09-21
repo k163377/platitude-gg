@@ -91,7 +91,7 @@ AppMenu {
         state.tagOnlyThere = facts.tagOnlyThere
         // Which sides of the name exist is what tells the three delete rows apart, and core has already said it in
         // words (offers::ref_menu). What is read off them here is which row has a seat.
-        const offers = facts.offers.split(" ")
+        const offers = facts.offers
         state.canPushTag = offers.includes("push-tag")
         state.canDelete = offers.includes("delete")
         state.canDeleteRemoteTag = offers.includes("delete-remote-tag")

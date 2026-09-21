@@ -410,7 +410,7 @@ Item {
             // The road every switch on that side arrives by, asked for its own answer: a row's double-click, a chip's
             // and a row of the list a chip had to stack all end here, and `false` is a press this road turned away
             // (`RepoPage.switchToRef` — the same answer `switch-remote-twice` reads).
-            acts.heldSwitch = page.switchToRef("L", acts.heldBranch) === false
+            acts.heldSwitch = page.switchToRef("branch", acts.heldBranch) === false
             // And the menu that row raises. It comes up with its rows kept and greyed, the same as the ref menu's:
             // `drop` is read because it is the one row of this card that cannot be undone.
             page.openRowMenu(workTree.headOid)

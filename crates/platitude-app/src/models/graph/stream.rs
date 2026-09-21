@@ -170,7 +170,7 @@ impl GraphModel {
             let idx = row as usize;
             if let Some(existing) = self.rows.get(idx) {
                 let mut updated = existing.clone();
-                updated.labels = encode_labels(&labels, pr);
+                updated.labels = crate::encode::chips_of(&labels, pr);
                 // The names on the row are searched, so the second pass
                 // that puts the chips on can turn a row's light on or
                 // off.
@@ -385,7 +385,7 @@ impl GraphModel {
                 .map(|r| crate::encode::tail_lanes(&r.geometry))
                 .unwrap_or_default()
         } else {
-            String::new()
+            crate::encode::Lanes::default()
         };
     }
 }

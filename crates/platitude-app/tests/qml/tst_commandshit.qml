@@ -149,7 +149,7 @@ Item {
                 return
             const from = 1
             const len = data.text.length - 1
-            const rects = ruler.rectsOf(data.text, false, from + ":" + len)
+            const rects = ruler.rectsOf(data.text, false, [{ from: from, len: len }])
             compare(rects.length, 1)
             compare(rects[0].x, reference.positionToRectangle(from).x)
             compare(rects[0].w, reference.positionToRectangle(from + len).x
@@ -170,7 +170,7 @@ Item {
 
         /// Nothing to wash asks nothing of the ruler.
         function test_a_column_with_no_run_has_no_rectangle() {
-            compare(ruler.rectsOf("git add --all", false, "").length, 0)
+            compare(ruler.rectsOf("git add --all", false, []).length, 0)
         }
 
         /// **Why the pane names the format its ruler is set in.** A command line can carry anything a shell would

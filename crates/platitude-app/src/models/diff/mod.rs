@@ -7,11 +7,13 @@ use platitude_core::details::DiffTarget;
 use platitude_core::eol;
 use platitude_core::parse::diff::FilePatch;
 use platitude_core::preview::{FilePreview, PreviewSide};
+use qtbridge::qtbridge_type_lib::QVariantMap;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{
-    DiffRow, SplitRow, diff_key, flatten_patches, human_size, is_combined, is_new_file,
-    is_unmerged_only, pair_rows, source_byte, spelled_ranges, widest_lines,
+    Candidates, DiffRow, Fields, LineMarks, Marks, One, Optional, Record, Runs, SplitRow, diff_key,
+    field, flatten_patches, human_size, is_combined, is_new_file, is_unmerged_only, pair_rows,
+    source_byte, spelled_ranges, widest_lines,
 };
 use crate::hub::{DiffMsg, Feed};
 
@@ -55,18 +57,13 @@ pub struct DiffLineItem {
     /// so the pane never has to say which this one is — and so a row is
     /// never measured in a format it is not about to be drawn in.
     text: String,
-    /// Display columns of what changed inside this row —
-    /// `"col:width,col:width"`, empty where nothing is emphasised
-    /// (see `encode::DiffRow`).
-    emph: String,
-    /// The small facts about the line, as letters: `f` for one of git's
-    /// conflict fences, `n` for a line that ends the file without a
-    /// newline (デザイン規約 §行末の改行が無いこと), `o` / `t` for the
-    /// side of a conflict it came from (`side_of_markers`). On a split
-    /// row the right side's letters follow a `|` — `"n|"`, `"fo|ft"` —
-    /// and as one column there is no `|` at all (`rows::marks_of`). The
-    /// row decodes it once (`DiffRowDelegate`).
-    marks: String,
+    /// The runs of what changed inside this row, none where nothing is
+    /// emphasised (see `encode::DiffRow`).
+    emph: Runs,
+    /// The small facts about the line — a fence, a missing final newline,
+    /// the side of a conflict — and on a split row the right side's as
+    /// well (`encode::Marks`).
+    marks: One<Marks>,
     /// Where this row sits in the patch, so staging it needs no lookup.
     hunk: i32,
     line: i32,
@@ -76,17 +73,16 @@ pub struct DiffLineItem {
     /// reads a row's own source text back off, with the drawn line the
     /// only one kept (`selection`).
     patch: i32,
-    /// The columns the reader's own selection covers on this row, in the
-    /// same `"col:wides:width:wides"` spelling as `emph` — with `"*"` for
-    /// a row that is in the selection from end to end, which is the shape
-    /// almost every selected row has and the one the pane can draw
-    /// without being told any columns at all.
+    /// What the reader's own selection covers on this row ([`Washed`]):
+    /// the row from end to end, which is the shape almost every selected
+    /// row has and the one the pane can draw without being told any
+    /// places at all, or the runs of it a drag cut through.
     ///
-    /// Empty on every row the plain `Copy` does not take: outside the
+    /// Nothing on every row the plain `Copy` does not take: outside the
     /// selection, and on the removed lines and hunk headings inside it.
     /// **The wash is the answer** — what is washed is what is copied
     /// (デザイン規約 §diff の中身をコピーする).
-    sel: String,
+    sel: Optional<Washed>,
     /// The new side of a split row — the same roles again, for the line
     /// on the right (デザイン規約 §diff を 2 列で読む). `pair_kind` is
     /// `ctx` / `add`, or `""` where the right has nothing: a removed line
@@ -94,15 +90,15 @@ pub struct DiffLineItem {
     /// throughout while the diff is read as one column.
     pair_kind: String,
     pair_text: String,
-    pair_emph: String,
+    pair_emph: Runs,
     /// The right side's line of the hunk, -1 for none. Its own: the
     /// two sides of a paired row are two lines of the hunk, and a press
     /// on the right's mark stages this one.
     pair_line: i32,
-    /// The wash on the right side, spelled the way `sel` is. A selection
-    /// is of one column (`selection`), so at most one of the two is ever
+    /// The wash on the right side, the shape `sel` is. A selection is of
+    /// one column (`selection`), so at most one of the two is ever
     /// written.
-    pair_sel: String,
+    pair_sel: Optional<Washed>,
 }
 
 impl platitude_core::mem::Footprint for DiffLineItem {
@@ -119,6 +115,50 @@ impl platitude_core::mem::Footprint for DiffLineItem {
     }
 }
 
+/// What the reader's selection covers on one side of a row: the line
+/// end to end (`whole`, and `runs` says nothing), or the runs of places
+/// a drag cut through (the shape `emph` has, laid by the same ruler).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Washed {
+    pub whole: bool,
+    pub runs: Runs,
+}
+
+impl Washed {
+    pub fn whole() -> Self {
+        Self {
+            whole: true,
+            runs: Runs::default(),
+        }
+    }
+
+    pub fn runs(runs: Runs) -> Self {
+        Self { whole: false, runs }
+    }
+}
+
+impl Record for Washed {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("whole", &self.whole)
+            .put("runs", &self.runs)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            whole: field(map, "whole")?,
+            runs: field(map, "runs")?,
+        })
+    }
+}
+
+impl platitude_core::mem::Footprint for Washed {
+    fn heap_bytes(&self) -> usize {
+        self.runs.heap_bytes()
+    }
+}
+
 #[derive(Default)]
 pub struct DiffModel {
     lines: Vec<DiffLineItem>,
@@ -127,12 +167,11 @@ pub struct DiffModel {
     /// fact about the rows.
     widest_no: i32,
     /// The lines the pane measures for a first answer to how far sideways
-    /// the code may be sent, packed (`encode::widest_lines`). Lines:
-    /// the pane owns the font, and on the fallback a Latin-only mono
-    /// family hands a wide glyph to there is no arithmetic over
-    /// columns that arrives at what is drawn. Empty is a diff with
-    /// nowhere to go.
-    widest_lines: String,
+    /// the code may be sent (`encode::widest_lines`). Lines: the pane
+    /// owns the font, and on the fallback a Latin-only mono family hands
+    /// a wide glyph to there is no arithmetic over columns that arrives
+    /// at what is drawn. Empty is a diff with nowhere to go.
+    widest_lines: Candidates,
     /// Which reading of the rows the ones on screen are from — one up
     /// every time they are laid out again. The pane files a width per row
     /// as the rows are drawn (`DiffReach`), and a width measured on a

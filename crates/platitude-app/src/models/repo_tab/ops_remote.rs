@@ -49,7 +49,8 @@ impl RepoTab {
     }
 
     pub(super) fn look_up_remote_branch(&mut self, remote: String, branch: String) {
-        self.remote_branch_asked = String::new();
+        self.remote_branch_asked = Optional::none();
+        self.remote_branch_revision = self.remote_branch_revision.wrapping_add(1);
         self.remote_branch_state = String::new();
         self.remote_branch_tip = String::new();
         self.remote_branch_theirs = 0;

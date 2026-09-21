@@ -164,13 +164,13 @@ pub struct RefMenuOffers {
 }
 
 impl RefMenuOffers {
-    /// The offers as packed words (`switch asks branch-here integrate
-    /// pull delete delete-remote push-tag delete-remote-tag
+    /// The offers as words (`switch asks branch-here integrate pull
+    /// delete delete-remote push-tag delete-remote-tag
     /// delete-tag-everywhere set-upstream current`), the shape
     /// `GitFacts.refMenuOffers` answers with and the opening function
-    /// decodes mechanically.
-    pub fn words(&self) -> String {
-        let mut words: Vec<&str> = Vec::new();
+    /// reads by name.
+    pub fn words(&self) -> Vec<&'static str> {
+        let mut words: Vec<&'static str> = Vec::new();
         if self.switch_to {
             words.push("switch");
         }
@@ -207,7 +207,7 @@ impl RefMenuOffers {
         if self.on_current_branch {
             words.push("current");
         }
-        words.join(" ")
+        words
     }
 }
 
@@ -351,11 +351,11 @@ pub struct CommitMenuOffers {
 }
 
 impl CommitMenuOffers {
-    /// The offers as packed words (`sequence integrate edit-history
-    /// move-branch branch-here stash-write`), the shape
+    /// The offers as words (`sequence`, `integrate`, `edit-history`,
+    /// `move-branch`, `branch-here`, `stash-write`), the list
     /// `GitFacts.commitMenuOffers` answers with.
-    pub fn words(&self) -> String {
-        let mut words: Vec<&str> = Vec::new();
+    pub fn words(&self) -> Vec<&'static str> {
+        let mut words: Vec<&'static str> = Vec::new();
         if self.sequence {
             words.push("sequence");
         }
@@ -374,7 +374,7 @@ impl CommitMenuOffers {
         if self.stash_write {
             words.push("stash-write");
         }
-        words.join(" ")
+        words
     }
 }
 

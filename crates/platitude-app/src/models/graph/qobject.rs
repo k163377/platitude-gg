@@ -10,8 +10,8 @@ use super::*;
 impl GraphModel {
     qproperty!("loading", Member = loading, Notify = stats_changed);
     // Chips the window is already showing as gone while git is still
-    // being asked to delete the refs they name — kind letter + name,
-    // separated by U+001F (デザイン規約 §消す操作は先に画面から消す). Held
+    // being asked to delete the refs they name — their keys
+    // (`encode::Chip::key`; デザイン規約 §消す操作は先に画面から消す). Held
     // here, beside the rows that carry those names, for the same reason
     // the sidebar's sections hold theirs (`NavSectionModel::set_hidden`):
     // the page tells every list what the window is standing in for, and
@@ -98,9 +98,8 @@ impl GraphModel {
     /// Names the refs whose chips are to be left undrawn — at most one
     /// per kind, since a delete touches at most one of each; empty
     /// halves put theirs back, which is what a refused delete does. The
-    /// packed set the delegates filter with (`goneChips`,
-    /// `encode::gone_keys`) is built here: which side of the bridge
-    /// spells a wire format is not the page's business.
+    /// set the delegates filter with (`goneChips`, `encode::gone_keys`)
+    /// is built here: what a chip answers to is not the page's business.
     #[qslot]
     fn set_gone(&mut self, branch: String, remote: String, tag: String) {
         let keys = crate::encode::gone_keys(&branch, &remote, &tag);
@@ -197,30 +196,28 @@ impl GraphModel {
     }
 
     /// The ids of the rows between two places, ends included, in walk
-    /// order and joined by `\u{1f}` — the commits a Shift click over the
-    /// graph reaches.
+    /// order — the commits a Shift click over the graph reaches.
     ///
     /// **One crossing.** A range is as long as the hand dragged it and
     /// can be the whole loaded window; asking the bridge for each row's
     /// id in turn would put a walk of the history on a click
     /// (CLAUDE.md §性能予算).
     #[qslot]
-    fn oids_between(&self, from: i32, to: i32) -> String {
+    fn oids_between(&self, from: i32, to: i32) -> Vec<String> {
         let (lo, hi) = if from <= to { (from, to) } else { (to, from) };
         let lo = usize::try_from(lo).unwrap_or(0);
         let Ok(hi) = usize::try_from(hi) else {
-            return String::new();
+            return Vec::new();
         };
         self.rows
             .get(lo..=hi.min(self.rows.len().saturating_sub(1)))
             .unwrap_or_default()
             .iter()
-            .map(|r| r.oid_hex.as_str())
-            .collect::<Vec<_>>()
-            .join("\u{1f}")
+            .map(|r| r.oid_hex.clone())
+            .collect()
     }
 
-    /// The ones of `packed` this graph still stands on, **in walk
+    /// The ones of `ids` this graph still stands on, **in walk
     /// order** — what a choice comes back as after a background pass
     /// rewrote the rows.
     ///
@@ -235,16 +232,13 @@ impl GraphModel {
     /// commit to have touched it
     /// (`details::union_files`).
     #[qslot]
-    fn present_oids(&self, packed: String) -> String {
-        let mut held: Vec<(usize, &str)> = packed
-            .split(crate::encode::RECORD_SEP)
-            .filter_map(|hex| Some((self.row_of_hex(hex)?, hex)))
+    fn present_oids(&self, ids: Vec<String>) -> Vec<String> {
+        let mut held: Vec<(usize, String)> = ids
+            .into_iter()
+            .filter_map(|hex| Some((self.row_of_hex(&hex)?, hex)))
             .collect();
         held.sort_unstable();
-        held.into_iter()
-            .map(|(_, hex)| hex)
-            .collect::<Vec<_>>()
-            .join(&crate::encode::RECORD_SEP.to_string())
+        held.into_iter().map(|(_, hex)| hex).collect()
     }
 
     /// The rows a choice of commits names, in walk order — what the pane
@@ -254,12 +248,8 @@ impl GraphModel {
     /// **No git runs for this**: every commit in a choice was picked off
     /// a row, and the row already carries what naming it takes — down to
     /// the message body and the credits, which is what lets the card
-    /// these rows put out be the graph's own (`CommitHoverCard`).
-    ///
-    /// Rows are `\u{1d}`-separated and their cells `\u{1c}` — the outer
-    /// pair, because one of the cells is a packed list itself
-    /// (`encode::ROW_SEP`). Cells: id, short id, subject, body, author,
-    /// time, identicon, picture, credits.
+    /// these rows put out be the graph's own (`CommitHoverCard`). One
+    /// record per row (`item::ChosenRow`), the credits nested in it.
     ///
     /// **The order handed in is the order handed back**, and what hands it
     /// in is [`Self::present_oids`] — so the reader sees the commits
@@ -270,28 +260,13 @@ impl GraphModel {
     /// loaded rows for the handful named here would put a walk of the
     /// history on a click (CLAUDE.md §性能予算).
     #[qslot]
-    fn chosen_rows(&self, packed: String) -> String {
-        packed
-            .split(crate::encode::RECORD_SEP)
-            .filter_map(|hex| self.rows.get(self.row_of_hex(hex)?))
-            .map(|row| {
-                let sep = crate::encode::CELL_SEP;
-                let short = row.oid_hex.get(..8).unwrap_or(row.oid_hex.as_str());
-                format!(
-                    "{}{sep}{}{sep}{}{sep}{}{sep}{}{sep}{}{sep}{}{sep}{}{sep}{}",
-                    row.oid_hex,
-                    short,
-                    row.subject,
-                    row.body,
-                    row.author,
-                    row.atime,
-                    row.avatar,
-                    row.avatar_url,
-                    row.co_authors
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(&crate::encode::ROW_SEP.to_string())
+    fn chosen_rows(&self, ids: Vec<String>) -> ChosenRows {
+        ChosenRows::new(
+            ids.iter()
+                .filter_map(|hex| self.rows.get(self.row_of_hex(hex)?))
+                .map(ChosenRow::of)
+                .collect(),
+        )
     }
 
     /// The row "the newest commit" names, or -1 where the window holds
@@ -315,11 +290,11 @@ impl GraphModel {
     /// tree's numbers on somebody else's row (observed, three rows saying
     /// one set). They live in a map beside the items — fifteen is the
     /// ceiling the model macro allows, and every one of them is spent
-    /// (`GraphRowItem`). **Empty is the answer that says "not one of
-    /// those rows"**, so a carried row always writes all six even when a
+    /// (`GraphRowItem`). **Nothing is the answer that says "not one of
+    /// those rows"**, so a carried row always carries all six even when a
     /// number is zero.
     #[qslot]
-    fn carried_tally(&self, row: i32) -> String {
+    fn carried_tally(&self, row: i32) -> Optional<Tally> {
         usize::try_from(row)
             .ok()
             .and_then(|row| self.carried.get(&row))
@@ -478,7 +453,7 @@ impl GraphModel {
         }
         self.rows
             .iter()
-            .find(|r| crate::encode::label_names(&r.labels).any(|n| n == name))
+            .find(|r| r.labels.iter().any(|chip| chip.name == name))
             .map_or(-1, |r| r.node_color)
     }
 
@@ -531,16 +506,16 @@ impl GraphModel {
     }
 
     /// The authors of the loaded rows as the settings card's entry shows
-    /// them — `Name <address>`, one per address, sorted, joined by
-    /// `\u{1f}`. A prefill (the badge's own author) goes first and its
-    /// address is not repeated below.
+    /// them — `Name <address>`, one per address, sorted. A prefill (the
+    /// badge's own author) goes first and its address is not repeated
+    /// below.
     ///
     /// What the card offers: the people whose commits are on screen
     /// are the people whose faces are worth setting. Read when the
     /// card opens, off rows already in memory — no git runs for
     /// it.
     #[qslot]
-    fn author_choices(&self, prefill_name: String, prefill_email: String) -> String {
+    fn author_choices(&self, prefill_name: String, prefill_email: String) -> Vec<String> {
         let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
         let mut listed: Vec<String> = Vec::new();
         for row in &self.rows {
@@ -558,7 +533,7 @@ impl GraphModel {
             out.push(format!("{prefill_name} <{prefill_email}>"));
         }
         out.extend(listed);
-        out.join("\u{1f}")
+        out
     }
 
     /// Puts the find bar's line to the rows, lighting the ones it is in.
@@ -628,12 +603,12 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
-    /// The chip records of a row (`encode::encode_labels`) — the same
-    /// string its delegate hands the chip column. Read when a menu opens
-    /// on the row, so the branch that row carries can be offered what
-    /// its own chip offers (`CommitRowMenu`).
+    /// The chips of a row (`encode::chips_of`) — the same list its
+    /// delegate hands the chip column. Read when a menu opens on the
+    /// row, so the branch that row carries can be offered what its own
+    /// chip offers (`CommitRowMenu`).
     #[qslot]
-    fn labels_at(&self, row: i32) -> String {
+    fn labels_at(&self, row: i32) -> Chips {
         usize::try_from(row)
             .ok()
             .and_then(|i| self.rows.get(i))
@@ -641,16 +616,16 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
-    /// The draw tokens of a row (`encode::encode_geometry`) — the same
-    /// string its delegate paints from. For the smoke hooks: a lane is a
-    /// stroke a couple of pixels wide, and whether one of them is dotted
-    /// is not a question a screenshot answers.
+    /// The lanes of a row, spelled (`encode::spell_lanes`). For the
+    /// smoke hooks: a lane is a stroke a couple of pixels wide, and
+    /// whether one of them is dotted is not a question a screenshot
+    /// answers.
     #[qslot]
     fn geometry_at(&self, row: i32) -> String {
         usize::try_from(row)
             .ok()
             .and_then(|i| self.rows.get(i))
-            .map(|r| r.geometry.clone())
+            .map(|r| crate::encode::spell_lanes(&r.geometry))
             .unwrap_or_default()
     }
 }

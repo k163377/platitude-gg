@@ -502,3 +502,32 @@ fn the_pairing_reads_runs_the_way_the_emphasis_does() {
         ]
     );
 }
+
+/// The marks round-trip with and without a right side, and a right side
+/// that is there but does not read is a refusal, not a row with one line.
+#[test]
+fn the_marks_round_trip_with_and_without_a_right_side() {
+    use qtbridge::qtbridge_type_lib::{QString, QVariant};
+
+    let own = LineMarks {
+        fence: true,
+        no_newline: false,
+        side: "ours".into(),
+    };
+    let pair = LineMarks {
+        fence: false,
+        no_newline: true,
+        side: String::new(),
+    };
+    let both = Marks {
+        own: own.clone(),
+        pair: Some(pair),
+    };
+    assert_eq!(Marks::from_map(&both.to_map()), Ok(both.clone()));
+    let alone = Marks { own, pair: None };
+    assert_eq!(Marks::from_map(&alone.to_map()), Ok(alone.clone()));
+
+    let mut broken = alone.to_map();
+    broken.insert(&QString::from("pair"), &QVariant::from(&7i32));
+    assert_eq!(Marks::from_map(&broken), Err(()));
+}

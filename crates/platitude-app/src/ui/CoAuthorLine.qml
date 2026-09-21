@@ -19,8 +19,8 @@ import platitude.ui
 Item {
     id: line
 
-    /// Packed co-author records (see `encode::encode_co_authors`).
-    property string packed: ""
+    /// The co-author records (`{name, email, face}` — `encode::Mates`).
+    property var records: []
     /// Full weight on the rule — the owner sets this while its card is up.
     property bool lit: false
     /// How wide the first name may run before it elides; 0 leaves it its own width. A trailer's name is whatever the
@@ -47,14 +47,13 @@ Item {
     /// a line with nothing in it is not a place to land (`SweepRoom`).
     readonly property var valueFields: line.records.length > 0 ? [names] : []
 
-    readonly property var records: line.packed === "" ? [] : line.packed.split(String.fromCharCode(31))
     function nameAt(i) {
         const record = line.records[i]
-        return record === undefined ? "" : record.split(String.fromCharCode(30))[0]
+        return record === undefined ? "" : record.name
     }
     function faceAt(i) {
         const record = line.records[i]
-        return record === undefined ? 0 : parseInt(record.split(String.fromCharCode(30))[2])
+        return record === undefined ? 0 : record.face
     }
     function allNames() {
         let out = ""

@@ -50,7 +50,14 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
     );
     assert_eq!(
         offers.words(),
-        "switch branch-here integrate delete delete-remote set-upstream"
+        [
+            "switch",
+            "branch-here",
+            "integrate",
+            "delete",
+            "delete-remote",
+            "set-upstream"
+        ]
     );
 }
 
@@ -158,7 +165,7 @@ fn a_pull_is_offered_on_the_two_ends_of_the_trees_own_comparison() {
     }
     assert_eq!(
         offers_tracked(RefKind::Remote, "origin/main", "origin/main").words(),
-        "switch branch-here integrate pull delete"
+        ["switch", "branch-here", "integrate", "pull", "delete"]
     );
 }
 
@@ -487,7 +494,14 @@ fn each_delete_row_needs_the_side_it_names() {
     assert!(both.delete && both.delete_remote_tag && both.delete_tag_everywhere);
     assert_eq!(
         both.words(),
-        "branch-here integrate delete push-tag delete-remote-tag delete-tag-everywhere"
+        [
+            "branch-here",
+            "integrate",
+            "delete",
+            "push-tag",
+            "delete-remote-tag",
+            "delete-tag-everywhere"
+        ]
     );
 }
 

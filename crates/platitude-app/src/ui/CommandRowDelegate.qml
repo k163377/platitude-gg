@@ -22,10 +22,10 @@ Rectangle {
     required property string result
     required property string duration
     required property string output
-    /// Where the reader's own selection falls on this row (`CommandsModel.sel`): a run for each of the three columns
-    /// and a last field saying whether the line was taken end to end, which is what brings git's words with it.
-    /// Empty on a row the selection does not reach.
-    required property string sel
+    /// Where the reader's own selection falls on this row (`CommandsModel.sel` — `{clock, command, outcome, whole}`):
+    /// the runs of each of the three columns, and whether the line was taken end to end, which is what brings git's
+    /// words with it. Nothing on a row the selection does not reach.
+    required property var sel
 
     /// One measured column of the mono font (`CommandsPane.charW`). **Two spacings only**: the space
     /// between `git` and what follows it, and the one between the two words about how the command went. Where the
@@ -82,9 +82,8 @@ Rectangle {
     }
 
     // ---- the reader's own selection -----------------------------------------------------------------------------
-    /// The three runs and the flag, taken apart once: `<clock>|<command>|<outcome>|<whole>`.
-    readonly property var picked: row.sel === "" ? [] : row.sel.split("|")
-    readonly property bool tookLine: row.picked.length === 4 && row.picked[3] === "1"
+    /// Whether the line was taken end to end.
+    readonly property bool tookLine: row.sel ? row.sel.whole : false
     /// The three columns as `CommandsModel` numbers them, in the order the runs above come in — `AT_CLOCK`,
     /// `AT_CMD`, `AT_OUT` of `models/commands/selection.rs`, whose odd numbers are the two gaps no run is drawn in.
     /// Written out: `CommandsTextSelect` names the same five for the hand, and a renumbering has
@@ -103,13 +102,14 @@ Rectangle {
     property var washSpans: [null, null, null]
     function settleWash() {
         // **`sel` is read again here.** A change handler runs *before* the bindings
-        // that derive from the property it is about, so `picked` inside `onSelChanged` is still the row's previous
-        // selection — measured on a throwaway `qmltestrunner` scene, and seen as a log that held a selection and
-        // wore no wash at all.
-        const runs = row.sel === "" ? [] : row.sel.split("|")
+        // that derive from the property it is about, so a property derived from `sel` inside `onSelChanged` is
+        // still the row's previous selection — measured on a throwaway `qmltestrunner` scene, and seen as a log
+        // that held a selection and wore no wash at all.
+        const wash = row.sel
+        const runs = wash ? [wash.clock, wash.command, wash.outcome] : []
         const out = [null, null, null]
         for (let at = 0; at < 3; at++) {
-            if (runs[at] === undefined || runs[at] === "")
+            if (!runs[at] || runs[at].length === 0)
                 continue
             const text = row.commandsModel.columnText(row.index, row.washCols[at])
             out[at] = row.bounds(row.ruler.rectsOf(text, false, runs[at]))

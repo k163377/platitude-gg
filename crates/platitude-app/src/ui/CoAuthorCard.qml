@@ -13,8 +13,7 @@ import platitude.ui
 AppCard {
     id: mateCard
 
-    /// Packed co-author records (name, address, identicon — see `encode::encode_co_authors`), in the order the message
-    /// lists them.
+    /// The co-author records (`{name, email, face}` — `encode::Mates`), in the order the message lists them.
     property var records: []
     /// How wide this card may stand — the same ceiling the author's card carries, and set the same way
     /// (`AuthorCard.maxWidth`, `DetailsAuthorCards.takeRoom`).
@@ -44,11 +43,8 @@ AppCard {
             model: mateCard.records
             delegate: Item {
                 id: mateRow
-                required property string modelData
-                // Name, address, identicon code — three fields always, so an address-less trailer is indexed by
-                // position.
-                readonly property var parts: mateRow.modelData.split(String.fromCharCode(30))
-                readonly property bool hasAddress: mateRow.parts[1] !== ""
+                required property var modelData
+                readonly property bool hasAddress: mateRow.modelData.email !== ""
 
                 // Laid out from the start: showing the address only under the pointer changed the row's
                 // own size, so the row moved out from under the hand that asked for it and the card shut
@@ -75,13 +71,13 @@ AppCard {
                     y: (mateRow.headHeight - height) / 2
                     spacing: Theme.spaceXs
                     IdentIcon {
-                        code: parseInt(mateRow.parts[2])
+                        code: mateRow.modelData.face
                         width: Theme.iconMd
                         height: Theme.iconMd
                         Layout.alignment: Qt.AlignVCenter
                     }
                     CardText {
-                        text: mateRow.parts[0]
+                        text: mateRow.modelData.name
                         color: Theme.textPrimary
                         pixelSize: Theme.fontMd
                         Layout.maximumWidth: mateCard.rowCap - Theme.iconMd - Theme.spaceXs
@@ -95,7 +91,7 @@ AppCard {
                     // Under the name, indented past the face so the two read as one person.
                     x: Theme.spaceSm + Theme.iconMd + Theme.spaceXs
                     y: mateRow.headHeight - Theme.spaceXs
-                    text: mateRow.parts[1]
+                    text: mateRow.modelData.email
                     color: Theme.textSecondary
                     pixelSize: Theme.fontSm
                 }

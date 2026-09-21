@@ -264,7 +264,7 @@ AppCard {
             worktreesModel: peek.rail !== null ? peek.rail.modelOf("worktree") : null
             pushRemote: peek.repoTab.defaultRemote
             stretch: true
-            remotesPacked: peek.repoTab.remoteNames
+            remoteNames: peek.repoTab.remoteNames
             markedRemote: peek.repoTab.pushDefault
             onRefActivated: oidHex => peek.refActivated(oidHex)
             onRefMenuRequested: (kind, name, full, oidHex) => peek.refMenuRequested(kind, name, full, oidHex)

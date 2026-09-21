@@ -144,8 +144,7 @@ Item {
                 + " walked=" + graphModel.walkedTotal
                 + " rows=" + graphPane.view.count
                 + " height=" + Math.round(tail.height)
-                + " lanes=" + (graphModel.tailGeometry === ""
-                               ? 0 : graphModel.tailGeometry.split(";").length))
+                + " lanes=" + graphModel.tailGeometry.length)
             driver.complete()
         }
     }
@@ -270,7 +269,7 @@ Item {
         }
         onTriggered: {
             if (graphModel.loading || graphModel.rowTotal === 0
-                    || graphModel.headRow < 0 || graphModel.headLabels === "")
+                    || graphModel.headRow < 0 || graphModel.headLabels.length === 0)
                 return
             const act = Harness.autoAct
             if (!graphHeadTimer.stoodAside) {

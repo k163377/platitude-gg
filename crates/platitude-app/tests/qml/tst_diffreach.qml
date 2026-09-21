@@ -60,19 +60,16 @@ Item {
         return out
     }
 
-    function packed(lines) {
-        let out = ""
-        for (const line of lines) {
-            const markup = root.escaped(line)
-            out += markup.length + ":1" + markup
-        }
-        return out
+    /// The candidates as the model hands them over (`DiffModel.widestLines` — `{bold, line}`, the line in the
+    /// markup the row draws).
+    function candidates(lines) {
+        return lines.map(line => ({ bold: true, line: root.escaped(line) }))
     }
 
     QtObject {
         id: diffModel
         property int widestNo: 1234
-        property string widestLines: ""
+        property var widestLines: []
     }
 
     DiffTextMetrics {
@@ -147,23 +144,14 @@ Item {
 
         function test_a_picked_line_measures_at_what_the_row_draws(data) {
             root.shown = [data.line]
-            diffModel.widestLines = root.packed([data.line])
+            diffModel.widestLines = root.candidates([data.line])
             tryVerify(agreed)
         }
 
         function test_the_picked_answer_is_the_furthest_of_them() {
             const lines = [root.wideLine, root.narrowLine, root.mixedLine]
             root.shown = lines
-            diffModel.widestLines = root.packed(lines)
-            tryVerify(agreed)
-        }
-
-        /// The packing carries a length, because the text is somebody's file and can hold anything — including
-        /// the digits and colons the length itself is spelled with.
-        function test_a_line_holding_the_packings_own_marks_is_cut_out_whole() {
-            const awkward = ["12:34:56 and a tab's worth of spaces    done"]
-            root.shown = awkward
-            diffModel.widestLines = root.packed(awkward)
+            diffModel.widestLines = root.candidates(lines)
             tryVerify(agreed)
         }
 
@@ -171,7 +159,7 @@ Item {
         /// the cases below are where it is held against.
         function test_nothing_picked_measures_at_nothing() {
             root.shown = []
-            diffModel.widestLines = ""
+            diffModel.widestLines = []
             tryCompare(metrics, "codeW", 0)
         }
 

@@ -1,10 +1,11 @@
-//! The packed record strings QML unpacks itself: the ref chips on a
-//! row, and the people a commit credits.
+//! The ref chips on a graph row, as QML draws them: one record per name
+//! the commit carries, and the words the rest of the app tells a chip's
+//! kind by.
 
 use platitude_core::session::{LabelKind, RefLabel};
+use qtbridge::qtbridge_type_lib::QVariantMap;
 
-use super::graph::avatar_code;
-use super::{FIELD_SEP, RECORD_SEP};
+use super::wire::{Fields, Listed, Record, field};
 
 /// Branch names wearing the PR badge. Real PR data joins in Phase 4; until
 /// then the only thing that ever fills this is the harness, so the design
@@ -14,310 +15,189 @@ pub(crate) fn pr_set() -> &'static std::collections::HashSet<String> {
     &crate::harness::knobs().fake_pr
 }
 
-/// How many flag digits stand between the kind letter and the name. The
-/// QML side counts the same seat by hand (`RefChip`), so a change here is
-/// a change there.
-const FLAGS: usize = 6;
-
-/// Labels → `\u{1f}`-joined chip records: a kind letter, the flag digits,
-/// the name, and — only when the ref was read off a remote — the field
-/// separator and the remotes it came from.
-///
-/// The letter is `H`ead / `L`ocal / `R`emote / `W`orktree / `T`ag; the
-/// flags, in order, are is-head, has-remote, has-PR (`pr` names the
-/// branches wearing it — the callers pass [`pr_set`], the preview until
-/// Phase 4), is-it-here, is-it-out-in-another-working-copy and
-/// is-that-copy-locked. The fourth is what the chip writes in the name's
-/// colour: a remote branch and a tag only a remote has are both somewhere
-/// else, and read the same way for it. The fifth is what puts the green
-/// frame on the chip (`RefChip.recHeld`) — a working copy is standing
-/// here, which is also why git refuses a `switch` onto it (measured); the
-/// `W` record says the same thing about a copy that has no branch to
-/// carry the flag, and is drawn the same way for it. The sixth is the
-/// padlock beside the name, and is only ever read where one of those two
-/// stands (デザイン規約 §ref の種別).
-///
-/// **The flags are fixed-width and the name starts after them**
-/// ([`FLAGS`]), so adding one moves every reader; the test at the foot of
-/// this file spells a whole record out for that reason.
-///
-/// Records arrive sorted HEAD → local → remote → tag, and stay that way:
-/// the row's one chip shows the first of them, so a branch is what a
-/// commit that is also tagged reads as.
-pub fn encode_labels(labels: &[RefLabel], pr: &std::collections::HashSet<String>) -> String {
-    let mut out = String::new();
-    for (i, l) in labels.iter().enumerate() {
-        if i > 0 {
-            out.push(RECORD_SEP);
-        }
-        out.push(match l.kind {
-            LabelKind::Head => 'H',
-            LabelKind::LocalBranch => 'L',
-            LabelKind::RemoteBranch => 'R',
-            LabelKind::Worktree => 'W',
-            LabelKind::Tag => 'T',
-        });
-        out.push(if l.is_head { '1' } else { '0' });
-        out.push(if l.has_remote { '1' } else { '0' });
-        let has_pr = matches!(l.kind, LabelKind::LocalBranch) && pr.contains(l.text.as_str());
-        out.push(if has_pr { '1' } else { '0' });
-        out.push(if l.here { '1' } else { '0' });
-        out.push(if l.held_elsewhere { '1' } else { '0' });
-        out.push(if l.locked { '1' } else { '0' });
-        out.push_str(&l.text);
-        if !l.remote.is_empty() {
-            out.push(FIELD_SEP);
-            out.push_str(&l.remote);
-        }
-    }
-    out
+/// One chip: what the frame says (the kind), what the name says (where
+/// the ref is), and the marks around it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Chip {
+    pub kind: LabelKind,
+    pub name: String,
+    /// HEAD is on this branch (bold name, and the colour "here").
+    pub is_head: bool,
+    /// On a remote as well — the cloud badge.
+    pub has_remote: bool,
+    /// A PR is open for it — the badge's other face; the two never stack.
+    pub has_pr: bool,
+    /// This repository holds the ref: the whereabouts the chip writes in
+    /// the name's colour (デザイン規約 §ref の種別). False for a remote
+    /// branch, and for a tag only a remote has.
+    pub here: bool,
+    /// Another working copy has this branch checked out — the green
+    /// frame, and why git refuses a `switch` onto it (measured).
+    pub held: bool,
+    /// `git worktree lock` is on that copy — the padlock beside the name.
+    pub locked: bool,
+    /// Whose reading this is, when it is not this repository's: the
+    /// remotes carrying a tag, comma-separated. Empty for everything else.
+    pub remote: String,
 }
 
-/// The refnames in a chip record string, in order — the inverse of the
-/// name half of [`encode_labels`].
-pub fn label_names(encoded: &str) -> impl Iterator<Item = &str> {
-    encoded.split(RECORD_SEP).filter_map(|record| {
-        // Kind letter plus the flag digits, then the name, then — only
-        // when the ref was read off a remote — the remotes it came from.
-        let rest = record.get(FLAGS + 1..)?;
-        Some(rest.split(FIELD_SEP).next().unwrap_or(rest))
-    })
-}
+/// The chips of one row, in the order core sorted them: HEAD's marker
+/// or branch first, then locals, remotes, the working-copy markers and
+/// tags. The row's one card shows the first of them.
+pub type Chips = Listed<Chip>;
 
-/// The name on one chip record — [`label_names`] for the single record a
-/// press or a right-click hands back.
-pub fn label_name_of(record: &str) -> &str {
-    label_names(record).next().unwrap_or("")
-}
-
-/// The ref kind a chip record's letter names, in the word the menus
-/// branch on. The HEAD marker, the worktree marker (and anything
-/// unrecognised) answer `""`: they name no ref, so there is nothing to
-/// act on — a working copy is opened from its own row.
-pub fn label_kind_word(record: &str) -> &'static str {
-    match record.as_bytes().first() {
-        Some(b'L') => "branch",
-        Some(b'R') => "remote",
-        Some(b'T') => "tag",
-        _ => "",
+/// The word a chip's kind goes out under, and the word every rule on the
+/// other side of the bridge branches on. **The list itself** — a kind
+/// added here is a word added to `RefChip.kindKeyOf` and the menus.
+pub fn kind_word(kind: LabelKind) -> &'static str {
+    match kind {
+        LabelKind::Head => "head",
+        LabelKind::LocalBranch => "branch",
+        LabelKind::RemoteBranch => "remote",
+        LabelKind::Worktree => "worktree",
+        LabelKind::Tag => "tag",
     }
 }
 
-/// A chip's identity inside a gone set: its kind letter and the name on
-/// it. The flag digits between the two say how the chip is drawn, and a
-/// tag may share a name with a branch, so the letter stays part of the
-/// key.
-pub fn label_key(record: &str) -> String {
-    let mut key = String::with_capacity(1 + record.len().saturating_sub(FLAGS + 1));
-    key.push_str(record.get(..1).unwrap_or(""));
-    key.push_str(label_name_of(record));
-    key
-}
-
-/// The gone set itself: one key per kind, empty halves left out — a
-/// delete touches at most one of each ([`label_key`] is the shape).
-pub fn gone_keys(branch: &str, remote: &str, tag: &str) -> String {
-    let mut out = String::new();
-    for (letter, name) in [('L', branch), ('R', remote), ('T', tag)] {
-        if name.is_empty() {
-            continue;
-        }
-        if !out.is_empty() {
-            out.push(RECORD_SEP);
-        }
-        out.push(letter);
-        out.push_str(name);
+pub fn kind_from_word(word: &str) -> Option<LabelKind> {
+    match word {
+        "head" => Some(LabelKind::Head),
+        "branch" => Some(LabelKind::LocalBranch),
+        "remote" => Some(LabelKind::RemoteBranch),
+        "worktree" => Some(LabelKind::Worktree),
+        "tag" => Some(LabelKind::Tag),
+        _ => None,
     }
-    out
 }
 
-/// The records still standing once the gone set has spoken: `packed` as
-/// [`encode_labels`] wrote it, less the chips `gone` names. The window
+/// The kind a chip's word names *as a ref the menus can act on*: the
+/// same word for a branch, a remote branch and a tag, and `""` for the
+/// two markers — the detached HEAD and a working copy standing on the
+/// commit with no branch out — which name no ref, so there is nothing
+/// to switch to, rename or delete (a copy is opened from its own row).
+pub fn ref_kind_word(word: &str) -> &'static str {
+    match kind_from_word(word) {
+        Some(LabelKind::LocalBranch) => "branch",
+        Some(LabelKind::RemoteBranch) => "remote",
+        Some(LabelKind::Tag) => "tag",
+        Some(LabelKind::Head | LabelKind::Worktree) | None => "",
+    }
+}
+
+impl Chip {
+    /// What this chip answers to across the two places it is drawn: its
+    /// kind and its name, and nothing of how it is drawn. A background
+    /// pass that learns the branch now has a remote rewrites the chip
+    /// and would lose a gesture keyed on the whole of it, and the row
+    /// and the card its chip unfolds into have to agree on what "the
+    /// same target" means (デザイン規約 §グラフ行のダブルクリック). A tag may
+    /// share a name with a branch, so the kind stays part of it.
+    pub fn key(&self) -> String {
+        chip_key(kind_word(self.kind), &self.name)
+    }
+}
+
+/// The key a chip of that kind and name answers to ([`Chip::key`]), for
+/// the callers that hold the two halves and no chip — the gone set.
+pub fn chip_key(kind: &str, name: &str) -> String {
+    format!("{kind}:{name}")
+}
+
+/// Labels → chips. `pr` names the branches wearing the PR badge (the
+/// callers pass [`pr_set`], the preview until Phase 4); only a local
+/// branch wears it.
+pub fn chips_of(labels: &[RefLabel], pr: &std::collections::HashSet<String>) -> Chips {
+    Listed::new(
+        labels
+            .iter()
+            .map(|l| Chip {
+                kind: l.kind,
+                name: l.text.to_string(),
+                is_head: l.is_head,
+                has_remote: l.has_remote,
+                has_pr: matches!(l.kind, LabelKind::LocalBranch) && pr.contains(l.text.as_str()),
+                here: l.here,
+                held: l.held_elsewhere,
+                locked: l.locked,
+                remote: l.remote.clone(),
+            })
+            .collect(),
+    )
+}
+
+/// The gone set: the keys of the chips the window is already showing as
+/// gone while git is still being asked to delete the refs they name —
+/// at most one per kind, since a delete touches at most one of each,
+/// empty halves left out.
+pub fn gone_keys(branch: &str, remote: &str, tag: &str) -> Vec<String> {
+    [("branch", branch), ("remote", remote), ("tag", tag)]
+        .into_iter()
+        .filter(|(_, name)| !name.is_empty())
+        .map(|(kind, name)| chip_key(kind, name))
+        .collect()
+}
+
+/// The chips still standing once the gone set has spoken. The window
 /// says a deleted ref's chip is gone before the walk that follows the
 /// delete lands (デザイン規約 §消す操作は先に画面から消す), and this is
 /// where that word is applied.
-pub fn labels_shown(packed: &str, gone: &str) -> String {
-    if packed.is_empty() || gone.is_empty() {
-        return packed.to_string();
+pub fn chips_shown(chips: &Chips, gone: &[String]) -> Chips {
+    if gone.is_empty() {
+        return chips.clone();
     }
-    let dropped: Vec<&str> = gone.split(RECORD_SEP).collect();
-    packed
-        .split(RECORD_SEP)
-        .filter(|record| !dropped.contains(&label_key(record).as_str()))
-        .collect::<Vec<_>>()
-        .join(&RECORD_SEP.to_string())
+    Listed::new(
+        chips
+            .iter()
+            .filter(|chip| !gone.contains(&chip.key()))
+            .cloned()
+            .collect(),
+    )
 }
 
-/// Co-authors → `\u{1f}`-joined records of name, address and identicon
-/// code, in that order, separated by [`FIELD_SEP`].
-///
-/// A trailer with no address still gets its two separators, so the reader
-/// can index without counting.
-pub fn encode_co_authors(mates: &[platitude_core::details::CoAuthor]) -> String {
-    let mut out = String::new();
-    for (i, m) in mates.iter().enumerate() {
-        if i > 0 {
-            out.push(RECORD_SEP);
-        }
-        out.push_str(&m.name);
-        out.push(FIELD_SEP);
-        out.push_str(&m.email);
-        out.push(FIELD_SEP);
-        out.push_str(&avatar_code(&m.name).to_string());
+impl Record for Chip {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("kind", kind_word(self.kind))
+            .put("name", &self.name)
+            .put("isHead", &self.is_head)
+            .put("hasRemote", &self.has_remote)
+            .put("hasPr", &self.has_pr)
+            .put("here", &self.here)
+            .put("held", &self.held)
+            .put("locked", &self.locked)
+            .put("remote", &self.remote)
+            .put("key", &self.key())
+            .done()
     }
-    out
+
+    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            kind: kind_from_word(&field::<String>(map, "kind")?).ok_or(())?,
+            name: field(map, "name")?,
+            is_head: field(map, "isHead")?,
+            has_remote: field(map, "hasRemote")?,
+            has_pr: field(map, "hasPr")?,
+            here: field(map, "here")?,
+            held: field(map, "held")?,
+            locked: field(map, "locked")?,
+            remote: field(map, "remote")?,
+        })
+    }
 }
 
-/// The (name, address) of each credited person in a packed record
-/// string — the inverse of the first two fields of [`encode_co_authors`].
-///
-/// The third field is a number: a reader that searched the packed string
-/// whole would answer a typed `12345` with somebody's identicon code.
-pub fn co_author_pairs(encoded: &str) -> impl Iterator<Item = (&str, &str)> {
-    encoded.split(RECORD_SEP).filter_map(|record| {
-        let mut fields = record.split(FIELD_SEP);
-        let name = fields.next()?;
-        Some((name, fields.next().unwrap_or("")))
-    })
+impl platitude_core::mem::Footprint for Chip {
+    fn heap_bytes(&self) -> usize {
+        self.name.heap_bytes() + self.remote.heap_bytes()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use qtbridge::qtbridge_type_lib::QVariant;
 
-    /// [`encode_labels`] with no branch wearing the PR badge — what every
-    /// test here means when the set is not its subject.
-    fn encode_no_pr(labels: &[RefLabel]) -> String {
-        encode_labels(labels, &Default::default())
-    }
-
-    #[test]
-    fn label_records_have_fixed_prefix() {
-        let labels = [
-            RefLabel {
-                text: "main".into(),
-                kind: LabelKind::LocalBranch,
-                has_remote: true,
-                is_head: true,
-                here: true,
-                remote: String::new(),
-                held_elsewhere: false,
-                locked: false,
-            },
-            RefLabel {
-                text: "v1.0".into(),
-                kind: LabelKind::Tag,
-                has_remote: false,
-                is_head: false,
-                here: true,
-                remote: String::new(),
-                held_elsewhere: false,
-                locked: false,
-            },
-        ];
-        assert_eq!(encode_no_pr(&labels), "L110100main\u{1f}T000100v1.0");
-    }
-
-    /// The last two flags, spelled out: a working copy is standing here
-    /// (the green frame), and that copy is locked (the padlock). The chip
-    /// reads both by their seats (`RefChip`).
-    #[test]
-    fn a_branch_another_working_copy_holds_carries_the_last_two_flags() {
-        let held = |locked| {
-            [RefLabel {
-                text: "feature/topic-a".into(),
-                kind: LabelKind::LocalBranch,
-                has_remote: false,
-                is_head: false,
-                here: true,
-                remote: String::new(),
-                held_elsewhere: true,
-                locked,
-            }]
-        };
-        assert_eq!(encode_no_pr(&held(false)), "L000110feature/topic-a");
-        assert_eq!(encode_no_pr(&held(true)), "L000111feature/topic-a");
-        // And the name still starts where the readers look for it.
-        assert_eq!(
-            label_names("L000111feature/topic-a").collect::<Vec<_>>(),
-            vec!["feature/topic-a"]
-        );
-    }
-
-    /// The marker for a copy with no branch out carries the padlock on
-    /// its own: it names no branch, so the flag beside it stays down and
-    /// the chip's kind letter is what puts the frame on it.
-    #[test]
-    fn a_locked_copy_with_no_branch_carries_the_padlock_and_not_the_held_flag() {
-        let labels = [RefLabel {
-            text: "spike".into(),
-            kind: LabelKind::Worktree,
-            has_remote: false,
-            is_head: false,
-            here: true,
-            remote: String::new(),
-            held_elsewhere: false,
-            locked: true,
-        }];
-        assert_eq!(encode_no_pr(&labels), "W000101spike");
-    }
-
-    #[test]
-    fn co_authors_pack_name_address_and_face_into_one_record_each() {
-        use platitude_core::details::CoAuthor;
-        let packed = encode_co_authors(&[
-            CoAuthor {
-                name: "Claude Opus 5".into(),
-                email: "noreply@anthropic.com".into(),
-            },
-            CoAuthor {
-                name: "Nameless".into(),
-                email: String::new(),
-            },
-        ]);
-        let records: Vec<&str> = packed.split(RECORD_SEP).collect();
-        assert_eq!(records.len(), 2);
-
-        let first: Vec<&str> = records[0].split(FIELD_SEP).collect();
-        assert_eq!(first[0], "Claude Opus 5");
-        assert_eq!(first[1], "noreply@anthropic.com");
-        assert_eq!(
-            first[2],
-            avatar_code("Claude Opus 5").to_string(),
-            "the face comes off the name, the way the graph rows' do"
-        );
-
-        let second: Vec<&str> = records[1].split(FIELD_SEP).collect();
-        assert_eq!(second.len(), 3);
-        assert_eq!(second[1], "");
-    }
-
-    #[test]
-    fn no_co_authors_pack_into_nothing() {
-        assert_eq!(encode_co_authors(&[]), "");
-    }
-
-    #[test]
-    fn a_tag_carries_the_remote_bit_like_a_branch() {
-        let labels = [RefLabel {
-            text: "v1.0".into(),
-            kind: LabelKind::Tag,
-            has_remote: true,
-            is_head: false,
-            here: true,
-            remote: String::new(),
-            held_elsewhere: false,
-            locked: false,
-        }];
-        assert_eq!(encode_no_pr(&labels), "T010100v1.0");
-    }
-
-    /// The PR digit answers the set the caller passed — only a local
-    /// branch wears it, and only when named. The set is an argument, so
-    /// this test is a fact about its inputs alone.
-    #[test]
-    fn the_pr_digit_answers_the_named_branches() {
-        let branch = |text: &str, kind| RefLabel {
+    fn label(text: &str, kind: LabelKind) -> RefLabel {
+        RefLabel {
             text: text.into(),
             kind,
             has_remote: false,
@@ -326,115 +206,145 @@ mod tests {
             remote: String::new(),
             held_elsewhere: false,
             locked: false,
-        };
-        let labels = [
-            branch("topic", LabelKind::LocalBranch),
-            branch("topic", LabelKind::Tag),
-        ];
-        let pr = std::collections::HashSet::from(["topic".to_string()]);
-        assert_eq!(
-            encode_labels(&labels, &pr),
-            "L001100topic\u{1f}T000100topic",
-            "the branch wears the digit; the tag sharing its name does not"
-        );
+        }
+    }
+
+    /// [`chips_of`] with no branch wearing the PR badge — what every
+    /// test here means when the set is not its subject.
+    fn chips_no_pr(labels: &[RefLabel]) -> Chips {
+        chips_of(labels, &Default::default())
     }
 
     #[test]
-    fn a_tag_only_a_remote_has_says_it_is_not_here_and_whose_it_is() {
-        let labels = [RefLabel {
-            text: "v9.9".into(),
-            kind: LabelKind::Tag,
-            has_remote: true,
-            is_head: false,
-            here: false,
-            remote: "origin, fork".into(),
-            held_elsewhere: false,
-            locked: false,
-        }];
-        assert_eq!(encode_no_pr(&labels), "T010000v9.9\u{1e}origin, fork");
-    }
-
-    #[test]
-    fn names_come_back_out_of_the_records_they_went_into() {
-        let labels = [
+    fn a_chip_carries_every_mark_the_label_had_and_round_trips() {
+        let chips = chips_no_pr(&[
             RefLabel {
-                text: "main".into(),
-                kind: LabelKind::LocalBranch,
                 has_remote: true,
                 is_head: true,
-                here: true,
-                remote: String::new(),
-                held_elsewhere: false,
-                locked: false,
+                ..label("main", LabelKind::LocalBranch)
             },
             RefLabel {
-                text: "v9.9".into(),
-                kind: LabelKind::Tag,
+                held_elsewhere: true,
+                locked: true,
+                ..label("feature/topic-a", LabelKind::LocalBranch)
+            },
+            RefLabel {
                 has_remote: true,
-                is_head: false,
                 here: false,
                 remote: "origin, fork".into(),
-                held_elsewhere: false,
-                locked: false,
+                ..label("v9.9", LabelKind::Tag)
             },
+            RefLabel {
+                locked: true,
+                ..label("spike", LabelKind::Worktree)
+            },
+            label("HEAD", LabelKind::Head),
+        ]);
+        assert_eq!(
+            chips[0],
+            Chip {
+                kind: LabelKind::LocalBranch,
+                name: "main".into(),
+                is_head: true,
+                has_remote: true,
+                has_pr: false,
+                here: true,
+                held: false,
+                locked: false,
+                remote: String::new(),
+            }
+        );
+        assert!(chips[1].held && chips[1].locked);
+        assert!(!chips[2].here);
+        assert_eq!(chips[2].remote, "origin, fork");
+        // The marker for a copy with no branch out carries the padlock on
+        // its own: it names no branch, so `held` stays down and the kind
+        // is what puts the frame on it.
+        assert!(chips[3].locked && !chips[3].held);
+        assert_eq!(Chips::try_from(&QVariant::from(&chips)), Ok(chips));
+    }
+
+    /// The words the other side branches on, spelled out whole: a kind
+    /// that moves is a test that fails.
+    #[test]
+    fn a_chip_goes_out_under_the_words_the_other_side_reads() {
+        let chip = chips_no_pr(&[RefLabel {
+            is_head: true,
+            has_remote: true,
+            ..label("main", LabelKind::LocalBranch)
+        }]);
+        let map = chip[0].to_map();
+        assert_eq!(field::<String>(&map, "kind"), Ok("branch".into()));
+        assert_eq!(field::<String>(&map, "name"), Ok("main".into()));
+        assert_eq!(field::<bool>(&map, "isHead"), Ok(true));
+        assert_eq!(field::<bool>(&map, "hasRemote"), Ok(true));
+        assert_eq!(field::<bool>(&map, "hasPr"), Ok(false));
+        assert_eq!(field::<bool>(&map, "here"), Ok(true));
+        assert_eq!(field::<bool>(&map, "held"), Ok(false));
+        assert_eq!(field::<bool>(&map, "locked"), Ok(false));
+        assert_eq!(field::<String>(&map, "remote"), Ok(String::new()));
+        assert_eq!(field::<String>(&map, "key"), Ok("branch:main".into()));
+        for (kind, word) in [
+            (LabelKind::Head, "head"),
+            (LabelKind::LocalBranch, "branch"),
+            (LabelKind::RemoteBranch, "remote"),
+            (LabelKind::Worktree, "worktree"),
+            (LabelKind::Tag, "tag"),
+        ] {
+            assert_eq!(kind_word(kind), word);
+            assert_eq!(kind_from_word(word), Some(kind));
+        }
+        assert_eq!(kind_from_word(""), None);
+    }
+
+    /// The PR badge answers the set the caller passed — only a local
+    /// branch wears it, and only when named. The set is an argument, so
+    /// this test is a fact about its inputs alone.
+    #[test]
+    fn the_pr_badge_answers_the_named_branches() {
+        let labels = [
+            label("topic", LabelKind::LocalBranch),
+            label("topic", LabelKind::Tag),
         ];
-        let encoded = encode_no_pr(&labels);
-        assert_eq!(
-            label_names(&encoded).collect::<Vec<_>>(),
-            vec!["main", "v9.9"],
-            "the remotes a record was read from are not part of its name"
-        );
-        assert_eq!(label_names("").count(), 0);
-        assert_eq!(label_names("L11").count(), 0);
+        let pr = std::collections::HashSet::from(["topic".to_string()]);
+        let chips = chips_of(&labels, &pr);
+        assert!(chips[0].has_pr, "the branch wears the badge");
+        assert!(!chips[1].has_pr, "the tag sharing its name does not");
     }
 
     #[test]
-    fn a_record_with_no_remote_carries_no_field_separator() {
-        let labels = [RefLabel {
-            text: "v9.9".into(),
-            kind: LabelKind::Tag,
-            has_remote: false,
-            is_head: false,
-            here: true,
-            remote: String::new(),
-            held_elsewhere: false,
-            locked: false,
-        }];
-        assert!(!encode_no_pr(&labels).contains(FIELD_SEP));
-    }
-
-    #[test]
-    fn a_record_answers_its_kind_and_its_name() {
-        assert_eq!(label_kind_word("L110100main"), "branch");
-        assert_eq!(label_kind_word("R010000origin/main\u{1e}origin"), "remote");
-        assert_eq!(label_kind_word("T000100v1.0"), "tag");
-        assert_eq!(label_kind_word("H100100HEAD"), "", "nothing to act on");
-        assert_eq!(label_kind_word("W000100spike"), "", "nor is a working copy");
-        assert_eq!(label_kind_word(""), "");
-        assert_eq!(
-            label_name_of("R010000origin/main\u{1e}origin"),
-            "origin/main"
-        );
-        assert_eq!(label_name_of("L110100main"), "main");
-        assert_eq!(label_name_of("L11"), "", "flags cut short name nothing");
+    fn a_ref_kind_is_the_word_the_menus_branch_on_and_a_marker_is_none() {
+        assert_eq!(ref_kind_word("branch"), "branch");
+        assert_eq!(ref_kind_word("remote"), "remote");
+        assert_eq!(ref_kind_word("tag"), "tag");
+        assert_eq!(ref_kind_word("head"), "", "nothing to act on");
+        assert_eq!(ref_kind_word("worktree"), "", "nor is a working copy");
+        assert_eq!(ref_kind_word(""), "");
     }
 
     #[test]
     fn the_gone_set_takes_chips_out_by_kind_and_name() {
-        let packed = "L110100main\u{1f}T000100main\u{1f}R010000origin/main\u{1e}origin";
-        // A tag sharing the branch's name stays: the letter is part of
-        // the identity.
+        let chips = chips_no_pr(&[
+            label("main", LabelKind::LocalBranch),
+            label("main", LabelKind::Tag),
+            label("origin/main", LabelKind::RemoteBranch),
+        ]);
+        // A tag sharing the branch's name stays: the kind is part of the
+        // identity.
+        let shown = chips_shown(&chips, &gone_keys("main", "", ""));
+        assert_eq!(shown.len(), 2);
+        assert_eq!(shown[0].kind, LabelKind::Tag);
+        assert_eq!(shown[1].name, "origin/main");
         assert_eq!(
-            labels_shown(packed, &gone_keys("main", "", "")),
-            "T000100main\u{1f}R010000origin/main\u{1e}origin"
+            chips_shown(&chips, &gone_keys("main", "origin/main", "main")),
+            Chips::default()
         );
+        assert_eq!(chips_shown(&chips, &[]), chips);
         assert_eq!(
-            labels_shown(packed, &gone_keys("main", "origin/main", "main")),
-            ""
+            chips_shown(&Chips::default(), &gone_keys("main", "", "")),
+            Chips::default()
         );
-        assert_eq!(labels_shown(packed, ""), packed);
-        assert_eq!(labels_shown("", "Lmain"), "");
-        assert_eq!(gone_keys("", "", ""), "");
-        assert_eq!(gone_keys("main", "", "v1"), "Lmain\u{1f}Tv1");
+        assert!(gone_keys("", "", "").is_empty());
+        assert_eq!(gone_keys("main", "", "v1"), ["branch:main", "tag:v1"]);
     }
 }

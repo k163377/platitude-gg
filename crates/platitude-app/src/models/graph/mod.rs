@@ -8,7 +8,7 @@ use platitude_core::find::{Query, Row};
 use platitude_core::session::LogRow;
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::encode::{co_author_pairs, encode_geometry, encode_labels, label_names};
+use crate::encode::{Chips, Lanes, Optional};
 use crate::hub::{Feed, GraphMsg};
 
 use super::{impl_extend_notified, impl_notify_runs, push_run, qml_register};
@@ -20,7 +20,7 @@ mod marks;
 mod qobject;
 mod stream;
 
-use item::{GraphRowItem, to_row_item};
+use item::{ChosenRow, ChosenRows, GraphRowItem, Tally, to_row_item};
 use marks::RowMark;
 
 /// What a row of another working copy's uncommitted work answers when the
@@ -37,8 +37,8 @@ struct CarriedRow {
     /// Where the copy is — what the row opens in a tab of its own, which
     /// is where its changes can be read and staged.
     path: String,
-    /// The six, comma-separated in the order the row draws them.
-    tally: String,
+    /// The six the row draws, ready to hand over.
+    tally: Optional<Tally>,
 }
 
 #[derive(Default)]
@@ -50,11 +50,10 @@ pub struct GraphModel {
     /// The parent ids the spans in `marks` point into, flattened.
     parent_oids: Vec<Oid>,
     /// The rows another working copy's uncommitted work draws, by row
-    /// index: its six tallies packed for the delegate, and the copy's
-    /// name beside them. **A map** — fifteen is the ceiling the model
-    /// macro allows and all of them are spent, and these rows are a
-    /// handful where the window is thousands
-    /// (`GraphModel::carried_tally`).
+    /// index: its six tallies for the delegate, and the copy's name
+    /// beside them. **A map** — fifteen is the ceiling the model macro
+    /// allows and all of them are spent, and these rows are a handful
+    /// where the window is thousands (`GraphModel::carried_tally`).
     carried: std::collections::HashMap<usize, CarriedRow>,
     /// Bumped every time those two are written. **A delegate's answer
     /// about them is a slot call, and a slot call is not made again
@@ -85,11 +84,11 @@ pub struct GraphModel {
     pinned_oid: Option<Oid>,
     generation: u64,
     loading: bool,
-    /// Chip records to leave undrawn — see the property's own note in
-    /// `qobject.rs`. Nothing here reads it: the rows are handed out by
-    /// reference (`QListModel::get`), so the leaving-out happens where
-    /// the chips are drawn.
-    gone_chips: String,
+    /// The keys of the chips to leave undrawn — see the property's own
+    /// note in `qobject.rs`. Nothing here reads it: the rows are handed
+    /// out by reference (`QListModel::get`), so the leaving-out happens
+    /// where the chips are drawn.
+    gone_chips: Vec<String>,
     row_total: i32,
     /// Commits the walk emitted — the truncation footer's number. Equals
     /// the window limit whenever `truncated`, where `row_total` drifts
@@ -150,22 +149,21 @@ pub struct GraphModel {
     /// working-tree row can never match, this is also the answer to "is
     /// the tree clean".
     first_matched: bool,
-    /// Lanes running off the end of the window (`t<lane>.<color>;...`,
-    /// uppercase for a dashed leash — `encode::tail_lanes`), drawn by the
-    /// truncation footer.
-    tail_geometry: String,
+    /// Lanes running off the end of the window (`encode::tail_lanes`),
+    /// drawn by the truncation footer.
+    tail_geometry: Lanes,
     /// The loaded row the working tree stands on, and what a stand-in for
-    /// it draws — the chip records it carries and the subject it says.
-    /// -1 and two empty strings while HEAD is outside the window, which
+    /// it draws — the chips it carries and the subject it says.
+    /// -1 and empty answers while HEAD is outside the window, which
     /// is a row nothing can lead to (`head::settle_head`).
     head_row: i32,
-    head_labels: String,
+    head_labels: Chips,
     head_subject: String,
     head_color: i32,
     head_lane: i32,
     head_avatar: i32,
     head_avatar_url: String,
-    head_geometry: String,
+    head_geometry: Lanes,
     error: String,
     /// The walk stopped, so the rows drawn are not all of them. **A
     /// state apart from `error`**: a walk that ended without an answer at

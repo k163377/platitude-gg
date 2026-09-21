@@ -15,11 +15,11 @@ Item {
     /// read in, so this cell has no view to be missing.
     required property real xOffset
     required property real fullWidth
-    /// Precomputed draw tokens for this row's lanes (`encode.rs`).
-    required property string geometry
+    /// This row's lane segments (`{kind, lane, color, dashed}` — `encode::Lanes`).
+    required property var geometry
     required property int nodeLane
-    /// Packed `Co-authored-by` records; the first one badges the node.
-    required property string coAuthors
+    /// The `Co-authored-by` records (`{name, email, face}`); the first one badges the node.
+    required property var coAuthors
     required property int avatar
     /// A picture this author was given, or empty for the generated pattern.
     required property string avatarUrl
@@ -28,11 +28,8 @@ Item {
     /// The search passed this row over. Only the row's own marks dim — the lanes stay lit.
     required property bool dimmed
 
-    readonly property var mateRecords: laneCell.coAuthors === ""
-        ? [] : laneCell.coAuthors.split(String.fromCharCode(31))
     /// Identicon code of the first co-author, or 0 when nobody is credited.
-    readonly property int mateFace: laneCell.mateRecords.length === 0
-        ? 0 : parseInt(laneCell.mateRecords[0].split(String.fromCharCode(30))[2])
+    readonly property int mateFace: laneCell.coAuthors.length === 0 ? 0 : laneCell.coAuthors[0].face
     /// The node's lane centre, and where the badge sits when somebody shares the commit — one set of numbers for the
     /// two canvases that draw the badge and punch its ring, so the cut and the ink cannot drift apart.
     /// **GraphColumnMetrics.graphColWMin mirrors this geometry**: the column's floor is where the message tick meets
@@ -171,32 +168,26 @@ Item {
                 const cx = function (l) { return Metrics.laneInset + l * Metrics.laneW + Metrics.laneW / 2 }
                 const midY = height / 2
                 const nodeX = laneCell.nodeMidX
-                // decode precomputed draw tokens: t/i/o + lane + color (uppercase = dashed WIP edge)
-                if (laneCell.geometry !== "") {
-                    const toks = laneCell.geometry.split(";")
-                    for (let n = 0; n < toks.length; n++) {
-                        const t = toks[n]
-                        const k = t[0].toLowerCase()
-                        const dot = t.indexOf(".")
-                        const lane = parseInt(t.substring(1, dot))
-                        const x = cx(lane)
-                        ctx.strokeStyle = Theme.graphLane[parseInt(t.substring(dot + 1)) % laneCount]
-                        ctx.setLineDash(t[0] === k ? [] : Metrics.laneDash)
-                        ctx.beginPath()
-                        if (k === "t") {
-                            ctx.moveTo(x, 0)
-                            ctx.lineTo(x, height)
-                        } else if (k === "i") {
-                            ctx.moveTo(x, 0)
-                            ctx.bezierCurveTo(x, midY * 0.66, nodeX, midY * 0.34, nodeX, midY)
-                        } else {
-                            ctx.moveTo(nodeX, midY)
-                            ctx.bezierCurveTo(nodeX, height - midY * 0.34, x, height - midY * 0.66, x, height)
-                        }
-                        ctx.stroke()
+                // One stroke per segment: `through` the whole row, `into` the node from the top edge, `out` of it to
+                // the bottom edge; dashed is the WIP leash.
+                for (const seg of laneCell.geometry) {
+                    const x = cx(seg.lane)
+                    ctx.strokeStyle = Theme.graphLane[seg.color % laneCount]
+                    ctx.setLineDash(seg.dashed ? Metrics.laneDash : [])
+                    ctx.beginPath()
+                    if (seg.kind === "through") {
+                        ctx.moveTo(x, 0)
+                        ctx.lineTo(x, height)
+                    } else if (seg.kind === "into") {
+                        ctx.moveTo(x, 0)
+                        ctx.bezierCurveTo(x, midY * 0.66, nodeX, midY * 0.34, nodeX, midY)
+                    } else {
+                        ctx.moveTo(nodeX, midY)
+                        ctx.bezierCurveTo(nodeX, height - midY * 0.34, x, height - midY * 0.66, x, height)
                     }
-                    ctx.setLineDash([])
+                    ctx.stroke()
                 }
+                ctx.setLineDash([])
                 // The marks below are the row's own — they dim with it while the lanes above stay lit. A lane is one
                 // line drawn across many rows: dimming it per row would break each line into a bright-and-dark ladder.
                 ctx.globalAlpha = laneCell.dimmed ? Metrics.dimFade : 1

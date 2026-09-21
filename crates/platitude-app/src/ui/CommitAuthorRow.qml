@@ -42,9 +42,9 @@ Item {
     property bool authorCardInside: false
 
     // ---- co-authors -------------------------------------------------
-    // Packed by encode::encode_co_authors; unpacked here the way the graph rows unpack their chips. A commit object
-    // holds one author, so everyone else arrives as a `Co-authored-by` trailer and is shown as what it is: a line the
-    // message credits, under the author (デザイン規約 §co-author).
+    // The records `encode::mates_of` hands the model. A commit object holds one author, so everyone else arrives as
+    // a `Co-authored-by` trailer and is shown as what it is: a line the message credits, under the author
+    // (デザイン規約 §co-author).
     readonly property var coAuthorRecords: coBlock.records
     /// Whether the pointer is on the underlined stretch. The real hover and the automation hook write this same one, so
     /// a run cannot go green with the hover unwired.
@@ -370,7 +370,7 @@ Item {
                 // one: the two are one target.
                 CoAuthorLine {
                     id: coBlock
-                    packed: authorRow.details.coAuthors
+                    records: authorRow.details.coAuthors
                     lit: authorRow.matesLit
                     // Half the pane, the share the hover card gives the same line out of the graph pane. The date holds the
                     // left of this row; this is the rest.

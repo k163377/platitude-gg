@@ -9,31 +9,40 @@ import platitude.ui
 // either. The card's own arithmetic is here for the same reason: `furnitureW` is a sum of what its labels and marks
 // came out to, which nothing outside a laid-out chip knows.
 //
-// The records are the fixed-width flags plus a name (`encode::labels`): kind, is-head, on-a-remote, has-a-PR, here,
-// held elsewhere, and that holder locked. Spelled out whole, so a flag that moves is a test that fails.
+// The records are the chips `encode::chips_of` hands the rows (`{kind, name, isHead, hasRemote, hasPr, here, held,
+// locked, remote, key}`), spelled out whole, so a field that moves is a test that fails.
 Item {
     id: root
     width: 400
     height: 200
 
-    readonly property string head: "H100100HEAD"
-    readonly property string current: "L100100main"
-    readonly property string local2: "L000100hotfix"
-    readonly property string held: "L000110spike"
+    /// One chip: `kind` and `name`, every mark down unless `marks` raises it — here, as a ref this repository holds
+    /// is (the same default a card with nothing on it reads, `RefChip.noChip`).
+    function chip(kind, name, marks) {
+        return Object.assign({ "kind": kind, "name": name, "isHead": false, "hasRemote": false, "hasPr": false,
+                               "here": true, "held": false, "locked": false, "remote": "", "key": kind + ":" + name },
+                             marks === undefined ? {} : marks)
+    }
+
+    readonly property var head: root.chip("head", "HEAD", { "isHead": true })
+    readonly property var current: root.chip("branch", "main", { "isHead": true })
+    readonly property var local2: root.chip("branch", "hotfix")
+    readonly property var held: root.chip("branch", "spike", { "held": true })
     /// The same branch, held by a copy somebody has run `git worktree lock` on — the padlock's record.
-    readonly property string heldLocked: "L000111spike"
-    readonly property string remote: "R000000origin/preview"
+    readonly property var heldLocked: root.chip("branch", "spike", { "held": true, "locked": true })
+    readonly property var remote: root.chip("remote", "origin/preview", { "here": false })
     /// A working copy standing on this commit with no branch out — a marker, and a colour of its
     /// own (デザイン規約 §ref の種別), with and without the lock.
-    readonly property string copy: "W000100rig"
-    readonly property string copyLocked: "W000101rig"
-    readonly property string tagHere: "T000100v1.0"
-    readonly property string tagHere2: "T000100v1.1"
-    readonly property string tagAway: "T010000v2.0"
+    readonly property var copy: root.chip("worktree", "rig")
+    readonly property var copyLocked: root.chip("worktree", "rig", { "locked": true })
+    readonly property var tagHere: root.chip("tag", "v1.0")
+    readonly property var tagHere2: root.chip("tag", "v1.1")
+    readonly property var tagAway: root.chip("tag", "v2.0", { "hasRemote": true, "here": false })
 
     /// A branch a **locked** working copy holds that is also on a remote — the worst-dressed card there is, which is
     /// the one the column's floor is measured on: both marks and the count, all at once.
-    readonly property string dressed: "L010111feature/a-name-far-too-long-for-any-column"
+    readonly property var dressed: root.chip("branch", "feature/a-name-far-too-long-for-any-column",
+                                             { "hasRemote": true, "held": true, "locked": true })
 
     RefChipStack {
         id: stack
@@ -88,7 +97,7 @@ Item {
 
         // The measured shape of nearly every multi-ref row in a real repository: one commit wearing several tags.
         function test_the_front_card_s_own_colour_is_the_one_that_may_come_twice() {
-            stack.records = [root.tagHere, root.tagHere2, "T000100v1.2", "T000100v1.3"]
+            stack.records = [root.tagHere, root.tagHere2, root.chip("tag", "v1.2"), root.chip("tag", "v1.3")]
             compare(stack.sheets, ["tag"])
             // And it stands out by the step every other sheet stands out by: the repeat sits one step from the
             // card it repeats.
@@ -97,7 +106,7 @@ Item {
 
         // Every other colour is one sheet however many names wear it — only the sheet against the card may repeat it.
         function test_a_colour_behind_the_card_is_one_sheet_however_many_wear_it() {
-            stack.records = [root.current, root.tagHere, root.tagHere2, "T000100v1.2"]
+            stack.records = [root.current, root.tagHere, root.tagHere2, root.chip("tag", "v1.2")]
             compare(stack.sheets, ["tag"])
         }
 
@@ -280,7 +289,7 @@ Item {
         function tags(n) {
             const out = []
             for (let i = 0; i < n; ++i)
-                out.push("T000100v1." + i)
+                out.push(root.chip("tag", "v1." + i))
             return out
         }
 
@@ -374,7 +383,7 @@ Item {
         when: windowShown
 
         /// The name a graph column has to cut and a card has room to show whole.
-        readonly property string cutInTheColumn: "L000100feature/a-name-far-too-long-for-any-column"
+        readonly property var cutInTheColumn: root.chip("branch", "feature/a-name-far-too-long-for-any-column")
 
         // A chip handed a wider room answers with the width it had before it, until it is asked to lay out: the frame's
         // contents are a positioner, and a positioner sums itself in the polish after the turn its children moved in.

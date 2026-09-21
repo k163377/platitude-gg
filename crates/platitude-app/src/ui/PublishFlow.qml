@@ -140,10 +140,7 @@ Item {
     /// What the branch is to be called over there — its own name unless the answer says otherwise.
     property string publishBranch: ""
 
-    readonly property var publishRemotes: {
-        const packed = publishFlow.repoTab.remoteNames
-        return packed === "" ? [] : packed.split(String.fromCharCode(31))
-    }
+    readonly property var publishRemotes: publishFlow.repoTab.remoteNames
     /// The chooser's last row: opens the add-remote dialog. The question stays standing behind it and picks the new
     /// remote up when it lands.
     readonly property string publishAddChoice: Words.addRemote
@@ -174,10 +171,20 @@ Item {
 
     readonly property string publishTarget: publishFlow.publishRemote + "/" + publishFlow.publishBranch
     readonly property bool publishFilled: publishFlow.publishBranch !== "" && publishFlow.publishRemote !== ""
+    /// The pair the remote's last answer is about, and nothing while a read is out. **`remoteBranchRevision` is
+    /// touched on purpose**: what answers is a slot call, and a slot call is not something a binding follows
+    /// (`GraphRowDelegate.carriedTally` — the same shape), so the revision that moves with every answer is what
+    /// asks again. A slot because a Qt property cannot hold nothing (`encode::Optional`).
+    readonly property var remoteBranchAsked: {
+        publishFlow.repoTab.remoteBranchRevision
+        return publishFlow.repoTab.remoteBranchAsked()
+    }
     /// The remote has answered for exactly what is typed now.
-    readonly property bool publishChecked:
-        publishFlow.repoTab.remoteBranchAsked === publishFlow.publishRemote
-        + String.fromCharCode(31) + publishFlow.publishBranch
+    readonly property bool publishChecked: {
+        const asked = publishFlow.remoteBranchAsked
+        return asked ? asked.remote === publishFlow.publishRemote && asked.branch === publishFlow.publishBranch
+                     : false
+    }
     /// …and what that answer says a push under this name would meet (`platitude_core::remote::RemoteBranchState`).
     /// Empty until the answer for exactly this name is in.
     readonly property string publishState:

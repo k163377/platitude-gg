@@ -88,24 +88,24 @@ AppListView {
     //   different surfaces — the row, then the card. Separate memories make the second one a first click, and the
     //   gesture reads as "sometimes it does nothing".
     //
-    // The key is what the reader is pointing at — the ref's kind and name (`GitFacts.recordKey`), which is the same
-    // string on both surfaces and does not change when a background pass rewrites the chip's flags.
+    // The key is what the reader is pointing at — the ref's kind and name (`encode::Chip::key`), which is the same
+    // string on both surfaces and does not change when a background pass rewrites the chip's marks.
     ReclickGesture {
         id: reclick
-        onRenameAsked: (key, names) => graphList.rowRenameRequested(names.oid, names.record)
+        onRenameAsked: (key, names) => graphList.rowRenameRequested(names.oid, names.chip)
     }
     /// A row was left-clicked: answers whether it is a click of its own (see the gesture), and takes the wait with it.
-    /// `record` is the chip's first one, read now — when the wait ends the row may be showing
-    /// something else, or be another row altogether.
-    function noteClick(oidHex, record, held) {
+    /// `chip` is the chip's first one, read now — when the wait ends the row may be showing
+    /// something else, or be another row altogether; null where the row draws no ref.
+    function noteClick(oidHex, chip, held) {
         // **A standing box is what this gesture turns into**, so a click
         // while one is up is the reader walking away from it — and the row's own click takes it down
         // (`RepoPage.activateRow`). Armed here, the box on the row just clicked would close and come straight back,
         // which reads as a blink. The click still says which target it landed on, so the next
         // one is a second click in the ordinary way.
-        const nameable = record !== "" && graphList.namingOid === ""
-        return reclick.click(record === "" ? "" : GitFacts.recordKey(record),
-                             nameable ? { "oid": oidHex, "record": record } : null,
+        const nameable = chip !== null && graphList.namingOid === ""
+        return reclick.click(chip === null ? "" : chip.key,
+                             nameable ? { "oid": oidHex, "chip": chip } : null,
                              held)
     }
     function dropRename() {
@@ -123,8 +123,8 @@ AppListView {
     /// runs** (`GraphRowDelegate.settlePointed`): the wait is a beat the reader is already watching one thing through,
     /// and a card opening or closing in it answers a question nobody asked.
     readonly property alias renameWaiting: reclick.armed
-    function renameArmed(record) {
-        return record !== "" && reclick.armedFor(GitFacts.recordKey(record))
+    function renameArmed(chip) {
+        return chip !== null && reclick.armedFor(chip.key)
     }
     // Which row the standing question is about, and in which tone — held here for the same recycling reason. The
     // words are on the bar; the row only marks itself.
@@ -145,16 +145,16 @@ AppListView {
     /// the page has to place the selection, and looking a row up is a walk over every loaded one
     /// (`RepoPage.activateRow`). The modifiers decide whether the click moves what is read or only what is chosen.
     signal rowSelected(string oidHex, int atRow, int modifiers)
-    /// A row was right-clicked, anywhere along it. `record` is the name its chip draws (kind + flags + name), empty
+    /// A row was right-clicked, anywhere along it. `chip` is the name its chip draws (`encode::Chip`), null
     /// where it draws none — what the menu's cards are aimed at (デザイン規約 §グラフ行の右クリック).
-    signal rowMenuRequested(string oidHex, string record)
-    signal rowSwitchRequested(string oidHex, string record)
+    signal rowMenuRequested(string oidHex, var chip)
+    signal rowSwitchRequested(string oidHex, var chip)
     /// Another working copy's uncommitted row was opened: that copy is to be shown in a tab of its own, which is where
     /// its changes are read and staged.
     signal carriedOpenRequested(string path)
     /// A row was clicked a second time, late enough that the double-click has been ruled out: the name on its chip is
-    /// being changed. `record` is the chip's first one, whatever kind it names.
-    signal rowRenameRequested(string oidHex, string record)
+    /// being changed. `chip` is the chip's first one, whatever kind it names.
+    signal rowRenameRequested(string oidHex, var chip)
     signal chipExpandRequested(string oidHex, int atRow, var records, var anchor)
     signal chipCollapseRequested()
     signal rowHoverRequested(var row, bool inside)

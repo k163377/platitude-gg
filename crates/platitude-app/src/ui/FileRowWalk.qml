@@ -79,26 +79,23 @@ Item {
         let side = walk.sideHolding()
         if (side < 0)
             return false
-        let record = walk.sides[side].model.stepFile(walk.atBucket, walk.atPath, way)
+        let landing = walk.sides[side].model.stepFile(walk.atBucket, walk.atPath, way)
         // Out of this bucket's list and into the next one's: the heading between them is something walking goes past
-        // (規約 §diff のファイル一覧), and so is a bucket holding no files at all.
-        while (record === "") {
+        // (規約 §diff のファイル一覧), and so is a bucket holding no files at all. Nowhere to land is nothing
+        // (`encode::Landing`).
+        while (!landing) {
             side += way < 0 ? -1 : 1
             if (side < 0 || side >= walk.sides.length)
                 return false
-            record = walk.sides[side].model.edgeFile(way)
+            landing = walk.sides[side].model.edgeFile(way)
         }
-        // `<row>\u{1e}<bucket>\u{1e}<path>`, the path last because it is the one field git lets hold the separator.
-        const sep = String.fromCharCode(30)
-        const first = record.indexOf(sep)
-        const second = record.indexOf(sep, first + 1)
-        walk.atBucket = record.substring(first + 1, second)
-        walk.atPath = record.substring(second + 1)
+        walk.atBucket = landing.bucket
+        walk.atPath = landing.path
         // As little as will do — the row stepped onto is brought inside the viewport and nothing else moves. Asked of
         // the view: a file list has folder rows in it that a walk goes past, so the arithmetic the graph's walk does
         // would land on the wrong pixel here. Uncentred: a file list holds no reading position of its own to protect,
         // and the lit row is where the hand just pressed (規約 §diff のファイル一覧).
-        walk.sides[side].view.positionViewAtIndex(Number(record.substring(0, first)), ListView.Contain)
+        walk.sides[side].view.positionViewAtIndex(landing.row, ListView.Contain)
         walk.stepped(walk.atBucket, walk.atPath)
         walk.noteStep(held)
         return true

@@ -288,9 +288,9 @@ impl DiffModel {
     }
 
     /// Writes one row's two washes, and says whether either changed. The
-    /// shape is worked out first so that the two spellings that need no
-    /// string — nothing, and the whole line — cost no allocation on the
-    /// rows a drag sweeps past.
+    /// shape is worked out first so that the two that need no runs —
+    /// nothing, and the whole line — walk no line on the rows a drag
+    /// sweeps past.
     fn settle_row(&mut self, row: usize) -> bool {
         let own = self.spelled(0, row);
         let pair = self.spelled(RIGHT, row);
@@ -305,15 +305,15 @@ impl DiffModel {
         true
     }
 
-    /// One side's wash, spelled the way the row draws it.
-    fn spelled(&self, side: i32, row: usize) -> String {
+    /// One side's wash, the shape the row draws it in.
+    fn spelled(&self, side: i32, row: usize) -> Optional<Washed> {
         match self.wash_of(side, row) {
-            Wash::None => String::new(),
-            Wash::Whole => String::from("*"),
-            Wash::Part(first, last) => self
-                .source_line(side, row)
-                .map(|text| spelled_ranges(text, &[(first, last - first)]))
-                .unwrap_or_default(),
+            Wash::None => Optional::none(),
+            Wash::Whole => Optional::some(Washed::whole()),
+            Wash::Part(first, last) => Optional::new(
+                self.source_line(side, row)
+                    .map(|text| Washed::runs(spelled_ranges(text, &[(first, last - first)]))),
+            ),
         }
     }
 

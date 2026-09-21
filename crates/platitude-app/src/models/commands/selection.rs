@@ -307,42 +307,43 @@ impl CommandsModel {
         true
     }
 
-    /// One row's share, as the delegate reads it:
-    /// `<clock run>|<command run>|<outcome run>|<whole>`, each run the
-    /// `"from:len,…"` places of that column the wash is laid over
-    /// (`encode::plain_ranges`) and empty where the column holds none of
-    /// the selection. `<whole>` is `1` where the line is taken end to end,
-    /// which is what brings git's own words with it.
-    fn spell(&self, row: usize) -> String {
+    /// One row's share, as the delegate reads it (`CommandWash`): the
+    /// runs of each of the three columns the wash is laid over
+    /// (`encode::plain_ranges`), none where the column holds none of the
+    /// selection, and whether the line is taken end to end — which is
+    /// what brings git's own words with it.
+    fn spell(&self, row: usize) -> Optional<CommandWash> {
         let Some((first, first_at, last, last_at)) = self.taken() else {
-            return String::new();
+            return Optional::none();
         };
         if row < first || row > last {
-            return String::new();
+            return Optional::none();
         }
         let Some(line) = self.line_at(row) else {
-            return String::new();
+            return Optional::none();
         };
         let from = if row == first { first_at } else { 0 };
         let to = if row == last { last_at } else { line.len() };
         if from >= to {
-            return String::new();
+            return Optional::none();
         }
-        let mut out = String::new();
+        let mut columns: Vec<Runs> = Vec::with_capacity(3);
         for (base, text) in line.columns() {
             let start = from.max(base);
             let end = to.min(base + text.len());
-            if start < end {
-                out.push_str(&plain_ranges(text, &[(start - base, end - start)]));
-            }
-            out.push('|');
+            columns.push(if start < end {
+                plain_ranges(text, &[(start - base, end - start)])
+            } else {
+                Runs::default()
+            });
         }
-        out.push(if from == 0 && to == line.len() {
-            '1'
-        } else {
-            '0'
-        });
-        out
+        let mut columns = columns.into_iter();
+        Optional::some(CommandWash {
+            clock: columns.next().unwrap_or_default(),
+            command: columns.next().unwrap_or_default(),
+            outcome: columns.next().unwrap_or_default(),
+            whole: from == 0 && to == line.len(),
+        })
     }
 
     // ---- what it hands the clipboard ---------------------------------

@@ -60,17 +60,13 @@ ColumnLayout {
         return true
     }
 
-    /// Assignments as the settings file holds them: address, name, URL — U+001F between records, U+001E between a
-    /// record's fields, the same convention every packed list carries (`encode::RECORD_SEP` / `FIELD_SEP`).
-    readonly property var assigned: {
-        const packed = AppBackend.avatars
-        if (packed === "")
-            return []
-        return packed.split(String.fromCharCode(31)).map(record => {
-            const parts = record.split(String.fromCharCode(30))
-            return { email: parts[0], name: parts[1] || parts[0], url: parts[2] }
-        })
-    }
+    /// Assignments as the settings file holds them (`AppBackend.avatars` — `{email, name, url}`). A picture filed
+    /// under no name is shown by its address.
+    readonly property var assigned: AppBackend.avatars.map(assignment => ({
+        email: assignment.email,
+        name: assignment.name !== "" ? assignment.name : assignment.email,
+        url: assignment.url
+    }))
 
     /// Who the entry offers: the authors of the repository being looked
     /// at. Read when the screen opens, because the graph
@@ -80,11 +76,10 @@ ColumnLayout {
     function readAuthorChoices() {
         // The model dedupes, sorts and formats (`GraphModel.author_choices`); the prefill rides along so its address
         // shows once. With no page there are no rows to offer — the prefill still leads the list.
-        const packed = pane.curPage
-                     ? pane.curPage.pageGraph.authorChoices(pane.prefillName, pane.prefillEmail)
-                     : pane.prefillEmail !== ""
-                       ? pane.prefillName + " <" + pane.prefillEmail + ">" : ""
-        pane.authorChoices = packed === "" ? [] : packed.split(String.fromCharCode(31))
+        pane.authorChoices = pane.curPage
+                           ? pane.curPage.pageGraph.authorChoices(pane.prefillName, pane.prefillEmail)
+                           : pane.prefillEmail !== ""
+                             ? [pane.prefillName + " <" + pane.prefillEmail + ">"] : []
     }
 
     /// The address the picker will file under, pulled back out of what the

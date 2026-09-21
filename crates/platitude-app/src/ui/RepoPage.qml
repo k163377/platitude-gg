@@ -646,10 +646,10 @@ FocusScope {
     }
 
     // ---- what a chip leads to --------------------------------------
-    // `record` is the chip as it is drawn — kind letter, the flag digits, then the name (see encode.rs, `FLAGS`).
-    function activateRecord(record) {
-        if (record !== "")
-            page.switchToRef(record[0], GitFacts.recordName(record))
+    // `chip` is the chip as it is drawn (`encode::Chip`); null is a row that draws none.
+    function activateChip(chip) {
+        if (chip)
+            page.switchToRef(chip.kind, chip.name)
     }
     // A branch another working copy holds is the one refusal no stash gets past and no operation put down can clear
     // (offers::SwitchAction) — the branch is simply somewhere else, and the way to it is that copy. So the press
@@ -694,7 +694,7 @@ FocusScope {
         // The models hold the lookups — the local branch a remote row lands on is the one another copy can be holding
         // — and which move they add up to is core's rule (offers::switch_action): a tag or the detached marker moves
         // nothing, a tag's row offering a branch at its commit instead (`startNaming`).
-        const local = kind === "R" ? remotesModel.localNameFor(name) : name
+        const local = kind === "remote" ? remotesModel.localNameFor(name) : name
         const action = GitFacts.switchAction(kind, local, workTree.branch,
                                              worktreesModel.worktreeHolding(local),
                                              branchesModel.oidOfName(local))
@@ -1017,7 +1017,7 @@ FocusScope {
             branchesModel: branchesModel
             worktreesModel: worktreesModel
             tagsModel: tagsModel
-            onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
+            onSwitchRequested: (kind, name) => page.switchToRef(kind, name)
             onBranchHereRequested: oidHex => page.startBranchAt(oidHex)
             onTagHereRequested: oidHex => page.startTagAt(oidHex)
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
@@ -1305,20 +1305,19 @@ FocusScope {
     }
 
     // ---- context menu on a graph row -------------------------------
-    /// The name a graph row draws, in the words the chip records use — its first one, whatever kind it is, which is
-    /// what the row hands over when a hand presses it (`GraphRowDelegate.renameRecord`). Asked of the model for the
-    /// callers that have no row in hand. The records already taken off the screen ahead of git's answer are filtered
-    /// out the same way the delegate filters them, so a name that is gone does not put a card up over a ref that is
-    /// not there any more (デザイン規約 §消す操作は先に画面から消す).
-    function rowRecordAt(oidHex) {
+    /// The chip a graph row draws — its first one, whatever kind it is, which is what the row hands over when a hand
+    /// presses it (`GraphRowDelegate.renameChip`); null where it draws no ref. Asked of the model for the callers
+    /// that have no row in hand. The chips already taken off the screen ahead of git's answer are filtered out the
+    /// same way the delegate filters them, so a name that is gone does not put a card up over a ref that is not
+    /// there any more (デザイン規約 §消す操作は先に画面から消す).
+    function rowChipAt(oidHex) {
         const row = graphModel.rowOf(oidHex)
         if (row < 0)
-            return ""
-        const shown = GitFacts.labelsShown(graphModel.labelsAt(row), graphModel.goneChips)
-        if (shown === "")
-            return ""
-        const first = shown.split(String.fromCharCode(31))[0]
-        return GitFacts.recordKind(first) === "" ? "" : first
+            return null
+        const shown = GitFacts.chipsShown(graphModel.labelsAt(row), graphModel.goneChips)
+        if (shown.length === 0)
+            return null
+        return GitFacts.refKind(shown[0].kind) === "" ? null : shown[0]
     }
 
     /// The one door into that menu: the graph's rows wherever they are pressed, the rows of the stacked list a chip
@@ -1327,12 +1326,12 @@ FocusScope {
     /// name at all. **The first level stands still**: it is the same commit either way, so what a naming in
     /// the list changes is which card comes up (デザイン規約 §グラフ行の右クリック). Left out, the row's own name is
     /// asked of the model, which is what the callers with no row in hand do.
-    function openRowMenu(oidHex, record) {
-        const named = record === undefined ? page.rowRecordAt(oidHex) : record
+    function openRowMenu(oidHex, chip) {
+        const named = chip === undefined ? page.rowChipAt(oidHex) : chip
         commitMenuSeat.active = true
         const menu = commitMenuSeat.item
-        menu.targetKind = GitFacts.recordKind(named)
-        menu.targetName = menu.targetKind === "" ? "" : GitFacts.recordName(named)
+        menu.targetKind = named ? GitFacts.refKind(named.kind) : ""
+        menu.targetName = menu.targetKind === "" ? "" : named.name
         commitMenuState.openRowMenu(oidHex)
     }
 
@@ -1378,7 +1377,7 @@ FocusScope {
             checkedBranch: repoTab.branchDeleteAsked
             checkedMerged: repoTab.branchDeleteMerged
             // The same road the row's double-click takes, held on the same answers (`switchToRef`).
-            onSwitchRequested: (kindLetter, name) => page.switchToRef(kindLetter, name)
+            onSwitchRequested: (kind, name) => page.switchToRef(kind, name)
             // Straight to the graph row: this menu is only ever raised on one.
             onBranchHereRequested: oidHex => graphPane.startNaming(oidHex)
             onTagHereRequested: oidHex => graphPane.startTagging(oidHex)
@@ -1427,14 +1426,14 @@ FocusScope {
     ///
     /// What is typed is the ref's own name — a remote branch without the remote it is on, the shape `renameRow` and
     /// the sidebar's box both take it in.
-    function startRename(oidHex, record) {
-        if (repoTab.state !== "open" || record === "")
+    function startRename(oidHex, chip) {
+        if (repoTab.state !== "open" || !chip)
             return
-        const kind = GitFacts.recordKind(record)
+        const kind = GitFacts.refKind(chip.kind)
         // The detached-HEAD marker names no ref, so there is nothing here to be renamed.
         if (kind === "")
             return
-        const id = GitFacts.recordName(record)
+        const id = chip.name
         // The card the chip unfolds into is standing on the column the box opens in.
         rowHost.closeRefList()
         graphPane.startRenaming(oidHex, kind, id,
@@ -1476,11 +1475,11 @@ FocusScope {
 
     // ---- double-click on a graph row -------------------------------
     // A row with no chip is offered one.
-    function rowDoubleClicked(oidHex, record) {
+    function rowDoubleClicked(oidHex, chip) {
         if (repoTab.state !== "open")
             return
-        if (record !== "") {
-            page.activateRecord(record)
+        if (chip) {
+            page.activateChip(chip)
             return
         }
         // The other half of the same door, and held on the same answer as the switch above it (`switchToRef`): the box
@@ -1499,7 +1498,7 @@ FocusScope {
         remotesModel: remotesModel
         menuStanding: commitMenuSeat.item !== null && commitMenuSeat.item.opened
         hoverBlocked: page.menuStanding
-        onRecordActivated: record => page.activateRecord(record)
+        onRecordActivated: chip => page.activateChip(chip)
         // A plain click in the card is a click on the row it is standing on: every name in it is on that one commit
         // (a held one never comes this way — the card hands it to the graph's row itself).
         onRecordChosen: (oidHex, atRow) => page.activateRow(oidHex, atRow)
@@ -1511,7 +1510,7 @@ FocusScope {
             detailsPane.callAttention()
         }
         // A right-click on one of the card's rows raises the row's own menu, aimed at the name that was pressed.
-        onRecordMenuAsked: (oidHex, record) => page.openRowMenu(oidHex, record)
+        onRecordMenuAsked: (oidHex, chip) => page.openRowMenu(oidHex, chip)
     }
 
     // ---- rewriting one commit --------------------------------------
@@ -1980,7 +1979,7 @@ FocusScope {
     /// behind a row of it are theirs: a diff of the two ends would carry whatever unchosen commits stand in between.
     function askCommitDiff(path, origPath) {
         if (detailsModel.selectionCount > 2) {
-            diffModel.requestChoiceFile(page.chosenPacked, path, origPath)
+            diffModel.requestChoiceFile(page.chosenIds, path, origPath)
             return
         }
         if (detailsModel.comparing) {
@@ -2524,8 +2523,8 @@ FocusScope {
     property string chosenAnchorOid: ""
     /// The choice as the models want it: the ids in walk order, and the rows that name them. Settled together, so the
     /// list on the right and the files under it can never be of different commits.
-    property string chosenPacked: ""
-    property string chosenRecords: ""
+    property var chosenIds: []
+    property var chosenRecords: []
     /// Makes one commit the whole of the choice. Every way a single row becomes what is being read comes through here
     /// — a plain click, an arrow key, a landing, the find bar — so there is one place the choice is settled from.
     function chooseOnly(oidHex) {
@@ -2534,8 +2533,8 @@ FocusScope {
             only[oidHex] = true
         page.chosenOids = only
         page.chosenCount = Object.keys(only).length
-        page.chosenPacked = ""
-        page.chosenRecords = ""
+        page.chosenIds = []
+        page.chosenRecords = []
     }
     /// A left click on a row, as this page answers one. **The choice and what is being read are two answers**: a plain
     /// click makes one commit both, a modified one moves only the choice (デザイン規約 §複数のコミットを選ぶ).
@@ -2587,11 +2586,11 @@ FocusScope {
     function dropFromChoice(oidHex) {
         page.chooseAlso(oidHex)
     }
-    /// Packs the rows of the chosen commits again for the list on the right: what it says about them (a subject, a
+    /// Reads the rows of the chosen commits again for the list on the right: what it says about them (a subject, a
     /// face) is read off the rows, so it is read again whenever the rows are.
     function refreshChosenRecords() {
-        if (page.chosenPacked !== "")
-            page.chosenRecords = graphModel.chosenRows(page.chosenPacked)
+        if (page.chosenIds.length > 0)
+            page.chosenRecords = graphModel.chosenRows(page.chosenIds)
     }
     /// Every commit row between two places, ends included — what a Shift click reaches. **The ones scrolled past are
     /// in it too**: the anchor and the click are on screen by definition, and what lies between them usually is not.
@@ -2602,10 +2601,8 @@ FocusScope {
     function chooseRange(from, to) {
         if (from < 0 || to < 0)
             return
-        const packed = graphModel.oidsBetween(from, to)
         const next = ({})
-        const ids = packed === "" ? [] : packed.split(String.fromCharCode(31))
-        for (const oidHex of ids) {
+        for (const oidHex of graphModel.oidsBetween(from, to)) {
             if (oidHex !== "" && !GitFacts.wipOid(oidHex))
                 next[oidHex] = true
         }
@@ -2632,29 +2629,28 @@ FocusScope {
     /// these commits hold. **Two are read as what differs between them, three or more as what all of them changed**
     /// (デザイン規約 §複数のコミットを選ぶ).
     function readChoice(ids) {
-        page.chosenPacked = graphModel.presentOids(ids.join(String.fromCharCode(31)))
-        page.chosenRecords = page.chosenPacked === "" ? "" : graphModel.chosenRows(page.chosenPacked)
-        if (page.chosenPacked === "")
+        page.chosenIds = graphModel.presentOids(ids)
+        page.chosenRecords = page.chosenIds.length === 0 ? [] : graphModel.chosenRows(page.chosenIds)
+        if (page.chosenIds.length === 0)
             return
         // None of what a single commit's pane says applies to several: no stash sits under a choice, and the diff
         // that was open was of one file of one commit.
         page.selectedStashRef = ""
         page.closeDiff()
-        detailsModel.requestSelection(page.chosenPacked, page.chosenCount === 2)
+        detailsModel.requestSelection(page.chosenIds, page.chosenCount === 2)
     }
     /// Drops from the choice whatever the graph no longer stands on. Run when a pass lands: a rewrite takes commits
     /// away, and a choice that goes on counting them says a number no row on screen adds up to.
     function settleChoiceAfterPass() {
         if (page.chosenCount <= 1)
             return
-        const packed = graphModel.presentOids(Object.keys(page.chosenOids).join(String.fromCharCode(31)))
-        const kept = packed === "" ? [] : packed.split(String.fromCharCode(31))
+        const kept = graphModel.presentOids(Object.keys(page.chosenOids))
         if (kept.length === page.chosenCount) {
             // The same commits, drawn again. In the same order, what the list on the right says about them is read
             // again off the rows the pass brought (a subject reworded, a face assigned); in another order — a rewrite
             // moved one past another — the choice is read again whole, since which of two commits is the older is
             // what the pane compares from.
-            if (packed === page.chosenPacked)
+            if (kept.every((oidHex, at) => oidHex === page.chosenIds[at]))
                 page.refreshChosenRecords()
             else
                 page.readChoice(kept)
@@ -3272,12 +3268,12 @@ FocusScope {
                                 if (oidHex !== "" && oidHex !== page.selectedOid)
                                     page.activateRow(oidHex)
                             }
-                            onRowMenuOpenRequested: (oidHex, record) => page.openRowMenu(oidHex, record)
-                            onRowSwitchRequested: (oidHex, record) => page.rowDoubleClicked(oidHex, record)
+                            onRowMenuOpenRequested: (oidHex, chip) => page.openRowMenu(oidHex, chip)
+                            onRowSwitchRequested: (oidHex, chip) => page.rowDoubleClicked(oidHex, chip)
                             // The same door the WORKTREES row opens: the copy's own tab, where its changes are read
                             // and staged.
                             onCarriedOpenRequested: path => page.openRepositoryPathRequested(path)
-                            onRowRenameRequested: (oidHex, record) => page.startRename(oidHex, record)
+                            onRowRenameRequested: (oidHex, chip) => page.startRename(oidHex, chip)
                             onRenameSubmitted: (kind, id, name) => page.renameRow(kind, id, name)
                             namingRefused: page.graphNameRefusedWhy !== ""
                             namingRefusedWhy: page.graphNameRefusedWhy
@@ -3425,7 +3421,7 @@ FocusScope {
                         anchors.bottomMargin: planRunBar.visible ? planRunBar.height : 0
                         visible: !page.wipShown
                         details: detailsModel
-                        chosenRecords: page.chosenRecords
+                        chosenCommits: page.chosenRecords
                         rowCardOid: rowHost.rowCardOid
                         onRowHoverRequested: (row, inside) => page.restOnCommit(row, inside)
                         onCommitDropRequested: oidHex => page.dropFromChoice(oidHex)

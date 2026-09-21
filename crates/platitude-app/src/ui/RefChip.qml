@@ -49,7 +49,7 @@ Rectangle {
     /// the left panel's rows draw it: a branch's own row carries it, and a remote-tracking row carries it on the line
     /// that names the branch reading it (デザイン規約 §左メニューの所作). So it is the chip's own line when the chip is
     /// the branch, and the line under it when the chip is what that branch reads.
-    readonly property bool trackOnName: chip.recKind === "L"
+    readonly property bool trackOnName: chip.recKind === "branch"
 
     visible: records.length > 0
     // The name's own line box, and the frame drawn around it — nothing else is in the box, so nothing else sets its
@@ -128,24 +128,29 @@ Rectangle {
     radius: Theme.radiusSm
     clip: true
 
-    readonly property string rec: records.length > 0 ? records[0] : "L000100"
-    readonly property string recKind: rec[0]
-    readonly property bool recHead: rec[1] === "1"
-    readonly property bool recRemote: rec.length > 2 && rec[2] === "1"
-    readonly property bool recPr: rec.length > 3 && rec[3] === "1"
-    readonly property bool recHere: rec.length > 4 && rec[4] === "1"
+    /// The chip a card with nothing on it reads as: a local branch with no name, here and unmarked. The frame is
+    /// not drawn then (`visible`), but every colour below is still asked.
+    readonly property var noChip: ({ "kind": "branch", "name": "", "isHead": false, "hasRemote": false,
+                                     "hasPr": false, "here": true, "held": false, "locked": false, "remote": "",
+                                     "key": "" })
+    /// The record the card draws — the first of the row's (`encode::Chip`: `kind`, `name`, `isHead`, `hasRemote`,
+    /// `hasPr`, `here`, `held`, `locked`, `remote`, `key`).
+    readonly property var rec: records.length > 0 ? records[0] : chip.noChip
+    readonly property string recKind: rec.kind
+    readonly property bool recHead: rec.isHead
+    readonly property bool recRemote: rec.hasRemote
+    readonly property bool recPr: rec.hasPr
+    readonly property bool recHere: rec.here
     // Another working copy has this branch out, which is what puts the green frame on it — and also why git refuses
     // a move onto it (measured). Read off the record: the record is rebuilt whenever the ref joins are, so the chip
     // repaints with the rest of them (app-ui.md 「QML バインディングはプロパティにしか反応しない」).
-    readonly property bool recHeld: rec.length > 5 && rec[5] === "1"
+    readonly property bool recHeld: rec.held
     // And `git worktree lock` is on that copy — the branch's holder, or the copy this marker is about. Only the two
     // records a copy is standing on ever carry it, so the padlock cannot turn up on a chip nobody is standing on.
-    readonly property bool recLocked: rec.length > 6 && rec[6] === "1"
-    // Name, and the remotes it was read from when it was not read here. The separator is absent whenever there are
-    // none, so the name runs to the end of the record (see encode.rs).
-    readonly property var recFields: rec.substring(7).split("\u001E")
-    readonly property string recName: chip.recFields[0]
-    readonly property string recWhere: chip.recFields.length > 1 ? chip.recFields[1] : ""
+    readonly property bool recLocked: rec.locked
+    // Name, and the remotes it was read from when it was not read here.
+    readonly property string recName: rec.name
+    readonly property string recWhere: rec.remote
     // One slot, one mark: on the remote, or on the remote with a PR open (規約 §グラフ行のダブルクリック — the two never stack).
     readonly property bool hasBadge: recRemote || recPr
     /// Whether the padlock stands ahead of the name: `git worktree lock` is on the copy standing here
@@ -164,7 +169,7 @@ Rectangle {
     /// **One mark in front of the name, never two.** A padlock is already a working copy's own state — nothing
     /// else in this column can be locked — so it says what the tree was there to say, and the pair only crowded a
     /// frame eighteen pixels tall.
-    readonly property bool hasTree: chip.recKind === "W" && !chip.recLocked
+    readonly property bool hasTree: chip.recKind === "worktree" && !chip.recLocked
     /// Which is why there is one seat, and the two above only decide what stands in it.
     readonly property bool hasMark: chip.hasLock || chip.hasTree
     /// Every colour a record can wear, which is how many cards one commit's names can ever come to
@@ -175,20 +180,20 @@ Rectangle {
     /// words and [`kindColourFor`] turns one into ink. A branch another working copy holds answers with where that
     /// copy is: standing on this commit, which is the thing the reader has to see first.
     function kindKeyOf(rec) {
-        if (rec.length > 5 && rec[5] === "1")
+        if (rec.held)
             return "worktree"
-        if (rec[0] === "T")
-            return rec.length > 4 && rec[4] === "1" ? "tag" : "tagdim"
-        if (rec[0] === "R")
+        if (rec.kind === "tag")
+            return rec.here ? "tag" : "tagdim"
+        if (rec.kind === "remote")
             return "remote"
-        if (rec[0] === "H")
+        if (rec.kind === "head")
             return "head"
         // A working copy standing here with no branch out reads as the branch chip a copy *does* hold: the same
         // green frame and a name in the same ink, the only difference being which name there is to show
         // (デザイン規約 §ref の種別). The two say one thing — a copy is on this commit — so they share one key:
         // the sheets behind the card are one per colour (§重ね表示), and a key of its own over the same ink would
         // draw two nobody can tell apart.
-        if (rec[0] === "W")
+        if (rec.kind === "worktree")
             return "worktree"
         return "local"
     }
@@ -219,7 +224,7 @@ Rectangle {
     // branch's, the branch is in this repository, and where the copy is is the frame's to say. Dulling the words as
     // well spent a second channel on a fact the frame already carries, and left the row's most-read text as the
     // faintest thing on it.
-    readonly property color nameColor: recKind === "H" ? Theme.warning
+    readonly property color nameColor: recKind === "head" ? Theme.warning
                                        : recHead ? Theme.textLink
                                        : !recHere ? Theme.textSecondary
                                        : Theme.textPrimary

@@ -69,12 +69,11 @@ impl NavSectionModel {
         )
     }
 
-    /// The file row `way` steps from `path` in `bucket`, as
-    /// `<row>\u{1e}<bucket>\u{1e}<path>`. Empty where the walk has nowhere
-    /// left to go — which is how the arrows stop at the ends — and empty
-    /// where the path is not shown at all
-    /// (デザイン規約 §diff のファイル一覧). Only the sign of `way` is read:
-    /// one press is one file.
+    /// The file row `way` steps from `path` in `bucket`
+    /// (`encode::Landing`). Nothing where the walk has nowhere left to go
+    /// — which is how the arrows stop at the ends — and nothing where the
+    /// path is not shown at all (デザイン規約 §diff のファイル一覧). Only the
+    /// sign of `way` is read: one press is one file.
     ///
     /// **The rows on screen.** A folder the reader closed is a folder the
     /// walk does not enter, and a file a filter hid is hidden from the
@@ -83,10 +82,10 @@ impl NavSectionModel {
     /// run**: the answer runs out at this list's own end, and crossing into
     /// the next bucket's list is the pane's step (`FileRowWalk`), which
     /// asks that list for the row at its near end ([`Self::edge`]).
-    pub(super) fn step(&self, bucket: &str, path: &str, way: i32) -> String {
+    pub(super) fn step(&self, bucket: &str, path: &str, way: i32) -> Landed {
         let shown = self.shown_rows();
         let Ok(from) = usize::try_from(self.row_of_file(bucket, path)) else {
-            return String::new();
+            return Landed::none();
         };
         let file = |at: &usize| {
             self.row_at(*at)
@@ -116,13 +115,13 @@ impl NavSectionModel {
 
     /// The file row at one end of this list — the first when `way` reads
     /// forwards, the last when it reads back — in [`Self::step`]'s own
-    /// shape. Empty where the list holds no file row at all, which is how
-    /// a walk goes past an empty bucket.
+    /// shape. Nothing where the list holds no file row at all, which is
+    /// how a walk goes past an empty bucket.
     ///
     /// This is the other half of crossing a bucket: `step` runs out at the
     /// end of its own run, and the list the walk carries on into is asked
     /// for the row nearest the edge it comes in by.
-    pub(super) fn edge(&self, way: i32) -> String {
+    pub(super) fn edge(&self, way: i32) -> Landed {
         let shown = self.shown_rows();
         let file = |at: &usize| {
             self.row_at(*at)
@@ -136,23 +135,18 @@ impl NavSectionModel {
         self.landing(landed)
     }
 
-    /// Where a walk landed, as `<row>\u{1e}<bucket>\u{1e}<path>` — the one
-    /// spelling of it, so the two ways to land (a step, and coming in at a
-    /// list's edge) cannot drift apart. Empty for no row.
-    ///
-    /// The path comes last because it is the only field git lets hold the
-    /// separator.
-    fn landing(&self, at: Option<usize>) -> String {
-        at.and_then(|at| self.row_at(at).map(|row| (at, row)))
-            .map(|(at, row)| {
-                format!(
-                    "{at}{sep}{bucket}{sep}{path}",
-                    sep = crate::encode::FIELD_SEP,
-                    bucket = self.field(row, Role::Bucket).as_str(),
-                    path = self.field(row, Role::Full).as_str()
-                )
-            })
-            .unwrap_or_default()
+    /// Where a walk landed — the one shape of it, so the two ways to land
+    /// (a step, and coming in at a list's edge) cannot drift apart.
+    /// Nothing for no row.
+    fn landing(&self, at: Option<usize>) -> Landed {
+        Landed::new(
+            at.and_then(|at| self.row_at(at).map(|row| (at, row)))
+                .map(|(at, row)| Landing {
+                    row: i32::try_from(at).unwrap_or(-1),
+                    bucket: self.field(row, Role::Bucket).as_str().to_string(),
+                    path: self.field(row, Role::Full).as_str().to_string(),
+                }),
+        )
     }
 
     /// Every source row of this section, in the order the list shows them.

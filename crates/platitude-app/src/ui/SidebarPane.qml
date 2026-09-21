@@ -71,8 +71,8 @@ Rectangle {
     /// what the row shows and `full` what git knows it by.
     signal refMenuRequested(string kind, string name, string full, string oidHex)
     signal worktreeActivated(string path)
-    /// Double-click on a branch row: `kind` is the chip letter the page's
-    /// dispatcher reads ("L" local / "R" remote).
+    /// Double-click on a branch row: `kind` is the word the page's dispatcher reads (`branch` / `remote`, the
+    /// same word a chip goes out under).
     signal refSwitchRequested(string kind, string name)
     /// A name was typed for a new branch on a tag's commit.
     signal branchAtRequested(string oidHex, string name)

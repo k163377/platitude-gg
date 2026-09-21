@@ -156,12 +156,12 @@ impl DiffModel {
     }
 
     /// One file as each of several chosen commits changed it, stacked
-    /// (デザイン規約 §複数のコミットを選ぶ). `packed` is their ids newest
-    /// first, joined by `\u{1f}` — the order the graph stands in.
+    /// (デザイン規約 §複数のコミットを選ぶ). `ids` are theirs, newest first
+    /// — the order the graph stands in.
     #[qslot]
-    fn request_choice_file(&mut self, packed: String, path: String, orig_path: String) {
+    fn request_choice_file(&mut self, ids: Vec<String>, path: String, orig_path: String) {
         let mut oids = Vec::new();
-        for hex in packed.split('\u{1f}').filter(|h| !h.is_empty()) {
+        for hex in ids.iter().filter(|h| !h.is_empty()) {
             let Ok(oid) = Oid::from_hex_str(hex.trim()) else {
                 return;
             };
@@ -255,18 +255,14 @@ impl DiffModel {
     /// there is.
     #[qslot]
     pub(super) fn side_count(&self, side: String) -> i32 {
-        // The letter the side is spelled by in `marks` (`rows::marks_of`);
-        // each side of a row carries it at most once, so a count of the
-        // letter over the whole row is a count of lines.
-        let letter = match side.as_str() {
-            "ours" => 'o',
-            "theirs" => 't',
-            _ => return 0,
-        };
-        let mut count = 0;
-        for line in &self.lines {
-            count += line.marks.matches(letter).count();
-        }
+        // Each side of a row names its side at most once, so a count over
+        // both sides of every row is a count of lines (`encode::Marks`).
+        let count = self
+            .lines
+            .iter()
+            .flat_map(|line| std::iter::once(&line.marks.own).chain(line.marks.pair.as_ref()))
+            .filter(|marks| marks.side == side)
+            .count();
         i32::try_from(count).unwrap_or(i32::MAX)
     }
 
@@ -353,7 +349,7 @@ impl DiffModel {
     fn clear(&mut self) {
         self.current_key = String::new();
         self.widest_no = 0;
-        self.widest_lines = String::new();
+        self.widest_lines = Candidates::default();
         self.title = String::new();
         self.is_binary = false;
         self.is_new_file = false;

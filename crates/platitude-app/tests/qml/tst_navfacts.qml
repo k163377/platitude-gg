@@ -31,7 +31,7 @@ Item {
     /// the wrong one of the three comes back wrong rather than right by coincidence.
     property string sectionUpstream: ""
     property string sectionTracked: ""
-    property string sectionCarried: ""
+    property var sectionCarried: []
     property string branchUpstream: ""
     property string branchGone: ""
     property int branchAhead: 0
@@ -319,9 +319,7 @@ Item {
         /// a colour and a supplement**, and the reading it is apart *from* is named in the words — a line saying
         /// only "another commit" would leave the reader to guess another commit than what.
         function test_a_tag_opens_one_line_per_remote_carrying_its_name() {
-            const unit = String.fromCharCode(31)
-            const rec = String.fromCharCode(30)
-            root.sectionCarried = "origin" + rec + "0" + unit + "fork" + rec + "1"
+            root.sectionCarried = [{ "remote": "origin", "apart": false }, { "remote": "fork", "apart": true }]
             const row = root.rowOf({ "kindHint": "tag", "name": "v1.5", "full": "v1.5",
                                      "pushRemote": "origin" })
             verify(row.gatherFacts())
@@ -341,7 +339,7 @@ Item {
         /// A tag nobody else carries opens on nothing, as a branch with no reading does — the name in full is reason
         /// enough to open.
         function test_a_tag_nobody_else_carries_opens_on_nothing() {
-            root.sectionCarried = ""
+            root.sectionCarried = []
             const row = root.rowOf({ "kindHint": "tag", "name": "v2.0-local", "full": "v2.0-local",
                                      "pushRemote": "origin" })
             verify(row.gatherFacts())

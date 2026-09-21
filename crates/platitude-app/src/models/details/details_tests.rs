@@ -4,7 +4,7 @@
 //! (.claude/rules/structure.md).
 
 use super::{DetailsModel, FileItem};
-use crate::encode::FIELD_SEP;
+use crate::encode::{Landed, Landing};
 
 fn commit(paths: &[&str]) -> DetailsModel {
     let mut model = DetailsModel::default();
@@ -21,6 +21,15 @@ fn commit(paths: &[&str]) -> DetailsModel {
     model
 }
 
+/// A landing on `row` at `path` — a commit's files sit in no bucket.
+fn landed(row: i32, path: &str) -> Landed {
+    Landed::some(Landing {
+        row,
+        bucket: String::new(),
+        path: path.to_string(),
+    })
+}
+
 /// The arrows walk the rows on screen, one file per press, and stop at
 /// each end (規約 §diff のファイル一覧).
 #[test]
@@ -31,21 +40,33 @@ fn the_arrows_walk_the_changed_files_and_stop_at_the_ends() {
 
     assert_eq!(
         model.step_file(String::new(), "a.txt".to_string(), 1),
-        format!("1{FIELD_SEP}{FIELD_SEP}z.txt")
+        landed(1, "z.txt")
     );
     assert_eq!(
         model.step_file(String::new(), "z.txt".to_string(), -1),
-        format!("0{FIELD_SEP}{FIELD_SEP}a.txt")
+        landed(0, "a.txt")
     );
     // Only the sign is read: one press is one file.
     assert_eq!(
         model.step_file(String::new(), "a.txt".to_string(), 9),
         model.step_file(String::new(), "a.txt".to_string(), 1)
     );
-    assert_eq!(model.step_file(String::new(), "a.txt".to_string(), -1), "");
-    assert_eq!(model.step_file(String::new(), "z.txt".to_string(), 1), "");
+    assert!(
+        model
+            .step_file(String::new(), "a.txt".to_string(), -1)
+            .is_none()
+    );
+    assert!(
+        model
+            .step_file(String::new(), "z.txt".to_string(), 1)
+            .is_none()
+    );
     // A path this commit did not touch has nowhere to walk from.
-    assert_eq!(model.step_file(String::new(), "no.txt".to_string(), 1), "");
+    assert!(
+        model
+            .step_file(String::new(), "no.txt".to_string(), 1)
+            .is_none()
+    );
 }
 
 /// A folder row has no diff behind it, so the walk steps over it and
@@ -60,11 +81,11 @@ fn the_arrows_step_over_a_folder_row() {
     assert!(model.files[2].folder);
     assert_eq!(
         model.step_file(String::new(), "one/x.txt".to_string(), 1),
-        format!("3{FIELD_SEP}{FIELD_SEP}two/y.txt")
+        landed(3, "two/y.txt")
     );
     assert_eq!(
         model.step_file(String::new(), "two/y.txt".to_string(), -1),
-        format!("1{FIELD_SEP}{FIELD_SEP}one/x.txt")
+        landed(1, "one/x.txt")
     );
 }
 

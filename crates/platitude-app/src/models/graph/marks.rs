@@ -39,6 +39,9 @@ impl GraphModel {
 
     /// Takes the marks off a chunk of walked rows, in the rows' order.
     pub(super) fn extend_marks(&mut self, rows: &[LogRow]) {
+        // A tally is a count of files; one past `i32` is not a working
+        // tree anybody has.
+        let count = |n: usize| i32::try_from(n).unwrap_or(i32::MAX);
         self.marks.reserve(rows.len());
         self.index.reserve(rows.len());
         for row in rows {
@@ -48,7 +51,7 @@ impl GraphModel {
             // ends on it and nothing names it as a parent.
             let oid = Oid::from_hex_str(&row.oid_hex).unwrap_or_else(|_| Oid::zero_unsized());
             // The rows another copy draws, filed by the index the delegate
-            // will ask with. All six written whatever they are: empty is
+            // will ask with. All six written whatever they are: nothing is
             // what says a row is not one of theirs (`carried_tally`).
             if let Some(carried) = &row.carried {
                 let k = &carried.kinds;
@@ -57,10 +60,14 @@ impl GraphModel {
                     super::CarriedRow {
                         name: carried.name.to_string(),
                         path: carried.path.clone(),
-                        tally: format!(
-                            "{},{},{},{},{},{}",
-                            k.added, k.modified, k.deleted, k.renamed, k.copied, k.conflicted
-                        ),
+                        tally: Optional::some(Tally {
+                            added: count(k.added),
+                            modified: count(k.modified),
+                            deleted: count(k.deleted),
+                            renamed: count(k.renamed),
+                            copied: count(k.copied),
+                            conflicted: count(k.conflicted),
+                        }),
                     },
                 );
                 self.carried_revision = self.carried_revision.wrapping_add(1);

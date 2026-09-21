@@ -81,29 +81,12 @@ Item {
         metrics.codeW = reach
     }
 
-    /// The packed records taken apart: `<length>:<bold><text>`, one after another, the length in the units this side
-    /// counts a string in. **Cut out by that length** — the text is a line of somebody's
-    /// file, so there is no character it cannot hold.
-    function reachRecords(packed) {
-        const out = []
-        let at = 0
-        while (at < packed.length) {
-            const cut = packed.indexOf(":", at)
-            if (cut < 0)
-                return out
-            const from = cut + 2
-            out.push({ bold: packed.charAt(cut + 1) === "1",
-                       line: packed.substring(from, from + Number(packed.substring(at, cut))) })
-            at = from + Number(packed.substring(at, cut))
-        }
-        return out
-    }
-
-    /// One never-drawn Label per line the reach could come from, in the font and the weight that line is drawn in —
-    /// the same instrument the number column is measured with, for the same reason (`TabStrip.settleTitleCap`).
+    /// One never-drawn Label per line the reach could come from (`DiffModel.widestLines` — `{bold, line}`), in the
+    /// font and the weight that line is drawn in — the same instrument the number column is measured with, for the
+    /// same reason (`TabStrip.settleTitleCap`).
     Repeater {
         id: reachRulers
-        model: metrics.reachRecords(metrics.diffModel.widestLines)
+        model: metrics.diffModel.widestLines
         onCountChanged: metrics.settleReach()
         delegate: Label {
             required property var modelData

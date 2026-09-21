@@ -3,17 +3,22 @@
 
 use std::collections::HashMap;
 
+use qtbridge::qtbridge_type_lib::QVariantMap;
+
+use crate::encode::{Chips, Fields, Lanes, Listed, Mates, Record, field};
+
 use super::*;
 
 // Kept lean: one instance per commit in the window. The short sha is
 // derived in QML from `oid_hex` (mechanical substring); `avatar` is a
-// packed local identicon code (see encode::avatar_code). PartialEq
+// local identicon code, one integer (see encode::avatar_code). PartialEq
 // feeds the in-place replacement: unchanged rows emit no dataChanged.
 //
 // **Fifteen fields is the ceiling** — `#[derive(QModelItem)]` refuses a
 // sixteenth. Anything the rows need that QML never reads belongs on the
 // way in: the lane count each row needs is taken off the `LogRow` while
-// the item is built (`max_lanes`).
+// the item is built (`max_lanes`). The three list fields go over as JS
+// arrays of objects (`encode::Listed`); the delegate reads them by name.
 #[derive(QModelItem, Default, Clone, PartialEq)]
 pub struct GraphRowItem {
     pub(super) oid_hex: String,
@@ -31,14 +36,15 @@ pub struct GraphRowItem {
     /// resolved here, so a delegate coming back from the reuse pool has
     /// the answer already in its row.
     pub(super) avatar_url: String,
-    /// Packed `Co-authored-by` records (see `encode::encode_co_authors`) —
-    /// the first draws the badge on the node, all of them are named in
-    /// the row's hover.
-    pub(super) co_authors: String,
+    /// The `Co-authored-by` records — the first draws the badge on the
+    /// node, all of them are named in the row's hover.
+    pub(super) co_authors: Mates,
     /// Message body without the co-author trailers — the row's hover.
     pub(super) body: String,
-    pub(super) geometry: String,
-    pub(super) labels: String,
+    /// The lane segments the row's cell draws.
+    pub(super) geometry: Lanes,
+    /// The chips the row carries, in the order the front card reads them.
+    pub(super) labels: Chips,
     /// `stash@{n}` when the row is a stash; empty otherwise.
     pub(super) stash_ref: String,
     /// The find bar's line is somewhere in this row. False for every row
@@ -98,15 +104,129 @@ pub(super) fn to_row_item(
         node_color: i32::from(row.node_color),
         avatar: crate::encode::avatar_code(&row.author),
         avatar_url: avatars.url_of(&row.author_email),
-        co_authors: crate::encode::encode_co_authors(&row.co_authors),
+        co_authors: crate::encode::mates_of(&row.co_authors),
         body: row.body.clone(),
-        geometry: encode_geometry(&row.segments),
-        labels: encode_labels(&row.labels, pr),
+        geometry: crate::encode::lanes_of(&row.segments),
+        labels: crate::encode::chips_of(&row.labels, pr),
         stash_ref: row.stash_ref.clone(),
         // Set by the marking pass that runs before anyone sees the row
         // (`mark_incoming`), so a chunk arriving under a standing query
         // arrives already lit.
         matched: false,
+    }
+}
+
+/// One row of a choice of commits, as the pane on the right lists it
+/// above the changed files (デザイン規約 §複数のコミットを選ぶ): what naming
+/// the commit takes, down to the message body and the credits — which
+/// is what lets the card these rows put out be the graph's own
+/// (`CommitHoverCard`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChosenRow {
+    pub oid_hex: String,
+    pub sha8: String,
+    pub subject: String,
+    pub body: String,
+    pub author: String,
+    pub atime: i64,
+    pub avatar: i32,
+    pub avatar_url: String,
+    pub mates: Mates,
+}
+
+pub type ChosenRows = Listed<ChosenRow>;
+
+/// The six a working copy's uncommitted row says beside its words —
+/// added, modified, deleted, renamed, copied, conflicted — in the order
+/// both sides draw them. A copy's row carries its own; this window's row
+/// reads the view's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Tally {
+    pub added: i32,
+    pub modified: i32,
+    pub deleted: i32,
+    pub renamed: i32,
+    pub copied: i32,
+    pub conflicted: i32,
+}
+
+impl Record for Tally {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("added", &self.added)
+            .put("modified", &self.modified)
+            .put("deleted", &self.deleted)
+            .put("renamed", &self.renamed)
+            .put("copied", &self.copied)
+            .put("conflicted", &self.conflicted)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            added: field(map, "added")?,
+            modified: field(map, "modified")?,
+            deleted: field(map, "deleted")?,
+            renamed: field(map, "renamed")?,
+            copied: field(map, "copied")?,
+            conflicted: field(map, "conflicted")?,
+        })
+    }
+}
+
+impl platitude_core::mem::Footprint for Tally {
+    fn heap_bytes(&self) -> usize {
+        0
+    }
+}
+
+impl ChosenRow {
+    pub(super) fn of(row: &GraphRowItem) -> Self {
+        Self {
+            oid_hex: row.oid_hex.clone(),
+            sha8: row
+                .oid_hex
+                .get(..8)
+                .unwrap_or(row.oid_hex.as_str())
+                .to_string(),
+            subject: row.subject.clone(),
+            body: row.body.clone(),
+            author: row.author.clone(),
+            atime: row.atime,
+            avatar: row.avatar,
+            avatar_url: row.avatar_url.clone(),
+            mates: row.co_authors.clone(),
+        }
+    }
+}
+
+impl Record for ChosenRow {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("oid", &self.oid_hex)
+            .put("sha8", &self.sha8)
+            .put("subject", &self.subject)
+            .put("body", &self.body)
+            .put("author", &self.author)
+            .put("atime", &self.atime)
+            .put("avatar", &self.avatar)
+            .put("avatarUrl", &self.avatar_url)
+            .put("mates", &self.mates)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            oid_hex: field(map, "oid")?,
+            sha8: field(map, "sha8")?,
+            subject: field(map, "subject")?,
+            body: field(map, "body")?,
+            author: field(map, "author")?,
+            atime: field(map, "atime")?,
+            avatar: field(map, "avatar")?,
+            avatar_url: field(map, "avatarUrl")?,
+            mates: field(map, "mates")?,
+        })
     }
 }
 
@@ -154,5 +274,32 @@ mod tests {
         let rows = [wip(), stash("c3", "stash@{0}")];
         assert_eq!(newest_commit_row(&rows), None);
         assert_eq!(newest_commit_row(&[]), None);
+    }
+
+    /// A chosen row carries the credits as the same list the graph row
+    /// does, nested — and comes back out of Qt's containers whole.
+    #[test]
+    fn a_chosen_row_round_trips_with_its_credits_nested() {
+        let row = GraphRowItem {
+            oid_hex: "0123456789abcdef".into(),
+            subject: "the subject".into(),
+            body: "the body".into(),
+            author: "Ada".into(),
+            atime: 1_700_000_000,
+            avatar: 42,
+            avatar_url: "file:///a.png".into(),
+            co_authors: crate::encode::mates_of(&[platitude_core::details::CoAuthor {
+                name: "Bob".into(),
+                email: "bob@example.com".into(),
+            }]),
+            ..GraphRowItem::default()
+        };
+        let chosen: ChosenRows = Listed::new(vec![ChosenRow::of(&row)]);
+        assert_eq!(chosen[0].sha8, "01234567");
+        assert_eq!(chosen[0].mates[0].name, "Bob");
+        assert_eq!(
+            ChosenRows::try_from(&qtbridge::qtbridge_type_lib::QVariant::from(&chosen)),
+            Ok(chosen)
+        );
     }
 }

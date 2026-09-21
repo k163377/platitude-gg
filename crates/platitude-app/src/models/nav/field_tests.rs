@@ -82,7 +82,7 @@ fn only_the_tags_section_answers_for_a_drift() {
     model.arrange();
     assert_eq!(model.remote_tag_drift("v1.0".into(), "origin".into()), "");
     assert_eq!(model.tag_sides("v1.0".into()), "");
-    assert_eq!(model.tag_remotes("v1.0".into(), "origin".into()), "");
+    assert!(model.tag_remotes("v1.0".into(), "origin".into()).is_empty());
 }
 
 /// The remotes a tag's row opens on, in name order and each with whether
@@ -120,8 +120,8 @@ fn a_tag_row_opens_on_its_carriers_and_says_which_stand_apart() {
     let said = |name: &str, against: &str| {
         model
             .tag_remotes(name.into(), against.into())
-            .split('\u{1f}')
-            .map(|record| record.replace('\u{1e}', ":"))
+            .iter()
+            .map(|carrier| format!("{}:{}", carrier.remote, u8::from(carrier.apart)))
             .collect::<Vec<_>>()
             .join(",")
     };
@@ -145,9 +145,17 @@ fn a_tag_row_opens_on_its_carriers_and_says_which_stand_apart() {
     // **Empty, not a list of one empty record**: a tag nobody out there
     // has opens on nothing at all, which is what the row with no lines
     // under it is drawn from.
-    assert_eq!(model.tag_remotes("v-here".into(), "origin".into()), "");
-    assert_eq!(model.tag_remotes("v-nobody".into(), "origin".into()), "");
-    assert_eq!(model.tag_remotes(String::new(), "origin".into()), "");
+    assert!(
+        model
+            .tag_remotes("v-here".into(), "origin".into())
+            .is_empty()
+    );
+    assert!(
+        model
+            .tag_remotes("v-nobody".into(), "origin".into())
+            .is_empty()
+    );
+    assert!(model.tag_remotes(String::new(), "origin".into()).is_empty());
 }
 
 /// Which sides a tag's name stands on — what tells the three delete rows

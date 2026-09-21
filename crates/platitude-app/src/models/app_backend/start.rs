@@ -1,27 +1,51 @@
 use super::*;
 
-use crate::encode::{FIELD_SEP, RECORD_SEP};
+use crate::encode::{Fields, Listed, Record, field};
 
-/// Every assignment as `email\u{1e}name\u{1e}url`, records joined by
-/// `\u{1f}`, sorted by address (the store keeps them that way) — the one
-/// packed-record convention every list in this crate uses
-/// (`encode::RECORD_SEP` / `FIELD_SEP`).
-pub(super) fn packed_avatars() -> String {
+/// One picture filed against an address: whose it is, the name it was
+/// filed under, and the `file:` URL the picture is read from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Assignment {
+    pub(super) email: String,
+    pub(super) name: String,
+    pub(super) url: String,
+}
+
+/// Every assignment, sorted by address (the store keeps them that way).
+pub(super) type Assignments = Listed<Assignment>;
+
+impl Record for Assignment {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        Fields::new()
+            .put("email", &self.email)
+            .put("name", &self.name)
+            .put("url", &self.url)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            email: field(map, "email")?,
+            name: field(map, "name")?,
+            url: field(map, "url")?,
+        })
+    }
+}
+
+pub(super) fn assignments() -> Assignments {
     Hub::with(|hub| {
         let urls = hub.avatar_urls();
-        hub.avatars()
-            .list()
-            .iter()
-            .map(|entry| {
-                format!(
-                    "{}{FIELD_SEP}{}{FIELD_SEP}{}",
-                    entry.email,
-                    entry.name,
-                    urls.url_of(&entry.email)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(&RECORD_SEP.to_string())
+        Assignments::new(
+            hub.avatars()
+                .list()
+                .iter()
+                .map(|entry| Assignment {
+                    email: entry.email.clone(),
+                    name: entry.name.clone(),
+                    url: urls.url_of(&entry.email),
+                })
+                .collect(),
+        )
     })
     .unwrap_or_default()
 }
@@ -131,9 +155,9 @@ impl Default for AppBackend {
             git_path_version: String::new(),
             git_path_error: String::new(),
             git_path_in_use: Hub::with(|hub| hub.git_program().to_string()).unwrap_or_default(),
-            avatars: packed_avatars(),
+            avatars: assignments(),
             avatar_error_kind: String::new(),
-            avatar_error_facts: String::new(),
+            avatar_error_facts: Vec::new(),
             avatar_error_said: String::new(),
             avatar_patterns: platitude_core::avatar::EXTENSIONS
                 .iter()

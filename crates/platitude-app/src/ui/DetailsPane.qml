@@ -11,11 +11,10 @@ ColumnLayout {
     id: detailsPane
 
     required property var details
-    /// The commits a choice holds, packed as the graph named them (`GraphModel.chosenRows`) — empty while one commit
-    /// is what is being read. Taken apart below into the rows this pane lists (デザイン規約 §複数のコミットを選ぶ): a
-    /// model role cannot be a list, so anything list-shaped crosses the bridge as a string (app-ui.md).
-    property string chosenRecords: ""
-    readonly property var chosenCommits: detailsPane.readRecords(detailsPane.chosenRecords)
+    /// The commits a choice holds, as the graph named them (`GraphModel.chosenRows` — one record per row: `oid`,
+    /// `sha8`, `subject`, `body`, `author`, `atime`, `avatar`, `avatarUrl`, `mates`) — empty while one commit is
+    /// what is being read. The rows this pane lists (デザイン規約 §複数のコミットを選ぶ).
+    property var chosenCommits: []
     /// The commit whose card is out, so the row it came off keeps its band under it. Written by the page, which owns
     /// the card (`RowHoverHost.rowCardOid`).
     property string rowCardOid: ""
@@ -30,19 +29,6 @@ ColumnLayout {
     /// Whether the pane is showing a choice of commits. **Read off the model** — the
     /// model is what the file list below answers to, and the two must turn over together.
     readonly property bool choosing: detailsPane.details.selectionCount > 1
-    /// Takes `GraphModel.chosenRows` apart. Rows are `\u{1d}`-separated and their cells `\u{1c}` — the outer pair,
-    /// one cell being a packed list itself (`encode::ROW_SEP`).
-    function readRecords(packed) {
-        if (packed === "")
-            return []
-        const out = []
-        for (const record of packed.split(String.fromCharCode(29))) {
-            const f = record.split(String.fromCharCode(28))
-            out.push({ "oid": f[0], "sha8": f[1], "subject": f[2], "body": f[3], "author": f[4],
-                       "atime": Number(f[5]), "avatar": Number(f[6]), "avatarUrl": f[7], "mates": f[8] })
-        }
-        return out
-    }
     // Reflog selector when the selected row is a stash ("" otherwise).
     property string stashRef: ""
     // Whether this commit's message may be rewritten from here — the page

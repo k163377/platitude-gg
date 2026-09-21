@@ -5,7 +5,9 @@ use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use platitude_core::session::Recording;
 
-use crate::encode::{plain_byte, plain_ranges};
+use qtbridge::qtbridge_type_lib::QVariantMap;
+
+use crate::encode::{Fields, Optional, Record, Runs, field, plain_byte, plain_ranges};
 use crate::hub::{CommandMsg, Feed};
 
 use super::{impl_notify_runs, push_run, qml_register};
@@ -51,9 +53,48 @@ pub struct CommandItem {
     /// git's own parting words. Only failures show it.
     output: String,
     /// Where the reader's own selection falls on this row, for the wash
-    /// the delegate lays down (`selection::spell`). Empty on a row it
+    /// the delegate lays down (`selection::spell`). Nothing on a row it
     /// does not reach.
-    sel: String,
+    sel: Optional<CommandWash>,
+}
+
+/// One row's share of the reader's selection, as the delegate reads it:
+/// the runs of each of the three columns the wash is laid over
+/// (`encode::plain_ranges`, none where the column holds none of the
+/// selection), and whether the line is taken end to end — which is what
+/// brings git's own words with it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CommandWash {
+    pub clock: Runs,
+    pub command: Runs,
+    pub outcome: Runs,
+    pub whole: bool,
+}
+
+impl Record for CommandWash {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("clock", &self.clock)
+            .put("command", &self.command)
+            .put("outcome", &self.outcome)
+            .put("whole", &self.whole)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            clock: field(map, "clock")?,
+            command: field(map, "command")?,
+            outcome: field(map, "outcome")?,
+            whole: field(map, "whole")?,
+        })
+    }
+}
+
+impl platitude_core::mem::Footprint for CommandWash {
+    fn heap_bytes(&self) -> usize {
+        self.clock.heap_bytes() + self.command.heap_bytes() + self.outcome.heap_bytes()
+    }
 }
 
 /// A row's invocation: the id its end arrives under, and whether the

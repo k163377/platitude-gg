@@ -101,7 +101,7 @@ impl RepoTab {
                     self.push_default = marked.cloned().unwrap_or_default();
                     self.push_default_local = push_default_local;
                     self.remote_count = names.len() as i32;
-                    self.remote_names = names.join("\u{1f}");
+                    self.remote_names = names.clone();
                     self.remotes = names;
                     self.remote_urls = urls;
                 }
@@ -112,7 +112,9 @@ impl RepoTab {
                     tip,
                     theirs,
                 } => {
-                    self.remote_branch_asked = format!("{remote}\u{1f}{branch}");
+                    self.remote_branch_asked =
+                        Optional::some(super::RemoteBranch { remote, branch });
+                    self.remote_branch_revision = self.remote_branch_revision.wrapping_add(1);
                     self.remote_branch_state = state;
                     self.remote_branch_tip = tip;
                     self.remote_branch_theirs = theirs;
@@ -150,7 +152,7 @@ impl RepoTab {
                     self.move_ask_seq += 1;
                 }
                 TabMsg::MergeTools { names, settled } => {
-                    self.merge_tools = names.join("\u{1f}");
+                    self.merge_tools = names;
                     // The fast half arrives first; the indicator keeps
                     // turning until the slow read has had its say.
                     if settled {

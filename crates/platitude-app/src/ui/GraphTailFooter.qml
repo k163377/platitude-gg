@@ -70,28 +70,21 @@ Item {
             onPaint: {
                 const ctx = getContext("2d")
                 ctx.clearRect(0, 0, width, height)
-                if (tail.graphModel.tailGeometry === "")
-                    return
                 ctx.lineWidth = Metrics.laneStroke
-                // Same tokens as a row's geometry (uppercase = dashed leash): a stash or WIP row whose target sits past
-                // the cut keeps dotting through here.
-                const toks = tail.graphModel.tailGeometry.split(";")
-                for (let n = 0; n < toks.length; n++) {
-                    const t = toks[n]
-                    const dot = t.indexOf(".")
-                    const lane = parseInt(t.substring(1, dot))
-                    const color = parseInt(t.substring(dot + 1))
-                    const x = Metrics.laneInset + lane * Metrics.laneW + Metrics.laneW / 2
+                // The same records as a row's geometry, every one of them `through` (`encode::tail_lanes`); a stash or
+                // WIP row whose target sits past the cut keeps its dashed leash dotting through here.
+                for (const seg of tail.graphModel.tailGeometry) {
+                    const x = Metrics.laneInset + seg.lane * Metrics.laneW + Metrics.laneW / 2
                     // **The lanes go out.** Drawn flat at `dimFade` they put a step between the last
                     // row and this one exactly where the eye is following a line down. Full
                     // strength where the last row leaves off, gone by the bottom — the history past the cut is not
                     // there to be drawn, so what stands for it fades out.
                     const fade = ctx.createLinearGradient(0, 0, 0, height)
-                    const hex = Theme.graphLane[color % Theme.graphLane.length]
+                    const hex = Theme.graphLane[seg.color % Theme.graphLane.length]
                     fade.addColorStop(0, tailCanvas.faded(hex, 1))
                     fade.addColorStop(1, tailCanvas.faded(hex, 0))
                     ctx.strokeStyle = fade
-                    ctx.setLineDash(t[0] === t[0].toLowerCase() ? [] : Metrics.laneDash)
+                    ctx.setLineDash(seg.dashed ? Metrics.laneDash : [])
                     ctx.beginPath()
                     ctx.moveTo(x, 0)
                     ctx.lineTo(x, height)

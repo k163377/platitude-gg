@@ -2,6 +2,42 @@
 
 use platitude_core::highlight::DiffColors;
 use platitude_core::parse::diff::{DiffLine, DiffLineKind, FilePatch};
+use qtbridge::qtbridge_type_lib::QVariantMap;
+
+use super::wire::{Fields, Listed, Record, field};
+
+/// One line as the pane will measure it: the markup the row draws, and
+/// whether the row draws it bold.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Candidate {
+    pub bold: bool,
+    pub line: String,
+}
+
+/// The lines worth measuring, longest first by column count.
+pub type Candidates = Listed<Candidate>;
+
+impl Record for Candidate {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("bold", &self.bold)
+            .put("line", &self.line)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            bold: field(map, "bold")?,
+            line: field(map, "line")?,
+        })
+    }
+}
+
+impl platitude_core::mem::Footprint for Candidate {
+    fn heap_bytes(&self) -> usize {
+        self.line.heap_bytes()
+    }
+}
 
 /// Columns a tab stands for (デザイン規約 §シンタックスハイライト).
 pub(super) const TAB_WIDTH: usize = 4;
@@ -12,8 +48,7 @@ pub(super) const TAB_WIDTH: usize = 4;
 const MOST_CANDIDATES: usize = 8;
 
 /// The lines worth measuring before the rows that hold them are laid out,
-/// each as `<length>:<bold><markup>` with the length in UTF-16 units, one
-/// record after another. Empty where there is nothing to send.
+/// one [`Candidate`] each. Empty where there is nothing to send.
 ///
 /// What it is for: the pane draws the code without eliding it and lets the
 /// reader send it sideways, so it wants to know how far sideways there is
@@ -46,7 +81,7 @@ const MOST_CANDIDATES: usize = 8;
 /// Hunk headings are not among them: they stand at the viewport's own left
 /// edge and never travel, so a long `@@` line is not something to scroll
 /// to the end of.
-pub fn widest_lines(patches: &[FilePatch], colors: &DiffColors) -> String {
+pub fn widest_lines(patches: &[FilePatch], colors: &DiffColors) -> Candidates {
     let mut lines: Vec<(usize, usize, usize, usize)> = Vec::new();
     for (patch_index, patch) in patches.iter().enumerate() {
         for (hunk_index, hunk) in patch.hunks.iter().enumerate() {
@@ -65,35 +100,26 @@ pub fn widest_lines(patches: &[FilePatch], colors: &DiffColors) -> String {
     }
     lines.sort_unstable_by(|a, b| b.cmp(a));
     lines.truncate(MOST_CANDIDATES);
-    let mut out = String::new();
-    for (_, patch_index, hunk_index, line_index) in lines {
-        let line = &patches[patch_index].hunks[hunk_index].lines[line_index];
-        let read = colors.line(patch_index, hunk_index, line_index);
-        push_candidate(
-            &mut out,
-            line,
-            &super::markup::styled(&line.text, &read.spans),
-        );
-    }
-    out
+    Candidates::new(
+        lines
+            .into_iter()
+            .map(|(_, patch_index, hunk_index, line_index)| {
+                let line = &patches[patch_index].hunks[hunk_index].lines[line_index];
+                let read = colors.line(patch_index, hunk_index, line_index);
+                Candidate {
+                    bold: is_bold(line),
+                    line: super::markup::styled(&line.text, &read.spans),
+                }
+            })
+            .collect(),
+    )
 }
 
-/// One line as the pane will measure it: how long the markup is, whether
-/// it is drawn bold, and the markup itself.
-fn push_candidate(out: &mut String, line: &DiffLine, markup: &str) {
-    // Counted the way the pane counts, so a line carrying anything the
-    // records are parted by — or an astral glyph, which QML holds as two
-    // — is still cut out whole (`DiffTextMetrics.reachRecords`).
-    out.push_str(&markup.encode_utf16().count().to_string());
-    out.push(':');
-    out.push(match line.kind {
-        // The two the rows set in bold (`DiffRowDelegate`). A conflict
-        // fence is the exception there only: git's `<<<<<<<` is seven
-        // characters and reaches past nothing.
-        DiffLineKind::Addition | DiffLineKind::Deletion => '1',
-        _ => '0',
-    });
-    out.push_str(markup);
+/// The two kinds the rows set in bold (`DiffRowDelegate`). A conflict
+/// fence is the exception there only: git's `<<<<<<<` is seven characters
+/// and reaches past nothing.
+fn is_bold(line: &DiffLine) -> bool {
+    matches!(line.kind, DiffLineKind::Addition | DiffLineKind::Deletion)
 }
 
 /// How many columns one line stands in — the ranking above, and nothing
@@ -158,29 +184,13 @@ mod tests {
     use platitude_core::highlight::DiffColors;
     use platitude_core::parse::diff::parse_patch;
 
-    /// The records read back the way `DiffTextMetrics.reachRecords` reads
-    /// them: each one's length in UTF-16 units cuts out its own text, so a
-    /// line carrying a digit, a colon or anything else the packing spells
-    /// with is still handed over whole.
-    fn records(packed: &str) -> Vec<(bool, String)> {
-        let units: Vec<u16> = packed.encode_utf16().collect();
-        let mut out = Vec::new();
-        let mut at = 0;
-        while at < units.len() {
-            let cut = at
-                + units[at..]
-                    .iter()
-                    .position(|&u| u == u16::from(b':'))
-                    .expect("every record says how long it is");
-            let len: usize = String::from_utf16_lossy(&units[at..cut])
-                .parse()
-                .expect("that length is a number");
-            let bold = units[cut + 1] == u16::from(b'1');
-            let from = cut + 2;
-            out.push((bold, String::from_utf16_lossy(&units[from..from + len])));
-            at = from + len;
-        }
-        out
+    /// The candidates as the pane reads them: whether each is bold, and
+    /// its text.
+    fn records(candidates: &Candidates) -> Vec<(bool, String)> {
+        candidates
+            .iter()
+            .map(|c| (c.bold, c.line.clone()))
+            .collect()
     }
 
     /// The candidates, and the rows they are supposed to be — read out of
@@ -290,21 +300,22 @@ mod tests {
     }
 
     #[test]
-    fn a_line_says_how_long_it_is_in_the_units_qml_counts_in() {
-        // An astral glyph is one character here and two units there, and
-        // the length is what cuts the record out — a count of characters
-        // would take two units too few and hand the pane a line with its
-        // tail cut off.
+    fn a_line_goes_over_whole_whatever_it_holds() {
+        // An astral glyph, a colon and a digit: nothing in the text is
+        // anything the record is parted by, because nothing parts it.
         let patch = "\
 --- a/f
 +++ b/f
 @@ -1,1 +1,1 @@
-+ab\u{1f600}
++4:1ab\u{1f600}
 ";
         let patches = parse_patch(patch.as_bytes());
-        let packed = widest_lines(&patches, &DiffColors::default());
-        assert_eq!(packed, "4:1ab\u{1f600}");
-        assert_eq!(records(&packed), [(true, "ab\u{1f600}".to_string())]);
+        let candidates = widest_lines(&patches, &DiffColors::default());
+        assert_eq!(records(&candidates), [(true, "4:1ab\u{1f600}".to_string())]);
+        assert_eq!(
+            Candidates::try_from(&qtbridge::qtbridge_type_lib::QVariant::from(&candidates)),
+            Ok(candidates)
+        );
     }
 
     #[test]
@@ -331,13 +342,13 @@ mod tests {
 
     #[test]
     fn a_diff_with_no_lines_has_nowhere_sideways_to_go() {
-        assert_eq!(widest_lines(&[], &DiffColors::default()), "");
-        assert_eq!(
+        assert!(widest_lines(&[], &DiffColors::default()).is_empty());
+        assert!(
             widest_lines(
                 &parse_patch(b"* Unmerged path gone.txt\n"),
                 &DiffColors::default()
-            ),
-            ""
+            )
+            .is_empty()
         );
     }
 }

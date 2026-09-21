@@ -28,7 +28,13 @@ fn an_ordinary_commit_away_from_head_offers_the_whole_menu() {
     );
     assert_eq!(
         offers.words(),
-        "sequence integrate edit-history move-branch branch-here"
+        [
+            "sequence",
+            "integrate",
+            "edit-history",
+            "move-branch",
+            "branch-here"
+        ]
     );
 }
 

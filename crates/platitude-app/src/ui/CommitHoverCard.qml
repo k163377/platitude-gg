@@ -27,8 +27,8 @@ AppCard {
     property string body: ""
     property string author: ""
     property double atime: 0
-    /// Packed co-author records for the line beside the date.
-    property string mates: ""
+    /// The co-author records for the line beside the date (`encode::Mates`).
+    property var mates: []
     /// How wide the message may run before it wraps. The owner sets it from the pane the card opens over — a share of
     /// what is there, which is why Metrics holds no token for it.
     property real textWidth: 0
@@ -205,7 +205,7 @@ AppCard {
             }
             CoAuthorLine {
                 id: mateLine
-                packed: hoverCard.mates
+                records: hoverCard.mates
                 plain: true
                 // The card's own face, so the mark a cut leaves is drawn on it
                 // (`LineText.ground`).

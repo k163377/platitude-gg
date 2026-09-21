@@ -155,20 +155,21 @@ impl NavSectionModel {
         self.take_feeds();
     }
 
-    /// Shows these rows as already gone: the page hands over the names of
-    /// what it has just asked git to delete, separated by U+001F, and an
-    /// empty string puts them all back (デザイン規約 §消す操作は先に画面から消す).
+    /// Shows a row as already gone: the page hands over the name of what
+    /// it has just asked git to delete — one per list, since a delete
+    /// touches at most one of each kind — and an empty name puts it back
+    /// (デザイン規約 §消す操作は先に画面から消す).
     ///
-    /// The page owns when they go back, because only the page knows which
+    /// The page owns when it goes back, because only the page knows which
     /// answer it is waiting for — this list holds nothing but what it was
     /// told, so a name for a row that is not here costs one comparison and
     /// changes nothing.
     #[qslot]
-    fn set_hidden(&mut self, names: String) {
-        let hidden: Vec<String> = if names.is_empty() {
+    fn set_hidden(&mut self, name: String) {
+        let hidden: Vec<String> = if name.is_empty() {
             Vec::new()
         } else {
-            names.split('\u{1f}').map(str::to_string).collect()
+            vec![name]
         };
         if self.hidden == hidden {
             return;
@@ -395,7 +396,7 @@ impl NavSectionModel {
         self.all.tag_drift(&name, &remote)
     }
 
-    /// The remotes carrying this tag, packed one per unit separator —
+    /// The remotes carrying this tag —
     /// **what the row opens on** (デザイン規約 §左メニューの所作), and the
     /// list the row's own cloud stands for.
     ///
@@ -405,32 +406,30 @@ impl NavSectionModel {
     /// (`remote::tags::list_tags`). Asked of the tags section, the only
     /// one holding the readings.
     ///
-    /// **One record to a remote, name order**, each the name and a digit:
-    /// whether that remote stands somewhere other than where `against`
-    /// has the tag. `against` is the remote this window's own tag rows act
-    /// on (`RepoTab.defaultRemote`) — sending a tag and taking one off a
-    /// remote both go to that one and no other
+    /// **One record to a remote, name order** (`TagCarrier`): the name,
+    /// and whether that remote stands somewhere other than where
+    /// `against` has the tag. `against` is the remote this window's own
+    /// tag rows act on (`RepoTab.defaultRemote`) — sending a tag and
+    /// taking one off a remote both go to that one and no other
     /// (デザイン規約 §タグを作る・送る), so it is the reading the others
     /// are read against. **Not the copy here**: which of the readings is
     /// the one is not a question the commits answer, and a local tag that
     /// is itself the odd one out would put the mark on everybody else.
     #[qslot]
-    pub(super) fn tag_remotes(&self, name: String, against: String) -> String {
+    pub(super) fn tag_remotes(&self, name: String, against: String) -> TagCarriers {
         if name.is_empty() || self.section != "tags" {
-            return String::new();
+            return TagCarriers::default();
         }
-        self.all
-            .tag_carriers(&name, &against)
-            .into_iter()
-            .map(|(remote, apart)| {
-                format!(
-                    "{remote}{sep}{}",
-                    u8::from(apart),
-                    sep = crate::encode::FIELD_SEP
-                )
-            })
-            .collect::<Vec<String>>()
-            .join(&crate::encode::RECORD_SEP.to_string())
+        TagCarriers::new(
+            self.all
+                .tag_carriers(&name, &against)
+                .into_iter()
+                .map(|(remote, apart)| TagCarrier {
+                    remote: remote.to_string(),
+                    apart,
+                })
+                .collect(),
+        )
     }
 
     /// The other working copy holding this branch, by the path git lists
@@ -533,7 +532,7 @@ impl NavSectionModel {
     /// The file row the arrows land on, `way` steps from `path` in `bucket`
     /// (see [`Self::step`]). What the file list's own arrows walk.
     #[qslot]
-    fn step_file(&self, bucket: String, path: String, way: i32) -> String {
+    fn step_file(&self, bucket: String, path: String, way: i32) -> Landed {
         self.step(&bucket, &path, way)
     }
 
@@ -549,7 +548,7 @@ impl NavSectionModel {
     /// (see [`Self::edge`]). What the arrows land on when they cross out of
     /// the bucket above or below.
     #[qslot]
-    fn edge_file(&self, way: i32) -> String {
+    fn edge_file(&self, way: i32) -> Landed {
         self.edge(way)
     }
 

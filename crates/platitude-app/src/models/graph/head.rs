@@ -9,6 +9,14 @@
 
 use super::*;
 
+/// Writes `value` over `slot` only where the two differ, and says so.
+fn take<T: PartialEq + Clone>(slot: &mut T, value: &T, moved: &mut bool) {
+    if slot != value {
+        *slot = value.clone();
+        *moved = true;
+    }
+}
+
 impl GraphModel {
     /// Re-reads which loaded row the working tree stands on, and takes
     /// off it everything the stand-in draws — its chips, its subject, its
@@ -49,31 +57,15 @@ impl GraphModel {
             self.head_row = head_row;
             moved = true;
         }
-        let row = found.and_then(|i| self.rows.get(i));
-        let mut take_str = |slot: &mut String, value: &str| {
-            if slot != value {
-                value.clone_into(slot);
-                moved = true;
-            }
-        };
-        take_str(
-            &mut self.head_labels,
-            row.map(|r| r.labels.as_str()).unwrap_or_default(),
-        );
-        take_str(
-            &mut self.head_subject,
-            row.map(|r| r.subject.as_str()).unwrap_or_default(),
-        );
-        take_str(
-            &mut self.head_avatar_url,
-            row.map(|r| r.avatar_url.as_str()).unwrap_or_default(),
-        );
-        take_str(
-            &mut self.head_geometry,
-            row.map(|r| r.geometry.as_str()).unwrap_or_default(),
-        );
-        let (color, lane, avatar) =
-            row.map_or((0, 0, 0), |r| (r.node_color, r.node_lane, r.avatar));
+        // Outside the window there is no row, and the stand-in draws
+        // nothing: the empty answers are what it reads then.
+        let none = GraphRowItem::default();
+        let row = found.and_then(|i| self.rows.get(i)).unwrap_or(&none);
+        take(&mut self.head_labels, &row.labels, &mut moved);
+        take(&mut self.head_subject, &row.subject, &mut moved);
+        take(&mut self.head_avatar_url, &row.avatar_url, &mut moved);
+        take(&mut self.head_geometry, &row.geometry, &mut moved);
+        let (color, lane, avatar) = (row.node_color, row.node_lane, row.avatar);
         if (self.head_color, self.head_lane, self.head_avatar) != (color, lane, avatar) {
             (self.head_color, self.head_lane, self.head_avatar) = (color, lane, avatar);
             moved = true;

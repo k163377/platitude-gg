@@ -29,17 +29,9 @@ ColumnLayout {
     signal accepted()
 
     // ---- which repository ------------------------------------------------
-    /// The strip, unpacked: one record per tab, the name it is shown by and then its work tree path
-    /// (`TabsModel::settle_open_repos`).
-    readonly property var openRepos: {
-        const packed = pane.tabsModel.openRepos
-        if (packed === "")
-            return []
-        return packed.split(String.fromCharCode(31)).map(record => {
-            const parts = record.split(String.fromCharCode(30))
-            return { name: parts[0], path: parts[1] }
-        })
-    }
+    /// The strip: one record per tab, the name it is shown by and its work tree path
+    /// (`TabsModel::settle_open_repos` — `{name, path}`).
+    readonly property var openRepos: pane.tabsModel.openRepos
     /// Just the names, which is what the list offers.
     readonly property var repoNames: pane.openRepos.map(repo => repo.name)
 

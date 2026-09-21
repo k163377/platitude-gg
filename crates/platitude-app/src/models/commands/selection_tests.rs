@@ -3,6 +3,40 @@
 use super::selection::{AT_CLOCK, AT_CMD, AT_GAP_CMD, AT_GAP_OUT, AT_OUT, clock_of};
 use super::*;
 
+/// One row's wash the way the tests read it: the three columns' runs as
+/// `from:len,…`, and whether the line was taken whole; `None` for a row
+/// the selection does not reach.
+fn said(sel: &Optional<CommandWash>) -> Option<(String, String, String, bool)> {
+    let spell = |runs: &Runs| {
+        runs.iter()
+            .map(|r| format!("{}:{}", r.from, r.len))
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    sel.as_ref().map(|w| {
+        (
+            spell(&w.clock),
+            spell(&w.command),
+            spell(&w.outcome),
+            w.whole,
+        )
+    })
+}
+
+fn wash(
+    clock: &str,
+    command: &str,
+    outcome: &str,
+    whole: bool,
+) -> Option<(String, String, String, bool)> {
+    Some((
+        clock.to_string(),
+        command.to_string(),
+        outcome.to_string(),
+        whole,
+    ))
+}
+
 fn row(args: &str, state: &str, result: &str, duration: &str, output: &str) -> CommandItem {
     CommandItem {
         clock: "12:03:17".to_string(),
@@ -12,7 +46,7 @@ fn row(args: &str, state: &str, result: &str, duration: &str, output: &str) -> C
         result: result.to_string(),
         duration: duration.to_string(),
         output: output.to_string(),
-        sel: String::new(),
+        sel: Optional::none(),
     }
 }
 
@@ -249,10 +283,10 @@ fn each_row_is_told_where_the_wash_falls_on_it() {
     // command and outcome columns both carry a run and the line is not
     // whole. A run is the places of that column the wash covers, and the
     // pane asks the column itself where those are drawn.
-    assert_eq!(model.rows[0].sel, "|4:9|0:5|0");
+    assert_eq!(said(&model.rows[0].sel), wash("", "4:9", "0:5", false));
     // The second starts at its first character, so the clock carries one
     // too -- and it stops inside the command, so nothing is on the third.
-    assert_eq!(model.rows[1].sel, "0:8|0:6||0");
+    assert_eq!(said(&model.rows[1].sel), wash("0:8", "0:6", "", false));
 }
 
 #[test]
@@ -265,8 +299,8 @@ fn a_row_the_selection_does_not_reach_is_told_nothing() {
     model.drag_select(0, 8);
     model.respell_row(0);
     model.respell_row(1);
-    assert_eq!(model.rows[0].sel, "0:8|||0");
-    assert_eq!(model.rows[1].sel, "");
+    assert_eq!(said(&model.rows[0].sel), wash("0:8", "", "", false));
+    assert_eq!(said(&model.rows[1].sel), None);
 }
 
 #[test]
@@ -281,7 +315,7 @@ fn a_wash_names_places_and_leaves_the_pixels_to_the_row() {
     model.respell_row(0);
     // `git add -- ` is eleven places, the three kanji are one each, and
     // `.txt` is four.
-    assert_eq!(model.rows[0].sel, "|0:18|0:4|0");
+    assert_eq!(said(&model.rows[0].sel), wash("", "0:18", "0:4", false));
 }
 
 #[test]

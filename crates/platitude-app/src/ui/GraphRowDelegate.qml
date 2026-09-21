@@ -24,11 +24,14 @@ Item {
     /// A picture this author was given, or empty for the generated pattern. Resolved in Rust onto the row
     /// (models::graph).
     required property string avatar_url
-    /// Packed `Co-authored-by` records; the first one badges the node (GraphLaneCell), and the hover card names the
-    /// rest.
-    required property string co_authors
-    required property string geometry
-    required property string labels
+    /// The `Co-authored-by` records (`{name, email, face}`); the first one badges the node (GraphLaneCell), and the
+    /// hover card names the rest.
+    required property var co_authors
+    /// The lane segments the cell draws (`{kind, lane, color, dashed}` — `encode::Lanes`).
+    required property var geometry
+    /// The chips the row carries (`{kind, name, isHead, hasRemote, hasPr, here, held, locked, remote, key}` —
+    /// `encode::Chips`), in the order the front card reads them: HEAD → local → remote → tag.
+    required property var labels
     required property string stash_ref
     /// The find bar's line is somewhere in this row (platitude-core::find decides; the model marks it). Only ever true
     /// while a search is on.
@@ -70,44 +73,36 @@ Item {
     // no gesture — the pane that stages and commits is opened by a WIP row's selection, so a row that cannot be
     // selected never puts it in front of a tree it does not belong to (P3-確認事項 §別 worktree の未コミット行).
     readonly property bool carried: rowItem.carriedName !== ""
-    // Its six tallies, packed by `GraphModel::carried_tally` in the order below.
+    // Its six tallies (`GraphModel::carried_tally` — `{added, modified, deleted, renamed, copied, conflicted}`), and
+    // nothing on every other row.
     readonly property var carriedTally: {
         if (!rowItem.carried)
-            return null
+            return undefined
         rowItem.ListView.view.model.carriedRevision
-        const packed = rowItem.ListView.view.model.carriedTally(rowItem.index)
-        return packed === "" ? null : packed.split(",").map(n => parseInt(n, 10))
+        return rowItem.ListView.view.model.carriedTally(rowItem.index)
     }
     // The six an uncommitted row says, whosever it is: another copy's come off its row, and this window's off the
-    // view — which holds one set, and it is this window's tree's. Ordered added, modified, deleted, renamed, copied,
-    // conflicted, the order both sides are written in.
+    // view — which holds one set, and it is this window's tree's. The same six names either way.
     readonly property var shownTally: {
         if (rowItem.carriedTally)
             return rowItem.carriedTally
         const view = rowItem.ListView.view
         if (!view)
-            return [0, 0, 0, 0, 0, 0]
-        return [view.wipAdded, view.wipModified, view.wipDeleted,
-                view.wipRenamed, view.wipCopied, view.wipConflicted]
+            return { "added": 0, "modified": 0, "deleted": 0, "renamed": 0, "copied": 0, "conflicted": 0 }
+        return { "added": view.wipAdded, "modified": view.wipModified, "deleted": view.wipDeleted,
+                 "renamed": view.wipRenamed, "copied": view.wipCopied, "conflicted": view.wipConflicted }
     }
-    // Chip records are separated by U+001F (see encode.rs), and arrive in the order the chip reads them out: HEAD →
-    // local → remote → tag. One card for the row, so a commit that is both a branch tip and a release shows the branch
-    // — the tag is a sheet behind it (`RefChipStack`), read whole in the hover card. A chip the window has already
-    // said is gone is left
-    // out (`encode::labels_shown` applies the set): the row still carries it, because the ref only leaves the model
+    // One card for the row, so a commit that is both a branch tip and a release shows the branch — the tag is a sheet
+    // behind it (`RefChipStack`), read whole in the hover card. A chip the window has already said is gone is left
+    // out (`encode::chips_shown` applies the set): the row still carries it, because the ref only leaves the model
     // when the walk that follows the delete lands (デザイン規約 §消す操作は先に画面から消す). Read off the model
     // — the same list that hands out `labels` says which names the window stands in for.
-    readonly property string goneChips:
-        rowItem.ListView.view && rowItem.ListView.view.model ? rowItem.ListView.view.model.goneChips : ""
-    readonly property string shownLabels: GitFacts.labelsShown(labels, rowItem.goneChips)
-    readonly property var labelRecords:
-        rowItem.shownLabels === "" ? [] : rowItem.shownLabels.split(String.fromCharCode(31))
-    // The same reading `RepoPage.branchRecordAt` uses, so the two doors to a row's branch cannot disagree: a tag is
+    readonly property var goneChips:
+        rowItem.ListView.view && rowItem.ListView.view.model ? rowItem.ListView.view.model.goneChips : []
+    readonly property var labelRecords: GitFacts.chipsShown(labels, rowItem.goneChips)
+    // The same reading `RepoPage.rowChipAt` uses, so the two doors to a row's branch cannot disagree: a tag is
     // not a branch, and neither is the detached-HEAD marker.
-    readonly property var branchRecords: labelRecords.filter(r => {
-        const kind = GitFacts.recordKind(r)
-        return kind === "branch" || kind === "remote"
-    })
+    readonly property var branchRecords: labelRecords.filter(chip => chip.kind === "branch" || chip.kind === "remote")
     // Whether this row is somewhere HEAD could stand: the working-tree row is not a commit, and a stash sits on no
     // branch's history.
     readonly property bool movable: !rowItem.isWip && rowItem.stash_ref === ""
@@ -115,17 +110,17 @@ Item {
     // is the same answer and says so with a different kind (`models::graph::head`).
     readonly property bool isHead: rowItem.ListView.view ? rowItem.ListView.view.headRow === rowItem.index : false
     // Where a double-click on this row goes: the branch chip's own first record, so what is on screen is what is moved
-    // to. Empty means the row shows no branch, which is the offer to put one there.
-    readonly property string primaryRecord:
-        rowItem.movable && rowItem.branchRecords.length > 0 ? rowItem.branchRecords[0] : ""
+    // to. Null means the row shows no branch, which is the offer to put one there.
+    readonly property var primaryChip:
+        rowItem.movable && rowItem.branchRecords.length > 0 ? rowItem.branchRecords[0] : null
     // **The name this row draws**: the chip's own first record, whatever kind it is. What the spaced second click
     // changes, and what a right-click aims the menu's cards at — one answer, so the row cannot rename one name and
-    // offer another. **`primaryRecord` is another question** — "where does this row lead", and a tag leads nowhere
+    // offer another. **`primaryChip` is another question** — "where does this row lead", and a tag leads nowhere
     // while still being a name that can be changed (デザイン規約 §左メニューの所作). The two markers name no ref — the
-    // detached HEAD and a working copy standing here — so they answer `""`.
-    readonly property string renameRecord:
-        rowItem.labelRecords.length > 0 && GitFacts.recordKind(rowItem.labelRecords[0]) !== ""
-            ? rowItem.labelRecords[0] : ""
+    // detached HEAD and a working copy standing here — so they answer null.
+    readonly property var renameChip:
+        rowItem.labelRecords.length > 0 && GitFacts.refKind(rowItem.labelRecords[0].kind) !== ""
+            ? rowItem.labelRecords[0] : null
     // The chip itself — what a stacked one is unstacked under.
     readonly property alias chipItem: chipColumn.chipItem
     // The mark the chip wears while a second click waits out its window, as drawn (PGG_AUTO_ACT=graph-reclick-mark).
@@ -361,12 +356,12 @@ Item {
                 visible: rowItem.isWip
                 Layout.leftMargin: Theme.spaceSm
                 sourceComponent: WipTallyRow {
-                    added: rowItem.shownTally[0]
-                    modified: rowItem.shownTally[1]
-                    deleted: rowItem.shownTally[2]
-                    renamed: rowItem.shownTally[3]
-                    copied: rowItem.shownTally[4]
-                    conflicted: rowItem.shownTally[5]
+                    added: rowItem.shownTally.added
+                    modified: rowItem.shownTally.modified
+                    deleted: rowItem.shownTally.deleted
+                    renamed: rowItem.shownTally.renamed
+                    copied: rowItem.shownTally.copied
+                    conflicted: rowItem.shownTally.conflicted
                 }
             }
             Item {
@@ -491,7 +486,7 @@ Item {
     /// (app-ui.md §UI 自動化の因果性, PGG_AUTO_ACT=graph-reclick). Both are the list's answer: the gesture lives there,
     /// because this delegate is pooled the moment its row scrolls off (`GraphList`).
     readonly property bool renameArmed:
-        rowItem.ListView.view ? rowItem.ListView.view.renameArmed(rowItem.renameRecord) : false
+        rowItem.ListView.view ? rowItem.ListView.view.renameArmed(rowItem.renameChip) : false
     readonly property bool clickGuarded: rowItem.ListView.view ? rowItem.ListView.view.clickGuarded : false
     /// A left click, as this row answers one. `held` is how long the button was down, which is what the gesture takes
     /// off the wait it has left (`ReclickGesture.click`). Named so that a run with no pointer to press with puts its
@@ -520,7 +515,7 @@ Item {
         }
         // The second click of a double-click belongs to the gesture: the first one already did what a click does,
         // and the gesture is the double.
-        if (!rowItem.ListView.view.noteClick(rowItem.oid_hex, rowItem.renameRecord, held))
+        if (!rowItem.ListView.view.noteClick(rowItem.oid_hex, rowItem.renameChip, held))
             return
         rowItem.claimRow(Qt.NoModifier)
     }
@@ -554,7 +549,7 @@ Item {
         rowItem.ListView.view.dropRename()
         if (!rowItem.movable)
             return false
-        rowItem.ListView.view.rowSwitchRequested(rowItem.oid_hex, rowItem.primaryRecord)
+        rowItem.ListView.view.rowSwitchRequested(rowItem.oid_hex, rowItem.primaryChip)
         return true
     }
     /// A press here says where the keyboard is working, so the arrows walk the history from the row that was just
@@ -601,12 +596,12 @@ Item {
             //
             // **One menu, wherever along the row the press landed**: its rows are
             // about this commit, and the cards at its foot are about the name the chip is drawing — which is what
-            // `renameRecord` already is, the first record the chip reads out (デザイン規約 §グラフ行の右クリック).
+            // `renameChip` already is, the first record the chip reads out (デザイン規約 §グラフ行の右クリック).
             // The hover still reads the division (`partAt`), because the two things a rest opens are two different
             // things; a right-click opens one, so it has nothing to divide. The names behind the card aim the same
             // menu at one of themselves, through the right-click on the list the chip unfolds into.
             if (!rowItem.isWip)
-                rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.renameRecord)
+                rowItem.ListView.view.rowMenuRequested(rowItem.oid_hex, rowItem.renameChip)
         }
         // Where the row leads: the chip it shows, or — with no branch on it — the offer to put one there. The page
         // decides which.

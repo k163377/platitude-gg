@@ -40,10 +40,7 @@ Item {
     /// — the refs are already on this side — so the pill goes quiet.
     property bool targetIsThere: false
 
-    readonly property var remotes: {
-        const packed = upstreamFlow.repoTab.remoteNames
-        return packed === "" ? [] : packed.split(String.fromCharCode(31))
-    }
+    readonly property var remotes: upstreamFlow.repoTab.remoteNames
     readonly property string target: upstreamFlow.remote + "/" + upstreamFlow.branchName
     readonly property bool filled: upstreamFlow.remote !== "" && upstreamFlow.branchName !== ""
 

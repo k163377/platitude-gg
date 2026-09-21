@@ -23,17 +23,17 @@ Item {
     /// What a press asked for, last one wins: the card runs nothing itself.
     property string asked: ""
 
-    /// The words core answers with, packed as `offers::RefMenuOffers::words` packs them. **Data, not a rule** — what
-    /// a repository's state comes to is core's and is tested there.
-    readonly property string free: "switch branch-here integrate delete delete-remote set-upstream"
+    /// The words core answers with, the list `offers::RefMenuOffers::words` is. **Data, not a rule** — what a
+    /// repository's state comes to is core's and is tested there.
+    readonly property var free: ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream"]
     /// The branch the working tree is on: no move, no delete, and the rows say so.
-    readonly property string current: "branch-here integrate set-upstream current"
+    readonly property var current: ["branch-here", "integrate", "set-upstream", "current"]
     /// One another working copy holds: `switch` stays and asks, the delete does not.
-    readonly property string held: "switch asks branch-here integrate set-upstream"
+    readonly property var held: ["switch", "asks", "branch-here", "integrate", "set-upstream"]
     /// A reading standing on another commit: the local delete stays, the one that reaches over there goes.
-    readonly property string drifted: "switch branch-here integrate delete set-upstream"
+    readonly property var drifted: ["switch", "branch-here", "integrate", "delete", "set-upstream"]
     /// Something running: every write is out at once.
-    readonly property string busy: "switch asks"
+    readonly property var busy: ["switch", "asks"]
 
     RefBranchMenu {
         id: card
@@ -146,7 +146,7 @@ Item {
         /// the held one that reaches past this machine.
         function test_a_remote_row_keeps_only_the_rows_it_can_name() {
             root.standOn({ kind: "remote", name: "origin/main", full: "origin/main",
-                           remoteCounterpart: "", offers: "switch branch-here integrate delete" })
+                           remoteCounterpart: "", offers: ["switch", "branch-here", "integrate", "delete"] })
             verify(card.applies)
             verify(card.deleteItem.offered)
             compare(card.deleteItem.code, "push --delete")
@@ -159,7 +159,7 @@ Item {
 
         /// A row that names no branch takes the card off the menu — the same answer from either entrance.
         function test_a_row_that_names_no_branch_has_no_card() {
-            root.standOn({ kind: "tag", name: "v1.0", full: "v1.0", offers: "" })
+            root.standOn({ kind: "tag", name: "v1.0", full: "v1.0", offers: [] })
             verify(!card.applies)
         }
 
@@ -236,7 +236,7 @@ Item {
 
             // A remote row's own delete goes to the reading it names.
             root.standOn({ kind: "remote", name: "origin/main", full: "origin/main",
-                           remoteCounterpart: "", offers: "delete" })
+                           remoteCounterpart: "", offers: ["delete"] })
             card.deleteItem.held()
             compare(root.asked, "delete-remote origin/main")
         }

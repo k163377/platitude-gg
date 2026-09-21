@@ -24,7 +24,7 @@ Item {
         id: sections
         function upstreamOf(name) { return "origin/feature/topic-a" }
         function trackedBy(full) { return "" }
-        function tagRemotes(name, against) { return "" }
+        function tagRemotes(name, against) { return [] }
     }
     QtObject {
         id: branches

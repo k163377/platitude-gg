@@ -253,13 +253,13 @@ Item {
             // added the row the fetch brought in was drawn over the refs as they stood, so that row arrives wearing
             // no chip at all and is given the remote name once the listing is in. Row zero is that row: the preset
             // opens on a clean tree, so no working-tree row stands above what the fetch brought in.
-            const topChips = GitFacts.labelsShown(graphModel.labelsAt(0), graphModel.goneChips)
-            if (topChips === "")
+            const topChips = GitFacts.chipsShown(graphModel.labelsAt(0), graphModel.goneChips)
+            if (topChips.length === 0)
                 return
             openFetchTimer.stop()
             Harness.report("open_fetch fails=" + repoTab.fetchFailures
                               + " behind=" + branchesModel.headBehind
-                              + " top=" + GitFacts.recordName(topChips.split(String.fromCharCode(31))[0])
+                              + " top=" + topChips[0].name
                               + " rows=" + graphModel.rowTotal
                               + " wanted=" + acts.openFetchRows)
             driver.complete()

@@ -98,9 +98,8 @@ impl DetailsModel {
         self.changed();
     }
 
-    /// Requests what a choice of several commits changed. `packed` is
-    /// their ids **newest first**, joined by `\u{1f}` — the order the
-    /// graph stands in.
+    /// Requests what a choice of several commits changed. `ids` are
+    /// theirs, **newest first** — the order the graph stands in.
     ///
     /// `compare` picks which question is being asked: two commits are
     /// read as what differs between them, three or more as what all of
@@ -108,9 +107,9 @@ impl DetailsModel {
     /// settled here, so the pane turns over with the press that
     /// asked.
     #[qslot]
-    fn request_selection(&mut self, packed: String, compare: bool) {
+    fn request_selection(&mut self, ids: Vec<String>, compare: bool) {
         let mut oids = Vec::new();
-        for hex in packed.split('\u{1f}').filter(|h| !h.is_empty()) {
+        for hex in ids.iter().filter(|h| !h.is_empty()) {
             let Ok(oid) = Oid::from_hex_str(hex.trim()) else {
                 tracing::warn!(hex, "invalid oid in a selection request");
                 return;
@@ -227,7 +226,7 @@ impl DetailsModel {
         self.avatar = crate::encode::avatar_code(&details.author_name);
         self.avatar_url =
             Hub::with(|hub| hub.avatar_url(&details.author_email)).unwrap_or_default();
-        self.co_authors = crate::encode::encode_co_authors(&details.co_authors);
+        self.co_authors = crate::encode::mates_of(&details.co_authors);
         self.author_time = details.author_time;
         self.committer_name = details.committer_name.clone();
         self.committer_email = details.committer_email.clone();
@@ -287,10 +286,9 @@ impl DetailsModel {
     }
 
     /// The changed file `way` steps from `path` among the rows this list
-    /// shows, as `<row>\u{1e}<bucket>\u{1e}<path>`. Empty where the walk has
-    /// nowhere left to go — which is how the arrows stop at the ends —
-    /// and empty where the path is not shown at all
-    /// (デザイン規約 §diff のファイル一覧).
+    /// shows (`encode::Landing`). Nothing where the walk has nowhere left
+    /// to go — which is how the arrows stop at the ends — and nothing
+    /// where the path is not shown at all (デザイン規約 §diff のファイル一覧).
     ///
     /// Only the sign of `way` is read: one press is one file.
     ///
@@ -298,14 +296,13 @@ impl DetailsModel {
     /// and the rows walked are the ones on screen — a folder the reader
     /// closed is one the walk does not enter.
     ///
-    /// The bucket field is always empty here (a commit's changed files sit
-    /// in no bucket); it is in the record so that one walk reads both file
-    /// lists. The path comes last because it is the only field git lets hold
-    /// the separator.
+    /// The bucket is always empty here (a commit's changed files sit in no
+    /// bucket); it is in the record so that one walk reads both file
+    /// lists.
     #[qslot]
-    pub(super) fn step_file(&self, _bucket: String, path: String, way: i32) -> String {
+    pub(super) fn step_file(&self, _bucket: String, path: String, way: i32) -> Landed {
         let Some(from) = self.files.iter().position(|f| !f.folder && f.path == path) else {
-            return String::new();
+            return Landed::none();
         };
         let file = |at: &usize| self.files.get(*at).is_some_and(|f| !f.folder);
         let landed = if way < 0 {
@@ -313,16 +310,15 @@ impl DetailsModel {
         } else {
             (from + 1..self.files.len()).find(file)
         };
-        landed
-            .and_then(|at| self.files.get(at).map(|f| (at, f)))
-            .map(|(at, f)| {
-                format!(
-                    "{at}{sep}{sep}{path}",
-                    sep = crate::encode::FIELD_SEP,
-                    path = f.path
-                )
-            })
-            .unwrap_or_default()
+        Landed::new(
+            landed
+                .and_then(|at| self.files.get(at).map(|f| (at, f)))
+                .map(|(at, f)| Landing {
+                    row: i32::try_from(at).unwrap_or(-1),
+                    bucket: String::new(),
+                    path: f.path.clone(),
+                }),
+        )
     }
 
     /// Where a renamed file came from, by path — whole, the way a diff wants

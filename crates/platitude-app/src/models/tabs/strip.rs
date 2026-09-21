@@ -110,7 +110,7 @@ impl TabsModel {
         Hub::with(|hub| hub.set_tabs_state(platitude_core::settings::TabsState { paths, active }));
     }
 
-    /// Packs the strip for the readers that want it whole (`open_repos`).
+    /// Lists the strip for the readers that want it whole (`open_repos`).
     ///
     /// From [`report`], which every act on the strip ends with — so a tab
     /// opened, closed, renamed against a new namesake or carried past its
@@ -124,17 +124,17 @@ impl TabsModel {
     ///
     /// [`report`]: TabsModel::report
     fn settle_open_repos(&mut self) {
-        let mut packed = String::new();
-        for item in &self.items {
-            if !packed.is_empty() {
-                packed.push(RECORD_SEP);
-            }
-            packed.push_str(&item.title);
-            packed.push(FIELD_SEP);
-            packed.push_str(&item.repo_path);
-        }
-        if packed != self.open_repos {
-            self.open_repos = packed;
+        let listed = OpenRepos::new(
+            self.items
+                .iter()
+                .map(|item| OpenRepo {
+                    name: item.title.clone(),
+                    path: item.repo_path.clone(),
+                })
+                .collect(),
+        );
+        if listed != self.open_repos {
+            self.open_repos = listed;
             self.open_repos_changed();
         }
     }

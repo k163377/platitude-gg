@@ -18,7 +18,8 @@ import platitude.ui
 Item {
     id: commitRow
 
-    /// One row as `GraphModel.chosenRows` packed it, already taken apart by the pane.
+    /// One row as `GraphModel.chosenRows` names it (`oid`, `sha8`, `subject`, `body`, `author`, `atime`, `avatar`,
+    /// `avatarUrl`, `mates`).
     required property var modelData
     /// The commit whose card is out. The row it came off keeps its band while the card stands over it: the card opens
     /// off the row's own bottom edge, so the hand walking down into it is off the row from that moment.
@@ -30,7 +31,7 @@ Item {
     readonly property string body: commitRow.modelData.body
     readonly property string author: commitRow.modelData.author
     readonly property double atime: commitRow.modelData.atime
-    readonly property string co_authors: commitRow.modelData.mates
+    readonly property var co_authors: commitRow.modelData.mates
     /// **Always -1.** The number that travels with a card is a row of the graph, which
     /// is what a press in one lands on; this list has its own numbering and handing that over would pick a commit at
     /// random (`RepoPage.activateRow` looks the commit up when it is given -1).

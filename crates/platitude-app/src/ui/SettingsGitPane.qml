@@ -46,11 +46,8 @@ ColumnLayout {
 
     // ---- the merge editor ------------------------------------------------
     readonly property string mergeTool: pane.curPage ? pane.curPage.pageWt.mergeTool : ""
-    /// Names to offer, packed the way the graph's label records are.
-    readonly property var toolChoices: {
-        const packed = pane.curPage ? pane.curPage.pageTab.mergeTools : ""
-        return packed === "" ? [] : packed.split(String.fromCharCode(31))
-    }
+    /// Names to offer (`RepoTab.mergeTools`).
+    readonly property var toolChoices: pane.curPage ? pane.curPage.pageTab.mergeTools : []
     /// Stops a late answer from overwriting something already typed.
     property bool toolTouched: false
     /// Keeps the box's turning indicator up past the read that raised it. Written from outside and false wherever

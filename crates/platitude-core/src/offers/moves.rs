@@ -48,21 +48,21 @@ impl SwitchAction {
     }
 }
 
-/// The action itself. `kind_letter` is the chip record's letter (`L`
-/// local / `R` remote — every other letter moves nothing); `local` the
-/// local branch the move lands on (for `R`, the remote ref's local
+/// The action itself. `kind` is the word the chip goes out under
+/// (`branch` / `remote` — every other kind moves nothing); `local` the
+/// local branch the move lands on (for `remote`, the remote ref's local
 /// name); `held_by_worktree` the other working copy holding that local
 /// branch, empty when none does; `local_oid` that branch's commit, empty
 /// when no such branch exists.
 pub fn switch_action(
-    kind_letter: &str,
+    kind: &str,
     local: &str,
     current_branch: &str,
     held_by_worktree: &str,
     local_oid: &str,
 ) -> SwitchAction {
-    match kind_letter {
-        "L" => {
+    match kind {
+        "branch" => {
             if local == current_branch {
                 SwitchAction::None
             } else if !held_by_worktree.is_empty() {
@@ -71,7 +71,7 @@ pub fn switch_action(
                 SwitchAction::Switch
             }
         }
-        "R" => {
+        "remote" => {
             if !held_by_worktree.is_empty() {
                 SwitchAction::OpenHolder
             } else if local_oid.is_empty() {

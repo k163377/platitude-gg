@@ -19,14 +19,14 @@ Item {
     /// `hunk` / `ctx` / `add` / `del` / `meta` / `commit` — what colour the words are, and whether they are a
     /// line of the file at all.
     required property string kind
-    /// Where what changed inside this line falls in it — `"from:len,…"` in the places a layout counts, empty for
-    /// nothing (`encode::DiffRow.emph`). Drawn as the stronger wash under the text; the quiet parts keep the
-    /// line's own background (デザイン規約 §シンタックスハイライト).
-    required property string emph
-    /// Where the reader's own selection falls on this line (`DiffModel.sel`): `"*"` for a line taken end to end, and
-    /// otherwise the same `from:len` runs `emph` carries. Empty on every line the plain `Copy` does not take —
+    /// Where what changed inside this line falls in it — runs of places a layout counts (`[{ from, len }, …]`),
+    /// empty for nothing (`encode::DiffRow.emph`). Drawn as the stronger wash under the text; the quiet parts keep
+    /// the line's own background (デザイン規約 §シンタックスハイライト).
+    required property var emph
+    /// Where the reader's own selection falls on this line (`DiffModel.sel` — `{whole, runs}`): the line taken end
+    /// to end, or the same runs `emph` carries. Nothing on every line the plain `Copy` does not take —
     /// **the wash is the answer** (デザイン規約 §diff の中身をコピーする).
-    required property string sel
+    required property var sel
     /// One of git's conflict fences: the words drop their voice (デザイン規約 §シンタックスハイライト).
     required property bool fence
     /// This line ends the file without a newline: git's note, said as a mark at the end of the line it was about
@@ -61,7 +61,7 @@ Item {
     clip: true
 
     /// Where this line's two washes are drawn, taken from the line laid out — `[{ x, w }, …]` in the code's own
-    /// coordinates, before the send (`LineRuler.rectsOf`). A line taken end to end says so with one word and needs
+    /// coordinates, before the send (`LineRuler.rectsOf`). A line taken end to end says so (`sel.whole`) and needs
     /// no ruler at all; a heading has neither wash.
     ///
     /// **Pushed** (the rule `DiffTextMetrics.codeW` is written under). Asking the ruler means putting this line on
@@ -74,7 +74,7 @@ Item {
         cell.emphRects = cell.ruler.rectsOf(cell.text, cell.codeBold, cell.emph)
     }
     function settleSel() {
-        cell.selRects = cell.sel === "*" ? [] : cell.ruler.rectsOf(cell.text, cell.codeBold, cell.sel)
+        cell.selRects = !cell.sel || cell.sel.whole ? [] : cell.ruler.rectsOf(cell.text, cell.codeBold, cell.sel.runs)
     }
     function settleWashes() {
         cell.settleEmph()
@@ -105,10 +105,10 @@ Item {
     // stands, and for the same reason: the strong/weak split of a diff is rectangles
     // (デザイン規約 §シンタックスハイライト), so a selected line keeps its syntax colours.
     Repeater {
-        model: cell.sel === "*" ? [cell.sel] : cell.selRects
+        model: cell.sel && cell.sel.whole ? [{ "whole": true }] : cell.selRects
         delegate: Rectangle {
             required property var modelData
-            readonly property bool whole: modelData === "*"
+            readonly property bool whole: modelData.whole === true
             x: -cell.codeX + (whole ? 0 : modelData.x)
             // A line taken whole is washed to its own end — the ink it was drawn in, which is the one number no
             // walk of it can produce — and a column at least: an empty line is a line the copy takes, and a wash

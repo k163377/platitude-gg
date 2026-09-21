@@ -330,7 +330,7 @@ Rectangle {
         let washed = 0
         for (let i = 0; i < diffList.count; i++) {
             const row = diffList.itemAtIndex(i)
-            if (row && (row.sel !== "" || row.pair_sel !== ""))
+            if (row && (row.sel || row.pair_sel))
                 washed++
         }
         return "new=" + diffPane.diffModel.selHasNew

@@ -25,12 +25,11 @@ Rectangle {
     /// to what is held"; everything that lands a row without a hand on it (the arrows, a landing, the stand-in) says
     /// `Qt.NoModifier`, which is the plain click.
     signal rowActivated(string oidHex, int atRow, int modifiers)
-    /// Right-click on a row, wherever along it. `record` is the name its chip draws (kind + flags + name), empty on a
+    /// Right-click on a row, wherever along it. `chip` is the name its chip draws (`encode::Chip`), null on a
     /// row that draws none — the menu is the row's either way, and that name is what its cards are about.
-    signal rowMenuOpenRequested(string oidHex, string record)
-    /// A row was double-clicked. `record` is the chip it shows (kind + flags + name); empty when the row shows no
-    /// branch at all.
-    signal rowSwitchRequested(string oidHex, string record)
+    signal rowMenuOpenRequested(string oidHex, var chip)
+    /// A row was double-clicked. `chip` is the chip it shows; null when the row shows no branch at all.
+    signal rowSwitchRequested(string oidHex, var chip)
     /// Another working copy's uncommitted row was opened (see `GraphList`).
     signal carriedOpenRequested(string path)
     /// The chip whose stacked list the page has out (null when none). Rows read it back through the view: a hand that
@@ -44,22 +43,22 @@ Rectangle {
     /// that one commit, so a click in the card is a click on that row.
     signal chipExpandRequested(string oidHex, int atRow, var records, var anchor)
     /// A row was clicked a second time, late enough for the double-click to have been ruled out: the name on its chip
-    /// is being changed (デザイン規約 §グラフ行のダブルクリック). `record` is the chip's first one, whatever kind it names.
+    /// is being changed (デザイン規約 §グラフ行のダブルクリック). `chip` is the chip's first one, whatever kind it names.
     ///
     /// **Raised for the card the chip unfolds into as well** — its rows answer through the four below, because a hand
     /// clicking one spot twice clicks the row and then the card, and those are one target.
-    signal rowRenameRequested(string oidHex, string record)
+    signal rowRenameRequested(string oidHex, var chip)
     /// How the graph's rows answer a click, for the card that stands on them (`RowHoverHost`). **The card's rows are
     /// these rows**, so they go through this door — two surfaces that had to agree on what "the same target"
     /// means is exactly what was wrong before.
-    function noteRowClick(oidHex, record, held) {
-        return graphList.noteClick(oidHex, record, held)
+    function noteRowClick(oidHex, chip, held) {
+        return graphList.noteClick(oidHex, chip, held)
     }
     function dropRowRename() {
         graphList.dropRename()
     }
-    function rowRenameArmed(record) {
-        return graphList.renameArmed(record)
+    function rowRenameArmed(chip) {
+        return graphList.renameArmed(chip)
     }
     /// A held click made in that card, put in at the row it stands on: the row's own `leftClick` is what decides
     /// what Ctrl or Shift does with the choice, the name box and the keyboard — a copy of it beside the card moves
@@ -405,11 +404,11 @@ Rectangle {
         // which is the only thing that tells a run apart from a press (`GraphRowWalk.noteStep`).
         Keys.onUpPressed: event => event.accepted = graphArea.stepRow(-1, event.isAutoRepeat)
         Keys.onDownPressed: event => event.accepted = graphArea.stepRow(1, event.isAutoRepeat)
-        onRowMenuRequested: (oidHex, record) => graphArea.rowMenuOpenRequested(oidHex, record)
+        onRowMenuRequested: (oidHex, chip) => graphArea.rowMenuOpenRequested(oidHex, chip)
         onRowSelected: (oidHex, atRow, modifiers) => graphArea.rowActivated(oidHex, atRow, modifiers)
-        onRowSwitchRequested: (oidHex, record) => graphArea.rowSwitchRequested(oidHex, record)
+        onRowSwitchRequested: (oidHex, chip) => graphArea.rowSwitchRequested(oidHex, chip)
         onCarriedOpenRequested: path => graphArea.carriedOpenRequested(path)
-        onRowRenameRequested: (oidHex, record) => graphArea.rowRenameRequested(oidHex, record)
+        onRowRenameRequested: (oidHex, chip) => graphArea.rowRenameRequested(oidHex, chip)
         onChipExpandRequested: (oidHex, atRow, records, anchor) =>
             graphArea.chipExpandRequested(oidHex, atRow, records, anchor)
         onChipCollapseRequested: graphArea.chipCollapseRequested()

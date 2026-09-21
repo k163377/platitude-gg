@@ -56,18 +56,17 @@ Rectangle {
     readonly property bool rowBelow: pin.rowTop + Theme.graphRowHeight > pin.view.contentY + pin.view.height
     /// A HEAD outside the loaded window has no row to lead to, and one whose chips have not arrived yet has no name to
     /// show — neither is a stand-in worth drawing (`models::graph::head`).
-    readonly property bool wanted: pin.headRow >= 0 && pin.graphModel.headLabels !== ""
+    readonly property bool wanted: pin.headRow >= 0 && pin.graphModel.headLabels.length > 0
     /// The list's selection is on the row this stands in for — the same question a row asks of itself
     /// (`GraphRowDelegate.selected`), asked from out here because the stand-in is not one of the list's delegates.
     /// **The grounds below read this**: Qt's `visible` is the effective one, so a
     /// band that asked its neighbour would be answering "is the stand-in drawn at all" in the same breath.
     readonly property bool selected: pin.view.currentIndex === pin.headRow
     /// The chips the stand-in draws, less the ones the window has already said are gone — the same answer the rows
-    /// themselves give (`encode::labels_shown`). HEAD's own branch is never one of them (git refuses to delete the
+    /// themselves give (`encode::chips_shown`). HEAD's own branch is never one of them (git refuses to delete the
     /// branch it is on), but another branch standing on the same commit can be.
-    readonly property string goneChips: pin.graphModel.goneChips
-    readonly property string shownLabels: GitFacts.labelsShown(pin.graphModel.headLabels, pin.goneChips)
-    readonly property var records: pin.shownLabels === "" ? [] : pin.shownLabels.split(String.fromCharCode(31))
+    readonly property var goneChips: pin.graphModel.goneChips
+    readonly property var records: GitFacts.chipsShown(pin.graphModel.headLabels, pin.goneChips)
     readonly property color laneColor: Theme.graphLane[pin.graphModel.headColor % Theme.graphLane.length]
 
     // ---- the three bands ---------------------------------------------------------------------------------------------
@@ -216,7 +215,7 @@ Rectangle {
             nodeLane: pin.graphModel.headLane
             // The stand-in shows the commit: the badge is a second face, and this row is already
             // standing in for something (規約 §co-author の表示).
-            coAuthors: ""
+            coAuthors: []
             avatar: pin.graphModel.headAvatar
             avatarUrl: pin.graphModel.headAvatarUrl
             isWip: false
@@ -241,24 +240,17 @@ Rectangle {
             onPaint: {
                 const ctx = getContext("2d")
                 ctx.clearRect(0, 0, width, height)
-                if (pin.graphModel.headGeometry === "")
-                    return
                 ctx.lineWidth = Metrics.laneStroke
-                const toks = pin.graphModel.headGeometry.split(";")
-                for (let n = 0; n < toks.length; n++) {
-                    const t = toks[n]
-                    const k = t[0].toLowerCase()
-                    if (k !== "t" && k !== (pin.rowAbove ? "o" : "i"))
+                for (const seg of pin.graphModel.headGeometry) {
+                    if (seg.kind !== "through" && seg.kind !== (pin.rowAbove ? "out" : "into"))
                         continue
-                    const dot = t.indexOf(".")
-                    const lane = parseInt(t.substring(1, dot))
-                    const hex = Theme.graphLane[parseInt(t.substring(dot + 1)) % Theme.graphLane.length]
-                    const x = Metrics.laneInset + lane * Metrics.laneW + Metrics.laneW / 2 - pin.graphXOffset
+                    const hex = Theme.graphLane[seg.color % Theme.graphLane.length]
+                    const x = Metrics.laneInset + seg.lane * Metrics.laneW + Metrics.laneW / 2 - pin.graphXOffset
                     const fade = ctx.createLinearGradient(0, 0, 0, height)
                     fade.addColorStop(0, goingOut.faded(hex, pin.rowAbove ? 1 : 0))
                     fade.addColorStop(1, goingOut.faded(hex, pin.rowAbove ? 0 : 1))
                     ctx.strokeStyle = fade
-                    ctx.setLineDash(t[0] === k ? [] : Metrics.laneDash)
+                    ctx.setLineDash(seg.dashed ? Metrics.laneDash : [])
                     ctx.beginPath()
                     ctx.moveTo(x, 0)
                     ctx.lineTo(x, height)

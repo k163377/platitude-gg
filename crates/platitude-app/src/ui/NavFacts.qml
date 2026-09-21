@@ -46,14 +46,9 @@ QtObject {
         // acts on has it. **A tag has no namespace**, so one row stands for every side of the name
         // (`NavSectionModel.tagSides`) and what it folds is the list of who out there has it — which is what it
         // opens on. One answer for both halves, because two would be two walks of the same run and a chance for
-        // them to disagree; the record is `<remote>\u1e<0|1>`.
-        const carried = kind === "tag" && leaf && row.sectionModel !== null
-                      ? row.sectionModel.tagRemotes(row.fullName, row.pushRemote) : ""
-        const remotes = carried === "" ? []
-                      : carried.split(String.fromCharCode(31)).map(record => {
-                            const said = record.split(String.fromCharCode(30))
-                            return { "remote": said[0], "apart": said[1] === "1" }
-                        })
+        // them to disagree; the record is `{remote, apart}` (`NavSectionModel.tagRemotes`).
+        const remotes = kind === "tag" && leaf && row.sectionModel !== null
+                      ? row.sectionModel.tagRemotes(row.fullName, row.pushRemote) : []
         // The copy holding the branch this row is about: its own on a BRANCHES row, the one named above on a
         // REMOTES row. A working copy's row asks nobody — it is the copy.
         const holds = kind === "branch" ? row.fullName : kind === "remote" ? local : ""

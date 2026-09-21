@@ -6,20 +6,18 @@ use super::*;
 impl GraphModel {
     /// Whether the query — if there is one — is somewhere in this row.
     ///
-    /// The three packed fields are unpacked through the readers that sit
-    /// beside their encoders, so the search sees names and addresses and
-    /// never the flags, separators or identicon codes they are packed
-    /// with.
+    /// The search sees names and addresses and never the marks beside
+    /// them: a credit's identicon code is a number, and a reader that
+    /// searched the whole record would answer a typed `12345` with
+    /// somebody's face.
     pub(super) fn hits(query: &Query, item: &GraphRowItem) -> bool {
         let mut people: Vec<&str> = vec![item.author.as_str()];
         let mut addresses: Vec<&str> = vec![item.author_email.as_str()];
-        if !item.co_authors.is_empty() {
-            for (name, address) in co_author_pairs(&item.co_authors) {
-                people.push(name);
-                addresses.push(address);
-            }
+        for mate in item.co_authors.iter() {
+            people.push(&mate.name);
+            addresses.push(&mate.email);
         }
-        let tokens: Vec<&str> = label_names(&item.labels).collect();
+        let tokens: Vec<&str> = item.labels.iter().map(|c| c.name.as_str()).collect();
         // Two of the row's fields are withheld, each for its own reason
         // (`platitude-core::find`): `body` is the hover card's and does
         // not stand on the row, and `stash_ref` is the handle `apply`

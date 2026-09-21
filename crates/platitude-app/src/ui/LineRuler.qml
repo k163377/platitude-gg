@@ -51,8 +51,8 @@ TextEdit {
         ruler.hold(line, bold)
         return ruler.positionAt(x, 0)
     }
-    /// The rectangles the runs `"from:len,…"` cover, in the line's own coordinates — `[{ x, w }, …]`, and empty for
-    /// nothing (`encode::markup::spelled_ranges` / `plain_ranges`).
+    /// The rectangles the runs (`[{ from, len }, …]`) cover, in the line's own coordinates — `[{ x, w }, …]`, and
+    /// empty for nothing (`encode::markup::spelled_ranges` / `plain_ranges`).
     ///
     /// **A run is one rectangle only while the line reads one way.** Where a line carries a right-to-left run the
     /// places along it stop being in order (measured: three Latin letters, four of a right-to-left alphabet and
@@ -69,15 +69,14 @@ TextEdit {
     /// `positionAt` and nothing that takes the direction the caller means, so there is no way from here to ask which
     /// (Qt 6.10). The pieces then reach past the characters the run names.
     function rectsOf(line, bold, runs) {
-        if (runs === "")
+        if (!runs || runs.length === 0)
             return []
         ruler.hold(line, bold)
         const twoWay = ruler.twoWay(line)
         let out = []
-        for (const run of runs.split(",")) {
-            const cut = run.split(":")
-            const from = Number(cut[0])
-            const to = from + Number(cut[1])
+        for (const run of runs) {
+            const from = run.from
+            const to = from + run.len
             // **A run past the end of the line belongs to another.** A row is handed its line and the runs on it
             // one property at a time (`DiffRowDelegate`, `reuseItems`), so in between them a run can stand against
             // a line that has none of its places — the row before's runs on the row after's blank line. Nothing is

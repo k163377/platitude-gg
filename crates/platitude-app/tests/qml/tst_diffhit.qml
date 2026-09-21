@@ -206,13 +206,13 @@ Item {
                 return
             const from = 1
             const len = spelled.length - 1
-            const rects = ruler.rectsOf(markup, false, from + ":" + len)
+            const rects = ruler.rectsOf(markup, false, [{ from: from, len: len }])
             compare(rects.length, 1)
             compare(rects[0].x, reference.positionToRectangle(from).x)
             compare(rects[0].w, reference.positionToRectangle(from + len).x
                                 - reference.positionToRectangle(from).x)
             // Two runs come back as two rectangles, in the order they were named.
-            const pair = ruler.rectsOf(markup, false, "0:1," + from + ":" + len)
+            const pair = ruler.rectsOf(markup, false, [{ from: 0, len: 1 }, { from: from, len: len }])
             compare(pair.length, 2)
             compare(pair[1].x, rects[0].x)
         }
@@ -241,7 +241,7 @@ Item {
             for (let p = 0; p <= spelled.length; p++)
                 compare(ruler.xOf(p), reference.positionToRectangle(p).x, "coloured, place " + p)
             if (spelled.length >= 2) {
-                const run = "1:" + (spelled.length - 1)
+                const run = [{ from: 1, len: spelled.length - 1 }]
                 const before = ruler.rectsOf(plain, false, run)
                 const after = ruler.rectsOf(coloured, false, run)
                 compare(after.length, before.length)
@@ -252,7 +252,7 @@ Item {
 
         /// Nothing to wash asks nothing of the ruler.
         function test_a_row_with_no_runs_has_no_rectangles() {
-            compare(ruler.rectsOf(root.markupOf("abc"), false, "").length, 0)
+            compare(ruler.rectsOf(root.markupOf("abc"), false, []).length, 0)
         }
 
         /// A row is handed its line and the runs on it one property at a time (`DiffRowDelegate`), so between the
@@ -260,11 +260,11 @@ Item {
         /// drawn from, over a blank line. **Such a run washes nothing**, and the places past the end stay out
         /// of the layout (each one would be a rectangle at nowhere and a warning from Qt).
         function test_a_run_the_line_has_no_places_for_washes_nothing() {
-            compare(ruler.rectsOf("", false, "0:33").length, 0)
-            compare(ruler.rectsOf(root.markupOf("abc"), false, "0:33").length, 0)
-            compare(ruler.rectsOf(root.markupOf("abc"), false, "2:2").length, 0)
+            compare(ruler.rectsOf("", false, [{ from: 0, len: 33 }]).length, 0)
+            compare(ruler.rectsOf(root.markupOf("abc"), false, [{ from: 0, len: 33 }]).length, 0)
+            compare(ruler.rectsOf(root.markupOf("abc"), false, [{ from: 2, len: 2 }]).length, 0)
             // The run that ends exactly at the line's end is the line's own, and is drawn.
-            compare(ruler.rectsOf(root.markupOf("abc"), false, "0:3").length, 1)
+            compare(ruler.rectsOf(root.markupOf("abc"), false, [{ from: 0, len: 3 }]).length, 1)
         }
 
         /// A line that reads both ways has no order along it, so a run over one cannot be read off its two ends.
@@ -280,18 +280,17 @@ Item {
             verify(ruler.twoWay(markup), "the line was not seen as reading both ways")
             // The places of that word are out of order, which is the whole reason for the walk.
             verify(ruler.xOf(5) > ruler.xOf(6), "the letters were not laid out the other way round")
-            for (const run of ["2:5", "4:4", "0:12", "5:2"]) {
-                const cut = run.split(":")
-                const from = Number(cut[0])
-                const to = from + Number(cut[1])
-                const pieces = ruler.rectsOf(markup, false, run)
-                verify(pieces.length > 0, run + " washed nothing")
-                for (let at = from; at <= to; at++) {
+            for (const run of [{ from: 2, len: 5 }, { from: 4, len: 4 }, { from: 0, len: 12 }, { from: 5, len: 2 }]) {
+                const said = run.from + ":" + run.len
+                const to = run.from + run.len
+                const pieces = ruler.rectsOf(markup, false, [run])
+                verify(pieces.length > 0, said + " washed nothing")
+                for (let at = run.from; at <= to; at++) {
                     const x = ruler.xOf(at)
                     let held = false
                     for (const piece of pieces)
                         held = held || (x >= piece.x - 0.01 && x <= piece.x + piece.w + 0.01)
-                    verify(held, run + ": place " + at + " at " + x + " is outside every piece")
+                    verify(held, said + ": place " + at + " at " + x + " is outside every piece")
                 }
             }
         }

@@ -44,7 +44,7 @@ Item {
             // own. `move-branch` is the same road past this bar; this one stops on it. Waited on at `AskBar.settled`
             // for the reason `switch-stopped` is — `dbl-remote` completes before the bar has finished opening and
             // photographs a marked row under no bar at all (observed).
-            page.switchToRef("R", arg)
+            page.switchToRef("remote", arg)
             moveAskTimer.start()
         } else if (act === "ask-over-notice") {
             // **The two bars standing at the same time**, which is the one arrangement where Escape has to belong to
@@ -61,7 +61,7 @@ Item {
             // place any of those is written (規約 §右のペインの字は掴める). Raised down the road a hand takes for the
             // reason that verb gives, and waited on at `AskBar.settled` for the same one — a bar still on its way down
             // has its words at some other width, and the air a run samples is the air of a frame nobody sees.
-            page.switchToRef("R", arg === "" ? "origin/main" : arg)
+            page.switchToRef("remote", arg === "" ? "origin/main" : arg)
             askSweepTimer.start()
         } else if (act === "switch-lands") {
             // A move photographed where it comes to rest. **`switch` cannot do this** — it ends on the write barrier,
@@ -75,7 +75,7 @@ Item {
             const landing = arg.split(":")
             switchLandsTimer.branch = landing[0]
             switchLandsTimer.stashes = landing.length > 1 ? Number(landing[1]) : -1
-            page.switchToRef("L", landing[0])
+            page.switchToRef("branch", landing[0])
             switchLandsTimer.start()
         } else if (act === "switch-stopped" || act === "switch-stopped-go"
                    || act === "switch-conflicted" || act === "switch-conflicted-go"
@@ -89,10 +89,10 @@ Item {
             const leave = arg.split(":")
             switchStoppedTimer.go = act.endsWith("-go")
             switchStoppedLandedTimer.stashes = leave.length > 1 ? Number(leave[1]) : -1
-            page.switchToRef("L", leave[0])
+            page.switchToRef("branch", leave[0])
             switchStoppedTimer.start()
         } else if (act === "switch-remote") {
-            page.switchToRef("R", arg)
+            page.switchToRef("remote", arg)
         } else if (act === "switch-remote-twice") {
             // The same chip pressed twice, which is what the report was: both `switch --create` left in the same
             // second and git refused the second one, because the first had already made the branch (observed). **The
@@ -100,10 +100,10 @@ Item {
             // that waited even a tick between them would be answered by the gate the old build had.
             switchTwiceTimer.branch = repoTab.localNameFor(arg)
             switchTwiceTimer.writesBefore = repoTab.writeSeq
-            page.switchToRef("R", arg)
+            page.switchToRef("remote", arg)
             // The road's own answer to the second press: `switchToRef` says whether the
             // press did anything, and a build with no gate says it did.
-            switchTwiceTimer.held = page.switchToRef("R", arg) === false
+            switchTwiceTimer.held = page.switchToRef("remote", arg) === false
             switchTwiceTimer.start()
         } else if (act === "rename-local-upstream") {
             // The question about carrying the name over comes back only when git says the local rename landed — the
@@ -139,9 +139,8 @@ Item {
             page.openRefMenu("branch", want[0], want[0], branchesModel.oidOfName(want[0]))
             switchMarkTimer.start()
         } else if (act === "dbl-local" || act === "dbl-remote") {
-            // The record is the chip as drawn (kind letter, four flags, name — see encode.rs).
-            page.activateRecord(
-                (act === "dbl-local" ? "L000100" : "R000000") + arg)
+            // The chip as drawn (`encode::Chip`); only its kind and name are read on this road.
+            page.activateChip({ "kind": act === "dbl-local" ? "branch" : "remote", "name": arg })
         } else {
             return false
         }
@@ -198,7 +197,7 @@ Item {
                 if (!page.noticeCard.settled)
                     return
                 askOverNoticeTimer.asked = true
-                page.switchToRef("R", askOverNoticeTimer.ref)
+                page.switchToRef("remote", askOverNoticeTimer.ref)
                 return
             }
             if (!askOverNoticeTimer.pressed) {

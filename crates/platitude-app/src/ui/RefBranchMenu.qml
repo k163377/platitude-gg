@@ -150,7 +150,7 @@ AppMenu {
         state.remoteDrifted = facts.remoteDrifted
         // What the rows may offer is core's rule, with the measured refusals it encodes — the current branch keeps
         // its delete table and says why (offers::ref_menu).
-        const offers = facts.offers.split(" ")
+        const offers = facts.offers
         state.canDelete = offers.includes("delete")
         state.canDeleteRemote = offers.includes("delete-remote")
         state.canSetUpstream = offers.includes("set-upstream")

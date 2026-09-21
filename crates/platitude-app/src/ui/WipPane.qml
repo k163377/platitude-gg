@@ -57,15 +57,14 @@ ColumnLayout {
         wipPane.wasRead = wipPane.readKey
     }
 
-    /// Whoever the message credits as it stands, packed the way the details pane's line is fed
-    /// (`encode::encode_co_authors`). Nothing has been committed, so the only place a trailer exists is the text.
+    /// Whoever the message credits as it stands, in the records the details pane's line is fed
+    /// (`encode::mates_of`). Nothing has been committed, so the only place a trailer exists is the text.
     ///
     /// A binding over a slot: what it follows is the box's own `bodyText`, which is a property, so every keystroke
     /// re-asks — and the rule for what counts as a trailer stays in one place, on the Rust side (`GitFacts.coAuthorsOf`).
-    readonly property string messageMates: GitFacts.coAuthorsOf(commitBlock.bodyText)
-    /// How many of them there are — one record per person, counted where the record shape lives
-    /// (`GitFacts.recordCount` / `encode::RECORD_SEP`).
-    readonly property int mateCount: GitFacts.recordCount(wipPane.messageMates)
+    readonly property var messageMates: GitFacts.coAuthorsOf(commitBlock.bodyText)
+    /// How many of them there are — one record per person.
+    readonly property int mateCount: wipPane.messageMates.length
     /// Stands in for the pointer on the signing tick in the commit button — hover cannot be injected (`commit-face`).
     property bool signingPointedAt: false
     /// What it puts on screen, for the headless report: the tooltip's own visible (the output side).

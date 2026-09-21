@@ -3,11 +3,38 @@ use std::sync::Arc;
 
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::encode::{FIELD_SEP, RECORD_SEP};
+use crate::encode::{Fields, Listed, Record, field};
 use crate::hub::{Feed, Hub, PickMsg};
 use crate::urlpath::file_url_to_path;
 
 use super::{impl_move_notified, impl_notify_runs, push_run, qml_register, tab_name};
+
+/// One tab of the strip as the settings list offers it: the name it is
+/// shown by, and the work tree path git is run in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenRepo {
+    pub name: String,
+    pub path: String,
+}
+
+/// The strip, in its own order.
+pub type OpenRepos = Listed<OpenRepo>;
+
+impl Record for OpenRepo {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        Fields::new()
+            .put("name", &self.name)
+            .put("path", &self.path)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            name: field(map, "name")?,
+            path: field(map, "path")?,
+        })
+    }
+}
 
 mod qobject;
 mod strip;
@@ -44,9 +71,8 @@ pub struct TabsModel {
     /// repository that will not read itself again (measured: the graph
     /// stayed empty and `middle-close` waited out its watchdog).
     current_tab_id: i32,
-    /// The strip as a list: one record per tab, the name it is shown by
-    /// and then its work tree path, packed the way every other list QML
-    /// unpacks itself is.
+    /// The strip as a list: one record per tab (`OpenRepo`), the name it
+    /// is shown by and its work tree path.
     ///
     /// For the readers that want the whole strip at once — the settings
     /// screen's repository chooser, which offers exactly the
@@ -54,7 +80,7 @@ pub struct TabsModel {
     /// the tab does. A view can walk the rows; a list bound to a
     /// property cannot, and a name a reader picked has to lead back to
     /// a path.
-    open_repos: String,
+    open_repos: OpenRepos,
     /// Answers about folders the picker handed over. Attached on the
     /// first question: a window that never opens the picker never has
     /// one to hear.
@@ -70,7 +96,7 @@ impl Default for TabsModel {
             // not exist, and the UI reads "no repository open" as < 0.
             current_index: -1,
             current_tab_id: -1,
-            open_repos: String::new(),
+            open_repos: OpenRepos::default(),
             picks: Arc::new(Feed::default()),
             attached: false,
         }

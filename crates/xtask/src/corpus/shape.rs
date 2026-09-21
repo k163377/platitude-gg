@@ -154,7 +154,7 @@ pub(super) const TAGS_IN_WINDOW: u64 = 520;
 
 /// The most refs the corpus puts on any one commit. The reference
 /// repository's busiest carries 42, which is one `LabelIndex` bucket,
-/// one `encode_labels` string and one row laying out 42 chips.
+/// one `Chips` list and one row laying out 42 chips.
 pub(super) const REFS_ON_ONE: u64 = 44;
 
 /// Tags carrying a tag object of their own. The reference

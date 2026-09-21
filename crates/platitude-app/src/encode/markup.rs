@@ -11,8 +11,11 @@
 //! [`source_byte`]), a command log row is the characters themselves and
 //! draws a tab at one stop of its own ([`plain_ranges`] / [`plain_byte`]).
 
-use super::columns::step_of;
 use platitude_core::highlight::Span;
+use qtbridge::qtbridge_type_lib::QVariantMap;
+
+use super::columns::step_of;
+use super::wire::{Fields, Listed, Record, field};
 
 /// One line as `Text.StyledText` reads it: the theme's runs where there
 /// are any, and the line escaped either way.
@@ -115,9 +118,42 @@ fn plain_units(ch: char, _col: usize) -> usize {
     ch.len_utf16()
 }
 
+/// One run of places along a line as the row spells it: where it starts
+/// and how many places it covers, in the UTF-16 units a layout counts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Run {
+    pub from: i32,
+    pub len: i32,
+}
+
+/// The runs a wash is laid over, in line order; empty for nothing.
+pub type Runs = Listed<Run>;
+
+impl Record for Run {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("from", &self.from)
+            .put("len", &self.len)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            from: field(map, "from")?,
+            len: field(map, "len")?,
+        })
+    }
+}
+
+impl platitude_core::mem::Footprint for Run {
+    fn heap_bytes(&self) -> usize {
+        0
+    }
+}
+
 /// Where byte ranges of the source line (`platitude_core::intraline`, the
-/// reader's own selection) fall in the line as the row spells it:
-/// `"from:len,…"` in UTF-16 units, empty where there is nothing.
+/// reader's own selection) fall in the line as the row spells it: runs
+/// of places in UTF-16 units, none where there is nothing.
 ///
 /// **Places, and places alone.** What turns a place into an x is the row's
 /// own layout and only that — a column is not a width and no arithmetic
@@ -126,22 +162,22 @@ fn plain_units(ch: char, _col: usize) -> usize {
 /// the layout where these places are drawn (`LineRuler`), which is the
 /// same layout the reader's press is read against, so the wash and the hit
 /// cannot disagree.
-pub fn spelled_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
+pub fn spelled_ranges(text: &str, ranges: &[(usize, usize)]) -> Runs {
     places_of(text, ranges, spelled_units)
 }
 
 /// The same answer for a row drawn as the characters themselves — the
 /// command log's three columns (`CommandsModel::spell`). One rule apart
 /// from [`spelled_ranges`], and it is the tab: see [`plain_units`].
-pub fn plain_ranges(text: &str, ranges: &[(usize, usize)]) -> String {
+pub fn plain_ranges(text: &str, ranges: &[(usize, usize)]) -> Runs {
     places_of(text, ranges, plain_units)
 }
 
-fn places_of(text: &str, ranges: &[(usize, usize)], units: fn(char, usize) -> usize) -> String {
+fn places_of(text: &str, ranges: &[(usize, usize)], units: fn(char, usize) -> usize) -> Runs {
     if ranges.is_empty() {
-        return String::new();
+        return Runs::default();
     }
-    let mut out = String::new();
+    let mut out: Vec<Run> = Vec::new();
     let mut iter = ranges.iter().copied();
     let mut current = iter.next();
     let mut open: Option<usize> = None;
@@ -171,19 +207,17 @@ fn places_of(text: &str, ranges: &[(usize, usize)], units: fn(char, usize) -> us
     if let Some(from) = open {
         push_span(&mut out, from, here);
     }
-    out
+    Runs::new(out)
 }
 
-fn push_span(out: &mut String, from: usize, to: usize) {
+fn push_span(out: &mut Vec<Run>, from: usize, to: usize) {
     if to <= from {
         return;
     }
-    if !out.is_empty() {
-        out.push(',');
-    }
-    out.push_str(&from.to_string());
-    out.push(':');
-    out.push_str(&(to - from).to_string());
+    out.push(Run {
+        from: i32::try_from(from).unwrap_or(i32::MAX),
+        len: i32::try_from(to - from).unwrap_or(i32::MAX),
+    });
 }
 
 /// Which byte of the source line the place `at` in the spelled line stands
@@ -284,26 +318,40 @@ mod tests {
         assert_eq!(out, "<font color=\"#000000\">日&nbsp;&nbsp;x</font>");
     }
 
+    /// The runs as `(from, len)` pairs, which is how a test reads them.
+    fn places(runs: &Runs) -> Vec<(i32, i32)> {
+        runs.iter().map(|r| (r.from, r.len)).collect()
+    }
+
     #[test]
     fn a_run_is_where_the_row_spells_it() {
         // "日\tab": the tab reaches the stop at 4, so the row spells it as
         // two `&nbsp;` — 日 on 0..1, the tab on 1..3, ab on 3..5 of the
         // line as spelled. Byte ranges 0..3, 3..4 and 4..6 of the source.
         let text = "日\tab";
-        assert_eq!(spelled_ranges(text, &[(0, 3)]), "0:1");
-        assert_eq!(spelled_ranges(text, &[(3, 1)]), "1:2");
-        assert_eq!(spelled_ranges(text, &[(4, 2)]), "3:2");
-        assert_eq!(spelled_ranges(text, &[(0, 6)]), "0:5");
-        assert_eq!(spelled_ranges(text, &[(0, 3), (4, 1)]), "0:1,3:1");
+        assert_eq!(places(&spelled_ranges(text, &[(0, 3)])), [(0, 1)]);
+        assert_eq!(places(&spelled_ranges(text, &[(3, 1)])), [(1, 2)]);
+        assert_eq!(places(&spelled_ranges(text, &[(4, 2)])), [(3, 2)]);
+        assert_eq!(places(&spelled_ranges(text, &[(0, 6)])), [(0, 5)]);
+        assert_eq!(
+            places(&spelled_ranges(text, &[(0, 3), (4, 1)])),
+            [(0, 1), (3, 1)]
+        );
         assert!(spelled_ranges(text, &[]).is_empty());
+        // And the runs go over as the records the ruler reads.
+        let runs = spelled_ranges(text, &[(0, 3), (4, 1)]);
+        assert_eq!(
+            Runs::try_from(&qtbridge::qtbridge_type_lib::QVariant::from(&runs)),
+            Ok(runs)
+        );
     }
 
     #[test]
     fn an_astral_glyph_is_two_of_the_units_a_place_is_counted_in() {
         // What QML holds a string in, and so what the row's layout counts
         // its places in: one character, two units.
-        assert_eq!(spelled_ranges("a\u{1f600}b", &[(1, 4)]), "1:2");
-        assert_eq!(spelled_ranges("a\u{1f600}b", &[(5, 1)]), "3:1");
+        assert_eq!(places(&spelled_ranges("a\u{1f600}b", &[(1, 4)])), [(1, 2)]);
+        assert_eq!(places(&spelled_ranges("a\u{1f600}b", &[(5, 1)])), [(3, 1)]);
     }
 
     #[test]
@@ -311,7 +359,7 @@ mod tests {
         // The font draws nothing extra for it, but the string holds it and
         // the layout counts it — which is exactly why a walk of columns
         // could never place it (`encode::columns`).
-        assert_eq!(spelled_ranges("e\u{301}x", &[(0, 3)]), "0:2");
+        assert_eq!(places(&spelled_ranges("e\u{301}x", &[(0, 3)])), [(0, 2)]);
         assert_eq!(source_byte("e\u{301}x", 1), 1);
         assert_eq!(source_byte("e\u{301}x", 2), 3);
     }
@@ -369,13 +417,13 @@ mod tests {
         // nothing spells the tab out for them, so it is one character in
         // the string the `Label` was handed and one place to stop at.
         let text = "a\tb";
-        assert_eq!(plain_ranges(text, &[(0, 3)]), "0:3");
-        assert_eq!(plain_ranges(text, &[(1, 1)]), "1:1");
+        assert_eq!(places(&plain_ranges(text, &[(0, 3)])), [(0, 3)]);
+        assert_eq!(places(&plain_ranges(text, &[(1, 1)])), [(1, 1)]);
         assert_eq!(plain_byte(text, 1), 1);
         assert_eq!(plain_byte(text, 2), 2);
         // …where a diff row spells the same tab as the three `&nbsp;` that
         // reach the stop at four, and counts every one of them.
-        assert_eq!(spelled_ranges(text, &[(0, 3)]), "0:5");
+        assert_eq!(places(&spelled_ranges(text, &[(0, 3)])), [(0, 5)]);
         assert_eq!(source_byte(text, 4), 2);
     }
 
@@ -385,12 +433,12 @@ mod tests {
         // one a character, and where those three are drawn is a question
         // for the row (`LineRuler`).
         let text = "日本語.txt";
-        assert_eq!(plain_ranges(text, &[(0, 9)]), "0:3");
-        assert_eq!(plain_ranges(text, &[(9, 4)]), "3:4");
+        assert_eq!(places(&plain_ranges(text, &[(0, 9)])), [(0, 3)]);
+        assert_eq!(places(&plain_ranges(text, &[(9, 4)])), [(3, 4)]);
         assert_eq!(plain_byte(text, 1), 3);
         assert_eq!(plain_byte(text, 3), 9);
         // An astral glyph is still the two units it is held as.
-        assert_eq!(plain_ranges("a\u{1f600}b", &[(1, 4)]), "1:2");
+        assert_eq!(places(&plain_ranges("a\u{1f600}b", &[(1, 4)])), [(1, 2)]);
         assert_eq!(plain_byte("a\u{1f600}b", 3), 5);
     }
 

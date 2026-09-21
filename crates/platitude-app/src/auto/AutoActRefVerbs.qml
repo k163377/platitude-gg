@@ -167,7 +167,7 @@ Item {
             // Forced, because a pointer cannot be put on a row from here (verify-ui §hover の絵の撮り方).
             const onBranch = workTree.branch
             if (arg === "chip")
-                page.openRowMenu(branchesModel.oidOfName(onBranch), "L100100" + onBranch)
+                page.openRowMenu(branchesModel.oidOfName(onBranch), { "kind": "branch", "name": onBranch })
             else
                 page.openRefMenu("branch", onBranch, onBranch, branchesModel.oidOfName(onBranch))
             pullBlockedTimer.onChip = arg === "chip"
@@ -176,19 +176,20 @@ Item {
             pullBlockedTimer.start()
         } else if (act === "chip-menu") {
             // The chip's own entrance. **It raises the row's menu, aimed at that name** — the chip
-            // and the rest of the row share one menu (デザイン規約 §グラフ行の右クリック). Only the kind letter
-            // and the name of the record are read.
-            page.openRowMenu(branchesModel.oidOfName(arg), "L000000" + arg)
+            // and the rest of the row share one menu (デザイン規約 §グラフ行の右クリック). Only the kind
+            // and the name of the chip are read.
+            page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })
             chipMenuTimer.start()
         } else if (act === "chip-menu-current") {
             page.openRowMenu(branchesModel.oidOfName(workTree.branch),
-                             "L100100" + workTree.branch)
+                             { "kind": "branch", "name": workTree.branch })
             chipMenuTimer.start()
         } else if (act === "delete-blocked-tip") {
             // Forced: the pointer cannot be put on a row from here, and this writes to the property
             // the real hover writes to. The argument names the branch, because the delete row is out for more than one
             // reason: without one it is the branch you are standing on, with one it is a branch another working copy
-            // has checked out (the flags say which, and the current branch is the only chip that carries them).
+            // has checked out (the chip's `isHead` / `held` say which, and the current branch is the only chip
+            // wearing `isHead`).
             //
             // `<branch>:remote` aims at the row that reaches the remote reading instead. That one is out for a
             // reason of its own — the two names standing on different commits — and the local row above it can be
@@ -629,7 +630,7 @@ Item {
                 if (repoTab.busyCount !== 0)
                     return
                 const arg = Harness.autoActArg
-                page.openRowMenu(branchesModel.oidOfName(arg), "L000000" + arg)
+                page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })
                 commitMenu.openSub(commitBranchCard)
                 // The row's own press: a stays-open row is picked (`AppMenuItem.picked`).
                 commitDeleteItem.picked()
@@ -676,7 +677,7 @@ Item {
             Harness.report("gone_row tag=" + Harness.autoActArg
                               + " row=" + tagsModel.rowOfName(Harness.autoActArg)
                               + " total=" + tagsModel.total
-                              + " chips=" + (graphModel.goneChips !== ""))
+                              + " chips=" + (graphModel.goneChips.length > 0))
             driver.complete()
         }
     }
@@ -690,7 +691,7 @@ Item {
         /// it the wait below is satisfied by a press that took nothing away at all.
         property bool stood: false
         function pressed() {
-            stoodDownTimer.stood = graphModel.goneChips !== ""
+            stoodDownTimer.stood = graphModel.goneChips.length > 0
             driver.inputWent(true)
         }
         onTriggered: {
@@ -698,14 +699,14 @@ Item {
                 return
             // The rows stay off the screen until a listing that looked after the
             // write has been drawn, and this is that listing arriving (`ops::StandIn`).
-            if (graphModel.goneChips !== "")
+            if (graphModel.goneChips.length > 0)
                 return
             stoodDownTimer.stop()
             Harness.report("stood_down tag=" + Harness.autoActArg
                               + " stood=" + stoodDownTimer.stood
                               + " row=" + tagsModel.rowOfName(Harness.autoActArg)
                               + " total=" + tagsModel.total
-                              + " chips=" + (graphModel.goneChips !== ""))
+                              + " chips=" + (graphModel.goneChips.length > 0))
             renderedBarrier.begin()
         }
     }

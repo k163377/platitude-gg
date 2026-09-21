@@ -4,7 +4,10 @@ use platitude_core::highlight::DiffColors;
 use platitude_core::intraline::IntraMarks;
 use platitude_core::parse::diff::{DiffLineKind, FilePatch};
 
-use super::markup::{spelled_ranges, styled};
+use qtbridge::qtbridge_type_lib::{QString, QVariantMap};
+
+use super::markup::{Runs, spelled_ranges, styled};
+use super::wire::{Fields, Record, field};
 
 /// One flattened row of the diff pane.
 ///
@@ -28,8 +31,8 @@ pub struct DiffRow {
     /// diff costs.
     pub text: String,
     /// Where what changed inside this row falls in the line as the row
-    /// spells it — `"from:len,…"` in the UTF-16 units a place is counted
-    /// in, empty where nothing is emphasised
+    /// spells it — runs of places in the UTF-16 units a place is counted
+    /// in, none where nothing is emphasised
     /// (`platitude_core::intraline`, laid out by [`spelled_ranges`]). The
     /// pane asks the row's own layout where those places are drawn
     /// (`LineRuler`) and lays the stronger wash there
@@ -37,7 +40,7 @@ pub struct DiffRow {
     /// width, since the fallback carrying a wide glyph is not monospaced,
     /// and a combining mark is a place the layout counts and draws
     /// nothing for.
-    pub emph: String,
+    pub emph: Runs,
     /// One of git's conflict fences (`<<<<<<<` / `|||||||` / `=======` /
     /// `>>>>>>>`); the pane drops its voice for these
     /// (デザイン規約 §シンタックスハイライト).
@@ -68,6 +71,85 @@ pub struct DiffRow {
     /// is in here and nowhere else: the colour cannot carry it, since git
     /// paints our side and theirs the same green.
     pub markers: String,
+}
+
+/// The small facts about one line, as the row reads them: one of git's
+/// conflict fences, a line that ends the file without a newline
+/// (デザイン規約 §行末の改行が無いこと), and the side of a conflict it came
+/// from — `ours` / `theirs` / `""`, by the parser's own rule
+/// (`side_of_markers`), so the rows and the tally cannot come to read
+/// the marker columns two ways.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct LineMarks {
+    pub fence: bool,
+    pub no_newline: bool,
+    pub side: String,
+}
+
+impl LineMarks {
+    pub fn of(row: &DiffRow) -> Self {
+        Self {
+            fence: row.fence,
+            no_newline: row.no_newline,
+            side: platitude_core::parse::diff::side_of_markers(&row.markers).to_string(),
+        }
+    }
+}
+
+impl Record for LineMarks {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("fence", &self.fence)
+            .put("noNewline", &self.no_newline)
+            .put("side", &self.side)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            fence: field(map, "fence")?,
+            no_newline: field(map, "noNewline")?,
+            side: field(map, "side")?,
+        })
+    }
+}
+
+/// The marks of one row of the diff: its own line's, and — on a split
+/// row that has a line on the right — that line's as well
+/// (デザイン規約 §diff を 2 列で読む).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Marks {
+    pub own: LineMarks,
+    pub pair: Option<LineMarks>,
+}
+
+impl Record for Marks {
+    fn to_map(&self) -> QVariantMap {
+        let own = Fields::new().put("own", &self.own.to_map());
+        match &self.pair {
+            Some(pair) => own.put("pair", &pair.to_map()),
+            None => own,
+        }
+        .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+        let own = LineMarks::from_map(&field(map, "own")?)?;
+        // A right side that is absent is a row with one line; one that
+        // is there but does not read is a refusal, like any field.
+        let pair = if map.value(&QString::from("pair")).is_valid() {
+            Some(LineMarks::from_map(&field(map, "pair")?)?)
+        } else {
+            None
+        };
+        Ok(Self { own, pair })
+    }
+}
+
+impl platitude_core::mem::Footprint for Marks {
+    fn heap_bytes(&self) -> usize {
+        self.own.side.heap_bytes() + self.pair.as_ref().map_or(0, |p| p.side.heap_bytes())
+    }
 }
 
 /// Whether the patch has a new side and no old one — a file the repository
@@ -135,7 +217,7 @@ pub fn flatten_patches(
                 old_no: -1,
                 new_no: -1,
                 text: styled(&patch.from_commit, &[]),
-                emph: String::new(),
+                emph: Runs::default(),
                 fence: false,
                 no_newline: false,
                 hunk: -1,
@@ -156,7 +238,7 @@ pub fn flatten_patches(
                     old_no: -1,
                     new_no: -1,
                     text: styled("(binary file)", &[]),
-                    emph: String::new(),
+                    emph: Runs::default(),
                     fence: false,
                     no_newline: false,
                     hunk: -1,
@@ -180,7 +262,7 @@ pub fn flatten_patches(
                 old_no: -1,
                 new_no: -1,
                 text: styled(&hunk_header(hunk, &heading), &[]),
-                emph: String::new(),
+                emph: Runs::default(),
                 fence: false,
                 no_newline: false,
                 hunk: hunk_no,
@@ -218,7 +300,7 @@ pub fn flatten_patches(
                     new_no: line.new_no.map_or(-1, |n| n as i32),
                     text: markup,
 
-                    emph: marks.map_or_else(String::new, |marks| {
+                    emph: marks.map_or_else(Runs::default, |marks| {
                         spelled_ranges(&line.text, marks.line(patch_index, hunk_index, line_index))
                     }),
                     fence: read.fence,

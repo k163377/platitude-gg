@@ -5,10 +5,35 @@ use std::sync::Arc;
 use platitude_core::{OperationKind, ReportKind};
 use qtbridge::{QObjectHolder, qobject};
 
+use crate::encode::{Fields, Optional, Record, field};
 use crate::hub::{Feed, Hub, TabMsg};
 use crate::urlpath::picker_folder_url;
 
 use super::qml_register;
+
+/// The name a remote was asked about (`checkRemoteBranch`): which
+/// remote, and the branch name over there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteBranch {
+    pub remote: String,
+    pub branch: String,
+}
+
+impl Record for RemoteBranch {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        Fields::new()
+            .put("remote", &self.remote)
+            .put("branch", &self.branch)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
+        Ok(Self {
+            remote: field(map, "remote")?,
+            branch: field(map, "branch")?,
+        })
+    }
+}
 
 mod drain;
 #[cfg(test)]
@@ -64,22 +89,27 @@ pub struct RepoTab {
     /// doors down off that answer alone
     /// (app-ui.md「QML は表示とインタラクションだけ」).
     replaying: bool,
-    /// Merge tool names the settings field can offer, joined by U+001F the
-    /// way the graph's label records are. Empty means none to offer, which
-    /// is a working state — the field takes a typed name either way.
-    merge_tools: String,
+    /// Merge tool names the settings field can offer. Empty means none to
+    /// offer, which is a working state — the field takes a typed name
+    /// either way.
+    merge_tools: Vec<String>,
     /// A candidate read is out. Asking git what is installed takes about
     /// eight seconds on Windows, so the field says so while the read
     /// runs.
     merge_tools_loading: bool,
-    /// Configured remote names joined by U+001F, so the publish question
-    /// can offer them from one property (`remoteAt` answers one
-    /// at a time, and a slot is not something a binding can follow).
-    remote_names: String,
-    /// Last answer to `checkRemoteBranch`, as `<remote>\u{1f}<branch>`.
-    /// Empty while a read is out — the question the answer belongs to has
-    /// to be checked, because the box may have moved on to another name.
-    remote_branch_asked: String,
+    /// Configured remote names, so the publish question can offer them
+    /// from one property (`remoteAt` answers one at a time, and a slot is
+    /// not something a binding can follow).
+    remote_names: Vec<String>,
+    /// The name the last answer to `checkRemoteBranch` was about
+    /// (`RemoteBranch`). Nothing while a read is out — the question the
+    /// answer belongs to has to be checked, because the box may have moved
+    /// on to another name.
+    remote_branch_asked: Optional<RemoteBranch>,
+    /// Moves with every answer and every question, so a binding on it reads
+    /// `remoteBranchAsked()` again — the pair crosses through a slot, since
+    /// a property cannot hold nothing (`encode::Optional`).
+    remote_branch_revision: i32,
     /// What a push under that name would meet over there
     /// (`platitude_core::remote::RemoteBranchState`): `free` /
     /// `fast-forward` / `refused` / `unknown` / `unreachable`. One

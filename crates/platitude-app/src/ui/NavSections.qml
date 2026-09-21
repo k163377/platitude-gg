@@ -240,7 +240,7 @@ ColumnLayout {
         // (デザイン規約 §左メニューの所作).
         offersFacts: true
         worktreesModel: sections.worktreesModel
-        remotesPacked: sections.repoTab.remoteNames
+        remoteNames: sections.repoTab.remoteNames
         markedRemote: sections.repoTab.pushDefault
         Layout.verticalStretchFactor: sections.sectionPull
         onRefActivated: oidHex => sections.refActivated(oidHex)

@@ -22,7 +22,7 @@ impl TabsModel {
         Notify = current_index_changed
     );
 
-    // Every tab, packed — see the member. Its own signal: this changes
+    // Every tab, one record each — see the member. Its own signal: this changes
     // on a name settling and on a carry across the strip, neither of
     // which moves the tab in front.
     qproperty!(
