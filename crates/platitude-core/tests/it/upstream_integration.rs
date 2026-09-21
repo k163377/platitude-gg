@@ -125,8 +125,8 @@ async fn a_diverged_local_branch_is_moved_onto_the_remote_one() {
 /// **`switch --force-create` applies `branch.autoSetupMerge` to a
 /// remote-tracking start point, existing branch or not** (measured 2.55:
 /// `origin/topic` became `up/2.21`, and `checkout -B` does the same; plain
-/// `reset --hard` and `branch -f` leave it alone). The reflog says only
-/// `reset: moving to <start>`, so nothing on screen or in the log names
+/// `reset --hard` and `branch -f` leave it alone). All the reflog says is
+/// `branch: Reset to <start>`, so nothing on screen or in the log names
 /// the upstream that was thrown away — which is why `--no-track` is on the
 /// command and not left to the default.
 #[tokio::test]

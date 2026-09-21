@@ -105,9 +105,11 @@ pub async fn checkout(
         // remote-tracking start point **even where the branch already
         // exists** — it overwrites `branch.<local>.remote` / `.merge`
         // with the start point (measured 2.55; `reset --hard` and
-        // `branch -f` onto the same ref leave them alone). The reflog
-        // says only `reset: moving to <start>`, so an upstream lost this
-        // way is named nowhere.
+        // `branch -f` onto the same ref leave them alone). All the reflog
+        // says is `branch: Reset to <start>`, so an upstream lost this
+        // way is named nowhere — and that line is the only thing that
+        // tells the move apart from a plain reset, which writes
+        // `reset: moving to <start>` and keeps the upstream.
         CheckoutTarget::ForceCreate { local, start } => {
             cmd.args(["--no-track", "--force-create", local, start])
         }
