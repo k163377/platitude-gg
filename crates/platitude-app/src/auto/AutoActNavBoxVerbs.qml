@@ -35,6 +35,7 @@ Item {
     readonly property var navProbe: driver.navProbe
     readonly property var refMenu: driver.refMenu
     readonly property var renderedBarrier: driver.barrierRendered
+    readonly property var writeBarrier: driver.barrierWrite
 
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
     /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
@@ -165,6 +166,14 @@ Item {
                 driver.holdToEnd(graphPane)
             else
                 renameAskTimer.start()
+        } else if (act === "rename-tag-remote" || act === "rename-tag-remote-go") {
+            // A tag whose name a remote carries too, renamed here — and the question that comes back for the copy
+            // over there. `<tag>:<新しい名前>[:<選ぶ答え>]`, the answer being `replace` / `add` / `leave`;
+            // **the tag is named, not numbered**, since which row a name sorts to is the preset's business while a
+            // name both sides hold is what this run needs (`nav-open-tag` の同じ理由). Without an answer the bar
+            // stands as it comes down, on the answer it opens with. "-go" answers it, and picks `replace` where the argument
+            // names none.
+            tagRemoteRenameTimer.begin(arg, act === "rename-tag-remote-go")
         } else if (act === "nav-branch-box" || act === "nav-rename-box" || act === "nav-tag-box") {
             // The two boxes the left menu opens on a row, left standing — the copy of the chip
             // column's box on the side with no lanes to grow into, and the rename box that shares the field with it.
@@ -301,6 +310,121 @@ Item {
             Harness.report("rename_ask hold=" + graphPane.askHold
                               + " code=" + graphPane.askCode)
             driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=rename-tag-remote / -go: the question that carries a tag's new name over to the remote holding the
+    // old one.
+    //
+    // **The reading is waited on before the rename is made at all.** Nothing local records what a remote carries
+    // under `refs/tags/` (`remote::tags::list_tags`), so a run that renamed before `ls-remote` answered would be
+    // changing a name this window believes only it has — nothing would be armed, and the bar this waits for would
+    // never come (`nav-open-tag` の同じ待ち). The fetch is this run's, for the same reason that one's is.
+    SampleTimer {
+        id: tagRemoteRenameTimer
+        property string tag: ""
+        property string name: ""
+        /// Whether the pill is held to the end, or the run stops at the question standing.
+        property bool holds: false
+        /// Whether the rename has gone in. The two halves of this timer are one state apart: before it the run is
+        /// waiting on the reading, after it on the bar.
+        property bool sent: false
+        /// A fetch has been seen running. **The edge, not the count** — the count is 0 before the ask as well, so a
+        /// beat that read it before git started would walk straight past the wait (`nav-open-tag` の同じ理由).
+        property bool ran: false
+        /// Which of the three answers the run picks, empty for the bar as it comes down.
+        property string choice: ""
+        /// Whether the picked answer has been given to the chooser already.
+        property bool picked: false
+        /// Whether the line has gone out — see the head of `onTriggered`.
+        property bool said: false
+        function begin(arg, holds) {
+            const parts = ("" + arg).split(":")
+            tagRemoteRenameTimer.tag = parts[0]
+            tagRemoteRenameTimer.name = parts.length > 1 ? parts[1] : ""
+            tagRemoteRenameTimer.choice = parts.length > 2 ? parts[2] : (holds ? "replace" : "")
+            tagRemoteRenameTimer.holds = holds
+            tagRemoteRenameTimer.sent = false
+            tagRemoteRenameTimer.picked = false
+            tagRemoteRenameTimer.said = false
+            tagRemoteRenameTimer.ran = false
+            repoTab.fetch("")
+            tagRemoteRenameTimer.start()
+        }
+        onTriggered: {
+            // Past the line this run is waiting on one thing only — the bar going back up after the answer that
+            // writes nothing, which has no write barrier to stand on.
+            if (tagRemoteRenameTimer.said) {
+                if (!graphPane.askCard.shut)
+                    return
+                tagRemoteRenameTimer.stop()
+                driver.complete()
+                return
+            }
+            if (repoTab.busyCount !== 0) {
+                tagRemoteRenameTimer.ran = true
+                return
+            }
+            if (!tagRemoteRenameTimer.sent) {
+                // Both sides holding the name is what the arming is made on, and it is the tags section that
+                // answers for it (`RepoPage.armRenameTagRemote`).
+                if (!tagRemoteRenameTimer.ran
+                    || tagsModel.tagSides(tagRemoteRenameTimer.tag) !== "both")
+                    return
+                tagRemoteRenameTimer.sent = true
+                // Through the row's own road, so a build where the gesture stopped reaching the rename waits here.
+                sidebarPane.beginRename("tag", tagRemoteRenameTimer.tag, tagRemoteRenameTimer.tag)
+                sidebarPane.submitEdit(tagRemoteRenameTimer.name)
+                return
+            }
+            if (!graphPane.askCard.settled)
+                return
+            // **And the rows the rename left, which arrive after the bar does.** The write's own answer is what
+            // raises the question, and the read behind that write is what puts the new name in the tags section
+            // (規約 §UI 自動化の因果性「書き込みの答えは、その書き込みが無効化した読み直しより先に来る」) — so a beat
+            // that read the section on the answer reads the list as it was. Measured: quiet it is in by the time the
+            // bar settles, under a gate running eight at a time it is not (2026-09-22, `here=false mark=false`).
+            if (tagsModel.rowOfName(tagRemoteRenameTimer.name) < 0)
+                return
+            if (tagRemoteRenameTimer.choice !== "" && !tagRemoteRenameTimer.picked) {
+                // Through the field's own door, since no injected click opens a popup on the offscreen platform
+                // (`RenameCarryFlow.pickChoice`). Re-applied until it takes: the form is built by a `Loader` a frame
+                // behind the bar.
+                if (!page.pickCarryChoice(driver.carryChoiceIndex(tagRemoteRenameTimer.choice)))
+                    return
+                tagRemoteRenameTimer.picked = true
+                return
+            }
+            tagRemoteRenameTimer.said = true
+            // `here=` is what the wait above was for, said out loud. `mark=` is the row under the question, read off
+            // the list and weighed against where the tags section has the new name: the commit the bar is marked
+            // with is taken before the write, while this is the answer the rows themselves came back with.
+            Harness.report(driver.carryWords("tag", tagRemoteRenameTimer.choice)
+                              + " here=" + (tagsModel.rowOfName(tagRemoteRenameTimer.name) >= 0)
+                              + " mark=" + (graphPane.view.askOid !== ""
+                                  && graphPane.view.askOid
+                                     === tagsModel.oidOfName(tagRemoteRenameTimer.name)))
+            if (!tagRemoteRenameTimer.holds) {
+                tagRemoteRenameTimer.stop()
+                driver.complete()
+                return
+            }
+            // The picked answer given to the bar, and then the write behind it waited out. **The barrier is this
+            // timer's to start**: a verb that defers its completion is never handed one by the dispatch
+            // (`AutoActDriver.dispatchFinished`), and a run that walked away here would photograph the bar going
+            // up with the push still to come (`set-upstream-go` の同じ形). Held or clicked as the bar says: only
+            // the answer that takes a name off the remote asks for a hold.
+            if (graphPane.askHold) {
+                driver.holdToEnd(graphPane)
+            } else if (tagRemoteRenameTimer.choice === "leave") {
+                // The one answer that writes nothing: the bar going back up is the whole of it, so the beats below
+                // are what this run waits on instead of a barrier nothing would reach.
+                page.answerRowAsk()
+                return
+            } else {
+                driver.pressWrite("answer-ask", () => { page.answerRowAsk(); return true })
+            }
+            tagRemoteRenameTimer.stop()
+            writeBarrier.start()
         }
     }
     // The press that does not wait out the rest: it lands on a closed row's own line, moves, and the lines have to

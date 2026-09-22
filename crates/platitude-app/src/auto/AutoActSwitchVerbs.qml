@@ -105,13 +105,23 @@ Item {
             // press did anything, and a build with no gate says it did.
             switchTwiceTimer.held = page.switchToRef("remote", arg) === false
             switchTwiceTimer.start()
-        } else if (act === "rename-local-upstream") {
-            // The question about carrying the name over comes back only when git says the local rename landed — the
-            // write's own answer is what raises the bar, so the completion is the bar settling
-            // (a shot at the write barrier catches a bar whose words are written and whose height is still nothing).
+        } else if (act === "rename-local-upstream" || act === "rename-local-upstream-go") {
+            // The question about what the remote does with the new name, which comes back only when git says the
+            // local rename landed — the write's own answer is what raises the bar, so the completion is the bar
+            // settling (a shot at the write barrier catches a bar whose words are written and whose height is still
+            // nothing). The argument is `<新しい名前>[:<選ぶ答え>]`, the answer being `replace` / `add` / `leave`;
+            // without one the bar stands as it comes down, on the answer it opens with. "-go" answers it.
+            const want = arg.split(":")
+            const goes = act.endsWith("-go")
+            // `add` is what "-go" takes where the argument names no answer: the branch this verb renames is the one
+            // the working tree is on, whose upstream is the remote's own HEAD — and git refuses to delete that
+            // (`rename-remote-go` の同項), so `replace` cannot be answered for real down this road. The write behind
+            // it is the same one `rename-remote-go` runs.
+            localUpstreamAskTimer.pick = want.length > 1 ? want[1] : (goes ? "add" : "")
+            localUpstreamAskTimer.answers = goes
             const local = workTree.branch
             sidebarPane.beginRename("branch", local, local)
-            sidebarPane.submitEdit(arg)
+            sidebarPane.submitEdit(want[0])
             localUpstreamAskTimer.start()
         } else if (act === "set-upstream" || act === "set-upstream-go" || act === "set-upstream-list"
                    || act === "set-upstream-enter") {
@@ -241,12 +251,55 @@ Item {
     // before its words — or its height — mean anything.
     SampleTimer {
         id: localUpstreamAskTimer
+        /// Which of the three answers the run picks, empty for the bar as it comes down.
+        property string pick: ""
+        /// Whether the picked answer is then given to the bar.
+        property bool answers: false
+        /// Whether it has been picked already: the chooser is answered once, and the beats after it are the bar
+        /// re-dressing itself around the choice.
+        property bool picked: false
+        /// Whether the line has gone out. Past it this timer is waiting on one thing only — the bar going back up
+        /// after the answer that writes nothing, which has no write barrier to stand on.
+        property bool said: false
         onTriggered: {
-            if (!graphPane.askCard.settled)
+            if (!localUpstreamAskTimer.said) {
+                if (!graphPane.askCard.settled)
+                    return
+                if (localUpstreamAskTimer.pick !== "" && !localUpstreamAskTimer.picked) {
+                    // Through the field's own door, since no injected click opens a popup on the offscreen platform
+                    // (`RenameCarryFlow.pickChoice`). Re-applied until it takes: the form is built by a `Loader` a
+                    // frame behind the bar.
+                    if (!page.pickCarryChoice(driver.carryChoiceIndex(localUpstreamAskTimer.pick)))
+                        return
+                    localUpstreamAskTimer.picked = true
+                    return
+                }
+                localUpstreamAskTimer.said = true
+                Harness.report(driver.carryWords("branch", localUpstreamAskTimer.pick))
+                if (!localUpstreamAskTimer.answers) {
+                    localUpstreamAskTimer.stop()
+                    driver.complete()
+                    return
+                }
+                // Held where the picked answer takes a name off the remote, clicked where it does not — the bar
+                // says which, and the run answers it the way a hand would (`AutoActDriver.holdToEnd`).
+                if (graphPane.askHold) {
+                    driver.holdToEnd(graphPane)
+                } else if (localUpstreamAskTimer.pick === "leave") {
+                    // The one answer that writes nothing. The bar going back up is the whole of it, so the beats
+                    // below are what this run waits on instead of a barrier that would never be reached.
+                    page.answerRowAsk()
+                    return
+                } else {
+                    driver.pressWrite("answer-ask", () => { page.answerRowAsk(); return true })
+                }
+                localUpstreamAskTimer.stop()
+                writeBarrier.start()
+                return
+            }
+            if (!graphPane.askCard.shut)
                 return
             localUpstreamAskTimer.stop()
-            Harness.report("rename_upstream_ask hold=" + graphPane.askHold
-                              + " branch=" + workTree.branch)
             driver.complete()
         }
     }

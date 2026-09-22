@@ -29,7 +29,8 @@ QtObject {
                 "open-mergetool", "discard-file-go", "delete-file-go",
                 "discard-staged-go", "switch", "switch-remote", "nav-dbl",
                 "rename-branch", "rename-tag", "rename-stash", "rename-taken",
-                "rename-remote-go", "rename-local-upstream", "delete-branch",
+                "rename-remote-go", "rename-local-upstream", "rename-local-upstream-go",
+                "rename-tag-remote", "rename-tag-remote-go", "delete-branch",
                 "delete-branch-go", "delete-tag-go", "delete-stash-go",
                 "delete-remote-go", "remote-refused", "delete-force", "delete-branch-refused",
                 "delete-branch-chip", "delete-stood-down",
@@ -163,7 +164,10 @@ QtObject {
                 "rename-remote", "set-upstream", "set-upstream-list",
                 // A write does come, but the subject is the question its answer raises,
                 // so the bar settling is the completion (the bar takes 200ms to come down).
-                "rename-local-upstream",
+                "rename-local-upstream", "rename-local-upstream-go",
+                // The tag's own pair, and one wait longer: what a remote carries under `refs/tags/` has no local
+                // record, so the reading has to be in before the rename that raises the question is made at all.
+                "rename-tag-remote", "rename-tag-remote-go",
                 // The write barrier is behind these two: the question is answered from the timer, after it.
                 "set-upstream-go", "set-upstream-enter",
                 // And behind this one twice over: the upstream goes down first, and what the run is about is the

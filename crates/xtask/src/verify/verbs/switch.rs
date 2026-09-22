@@ -75,6 +75,52 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "rename_ask hold=true code=",
     },
+    // The branch half of the same question: a name changed here, and what
+    // the remote it was measured against does about it
+    // (デザイン規約 §手元の改名をリモートへ運ぶ). The fields are the tag
+    // half's, minus the two that are a tag's alone
+    // (`nav::TABLE`, where what each one claims is written down).
+    Verb {
+        name: "rename-local-upstream",
+        when: &[
+            (
+                Arg::Ends(":replace"),
+                "rename_carry kind=branch rows=3 pick=replace shown=true answerable=true \
+                 hold=true neutral=false pill=Replace",
+            ),
+            (
+                Arg::Ends(":add"),
+                "rename_carry kind=branch rows=3 pick=add shown=true answerable=true hold=false \
+                 neutral=true pill=Create",
+            ),
+            (
+                Arg::Ends(":leave"),
+                "rename_carry kind=branch rows=3 pick=leave shown=true answerable=true \
+                 hold=false neutral=true pill=Leave",
+            ),
+        ],
+        // `pick=none` is the run that picks nothing, and what stands in
+        // the chooser then is the answer the question opens on — the one
+        // that takes nothing away, which is why `shown=true` and the pill
+        // is live from the first frame.
+        plain: "rename_carry kind=branch rows=3 pick=none shown=true answerable=true \
+                hold=false neutral=true pill=Create",
+    },
+    // …and the same road with the answer given. **`replace` is not on
+    // this one**: the branch it renames is the one the working tree is
+    // on, whose upstream is the remote's own HEAD, and git refuses to
+    // delete that — the write behind that answer is `rename-remote-go`'s.
+    // An argument naming no answer takes `add`.
+    Verb {
+        name: "rename-local-upstream-go",
+        when: &[(
+            Arg::Ends(":leave"),
+            "rename_carry kind=branch rows=3 pick=leave shown=true answerable=true hold=false \
+             neutral=true pill=Leave",
+        )],
+        plain: "rename_carry kind=branch rows=3 pick=add shown=true answerable=true hold=false \
+                neutral=true pill=Create",
+    },
     // A bar that never came down and a bar that came down empty are
     // the same picture, and where the move ended is the half the
     // picture cannot answer at all: the run that answered the

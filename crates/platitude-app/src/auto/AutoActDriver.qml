@@ -266,6 +266,31 @@ Item {
         return graphModel.stashRefOf(oid) !== "" ? "stash" : "commit"
     }
 
+    /// The row a word names in the chooser a carried rename asks with (`RenameCarryFlow.choices`): the answer that
+    /// makes one name and takes the other away, the one that makes it and leaves the other, and the one that writes
+    /// nothing. Named rather than numbered, so a run says which answer it is about.
+    function carryChoiceIndex(word) {
+        return word === "replace" ? 0 : word === "add" ? 1 : word === "leave" ? 2 : -1
+    }
+    /// What that bar is saying, for the two runs that raise it. **Read off the control and the bar, not off the flow
+    /// that dressed them**: `rows=` is the chooser's own count and `shown=` is whether a value stands in its field,
+    /// so a pick that never reached the form answers `false` where the flow's own number would say it took. `pick=`
+    /// is the word the run asked for, which is the other half — the three answers dress the bar differently, and a
+    /// line without it could not say which dressing was expected.
+    function carryWords(kind, pick) {
+        const field = driver.graphPane.askForm ? driver.graphPane.askForm.pick : null
+        return "rename_carry kind=" + kind
+            + " rows=" + (field ? field.count : -1)
+            + " pick=" + (pick === "" ? "none" : pick)
+            + " shown=" + Boolean(field && field.wanted !== "")
+            + " answerable=" + driver.graphPane.askAnswerable
+            + " hold=" + driver.graphPane.askHold
+            + " neutral=" + driver.graphPane.askNeutral
+            // The word on the pill, which moves with the chooser here — read off the bar, so a binding that stopped
+            // following says so.
+            + " pill=" + driver.graphPane.askCard.accept
+    }
+
     function dispatchFinished() {
         if (driver.completionDeferred)
             return

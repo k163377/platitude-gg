@@ -63,6 +63,65 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "tag_name_box was=v0.3-local typed=V0.3-LOCAL box=true refused=true tip=true \
                 text=Only the letter case differs — on this disk that deletes both names",
     },
+    // A tag both sides hold, renamed here, and the bar that comes down
+    // asking what the remote does about it
+    // (デザイン規約 §手元の改名をリモートへ運ぶ). **The picture cannot answer
+    // the halves that matter**: a bar that never came down and a bar
+    // still on its way frame alike once it is settled, and what stands in
+    // the chooser is not the same claim as the name here having changed.
+    //
+    // `rows=3` and `shown=` are the chooser's own — the field's count and
+    // whether a value stands in it — so a pick that never reached the
+    // form says so where the flow's own number would call it taken.
+    // `hold=` and `neutral=` are the bar dressed by that pick: only the
+    // answer that takes a name off the remote is held, and only the one
+    // that writes nothing stays the plain colour (§状態). `here=true` is
+    // the fixture half: the local rename landed, so the question standing
+    // is this road's and not some other bar's, and `mark=true` is the row
+    // it stands over.
+    Verb {
+        name: "rename-tag-remote",
+        when: &[
+            (
+                Arg::Ends(":replace"),
+                "rename_carry kind=tag rows=3 pick=replace shown=true answerable=true hold=true \
+                 neutral=false pill=Replace here=true mark=true",
+            ),
+            (
+                Arg::Ends(":add"),
+                "rename_carry kind=tag rows=3 pick=add shown=true answerable=true hold=false \
+                 neutral=true pill=Create here=true mark=true",
+            ),
+            (
+                Arg::Ends(":leave"),
+                "rename_carry kind=tag rows=3 pick=leave shown=true answerable=true hold=false \
+                 neutral=true pill=Leave here=true mark=true",
+            ),
+        ],
+        plain: "rename_carry kind=tag rows=3 pick=none shown=true answerable=true hold=false \
+                neutral=true pill=Create here=true mark=true",
+    },
+    // The same road with the answer given. The line is the one its
+    // argument names above — what is added is the write behind it, which
+    // the run's own `write-failures` count is the judge of — and the
+    // argument that names none takes `replace`.
+    Verb {
+        name: "rename-tag-remote-go",
+        when: &[
+            (
+                Arg::Ends(":add"),
+                "rename_carry kind=tag rows=3 pick=add shown=true answerable=true hold=false \
+                 neutral=true pill=Create here=true mark=true",
+            ),
+            (
+                Arg::Ends(":leave"),
+                "rename_carry kind=tag rows=3 pick=leave shown=true answerable=true hold=false \
+                 neutral=true pill=Leave here=true mark=true",
+            ),
+        ],
+        plain: "rename_carry kind=tag rows=3 pick=replace shown=true answerable=true hold=true \
+                neutral=false pill=Replace here=true mark=true",
+    },
     // Every door onto the history while a rebase replays behind the
     // screen — the graph's and the left pane's. **None of it is a
     // picture**: a switch the road turned away, a box that never opened, a
