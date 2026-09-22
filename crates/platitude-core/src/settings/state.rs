@@ -105,11 +105,28 @@ pub const AUTO_WIDTH: i32 = -1;
 /// something enormous cannot make startup crawl.
 const MAX_TABS: usize = 64;
 
+/// One tab as the last run left it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TabRecord {
+    /// The working copy the tab stood in — the folder opened again.
+    pub path: String,
+    /// The repository that copy belongs to, which is what the tab is
+    /// named after (`repo::Place::repo`). **Both are written**: a tab
+    /// standing in a linked copy is named after neither the folder it
+    /// opens nor anything the strip can work out without asking git,
+    /// and a restored tab is not opened until it is looked at.
+    ///
+    /// The copy's own path where the file does not say — every tab of a
+    /// file written before a tab could stand anywhere else stood in the
+    /// repository's own copy.
+    pub repo: String,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TabsState {
-    /// Work tree paths, in the order the tabs sat in.
-    pub paths: Vec<String>,
-    /// Index into `paths`. Always in range once loaded.
+    /// The tabs, in the order they sat in.
+    pub tabs: Vec<TabRecord>,
+    /// Index into `tabs`. Always in range once loaded.
     pub active: usize,
 }
 
@@ -163,26 +180,42 @@ impl State {
         }
 
         if let Some(t) = sub_table(table, "tabs") {
-            let paths: Vec<String> = t
-                .get("paths")
-                .and_then(Value::as_array)
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .filter(|p| !p.is_empty())
-                        .take(MAX_TABS)
-                        .map(repo_key)
-                        .collect()
+            let strings = |key: &str| -> Vec<String> {
+                t.get(key)
+                    .and_then(Value::as_array)
+                    .map(|items| {
+                        items
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(repo_key)
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            };
+            // Paired by position, and the pairing is what the empty ones
+            // are dropped after: a blank in either list would otherwise
+            // shift every repository one tab along.
+            let repos = strings("repos");
+            let tabs: Vec<TabRecord> = strings("paths")
+                .into_iter()
+                .enumerate()
+                .filter(|(_, path)| !path.is_empty())
+                .map(|(at, path)| {
+                    let repo = repos.get(at).filter(|r| !r.is_empty()).unwrap_or(&path);
+                    TabRecord {
+                        repo: repo.clone(),
+                        path,
+                    }
                 })
-                .unwrap_or_default();
+                .take(MAX_TABS)
+                .collect();
             let active = t
                 .get("active")
                 .and_then(Value::as_integer)
                 .and_then(|v| usize::try_from(v).ok())
-                .filter(|v| *v < paths.len())
+                .filter(|v| *v < tabs.len())
                 .unwrap_or(0);
-            state.tabs = TabsState { paths, active };
+            state.tabs = TabsState { tabs, active };
         }
 
         state
@@ -244,18 +277,22 @@ impl State {
         root.insert("layout".into(), Value::Table(layout));
 
         let mut tabs = Table::new();
-        let paths: Vec<Value> = self
+        let kept: Vec<&TabRecord> = self
             .tabs
-            .paths
+            .tabs
             .iter()
-            .filter(|p| !p.is_empty())
+            .filter(|tab| !tab.path.is_empty())
             .take(MAX_TABS)
-            .map(|p| Value::String(repo_key(p)))
             .collect();
-        let active =
-            i64::try_from(self.tabs.active.min(paths.len().saturating_sub(1))).unwrap_or(0);
+        let written = |of: fn(&TabRecord) -> &String| -> Vec<Value> {
+            kept.iter()
+                .map(|tab| Value::String(repo_key(of(tab))))
+                .collect()
+        };
+        let active = i64::try_from(self.tabs.active.min(kept.len().saturating_sub(1))).unwrap_or(0);
         tabs.insert("active".into(), Value::Integer(active));
-        tabs.insert("paths".into(), Value::Array(paths));
+        tabs.insert("paths".into(), Value::Array(written(|tab| &tab.path)));
+        tabs.insert("repos".into(), Value::Array(written(|tab| &tab.repo)));
         root.insert("tabs".into(), Value::Table(tabs));
 
         root
@@ -344,7 +381,50 @@ graph_lanes_width = 3
         )
         .expect("write");
         let tabs = dir_store(dir.path()).load_state().tabs;
-        assert_eq!(tabs.paths, vec!["C:/a".to_string(), "C:/b".to_string()]);
+        assert_eq!(
+            paths_of(&tabs),
+            vec!["C:/a".to_string(), "C:/b".to_string()]
+        );
         assert_eq!(tabs.active, 0);
+    }
+
+    /// A tab standing in a linked working copy comes back standing in it,
+    /// and still named after its repository. The two lists are read by
+    /// position, so a blank in the paths takes its repository with it.
+    #[test]
+    fn a_tab_keeps_the_repository_its_copy_hangs_off() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join(STATE_FILE),
+            "[tabs]\nactive = 0\npaths = ['C:/a/wt', '', 'C:/b']\nrepos = ['C:/a', 'C:/gone', 'C:/b']\n",
+        )
+        .expect("write");
+        let tabs = dir_store(dir.path()).load_state().tabs;
+        assert_eq!(
+            paths_of(&tabs),
+            vec!["C:/a/wt".to_string(), "C:/b".to_string()]
+        );
+        assert_eq!(
+            tabs.tabs.iter().map(|t| t.repo.clone()).collect::<Vec<_>>(),
+            vec!["C:/a".to_string(), "C:/b".to_string()]
+        );
+    }
+
+    /// A file written before a tab could stand anywhere else: every tab
+    /// stood in its repository's own copy, and says so.
+    #[test]
+    fn a_file_with_no_repositories_names_each_tab_after_its_own_copy() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join(STATE_FILE),
+            "[tabs]\nactive = 0\npaths = ['C:/a', 'C:/b']\n",
+        )
+        .expect("write");
+        let tabs = dir_store(dir.path()).load_state().tabs;
+        assert!(tabs.tabs.iter().all(|tab| tab.repo == tab.path));
+    }
+
+    fn paths_of(tabs: &TabsState) -> Vec<String> {
+        tabs.tabs.iter().map(|tab| tab.path.clone()).collect()
     }
 }

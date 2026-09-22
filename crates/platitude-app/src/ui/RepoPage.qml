@@ -2189,9 +2189,12 @@ FocusScope {
     /// For the settings card's avatar entry, which offers the authors of the repository being looked at.
     readonly property var pageGraph: graphModel
     /// The graph's rows themselves. Automation only, and for the same reason `pageWip` is exposed: a window-level
-    /// verb asks one page for a row and reads the answer in the window (`carried-open` opens another working copy in
-    /// a tab of its own, which is a question about two pages).
+    /// verb asks one page for a row and reads the answer in the window (`carried-open` stands this tab in another
+    /// working copy, and the page it stood in is taken down on the way).
     readonly property alias pageGraphPane: graphPane
+    /// The left menu, for the same one reason (`worktree-stand`): a WORKTREES row stands the tab in that copy, which
+    /// takes this page down and builds the next one, so nothing on this side is left to see it through.
+    readonly property alias pageSidebar: sidebarPane
     /// Whether the refs listing has landed — the read that also settles how many remotes this repository has, and so
     /// what the band's fetch button is allowed to be (`fetch-tip`).
     readonly property bool pageRefsLoaded: branchesModel.refsLoaded

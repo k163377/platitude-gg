@@ -188,7 +188,17 @@ mod tests {
     use toml::{Table, Value};
 
     use crate::settings::testkit::dir_store;
-    use crate::settings::{Claim, Defaults, LayoutState, Sections, TabsState, WindowState};
+    use crate::settings::{
+        Claim, Defaults, LayoutState, Sections, TabRecord, TabsState, WindowState,
+    };
+
+    /// A tab standing in the repository's own working copy.
+    fn stood_in(path: &str) -> TabRecord {
+        TabRecord {
+            path: path.to_string(),
+            repo: path.to_string(),
+        }
+    }
     #[test]
     fn round_trips_everything() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -227,7 +237,7 @@ mod tests {
                 },
             },
             tabs: TabsState {
-                paths: vec!["C:/a".into(), "C:/b".into()],
+                tabs: vec![stood_in("C:/a"), stood_in("C:/b")],
                 active: 1,
             },
         };
@@ -275,9 +285,15 @@ mod tests {
             },
             layout: LayoutState::default(),
             tabs: TabsState {
-                paths: vec![
-                    r"C:\Users\me\platitude-gg".into(),
-                    r"C:\Users\me\other".into(),
+                tabs: vec![
+                    // Standing in a linked working copy, which is the
+                    // one shape of a tab the file cannot work out for
+                    // itself (`TabRecord::repo`).
+                    TabRecord {
+                        path: r"C:\Users\me\platitude-gg\.claude\worktrees\c".into(),
+                        repo: r"C:\Users\me\platitude-gg".into(),
+                    },
+                    stood_in(r"C:\Users\me\other"),
                 ],
                 active: 1,
             },

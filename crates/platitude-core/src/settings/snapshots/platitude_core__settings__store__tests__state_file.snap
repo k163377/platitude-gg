@@ -25,7 +25,8 @@ worktree = true
 
 [tabs]
 active = 1
-paths = ["C:/Users/me/platitude-gg", "C:/Users/me/other"]
+paths = ["C:/Users/me/platitude-gg/.claude/worktrees/c", "C:/Users/me/other"]
+repos = ["C:/Users/me/platitude-gg", "C:/Users/me/other"]
 
 [window]
 height = 980

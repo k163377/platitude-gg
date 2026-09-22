@@ -26,6 +26,16 @@ Item {
     required property Item mainUi
     required property Item gate
 
+    /// Whether `page` is reading the working copy at `path` — asked of the session's own answer for where it
+    /// opened (`RepoTab.repoPath`), which is the witness outside the strip's bookkeeping.
+    ///
+    /// **Folded the way the application folds it** (`nav/drain.rs`): one folder reaches the two sides spelled
+    /// differently — `git worktree list` prints it one way and `rev-parse --show-toplevel` another — and on
+    /// Windows the difference is the letter case the filesystem keeps but does not tell names apart by.
+    function standsIn(page, path) {
+        return path !== "" && page.pageTab.repoPath.toLowerCase() === path.toLowerCase()
+    }
+
     // What remains after a middle-click is the output under test. Wait for the tab-model count edge.
     // The two tabs this verb needs are a precondition of the press and
     // nothing else: read again after it, they turn the verb's own answer — one tab fewer — into a wait nothing can end.
@@ -225,8 +235,9 @@ Item {
         }
     }
 
-    // Another working copy's uncommitted row opens that copy in a tab of its own — the door to the changes it is
-    // about, since this window's panes read this window's tree. Window-level because a tab is what it lands in.
+    // Another working copy's uncommitted row stands this tab in that copy — the door to the changes it is about,
+    // since this window's panes read the tree this tab is standing in. Window-level because the strip is what it
+    // lands in, and because the page that was asked is taken down on the way (デザイン規約 §タブの所作).
     SampleTimer {
         id: carriedOpenTimer
         running: Harness.autoAct === "carried-open"
@@ -262,17 +273,68 @@ Item {
                 carriedOpenTimer.asked = true
                 return
             }
-            // The tab is there and showing its repository: a page still opening looks the same whichever copy it is.
-            if (pageRepeater.count !== carriedOpenTimer.beforeCount + 1)
+            // The strip did not grow and the page in front is reading the copy that was asked for: a page still
+            // opening looks the same whichever copy it is, and so does a second tab in a picture of one.
+            if (pageRepeater.count !== carriedOpenTimer.beforeCount)
                 return
             const front = window.curPage
             if (front === null || front.pageTab.state !== "open"
-                    || !front.pageWt.loaded || front.pageGraph.finishCount === 0)
+                    || !front.pageWt.loaded || front.pageGraph.finishCount === 0
+                    || !acts.standsIn(front, carriedOpenTimer.wanted))
                 return
             stop()
             Harness.report("carried_open tabs=" + pageRepeater.count
-                              + " grew=" + (pageRepeater.count === carriedOpenTimer.beforeCount + 1)
-                              + " wanted=" + carriedOpenTimer.wanted)
+                              + " grew=" + (pageRepeater.count !== carriedOpenTimer.beforeCount)
+                              + " stood=" + acts.standsIn(front, carriedOpenTimer.wanted)
+                              + " wanted=" + carriedOpenTimer.wanted
+                              + " where=" + front.pageTab.repoPath)
+            window.finishAutoAct()
+        }
+    }
+
+    // A WORKTREES row stands this tab in that working copy — the same landing the graph's carried row reaches, by
+    // the door the left menu offers (デザイン規約 §左メニューの所作). Window-level for the reason above.
+    SampleTimer {
+        id: worktreeStandTimer
+        running: Harness.autoAct === "worktree-stand"
+        property bool asked: false
+        property int beforeCount: -1
+        property string wanted: ""
+        onTriggered: {
+            const page = window.curPage
+            if (page === null || page.pageTab.state !== "open" || page.pageGraph.finishCount === 0)
+                return
+            if (!worktreeStandTimer.asked) {
+                // The row, off the section's own model: which copies there are is what it is listing, and the
+                // argument names one of its rows (the first linked copy by default — row 0 is the copy this window
+                // is already standing in, whose row leads nowhere).
+                const trees = page.pageSidebar.worktreesModel
+                const row = Harness.autoActArg === "" ? 1 : Number(Harness.autoActArg)
+                if (trees.shown() <= row)
+                    return
+                const full = trees.fullAt(row)
+                if (full === "" || acts.standsIn(page, full))
+                    return
+                worktreeStandTimer.wanted = full
+                worktreeStandTimer.beforeCount = pageRepeater.count
+                // The pane's own door — the one the row's double-click calls (`SidebarRowGestures.activateRow`).
+                page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfCopy(full))
+                worktreeStandTimer.asked = true
+                return
+            }
+            if (pageRepeater.count !== worktreeStandTimer.beforeCount)
+                return
+            const front = window.curPage
+            if (front === null || front.pageTab.state !== "open"
+                    || !front.pageWt.loaded || front.pageGraph.finishCount === 0
+                    || !acts.standsIn(front, worktreeStandTimer.wanted))
+                return
+            stop()
+            Harness.report("worktree_stand tabs=" + pageRepeater.count
+                              + " grew=" + (pageRepeater.count !== worktreeStandTimer.beforeCount)
+                              + " stood=" + acts.standsIn(front, worktreeStandTimer.wanted)
+                              + " wanted=" + worktreeStandTimer.wanted
+                              + " where=" + front.pageTab.repoPath)
             window.finishAutoAct()
         }
     }

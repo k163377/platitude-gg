@@ -31,11 +31,24 @@ impl TabsModel {
         Notify = open_repos_changed
     );
 
+    // A folder somebody asked for is still being placed: git has been
+    // asked where it opens and has not answered yet (`TabsModel::asking`).
+    //
+    // **What "the strip is what was asked for" is read from.** Tabs
+    // arrive over the frames after they are asked for now, so anything
+    // reading the whole strip — a headless run measuring it, a picture
+    // of it — waits for this to go false, or reads a strip that is
+    // still filling (measured: a run photographed one tab of sixteen).
+    qproperty!("opening", Member = opening, Notify = opening_changed);
+
     #[qsignal]
     pub(super) fn current_index_changed(&mut self);
 
     #[qsignal]
     pub(super) fn open_repos_changed(&mut self);
+
+    #[qsignal]
+    pub(super) fn opening_changed(&mut self);
 
     /// The row at `index` is about to stop being the one in front.
     ///
@@ -65,7 +78,13 @@ impl TabsModel {
     /// `bare` / `other`, `message` git's own words (`other` alone), and
     /// `near` the folder to bring the picker back up at.
     #[qsignal]
-    fn open_rejected(&mut self, path: String, kind: String, message: String, near: String);
+    pub(super) fn open_rejected(
+        &mut self,
+        path: String,
+        kind: String,
+        message: String,
+        near: String,
+    );
 
     /// Takes the folder picked in a FolderDialog (a `file://` URL).
     #[qslot]
@@ -73,101 +92,37 @@ impl TabsModel {
         self.open_picked_path(file_url_to_path(&url).to_string_lossy().into_owned());
     }
 
-    /// Takes a picked folder as a plain path: check first, open second.
-    ///
-    /// The check costs one `git rev-parse` — a whole process, whether the
-    /// folder is a repository or not (ci/baseline/code-costs-windows-x64.md)
-    /// — which is why nothing is shown while it runs, and why the tab is
-    /// not opened up front and closed again, which would flash a tab for
-    /// the length of a frame or two.
+    /// Takes a picked folder as a plain path — the road whose refusals
+    /// have a picker to go back to.
     #[qslot]
     fn open_picked_path(&mut self, path: String) {
-        let path_buf = std::path::PathBuf::from(path.trim());
-        if path_buf.as_os_str().is_empty() {
-            return;
-        }
-        // A repository already in the strip needs no asking: it opened
-        // once. The strip moves to it, the way every other road into an
-        // open one does (デザイン規約 §タブの所作).
-        if let Some(position) = self.position_of(path.trim()) {
-            self.set_current_index(position as i32);
-            self.front_tab_asked();
-            return;
-        }
-        if !self.attached {
-            self.picks.attach(self.get_qml_method_invoker());
-            self.attached = true;
-        }
-        let feed = Arc::clone(&self.picks);
-        // With no runtime there is nothing to ask and nothing to wait
-        // for, so the old road applies: open it and let the page say so.
-        if Hub::with(|hub| hub.probe_repo(path_buf, feed)) != Some(true) {
-            self.open_repository_path(path);
-        }
+        self.ask(path, true);
+    }
+
+    /// Opens a plain filesystem path — a worktree row, the pill naming
+    /// the copy holding a branch, `PGG_AUTO_OPEN`. A refusal here is
+    /// shown on the tab's own failure screen, because nobody is standing
+    /// in a picker to be sent back to
+    /// (デザイン規約 §可否・警告の出し場所).
+    #[qslot]
+    fn open_repository_path(&mut self, path: String) {
+        self.ask(path, false);
     }
 
     #[qslot]
     fn drain(&mut self) {
-        for msg in self.picks.drain() {
-            match msg {
-                PickMsg::Accepted { path } => {
-                    self.open_repository_path(path.to_string_lossy().into_owned());
-                }
-                PickMsg::Rejected {
-                    path,
-                    near,
-                    kind,
-                    message,
-                } => {
-                    tracing::info!(path = %path.display(), kind, "picked folder refused");
-                    self.open_rejected(
-                        crate::urlpath::shown_path(&path.to_string_lossy()),
-                        kind.to_string(),
-                        message,
-                        near,
-                    );
-                }
-            }
+        for msg in self.asks.drain() {
+            // One folder is asked about at a time, so the answer is the
+            // one at the front (`TabsModel::asking`).
+            let Some(ask) = self.asking.pop_front() else {
+                continue;
+            };
+            self.land(&ask, msg);
         }
-    }
-
-    /// Opens a plain filesystem path.
-    ///
-    /// A repository already in the strip is not opened a second time —
-    /// the strip moves to the tab holding it (デザイン規約 §タブの所作).
-    #[qslot]
-    fn open_repository_path(&mut self, path: String) {
-        // Trimmed and spelled once, here, so the string the tab keeps is
-        // the one it was compared by — and the one the hover reads out
-        // (デザイン規約 §パスの区切り). Every road in hands over `/`
-        // already (git answers with it, `repo_key` writes it, the picker
-        // keeps it); the fold is what keeps the one that does not from
-        // reaching the strip.
-        let path = crate::urlpath::shown_path(path.trim());
-        let path_buf = std::path::PathBuf::from(&path);
-        if path_buf.as_os_str().is_empty() {
-            return;
-        }
-        if let Some(position) = self.position_of(&path) {
-            self.set_current_index(position as i32);
-            self.front_tab_asked();
-            return;
-        }
-        let title = title_of(&path);
-        let Some(Some(tab_id)) = Hub::with(|hub| hub.open_tab(path_buf)) else {
-            return;
-        };
-        self.push(TabItem {
-            tab_id,
-            title,
-            repo_path: path,
-        });
-        self.settle_titles();
-        self.leave_front();
-        self.current_index = self.items.len() as i32 - 1;
-        self.report();
-        self.current_index_changed();
-        self.front_tab_asked();
+        self.start_asking();
+        // After the next one is out, so a queue that still has folders
+        // in it never reads as settled between two of them.
+        self.settle_opening();
     }
 
     /// Puts back the tabs the last session had open.
@@ -191,15 +146,16 @@ impl TabsModel {
         // copy: the tab already holding that repository, whatever the
         // shifting below does to the count.
         let mut wanted_held: Option<usize> = None;
-        for (position, saved_path) in saved.paths.iter().enumerate() {
+        for (position, saved_tab) in saved.tabs.iter().enumerate() {
             // Spelled for the screen on the way in, the same as the road
-            // the picker takes (`open_repository_path`): the file is
-            // written with `/` but nothing stops a hand from writing one
-            // that is not, and the hover reads out whatever the tab kept.
-            let path = crate::urlpath::shown_path(saved_path);
-            let path_buf = std::path::PathBuf::from(&path);
-            if !path_buf.is_dir() {
-                tracing::info!(path = %path, "restored tab dropped: not there any more");
+            // the picker takes (`TabsModel::ask`): the file is written
+            // with `/` but nothing stops a hand from writing one that is
+            // not, and the hover reads out whatever the tab kept.
+            let copy = crate::urlpath::shown_path(&saved_tab.path);
+            let repo = crate::urlpath::shown_path(&saved_tab.repo);
+            let copy_buf = std::path::PathBuf::from(&copy);
+            if !copy_buf.is_dir() {
+                tracing::info!(path = %copy, "restored tab dropped: not there any more");
                 // Everything after it shifts left, and the active one with
                 // it if it was to the right.
                 if position < saved.active {
@@ -207,12 +163,17 @@ impl TabsModel {
                 }
                 continue;
             }
-            // A file written before the strip refused duplicates can name
-            // one repository twice, and the two entries need not be
-            // spelled alike. Putting both back would restore the very
-            // thing opening now declines to make.
-            if let Some(held) = self.position_of(&path) {
-                tracing::info!(path = %path, "restored tab dropped: already open");
+            // A file can name one repository twice — written before the
+            // strip refused duplicates, or spelling one folder two ways,
+            // or naming two working copies of one repository. Putting
+            // both back would restore the very thing opening now
+            // declines to make, and git is not asked here: what the file
+            // says is what a run wrote when it did ask
+            // (`settings::TabRecord`).
+            if let Landing::Show(held) | Landing::Switch(held) =
+                landing_for(&self.items, &copy, &repo)
+            {
+                tracing::info!(path = %copy, "restored tab dropped: already open");
                 if position == saved.active {
                     wanted_held = Some(held);
                 } else if position < saved.active {
@@ -220,14 +181,15 @@ impl TabsModel {
                 }
                 continue;
             }
-            let title = title_of(&path);
-            let Some(Some(tab_id)) = Hub::with(|hub| hub.reserve_tab(path_buf)) else {
+            let title = title_of(&repo);
+            let Some(Some(tab_id)) = Hub::with(|hub| hub.reserve_tab(copy_buf)) else {
                 continue;
             };
             self.push(TabItem {
                 tab_id,
                 title,
-                repo_path: path,
+                repo_path: repo,
+                copy_path: copy,
             });
         }
         // Once, with the whole strip standing: a name settled against
@@ -303,7 +265,7 @@ impl TabsModel {
     }
 
     #[qslot]
-    fn set_current_index(&mut self, index: i32) {
+    pub(super) fn set_current_index(&mut self, index: i32) {
         if index != self.current_index && index >= -1 && index < self.items.len() as i32 {
             self.leave_front();
             self.current_index = index;

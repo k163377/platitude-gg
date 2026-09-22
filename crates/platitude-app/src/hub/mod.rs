@@ -41,7 +41,7 @@ mod tabs;
 pub use feed::{Feed, Feeds, attach_feed, attached};
 pub use msg::{
     CarriedStatusMsg, CloneMsg, CommandMsg, DetailsMsg, DiffMsg, GraphMsg, HeadMsg, OpProgressMsg,
-    PickMsg, PlanMsg, RefsMsg, StashList, StateMsg, StatusMsg, TabMsg,
+    OpenMsg, PlanMsg, RefsMsg, StashList, StateMsg, StatusMsg, TabMsg,
 };
 pub use prefs::AvatarUrls;
 pub use tabs::{from_session, listing_applied, stand_in, with_session};
@@ -78,8 +78,12 @@ struct Tab {
     /// speaking for. `None` for a tab with no session.
     sink: Option<Arc<sink::BridgeSink>>,
     /// Held across a release, because it is the only thing here that
-    /// cannot be read again.
-    draft: Draft,
+    /// cannot be read again. **One per working copy this tab has stood
+    /// in** (`Tab::path` is the key): a message written for what is
+    /// staged in one copy says nothing about another, and standing the
+    /// tab in a sibling copy is a gesture the reader comes back from
+    /// (`Hub::switch_tab`).
+    drafts: HashMap<String, Draft>,
     /// The rows a delete has taken off the screen and the write they are
     /// waiting on (`ops::StandIn`). Held here for the reason the draft is:
     /// a page is built for the tab in front and taken down behind it, and

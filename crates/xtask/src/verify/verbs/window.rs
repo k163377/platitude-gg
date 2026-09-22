@@ -82,15 +82,23 @@ pub(super) const TABLE: &[Verb] = &[
     // everything else on that page was thrown away and read again;
     // `wip=` is the pane holding them being the one on screen, which
     // is the half of "kept" that a report about text alone misses.
-    // Another working copy's uncommitted row opening that copy. `grew=`
-    // is the whole claim — the picture of a second tab showing a
-    // repository is the same picture whichever door opened it, and a row
-    // that did nothing leaves the run to spend the whole of the
-    // ceiling.
+    // Another working copy's uncommitted row standing this tab in that
+    // copy. **The two halves are what the picture cannot hold**: a
+    // window showing one repository frames the same whether the strip
+    // grew a second tab for the copy (`grew=`) or the tab it already had
+    // moved into it (`stood=`), and those are the two answers this verb
+    // exists to tell apart (デザイン規約 §タブの所作).
     Verb {
         name: "carried-open",
         when: &[],
-        plain: "carried_open tabs=2 grew=true",
+        plain: "carried_open tabs=1 grew=false stood=true",
+    },
+    // The same landing by the left menu's door. One tab before and one
+    // after, and the copy the row named is the one the session opened.
+    Verb {
+        name: "worktree-stand",
+        when: &[],
+        plain: "worktree_stand tabs=1 grew=false stood=true",
     },
     Verb {
         name: "tab-carry",

@@ -3,15 +3,23 @@
 
 use super::*;
 
-/// What came back about a folder somebody picked, before it is a tab.
+/// What came back about a folder somebody asked for, before it is a tab.
+///
+/// **Every road in waits for one of these** (デザイン規約 §タブの所作
+/// 「判定は 1 か所に置く」): the working copy a folder opens and the
+/// repository that copy hangs off are git's to say, and until they are
+/// said there is no telling a second copy of what is already open from a
+/// repository nobody has opened yet.
 #[derive(Debug)]
-pub enum PickMsg {
-    /// It opens. The path is the folder picked; git's root may sit
-    /// above it.
-    Accepted { path: PathBuf },
-    /// It does not, and never becomes a tab. `kind` is `plain` / `bare` /
-    /// `other` — the same three the tab's own failure screen names.
-    Rejected {
+pub enum OpenMsg {
+    /// It opens, and here is where: the working copy the asked-for
+    /// folder is in, and the repository it belongs to
+    /// ([`platitude_core::repo::Place`]).
+    Placed { place: platitude_core::repo::Place },
+    /// It does not. `kind` is `plain` / `bare` / `other` — the same three
+    /// the tab's own failure screen names, which is where every road but
+    /// the picker's shows this (デザイン規約 §可否・警告の出し場所).
+    Refused {
         path: PathBuf,
         /// The folder to reopen the picker at — the one this sits in.
         near: String,

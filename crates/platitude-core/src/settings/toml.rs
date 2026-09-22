@@ -246,16 +246,25 @@ pub(super) fn clamp_to_i64(value: u64) -> i64 {
 mod tests {
     use super::*;
     use crate::settings::testkit::dir_store;
-    use crate::settings::{STATE_FILE, Settings, State, TabsState};
+    use crate::settings::{STATE_FILE, Settings, State, TabRecord, TabsState};
+
+    /// One tab standing in the repository's own working copy.
+    fn one_tab(path: &str) -> TabsState {
+        TabsState {
+            tabs: vec![TabRecord {
+                path: path.to_string(),
+                repo: path.to_string(),
+            }],
+            active: 0,
+        }
+    }
+
     #[test]
     fn windows_paths_are_written_without_escaping() {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = dir_store(dir.path());
         let state = State {
-            tabs: TabsState {
-                paths: vec![r"C:\Users\me\proj".into()],
-                active: 0,
-            },
+            tabs: one_tab(r"C:\Users\me\proj"),
             ..State::default()
         };
         store.save_state(&state).expect("save");
@@ -269,7 +278,13 @@ mod tests {
             "nothing in the file needs an escape:\n{text}"
         );
         assert_eq!(
-            store.load_state().tabs.paths,
+            store
+                .load_state()
+                .tabs
+                .tabs
+                .iter()
+                .map(|tab| tab.path.clone())
+                .collect::<Vec<_>>(),
             vec!["C:/Users/me/proj".to_string()],
             "and what comes back is what a repository is named elsewhere"
         );
@@ -285,10 +300,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = dir_store(dir.path());
         let raw = State {
-            tabs: TabsState {
-                paths: vec![r"C:\Users\me\proj".into()],
-                active: 0,
-            },
+            tabs: one_tab(r"C:\Users\me\proj"),
             ..State::default()
         };
         store.save_state(&raw).expect("save");

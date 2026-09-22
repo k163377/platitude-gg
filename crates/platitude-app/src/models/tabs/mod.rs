@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{Fields, Listed, Record, field};
-use crate::hub::{Feed, Hub, PickMsg};
+use crate::hub::{Feed, Hub, OpenMsg};
 use crate::urlpath::file_url_to_path;
 
 use super::{impl_move_notified, impl_notify_runs, push_run, qml_register, tab_name};
@@ -42,7 +42,7 @@ mod strip;
 pub(super) use strip::index_after_move;
 // The siblings reach this through `use super::*`, the way `graph` hands
 // its row item down: the name a tab lands with belongs to the strip.
-use strip::title_of;
+use strip::{Landing, landing_for, title_of};
 
 // ---------------------------------------------------------------------------
 // TabsModel: open repositories (the tab strip)
@@ -52,7 +52,29 @@ use strip::title_of;
 pub struct TabItem {
     tab_id: i32,
     title: String,
+    /// The repository the tab shows: its own working copy, which is
+    /// what the tab is named after and what says whether two folders
+    /// are one repository (`repo::Place::repo`). **Not what git is run
+    /// in** — that is `copy_path`, and the two differ for every tab
+    /// standing in a linked copy.
     repo_path: String,
+    /// The working copy the tab is standing in — `repo_path` where that
+    /// is the repository's own, one of its linked copies otherwise.
+    /// What the session opens, and what the strip moves to instead of
+    /// opening a second time.
+    copy_path: String,
+}
+
+/// A folder somebody asked for, waiting on git to say where it opens
+/// (`TabsModel::ask`).
+struct Ask {
+    /// The folder as it was handed over — the path a refusal names,
+    /// since a refused folder has no working copy to name instead.
+    path: String,
+    /// The reader's hand is on a folder picker, so a refusal has
+    /// somewhere to go back to. Every other road shows a refusal on the
+    /// tab's own failure screen (デザイン規約 §可否・警告の出し場所).
+    picked: bool,
 }
 
 pub struct TabsModel {
@@ -81,11 +103,21 @@ pub struct TabsModel {
     /// property cannot, and a name a reader picked has to lead back to
     /// a path.
     open_repos: OpenRepos,
-    /// Answers about folders the picker handed over. Attached on the
-    /// first question: a window that never opens the picker never has
-    /// one to hear.
-    picks: Arc<Feed<PickMsg>>,
+    /// Answers about folders somebody asked for. Attached on the first
+    /// question: a window that opens nothing never has one to hear.
+    asks: Arc<Feed<OpenMsg>>,
     attached: bool,
+    /// The folders asked for and not yet answered, in the order they
+    /// were asked for, the one git is being asked about at the front.
+    ///
+    /// **One at a time, and the queue is why**: answers come back in
+    /// whatever order git finishes, and the strip is an order —
+    /// `PGG_AUTO_OPEN` naming three repositories has to put three tabs
+    /// down in the order it named them.
+    asking: VecDeque<Ask>,
+    /// Whether anything in that queue is still waiting on git
+    /// (`opening`).
+    opening: bool,
 }
 
 impl Default for TabsModel {
@@ -97,8 +129,10 @@ impl Default for TabsModel {
             current_index: -1,
             current_tab_id: -1,
             open_repos: OpenRepos::default(),
-            picks: Arc::new(Feed::default()),
+            asks: Arc::new(Feed::default()),
             attached: false,
+            asking: VecDeque::new(),
+            opening: false,
         }
     }
 }
@@ -114,6 +148,12 @@ impl QListModel for TabsModel {
     }
     fn remove_unnotified(&mut self, index: usize) -> TabItem {
         self.items.remove(index)
+    }
+    /// The seat a tab standing in another working copy takes over
+    /// (`TabsModel::switch_copy`) — the one act that puts a row back
+    /// where one just left.
+    fn insert_unnotified(&mut self, index: usize, value: TabItem) {
+        self.items.insert(index, value);
     }
     fn reset_unnotified(&mut self) {
         self.items.clear();

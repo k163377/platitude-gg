@@ -44,6 +44,11 @@ Item {
     /// window's own completion handler, so both phases are over before the window reaches its next line
     /// (`HarnessSeat`).
     property bool screensUp: false
+    /// The window said the verbs may start, and whether they have (`begin`). **One way** — the strip goes on
+    /// filling as verbs open tabs of their own, and a gate that closed again would take the running verb down
+    /// with it.
+    property bool beginAsked: false
+    property bool begun: false
     readonly property var cloneModel: harness.dialogSeat.cloneModel
     readonly property var cloneDialog: harness.dialogSeat.cloneDialog
     readonly property var settingsDialog: harness.dialogSeat.settingsDialog
@@ -91,10 +96,36 @@ Item {
     }
 
     /// The window is up: the verbs may start, and the shot clock with them.
+    ///
+    /// **Held until the strip holds every folder the run named.** Where a folder opens is git's answer now
+    /// (デザイン規約 §タブの所作), so the tabs asked for above arrive over the frames after this call — and a verb
+    /// that read the strip in between would be reading a strip still filling (measured: `tab-widths` reported one
+    /// tab of sixteen). **One gate for every window verb**: the alternative is this precondition written into each
+    /// of them, where the next one written forgets it.
+    ///
+    /// The verbs are *built* by it rather than told to start, because a `SampleTimer` runs off its own `running`
+    /// and not off this call — a verb held by a word it never reads is a verb that is not held.
     function begin() {
+        harness.beginAsked = true
+        harness.beginOnceTheStripStands()
+    }
+    /// The half of [`begin`] that runs when nothing is left to place — now, or on the answer that empties the
+    /// queue (`TabsModel.opening`).
+    function beginOnceTheStripStands() {
+        if (harness.begun || !harness.beginAsked || harness.tabsModel.opening)
+            return
+        // The window's verbs are built on this edge (`actsLoader`), so the item exists by the line below: a
+        // loader with no reason to wait hands its item over inside the write.
+        harness.begun = true
         if (actsLoader.item)
             actsLoader.item.begin()
         shotDriver.begin()
+    }
+    Connections {
+        target: harness.tabsModel
+        function onOpeningChanged() {
+            harness.beginOnceTheStripStands()
+        }
     }
     /// One run has one owner of the page-level act (app-ui.md §UI 自動化の因果性).
     function claimPageAct() {
@@ -150,10 +181,11 @@ Item {
         onAppPictured: census.report()
     }
 
-    // Built only when a verb was given: a run that is only being measured or photographed carries none of the verbs.
+    // Built only when a verb was given, and only once the strip holds what the run asked for (`begin`): a run that
+    // is only being measured or photographed carries none of the verbs.
     Loader {
         id: actsLoader
-        active: harness.screensUp && Harness.autoAct !== ""
+        active: harness.screensUp && harness.begun && Harness.autoAct !== ""
         sourceComponent: WindowAutoActDriver {
             window: harness.window
             tabsModel: harness.tabsModel

@@ -31,7 +31,7 @@ pub use self::toml::repo_key;
 pub use lock::{Claim, Lock};
 pub use place::{Build, Env, Platform};
 pub use prefs::{Defaults, Settings};
-pub use state::{AUTO_WIDTH, LayoutState, Sections, State, TabsState, WindowState};
+pub use state::{AUTO_WIDTH, LayoutState, Sections, State, TabRecord, TabsState, WindowState};
 pub use store::Store;
 
 pub const DIR_NAME: &str = "platitude-gg";

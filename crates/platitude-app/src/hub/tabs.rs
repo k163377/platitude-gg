@@ -5,22 +5,36 @@ use super::sink::BridgeSink;
 use super::*;
 
 impl Hub {
-    /// Asks whether `path` can be opened, without opening anything.
+    /// Asks where `path` opens, without opening anything: the working
+    /// copy the folder is in, and the repository that copy hangs off
+    /// ([`platitude_core::repo::place`]).
     ///
-    /// Only the picker goes through here — what it remembers as a tab is
-    /// a folder that opened. Every other way in (a restored tab, a
-    /// worktree row, `PGG_AUTO_OPEN`) opens straight away and fails on
-    /// the page's own failure screen
-    /// (デザイン規約 §可否・警告の出し場所).
-    pub fn probe_repo(&self, path: PathBuf, feed: Arc<Feed<PickMsg>>) -> bool {
+    /// **Every road in asks this** — the picker, a worktree row, the
+    /// pill naming the copy holding a branch, `PGG_AUTO_OPEN` — because
+    /// the strip's one question ("is this repository already open?")
+    /// cannot be answered from the path alone: a folder deeper in a tree
+    /// and a linked working copy are both spelled unlike anything in the
+    /// strip, and both belong to a repository that may already be in it
+    /// (デザイン規約 §タブの所作).
+    ///
+    /// Two processes, and nothing is shown while they run: opening the
+    /// tab first and taking it away again would flash a tab for a frame
+    /// or two, and the folder that opens is about to have a whole
+    /// repository read for it anyway
+    /// (ci/baseline/code-costs-windows-x64.md).
+    ///
+    /// Answers `false` where there is no runtime to ask on, which is the
+    /// caller's cue to open the folder the old way and let the page say
+    /// what became of it.
+    pub fn place_repo(&self, path: PathBuf, feed: Arc<Feed<OpenMsg>>) -> bool {
         let Some(handle) = self.runtime_handle() else {
             return false;
         };
         let executor = self.executor();
         handle.spawn(async move {
             let cancel = tokio_util::sync::CancellationToken::new();
-            let msg = match platitude_core::repo::open(&executor, &path, &cancel).await {
-                Ok(_) => PickMsg::Accepted { path },
+            let msg = match platitude_core::repo::place(&executor, &path, &cancel).await {
+                Ok(place) => OpenMsg::Placed { place },
                 Err(e) => {
                     let (kind, message) = match &e {
                         platitude_core::GitError::NotARepository { bare, .. } => {
@@ -28,7 +42,7 @@ impl Hub {
                         }
                         _ => ("other", e.to_string()),
                     };
-                    PickMsg::Rejected {
+                    OpenMsg::Refused {
                         near: crate::urlpath::picker_folder_url(&path),
                         path,
                         kind,
@@ -102,11 +116,45 @@ impl Hub {
                 path,
                 feeds: Arc::new(Feeds::default()),
                 sink: None,
-                draft: Draft::default(),
+                drafts: HashMap::new(),
                 stand_in: crate::ops::StandIn::default(),
             },
         );
         Some(id)
+    }
+
+    /// Stands a tab in another working copy of the repository it is
+    /// already showing: a tab on `path` taking the same seat in the
+    /// strip, and the one that was there closed
+    /// (`TabsModel::switch_copy`). Answers with the new tab's id.
+    ///
+    /// **A new tab, not the old one re-pointed.** A page is built for
+    /// the tab in front and holds everything it read off that tab's id
+    /// (`RepoPageStack`), so the copy being left has to take its page
+    /// with it — the same move a tab makes on its way off the front,
+    /// which is the one road a session is ever swapped on.
+    ///
+    /// What crosses is what cannot be read again: the unsent words of
+    /// every copy this tab has stood in (`Tab::drafts`), the copy being
+    /// left included — the reader comes back to it.
+    /// **Opened before the old one is closed**, so a refusal leaves the
+    /// tab that was there: the strip holds this id and would otherwise
+    /// be left naming a tab the hub no longer has.
+    pub fn switch_tab(&mut self, id: i32, path: PathBuf) -> Option<i32> {
+        if !self.tabs.contains_key(&id) {
+            return None;
+        }
+        let opened = self.open_tab(path)?;
+        let drafts = self
+            .tabs
+            .get_mut(&id)
+            .map(|tab| std::mem::take(&mut tab.drafts))
+            .unwrap_or_default();
+        self.close_tab(id);
+        if let Some(tab) = self.tabs.get_mut(&opened) {
+            tab.drafts = drafts;
+        }
+        Some(opened)
     }
 
     /// Opens the session of a reserved tab, if it has not been opened yet.
@@ -230,20 +278,28 @@ impl Hub {
     }
 
     /// Puts the words typed into a tab's commit editor somewhere that
-    /// outlives its page (see [`Draft`]).
+    /// outlives its page (see [`Draft`]) — filed under the working copy
+    /// they were written in, which is the one they are about.
+    ///
+    /// An empty draft is filed too: it is the answer for a message the
+    /// reader cleared, and leaving the last one standing would put words
+    /// back that were deleted.
     pub fn hold_draft(&mut self, id: i32, draft: Draft) {
         if let Some(tab) = self.tabs.get_mut(&id) {
-            tab.draft = draft;
+            let copy = tab.path.to_string_lossy().into_owned();
+            tab.drafts.insert(copy, draft);
         }
     }
 
-    /// What was typed there, for the page that comes back. Empty for a tab
-    /// nobody has written in — which is also what an unknown tab answers,
-    /// since there is nothing to put back either way.
+    /// What was typed in the copy this tab is standing in, for the page
+    /// that comes back. Empty for a copy nobody has written in — which is
+    /// also what an unknown tab answers, since there is nothing to put
+    /// back either way.
     pub fn draft(&self, id: i32) -> Draft {
         self.tabs
             .get(&id)
-            .map(|tab| tab.draft.clone())
+            .and_then(|tab| tab.drafts.get(tab.path.to_string_lossy().as_ref()))
+            .cloned()
             .unwrap_or_default()
     }
 

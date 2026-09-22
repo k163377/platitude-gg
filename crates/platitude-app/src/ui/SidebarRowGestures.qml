@@ -267,9 +267,10 @@ QtObject {
     /// Double-click: where the row leads (デザイン規約 §左メニューの所作).
     function activateRow(kind, name, full, oidHex) {
         // The two of these that write: a switch, and the box a tag's row opens for a new branch's name. **A worktree
-        // row goes through** — opening another working copy in a tab writes nothing in this one, and going
-        // somewhere else to read while a rewrite runs is exactly what the hold is meant to leave alone
-        // (デザイン規約 §左メニューの所作 の replay の段).
+        // row goes through** — standing this tab in another working copy writes nothing, and going somewhere else
+        // to read while a rewrite runs is exactly what the hold is meant to leave alone. The page goes with the
+        // move and the running write does not: it outlives the page that asked for it
+        // (`RepoSession::close`, デザイン規約 §左メニューの所作 の replay の段).
         if (gestures.held && kind !== "worktree")
             return
         const id = full !== "" ? full : name
