@@ -158,7 +158,7 @@ AppListView {
         if (!row)
             return false
         // Nothing was held down: a run with no pointer has no press to time (`ReclickGesture.click`).
-        row.leftClick(Qt.NoModifier, 0)
+        row.leftClick(Qt.NoModifier)
         return true
     }
     /// Smoke hook (PGG_AUTO_ACT=nav-drag-open): a press on one **closed** row's own line that starts to move — the

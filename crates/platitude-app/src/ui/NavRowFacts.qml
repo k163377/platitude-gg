@@ -85,9 +85,6 @@ Item {
     /// The hand is on these lines — the whole block's answer, which the row reads as its own hover
     /// (`NavItemDelegate.factsPointed` says why the row cannot read it off its own handler).
     readonly property bool pointed: factsHover.hovered
-    /// When the button went down, so the row's gesture takes the time it was held off the wait it has left — Qt
-    /// measures a double-click press to press, and the click arrives at the release (`NavItemDelegate`).
-    property real heldFrom: 0
     /// Whether the press that is ending took words with it. **That is what tells a drag from a click** — a sweep that
     /// came away empty never moved — and a drag must not reach the row, whose second click opens a name box.
     readonly property bool swept: pad.sweptText() !== ""
@@ -119,7 +116,6 @@ Item {
     function handPressed(button, x, y) {
         if (button !== Qt.LeftButton)
             return
-        facts.heldFrom = Date.now()
         pad.pressAt(x, y)
     }
     function handMoved(x, y) {
@@ -136,7 +132,7 @@ Item {
         // take what it is about off the screen with them (デザイン規約 §左メニューの所作).
         if (button === Qt.RightButton)
             facts.row.factsMenuAsked()
-        facts.row.rowPressed(button, modifiers, Date.now() - facts.heldFrom)
+        facts.row.rowPressed(button, modifiers)
     }
     function handDoubled(button) {
         if (!facts.swept && facts.row !== null)

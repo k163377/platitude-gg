@@ -393,7 +393,7 @@ Item {
                 const item = graphPane.view.itemAtIndex(row)
                 if (item === null)
                     return
-                item.leftClick(0, Qt.NoModifier)
+                item.leftClick(Qt.NoModifier)
                 carriedReadTimer.asked = true
                 return
             }
@@ -516,7 +516,7 @@ Item {
                 const item = graphPane.view.itemAtIndex(row)
                 if (item === null)
                     return
-                item.leftClick(0, Qt.NoModifier)
+                item.leftClick(Qt.NoModifier)
                 carriedStandTimer.asked = true
                 return
             }

@@ -44,15 +44,20 @@ QtObject {
         return renameTimer.running && gesture.armedKey === key
     }
 
-    /// A left click landed. Answers whether it is a click of its own — the second one of a double-click is not, the
-    /// gesture there being the double — so the caller does what a click does only when this says so.
+    /// A left press landed. Answers whether it is a press of its own — the second one of a double-click is not, the
+    /// gesture there being the double — so the caller does what a press does only when this says so.
     ///
-    /// `names` is what a second click on this target would name, or nothing where there is no name to change (a
-    /// folder, a marker, a row with no ref on it). `held` is how long the button was down, in milliseconds.
+    /// **Both halves of a double-click come here, and both come as presses**: Qt raises the second press before it
+    /// raises the double and withholds the second click altogether (measured, `tst_pressorder`). A surface that
+    /// answered at the release would never see the second half at all — which is why the guard below is what stops
+    /// the second press from selecting again and arming a name box under a hand that is going somewhere.
     ///
-    /// The arming is decided here, before the caller has answered the click: what makes a second click a second is
-    /// that the target was already the one clicked, and the caller's own answer is what makes it that.
-    function click(key, names, held) {
+    /// `names` is what a second press on this target would name, or nothing where there is no name to change (a
+    /// folder, a marker, a row with no ref on it).
+    ///
+    /// The arming is decided here, before the caller has answered the press: what makes a second press a second is
+    /// that the target was already the one pressed, and the caller's own answer is what makes it that.
+    function click(key, names) {
         // The second click of a double-click, dropped — **but only on the target the first one landed on**. One of
         // these serves a whole surface, so a guard that answered for all of it would swallow the second of two quick
         // clicks on *different* rows, which is a hand reading down a list (the per-row timers this replaced could
@@ -68,11 +73,9 @@ QtObject {
         if (wasActive && names) {
             gesture.armedKey = key
             gesture.armedNames = names
-            // **Qt measures the double-click press to press, and this is the release.** What is left to wait for is
-            // the rest of that window — the time the button was down has already gone by, and a press that comes
-            // after the window is no longer a double-click whatever this does. A button held longer than the window
-            // leaves nothing to wait for at all.
-            renameTimer.interval = Math.max(1, window - (held === undefined ? 0 : held))
+            // **Qt measures the double-click press to press, and this is a press**, so the whole window is still to
+            // come: a press landing after it is no longer a double-click whatever this does.
+            renameTimer.interval = window
             renameTimer.start()
         }
         return true

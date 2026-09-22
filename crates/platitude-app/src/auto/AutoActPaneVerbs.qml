@@ -302,7 +302,7 @@ Item {
                     graphPane.view.positionViewAtBeginning()
                     return
                 } else if (act === "graph-head-go") {
-                    graphPane.headPin.activated(graphPane.headPin.headRow)
+                    graphPane.headPin.activated(graphPane.headPin.headRow, Qt.NoModifier)
                     return
                 }
                 graphHeadTimer.stop()

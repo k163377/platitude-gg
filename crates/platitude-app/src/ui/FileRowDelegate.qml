@@ -121,6 +121,10 @@ Item {
         id: fileMouse
         anchors.fill: parent
         hoverEnabled: true
+        // The row keeps the drag it is handed, as every row in this window does (`GraphRowDelegate`, measured in
+        // `tst_pressorder`): the list takes the grab at the platform's drag distance otherwise, and a click with a
+        // tremor in it opens nothing while the files slide under the hand that made it.
+        preventStealing: true
         onClicked: fileRow.press()
     }
     // Hover says the path, whatever the row shows and however wide the pane is (デザイン規約 §hover のツールチップ). Asking

@@ -135,8 +135,7 @@ AppCard {
         const row = refList.rowAt(i)
         if (!row)
             return false
-        // Nothing was held down: a run with no pointer has no press to time (`ReclickGesture.click`).
-        row.leftClick(0)
+        row.leftClick(Qt.NoModifier)
         return true
     }
     function doubleClickRow(i) {
@@ -172,7 +171,7 @@ AppCard {
         const row = refList.rowAt(i)
         if (!row)
             return false
-        row.leftClick(0, modifiers)
+        row.leftClick(modifiers)
         return true
     }
     function rowLit(i) {
@@ -408,7 +407,7 @@ AppCard {
                 ///
                 /// **Every row takes the click**, whether or not it leads anywhere: what a row that leads nowhere
                 /// still has is a name, and the gesture that changes it begins with a click of its own.
-                function leftClick(held, modifiers) {
+                function leftClick(modifiers) {
                     const mods = modifiers === undefined ? Qt.NoModifier : modifiers
                     // **A held click is the graph row's own** (デザイン規約 §複数のコミットを選ぶ): this card's rows are
                     // that row, so the press goes in at the row's handler — what it does with the choice, the name
@@ -422,7 +421,7 @@ AppCard {
                     // the marker names no ref, so it goes in as a row with nothing on it.
                     if (refList.rowClicks
                             && !refList.rowClicks.noteRowClick(
-                                refList.rowOid, refRow.nameable ? refRow.modelData : null, held))
+                                refList.rowOid, refRow.nameable ? refRow.modelData : null))
                         return
                     if (refRow.nameable)
                         refList.chose(refRow.modelData)
@@ -451,10 +450,11 @@ AppCard {
                 // left menu (`NavItemDelegate`). What stops at the gutter is the ink.
                 TapHandler {
                     id: rowTap
-                    /// When the button went down, for the gesture to take off the wait it has left (see the component).
-                    property real pressAt: 0
-                    onPressedChanged: if (rowTap.pressed) rowTap.pressAt = Date.now()
-                    onSingleTapped: refRow.leftClick(Date.now() - rowTap.pressAt, rowTap.point.modifiers)
+                    // **At the press**, as the graph's own rows answer theirs (`GraphRowDelegate`). This card and
+                    // those rows are one target — a hand pressing one spot twice presses the row and then the card —
+                    // so the two have to answer the same half of the gesture or the second press comes up as a first
+                    // (規約 §グラフ行のダブルクリック).
+                    onPressedChanged: if (rowTap.pressed) refRow.leftClick(rowTap.point.modifiers)
                     onDoubleTapped: refRow.doubleClick(rowTap.point.modifiers)
                 }
                 /// A right-click on this row, as the row answers one. Named for the same reason `leftClick` is: a run

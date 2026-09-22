@@ -139,6 +139,8 @@ Item {
         id: dropHand
         anchors.fill: parent
         hoverEnabled: false
+        // The row keeps the drag it is handed (`GraphRowDelegate`, measured in `tst_pressorder`).
+        preventStealing: true
         onPressed: mouse => { mouse.accepted = commitRow.takesPress(mouse.modifiers) }
         onClicked: mouse => commitRow.leftClick(mouse.modifiers)
     }

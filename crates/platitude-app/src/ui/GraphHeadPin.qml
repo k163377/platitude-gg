@@ -42,7 +42,9 @@ Rectangle {
     required property real barRoom
 
     /// The stand-in was pressed: go to the row it stands for.
-    signal activated(int row)
+    /// The stand-in was pressed. `modifiers` rides along because this is the row: what Ctrl and Shift do to the
+    /// choice is decided where every other press decides it (デザイン規約 §複数のコミットを選ぶ).
+    signal activated(int row, int modifiers)
 
     /// The pointer resting on this, for the headless run — hover cannot be injected, so what the pointer would light is
     /// written in the same one place the pointer's own arrival writes (verify-ui).
@@ -325,9 +327,11 @@ Rectangle {
         height: Theme.graphRowHeight + pin.topRoom
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        onClicked: mouse => {
+        // At the press, as the rows below answer theirs (`GraphRowDelegate`). The right button is still only taken
+        // and dropped, which needs no handler at all.
+        onPressed: mouse => {
             if (mouse.button === Qt.LeftButton)
-                pin.activated(pin.headRow)
+                pin.activated(pin.headRow, mouse.modifiers)
         }
     }
 }

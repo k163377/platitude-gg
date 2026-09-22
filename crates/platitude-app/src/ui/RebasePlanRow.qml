@@ -47,6 +47,10 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
+        // **The reorder is this row's drag, so it keeps it** (`GraphRowDelegate`, measured in `tst_pressorder`). The
+        // list took the grab at the same distance this row tells a drag from a click by, so which of the two got it
+        // was a race — and losing it left the plan sliding instead of the row moving.
+        preventStealing: true
         onPressed: mouse => {
             if (mouse.button === Qt.LeftButton) {
                 rowArea.pressedY = mouse.y

@@ -26,13 +26,17 @@ MouseArea {
     property real pressX: 0
     property real startGX: 0
     property bool panning: false
-    /// When the button went down, for the gesture to take off the wait it has left (`ReclickGesture.click`).
-    property real pressAt: 0
+    /// Whether the press that is down landed on a row. The footer below the last row is the other thing under this
+    /// strip, and it is a button: it waits for the release the way every button does.
+    property bool pressOnRow: false
+    // **The row is answered at the press**, as it is everywhere else along it (`GraphRowDelegate.leftClick`). Reading
+    // it off the release instead picked the row the hand had drifted onto, not the one it had pressed — the strip
+    // takes the grab, so a drag down it never cancelled the way a press on the rows themselves does.
     onPressed: mouse => {
         pan.pressX = mouse.x
         pan.startGX = pan.columns.graphX
         pan.panning = false
-        pan.pressAt = Date.now()
+        pan.pressOnRow = pan.pressLanded(mouse, mouse.modifiers)
     }
     onPositionChanged: mouse => {
         if (!pan.pressed)
@@ -42,14 +46,15 @@ MouseArea {
         if (pan.panning)
             pan.columns.graphX = Math.max(0, Math.min(pan.startGX - (mouse.x - pan.pressX), pan.columns.graphXMax))
     }
-    /// A press and a release on this strip, as a run with no pointer to press with puts one in — at a point in this
+    /// A press on this strip, as a run with no pointer to press with puts one in — at a point in this
     /// strip's own frame, so **the mapping from the point to a row is the strip's own**, which is the half worth
     /// proving (PGG_AUTO_ACT=graph-reclick-lanes). Answers false where the point is on no row.
     ///
     /// **It goes in at the handler's own body**: a hook that did what the handler would have done
     /// stays green while the handler does something else, which is exactly how the gap this proves survived a run.
-    function clickAt(x, y) {
-        return pan.pressLanded({ "x": x, "y": y }, 0)
+    function clickAt(x, y, modifiers) {
+        return pan.pressLanded({ "x": x, "y": y },
+                               modifiers === undefined ? Qt.NoModifier : modifiers)
     }
     /// The row a press on this strip landed on, or null.
     ///
@@ -71,18 +76,24 @@ MouseArea {
         if (row)
             row.doubleClick(mouse.modifiers)
     }
+    // What is left for the release is the footer, which is a button and acts on one. A press that travelled sideways
+    // was a pan, and the footer is not what it was aimed at.
     onReleased: mouse => {
-        if (pan.panning)
+        if (pan.panning || pan.pressOnRow)
             return
-        pan.pressLanded(mouse, Date.now() - pan.pressAt)
+        pan.tailPressed(mouse)
     }
-    /// What a press that did not travel means. One line in the handler above, so the run and the hand go in at the
-    /// same place (`clickAt`).
-    function pressLanded(at, held) {
+    /// What a press on this strip means. One line in the handler above, so the run and the hand go in at the
+    /// same place (`clickAt`). Answers whether it landed on a row.
+    ///
+    /// **The modifiers travel with it.** Dropped here, Ctrl and Shift came out as a plain press — and a plain press
+    /// puts the whole choice back down to the one commit under it (`RepoPage.pickRow`), so building a choice died on
+    /// the half of the row a wide repository makes this strip (デザイン規約 §複数のコミットを選ぶ).
+    function pressLanded(at, modifiers) {
         const row = pan.rowAt(at)
         if (!row)
-            return pan.tailPressed(at)
-        row.leftClick(held)
+            return false
+        row.leftClick(modifiers)
         return true
     }
     /// A press under the last row. The only thing down there is the window's own footer, and it takes presses now

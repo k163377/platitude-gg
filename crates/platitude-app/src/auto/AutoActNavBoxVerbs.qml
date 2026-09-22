@@ -870,12 +870,12 @@ Item {
                 // leaves the gesture with no memory of the row, and every way out then passes for free — which is how
                 // the blink survived a green run twice. What the reader did is two clicks, and
                 // the second one is what the way out has to be weighed against.
-                item.leftClick(0)
+                item.leftClick(Qt.NoModifier)
                 acts.boxOutStep = 1
             } else if (acts.boxOutStep === 1) {
                 if (graphPane.view.clickGuarded)
                     return
-                item.leftClick(0)
+                item.leftClick(Qt.NoModifier)
                 acts.boxOutStep = 2
             } else if (acts.boxOutStep === 2) {
                 if (graphPane.namingOid === "")
@@ -890,7 +890,7 @@ Item {
                     const row = route === "same-row" ? item : graphPane.view.itemAtIndex(1)
                     if (!row)
                         return
-                    row.leftClick(0)
+                    row.leftClick(Qt.NoModifier)
                 } else if (route === "escape") {
                     graphPane.view.namingCancelled()
                 } else {

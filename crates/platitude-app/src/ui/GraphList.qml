@@ -94,10 +94,10 @@ AppListView {
         id: reclick
         onRenameAsked: (key, names) => graphList.rowRenameRequested(names.oid, names.chip)
     }
-    /// A row was left-clicked: answers whether it is a click of its own (see the gesture), and takes the wait with it.
+    /// A row was left-pressed: answers whether it is a press of its own (see the gesture), and takes the wait with it.
     /// `chip` is the chip's first one, read now — when the wait ends the row may be showing
     /// something else, or be another row altogether; null where the row draws no ref.
-    function noteClick(oidHex, chip, held) {
+    function noteClick(oidHex, chip) {
         // **A standing box is what this gesture turns into**, so a click
         // while one is up is the reader walking away from it — and the row's own click takes it down
         // (`RepoPage.activateRow`). Armed here, the box on the row just clicked would close and come straight back,
@@ -105,8 +105,7 @@ AppListView {
         // one is a second click in the ordinary way.
         const nameable = chip !== null && graphList.namingOid === ""
         return reclick.click(chip === null ? "" : chip.key,
-                             nameable ? { "oid": oidHex, "chip": chip } : null,
-                             held)
+                             nameable ? { "oid": oidHex, "chip": chip } : null)
     }
     function dropRename() {
         reclick.drop()

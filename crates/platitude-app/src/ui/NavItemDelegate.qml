@@ -318,7 +318,7 @@ Item {
     readonly property bool editTipShown: editSeat.item ? editSeat.item.ToolTip.visible : false
     /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
     /// the row itself (PGG_AUTO_ACT=nav-reclick).
-    function leftClick(modifiers, held) {
+    function leftClick(modifiers) {
         // The second click of a double-click belongs to the double: the first one already did what a click
         // does.
         //
@@ -326,8 +326,7 @@ Item {
         // be showing another row's name (`ReclickGesture`).
         if (navRow.reclick
                 && !navRow.reclick.click(navRow.rowKey,
-                                         navRow.nameable ? navRow.renameNames() : null,
-                                         held))
+                                         navRow.nameable ? navRow.renameNames() : null))
             return
         navRow.rowClicked()
         navRow.ordinaryClick(modifiers)
@@ -450,9 +449,10 @@ Item {
         // While the box is open the row belongs to it.
         visible: !navRow.editing
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        /// When the button went down, so the gesture can take the time it was held off the wait it has left — Qt
-        /// measures a double-click press to press, and `clicked` arrives at the release.
-        property real pressAt: 0
+        // **The row keeps the drag it is handed** (`GraphRowDelegate`, measured in `tst_pressorder`). The list took
+        // the grab at the very distance this row hands the press on to the sweep at, so which of the two got it was a
+        // race — and losing it cancelled the press where it stood.
+        preventStealing: true
         /// Where it went down, and whether this press has already been handed on to the name. **Each handler is
         /// one line into the row's own** — a run enters those, so what it drives is this wiring rather than a copy
         /// of it (verify-ui スキル §注入はハンドラ本体そのものへ入れる).
@@ -480,7 +480,6 @@ Item {
     function linePressed(button, x, y) {
         if (button !== Qt.LeftButton)
             return
-        itemMouse.pressAt = Date.now()
         itemMouse.pressFrom = Qt.point(x, y)
         itemMouse.pressing = true
         itemMouse.handedOn = false
@@ -523,13 +522,13 @@ Item {
     function lineClicked(button, modifiers) {
         if (button === Qt.LeftButton && navRow.nameTook !== "")
             return
-        navRow.rowPressed(button, modifiers, Date.now() - itemMouse.pressAt)
+        navRow.rowPressed(button, modifiers)
     }
     /// A press on this row, and a double-click on it — **the handler above is one line and this is the whole of
     /// what it does**, because the lines the row opens under itself answer with these two as well (`NavRowFacts`):
     /// the hand there takes every press over them so the words can be dragged out, and a press that never moved is
     /// this row's own click.
-    function rowPressed(button, modifiers, held) {
+    function rowPressed(button, modifiers) {
         if (button === Qt.RightButton) {
             // Only rows with operations behind them open a menu.
             if (!navRow.folder && navRow.oid_hex !== ""
@@ -544,7 +543,7 @@ Item {
                 navRow.remoteMenuRequested(navRow.fullName)
             return
         }
-        navRow.leftClick(modifiers, held)
+        navRow.leftClick(modifiers)
     }
     function rowDoubled(button) {
         if (button !== Qt.LeftButton || navRow.folder)

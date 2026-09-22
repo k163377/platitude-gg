@@ -125,7 +125,7 @@ Item {
         driver.stage = "details"
         driver.actionStart = PerfProbe.clockMs()
         page.releasePressedAway(null)
-        item.leftClick(0)
+        item.leftClick(Qt.NoModifier)
         Harness.report("perf_selection mode=" + PerfProbe.selection + " oid=" + driver.wantedOid
                        + " case=" + driver.caseName + " operation=" + driver.operation)
         driver.tick()

@@ -51,8 +51,8 @@ Rectangle {
     /// How the graph's rows answer a click, for the card that stands on them (`RowHoverHost`). **The card's rows are
     /// these rows**, so they go through this door — two surfaces that had to agree on what "the same target"
     /// means is exactly what was wrong before.
-    function noteRowClick(oidHex, chip, held) {
-        return graphList.noteClick(oidHex, chip, held)
+    function noteRowClick(oidHex, chip) {
+        return graphList.noteClick(oidHex, chip)
     }
     function dropRowRename() {
         graphList.dropRename()
@@ -68,7 +68,7 @@ Rectangle {
         const row = graphList.itemAtIndex(graphArea.graphModel.rowOf(oidHex))
         if (!row)
             return false
-        row.leftClick(0, modifiers)
+        row.leftClick(modifiers)
         return true
     }
     readonly property alias rowClickGuarded: graphList.clickGuarded
@@ -489,10 +489,13 @@ Rectangle {
         // The list's own bar, which this lies on top of — the strip every hand laid over a list gives back
         // (`AppListView.barRoom`).
         barRoom: graphList.barRoom
-        onActivated: row => {
+        // **The modifiers come with it.** The stand-in is the row, so Ctrl and Shift mean on it what they mean on
+        // the row it stands for (デザイン規約 §複数のコミットを選ぶ) — dropped here, a held press on the stand-in put the
+        // whole choice back down to one commit.
+        onActivated: (row, modifiers) => {
             graphList.takeKeyboard()
             graphArea.jumpToRow(row)
-            graphArea.rowActivated(graphArea.graphModel.oidAt(row), row, Qt.NoModifier)
+            graphArea.rowActivated(graphArea.graphModel.oidAt(row), row, modifiers)
         }
     }
     /// The stand-in itself — automation-only exposure, the same one `view` is (app-ui.md). A headless run reads what it

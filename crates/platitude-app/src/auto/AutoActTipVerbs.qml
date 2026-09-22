@@ -203,7 +203,7 @@ Item {
             const item = graphPane.view.itemAtIndex(row)
             if (item === null)
                 return false
-            item.leftClick(0, Qt.NoModifier)
+            item.leftClick(Qt.NoModifier)
             pathTipTimer.stood = true
             return false
         }

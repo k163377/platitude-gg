@@ -489,10 +489,11 @@ Item {
     readonly property bool renameArmed:
         rowItem.ListView.view ? rowItem.ListView.view.renameArmed(rowItem.renameChip) : false
     readonly property bool clickGuarded: rowItem.ListView.view ? rowItem.ListView.view.clickGuarded : false
-    /// A left click, as this row answers one. `held` is how long the button was down, which is what the gesture takes
-    /// off the wait it has left (`ReclickGesture.click`). Named so that a run with no pointer to press with puts its
-    /// click in at the row itself.
-    function leftClick(held, modifiers) {
+    /// A left press, as this row answers one — **at the press, not at the release**. The double-click on the other
+    /// side of it is measured press to press and lands the working tree somewhere else, so answering the plain one at
+    /// the release put the light half of the gesture behind the heavy one: the row sat unlit for as long as the
+    /// button was down. Named so that a run with no pointer to press with puts its press in at the row itself.
+    function leftClick(modifiers) {
         // Another copy's row selects like any other — **what it opens is that copy, read-only** (P3-確認事項
         // §別 worktree の未コミット行). Which copy is the row's own answer: every uncommitted row
         // carries git's all-zero id, so the page is handed the row number (`RepoPage.openWipFor`).
@@ -514,9 +515,9 @@ Item {
             rowItem.claimRow(mods)
             return
         }
-        // The second click of a double-click belongs to the gesture: the first one already did what a click does,
+        // The second press of a double-click belongs to the gesture: the first one already did what a press does,
         // and the gesture is the double.
-        if (!rowItem.ListView.view.noteClick(rowItem.oid_hex, rowItem.renameChip, held))
+        if (!rowItem.ListView.view.noteClick(rowItem.oid_hex, rowItem.renameChip))
             return
         rowItem.claimRow(Qt.NoModifier)
     }
@@ -577,18 +578,20 @@ Item {
         anchors.leftMargin: rowItem.naming ? Theme.spaceXs + chipColumn.nameBoxWidth : 0
         hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        /// When the button went down, so the gesture can take the time it was held off the wait it has left — Qt
-        /// measures a double-click press to press, and `clicked` arrives at the release.
-        property real pressAt: 0
+        // **The row keeps the drag it is handed** (measured, `tst_pressorder`). The list takes the grab at the
+        // platform's drag distance otherwise, and the press is cancelled where it stood: a click with a tremor in it
+        // chose nothing, and the history slid under the hand that made it. Desktop lists are read, not panned — the
+        // wheel and the bar are what send this one.
+        preventStealing: true
+        // **The left button is answered here**, at the press. The right one waits for its release, which is where
+        // every platform opens a context menu.
         onPressed: mouse => {
             if (mouse.button === Qt.LeftButton)
-                rowMouse.pressAt = Date.now()
+                rowItem.leftClick(mouse.modifiers)
         }
         onClicked: mouse => {
-            if (mouse.button !== Qt.RightButton) {
-                rowItem.leftClick(Date.now() - rowMouse.pressAt, mouse.modifiers)
+            if (mouse.button !== Qt.RightButton)
                 return
-            }
             // **A right-click takes the choice down to this row**, whatever was held before it. Every row of the menu
             // below is about one commit, and leaving several highlighted while the menu acts on one is the one way
             // this pane could offer to `cherry-pick` three and pick one (デザイン規約 §複数のコミットを選ぶ).

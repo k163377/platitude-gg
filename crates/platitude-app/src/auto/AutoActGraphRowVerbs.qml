@@ -283,9 +283,9 @@ Item {
                 }
                 if (chooseTimer.step === 0) {
                     chooseTimer.readOid = item.oid_hex
-                    item.leftClick(0, Qt.NoModifier)
+                    item.leftClick(Qt.NoModifier)
                 } else {
-                    item.leftClick(0, chooseTimer.sweeps ? Qt.ShiftModifier : Qt.ControlModifier)
+                    item.leftClick(chooseTimer.sweeps ? Qt.ShiftModifier : Qt.ControlModifier)
                 }
                 chooseTimer.step++
                 return
@@ -374,7 +374,7 @@ Item {
                 if (!at)
                     return
                 chosenRowTimer.stop()
-                at.leftClick(0, Qt.ControlModifier)
+                at.leftClick(Qt.ControlModifier)
                 const led = at.doubleClick(Qt.ControlModifier)
                 // **`switch` is what the plain double-click leads to**, and it lands ticks later — so the branch on
                 // screen at the moment of the press says nothing either way. What the row answered is the decision
@@ -846,7 +846,7 @@ Item {
                 // decision after that for itself (`row-part`).
                 if (reclickGraphTimer.points)
                     item.pointerRowX = item.labelsW - 2
-                item.leftClick(0)
+                item.leftClick(Qt.NoModifier)
                 acts.reclickGraphStep = 1
             } else if (acts.reclickGraphStep === 1) {
                 // Inside the window the first click opened, a second click is the other half of a double-click and not
@@ -855,7 +855,7 @@ Item {
                     return
                 // waits(measured): the origin of the `wait=` below, which the report prints and nothing here reads
                 acts.reclickGraphAt = Date.now()
-                item.leftClick(0)
+                item.leftClick(Qt.NoModifier)
                 // Read where it is set: the wait is short and the box is what it turns into.
                 acts.reclickGraphArmed = item.renameArmed
                 // The history walks away under the wait: the row that was clicked is pooled, and what was armed on it
@@ -983,7 +983,7 @@ Item {
                 if (!item)
                     return
                 if (reclickListTimer.across)
-                    item.leftClick(0)
+                    item.leftClick(Qt.NoModifier)
                 // Hover cannot be injected, so this enters where the row's own rest timer would (`ref-list`).
                 graphPane.view.chipExpandRequested(item.oid_hex, reclickListTimer.row,
                                                    item.chipItem.records, item.chipItem)
