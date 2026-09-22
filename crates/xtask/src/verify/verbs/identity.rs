@@ -305,6 +305,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "overlay saved=true popups=3",
     },
+    // Enter in that box finds the file, which is the one errand the
+    // name it holds is for (デザイン規約 §アバターを与える). **Nothing
+    // here is a picture either**: the picker is the platform's own
+    // window, so it is in neither PNG and the screen behind it is drawn
+    // exactly as it was (the reading `open-picker` takes). `who=` is
+    // the guard the button beside the box wears — a picker opened over
+    // nobody would file its answer against an empty address.
+    Verb {
+        name: "avatar-enter",
+        when: &[],
+        plain: "avatar_enter who=true picker=true",
+    },
     // The badge's sentence names the address it is about, and the
     // address is handed to it late (`%1`). A picture cannot answer
     // that: an empty name leaves a box the same size with the same

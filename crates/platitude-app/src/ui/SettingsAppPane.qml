@@ -50,6 +50,21 @@ ColumnLayout {
     function autoAvatarOfferCombo() {
         avatarWho.pressField()
     }
+    /// The name put into that box, and Enter in it. Neither key nor letter reaches the box on the offscreen
+    /// platform: the text is written where typing writes it (`AppCombo.wanted`, the way [`focusPrefill`] fills the
+    /// box), and the Enter is the box's own `accepted` — the signal Qt raises on the key (`tst_appcombo`), and the
+    /// door [`openAvatarPicker`] hangs off.
+    function autoTypeAvatarWho(who) {
+        avatarWho.wanted = who
+        avatarWho.editText = who
+    }
+    function autoEnterAvatarWho() {
+        avatarWho.accepted()
+    }
+    /// Whether the picker this screen files a picture from is standing. **`visible`, not `opened`** — a `FileDialog`
+    /// is the platform's window and not a `Popup`, so it has no `opened` of its own (`open-picker` reads the
+    /// repository picker the same way), and it is in neither PNG.
+    readonly property bool autoAvatarPickerOpen: avatarPicker.visible
     /// Runs the row's hold to its end. False where the list has no such row yet, so the caller waits
     /// for it.
     function autoAvatarHoldRemove(at) {
@@ -88,6 +103,14 @@ ColumnLayout {
     /// `@` in it (`platitude_core::trailers::split_identity`).
     readonly property string chosenEmail: GitFacts.identityEmailOf(avatarWho.wanted)
     readonly property string chosenName: GitFacts.identityNameOf(avatarWho.wanted)
+    /// Find the file for whoever the box names. **The one body both ways in enter** — the button and the box's own
+    /// Enter — so what "choose" means cannot come to differ between them; and the same guard the button wears, since
+    /// a picker opened over nobody would file its answer against an empty address.
+    function openAvatarPicker() {
+        if (pane.chosenEmail === "")
+            return
+        avatarPicker.open()
+    }
 
     /// The version git printed, in git's own spelling — the chip at the head of the line. Empty where git printed
     /// none, which is every answer that is not a version.
@@ -635,6 +658,11 @@ ColumnLayout {
                 Layout.fillWidth: true
                 placeholder: qsTr("name or email")
                 model: pane.authorChoices
+                // A finished name is somebody to give a picture to, and the only thing left to do with them is find
+                // the file — the same one press the box beside it makes (デザイン規約 §アバターを与える). The git
+                // box at the head of this screen already answers its own Enter with the picker it opens
+                // (`FormField.answerKey`); this is that rule where the box also takes typing.
+                onSubmitted: pane.openAvatarPicker()
             }
             ActionButton {
                 id: chooseAvatar
@@ -654,7 +682,7 @@ ColumnLayout {
                 frameColor: Theme.borderDefault
                 activeFocusOnTab: true
                 enabled: pane.chosenEmail !== ""
-                onActivated: avatarPicker.open()
+                onActivated: pane.openAvatarPicker()
             }
         }
         CardText {

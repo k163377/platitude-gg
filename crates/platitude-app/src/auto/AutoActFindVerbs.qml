@@ -62,7 +62,8 @@ Item {
                 avatarShownTimer.start()
             }
         } else if (act === "avatar-settings" || act === "avatar-combo"
-                   || act === "avatar-row-lit" || act === "avatar-remove") {
+                   || act === "avatar-row-lit" || act === "avatar-remove"
+                   || act === "avatar-enter") {
             // Each run starts with an empty store, so a picture to look at has to be filed first — the argument is the
             // one to file. The card the four of them are about is the window's, and so is their completion
             // (`WindowAutoActDriver`); all that happens here is the filing and the asking.

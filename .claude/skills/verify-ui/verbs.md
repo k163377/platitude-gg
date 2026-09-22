@@ -359,6 +359,7 @@
 - `nav-rename`(左メニューの改名入力欄)
 - `rename-remote-box`(リモートブランチ改名の入力欄)
 - `avatar-rest` / `avatar-hover` / `avatar-tip` / `avatar-assign` / `avatar-badge` / `avatar-settings` / `avatar-row-lit` / `avatar-remove` / `avatar-combo`(アバター一式: 静止 / ペンのバッジ / バッジの文 / 与える / バッジ / 設定一覧 / Remove の hover(赤い側)/ 長押しで消した後 / 候補の combo)
+- `avatar-enter`(**候補欄の Enter が `Choose avatar…` の扉を開く**(規約 §アバターを与える)。名前は `authorChoices` の先頭を欄へ書いてから撃つ(綴りをこちらで決めない)。must_say は `avatar_enter who=true picker=true`。**絵では判定できない** —— `FileDialog` はプラットフォームの窓なのでどちらの PNG にも写らない(`open-picker` と同じ読み方)。完了は `avatarPicker.visible`)
 
 ## 動詞ごとの読み方・仕込み
 

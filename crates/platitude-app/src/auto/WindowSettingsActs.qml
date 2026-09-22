@@ -519,6 +519,36 @@ Item {
         }
     }
 
+    // PGG_AUTO_ACT=avatar-enter: **Enter in the candidate box finds the file**, which is the one thing left to do
+    // with the name it holds (デザイン規約 §アバターを与える). The picker is the platform's window and is in
+    // neither PNG, so the report line is the whole of it — the same reading `open-picker` takes.
+    SampleTimer {
+        id: avatarEnterTimer
+        running: Harness.autoAct === "avatar-enter"
+        /// A name has been put in the box. The candidates come with the page, so the run waits for one rather than
+        /// spelling a name this repository may not carry.
+        property bool typed: false
+        onTriggered: {
+            if (!settingsDialog.opened)
+                return
+            if (!avatarEnterTimer.typed) {
+                if (acts.appPane.authorChoices.length === 0)
+                    return
+                acts.appPane.autoTypeAvatarWho(acts.appPane.authorChoices[0])
+                avatarEnterTimer.typed = true
+                return
+            }
+            if (!acts.appPane.autoAvatarPickerOpen) {
+                acts.appPane.autoEnterAvatarWho()
+                return
+            }
+            avatarEnterTimer.stop()
+            Harness.report("avatar_enter who=" + (acts.appPane.chosenEmail !== "")
+                              + " picker=" + acts.appPane.autoAvatarPickerOpen)
+            window.finishAutoAct()
+        }
+    }
+
     // The same card's avatar half, whose four shots the page opens and this finishes. Each waits on what its own verb
     // produced: the row the store answered the filing with and the picture inside it, that row's `lit`, the candidate
     // list's `opened`, and — for the removal — the row leaving the store on the far side of a hold that runs at its own
