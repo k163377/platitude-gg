@@ -51,6 +51,29 @@ QtObject {
         return Math.max(air / 2, Math.min(air, tabShare.markRoomFull - markRoom))
     }
 
+    /// How one tab spends the cap between the two runs it draws: the repository's name, and the run naming the
+    /// linked copy it is standing in (`TabTreeMark`).
+    ///
+    /// **The name is served first and the copy takes what is left**
+    /// (デザイン規約 §ウィンドウの縁 の譲る順): a tab is read for which repository it holds, and where
+    /// it stands is the second thing it says. So the run narrows while the name is still whole, and it is gone
+    /// before a single letter of the name is cut.
+    ///
+    /// `treeFloor` is the least that run is worth drawing at (`TabTreeMark.floorWidth`); under it the whole of it
+    /// goes, brackets and mark together — half a bracket says nothing, and the reader is still told where they are
+    /// standing by the tab's own ground and by the hover.
+    ///
+    /// **A tab that drops the run is narrower than its share by under that floor.** The strip priced it at
+    /// `min(natural, cap)`, and what it does not spend is left as band at the end of the strip. That only ever
+    /// happens while `cap` is above the name's own width — a strip cutting names gives the run nothing at all and
+    /// spends the cap to the letter — so no name is ever cut for it.
+    function splitName(titleNat, treeNat, treeFloor, cap) {
+        const titleW = Math.min(titleNat, cap)
+        const left = cap - titleW
+        const treeW = treeNat > 0 && left >= treeFloor ? Math.min(left, treeNat) : 0
+        return { titleW: titleW, treeW: treeW }
+    }
+
     /// The whole pass, in the order the band gives things up (デザイン規約 §ウィンドウの縁): the room the marks stand
     /// in first — all of it, off every tab at once — and only then the names, the longest giving way last; below
     /// `minW` the strip scrolls.

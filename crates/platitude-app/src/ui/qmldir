@@ -196,6 +196,7 @@ TabRun 1.0 TabRun.qml
 TabShare 1.0 TabShare.qml
 TabStrip 1.0 TabStrip.qml
 TabTitleFade 1.0 TabTitleFade.qml
+TabTreeMark 1.0 TabTreeMark.qml
 TopBar 1.0 TopBar.qml
 TreeViewToggle 1.0 TreeViewToggle.qml
 ViewMarkButton 1.0 ViewMarkButton.qml

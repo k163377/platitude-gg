@@ -109,6 +109,7 @@ StackLayout {
                 onGitSettingsRequested: stack.gitSettingsRequested()
                 onAvatarSettingsRequested: (name, email) => stack.avatarSettingsRequested(name, email)
                 onCloseTabRequested: stack.tabsModel.closeTab(seat.tab_id)
+                onStandHomeRequested: stack.tabsModel.standTabHome(seat.tab_id)
             }
         }
     }

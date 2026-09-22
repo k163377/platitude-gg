@@ -35,6 +35,22 @@ QtObject {
     readonly property real markRoomFull: 2 * tabMetrics.markGap + tabMetrics.markSeat
     readonly property real markRoomMin: tabMetrics.tabPadL
 
+    /// The seat the mark naming the copy a tab stands in takes: **the step of the word it is set in**
+    /// (デザイン規約 §寸法). The run is drawn a step under the tab's name, so its mark is a step under the one the
+    /// same mark takes beside a `fontMd` name — at `iconSm` the crown would stand 9.75px against a `fontSm`
+    /// capital's 8.6 and read as a picture dropped into the word, where `iconXs` comes out at 8.13 (measured,
+    /// Yu Gothic UI; the ink is 11.5 of the 16 grid plus the line).
+    ///
+    /// **Nothing is spent either side of it.** This mark is set in the run as a letter is, not stood in a row
+    /// (デザイン規約 §タブの所作), so what opens around it is the air its own box holds — `(iconSm − ink) / 2`, a
+    /// hair under half a step — and the side bearings of the bracket and the letter beside it. The row's step is
+    /// what the `✕` takes, and it is written as `刻み − 印が持つ余白` because the `✕` is a mark standing in a row
+    /// (§余白); a mark inside a word adds neither.
+    readonly property int treeSeat: Theme.iconXs
+    /// The step between the repository's name and the bracket that opens the run. **This one is a row's**: the two
+    /// runs are two things the tab says, and the step is what tells them apart (デザイン規約 §余白).
+    readonly property real treeRunGap: Theme.spaceXs
+
     /// How many ways the run is cut for one name's ceiling (デザイン規約 レイアウト初期値). A share:
     /// what makes one tab too wide is how much of the band it is holding, and the band is not one size —
     /// a width written here is generous in a wide window and the whole strip in a narrow one.

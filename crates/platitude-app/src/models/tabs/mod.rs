@@ -61,8 +61,61 @@ pub struct TabItem {
     /// The working copy the tab is standing in — `repo_path` where that
     /// is the repository's own, one of its linked copies otherwise.
     /// What the session opens, and what the strip moves to instead of
-    /// opening a second time.
+    /// opening a second time. **The hover reads this one**: a path put
+    /// out under the hand is where the reader is standing
+    /// (デザイン規約 §hover のツールチップ).
     copy_path: String,
+    /// That copy by name, and empty where the tab stands in the
+    /// repository's own — which is what says whether the strip draws
+    /// anything after the name at all
+    /// ([`copy_name_of`]; デザイン規約 §タブの所作).
+    copy_name: String,
+}
+
+impl TabItem {
+    /// One row of the strip: the tab showing the repository whose own
+    /// working copy is `repo`, standing in `copy`.
+    ///
+    /// The one door, so the name the strip says the copy by cannot be
+    /// left out of a road that opens a tab — there are four
+    /// (opening, standing elsewhere, putting the last session back, and
+    /// a folder that would not open standing for itself).
+    fn standing(tab_id: i32, title: String, repo: String, copy: String) -> Self {
+        Self {
+            tab_id,
+            title,
+            copy_name: copy_name_of(&repo, &copy),
+            repo_path: repo,
+            copy_path: copy,
+        }
+    }
+
+    /// Stands this row in another working copy of the repository it is
+    /// already showing (`TabsModel::switch_copy`): the folder git is
+    /// run in, and the name the strip draws after the tab's own.
+    ///
+    /// **The repository does not move**, so neither does what the tab is
+    /// called — and the row keeps its id, because the page is built on
+    /// that (`Hub::restand_tab`).
+    fn stand_in(&mut self, copy: String) {
+        self.copy_name = copy_name_of(&self.repo_path, &copy);
+        self.copy_path = copy;
+    }
+}
+
+/// What the strip says after the name: the folder git made the linked
+/// copy in, and nothing at all for the repository's own copy.
+///
+/// Told apart by `repo::open_key`, the key the strip judges two folders
+/// by everywhere else (`landing_for`): the two paths arrive from one
+/// answer of git's when a tab is opened, but a tab put back from the
+/// file carries the two spellings that answer was written down with.
+fn copy_name_of(repo: &str, copy: &str) -> String {
+    let key = platitude_core::repo::open_key;
+    if key(repo) == key(copy) {
+        return String::new();
+    }
+    crate::urlpath::path_leaf(copy).to_string()
 }
 
 /// A folder somebody asked for, waiting on git to say where it opens

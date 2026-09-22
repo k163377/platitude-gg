@@ -174,6 +174,17 @@ impl TabsModel {
             // not, and the hover reads out whatever the tab kept.
             let copy = crate::urlpath::shown_path(&saved_tab.path);
             let repo = crate::urlpath::shown_path(&saved_tab.repo);
+            // A linked copy that has gone stands the tab back in the
+            // repository's own, the same fall this tab would take on
+            // being looked at (デザイン規約 §タブの所作
+            // 「立てない所へは立たない」). The tab is for the
+            // repository, so only a repository that has gone too is
+            // one the reader is not left holding.
+            let copy = if std::path::Path::new(&copy).is_dir() {
+                copy
+            } else {
+                repo.clone()
+            };
             let copy_buf = std::path::PathBuf::from(&copy);
             if !copy_buf.is_dir() {
                 tracing::info!(path = %copy, "restored tab dropped: not there any more");
@@ -203,15 +214,12 @@ impl TabsModel {
                 continue;
             }
             let title = title_of(&repo);
-            let Some(Some(tab_id)) = Hub::with(|hub| hub.reserve_tab(copy_buf)) else {
+            let Some(Some(tab_id)) =
+                Hub::with(|hub| hub.reserve_tab(copy_buf, std::path::PathBuf::from(&repo)))
+            else {
                 continue;
             };
-            self.push(TabItem {
-                tab_id,
-                title,
-                repo_path: repo,
-                copy_path: copy,
-            });
+            self.push(TabItem::standing(tab_id, title, repo, copy));
         }
         // Once, with the whole strip standing: a name settled against
         // half of it would be settled against tabs that are still to
@@ -224,6 +232,18 @@ impl TabsModel {
         self.report();
         self.current_index_changed();
         self.front_tab_asked();
+    }
+
+    /// A tab's copy would not open, so it is stood back in the
+    /// repository's own one (`TabsModel::stand_home`).
+    ///
+    /// Asked by the page that could not open — it is the one that
+    /// hears git refuse, and it asks **before** it says anything about
+    /// the refusal, so the reader is shown one screen and not a failure
+    /// that is taken away again (`RepoTab::stand_home_asked`).
+    #[qslot]
+    fn stand_tab_home(&mut self, tab_id: i32) {
+        self.stand_home(tab_id);
     }
 
     #[qslot]

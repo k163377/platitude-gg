@@ -139,16 +139,15 @@ impl TabsModel {
     /// Puts a tab for `copy` at the end of the strip and moves to it.
     pub(super) fn open_new(&mut self, copy: String, repo: String) {
         let title = title_of(&repo);
-        let Some(Some(tab_id)) = Hub::with(|hub| hub.open_tab(std::path::PathBuf::from(&copy)))
-        else {
+        let Some(Some(tab_id)) = Hub::with(|hub| {
+            hub.open_tab(
+                std::path::PathBuf::from(&copy),
+                std::path::PathBuf::from(&repo),
+            )
+        }) else {
             return;
         };
-        self.push(TabItem {
-            tab_id,
-            title,
-            repo_path: repo,
-            copy_path: copy,
-        });
+        self.push(TabItem::standing(tab_id, title, repo, copy));
         self.settle_titles();
         self.leave_front();
         self.current_index = self.items.len() as i32 - 1;
@@ -170,8 +169,10 @@ impl TabsModel {
     /// drops between the two signals below.
     ///
     /// The name does not move: a tab is named after its repository, and
-    /// that is the one thing this does not change. Where the reader is
-    /// standing is the sidebar's to say (規約 §左メニューの所作).
+    /// that is the one thing this does not change. What does move is
+    /// the run drawn after it (`TabItem::copy_name`), which is the band
+    /// saying which of that repository's copies the reader is standing
+    /// in (デザイン規約 §タブの所作).
     pub(super) fn switch_copy(&mut self, at: usize, copy: String) {
         let Some(item) = self.items.get(at) else {
             return;
@@ -198,7 +199,7 @@ impl TabsModel {
             return;
         }
         if let Some(item) = self.items.get_mut(at) {
-            item.copy_path = copy;
+            item.stand_in(copy);
         }
         self.notify_runs([(at, at)]);
         self.current_index = at as i32;
@@ -211,6 +212,35 @@ impl TabsModel {
             self.stood_copy(at as i32);
         }
         self.front_tab_asked();
+    }
+
+    /// Stands the tab holding `tab_id` back in the repository's own
+    /// working copy, because the linked one it was in would not open
+    /// (デザイン規約 §タブの所作「立てない所へは立たない」).
+    ///
+    /// **Not a question for [`landing_for`]**, which answers "is this
+    /// repository already open?" — the road in. This one already knows
+    /// the answer: the tab is the one holding the repository, and the
+    /// copy it is being stood in is the one git named when the tab was
+    /// made. Asking git again would be a second refusal for a folder
+    /// that has just refused.
+    ///
+    /// Silent for a tab already standing in that copy, which is what
+    /// leaves the failure to be shown: there is nowhere further back to
+    /// go (`RepoTab` is where the choice is made, before a word of it
+    /// reaches the screen).
+    pub(super) fn stand_home(&mut self, tab_id: i32) {
+        let Some(at) = self.items.iter().position(|t| t.tab_id == tab_id) else {
+            return;
+        };
+        let Some(item) = self.items.get(at) else {
+            return;
+        };
+        if item.copy_path == item.repo_path {
+            return;
+        }
+        let home = item.repo_path.clone();
+        self.switch_copy(at, home);
     }
 
     /// Moves the strip to the tab at `position` and asks the band to
@@ -422,12 +452,29 @@ mod tests {
     /// A tab standing in `copy`, of the repository whose own working
     /// copy is at `repo`.
     fn tab(repo: &str, copy: &str) -> TabItem {
-        TabItem {
-            tab_id: 1,
-            title: "repo".to_string(),
-            repo_path: repo.to_string(),
-            copy_path: copy.to_string(),
-        }
+        TabItem::standing(1, "repo".to_string(), repo.to_string(), copy.to_string())
+    }
+
+    /// The strip says the copy by its own folder name, and says nothing
+    /// at all where the tab stands in the repository's own copy
+    /// (`copy_name_of`).
+    #[test]
+    fn only_a_linked_copy_is_named_after_the_repository() {
+        assert_eq!(tab("C:/one", "C:/one").copy_name, "");
+        assert_eq!(tab("C:/two", "C:/elsewhere/wt").copy_name, "wt");
+        assert_eq!(
+            tab("C:/two", r"C:\elsewhere\wt").copy_name,
+            "wt",
+            "either separator ends a folder on the way in"
+        );
+    }
+
+    /// Two spellings of one folder are that folder, so a tab standing in
+    /// the repository's own copy says nothing however it was spelled.
+    #[test]
+    fn one_folder_spelled_two_ways_names_no_copy() {
+        assert_eq!(tab("C:/one", "C:/one/").copy_name, "");
+        assert_eq!(tab("C:/one/", "C:/one").copy_name, "");
     }
 
     /// The copy already open is the one landing that reads nothing

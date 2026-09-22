@@ -226,6 +226,18 @@ impl RepoTab {
     #[qsignal]
     pub(super) fn changed(&mut self);
 
+    /// The working copy this tab is standing in would not open, and the
+    /// repository has its own one to stand in instead
+    /// (`Hub::home_copy`). The strip is what moves the tab
+    /// (`TabsModel::standTabHome`); this only says that it is to.
+    ///
+    /// **Whoever hears it answers a turn later** (`RepoPage`): standing
+    /// the tab elsewhere takes this page down, and this is emitted from
+    /// the middle of the drain that is filling it
+    /// (規約 §Qt Bridges の要点 — 再入 borrow).
+    #[qsignal]
+    pub(super) fn stand_home_asked(&mut self);
+
     /// The first fetch of a run to fail. Only the first: a machine that
     /// is simply offline fails every interval, and the panel that opens
     /// on this would then be opening over and over on the same news.

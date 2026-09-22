@@ -52,12 +52,35 @@ Item {
         index: 0
         tab_id: 1
         title: "platitude-gg"
-        repo_path: "/home/someone/src/platitude-gg"
+        copy_path: "/home/someone/src/platitude-gg"
+        copy_name: ""
         tabsModel: tabsModel
         metrics: metrics
         bandColor: Theme.bgBase
         stripHeight: 40
         titleCap: 400
+        titleMinW: root.floorW
+        titleEaseW: 72
+        markRoom: root.roomFull
+        fadeW: 30
+    }
+
+    /// The same tab standing in a linked working copy, so the run naming that copy is drawn after the name
+    /// (デザイン規約 §タブの所作). Its own instance: what the run costs is what half these cases are about, and a
+    /// property flipped back and forth on the one tab above would leave every case before it reading a different tab.
+    TabItemDelegate {
+        id: standing
+        index: 1
+        tab_id: 2
+        title: "platitude-gg"
+        copy_path: "/home/someone/src/trees/topic"
+        copy_name: "topic"
+        tabsModel: tabsModel
+        metrics: metrics
+        bandColor: Theme.bgBase
+        stripHeight: 40
+        titleCap: 400
+        titleMinW: root.floorW
         titleEaseW: 72
         markRoom: root.roomFull
         fadeW: 30
@@ -322,6 +345,71 @@ Item {
             tab.title = "ui"
             verify(!tab.nameUnderMark,
                    "a short name spends its eased air on that side and still stops short of the mark")
+        }
+
+        // ---- the copy a tab is standing in --------------------------------------
+        //
+        // The second run a tab draws, and the order the cap is spent in: the repository's name first, the copy's run
+        // out of what is left, and that run gone whole before a letter of the name is cut
+        // (デザイン規約 §ウィンドウの縁 の譲る順 2 段目).
+
+        /// The arithmetic on its own, where every boundary is a number: 100 of name, 40 of run, 30 the least the run
+        /// is worth drawing at.
+        function test_the_cap_is_spent_on_the_name_first_and_the_copy_takes_what_is_left() {
+            split(200, 100, 40, "room for both, so both are whole")
+            split(140, 100, 40, "and exactly the room for both")
+            split(135, 100, 35, "short of it, the run gives way and the name does not")
+            split(130, 100, 30, "down to the least it is worth drawing at")
+            split(129, 100, 0, "under that the whole run goes, brackets and mark with it")
+            split(80, 80, 0, "and only then is the name cut")
+        }
+
+        /// A copy whose name is shorter than that floor is all or nothing: cutting `b` is cutting nothing, and a
+        /// floor above the run's own width would drop a run that fits (`TabTreeMark.floorWidth`).
+        function test_a_run_shorter_than_the_floor_is_drawn_whole_or_not_at_all() {
+            const fits = share.splitName(100, 20, 20, 120)
+            compare(fits.titleW, 100)
+            compare(fits.treeW, 20, "it fits, so it is drawn")
+            const cramped = share.splitName(100, 20, 20, 119)
+            compare(cramped.titleW, 100)
+            compare(cramped.treeW, 0, "and a pixel short it is gone")
+        }
+
+        /// One cap spent between a 100-wide name and a 40-wide run worth drawing down to 30.
+        function split(cap, titleW, treeW, why) {
+            const got = share.splitName(100, 40, 30, cap)
+            compare(got.titleW, titleW, why)
+            compare(got.treeW, treeW, why)
+        }
+
+        /// A tab standing in the repository's own copy has no run to draw and is the width it always was.
+        function test_a_tab_in_the_repositorys_own_copy_draws_nothing_after_its_name() {
+            const name = nameIn(tab)
+            compare(tab.treeW, 0)
+            compare(tab.width, name.implicitWidth + metrics.tabPadL + tab.markRoom + tab.titleEase)
+        }
+
+        /// One standing in a linked copy is wider by that run, and the run is what a crowded strip takes back first:
+        /// the name is still whole at a cap that has taken the whole of it away.
+        function test_the_run_naming_the_copy_is_given_up_before_the_name_is_cut() {
+            const name = nameIn(standing)
+            standing.titleCap = 400
+            verify(standing.treeW > 0, "room to spare, so the copy is named")
+            compare(standing.width,
+                    name.implicitWidth + standing.treeW + metrics.tabPadL + standing.markRoom + standing.titleEase)
+            const named = standing.width
+
+            standing.titleCap = Math.ceil(name.implicitWidth)
+            compare(standing.treeW, 0, "a cap that holds the name alone draws no run")
+            verify(standing.width < named, "and the tab comes in by the run it gave up")
+            verify(!name.cutting, "and the name is whole in it")
+            verify(standing.nameKept)
+
+            standing.titleCap = Math.floor(name.implicitWidth / 2)
+            compare(standing.treeW, 0, "still none once the name itself is being cut")
+            verify(name.cutting)
+            verify(standing.nameKept, "and something of the name is drawn at every cap")
+            standing.titleCap = 400
         }
 
         /// The one child of a tab that draws its name, found by what it is rather than by name.

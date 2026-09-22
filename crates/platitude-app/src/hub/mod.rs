@@ -83,6 +83,11 @@ struct Tab {
     /// Kept after opening too: it is the name a per-repository setting is
     /// filed under (`reapply_settings`).
     path: PathBuf,
+    /// The repository's own working copy — where a tab whose copy will
+    /// not open is stood back (`Hub::home_copy`). Equal to `path` for a
+    /// tab standing in that copy already, which is what says there is
+    /// nowhere further back to go.
+    home: PathBuf,
     feeds: Arc<Feeds>,
     /// The session's own door into those feeds, kept so a release or
     /// close can shut it (`BridgeSink::retired`): the writes a close lets

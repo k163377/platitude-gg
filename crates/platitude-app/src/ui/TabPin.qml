@@ -20,6 +20,7 @@ Rectangle {
     /// three the rows are drawn from, so the stand-in cannot be set in a measure the strip is not using.
     required property var metrics
     property real titleCap: 0
+    property real titleMinW: 0
     property real titleEaseW: 0
     property real markRoom: 0
     property real fadeW: 0
@@ -71,10 +72,20 @@ Rectangle {
     readonly property color deepGround: Theme.bgBase
     readonly property color deepGone:
         Qt.rgba(tabPin.deepGround.r, tabPin.deepGround.g, tabPin.deepGround.b, 0)
+    /// The copy the tab in front is standing in, by name — empty where it stands in the repository's own, which is
+    /// what says this stand-in draws no second run and wears the band's ordinary blue (`TabItemDelegate`).
+    readonly property string treeName: tabPin.frontTab ? tabPin.frontTab.copy_name : ""
+    /// The two runs together and the cap spent between them, settled the way the rows settle them
+    /// (`TabShare.splitName`) — a stand-in that spent its cap differently would be a tab the strip has not got.
+    readonly property real nameNatW: Math.ceil(pinTitle.implicitWidth) + pinTree.naturalWidth
+    readonly property var nameSplit: tabPin.metrics.share.splitName(
+        Math.ceil(pinTitle.implicitWidth), pinTree.naturalWidth, pinTree.floorWidth, tabPin.titleCap)
+    readonly property real titleW: tabPin.nameSplit.titleW
+    readonly property real treeW: tabPin.nameSplit.treeW
     /// The air this name is eased with, the same half-of-the-shortfall the rows are given
-    /// (`TabMetrics.titleEase`). Read off the label's own hint, which is the name at its natural width.
+    /// (`TabMetrics.titleEase`). Read off what the stand-in would draw whole, its two runs together.
     readonly property real titleEase:
-        tabPin.metrics.titleEase(pinTitle.implicitWidth, tabPin.titleCap, tabPin.titleEaseW)
+        tabPin.metrics.titleEase(tabPin.nameNatW, tabPin.titleCap, tabPin.titleEaseW)
     /// Where that air is set down, and whether the name still runs on under the mark once it has been spent — both as
     /// the rows settle them (`TabItemDelegate`).
     readonly property real easeRight: tabPin.metrics.easeRight(tabPin.titleEase, tabPin.markRoom)
@@ -107,12 +118,13 @@ Rectangle {
     // (a filled tab against transparent ones). A rule in the band would be the strongest ink in it for as long as the
     // strip is scrolled, which is the reason the graph's stand-in has none either (規約 §グラフの中で HEAD を見失わない).
     // It ends with the tab, and what the strip does on the other side of that edge is `pinDissolve` below.
-    color: Theme.bgSelected
-    // The repository in full, as the tab it stands for says it (デザイン規約 §hover のツールチップ). Read off `pointed`
-    // for the reason the tabs read it, and it is the stand-in's own: a tip belongs to the thing under the hand.
+    color: tabPin.frontTab ? tabPin.frontTab.groundColor : Theme.bgSelected
+    // The working copy in full, as the tab it stands for says it (デザイン規約 §hover のツールチップ). Read off
+    // `pointed` for the reason the tabs read it, and it is the stand-in's own: a tip belongs to the thing under the
+    // hand.
     ToolTip.visible: tabPin.pointed
     ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: tabPin.frontTab ? tabPin.frontTab.repo_path : ""
+    ToolTip.text: tabPin.frontTab ? tabPin.frontTab.copy_path : ""
     HoverHandler {
         id: pinHover
         onHoveredChanged: tabPin.pointed = pinHover.hovered
@@ -166,14 +178,24 @@ Rectangle {
     CutName {
         id: pinTitle
         anchors.left: parent.left
-        anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         anchors.leftMargin: tabPin.metrics.tabPadL + tabPin.titleEase - tabPin.easeRight
-        anchors.rightMargin: tabPin.markRoom + tabPin.easeRight
+        width: tabPin.titleW
         text: tabPin.frontTab ? tabPin.frontTab.title : ""
         letterSpacing: tabPin.metrics.titleTracking(pinTitle.text.length)
         weight: Font.DemiBold
         color: Theme.textPrimary
+    }
+    // And where that tab is standing, as the row says it (`TabItemDelegate`).
+    TabTreeMark {
+        id: pinTree
+        anchors.left: pinTitle.right
+        anchors.verticalCenter: parent.verticalCenter
+        width: tabPin.treeW
+        visible: tabPin.treeW > 0
+        name: tabPin.treeName
+        metrics: tabPin.metrics
+        minNameW: tabPin.titleMinW
     }
     // The name goes quiet under the mark on the same terms the rows do. One ground: this one
     // is always the tab in front, so what is behind its name is its own.
@@ -194,7 +216,7 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: 2 * Theme.borderWidth
-        color: Theme.accent
+        color: tabPin.frontTab ? tabPin.frontTab.ruleColor : Theme.accent
     }
     // The tab in front always has its mark out (デザイン規約 §タブの所作), and the room it stands in is part of what that
     // tab costs — a stand-in drawn without it would be the same width with a hole at the end of it.

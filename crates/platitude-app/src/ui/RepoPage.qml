@@ -32,6 +32,9 @@ FocusScope {
     signal perfFinished()
     /// The failed-open screen's "Close tab" button.
     signal closeTabRequested()
+    /// The working copy this tab is standing in would not open, and the repository has its own one to stand in
+    /// instead (`RepoTab.standHomeAsked`). The strip is what moves the tab.
+    signal standHomeRequested()
 
     property string selectedOid: ""
 
@@ -2312,7 +2315,13 @@ FocusScope {
         return page.commandsPane !== null && page.commandsPane.copySelection()
     }
 
-    RepoTab { id: repoTab }
+    RepoTab {
+        id: repoTab
+        // A turn later, always: this arrives from the middle of the drain filling this very page, and standing the
+        // tab elsewhere takes the page down (規約 §Qt Bridges の要点 — 再入 borrow). `Qt.callLater` also folds a
+        // repeat ask into one, which is what a second refusal on the way down would be.
+        onStandHomeAsked: Qt.callLater(page.standHomeRequested)
+    }
     CommandsModel {
         id: commandsModel
         // The machine's offset from UTC, said before the first row arrives: the panel says it again each time it is

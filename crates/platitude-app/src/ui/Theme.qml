@@ -159,6 +159,22 @@ QtObject {
     // section, and a colour read apart by which column it is in is how `success` itself is already read
     // (規約 §ref の種別).
     readonly property color textHereTree: "#22C55E"
+    // The ground under the tab in front while that tab is standing in a linked worktree — green 950's hue and
+    // saturation taken down to 5.5% lightness, where that ramp's own darkest step is 10%. `bgSelected` is Tailwind
+    // blue 950 and green 950 is its match by the numbers (0.0204 against 0.0210 relative luminance), but **matched
+    // luminance is not matched loudness**: the green reads as the brighter of the two grounds, and this is how far
+    // it had to come down to read as quiet.
+    //
+    // **At this step the ground has stopped saying "in front" by lightness.** 0.0074 against the band it sits on
+    // (`bgElevated`, 0.0080) is 1.01:1 — no light and dark between them at all, so what lifts this tab off the band
+    // is the hue and only the hue, and **what says it is the one in front is the rule along its edge and the weight
+    // of its name** (デザイン規約 §タブの所作 — the ground is one of three, and here it is the other two that
+    // carry it). The blue ground does not come down this far: it is 2.63x its band and says it in light as well.
+    //
+    // Everything drawn on it gains by the dark: `textPrimary` 14.8:1, `textHereTree` (the rule, and the same green
+    // the WORKTREES section is) 8.0:1, `textSecondary` (the run naming the copy) 7.1:1 — each over what the blue
+    // ground gives the same ink.
+    readonly property color bgHereTree: "#03190C"
 
     // ---- colors: git / diff ----
     readonly property color diffAddedFg: "#4ADE80"

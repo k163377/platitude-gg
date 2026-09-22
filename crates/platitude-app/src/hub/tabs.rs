@@ -107,9 +107,11 @@ impl Hub {
         Some(token)
     }
 
-    /// Opens a repository in a new tab; returns the tab id.
-    pub fn open_tab(&mut self, path: PathBuf) -> Option<i32> {
-        let id = self.reserve_tab(path)?;
+    /// Opens a repository in a new tab; returns the tab id. `home` is
+    /// the repository's own working copy — the same for every copy of
+    /// one repository, and equal to `path` for a tab standing in it.
+    pub fn open_tab(&mut self, path: PathBuf, home: PathBuf) -> Option<i32> {
+        let id = self.reserve_tab(path, home)?;
         self.ensure_open(id);
         Some(id)
     }
@@ -117,7 +119,7 @@ impl Hub {
     /// Takes a tab id for a repository without opening it. The feeds exist
     /// from the start, so the page attaches to them as usual and simply
     /// stays on "loading" until [`Hub::ensure_open`] fills them.
-    pub fn reserve_tab(&mut self, path: PathBuf) -> Option<i32> {
+    pub fn reserve_tab(&mut self, path: PathBuf, home: PathBuf) -> Option<i32> {
         self.runtime_handle()?;
         self.next_tab_id += 1;
         let id = self.next_tab_id;
@@ -128,6 +130,7 @@ impl Hub {
                 runs: 0,
                 drawn: None,
                 path,
+                home,
                 feeds: Arc::new(Feeds::default()),
                 sink: None,
                 drafts: HashMap::new(),
@@ -135,6 +138,22 @@ impl Hub {
             },
         );
         Some(id)
+    }
+
+    /// Where a tab whose copy would not open is stood back: the
+    /// repository's own working copy, and `None` for a tab already
+    /// standing in it (デザイン規約 §タブの所作
+    /// 「立てない所へは立たない」).
+    ///
+    /// **Asked before the refusal is shown**, so the page that is about
+    /// to say a copy would not open can tell whether anything is going
+    /// to be tried instead of saying it (`RepoTab` drain). The strip
+    /// holds both paths as well, but it holds them for the row — this
+    /// answers for the tab id the page has, which is the one thing a
+    /// page knows about itself.
+    pub fn home_copy(&self, id: i32) -> Option<String> {
+        let tab = self.tabs.get(&id)?;
+        (tab.home != tab.path).then(|| tab.home.to_string_lossy().into_owned())
     }
 
     /// Stands a tab in another working copy of the repository it is
@@ -160,6 +179,11 @@ impl Hub {
     /// off the front holds no session (`Hub::release_tab`), and the copy
     /// it now stands in is read when it comes to the front, the same as
     /// any other tab nobody has looked at yet.
+    ///
+    /// **The repository behind it does not move**, so `Tab::home` is
+    /// left where it is: every copy of one repository hangs off the same
+    /// one, and that is what a copy which will not open is stood back
+    /// in (`Hub::home_copy`).
     pub fn restand_tab(&mut self, id: i32, path: PathBuf) -> bool {
         if !self.tabs.contains_key(&id) {
             return false;

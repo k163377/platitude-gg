@@ -50,14 +50,35 @@ impl RepoTab {
                     path,
                     message,
                 } => {
-                    self.state = "error".into();
-                    self.error_kind = kind.into();
-                    self.error_path = path;
-                    self.error = message;
-                    // The copy would not open, which is still an answer:
-                    // the doors are let go of and the page says what
-                    // became of the folder.
-                    self.stood();
+                    // A linked copy that would not open is stood back in
+                    // the repository's own one, and nothing is said about
+                    // this refusal (デザイン規約 §タブの所作
+                    // 「立てない所へは立たない」): the page stays as it
+                    // was until the strip takes the tab there, so the
+                    // reader is shown one screen and not a failure that
+                    // is withdrawn a frame later. Only a refusal with
+                    // nowhere left to fall reaches the screen.
+                    //
+                    // **And the tab goes on standing.** Another stand is
+                    // on its way, so the doors it is holding stay held
+                    // (`RepoTab::stood`) — let go of here they would
+                    // open for the one turn between this answer and the
+                    // next stand, on a page that is showing no copy.
+                    if Hub::with(|hub| hub.home_copy(self.tab_id))
+                        .flatten()
+                        .is_some()
+                    {
+                        self.stand_home_asked();
+                    } else {
+                        self.state = "error".into();
+                        self.error_kind = kind.into();
+                        self.error_path = path;
+                        self.error = message;
+                        // The copy would not open, which is still an
+                        // answer: the doors are let go of and the page
+                        // says what became of the folder.
+                        self.stood();
+                    }
                 }
                 TabMsg::OpError { message } => {
                     self.last_error = message;

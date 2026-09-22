@@ -265,9 +265,9 @@ Item {
     function settleTitleCap() {
         let nat = []
         for (let i = 0; i < titleMeasure.count; i++) {
-            const label = titleMeasure.itemAt(i)
-            if (label)
-                nat.push(Math.ceil(label.implicitWidth))
+            const measured = titleMeasure.itemAt(i)
+            if (measured)
+                nat.push(Math.ceil(measured.natW))
         }
         // What the row is asked for, so the band's leftover is shared with the state group in proportion — asking for
         // the floor instead has the tabs down to three characters beside two whole badges. Measured off the same
@@ -307,22 +307,40 @@ Item {
     /// The names at their natural width, off screen: the strip's own labels are the ones being capped, so they cannot
     /// also be what the cap is measured from. These carry the font the strip draws in, the current tab's heavier
     /// weight included, so what comes back is the width the strip will ask for.
+    ///
+    /// **A tab standing in a linked copy asks for that run too** (`TabTreeMark`): the run is given up before any
+    /// name is cut, but it is part of what the tab would draw whole, and a strip that asked without it would hand
+    /// out a run it is about to spend more of than it counted.
     Repeater {
         id: titleMeasure
         model: tabStrip.tabsModel
         onCountChanged: tabStrip.settleTitleCap()
-        delegate: Label {
+        delegate: Item {
+            id: measured
             required property int index
             required property string title
+            required property string copy_name
+
+            /// The two runs together, which is the one number the run is handed out by.
+            readonly property real natW: Math.ceil(nameLabel.implicitWidth) + treeMeasure.naturalWidth
 
             visible: false
-            text: title
-            // The tracking a short name is set in comes into what it measures, or the strip and the tab would be
-            // reading the same name at two different widths (`TabMetrics.titleTracking`).
-            font.letterSpacing: tabMetrics.titleTracking(title.length)
-            font.weight: tabStrip.tabsModel.currentIndex === index ? Font.DemiBold : Font.Normal
-            onImplicitWidthChanged: tabStrip.settleTitleCap()
+            onNatWChanged: tabStrip.settleTitleCap()
             Component.onCompleted: tabStrip.settleTitleCap()
+
+            Label {
+                id: nameLabel
+                text: measured.title
+                // The tracking a short name is set in comes into what it measures, or the strip and the tab would be
+                // reading the same name at two different widths (`TabMetrics.titleTracking`).
+                font.letterSpacing: tabMetrics.titleTracking(measured.title.length)
+                font.weight: tabStrip.tabsModel.currentIndex === measured.index ? Font.DemiBold : Font.Normal
+            }
+            TabTreeMark {
+                id: treeMeasure
+                name: measured.copy_name
+                metrics: tabMetrics
+            }
         }
     }
 
@@ -381,6 +399,7 @@ Item {
             tabsModel: tabStrip.tabsModel
             metrics: tabMetrics
             titleCap: tabStrip.tabTitleCap
+            titleMinW: tabStrip.tabTitleMinW
             titleEaseW: tabStrip.tabTitleEaseW
             markRoom: tabStrip.tabMarkRoom
             fadeW: tabStrip.tabTitleFadeW
@@ -422,6 +441,7 @@ Item {
         metrics: tabMetrics
         frontTab: tabStrip.frontTab
         titleCap: tabStrip.tabTitleCap
+        titleMinW: tabStrip.tabTitleMinW
         titleEaseW: tabStrip.tabTitleEaseW
         markRoom: tabStrip.tabMarkRoom
         fadeW: tabStrip.tabTitleFadeW

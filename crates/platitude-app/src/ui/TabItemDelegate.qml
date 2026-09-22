@@ -11,13 +11,18 @@ Rectangle {
     required property int index
     required property int tab_id
     required property string title
-    required property string repo_path
+    /// The working copy this tab is standing in: the path the hover puts out, and — where that copy is a linked one
+    /// — its own folder name, which is the run drawn after the title (デザイン規約 §タブの所作). Empty for a tab
+    /// standing in the repository's own copy, which draws no run and wears the band's ordinary blue.
+    required property string copy_path
+    required property string copy_name
     /// The strip's own model: the one question a tab asks of it, and the one thing the mark does to it.
     required property var tabsModel
-    /// What every name in the strip is capped at right now, the length a name stops being eased at, the room every tab
-    /// keeps for its mark, and the run a name goes quiet over where the mark stands on it — all settled in the same
-    /// pass, off the same run (`TabStrip.settleTitleCap`).
+    /// What every name in the strip is capped at right now, the shortest one is cut to, the length a name stops being
+    /// eased at, the room every tab keeps for its mark, and the run a name goes quiet over where the mark stands on
+    /// it — all settled in the same pass, off the same run (`TabStrip.settleTitleCap`).
     property real titleCap: 0
+    property real titleMinW: 0
     property real titleEaseW: 0
     property real markRoom: 0
     property real fadeW: 0
@@ -27,10 +32,20 @@ Rectangle {
     /// The strip's shared arithmetic (`TabMetrics`): what a tab costs, the seat its mark stands in, and how a short
     /// name is eased. One object, so the strip and the tab cannot disagree.
     required property var metrics
-    /// The air this name is eased with, half of what it falls short by (`TabMetrics.titleEase`). Read off the label's
-    /// own hint, which is the name at its natural width — the cap is a maximum on the item and does not move it.
+    /// What the tab would draw with nothing cut: the repository's name and, after it, the run naming the copy this
+    /// tab stands in (`TabTreeMark`). One number, because one cap is what the strip hands out — and the tab is what
+    /// decides how that cap is spent between the two (`nameSplit`).
+    readonly property real nameNatW: Math.ceil(tabTitle.implicitWidth) + treeRun.naturalWidth
+    /// How it is spent: the name first, the copy's run out of what is left, and that run gone whole before a letter
+    /// of the name is cut (`TabShare.splitName`).
+    readonly property var nameSplit: tabItem.metrics.share.splitName(
+        Math.ceil(tabTitle.implicitWidth), treeRun.naturalWidth, treeRun.floorWidth, tabItem.titleCap)
+    readonly property real titleW: tabItem.nameSplit.titleW
+    readonly property real treeW: tabItem.nameSplit.treeW
+    /// The air this name is eased with, half of what it falls short by (`TabMetrics.titleEase`). Read off what the
+    /// tab would draw whole, the two runs together — the cap is a maximum on the item and does not move it.
     readonly property real titleEase:
-        tabItem.metrics.titleEase(tabTitle.implicitWidth, tabItem.titleCap, tabItem.titleEaseW)
+        tabItem.metrics.titleEase(tabItem.nameNatW, tabItem.titleCap, tabItem.titleEaseW)
     /// How much of that air is set down on the mark's side (`TabMetrics.easeRight`), and — once it has all been spent —
     /// whether the name still runs on under the mark. The second is what the fade is for and nothing else asks it.
     readonly property real easeRight: tabItem.metrics.easeRight(tabItem.titleEase, tabItem.markRoom)
@@ -83,13 +98,20 @@ Rectangle {
     // The name at whatever it is capped to, the step it is set at on the near side, the room the mark stands in on the
     // far one, and the easing a short name is given. Rounded up so this and `settleTitleCap` agree on what the tab
     // costs, or the strip scrolls by the fractions they disagree about.
-    width: Math.ceil(Math.min(tabTitle.implicitWidth, tabItem.titleCap))
+    width: tabItem.titleW + tabItem.treeW
         + tabItem.metrics.tabPadL + tabItem.markRoom + tabItem.titleEase
     height: tabItem.stripHeight
     // Over the tabs it is being carried past: between one neighbour's half and the next one's, the tab in hand covers
     // the tab it has not displaced yet.
     z: tabItem.held ? 1 : 0
-    color: tabItem.current ? Theme.bgSelected : "transparent"
+    // The tab in front paints its own ground, and which ground says which copy it is standing in
+    // (デザイン規約 §タブの所作). One step of one ramp either way, so the reader tells the
+    // tab in front from the rest by the same amount of ink whichever place it stands in.
+    color: tabItem.current ? tabItem.groundColor : "transparent"
+    /// What the tab in front is painted in, and the line along its bottom edge. Read by the fade over the mark and
+    /// by the stand-in as well, so a strip that has scrolled says one thing (`TabPin`).
+    readonly property color groundColor: tabItem.copy_name === "" ? Theme.bgSelected : Theme.bgHereTree
+    readonly property color ruleColor: tabItem.copy_name === "" ? Theme.accent : Theme.textHereTree
     // Drawn where the hand has it. A transform: the
     // view owns a delegate's place and writes it back at every layout, and this way the two never argue — the offset is
     // read from whatever place the row was given, so the tab stays under the hand across the very moves it is causing.
@@ -97,9 +119,12 @@ Rectangle {
         id: heldShift
         x: tabItem.held ? tabItem.heldX - tabItem.x : 0
     }
-    // The repository in full, under the hand (デザイン規約 §hover のツールチップ「タブも同じで、hover が必ずリポジトリの
-    // フルパスを言う」). Read off `pointed` like the mark, so the one property the real hover writes is what puts the
-    // words out — and the headless run reaches them the same way it reaches the mark (`TabProbe.pointAtTab`).
+    // The working copy this tab stands in, in full, under the hand (デザイン規約 §hover のツールチップ「タブも同じで、
+    // hover が必ずフルパスを言う」). **Not the repository's own copy**
+    // — the strip's name says which repository this is, and the path is the one thing that can say which of its
+    // copies the reader is looking at. Read off `pointed` like the mark, so the one property the real hover writes is
+    // what puts the words out — and the headless run reaches them the same way it reaches the mark
+    // (`TabProbe.pointAtTab`).
     //
     // Nothing new comes out under a hand that is carrying: by then the hand is doing something else, and a box opening
     // beside a tab in motion is not there to be read (同§「掴んだ手の下は空のまま」). Only the new one — a tip
@@ -107,7 +132,7 @@ Rectangle {
     // it came out of (`SharedToolTip.wanted`), which a tab under a carrying hand still is (P3-確認事項).
     ToolTip.visible: tabItem.pointed && !tabItem.held
     ToolTip.delay: Metrics.tipDelayMs
-    ToolTip.text: tabItem.repo_path
+    ToolTip.text: tabItem.copy_path
     onCurrentChanged: tabItem.frontChanged(tabItem.current)
     // The strip's first tab comes up already in front, and a property that was true from the start never announces
     // itself — the stand-in would have nothing to draw from until the reader moved to some other tab and back.
@@ -194,10 +219,11 @@ Rectangle {
     CutName {
         id: tabTitle
         anchors.left: parent.left
-        anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         anchors.leftMargin: tabItem.metrics.tabPadL + tabItem.titleEase - tabItem.easeRight
-        anchors.rightMargin: tabItem.markRoom + tabItem.easeRight
+        // What the split left the name (`nameSplit`), rather than what the two margins leave: the run naming the
+        // copy stands between this and the mark's room, and it is given its width by the same one answer.
+        width: tabItem.titleW
         text: tabItem.title
         // The other half of the easing: a short name is set with its letters a little apart, so the air it is
         // given belongs to the word. Off the letter count — the width is what the air
@@ -205,6 +231,19 @@ Rectangle {
         letterSpacing: tabItem.metrics.titleTracking(tabItem.title.length)
         weight: tabItem.current ? Font.DemiBold : Font.Normal
         color: Theme.textPrimary
+    }
+    // Where this tab is standing, after the name it is called by (デザイン規約 §タブの所作). Drawn on every tab that
+    // stands in a linked copy, in front or not: which copy a tab holds is what the reader left it on, and a run that
+    // only appeared on the tab in front would make the strip a different shape every time it is moved across.
+    TabTreeMark {
+        id: treeRun
+        anchors.left: tabTitle.right
+        anchors.verticalCenter: parent.verticalCenter
+        width: tabItem.treeW
+        visible: tabItem.treeW > 0
+        name: tabItem.copy_name
+        metrics: tabItem.metrics
+        minNameW: tabItem.titleMinW
     }
     // What the name does where the mark has come to stand over it (デザイン規約 §タブの所作). The strip gives the mark's
     // room up before it cuts a single name, so past that point the name runs on underneath — and this is what says so.
@@ -225,7 +264,7 @@ Rectangle {
         markR: tabItem.metrics.markSeat / 2
         rampW: tabItem.fadeW
         ground: tabItem.current
-            ? Theme.bgSelected
+            ? tabItem.groundColor
             : (tabItem.pointed ? Qt.tint(tabItem.bandColor, Theme.bgHover) : tabItem.bandColor)
         // As strongly as the mark itself stands: what quietens the name is the mark being over it, so the two arrive
         // and leave together. Read off the mark.
@@ -239,7 +278,7 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: 2 * Theme.borderWidth
-        color: Theme.accent
+        color: tabItem.ruleColor
         visible: tabItem.current
     }
     // Shown on the tab in front and under the pointer (デザイン規約 §タブの所作). Dimmed: an item the

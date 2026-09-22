@@ -35,12 +35,15 @@ QtObject {
         return n
     }
 
-    /// Whether any tab in the strip was opened on `path`. The closed tab's title cannot say it went — every demo
+    /// Whether any tab in the strip is standing in `path`. The closed tab's title cannot say it went — every demo
     /// working tree is called the same thing — and the path is the only thing that can.
+    ///
+    /// **The copy, not the repository**: it is what the tab opens, what the hover puts out, and the one of the two
+    /// that moves when a tab is stood elsewhere (`TabItem.copy_path`).
     function hasTabPath(path) {
         for (let i = 0; i < probe.view.count; i++) {
             const tab = probe.view.itemAtIndex(i)
-            if (tab && tab.repo_path === path)
+            if (tab && tab.copy_path === path)
                 return true
         }
         return false
@@ -53,9 +56,31 @@ QtObject {
         for (let i = 0; i < probe.view.count; i++) {
             const tab = probe.view.itemAtIndex(i)
             if (tab)
-                paths.push(tab.repo_path)
+                paths.push(tab.copy_path)
         }
         return paths.join(",")
+    }
+
+    /// What each tab says after its name — the copy it is standing in, or nothing where that is the repository's own
+    /// (`TabItemDelegate.copy_name`). A picture cannot tell a run the strip gave up for want of run from a tab that
+    /// never had one, so the run each tab was **handed** is reported beside it (`tabTreeWidths`).
+    function tabTrees() {
+        let names = []
+        for (let i = 0; i < probe.view.count; i++) {
+            const tab = probe.view.itemAtIndex(i)
+            names.push(tab ? tab.copy_name : "")
+        }
+        return names.join(",")
+    }
+
+    /// How wide that run came out on each tab, in strip order — 0 where none is drawn.
+    function tabTreeWidths() {
+        let widths = []
+        for (let i = 0; i < probe.view.count; i++) {
+            const tab = probe.view.itemAtIndex(i)
+            widths.push(tab ? Math.round(tab.treeW) : 0)
+        }
+        return widths.join(",")
     }
 
     /// The name each tab came out with, in the order they sit in (`PGG_AUTO_ACT=tab-name`). Read off the tabs:
@@ -72,7 +97,7 @@ QtObject {
     /// The path a tab was opened with, spelled the way the strip has it (`PGG_AUTO_ACT=open-again`).
     function tabPathAt(index) {
         const tab = probe.view.itemAtIndex(index)
-        return tab ? tab.repo_path : ""
+        return tab ? tab.copy_path : ""
     }
 
     /// Every tab's width, in the order they sit in (`PGG_AUTO_ACT=tab-widths`).
