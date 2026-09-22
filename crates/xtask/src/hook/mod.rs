@@ -23,6 +23,7 @@ mod payload;
 pub(crate) mod permit;
 mod review;
 mod seat;
+mod shell;
 mod still;
 mod write;
 

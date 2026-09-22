@@ -5,6 +5,7 @@
 use super::GUI_APPROVAL_FLAG;
 use super::git::{unquote, xtask_verb};
 use super::payload::{bool_field, string_field};
+use super::shell::shell_segments;
 use crate::seats::worktree_root;
 
 /// PreToolUse(Bash|PowerShell): starting the app from a worktree takes
@@ -105,16 +106,6 @@ fn launch_segments(command: &str) -> Vec<&str> {
             let tokens: Vec<&str> = bare.split_whitespace().collect();
             xtask_verb(&tokens, "launch")
         })
-        .collect()
-}
-
-/// `command` cut where one command in the line ends and the next begins, so
-/// that a pipe belonging to a neighbour is not read as the launch's own.
-pub(super) fn shell_segments(command: &str) -> Vec<&str> {
-    command
-        .split(['\n', ';'])
-        .flat_map(|part| part.split("&&"))
-        .flat_map(|part| part.split("||"))
         .collect()
 }
 

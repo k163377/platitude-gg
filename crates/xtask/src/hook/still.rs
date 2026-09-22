@@ -9,8 +9,8 @@
 //! hold costs one shell line typed again once the hold lifts, a false
 //! pass costs a spoiled measurement.
 
-use super::launch::shell_segments;
 use super::payload::{deny, string_field};
+use super::shell::{is_cargo, pipe_pieces, program_at};
 
 /// The cargo subcommands that compile nothing, and so may run beside a
 /// measurement.
@@ -23,25 +23,6 @@ const HARMLESS: [&str; 8] = [
     "version",
     "locate-project",
     "pkgid",
-];
-
-/// The programs a command is run through: stepped over
-/// to reach the command, flags and all, so `env X=1 cargo build`, `time
-/// cargo test`, `bash -c "cargo build"` and `cmd /c cargo build` are
-/// read as the cargo they run.
-const WRAPPERS: [&str; 12] = [
-    "env",
-    "time",
-    "nice",
-    "nohup",
-    "exec",
-    "bash",
-    "sh",
-    "zsh",
-    "pwsh",
-    "powershell",
-    "powershell.exe",
-    "cmd",
 ];
 
 /// PreToolUse(Bash|PowerShell). Answers whether it refused, so the guards
@@ -74,35 +55,14 @@ pub(super) fn pre_shell(input: &str) -> Result<bool, String> {
 /// structure && cargo build` is still a bare build, and only in command
 /// position, so a commit message that mentions `cargo test` is not.
 fn bare_cargo(command: &str) -> bool {
-    shell_segments(command)
-        .into_iter()
-        .flat_map(|segment| segment.split('|'))
-        .any(segment_is_bare_cargo)
+    pipe_pieces(command).into_iter().any(segment_is_bare_cargo)
 }
 
 fn segment_is_bare_cargo(segment: &str) -> bool {
-    let tokens: Vec<&str> = segment
-        .split_whitespace()
-        .map(|token| token.trim_matches(['"', '\'', '(', ')', '&']))
-        .filter(|token| !token.is_empty())
-        .collect();
-    // Past the environment a line sets in front of its command, and past
-    // the programs it runs the command through, with their flags.
-    let mut at = 0;
-    while at < tokens.len() {
-        let token = tokens[at];
-        let stepped_over = is_assignment(token)
-            || WRAPPERS.contains(&program_name(token).as_str())
-            || (at > 0 && (token.starts_with('-') || token.starts_with('/')));
-        if !stepped_over {
-            break;
-        }
-        at += 1;
-    }
-    let Some(program) = tokens.get(at) else {
+    let Some((tokens, at)) = program_at(segment) else {
         return false;
     };
-    if !is_cargo(program) {
+    if !is_cargo(tokens[at]) {
         return false;
     }
     // Past the toolchain and the global flags: `cargo +stable -q build`.
@@ -119,29 +79,6 @@ fn segment_is_bare_cargo(segment: &str) -> bool {
         return false;
     }
     true
-}
-
-/// `NAME=value` in front of a command, which the shell takes as
-/// environment.
-fn is_assignment(token: &str) -> bool {
-    token.split_once('=').is_some_and(|(name, _)| {
-        !name.is_empty() && name.bytes().all(|b| b == b'_' || b.is_ascii_alphanumeric())
-    })
-}
-
-/// The program a token names, however it is spelled: the last path
-/// segment, lowercase.
-fn program_name(token: &str) -> String {
-    let path = token.replace('\\', "/");
-    path.rsplit('/')
-        .next()
-        .unwrap_or(&path)
-        .to_ascii_lowercase()
-}
-
-/// `cargo`, however it is spelled: a path to it, `cargo.exe`, any case.
-fn is_cargo(token: &str) -> bool {
-    matches!(program_name(token).as_str(), "cargo" | "cargo.exe")
 }
 
 /// `cargo run -p xtask -- <verb>`: the task runner, unquieted.
