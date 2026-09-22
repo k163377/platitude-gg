@@ -19,6 +19,42 @@ pub(crate) fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// The primary checkout that the tree at `cwd` belongs to, whichever
+/// tree that is — read off the filesystem rather than asked of git,
+/// because the readers are hooks that run on every line a session types
+/// and a process started there is paid for by all of them.
+///
+/// `.git` is a directory in the primary checkout and a file in every
+/// linked worktree, naming `<primary>/.git/worktrees/<name>`. A session
+/// that types in the primary checkout and then enters a seat must land
+/// on one answer, or what it wrote before the move is left behind
+/// (`hook::repeat`, `seats::entry`).
+pub(crate) fn primary_root(cwd: &str) -> Option<PathBuf> {
+    let mut at: &Path = Path::new(cwd);
+    loop {
+        let dot_git = at.join(".git");
+        if dot_git.is_dir() {
+            return Some(at.to_path_buf());
+        }
+        if dot_git.is_file() {
+            return linked_primary(&dot_git);
+        }
+        at = at.parent()?;
+    }
+}
+
+/// The primary checkout a linked worktree's `.git` file names. Anything
+/// that does not sit under a `<primary>/.git/worktrees/` — a repository
+/// laid out by `--separate-git-dir`, say — is nobody's primary here.
+fn linked_primary(dot_git: &Path) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(dot_git).ok()?;
+    let named = text
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("gitdir:"))?;
+    let root = Path::new(named.trim()).ancestors().nth(3)?.to_path_buf();
+    root.join(".git").is_dir().then_some(root)
+}
+
 /// The app's verification harness, which is not in a build that did not
 /// ask for it: the `PGG_*` protocol, the drivers, and the `platitude.auto`
 /// QML module (`platitude-app` §features). Everything this task runner
@@ -171,4 +207,41 @@ fn where_it_lands(root: &Path, profile: &str) -> Result<PathBuf, String> {
         ));
     }
     Ok(exe)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::primary_root;
+
+    /// A seat and the checkout it hangs off answer with one path, so
+    /// what a session writes before it enters a seat is found again
+    /// after it has.
+    #[test]
+    fn a_seat_and_its_checkout_name_one_root() {
+        let base = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-hook"), "roots")
+            .expect("a directory of its own");
+        let primary = base.join("platitude-gg");
+        let seat = primary.join(".claude/worktrees/a");
+        std::fs::create_dir_all(primary.join(".git/worktrees/a")).expect("a primary checkout");
+        std::fs::create_dir_all(seat.join("crates/xtask")).expect("a seat");
+        std::fs::write(
+            seat.join(".git"),
+            format!("gitdir: {}/.git/worktrees/a\n", primary.display()),
+        )
+        .expect("a seat's .git file");
+
+        let named = |at: &std::path::Path| primary_root(&at.to_string_lossy());
+        assert_eq!(named(&primary).as_deref(), Some(primary.as_path()));
+        assert_eq!(named(&seat).as_deref(), Some(primary.as_path()));
+        // From a subdirectory that carries no .git of its own.
+        assert_eq!(
+            named(&seat.join("crates/xtask")).as_deref(),
+            Some(primary.as_path())
+        );
+        // A .git naming a layout this reader does not know.
+        std::fs::write(seat.join(".git"), "gitdir: /elsewhere\n").expect("a foreign .git file");
+        assert_eq!(named(&seat), None);
+
+        std::fs::remove_dir_all(&base).ok();
+    }
 }

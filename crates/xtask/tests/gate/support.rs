@@ -275,6 +275,35 @@ impl Sandbox {
         text.lines().map(str::to_string).collect()
     }
 
+    /// What a hook prints for `payload`, through the binary the harness
+    /// runs. Empty is a hook's way of saying it has no objection.
+    pub fn hook(&self, event: &str, payload: &str) -> String {
+        let file = self.root.join(format!(
+            "{event}-{}.json",
+            COUNTER.fetch_add(1, Ordering::SeqCst)
+        ));
+        std::fs::write(&file, payload).expect("payload");
+        let mut command = Command::new(EXE);
+        command
+            .args(["hook", event])
+            .stdin(std::process::Stdio::from(
+                std::fs::File::open(&file).expect("payload open"),
+            ));
+        command.current_dir(&self.repo);
+        self.env(&mut command);
+        // The payload's id is the session's; the environment's, if the
+        // run that started this suite is a session, is not.
+        command.env_remove("CLAUDE_CODE_SESSION_ID");
+        command.env_remove("CLAUDE_PID");
+        let output = output_past_a_busy_image(&mut command, || {}).expect("spawn xtask");
+        assert!(
+            output.status.success(),
+            "hook {event} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    }
+
     pub fn write(&self, dir: &Path, relative: &str, text: &str) {
         let path = dir.join(relative);
         if let Some(parent) = path.parent() {

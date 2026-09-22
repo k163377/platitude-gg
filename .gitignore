@@ -22,6 +22,11 @@ target/
 # session that wrote it ends.
 .chips/
 
+# The repeat ledger (hook repeat): one file per session, beside this
+# .git wherever the session typed the line, holding the last ten minutes
+# of the shell lines it ran. Cleared when that session ends.
+.repeats/
+
 # The landing permit (hook permit): one file per session, beside this
 # .git so a seat's landing reads what the prompt hook wrote wherever the
 # session sat. Opened by the user's message, spent by one landing.

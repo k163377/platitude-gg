@@ -6,6 +6,11 @@
 //! the permit the user's own message opens (`permit`), and on that
 //! alone.
 //!
+//! Two guards hold a line for what it costs rather than for what it
+//! touches: a wait asked again and again (`repeat`) and a file printed
+//! whole (`dump`) are both read back by every call that follows them,
+//! and the conversation is what every call is charged.
+//!
 //! Wired from .claude/settings.json. Each handler reads the hook's JSON
 //! payload from stdin and answers on stdout; printing nothing means "no
 //! objection".
@@ -15,12 +20,15 @@ use std::io::Read;
 mod attribution;
 mod chips;
 mod commit;
+mod dump;
 mod git;
 mod greeting;
 mod kill;
 mod launch;
 mod payload;
 pub(crate) mod permit;
+mod python;
+mod repeat;
 mod review;
 mod seat;
 mod shell;
@@ -121,6 +129,7 @@ fn stop(input: &str) -> Result<(), String> {
 /// xtask seat release`), or the user has it taken over (`seats::takeover`).
 fn session_end(input: &str) -> Result<(), String> {
     chips::session_end(input);
+    repeat::session_end(input);
     Ok(())
 }
 
@@ -133,6 +142,9 @@ fn pre_shell(input: &str) -> Result<(), String> {
         || still::pre_shell(input)?
         || attribution::pre_comment(input)?
         || kill::pre_kill(input)?
-        || launch::pre_launch(input)?;
+        || launch::pre_launch(input)?
+        || python::pre_shell(input)?
+        || dump::pre_shell(input)?
+        || repeat::pre_shell(input)?;
     Ok(())
 }

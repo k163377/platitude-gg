@@ -30,4 +30,5 @@ mod landing;
 mod permit;
 mod seats;
 mod selection;
+mod shell;
 mod stamps;
