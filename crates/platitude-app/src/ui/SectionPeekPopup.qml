@@ -180,11 +180,25 @@ AppCard {
     width: peek.listW
     // As tall as it has rows, at most to the foot of the pane it
     // comes out of. It always has rows — a cell
-    // holding a zero does not open (NavRail).
-    height: Math.min(Theme.headerHeight + peekList.count * Theme.rowHeight + Theme.borderWidth,
+    // holding a zero does not open (NavRail). The band is a
+    // `NavHeader`, which is `rowHeight` wherever it stands, and the two
+    // lines are the frame's.
+    height: Math.min(Theme.rowHeight + peekList.count * Theme.rowHeight + 2 * Theme.borderWidth,
                      Math.max(0, peek.paneH - peek.top))
-    padding: 0
+    // The frame's own two lines, kept out from under the content: a
+    // `Popup` lays its content over the whole face, and the band at the
+    // head of this one is opaque, so at zero it painted the frame out —
+    // the top edge entirely, and `rowHeight` of each side with it
+    // (observed: the panel met the graph above it with no line at all).
+    padding: Theme.borderWidth
     margins: 0
+    // That padding is one line wide and the hand walking in off the
+    // rail crosses it, where the content's own handler cannot see it.
+    // Nothing is allowed to lie between the cell and this list
+    // (デザイン規約 §左メニューを畳む), so the face reports it too — a
+    // hand come to rest on that line would otherwise take the section
+    // down under itself.
+    tracksPointer: true
     // Leaving it is what closes it (above). Escape is for the reader
     // whose pointer is already inside it.
     closePolicy: Popup.CloseOnEscape
