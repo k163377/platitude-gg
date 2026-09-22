@@ -360,7 +360,7 @@ Item {
             split(140, 100, 40, "and exactly the room for both")
             split(135, 100, 35, "short of it, the run gives way and the name does not")
             split(130, 100, 30, "down to the least it is worth drawing at")
-            split(129, 100, 0, "under that the whole run goes, brackets and mark with it")
+            split(129, 100, 0, "under that the whole run goes, the mark with it")
             split(80, 80, 0, "and only then is the name cut")
         }
 

@@ -43,11 +43,11 @@ QtObject {
     ///
     /// **Nothing is spent either side of it.** This mark is set in the run as a letter is, not stood in a row
     /// (デザイン規約 §タブの所作), so what opens around it is the air its own box holds — `(iconSm − ink) / 2`, a
-    /// hair under half a step — and the side bearings of the bracket and the letter beside it. The row's step is
-    /// what the `✕` takes, and it is written as `刻み − 印が持つ余白` because the `✕` is a mark standing in a row
-    /// (§余白); a mark inside a word adds neither.
+    /// hair under half a step — and the side bearing of the letter beside it. The row's step is what the `✕` takes,
+    /// and it is written as `刻み − 印が持つ余白` because the `✕` is a mark standing in a row (§余白); a mark inside
+    /// a word adds neither.
     readonly property int treeSeat: Theme.iconXs
-    /// The step between the repository's name and the bracket that opens the run. **This one is a row's**: the two
+    /// The step between the repository's name and the mark that opens the run. **This one is a row's**: the two
     /// runs are two things the tab says, and the step is what tells them apart (デザイン規約 §余白).
     readonly property real treeRunGap: Theme.spaceXs
 

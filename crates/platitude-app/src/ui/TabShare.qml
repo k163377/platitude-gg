@@ -60,7 +60,8 @@ QtObject {
     /// before a single letter of the name is cut.
     ///
     /// `treeFloor` is the least that run is worth drawing at (`TabTreeMark.floorWidth`); under it the whole of it
-    /// goes, brackets and mark together — half a bracket says nothing, and the reader is still told where they are
+    /// goes, mark and all — the mark is what parts the copy's name from the repository's, so a name left standing
+    /// without it reads as the repository's own name carrying on, and the reader is still told where they are
     /// standing by the tab's own ground and by the hover.
     ///
     /// **A tab that drops the run is narrower than its share by under that floor.** The strip priced it at
