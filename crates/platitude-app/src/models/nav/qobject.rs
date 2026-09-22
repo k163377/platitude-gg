@@ -471,6 +471,23 @@ impl NavSectionModel {
         self.worktree_with(&branch)
     }
 
+    /// Where the working copy at `path` is standing — the HEAD git
+    /// listed with the entry, as hex; empty for a path this listing does
+    /// not hold and for a bare entry, which has no commit out.
+    ///
+    /// **Asked by the path, not the name**: the rows show the last
+    /// segment of the path and two copies can be leaves of the same name
+    /// under different parents, while the path is what git lists them by
+    /// and what a row about a copy carries (`RepoPage.carriedPath`).
+    ///
+    /// What the page lands on when the uncommitted row it was reading
+    /// goes away: that copy committed, and this is where it went
+    /// (`settleCarriedAfterPass`).
+    #[qslot]
+    pub(super) fn head_of_copy(&self, path: String) -> String {
+        self.told(Role::Full, &path, Role::OidHex)
+    }
+
     /// What one row shows, and what git knows it by (empty out of range).
     ///
     /// Roles are only visible to a delegate, so this is how automation

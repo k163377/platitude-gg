@@ -283,11 +283,27 @@ FocusScope {
             graphPane.setCurrentRow(row)
             return
         }
-        // Nothing to show and nothing to stand on: the copy committed, or put its changes away. The pane falls back
-        // the way it does when the row being read goes from under it — to whatever this page would have opened on.
+        // Nothing to show and nothing to stand on: the copy committed, or put its changes away.
+        //
+        // **The landing is where that copy now stands.** An uncommitted row names one working copy and nothing else
+        // — a copy with no branch out has one all the same — so the copy is what the reader was reading, and the
+        // commit it has just made is where it went. Asked of the worktree listing by the copy's path
+        // (`NavSectionModel.headOfCopy`), which is one lookup over a handful of entries.
+        //
+        // **A listing a tick behind lands one commit behind**, on the copy's previous HEAD — still that copy's own
+        // history, and the next pass leaves the reader there because that commit is still drawn.
+        const head = worktreesModel.headOfCopy(page.carriedPath)
+        const headRow = head === "" ? -1 : graphModel.rowOf(head)
         page.dropCarried()
         page.wipShown = false
         page.selectedOid = ""
+        if (headRow >= 0) {
+            graphPane.setCurrentRow(headRow)
+            page.activateRow(graphModel.oidAt(headRow), headRow)
+            return
+        }
+        // The copy is gone from the listing (removed, pruned, or bare): there is no copy left to follow, so the page
+        // falls back to what it would have opened on.
         page.trySelectDefault()
     }
 
