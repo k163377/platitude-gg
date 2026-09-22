@@ -26,6 +26,43 @@ pub enum FirstPass {
     Swapped,
 }
 
+/// The record of the graph a consumer is showing, moved from the
+/// session that drew it to the one taking its place
+/// ([`RepoSession::take_drawn_graph`]).
+///
+/// **The graph outlives the session, so the record of it does too.** A
+/// page that keeps its rows while the copy under it changes leaves the
+/// next session two questions it cannot answer for itself: whether a
+/// pass it walks arrives at the picture already on screen — a print per
+/// row is what that is read against, and one that starts empty calls
+/// every picture new — and which chips those rows are already wearing,
+/// which is what a refs read diffs against. Both are the *consumer's*
+/// state rather than the repository's, and neither is re-derivable
+/// without redrawing the graph to find out.
+///
+/// **Moved, not copied**: the session it comes from is being closed, and
+/// what is inside is what that close would throw away
+/// (`RepoSession::close`).
+///
+/// **The rows themselves are not in it.** The session keeps a hash per
+/// row and not the row (`RowPrint`: sixteen bytes against 822), so a
+/// walk is still what makes rows — 120–147ms of the opening on a
+/// repository of `JetBrains/kotlin`'s size
+/// (ci/baseline/perf-windows-x64.md). What this saves is the redraw:
+/// two copies whose picture agrees swap nothing at all.
+pub struct DrawnGraph(Shared);
+
+/// What an opening is settled with, all of it decided before the first
+/// git command is spawned and none of it movable afterwards: how much
+/// of the opening the command log keeps ([`Recording`]), what its first
+/// graph pass does about a graph already on screen ([`FirstPass`]), and
+/// the record of that graph ([`DrawnGraph`]).
+struct Opening {
+    recording: Recording,
+    first_pass: FirstPass,
+    drawn: Option<DrawnGraph>,
+}
+
 impl RepoSession {
     /// Creates the session and starts opening `path` in the background.
     /// On success everything loads: log stream, refs, status, stashes.
@@ -58,12 +95,16 @@ impl RepoSession {
     /// repository's graph read from another of its working copies —
     /// the door a tab changes the copy it stands in through
     /// ([`FirstPass::Swapped`]).
+    ///
+    /// `drawn` is the record of that graph, from the session being
+    /// closed ([`DrawnGraph`]).
     pub fn open_standing_in(
         executor: GitExecutor,
         runtime: tokio::runtime::Handle,
         path: PathBuf,
         sink: Arc<dyn SessionSink>,
         pass_hooks: Option<Arc<dyn PassHooks>>,
+        drawn: Option<DrawnGraph>,
     ) -> Arc<Self> {
         Self::open_as(
             executor,
@@ -71,9 +112,22 @@ impl RepoSession {
             path,
             sink,
             pass_hooks,
-            Recording::UserOnly,
-            FirstPass::Swapped,
+            Opening {
+                recording: Recording::UserOnly,
+                first_pass: FirstPass::Swapped,
+                drawn,
+            },
         )
+    }
+
+    /// Takes the record of the graph on screen out of this session, for
+    /// the one taking its place over the same consumer ([`DrawnGraph`]).
+    ///
+    /// **Before the close**, which is what throws it away
+    /// (`RepoSession::close`). What is left behind is what a closed
+    /// session keeps of the graph either way: nothing.
+    pub fn take_drawn_graph(&self) -> DrawnGraph {
+        DrawnGraph(std::mem::take(&mut *self.lock_shared()))
     }
 
     /// [`RepoSession::open`], with what the command log keeps decided
@@ -94,23 +148,37 @@ impl RepoSession {
             path,
             sink,
             pass_hooks,
-            recording,
-            FirstPass::Streamed,
+            Opening {
+                recording,
+                first_pass: FirstPass::Streamed,
+                drawn: None,
+            },
         )
     }
 
-    /// The constructor the doors above name their difference by. Both
-    /// of the things decided here are decided before the first git
-    /// command is spawned, and neither can be moved afterwards.
+    /// The constructor the doors above name their difference by
+    /// ([`Opening`]).
     fn open_as(
         executor: GitExecutor,
         runtime: tokio::runtime::Handle,
         path: PathBuf,
         sink: Arc<dyn SessionSink>,
         pass_hooks: Option<Arc<dyn PassHooks>>,
-        recording: Recording,
-        first_pass: FirstPass,
+        opening: Opening,
     ) -> Arc<Self> {
+        let Opening {
+            recording,
+            first_pass,
+            drawn,
+        } = opening;
+        // The consumer's graph, where one is being kept ([`DrawnGraph`]).
+        // **The pass number comes with it**: the record and the rows on
+        // screen are numbered by the session that drew them, and a
+        // counter starting over would have this session's first pass
+        // refused as one the consumer has already seen
+        // (`GraphModel::take_chunk`).
+        let shared = drawn.map_or_else(Shared::default, |carried| carried.0);
+        let passes = shared.generation;
         let (write_tx, write_rx) = tokio::sync::mpsc::unbounded_channel();
         let commands = Arc::new(CommandFeed::new(Arc::clone(&sink), recording));
         let observer: Arc<dyn crate::process::CommandObserver> = Arc::clone(&commands) as _;
@@ -127,9 +195,9 @@ impl RepoSession {
             sink,
             root_cancel: CancellationToken::new(),
             info: Mutex::new(None),
-            shared: Arc::new(Mutex::new(Shared::default())),
+            shared: Arc::new(Mutex::new(shared)),
             log_options: Mutex::new(LogOptions::default()),
-            log_gen: AtomicU64::new(0),
+            log_gen: AtomicU64::new(passes),
             diff_epoch: AtomicU64::new(0),
             last_diff: Mutex::new(None),
             lex_cache: Mutex::new(None),
