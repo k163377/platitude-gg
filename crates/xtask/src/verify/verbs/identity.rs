@@ -60,6 +60,20 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "settled=true loading=false open=true typing=true",
     },
+    // **Enter on each side of that list, in the one run** (デザイン規約
+    // §立っている質問は 1 か所で聞く). `stood=` is the press made with
+    // the list down, which is the list's key and not the screen's —
+    // hung on the field's plain `accepted`, that press shut the screen
+    // on a reader who had just arrowed to a tool. `left=` is the press
+    // after it, with the list taken down, which is the answer. **Nothing
+    // here is a picture**: the run ends with the screen gone, and a
+    // screen that went at the wrong press is the same window as one
+    // that went at the right one.
+    Verb {
+        name: "settings-tools-enter",
+        when: &[],
+        plain: "merge_editor_enter stood=true left=true",
+    },
     // Which git the app runs, and what that binary answered. **Nothing
     // here is a picture**: a path is drawn the same whether or not there
     // is anything at the end of it, and the sentence under the box takes

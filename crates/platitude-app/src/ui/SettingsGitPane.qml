@@ -59,6 +59,15 @@ ColumnLayout {
     /// the answer: an automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
     readonly property bool toolListOpen: toolField.popup.opened
     readonly property bool toolsSettled: pane.curPage !== null && !pane.curPage.pageTab.mergeToolsLoading
+    /// Automation: Enter in that box, and the list taken back down where the run wants it shut. No key reaches the
+    /// box on the offscreen platform, so what is raised is the box's own `accepted` — the signal Qt raises on Enter
+    /// (`tst_appcombo` fixes that it does), and the door the handler below hangs off.
+    function autoEnterTool() {
+        toolField.accepted()
+    }
+    function autoShutToolList() {
+        toolField.popup.close()
+    }
 
     /// Asks git what it would launch, and what it could launch. The candidate read is `git mergetool --tool-help`,
     /// which is about eight seconds on Windows (規約 §conflict を外部ツールへ渡す) — hence the turning indicator, and
@@ -236,8 +245,12 @@ ColumnLayout {
                     onWantedChanged: pane.toolTouched = true
                     // A row picked from the list is a finished answer; free text waits for Enter or for the screen to
                     // close.
+                    //
+                    // **`submitted`, not `accepted`**: under the open list that key is the list's, and Qt raises
+                    // `accepted` on the press with the row still unpicked (`AppCombo.submitted`) — so the reader who
+                    // arrowed to a tool and pressed Enter had the screen shut on them mid-choice.
                     onActivated: pane.applyTool()
-                    onAccepted: pane.accepted()
+                    onSubmitted: pane.accepted()
                 }
             }
         }

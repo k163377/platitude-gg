@@ -519,6 +519,65 @@ Item {
         }
     }
 
+    // PGG_AUTO_ACT=settings-tools-enter: **what Enter in the merge editor's box does on each side of its own list**
+    // (デザイン規約 §立っている質問は 1 か所で聞く の一覧が降りている間の Enter). Both halves are pressed in the one
+    // run, and the second is what ends it: under the list the key is the list's and the screen has to stand, with
+    // the list shut it is the answer and the screen goes. Either half alone passes for a build that never leaves
+    // and for one that always does.
+    SampleTimer {
+        id: toolEnterTimer
+        running: Harness.autoAct === "settings-tools-enter"
+        /// The screen is up, the stock-take is in, and the list is down. Latched, because what this run presses can
+        /// take the screen away and a precondition read every tick would put it straight back up.
+        property bool arrived: false
+        property bool pressedUnderList: false
+        /// Whether the screen was still standing after that press — read on the tick after it, since the way out
+        /// this press must not take closes the screen where it stands (`SettingsDialog.escapeOut`).
+        property bool stood: false
+        property bool pressedShut: false
+        onTriggered: {
+            if (!toolEnterTimer.arrived) {
+                if (!settingsDialog.opened) {
+                    settingsDialog.openAt("git")
+                    return
+                }
+                // **A card with a ring in it is a list standing in front of the box**, and standing is the whole of
+                // what decides whose key an Enter is — so this run takes the one the box has while the stock-take
+                // is still out, and owes that read nothing (`AppCombo.hasList`: a field with a read out has
+                // something to open). Waiting for the rows instead ties the run to
+                // `git mergetool --tool-help`, which is eight seconds on a quiet machine and was killed at its
+                // timeout on a loaded one — leaving a box with nothing to drop and a run with nothing to press
+                // (observed).
+                if (acts.gitPane.toolsSettled && acts.gitPane.toolChoices.length === 0)
+                    return
+                // Asked again while it is shut, for the turn of the loop the field puts between the press and the
+                // list (`AppCombo.pressField`).
+                if (!acts.gitPane.toolListOpen) {
+                    acts.gitPane.pressToolField()
+                    return
+                }
+                toolEnterTimer.arrived = true
+            }
+            if (!toolEnterTimer.pressedUnderList) {
+                acts.gitPane.autoEnterTool()
+                toolEnterTimer.pressedUnderList = true
+                return
+            }
+            if (!toolEnterTimer.pressedShut) {
+                toolEnterTimer.stood = settingsDialog.opened
+                acts.gitPane.autoShutToolList()
+                acts.gitPane.autoEnterTool()
+                toolEnterTimer.pressedShut = true
+                return
+            }
+            if (settingsDialog.opened)
+                return
+            toolEnterTimer.stop()
+            Harness.report("merge_editor_enter stood=" + toolEnterTimer.stood + " left=true")
+            window.finishAutoAct()
+        }
+    }
+
     // PGG_AUTO_ACT=avatar-enter: **Enter in the candidate box finds the file**, which is the one thing left to do
     // with the name it holds (デザイン規約 §アバターを与える). The picker is the platform's window and is in
     // neither PNG, so the report line is the whole of it — the same reading `open-picker` takes.
