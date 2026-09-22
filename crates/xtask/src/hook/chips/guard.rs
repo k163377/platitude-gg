@@ -31,7 +31,7 @@ pub(crate) fn pre_spawn(input: &str) -> Result<(), String> {
     let asked = section(input, "\"tool_input\"");
     let title = string_field(asked, "title").unwrap_or_default();
     let Some((priority, body, optional)) = numbered(&title) else {
-        deny(UNNUMBERED);
+        deny(&format!("{UNNUMBERED} {}", standing(&load(input))));
         return Ok(());
     };
     if misspelt_mark(&body) {
@@ -367,6 +367,16 @@ fn id_in(input: &str) -> Option<String> {
     (!id.is_empty()).then_some(id)
 }
 
+/// Where the live set stands, for the refusal that asks for a number:
+/// a session that cannot see the list picks one that is taken and
+/// spends a second call on the same chip.
+fn standing(live: &[Chip]) -> String {
+    if live.is_empty() {
+        return "Nothing is live, so this one is 1.".to_string();
+    }
+    format!("Live now: {}.", roster(live))
+}
+
 /// The live set as the user reads it.
 fn roster(live: &[Chip]) -> String {
     let mut sorted: Vec<&Chip> = live.iter().collect();
@@ -413,7 +423,8 @@ const UNMARKED: &str = "asks a question: the user answers it and may answer no, 
 #[cfg(test)]
 mod tests {
     use super::{
-        Chip, asks, covers, id_in, misspelt_mark, numbered, problems, resolution, shared, targets,
+        Chip, asks, covers, id_in, misspelt_mark, numbered, problems, resolution, shared, standing,
+        targets,
     };
     use std::collections::BTreeSet;
 
@@ -440,6 +451,18 @@ mod tests {
         assert_eq!(numbered("Fix the badge"), None);
         assert_eq!(numbered("0. nothing outranks 1"), None);
         assert_eq!(numbered("3. "), None);
+    }
+
+    /// The refusal that asks for a number says which ones are taken, so
+    /// the chip is stacked again once rather than twice.
+    #[test]
+    fn the_refusal_that_asks_for_a_number_names_the_live_ones() {
+        assert_eq!(standing(&[]), "Nothing is live, so this one is 1.");
+        let live = [chip(2, "Fix the badge", &[]), chip(1, "Drop the flag", &[])];
+        assert_eq!(
+            standing(&live),
+            "Live now: '1. Drop the flag', '2. Fix the badge'."
+        );
     }
 
     #[test]
