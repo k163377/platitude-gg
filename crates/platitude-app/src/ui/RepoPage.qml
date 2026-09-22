@@ -2991,6 +2991,11 @@ FocusScope {
                         graphPane.setCurrentRow(row)
                         if (resetHappened)
                             graphPane.anchorSoon()
+                    } else if (page.pendingWipSelect) {
+                        // **A landing the reader asked for outranks the two below.** A stopped operation owes them
+                        // the working tree's row (規約 §進行中の操作から出る) and this pass may simply not have that
+                        // row yet; landing anywhere else now would take the owed one away, because every landing
+                        // clears it (`activateRow`).
                     } else if (page.rewordRow >= 0) {
                         page.followRewrittenCommit()
                     } else if (page.selectedRow >= 0) {
