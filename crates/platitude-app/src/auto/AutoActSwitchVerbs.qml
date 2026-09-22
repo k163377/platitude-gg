@@ -77,15 +77,24 @@ Item {
             switchLandsTimer.stashes = landing.length > 1 ? Number(landing[1]) : -1
             page.switchToRef("branch", landing[0])
             switchLandsTimer.start()
+        } else if (act === "switch-held") {
+            // **The press that is not a move.** A branch another working copy holds is somewhere else, and the way
+            // to it is that copy — so this press stands the tab there and raises nothing
+            // (offers::SwitchAction::OpenHolder). The argument is the branch; the copy is read **before** the press,
+            // because after it this page is reading that copy and would answer the question with itself.
+            //
+            // Entered by the ref row's own road (`switchToRef`), the same one the two shapes above take: the whole
+            // claim is that this road no longer ends in a bar.
+            switchHeldTimer.wanted = sidebarPane.worktreesModel.worktreeHolding(arg)
+            page.switchToRef("branch", arg)
+            switchHeldTimer.start()
         } else if (act === "switch-stopped" || act === "switch-stopped-go"
-                   || act === "switch-conflicted" || act === "switch-conflicted-go"
-                   || act === "switch-held") {
+                   || act === "switch-conflicted" || act === "switch-conflicted-go") {
             // The question a move raises when something is in its way, and the gesture that answers it. **One road for
-            // all three shapes** — an operation standing, an unmerged index with none, and a branch another working
-            // copy has out — because the press is the same press; only the bar differs, and the verbs are separate so
-            // each shape can be claimed on its own. Entered by the ref row's own road (`switchToRef`), so the run
-            // proves the gate sits where a hand arrives. The argument is `<branch>[:<stashes>]`, the count meaning
-            // what it does for `switch-lands`.
+            // both shapes** — an operation standing and an unmerged index with none — because the press is the same
+            // press; only the bar differs, and the verbs are separate so each shape can be claimed on its own.
+            // Entered by the ref row's own road (`switchToRef`), so the run proves the gate sits where a hand
+            // arrives. The argument is `<branch>[:<stashes>]`, the count meaning what it does for `switch-lands`.
             const leave = arg.split(":")
             switchStoppedTimer.go = act.endsWith("-go")
             switchStoppedLandedTimer.stashes = leave.length > 1 ? Number(leave[1]) : -1
@@ -359,6 +368,29 @@ Item {
                               + " writes=" + (repoTab.writeSeq - switchTwiceTimer.writesBefore)
                               + " branch=" + workTree.branch
                               + " log=" + page.commandsOpen)
+            driver.complete()
+        }
+    }
+    // Where the held branch's press lands: this tab, standing in the copy that has it out. **The page stays** —
+    // that is what the landing is (`Hub::restand_tab`) — so it is this very driver that reads the answer.
+    //
+    // **Either end ends the run**: a build that raised a bar instead would leave the tab where it was, and a run
+    // waiting only for the copy would sit there until the ceiling and say nothing about why. So the bar is watched
+    // too, and `bar=` is the half of the report that a return to the old road would fail on.
+    SampleTimer {
+        id: switchHeldTimer
+        property string wanted: ""
+        onTriggered: {
+            const stood = switchHeldTimer.wanted !== ""
+                && repoTab.repoPath.toLowerCase() === switchHeldTimer.wanted.toLowerCase()
+            const barUp = graphPane.askCard.settled
+            if (!barUp && !(stood && PageSettled.settled(page)))
+                return
+            switchHeldTimer.stop()
+            Harness.report("switch_held stood=" + stood
+                              + " bar=" + barUp
+                              + " wanted=" + switchHeldTimer.wanted
+                              + " where=" + repoTab.repoPath)
             driver.complete()
         }
     }

@@ -154,14 +154,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "switch_stopped code=stash accept= hold=false bang=false op= branch=main log=false",
     },
-    // And the one nothing here can clear: the pill goes to the copy
-    // that has the branch, which is what the `!` after the word
-    // says. No chip — git has no one command
-    // for opening a working copy.
+    // And the one nothing here can clear, which is why it is not a
+    // question at all: the press stands the tab in the copy that has
+    // the branch. `bar=false` is the half a return to the old road
+    // would fail on — a run that only waited for the copy would sit
+    // out its whole ceiling saying nothing about why.
     Verb {
         name: "switch-held",
         when: &[],
-        plain: "switch_stopped code= accept=Open hold=false bang=true op= branch=main log=false",
+        plain: "switch_held stood=true bar=false",
     },
     // The mark ahead of the row, which says the press raises a
     // question. **Read from the report**: it is 16px in a full

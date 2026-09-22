@@ -693,29 +693,15 @@ FocusScope {
             page.switchToRef(chip.kind, chip.name)
     }
     // A branch another working copy holds is the one refusal no stash gets past and no operation put down can clear
-    // (offers::SwitchAction) — the branch is simply somewhere else, and the way to it is that copy. So the press
-    // raises a bar like every other refusal does, and the pill goes there instead: the same road the WORKTREES row
-    // takes (`openRepositoryPathRequested`). **The `!` after the word is what says the pill leads somewhere else**
-    // (デザイン規約 §進行中の操作から出る, by design).
-    function askOpenHolder(local) {
+    // (offers::SwitchAction) — the branch is simply somewhere else, and the way to it is that copy. **So the press
+    // goes there**: the tab stands in that copy, down the same road the WORKTREES row takes
+    // (`openRepositoryPathRequested`). Nothing is asked in front of it — the press writes nothing to the repository
+    // and is one press back — and the rows that carry words name the copy before they are pressed
+    // (`RefRowMenu` の `Open`, デザイン規約 §進行中の操作から出る).
+    function openHolder(local) {
         const held = worktreesModel.worktreeHolding(local)
-        if (held === "")
-            return
-        const leaf = GitFacts.pathLeaf(held)
-        page.startRowAsk(
-            branchesModel.oidOfName(local),
-            //: %1 is the folder of the working copy that has the branch checked out.
-            qsTr("Open %1 instead?").arg(leaf),
-            //: %1 is a branch name.
-            qsTr("%1 is checked out there, so nothing here can move onto it.").arg(local),
-            false,
-            qsTr("Open"),
-            function () { page.openRepositoryPathRequested(held) },
-            false,
-            "",
-            null,
-            "")
-        graphPane.askAlert = true
+        if (held !== "")
+            page.openRepositoryPathRequested(held)
     }
     /// Answers whether the press did anything — a move sent, or a question raised in front of one. `false` is a press
     /// this road turned away, which is what the headless double press reads (動詞 `switch-remote-twice`): the second
@@ -739,12 +725,13 @@ FocusScope {
         const action = GitFacts.switchAction(kind, local, workTree.branch,
                                              worktreesModel.worktreeHolding(local),
                                              branchesModel.oidOfName(local))
-        // Before the leave question: the holder refusal is the one no
+        // Before the leave question: the holder road is the one no
         // operation put down can clear (offers::SwitchAction), so asking
         // to undo a rebase first would spend the undo on a move that was
-        // never possible.
+        // never possible — and this road leaves the operation exactly
+        // where it is, in the copy it is standing in.
         if (action === "holder") {
-            page.askOpenHolder(local)
+            page.openHolder(local)
             return true
         }
         // Ahead of the branches below: the one that lands on an existing local branch asks git what the move would
