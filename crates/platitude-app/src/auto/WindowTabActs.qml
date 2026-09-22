@@ -478,6 +478,153 @@ Item {
         }
     }
 
+    // The path the hover puts out over a tab standing in a linked copy: **that copy's**, not the repository's
+    // (デザイン規約 §hover のツールチップ). The tab's own name says which repository this is,
+    // so the only thing left for a path to say is which of its copies — and this is the one reading the strip's
+    // picture cannot hold, since the tip comes out on the overlay.
+    SampleTimer {
+        id: worktreeTipTimer
+        running: Harness.autoAct === "worktree-tip"
+        /// 0 = stand this tab in a linked copy, 1 = put the hand on it, 2 = read what came out.
+        property int step: 0
+        property string wanted: ""
+        onTriggered: {
+            const page = window.curPage
+            if (page === null || page.pageTab.state !== "open" || page.pageGraph.finishCount === 0)
+                return
+            if (worktreeTipTimer.step === 0) {
+                const trees = page.pageSidebar.worktreesModel
+                const row = Harness.autoActArg === "" ? 1 : Number(Harness.autoActArg)
+                if (trees.shown() <= row)
+                    return
+                const full = trees.fullAt(row)
+                if (full === "" || acts.standsIn(page, full))
+                    return
+                worktreeTipTimer.wanted = full
+                worktreeTipTimer.step = 1
+                page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfCopy(full))
+                return
+            }
+            if (worktreeTipTimer.step === 1) {
+                // The tab as well as the page: a strip is a view, and the item for a row the model has only just
+                // gained arrives with the next layout — a hand put on nothing is a wait no tip can end.
+                if (!acts.standsIn(page, worktreeTipTimer.wanted) || tabProbe.tabItemCount() === 0)
+                    return
+                worktreeTipTimer.step = 2
+                tabProbe.pointAtTab(0)
+                return
+            }
+            const tip = mainUi.ToolTip.toolTip
+            // The tip is on a delay, so this waits it out.
+            if (!tip.visible)
+                return
+            stop()
+            // `copy=` is the whole claim: the words under the hand are the copy this tab is standing in, and not the
+            // repository it is named after. `native=` is the spelling, read the way `tab-name` reads it.
+            Harness.report("worktree_tip tip=" + tip.visible
+                              + " copy=" + (tip.text.toLowerCase() === worktreeTipTimer.wanted.toLowerCase())
+                              + " native=" + tip.text.includes("\\")
+                              + " said=" + tip.text)
+            window.finishAutoAct()
+        }
+    }
+
+    // The run naming the copy a tab is standing in stays with that tab, and coming back stands the reader in that
+    // copy again (デザイン規約 §タブの所作). **Two landings of one walk, chosen by the
+    // argument**: `away` is the strip with that run drawn on a tab which is not in front — and so wearing none of the
+    // green — and `back` (the default) is the same tab in front once more, standing where it was left.
+    //
+    // **What answers at `away` is the strip, not a page**: the tab left behind has no page at all
+    // (`Hub::release_tab`), so what says its run is still drawn is the row itself (`TabProbe.tabTrees`).
+    //
+    // Two repositories, the linked copies in front: `--preset basic --preset worktrees`.
+    SampleTimer {
+        id: worktreeKeptTimer
+        running: Harness.autoAct === "worktree-kept"
+        /// 0 = stand this tab in a linked copy, 1 = wait for it, 2 = leave it, 3 = come back to it.
+        property int step: 0
+        /// Where in the strip the tab that was stood sits, and the copy it was stood in. **The seat**, which is what
+        /// the reader comes back to: the strip is moved by index, and every landing of this walk is a move.
+        property int seat: -1
+        property string wanted: ""
+        /// `[<row>][:away]` — which WORKTREES row to stand in (the first linked copy by default), and whether to stop
+        /// at the landing away from it. A long-named copy (`8`) is how the run is asked for at a width that makes the
+        /// strip cut it: two tabs share the run, so what one of them may draw is half a band.
+        readonly property int row: {
+            const named = Number((Harness.autoActArg || "").split(":")[0])
+            return Number.isInteger(named) && named > 0 ? named : 1
+        }
+        readonly property bool comesBack: (Harness.autoActArg || "").indexOf("away") < 0
+        function whole(page) {
+            return page !== null && page.pageTab.state === "open"
+                   && page.pageWt.loaded && page.pageGraph.finishCount > 0
+        }
+        /// What the strip came out saying, at whichever landing the run asked for.
+        function tell(page) {
+            tabProbe.settleStrip()
+            const trees = tabProbe.tabTrees().split(",")
+            Harness.report("worktree_kept tabs=" + pageRepeater.count
+                              + " kept=" + (trees[worktreeKeptTimer.seat] !== undefined
+                                            && trees[worktreeKeptTimer.seat] !== "")
+                              + " front=" + (tabsModel.currentIndex === worktreeKeptTimer.seat)
+                              + " stood=" + acts.standsIn(page, worktreeKeptTimer.wanted)
+                              // How wide the run came out on each tab: `kept=` is read off the model, which goes on
+                              // naming the copy after the strip has given the run up for want of room, and 0 here is
+                              // the strip having done so (デザイン規約 §ウィンドウの縁 の譲る順).
+                              + " wide=" + tabProbe.tabTreeWidths()
+                              + " says=" + tabProbe.tabTrees()
+                              + " wanted=" + worktreeKeptTimer.wanted)
+            window.finishAutoAct()
+        }
+        onTriggered: {
+            const page = window.curPage
+            if (!worktreeKeptTimer.whole(page))
+                return
+            if (worktreeKeptTimer.step === 0) {
+                // Two tabs are what this verb is about, and a precondition of this branch alone: read again
+                // afterwards it would be read against a strip this verb has already moved.
+                if (pageRepeater.count < 2)
+                    return
+                const trees = page.pageSidebar.worktreesModel
+                const row = worktreeKeptTimer.row
+                if (trees.shown() <= row)
+                    return
+                const full = trees.fullAt(row)
+                if (full === "" || acts.standsIn(page, full))
+                    return
+                worktreeKeptTimer.wanted = full
+                worktreeKeptTimer.seat = tabsModel.currentIndex
+                worktreeKeptTimer.step = 1
+                page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfCopy(full))
+                return
+            }
+            if (worktreeKeptTimer.step === 1) {
+                if (!acts.standsIn(page, worktreeKeptTimer.wanted))
+                    return
+                worktreeKeptTimer.step = 2
+                tabsModel.setCurrentIndex(worktreeKeptTimer.seat === 0 ? 1 : 0)
+                return
+            }
+            if (worktreeKeptTimer.step === 2) {
+                if (tabsModel.currentIndex === worktreeKeptTimer.seat)
+                    return
+                if (!worktreeKeptTimer.comesBack) {
+                    stop()
+                    worktreeKeptTimer.tell(page)
+                    return
+                }
+                worktreeKeptTimer.step = 3
+                tabsModel.setCurrentIndex(worktreeKeptTimer.seat)
+                return
+            }
+            if (tabsModel.currentIndex !== worktreeKeptTimer.seat
+                    || !acts.standsIn(page, worktreeKeptTimer.wanted))
+                return
+            stop()
+            worktreeKeptTimer.tell(page)
+        }
+    }
+
     // Reopening an existing path selects the tab it already has.
     SampleTimer {
         id: openAgainTimer

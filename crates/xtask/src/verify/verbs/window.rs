@@ -130,6 +130,32 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "copy_draft empty=true back=true wip=true kept=true",
     },
+    // And the path that comes out under the hand on such a tab.
+    // `copy=` is the whole of it: the words are the copy the tab is
+    // standing in, not the repository it is named after, and the two
+    // differ only on a tab that has been stood somewhere. `tip=` is the
+    // hover itself, which the strip's own picture cannot hold — a run
+    // whose tip never opened photographs an ordinary band.
+    Verb {
+        name: "worktree-tip",
+        when: &[],
+        plain: "worktree_tip tip=true copy=true native=false",
+    },
+    // The same landing, left and come back to. `kept=` is the run
+    // naming that copy still drawn on the tab — read off the strip,
+    // because the tab that was left has no page to ask. `front=` is
+    // which of the two landings the picture is of, and it is the whole
+    // difference between them: a strip of two tabs frames the same
+    // either way. `stood=` is the copy the reader came back to, which
+    // only the returning landing can answer.
+    Verb {
+        name: "worktree-kept",
+        when: &[(
+            Arg::Has("away"),
+            "worktree_kept tabs=2 kept=true front=false",
+        )],
+        plain: "worktree_kept tabs=2 kept=true front=true stood=true",
+    },
     Verb {
         name: "tab-carry",
         when: &[],
