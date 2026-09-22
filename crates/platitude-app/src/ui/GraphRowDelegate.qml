@@ -69,9 +69,10 @@ Item {
         view.model.carriedRevision
         return view.model.carriedName(rowItem.index)
     }
-    // A row about a copy this window is not open on. **Read-only**: it opens no pane, takes no selection, and offers
-    // no gesture — the pane that stages and commits is opened by a WIP row's selection, so a row that cannot be
-    // selected never puts it in front of a tree it does not belong to (P3-確認事項 §別 worktree の未コミット行).
+    // A row about a copy this window is not open on. **It selects like any other row, and what it opens is that
+    // copy, read-only** (`leftClick`): the pane stands on that copy's own status and every write control is down,
+    // because the only tree this window can write is its own (`RepoPage.wipWritable`). The door into that copy's
+    // writes is its own tab, which the row's double-click opens (P3-確認事項 §別 worktree の未コミット行).
     readonly property bool carried: rowItem.carriedName !== ""
     // Its six tallies (`GraphModel::carried_tally` — `{added, modified, deleted, renamed, copied, conflicted}`), and
     // nothing on every other row.
