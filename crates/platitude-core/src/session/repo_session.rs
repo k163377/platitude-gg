@@ -53,6 +53,9 @@ pub struct RepoSession {
     /// session was opened ([`PassHooks`]) — `None` in the application as
     /// shipped, where no pass asks anything and nothing is held for it.
     pub(super) pass_hooks: Option<Arc<dyn PassHooks>>,
+    /// What this session's opening does about a graph already on screen
+    /// ([`FirstPass`]) — read once, by the opening itself.
+    pub(super) first_pass: FirstPass,
     /// Whether the graph on screen has been left behind the repository:
     /// a rebuild that would have replaced it did not land, so every row
     /// standing there is real and none of them is current.

@@ -4,6 +4,28 @@
 use super::*;
 use crate::repo;
 
+/// What the opening's first graph pass does about whatever is already
+/// drawn.
+///
+/// Settled when the session is created, for the reason [`Recording`] is:
+/// the opening spawns that pass itself, so a caller flipping this
+/// afterwards would be racing it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FirstPass {
+    /// Nothing is on screen, so the walk is streamed in chunks and the
+    /// first rows are drawn as they arrive — the shortest way to a graph
+    /// somebody can read (CLAUDE.md §性能予算).
+    #[default]
+    Streamed,
+    /// The consumer is already showing this repository's graph, read
+    /// from another working copy of it (`Hub::restand_tab`). Linked
+    /// copies share refs and objects, so what is drawn is this walk's
+    /// answer but for where HEAD stands and what is uncommitted: the
+    /// pass is built off-screen and swapped in whole, and the reader
+    /// keeps a graph — with their place in it — throughout.
+    Swapped,
+}
+
 impl RepoSession {
     /// Creates the session and starts opening `path` in the background.
     /// On success everything loads: log stream, refs, status, stashes.
@@ -32,6 +54,28 @@ impl RepoSession {
         )
     }
 
+    /// [`RepoSession::open`], for a consumer already showing this
+    /// repository's graph read from another of its working copies —
+    /// the door a tab changes the copy it stands in through
+    /// ([`FirstPass::Swapped`]).
+    pub fn open_standing_in(
+        executor: GitExecutor,
+        runtime: tokio::runtime::Handle,
+        path: PathBuf,
+        sink: Arc<dyn SessionSink>,
+        pass_hooks: Option<Arc<dyn PassHooks>>,
+    ) -> Arc<Self> {
+        Self::open_as(
+            executor,
+            runtime,
+            path,
+            sink,
+            pass_hooks,
+            Recording::UserOnly,
+            FirstPass::Swapped,
+        )
+    }
+
     /// [`RepoSession::open`], with what the command log keeps decided
     /// before the first git command is spawned — which is the only way
     /// to be sure of how much of an opening it holds (see
@@ -43,6 +87,29 @@ impl RepoSession {
         sink: Arc<dyn SessionSink>,
         pass_hooks: Option<Arc<dyn PassHooks>>,
         recording: Recording,
+    ) -> Arc<Self> {
+        Self::open_as(
+            executor,
+            runtime,
+            path,
+            sink,
+            pass_hooks,
+            recording,
+            FirstPass::Streamed,
+        )
+    }
+
+    /// The constructor the doors above name their difference by. Both
+    /// of the things decided here are decided before the first git
+    /// command is spawned, and neither can be moved afterwards.
+    fn open_as(
+        executor: GitExecutor,
+        runtime: tokio::runtime::Handle,
+        path: PathBuf,
+        sink: Arc<dyn SessionSink>,
+        pass_hooks: Option<Arc<dyn PassHooks>>,
+        recording: Recording,
+        first_pass: FirstPass,
     ) -> Arc<Self> {
         let (write_tx, write_rx) = tokio::sync::mpsc::unbounded_channel();
         let commands = Arc::new(CommandFeed::new(Arc::clone(&sink), recording));
@@ -73,6 +140,7 @@ impl RepoSession {
             write_running: Mutex::new(None),
             graph_passes: Arc::default(),
             pass_hooks,
+            first_pass,
             graph_stale: std::sync::atomic::AtomicBool::new(false),
             standing: Standing::default(),
             merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),
@@ -162,7 +230,13 @@ async fn settle(s: Arc<RepoSession>, path: PathBuf) {
             // commit into a wall of git text, and the UI can ask for one
             // instead.
             s.refresh_author();
-            s.restart_log();
+            // The one place the two openings differ: a graph nobody is
+            // showing is streamed, and one that is already drawn is
+            // rebuilt behind it and swapped in whole ([`FirstPass`]).
+            match s.first_pass {
+                FirstPass::Streamed => s.restart_log(),
+                FirstPass::Swapped => s.refresh_log(),
+            }
             s.refresh_quick();
             // A fetch reads what the remotes carry under `refs/tags/` on
             // its way out, so only an opening without one has anything

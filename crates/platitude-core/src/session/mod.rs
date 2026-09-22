@@ -122,6 +122,7 @@ pub use graph_refresh::{
 use latest::Latest;
 pub(crate) use model::LabelIndex;
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel};
+pub use open::FirstPass;
 use pass_watch::PassWatch;
 pub use pass_watch::{PassHooks, PassStep};
 use print::RowPrint;
