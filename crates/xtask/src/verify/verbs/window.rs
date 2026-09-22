@@ -505,9 +505,17 @@ pub(super) const TABLE: &[Verb] = &[
     // pictures. The line is the whole of the evidence, and the folder
     // it names is the verb's own subject: the picker comes up beside
     // the repository that is already open (rules-refs/app-ui.md).
+    //
+    // `beside_copy=` is what makes the folder readable without knowing
+    // the machine's paths: whether the picker came up in the folder the
+    // **copy** sits in. The plain run stands in the repository's own
+    // copy, where the two folders are one, and `copy` stands in a linked
+    // one kept below the root (`Route::NestedCopy`) — there the picker
+    // leaves the copy's folder, which is the whole of the difference
+    // between opening beside the repository and opening beside the copy.
     Verb {
         name: "open-picker",
-        when: &[],
-        plain: "picker folder=",
+        when: &[(Arg::Is("copy"), "picker beside_copy=false")],
+        plain: "picker beside_copy=true",
     },
 ];

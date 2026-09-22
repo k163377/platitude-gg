@@ -160,6 +160,24 @@ fn preset_repos(presets: &[String]) -> Result<Vec<PathBuf>, String> {
     Ok(made)
 }
 
+/// The linked working copy the `nested-copy` preset keeps below its
+/// root, which is what the run opens — the repository's own copy is
+/// what every other fixture hands over, and a tab standing in that one
+/// has no second folder to tell apart.
+fn nested_copy_repo() -> Result<Vec<PathBuf>, String> {
+    let work = crate::demo::create("nested-copy", None)?;
+    let root = work
+        .parent()
+        .ok_or_else(|| format!("no root above {}", work.display()))?;
+    let copy = root.join(crate::demo::NESTED_COPY);
+    println!(
+        "demo repo (nested-copy): {} in {}",
+        copy.display(),
+        work.display()
+    );
+    Ok(vec![copy])
+}
+
 /// The strip the `tab-name` verb is run against: repositories that share
 /// a folder name, and one that shares nothing with anybody.
 ///
@@ -410,6 +428,7 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
             Route::Strip(Some(count)) => tab_width_repos(count)?,
             Route::Colliding => tab_name_repos()?,
             Route::BandStrip(count) => band_state_repos(count, &opts.preset)?,
+            Route::NestedCopy => nested_copy_repo()?,
             Route::Presets => preset_repos(&opts.preset)?,
         }
     };
@@ -436,6 +455,12 @@ enum Route {
     Colliding,
     /// A strip with the run's own preset on the tab in front.
     BandStrip(usize),
+    /// The one fixture a run opens a **linked** working copy of: the
+    /// `nested-copy` preset's copy, which is the only one in these
+    /// fixtures that does not sit beside its repository. **The
+    /// `--preset` flag is not read**: what the verb is about is the
+    /// difference between the two folders, so the shape is the fixture.
+    NestedCopy,
     /// One fresh demo repository per preset, [`DEFAULT_PRESET`] where the
     /// run names none.
     Presets,
@@ -443,6 +468,11 @@ enum Route {
 
 fn route_of(verb: &str, arg: &str) -> Result<Route, String> {
     Ok(match verb {
+        // The picker's second subject, and the only run that opens a
+        // linked working copy: the folder the picker comes up in is the
+        // repository's, which is a claim no fixture whose copies sit
+        // beside the repository can be judged on (`Route::NestedCopy`).
+        "open-picker" if arg == "copy" => Route::NestedCopy,
         "tab-widths" => Route::Strip(None),
         // Same ladder, eight of them; the argument here names the tab the
         // hand is on, so the count is written out rather than taken from

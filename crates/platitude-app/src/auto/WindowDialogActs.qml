@@ -38,9 +38,36 @@ Item {
             if (!folderDialog.visible)
                 return
             stop()
-            Harness.report("picker folder=" + folderDialog.currentFolder)
+            Harness.report(acts.pickerLine())
             window.finishAutoAct()
         }
+    }
+    /// Where the picker was pointed, and the one reading of it a run can be judged on.
+    ///
+    /// **The folder itself names this machine**, so the line carries `beside_copy=` beside it: whether the picker
+    /// came up in the folder the **copy** the tab is standing in sits in. A tab standing in the repository's own
+    /// copy answers `true` — the two folders are one there — and a tab standing in a linked copy answers `false`,
+    /// which is the picker following the repository and not the copy (`RepoTab.picker_folder_url`). The verb's
+    /// argument is which of the two the fixture stands in (`open-picker copy`).
+    ///
+    /// Both sides are paths on this machine, so the URL is put back into one by the same door the screens use
+    /// (`GitFacts.pickedPath`) rather than compared as text — a folder whose name has a space reaches here
+    /// percent-encoded. The copy is the page's own `repoPath`, which is the folder git runs in, and both are
+    /// spelled with `/` (規約 §パスの区切り). A window with no page has no copy to be beside, which is the `false`
+    /// the road below it answers with (the picker a refused folder reopens).
+    function pickerLine() {
+        return "picker beside_copy=" + acts.pickerIsBesideCopy()
+                + " folder=" + folderDialog.currentFolder
+    }
+    function pickerIsBesideCopy() {
+        const page = window.curPage
+        if (page === null)
+            return false
+        const copy = page.pageTab.repoPath
+        const cut = copy.lastIndexOf("/")
+        if (cut <= 0)
+            return false
+        return GitFacts.pickedPath(folderDialog.currentFolder.toString()) === copy.substring(0, cut)
     }
     // Every *other* verb that happens to put the picker up says where it was pointed, which nothing on this side of
     // the platform's own box says afterwards. The verb above reports where its own wait ended.
@@ -48,7 +75,7 @@ Item {
         target: acts.window
         enabled: Harness.autoAct !== "open-picker"
         function onPickerOpened() {
-            Harness.report("picker folder=" + acts.folderDialog.currentFolder)
+            Harness.report(acts.pickerLine())
         }
     }
 
