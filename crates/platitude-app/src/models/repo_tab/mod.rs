@@ -46,6 +46,7 @@ mod ops_delete;
 mod ops_remote;
 mod ops_stage;
 mod qobject;
+mod restand;
 mod state;
 mod write_watch;
 
@@ -83,6 +84,18 @@ pub struct RepoTab {
     /// but requests can queue up).
     busy_count: i32,
     busy_op: String,
+    /// The tab is standing in another working copy of the repository it
+    /// is showing, and the session reading it has not said where it is
+    /// yet (`Hub::restand_tab`).
+    ///
+    /// **Counted in `busy_count` while it lasts**, which is what makes
+    /// everything else wait: a write asked in that gap reaches a
+    /// session with no repository open yet and is refused with words of
+    /// its own (`RepoSession::run_write`), and every door this page
+    /// offers is already gated on a command being in flight. Held
+    /// beside the count so that putting it down is this one thing
+    /// ending, not a write's answer.
+    standing: bool,
     /// Whether the write in flight is one that replays history a commit
     /// at a time — the kind's own answer, carried across the bridge
     /// (`TabMsg::WriteState::replays`), so the page holds its write

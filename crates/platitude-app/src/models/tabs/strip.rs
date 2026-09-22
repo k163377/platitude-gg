@@ -161,12 +161,13 @@ impl TabsModel {
     /// it is already showing, and moves to it
     /// (デザイン規約 §タブの所作「同じリポジトリのタブは 1 枚」).
     ///
-    /// **The row is taken out and put back, not written over.** A page
-    /// is built per tab id and holds everything it read off it
-    /// (`RepoPageStack`), so a row that kept its id would leave the page
-    /// of the copy being left standing over the copy being arrived at.
-    /// Taking the row out is what takes that page down, the same way
-    /// closing a tab does.
+    /// **The row is written over, id and all.** A page is built per tab
+    /// id (`RepoPageStack`), and keeping the id is what keeps the page:
+    /// the reader is looking at this repository's graph, and the copy
+    /// they are moving to shares every commit and every ref of it — so
+    /// the graph stands while the session under it is swapped
+    /// (`Hub::restand_tab`), and what the copy being left owned the page
+    /// drops between the two signals below.
     ///
     /// The name does not move: a tab is named after its repository, and
     /// that is the one thing this does not change. Where the reader is
@@ -175,29 +176,40 @@ impl TabsModel {
         let Some(item) = self.items.get(at) else {
             return;
         };
-        let (leaving, title, repo) = (item.tab_id, item.title.clone(), item.repo_path.clone());
-        // Before the hub is told, so the page being taken down is still
-        // whole while it hands over its layout and its unsent words
-        // (`leaving_tab`) — the same order a close keeps.
-        self.leave_front();
-        let Some(Some(tab_id)) =
-            Hub::with(|hub| hub.switch_tab(leaving, std::path::PathBuf::from(&copy)))
-        else {
+        let standing = item.tab_id;
+        // Whether the tab being stood elsewhere is the one with a page
+        // on it. Every road a reader takes is (the pill and the
+        // worktree row are on the page in front); a path handed to the
+        // window from outside can name a copy of a repository some
+        // other tab is holding, and that tab has no page and no session
+        // — it is simply pointed elsewhere and opened when it is
+        // reached.
+        let front = usize::try_from(self.current_index).ok() == Some(at);
+        if front {
+            // Before the hub is pointed at the next copy: the unsent
+            // words this hands over are filed under the copy they were
+            // written in (`Hub::hold_draft`).
+            self.leaving_copy(at as i32);
+        } else {
+            self.leave_front();
+        }
+        if Hub::with(|hub| hub.restand_tab(standing, std::path::PathBuf::from(&copy))) != Some(true)
+        {
             return;
-        };
-        self.remove(at);
-        self.insert(
-            at,
-            TabItem {
-                tab_id,
-                title,
-                repo_path: repo,
-                copy_path: copy,
-            },
-        );
+        }
+        if let Some(item) = self.items.get_mut(at) {
+            item.copy_path = copy;
+        }
+        self.notify_runs([(at, at)]);
         self.current_index = at as i32;
         self.report();
         self.current_index_changed();
+        if front {
+            // After the hub, so the page puts back the words of the
+            // copy it is now standing in and not the ones it just
+            // handed over.
+            self.stood_copy(at as i32);
+        }
         self.front_tab_asked();
     }
 

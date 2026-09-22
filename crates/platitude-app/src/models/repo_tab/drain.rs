@@ -43,6 +43,7 @@ impl RepoTab {
                     self.title = title;
                     self.picker_folder_url = picker_folder_url(std::path::Path::new(&path));
                     self.repo_path = path;
+                    self.stood();
                 }
                 TabMsg::OpenFailed {
                     kind,
@@ -53,6 +54,10 @@ impl RepoTab {
                     self.error_kind = kind.into();
                     self.error_path = path;
                     self.error = message;
+                    // The copy would not open, which is still an answer:
+                    // the doors are let go of and the page says what
+                    // became of the folder.
+                    self.stood();
                 }
                 TabMsg::OpError { message } => {
                     self.last_error = message;

@@ -313,9 +313,19 @@ FocusScope {
     // the walk's own marks and kept beside HEAD (`WorkTreeModel.headPublished`), so nothing here asks git for it and
     // a HEAD that moved wears no answer about the commit it left.
     readonly property bool headPublished: workTree.headPublished
+    /// Whether the tab was standing in another working copy at the last drain (`RepoTab.standing`). The edge is
+    /// read here rather than in a handler of its own: every property of that model shares one notify, so the only
+    /// way to see one of them turn over is to have kept what it was (規約 §UI 自動化の因果性 —
+    /// "まだ答えが無い" と値を分ける).
+    property bool wasStanding: false
     Connections {
         target: repoTab
         function onChanged() {
+            if (page.wasStanding !== repoTab.standing) {
+                page.wasStanding = repoTab.standing
+                if (!page.wasStanding)
+                    page.standSettled()
+            }
             page.absorbHeadMessage()
             page.absorbMoveAsk()
             page.absorbWriteResult()
@@ -2190,10 +2200,10 @@ FocusScope {
     readonly property var pageGraph: graphModel
     /// The graph's rows themselves. Automation only, and for the same reason `pageWip` is exposed: a window-level
     /// verb asks one page for a row and reads the answer in the window (`carried-open` stands this tab in another
-    /// working copy, and the page it stood in is taken down on the way).
+    /// working copy, and where the strip lands is the window's to say).
     readonly property alias pageGraphPane: graphPane
-    /// The left menu, for the same one reason (`worktree-stand`): a WORKTREES row stands the tab in that copy, which
-    /// takes this page down and builds the next one, so nothing on this side is left to see it through.
+    /// The left menu, for the same one reason (`worktree-stand`): a WORKTREES row stands the tab in that copy, and
+    /// the landing is the strip's — this page stays, so the verb reads the answer off the window.
     readonly property alias pageSidebar: sidebarPane
     /// Whether the refs listing has landed — the read that also settles how many remotes this repository has, and so
     /// what the band's fetch button is allowed to be (`fetch-tip`).
@@ -2361,6 +2371,102 @@ FocusScope {
             return
         repoTab.holdDraft(wipPane.subjectText, wipPane.bodyText, page.amending)
         repoTab.release()
+    }
+
+    /// Everything this page owes on its way into another working copy of the repository it is showing
+    /// (`TabsModel::leaving_copy`), and **this page is staying**: the graph, the refs sections and the panes around
+    /// them are the repository's, and linked copies share all of it (デザイン規約 §タブの所作
+    /// 「同じリポジトリのタブは 1 枚」). What goes is what the copy being left owned.
+    ///
+    /// **Called while that copy is still the one behind the tab**, which is what puts the unsent words back where
+    /// they were written: the hub files them under the copy the tab is standing in at the time (`Hub::hold_draft`).
+    function leaveCopy() {
+        // The blank page stands in for no tab, so there is no copy to leave (`leaveFront` keeps the same guard).
+        if (page.blank)
+            return
+        repoTab.holdDraft(wipPane.subjectText, wipPane.bodyText, page.amending)
+        // …and the boxes go empty behind them: the copy arrived at has words of its own or none at all, and words
+        // left standing would be read as that copy's (`restoreDraft` puts back only what it finds).
+        page.amending = false
+        wipPane.setAmendChecked(false)
+        wipPane.clearMessage()
+        // A plan is composed against one working tree and would be replayed in it.
+        if (page.planShown)
+            planModel.cancelPlan()
+        // The pane goes back to this tab's own tree — which is about to be the copy it was reading.
+        page.dropCarried()
+        // A diff of a file in the tree being left is that tree's; one still being read was asked of the session
+        // being closed, and no answer is coming for it. A commit's, already drawn, is the repository's and stays.
+        if (page.diffShown && (page.diffKind !== "commit" || diffModel.loading))
+            page.closeDiff()
+        // A read still out was asked of the session about to be closed, so no answer is coming for it — and the
+        // details pane is the one place that would wait for it in silence. Written down here, where it can still be
+        // seen, and asked again once there is a session to ask (`standSettled`).
+        page.owedDetails = detailsModel.loading
+        // **Every answer this page was still waiting for was that session's**, and none of them is coming: a write
+        // it accepted answers to a retired sink (`Hub::let_go_of_session`). Left armed, each is a wait nothing ends
+        // — and worse than that for the ones armed by *number*, because the next session counts its writes from the
+        // start and somebody else's answer would be taken for this one's (`pendingPopId`). The landings go with
+        // them: where a write put the reader is about the tree it was made in.
+        page.pendingPopLabel = ""
+        page.pendingPopId = 0
+        page.pendingRenameRemote = ""
+        page.pendingRenameTo = ""
+        page.diffAwaits = false
+        page.moveLanding = ""
+        page.pendingHeadSelect = false
+        page.pendingHeadAsked = false
+        page.pendingHeadFromSeq = 0
+        page.pendingWipSelect = false
+        page.rewordRow = -1
+        page.planRunOut = false
+        // What the models hold of that copy, each by its own rule (see the `restand` slots): the working tree's
+        // answers go back to "not read yet", and the graph keeps its rows.
+        repoTab.restand()
+        graphModel.restand()
+        workTree.restand()
+        conflictsModel.restand()
+        worktreeModel.restand()
+        stagedModel.restand()
+        carriedModel.restand()
+        // The command log is the session's: a new one numbers its commands from the start, so rows kept here would
+        // be rewritten by answers about other commands entirely (`CommandMsg::Finished`).
+        commandsModel.clear()
+    }
+
+    /// …and the other side of it: the tab is standing in the copy that was asked for, and the session reading it is
+    /// opening (`TabsModel::stood_copy`).
+    ///
+    /// **The words only.** Everything else this page owes itself waits for the session to say where it is
+    /// (`standSettled`): a read asked before that reaches a session with no repository open yet and is answered with
+    /// nothing at all (`RepoSession::load_details`).
+    function standInCopy() {
+        if (page.blank)
+            return
+        page.restoreDraft()
+    }
+
+    /// A read the closed session was still owing this page when the tab was stood elsewhere (`leaveCopy`).
+    property bool owedDetails: false
+
+    /// The session reading the copy this tab now stands in has said where it is (`RepoTab.standing` going down), so
+    /// the reads that died with the last one can be asked again.
+    ///
+    /// **Only the ones that died.** What the right pane is showing is a commit's, and a commit is the repository's —
+    /// the same on both sides of a linked copy — so asking for it again would spend a `git show` and a gpg run on an
+    /// answer already on screen (デザイン規約 §グラフ行のダブルクリック keeps the same rule for a second click).
+    /// What has to be asked again is what was still out: the details, which this page wrote down as it left, and the
+    /// signature, which says so itself by not being the selection's.
+    function standSettled() {
+        if (page.owedDetails) {
+            page.owedDetails = false
+            if (page.chosenCount > 1)
+                detailsModel.requestSelection(page.chosenIds, page.chosenCount === 2)
+            else if (page.selectedOid !== "")
+                detailsModel.request(page.selectedOid)
+        }
+        if (page.selectedOid !== "" && repoTab.signatureOid !== page.selectedOid)
+            page.askSignature(page.selectedOid)
     }
 
     /// …and the other half: what the last page on this tab was holding, put back into the boxes.

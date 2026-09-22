@@ -17,6 +17,7 @@ impl RepoTab {
     qproperty!("tagsShown", Member = tags_shown, Notify = changed);
     qproperty!("busyCount", Member = busy_count, Notify = changed);
     qproperty!("busyOp", Member = busy_op, Notify = changed);
+    qproperty!("standing", Member = standing, Notify = changed);
     qproperty!("replaying", Member = replaying, Notify = changed);
     qproperty!("mergeTools", Member = merge_tools, Notify = changed);
     qproperty!(
@@ -505,6 +506,28 @@ impl RepoTab {
     fn release(&mut self) {
         let id = self.tab_id;
         Hub::with(|hub| hub.release_tab(id));
+    }
+
+    /// The tab is standing in another working copy of the repository it
+    /// is showing (`Hub::restand_tab`), and the page is staying.
+    ///
+    /// **What is kept is what the repository itself answered**: who the
+    /// tab is and what it is called, the identity and the signing
+    /// settings, the remotes, the merge tools. Every one of those is the
+    /// same on both sides of a linked copy, and dropping them would put
+    /// the "no identity" warning and an empty remote list on screen for
+    /// as long as it takes to read them again.
+    ///
+    /// **Everything else goes**, because it is either the copy's — where
+    /// HEAD is, what it is in the middle of — or an answer that is never
+    /// coming: a write the closed session accepted answers to a retired
+    /// sink, and a count of writes in flight left standing would hold
+    /// this page's doors shut for as long as it stood
+    /// (`Hub::let_go_of_session`).
+    #[qslot]
+    fn restand(&mut self) {
+        self.forget_the_copy();
+        self.changed();
     }
 
     /// Hands the commit editor's unsent words to the hub, which is what

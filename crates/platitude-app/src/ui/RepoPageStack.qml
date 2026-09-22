@@ -67,6 +67,19 @@ StackLayout {
             if (leaving !== null)
                 leaving.leaveFront()
         }
+        // …and the switch that keeps its page: the tab stands in another working copy of the repository it is
+        // already showing, so the page stays and drops what that copy owned between these two
+        // (`RepoPage.leaveCopy` / `standInCopy`). Its loader is not touched — the tab id does not move.
+        function onLeavingCopy(index) {
+            const leaving = stack.pageAt(index)
+            if (leaving !== null)
+                leaving.leaveCopy()
+        }
+        function onStoodCopy(index) {
+            const stood = stack.pageAt(index)
+            if (stood !== null)
+                stood.standInCopy()
+        }
     }
 
     Repeater {

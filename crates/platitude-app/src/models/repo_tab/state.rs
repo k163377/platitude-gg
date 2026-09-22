@@ -20,6 +20,7 @@ impl Default for RepoTab {
             tags_shown: true,
             busy_count: 0,
             busy_op: String::new(),
+            standing: false,
             replaying: false,
             merge_tools: Vec::new(),
             merge_tools_loading: false,
@@ -141,6 +142,21 @@ impl RepoTab {
         let asked = crate::hub::from_session(self.tab_id, f).flatten();
         self.write_watch.asked(asked.map(|id| id.as_u64()));
         asked
+    }
+
+    /// The session reading the copy this tab was stood in has answered
+    /// — where it is, or that it would not open — so the tab is no
+    /// longer standing and the count it was holding goes back
+    /// (`RepoTab::restand`).
+    ///
+    /// Guarded, because the two arms that call it are every opening's,
+    /// and an opening nobody stood for is holding no count.
+    pub(super) fn stood(&mut self) {
+        if !self.standing {
+            return;
+        }
+        self.standing = false;
+        self.busy_count = (self.busy_count - 1).max(0);
     }
 
     /// The page has put a status on screen: its counts stood beside the

@@ -19,7 +19,7 @@ use platitude_core::parse::diff::FilePatch;
 use platitude_core::preview::FilePreview;
 use platitude_core::process::{CommandEnd, GitExecutor};
 use platitude_core::session::{
-    LogRow, RefLabel, RefsSnapshot, RepoSession, SessionEvent, SessionSink,
+    FirstPass, LogRow, RefLabel, RefsSnapshot, RepoSession, SessionEvent, SessionSink,
 };
 use platitude_core::settings::{Settings, State, Store};
 use platitude_core::stash::StashEntry;
@@ -82,7 +82,8 @@ struct Tab {
     /// in** (`Tab::path` is the key): a message written for what is
     /// staged in one copy says nothing about another, and standing the
     /// tab in a sibling copy is a gesture the reader comes back from
-    /// (`Hub::switch_tab`).
+    /// (`Hub::restand_tab`, which leaves this map where it is — the tab
+    /// is the same one).
     drafts: HashMap<String, Draft>,
     /// The rows a delete has taken off the screen and the write they are
     /// waiting on (`ops::StandIn`). Held here for the reason the draft is:

@@ -62,6 +62,27 @@ impl TabsModel {
     #[qsignal]
     pub(super) fn leaving_tab(&mut self, index: i32);
 
+    /// The row at `index` is about to stand in another working copy of
+    /// the repository it is showing, and its page is staying
+    /// (`TabsModel::switch_copy`).
+    ///
+    /// Emitted *before* the hub is pointed at that copy, for the reason
+    /// [`TabsModel::leaving_tab`] is emitted before the index moves: the
+    /// words in the commit editor are filed under the copy they were
+    /// written in, and after the hub has moved they would be filed under
+    /// the copy they are not about. Everything the page has that belongs
+    /// to the copy being left goes here too — the graph and the panes
+    /// around it are the repository's and stay.
+    ///
+    /// [`TabsModel::leaving_tab`]: TabsModel::leaving_tab
+    #[qsignal]
+    pub(super) fn leaving_copy(&mut self, index: i32);
+
+    /// …and the other side of it: the tab at `index` is standing in the
+    /// copy that was asked for, and the session reading it is opening.
+    #[qsignal]
+    pub(super) fn stood_copy(&mut self, index: i32);
+
     /// Somebody asked to be shown the repository now in front, so the band
     /// travels to that tab's seat (デザイン規約 §タブの所作).
     ///

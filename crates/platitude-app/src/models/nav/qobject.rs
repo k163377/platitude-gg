@@ -150,6 +150,28 @@ impl NavSectionModel {
         self.attach_carried_feed(tab_id);
     }
 
+    /// The tab is standing in another working copy (`Hub::restand_tab`),
+    /// and this list was showing that copy's files — the three bucket
+    /// runs and the pane reading somebody else's copy.
+    ///
+    /// **Back to waiting, not to empty**: a status of no rows is a clean
+    /// tree, and this list has not been told anything about the copy it
+    /// now stands in (`Source::Waiting`).
+    ///
+    /// Not for the sections a repository owns — branches, remotes, tags,
+    /// stashes, the copies themselves. Linked copies share all of them,
+    /// so those rows are still this repository's and stay drawn while
+    /// the new session reads them again.
+    #[qslot]
+    fn restand(&mut self) {
+        self.take(Source::Waiting);
+        self.eol_marks = Arc::default();
+        self.carried_at = String::new();
+        self.carried_name = String::new();
+        self.reshape();
+        self.changed();
+    }
+
     #[qslot]
     fn drain(&mut self) {
         self.take_feeds();

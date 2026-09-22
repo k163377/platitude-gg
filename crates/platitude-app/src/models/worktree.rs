@@ -309,6 +309,24 @@ impl WorkTreeModel {
         self.progress_feed = crate::hub::attach_feed(tab_id, |f| &f.op_progress, invoker);
     }
 
+    /// The tab is standing in another working copy (`Hub::restand_tab`):
+    /// every answer here was that copy's.
+    ///
+    /// **All of it, back to before the first status** — where HEAD is,
+    /// what is uncommitted, what operation is standing: a working copy
+    /// is precisely the thing this model reports, and not one of these
+    /// crosses. `loaded` going down with them is what keeps the counts
+    /// from reading as "clean" in the moment before the new copy's
+    /// status lands (see the member).
+    ///
+    /// The feeds are kept, and so is the tab: the page is still
+    /// standing and the next session pushes to the very same ones.
+    #[qslot]
+    fn restand(&mut self) {
+        self.forget_the_copy();
+        self.changed();
+    }
+
     #[qslot]
     fn drain(&mut self) {
         let progressed = self.drain_progress();
@@ -326,6 +344,84 @@ impl WorkTreeModel {
 }
 
 impl WorkTreeModel {
+    /// Back to before the first read, for [`WorkTreeModel::restand`].
+    ///
+    /// **Field by field, and every field this model has is one of
+    /// them** — what is kept is only the tab and the two feeds, which
+    /// are not this copy's. A field added to this model belongs here;
+    /// left out, it would stand on the page describing a working copy
+    /// the reader has left.
+    ///
+    /// **Written out rather than assigned a fresh model**: the bridge
+    /// keys a QObject to the Rust object's own address and deletes it
+    /// when that value is dropped, so `*self = Self::default()` takes
+    /// the QML object with it — every binding on this model reads
+    /// `null` from there on, and the next slot call aborts the process
+    /// with "No proxy" (measured; qtbridge `QObjectHolder`:
+    /// "Do not move or replace the `Self`").
+    fn forget_the_copy(&mut self) {
+        self.loaded = false;
+        self.head_known = false;
+        self.branch = String::new();
+        self.head_oid = String::new();
+        self.detached = false;
+        self.unborn = false;
+        self.branch_oid = String::new();
+        self.head_seq = 0;
+        self.head_published = false;
+        self.head_published_oid = String::new();
+        self.head_reached_elsewhere = false;
+        self.status_seq = 0;
+        self.status_branch = String::new();
+        self.counts_settled = false;
+        self.status_upstream = String::new();
+        self.status_upstream_tracked = false;
+        self.status_ahead = 0;
+        self.status_behind = 0;
+        self.upstream = String::new();
+        self.upstream_tracked = false;
+        self.ahead = 0;
+        self.behind = 0;
+        self.pull_blocked = false;
+        self.push_remote = String::new();
+        self.op_text = String::new();
+        self.op_command = String::new();
+        self.op_also = String::new();
+        self.has_conflicts = false;
+        self.staged_count = 0;
+        self.unstaged_count = 0;
+        self.untracked_count = 0;
+        self.conflict_count = 0;
+        self.hard_reset_takes = 0;
+        self.op_step = 0;
+        self.op_steps = 0;
+        self.op_stepping = false;
+        self.op_merging = false;
+        self.op_subject = String::new();
+        self.op_body = String::new();
+        self.side_ours = String::new();
+        self.side_theirs = String::new();
+        self.merge_tool = String::new();
+        self.eol_staged_count = 0;
+        self.wip_added = 0;
+        self.wip_modified = 0;
+        self.wip_deleted = 0;
+        self.wip_renamed = 0;
+        self.wip_copied = 0;
+        self.stash_standing = String::new();
+        self.moves_blocked = false;
+        self.leave_undoes = false;
+        self.leave_code = String::new();
+        self.op_skip_free = false;
+        self.op_editing = false;
+        self.op_edit_oid = String::new();
+        self.tree_revision = 0;
+        self.wip_row_stands = false;
+        self.seen_counts = None;
+        self.counts = platitude_core::status::Counts::default();
+        self.op_state = platitude_core::opstate::OpState::default();
+    }
+
     /// Everything the feed had waiting, folded in — in the order the
     /// session said it, so a status never lands ahead of the HEAD report
     /// it was read beside. Answers whether anything arrived; the derived

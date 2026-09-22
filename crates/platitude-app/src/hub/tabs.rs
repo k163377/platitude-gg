@@ -4,6 +4,18 @@
 use super::sink::BridgeSink;
 use super::*;
 
+/// What becomes of the page reading a tab's feeds when the session
+/// behind it is let go ([`Hub::let_go_of_session`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PageAfter {
+    /// It goes with the session: the tab is off the front or closed,
+    /// and every model it held is destroyed with it (`RepoPageStack`).
+    TakenDown,
+    /// It stays and reads the next session on this tab — the tab
+    /// standing in another working copy (`Hub::restand_tab`).
+    Standing,
+}
+
 impl Hub {
     /// Asks where `path` opens, without opening anything: the working
     /// copy the folder is in, and the repository that copy hangs off
@@ -124,41 +136,54 @@ impl Hub {
     }
 
     /// Stands a tab in another working copy of the repository it is
-    /// already showing: a tab on `path` taking the same seat in the
-    /// strip, and the one that was there closed
-    /// (`TabsModel::switch_copy`). Answers with the new tab's id.
+    /// already showing: the same tab id, pointed at `path`, with the
+    /// repository behind it read again from there
+    /// (`TabsModel::switch_copy`). Answers whether the tab is this
+    /// hub's.
     ///
-    /// **A new tab, not the old one re-pointed.** A page is built for
-    /// the tab in front and holds everything it read off that tab's id
-    /// (`RepoPageStack`), so the copy being left has to take its page
-    /// with it — the same move a tab makes on its way off the front,
-    /// which is the one road a session is ever swapped on.
+    /// **The tab id is what the page is built on** (`RepoPageStack`), so
+    /// keeping it is what keeps the page: the reader's graph, their
+    /// place in it and the panes around it stand while the session
+    /// under them is swapped, and the walk that the new one starts
+    /// replaces the graph in one go rather than emptying it first
+    /// ([`FirstPass::Swapped`]). What the copy being left owned — its
+    /// status, its uncommitted files — the page drops for itself
+    /// (`RepoPage.leaveCopy`).
     ///
-    /// What crosses is what cannot be read again: the unsent words of
-    /// every copy this tab has stood in (`Tab::drafts`), the copy being
-    /// left included — the reader comes back to it.
-    /// **Opened before the old one is closed**, so a refusal leaves the
-    /// tab that was there: the strip holds this id and would otherwise
-    /// be left naming a tab the hub no longer has.
-    pub fn switch_tab(&mut self, id: i32, path: PathBuf) -> Option<i32> {
+    /// The unsent words stay where they are: they are filed under the
+    /// copy they were written in (`Tab::drafts`), and this tab keeps the
+    /// lot of them — the reader comes back to the copy they were left in.
+    ///
+    /// **Only a tab somebody is looking at is opened again here.** A tab
+    /// off the front holds no session (`Hub::release_tab`), and the copy
+    /// it now stands in is read when it comes to the front, the same as
+    /// any other tab nobody has looked at yet.
+    pub fn restand_tab(&mut self, id: i32, path: PathBuf) -> bool {
         if !self.tabs.contains_key(&id) {
-            return None;
+            return false;
         }
-        let opened = self.open_tab(path)?;
-        let drafts = self
-            .tabs
-            .get_mut(&id)
-            .map(|tab| std::mem::take(&mut tab.drafts))
-            .unwrap_or_default();
-        self.close_tab(id);
-        if let Some(tab) = self.tabs.get_mut(&opened) {
-            tab.drafts = drafts;
+        let standing = self.let_go_of_session(id, PageAfter::Standing);
+        let Some(tab) = self.tabs.get_mut(&id) else {
+            return false;
+        };
+        tab.path = path;
+        if standing {
+            self.open_session(id, FirstPass::Swapped);
         }
-        Some(opened)
+        tracing::info!(tab = id, standing, "repository tab stood in another copy");
+        true
     }
 
     /// Opens the session of a reserved tab, if it has not been opened yet.
     pub fn ensure_open(&mut self, id: i32) {
+        self.open_session(id, FirstPass::Streamed);
+    }
+
+    /// The opening itself, with what its first graph pass does about a
+    /// graph already on screen ([`FirstPass`]) — the one thing that
+    /// differs between a tab being looked at for the first time and one
+    /// whose reader is standing in front of the repository already.
+    fn open_session(&mut self, id: i32, first_pass: FirstPass) {
         let Some(handle) = self.runtime_handle() else {
             return;
         };
@@ -181,13 +206,15 @@ impl Hub {
         let feeds = Arc::clone(&tab.feeds);
         let applied = self.settings.defaults.clone();
         let sink = Arc::new(BridgeSink::new(feeds));
-        let session = RepoSession::open(
-            executor,
-            handle,
-            path,
-            Arc::clone(&sink) as _,
-            crate::harness::pass_hooks(),
-        );
+        let hooks = crate::harness::pass_hooks();
+        let session = match first_pass {
+            FirstPass::Streamed => {
+                RepoSession::open(executor, handle, path, Arc::clone(&sink) as _, hooks)
+            }
+            FirstPass::Swapped => {
+                RepoSession::open_standing_in(executor, handle, path, Arc::clone(&sink) as _, hooks)
+            }
+        };
         apply_repo_settings(&session, &applied);
         // The saved tags flag takes the same door the settings do: the
         // page's restore runs before this session exists, so its
@@ -249,11 +276,26 @@ impl Hub {
     /// Does nothing to a tab that has no session, which is the normal
     /// case for a tab nobody has looked at yet.
     pub fn release_tab(&mut self, id: i32) {
-        let Some(tab) = self.tabs.get_mut(&id) else {
+        if !self.let_go_of_session(id, PageAfter::TakenDown) {
             return;
+        }
+        crate::harness::memprobe::forget(id);
+        tracing::info!(tab = id, "released repository tab");
+    }
+
+    /// Lets go of the session behind a tab and answers whether there was
+    /// one — the half [`Hub::release_tab`] and [`Hub::restand_tab`]
+    /// share, and the two roads a session is ever swapped on.
+    ///
+    /// `page` is the whole of the difference: a page going down takes
+    /// the consumers with it, and one left standing reads the next
+    /// session through the very same feeds.
+    fn let_go_of_session(&mut self, id: i32, page: PageAfter) -> bool {
+        let Some(tab) = self.tabs.get_mut(&id) else {
+            return false;
         };
         let Some(session) = tab.session.take() else {
-            return;
+            return false;
         };
         session.close();
         // Before the feeds are let go: a write the close let run on
@@ -263,7 +305,16 @@ impl Hub {
         if let Some(sink) = tab.sink.take() {
             sink.retire();
         }
-        tab.feeds.release_all();
+        match page {
+            PageAfter::TakenDown => tab.feeds.release_all(),
+            // The invokers name QML objects that are still there and
+            // about to read the next session: letting them go would
+            // leave a live page attached to nothing, with no second
+            // `attach` coming (the page attaches once, when it is
+            // built). What the queues hold is the copy being left's, and
+            // that goes either way.
+            PageAfter::Standing => tab.feeds.clear_queued_all(),
+        }
         // The rows a delete took off the screen go back with it, and so
         // do the readings the lists had drawn: the answer that would have
         // put the rows back is this session's, a retired sink is exactly
@@ -273,8 +324,7 @@ impl Hub {
         // the truth either way.
         tab.stand_in.session_gone();
         self.park_writes_of(&session);
-        crate::harness::memprobe::forget(id);
-        tracing::info!(tab = id, "released repository tab");
+        true
     }
 
     /// Puts the words typed into a tab's commit editor somewhere that
