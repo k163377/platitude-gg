@@ -162,6 +162,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         worktree-detached  one linked copy, detached, with a commit made
                   in it: the one shape where a working copy stands
                   somewhere no branch, tag or remote reaches (nav-jump)
+        nested-copy  one linked copy kept in a folder of its own below
+                  the root (copies/nested): the one shape where the
+                  folder above the copy and the folder above the
+                  repository are not the same folder (open-picker copy)
         tracked-elsewhere  a branch that reads a remote and is checked
                   out in another copy, one commit past that reading: the
                   one shape where a REMOTES row opens on all three of

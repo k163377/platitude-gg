@@ -299,3 +299,41 @@ pub(super) fn worktree_detached(repo: &mut DemoRepo) -> Result<(), String> {
     )?;
     Ok(())
 }
+
+/// Where [`nested_copy`] puts its linked working copy, under the root
+/// that preset was built in.
+///
+/// Named here because two places need it and neither owns it: the
+/// preset that makes the copy, and the run that opens at it
+/// (`verify::repos`) — every other fixture hands a run the repository's
+/// own copy, which is the one path `demo::create` answers with.
+pub const NESTED_COPY: &str = "copies/nested";
+
+/// One linked working copy, kept in a folder of its own a level below
+/// the root — the way copies are kept where they are gathered together
+/// rather than scattered beside the repositories
+/// (`.claude/worktrees/<letter>` in this tree).
+///
+/// **The nesting is the whole of the preset.** Every other copy in
+/// these fixtures is the repository's sibling, and there the folder
+/// above the copy and the folder above the repository are one and the
+/// same — a picker pointed at either lands in the same place, so a run
+/// on such a fixture cannot say which of the two it was pointed at
+/// (`open-picker copy`).
+pub(super) fn nested_copy(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nA repository whose copy is kept below it.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.commit("src/lib.txt", "lib v1\n", "feat: add the library")?;
+    repo.git(&[
+        "worktree",
+        "add",
+        "-b",
+        "side/nested",
+        &format!("../{NESTED_COPY}"),
+    ])?;
+    Ok(())
+}

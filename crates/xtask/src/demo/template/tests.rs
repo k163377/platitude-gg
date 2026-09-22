@@ -121,6 +121,7 @@ fn only_gits_own_files_name_the_directory_they_were_built_in() {
         "tags",
         "worktrees",
         "worktree-detached",
+        "nested-copy",
         "stashes",
         "shallow",
     ] {
