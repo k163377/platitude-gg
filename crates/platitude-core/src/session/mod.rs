@@ -126,7 +126,7 @@ pub use open::{DrawnGraph, FirstPass};
 use pass_watch::PassWatch;
 pub use pass_watch::{PassHooks, PassStep};
 use print::RowPrint;
-use published::PublishMarks;
+use published::{PublishMarks, RemoteTips};
 pub use query::{DiffReadOutcome, DiffRefreshTask};
 use read_flight::{ReadFlight, Stamp};
 pub use remote_tags::RemoteTagIndex;
@@ -138,6 +138,7 @@ use state::{
     AutoFetch, ConfigStamp, Derived, EndingContext, Footer, OpenFetchState, Operation, Reread,
     Shared, WorktreeRead, WriteRequest,
 };
+use walk::{Building, WalkInputs};
 use write_order::WriteOrder;
 
 use crate::operation::{Lane, OperationId, OperationKind};

@@ -438,6 +438,52 @@ async fn a_poll_rebuilds_the_graph_once() {
     session.close();
 }
 
+/// **One ask, one set of reads.** A restart runs two passes where tags
+/// are drawn — the tag-less one that paints and the rebuild that is owed
+/// the picture the tags are in (`restart_log`) — and the second starts
+/// the moment the first lands, on a repository neither of them moved.
+/// Asking git the walk's own questions again there is a process launch
+/// apiece, which is most of what a read costs on Windows
+/// (ci/baseline/code-costs-windows-x64.md).
+///
+/// The stash listing is the one of those reads that always goes to git:
+/// HEAD is answered by the settled refs read (`known_head_tip`) and the
+/// remote tips by the snapshot beside it, so counting `stash list` is
+/// counting how many times the pair asked.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_two_passes_of_one_ask_read_the_stashes_once() {
+    let (_repo, sink, session, _baseline) = settled_graph().await;
+    // From here the background reads are in the command log, and the
+    // opening's own passes are behind this line (the baseline closed
+    // them).
+    session.set_recording(Recording::WithBackground);
+    let ran = |needle: &'static str| {
+        sink.count(
+            |e| matches!(e, SessionEvent::CommandStarted { display, .. } if display.contains(needle)),
+        )
+    };
+    assert_eq!(ran("stash list"), 0, "nothing from before the baseline");
+
+    // A window nobody has asked for yet, which is one ask and two passes:
+    // the options carry tags (`LogOptions::default`).
+    session.set_log_limit(Some(platitude_core::session::DEFAULT_LOG_LIMIT + 1));
+    crate::support::wait::bounded("the graph passes", session.wait_for_graph_passes()).await;
+
+    assert_eq!(
+        ran("log -z"),
+        2,
+        "the ask ran both of its passes: {:?}",
+        commands(&sink)
+    );
+    assert_eq!(
+        ran("stash list"),
+        1,
+        "and read the stashes once between them: {:?}",
+        commands(&sink)
+    );
+    session.close();
+}
+
 /// A rebuild taken over before it started does not walk.
 ///
 /// Asking for one cancels the pass that held the stream, and a cancelled

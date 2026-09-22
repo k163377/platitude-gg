@@ -5,21 +5,89 @@
 use super::rows::{LogTotals, Sifter, StreamItem, wip_row};
 use super::*;
 
+/// Where a buffered pass puts what it walks: the lanes it lays, the
+/// marks it stamps its rows with, and the rows themselves.
+///
+/// The three travel together because they are one thing — the picture
+/// being built off screen — and a pass that took them apart would hand
+/// the walk half of it.
+pub(super) struct Building<'a> {
+    pub(super) builder: &'a mut GraphBuilder,
+    pub(super) marks: &'a mut PublishMarks,
+    pub(super) out: &'a mut Vec<LogRow>,
+}
+
+/// What a walk's command cannot be built without: the commit HEAD
+/// stands on, and the commits the stashes stand on.
+///
+/// **Read as one ([`RepoSession::walk_inputs`]), because the reads are
+/// independent and each is a process.** One after the other they stood
+/// in front of the first chunk of every opening, and on Windows the
+/// launch is most of what a read costs
+/// (ci/baseline/code-costs-windows-x64.md).
+///
+/// **The stashes are read whatever HEAD turns out to be.** A walk with
+/// no commit to start from has no use for them, but asking HEAD first
+/// to find that out is the serial pair this exists to undo — so a
+/// repository with no commits yet pays one cheap listing per pass.
+#[derive(Clone)]
+pub(super) struct WalkInputs {
+    /// `None` is an unborn HEAD: nothing to walk.
+    head_tip: Option<Oid>,
+    /// The commit each stash stands on, by the name it is drawn under.
+    stash_refs: HashMap<Oid, String>,
+}
+
 impl RepoSession {
+    /// The two reads a walk waits on, taken together.
+    ///
+    /// HEAD is asked of git only where no refs read has landed to
+    /// answer it (`known_head_tip`), and a listing that failed leaves
+    /// the walk without stash rows — the same nothing it drew before
+    /// stashes were in it.
+    pub(super) async fn walk_inputs(
+        self: &Arc<Self>,
+        workdir: &std::path::Path,
+        cancel: &CancellationToken,
+    ) -> Result<WalkInputs, GitError> {
+        let head = async {
+            match self.known_head_tip() {
+                Some(tip) => Ok(tip),
+                None => refs::head_tip(&self.executor, workdir, cancel).await,
+            }
+        };
+        // Stashes are part of the graph: their oids join the walk and the
+        // synthetic index/untracked parents are sifted out below.
+        let stashes = async {
+            stash::load(&self.executor, workdir, cancel)
+                .await
+                .map(|list| {
+                    list.into_iter()
+                        .map(|s| (s.oid, s.name))
+                        .collect::<HashMap<Oid, String>>()
+                })
+                .unwrap_or_default()
+        };
+        let (head_tip, stash_refs) = tokio::join!(head, stashes);
+        Ok(WalkInputs {
+            head_tip: head_tip?,
+            stash_refs,
+        })
+    }
+
     pub(super) async fn stream_log(
         self: &Arc<Self>,
         workdir: &std::path::Path,
         generation: u64,
         options: LogOptions,
         cancel: &CancellationToken,
+        inputs: WalkInputs,
     ) -> Result<LogTotals, GitError> {
-        // An unborn HEAD has nothing to log. The refs read already
-        // answered this, and asking git again is two processes in front
-        // of the first chunk on every rebuild (`known_head_tip`).
-        let head_tip = match self.known_head_tip() {
-            Some(tip) => tip,
-            None => refs::head_state(&self.executor, workdir, cancel).await?.oid,
-        };
+        let WalkInputs {
+            head_tip,
+            stash_refs,
+        } = inputs;
+        // An unborn HEAD has nothing to log.
         let Some(head_tip) = head_tip else {
             // No commits yet, but there can still be something to commit:
             // the working-tree row does not hang off HEAD, so it stands
@@ -31,13 +99,6 @@ impl RepoSession {
             }
             return Ok(totals);
         };
-
-        // Stashes are part of the graph: their oids join the walk and the
-        // synthetic index/untracked parents are sifted out below.
-        let stash_refs: HashMap<Oid, String> = stash::load(&self.executor, workdir, cancel)
-            .await
-            .map(|list| list.into_iter().map(|s| (s.oid, s.name)).collect())
-            .unwrap_or_default();
 
         // The row at the top and the walk under it, decided once (see
         // `pending_commit`): the sides a standing merge brings in are
@@ -122,15 +183,19 @@ impl RepoSession {
         workdir: &std::path::Path,
         options: LogOptions,
         cancel: &CancellationToken,
-        builder: &mut GraphBuilder,
-        marks: &mut PublishMarks,
-        out: &mut Vec<LogRow>,
+        into: Building<'_>,
+        inputs: WalkInputs,
     ) -> Result<LogTotals, GitError> {
+        let Building {
+            builder,
+            marks,
+            out,
+        } = into;
+        let WalkInputs {
+            head_tip,
+            stash_refs,
+        } = inputs;
         // An unborn HEAD has nothing to log (see stream_log).
-        let head_tip = match self.known_head_tip() {
-            Some(tip) => tip,
-            None => refs::head_state(&self.executor, workdir, cancel).await?.oid,
-        };
         let Some(head_tip) = head_tip else {
             // Still something to commit (see stream_log).
             if self.pending_commit().is_some() {
@@ -153,13 +218,7 @@ impl RepoSession {
             out.push(wip_row(&head_tip, incoming, builder));
         }
 
-        // Stashes join the walk here too (see stream_log).
-        let stash_refs: HashMap<Oid, String> = stash::load(&self.executor, workdir, cancel)
-            .await
-            .map(|list| list.into_iter().map(|s| (s.oid, s.name)).collect())
-            .unwrap_or_default();
-
-        // And the working copies standing on no branch (see stream_log).
+        // The working copies standing on no branch (see stream_log).
         let standing = self.worktree_holders();
         let detached = detached_oids(&standing);
 

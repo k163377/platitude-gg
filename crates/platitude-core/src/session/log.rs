@@ -1,7 +1,21 @@
 //! The log -> graph pipeline: options, the direct and swap passes, and
 //! the background refreshes. What one pass reads is [`super::walk`].
 
+use super::rows::LogTotals;
 use super::*;
+
+/// The reads a pass takes before the walk: where the remote-tracking
+/// branches stand (what the rows are marked against) and what the
+/// walk's own command is built from ([`WalkInputs`]).
+///
+/// **One set serves both passes of one ask** (`restart_log`): the
+/// rebuild draws the picture the paint drew but for the tags, and it
+/// starts the moment the paint lands.
+#[derive(Clone)]
+pub(super) struct PassReads {
+    tips: RemoteTips,
+    inputs: WalkInputs,
+}
 
 impl RepoSession {
     pub fn log_options(&self) -> LogOptions {
@@ -99,7 +113,7 @@ impl RepoSession {
             // (`run_swap_pass` -> `fail`). Put the window back to the one
             // that is drawn and take the ordinary route, which does
             // answer the graph.
-            let outcome = s.run_swap_pass(&workdir, options, &run_cancel).await;
+            let outcome = s.run_swap_pass(&workdir, options, &run_cancel, None).await;
             run.answer(outcome);
             if outcome == RefreshOutcome::Failed {
                 // **Only if the window is still the one this press set.**
@@ -138,6 +152,46 @@ impl RepoSession {
         }
     }
 
+    /// What a pass reads before it can walk, taken as one.
+    ///
+    /// **All at once, because no answer feeds another.** Read one after
+    /// the other they were three process launches standing between an
+    /// opening and its first chunk, and on Windows the launch is most
+    /// of what a read costs (ci/baseline/code-costs-windows-x64.md).
+    pub(super) async fn pass_reads(
+        self: &Arc<Self>,
+        workdir: &std::path::Path,
+        cancel: &CancellationToken,
+    ) -> Result<PassReads, GitError> {
+        let (tips, inputs) = self.reads_for(None, workdir, cancel).await;
+        Ok(PassReads {
+            tips,
+            inputs: inputs?,
+        })
+    }
+
+    /// What this pass walks with: the reads the ask above it took, or its
+    /// own where it is the only pass there is.
+    ///
+    /// The two halves come back apart, because a pass has a use for the
+    /// tips of a read whose other half failed — the marks are what the
+    /// rows it never emits would have been stamped with, and the failure
+    /// is the walk's to report.
+    async fn reads_for(
+        self: &Arc<Self>,
+        taken: Option<PassReads>,
+        workdir: &std::path::Path,
+        cancel: &CancellationToken,
+    ) -> (RemoteTips, Result<WalkInputs, GitError>) {
+        match taken {
+            Some(PassReads { tips, inputs }) => (tips, Ok(inputs)),
+            None => tokio::join!(
+                self.remote_tips(workdir, cancel),
+                self.walk_inputs(workdir, cancel)
+            ),
+        }
+    }
+
     /// Restarts the log → graph stream (used by manual full refresh).
     ///
     /// With tags enabled this runs **two passes**: a fast tag-less pass
@@ -164,14 +218,26 @@ impl RepoSession {
                     include_tags: false,
                     ..options
                 };
-                match s.run_direct_pass(&workdir, fast, &run_cancel).await {
+                // **One ask, one set of reads.** The rebuild draws the
+                // same picture the paint did but for the tags, and it
+                // starts the moment that one lands — asking git the two
+                // questions again there is three process launches for
+                // answers a walk old (`PassReads`). A stash pushed from
+                // outside in between is drawn by the next tick, the way
+                // it would be with no pass running at all.
+                let reads = s.pass_reads(&workdir, &run_cancel).await.ok();
+                match s
+                    .run_direct_pass(&workdir, fast, &run_cancel, reads.clone())
+                    .await
+                {
                     RefreshOutcome::Changed => {
-                        s.run_swap_pass(&workdir, options, &run_cancel).await
+                        s.run_swap_pass(&workdir, options, &run_cancel, reads).await
                     }
                     stopped => stopped,
                 }
             } else {
-                s.run_direct_pass(&workdir, options, &run_cancel).await
+                s.run_direct_pass(&workdir, options, &run_cancel, None)
+                    .await
             };
             run.answer(outcome);
         });
@@ -218,11 +284,12 @@ impl RepoSession {
         workdir: &std::path::Path,
         options: LogOptions,
         cancel: &CancellationToken,
+        reads: Option<PassReads>,
     ) -> RefreshOutcome {
         let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
         let mut watch = PassWatch::operation(self);
         // Before the lock, because reading them can go to git.
-        let tips = self.remote_tips(workdir, cancel).await;
+        let (tips, inputs) = self.reads_for(reads, workdir, cancel).await;
         {
             // Reset graph state for the new stream and announce it under
             // one lock: everything that reads row numbers out of `shared`
@@ -273,9 +340,15 @@ impl RepoSession {
         // A fault left here stands in for the walk, so what follows is
         // the same reporting arm a git that failed would have reached
         // (`PassHooks::fault`).
-        let walk = match self.pass_fault(PassStep::Streaming) {
-            Some(error) => Err(error),
-            None => self.stream_log(workdir, generation, options, cancel).await,
+        let walk = match (self.pass_fault(PassStep::Streaming), inputs) {
+            (Some(error), _) => Err(error),
+            // A read the walk cannot be built without is this pass's
+            // failure, and takes the same arm a git that failed does.
+            (None, Err(error)) => Err(error),
+            (None, Ok(inputs)) => {
+                self.stream_log(workdir, generation, options, cancel, inputs)
+                    .await
+            }
         };
         match walk {
             Ok(totals) => {
@@ -338,14 +411,39 @@ impl RepoSession {
         }
     }
 
+    /// The swap pass's walk, and the two things that stand in for it:
+    /// a fault the run was told to raise (see `run_direct_pass`), and a
+    /// read the walk's command cannot be built without.
+    async fn walk_off_screen(
+        self: &Arc<Self>,
+        workdir: &std::path::Path,
+        options: LogOptions,
+        cancel: &CancellationToken,
+        into: Building<'_>,
+        inputs: Result<WalkInputs, GitError>,
+    ) -> Result<LogTotals, GitError> {
+        match (self.pass_fault(PassStep::Swapping), inputs) {
+            (Some(error), _) => Err(error),
+            (None, Err(error)) => Err(error),
+            (None, Ok(inputs)) => {
+                self.collect_log(workdir, options, cancel, into, inputs)
+                    .await
+            }
+        }
+    }
+
     /// Builds a full pass off-screen, then swaps it in as one reset +
     /// one chunk (the UI drains all three events in a single slot call,
     /// so the replacement is flicker-free).
+    ///
+    /// `reads` is what the ask above took for both of its passes, and
+    /// `None` where this is the only pass there is ([`PassReads`]).
     pub(super) async fn run_swap_pass(
         self: &Arc<Self>,
         workdir: &std::path::Path,
         options: LogOptions,
         cancel: &CancellationToken,
+        reads: Option<PassReads>,
     ) -> RefreshOutcome {
         // Superseded before it began: somebody took the stream over
         // between this pass being asked for and its first read. The check
@@ -369,29 +467,29 @@ impl RepoSession {
         let started = Instant::now();
         let mut builder = GraphBuilder::new();
         // Taken before the walk: the walk runs across awaits and cannot
-        // hold this lock (`published::RemoteTips`).
-        let mut marks = PublishMarks::new(self.remote_tips(workdir, cancel).await);
+        // hold this lock (`published::RemoteTips`). Beside the walk's own
+        // reads, for the reason `run_direct_pass` takes them together.
+        let (tips, inputs) = self.reads_for(reads, workdir, cancel).await;
+        let mut marks = PublishMarks::new(tips);
         let mut rows: Vec<LogRow> = Vec::new();
         // What the synthetic rows are about to be laid from, so the
         // publish below can tell whether it moved while the walk ran
         // (`session::relay`).
         let laid_from = self.standing_rows();
 
-        // See `run_direct_pass`: a fault left here stands in for the walk.
-        let result = match self.pass_fault(PassStep::Swapping) {
-            Some(error) => Err(error),
-            None => {
-                self.collect_log(
-                    workdir,
-                    options,
-                    cancel,
-                    &mut builder,
-                    &mut marks,
-                    &mut rows,
-                )
-                .await
-            }
-        };
+        let result = self
+            .walk_off_screen(
+                workdir,
+                options,
+                cancel,
+                Building {
+                    builder: &mut builder,
+                    marks: &mut marks,
+                    out: &mut rows,
+                },
+                inputs,
+            )
+            .await;
         let walked = match result {
             Ok(totals) => {
                 // The mark on HEAD's row is a fact about the repository,

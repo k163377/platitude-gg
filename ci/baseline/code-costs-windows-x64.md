@@ -38,6 +38,8 @@
 | `session::refresh` の refs listing | 300ms(kotlin) |
 | `session::mod` / `session::read_flight` の `status --porcelain=v2 -uall` | 2.9s wall / 2.3 CPU 秒(合成コーパス = tracked 109,652 + ignored 78,000) |
 | `session::query` の「動いていない snapshot を組み直して等値比較」 | 39ms / 1 コア(kotlin) |
+| `session::log` の pass が walk の前に読む物(`PassReads`) | **直列に並べると最初の行までの支配項** — 7 本の直列で kotlin のタブ切替が 2.96s(他席が動いている機械。同じ 7 本を素の git で撃つと合計 0.2s = 残りは全部プロセス起動)。1 組を同時に撃つ形で `repo::open` → 3 本並行 → walk の 2 段 |
+| kotlin(refs 48,341 本)の素の git・ウォーム | `rev-parse --show-toplevel …` 23ms / `for-each-ref refs/remotes` 44ms / `stash list` 41ms / 全 refs の `for-each-ref` 0.88s / `status -uall` 1.15s / walk 0.14s(`--max-count` は 100 も 2000 も 15ms しか違わない = `session::log_limit` の「窓の広さは walk をほとんど動かさない」の裏) |
 | `session::model` の tag 込み walk | 最初の 1 バイトまで約 +1.7s(kotlin の 44k タグ、commit-graph 有り) |
 | `session::head_reach` / `reachable` の tag 抜き | tag は refs 53,672 のうち 45,846、walk 501ms のうち 478ms(→ [head-reach](head-reach-windows-x64.md)) |
 | `RefListPopup` の「測るためにもう 1 組並べる」案 | kotlin の最深行で 109ms(操作応答 100ms を単体で超える) |

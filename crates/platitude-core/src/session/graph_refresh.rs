@@ -400,7 +400,7 @@ impl RepoSession {
         let (finished, task) = RefreshTask::pending(Some(run.ask()));
         self.runtime.spawn(async move {
             let _held = held;
-            let outcome = s.run_swap_pass(&workdir, options, &run_cancel).await;
+            let outcome = s.run_swap_pass(&workdir, options, &run_cancel, None).await;
             run.answer(outcome);
             if finished.send(outcome).is_err() {
                 tracing::trace!("refresh completion was not observed");
@@ -574,7 +574,7 @@ impl RepoSession {
                 };
                 let (run_cancel, mut run) = s.take_log_run();
                 let options = s.log_options();
-                let outcome = s.run_swap_pass(&workdir, options, &run_cancel).await;
+                let outcome = s.run_swap_pass(&workdir, options, &run_cancel, None).await;
                 run.answer(outcome);
                 outcome
             } else {
