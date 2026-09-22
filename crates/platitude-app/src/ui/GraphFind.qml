@@ -71,8 +71,11 @@ FindBar {
     function goToMatch(row) {
         if (row < 0)
             return
-        if (!find.view.rowOnScreen(row))
+        if (!find.view.rowOnScreen(row)) {
+            // A wheel notch still in flight was aimed elsewhere (`WheelGlide.halt`).
+            find.view.haltGlide()
             find.view.positionViewAtIndex(row, ListView.Center)
+        }
         find.landed(find.graphModel.oidAt(row))
     }
 

@@ -297,6 +297,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/WindowShape.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WindowWaitRing.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketPane.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/WheelGlide.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipBucketHeader.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipCommitBlock.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/WipPane.qml", "qt/qml/platitude");

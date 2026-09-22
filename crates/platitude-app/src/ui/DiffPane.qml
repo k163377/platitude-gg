@@ -480,6 +480,18 @@ Rectangle {
             function clampY(y) {
                 return Math.max(0, Math.min(y, diffList.maxY))
             }
+            /// One notch, sent — and the way in for a run, since a wheel cannot be injected (verify-ui スキル).
+            function sendRows(pixels) {
+                wheelGlide.sendTo(diffList.clampY(wheelGlide.at - pixels))
+            }
+            /// Something else is moving the view: the notch in flight loses it (`WheelGlide.halt`).
+            function haltGlide() {
+                wheelGlide.halt()
+            }
+            WheelGlide {
+                id: wheelGlide
+                view: diffList
+            }
             // The arrows are answered below, where they move the view (規約 §diff を上下に送る): Qt's own key navigation
             // moves `currentIndex` and tells nobody, and would scroll to a selection nothing here follows.
             keyNavigationEnabled: false
@@ -507,8 +519,7 @@ Rectangle {
                     // input itself, so it is answered wherever the pointer is (デザイン規約 §グラフを横へ送る, same rule).
                     if (event.angleDelta.x !== 0)
                         codeScroll.shift(-event.angleDelta.x / 2)
-                    const step = (event.angleDelta.y / 120) * Metrics.wheelRows * Theme.rowHeight
-                    diffList.contentY = diffList.clampY(diffList.contentY - step)
+                    diffList.sendRows((event.angleDelta.y / 120) * Metrics.wheelRows * Theme.rowHeight)
                 }
             }
             delegate: DiffRowDelegate {

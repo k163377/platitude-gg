@@ -201,12 +201,18 @@ ColumnLayout {
         const flick = summaryView.contentItem
         const pixels = dy / 120 * (Metrics.wheelRows * Theme.fontMdLine)
         const max = Math.max(0, flick.contentHeight - flick.height)
-        const next = Math.max(0, Math.min(max, flick.contentY - pixels))
-        if (Math.abs(next - flick.contentY) > 0.5) {
-            flick.contentY = next
+        // Measured from where the notch in flight is aiming (`DescriptionBox.rollBy`, same reason).
+        const from = summaryGlide.at
+        const next = Math.max(0, Math.min(max, from - pixels))
+        if (Math.abs(next - from) > 0.5) {
+            summaryGlide.sendTo(next)
             return
         }
         editor.wheelPastEnd(pixels)
+    }
+    WheelGlide {
+        id: summaryGlide
+        view: summaryView.contentItem
     }
     /// Smoke hook: the caret in the description box, the way a click in it puts it there.
     function focusDescription() {

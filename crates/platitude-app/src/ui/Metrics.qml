@@ -46,7 +46,7 @@ QtObject {
     readonly property int nodeIcon: Theme.iconLg
     readonly property int laneStroke: 2
     readonly property real identiconFill: 0.72
-    readonly property int wheelRows: 6
+    readonly property int wheelRows: 3
     // Middle-click autoscroll, and the send a dragged tab gets once it crosses the band's edge — both are "how far
     // the hand pointed past what it can reach = how fast", and two sensitivities would make one gesture run at
     // different speeds depending on where it was made. **The three below are one curve**, read through `handSent`.
@@ -60,6 +60,10 @@ QtObject {
     // The pad around the anchor where the hand is holding still, not asking. Without it no hand can hold a view
     // still — a pixel of drift is a speed. Per axis, so a hand drifting straight down does not creep sideways.
     readonly property int middleScrollDeadZone: 15
+    // How long a wheel notch takes to land. The wheel names a distance, not a place, so the eye has to follow the
+    // rows across — an instant jump has to be re-read from scratch. Chromium's own wheel animation
+    // (`scroll_offset_animation_curve.cc`: 9 frames / 60), and its ease-in-out is what `WheelGlide` draws.
+    readonly property int wheelGlideMs: 150
     // The chip column's default width. Its floor is a count of
     // characters, measured at run time from the font in use.
     readonly property int labelColW: 152

@@ -50,6 +50,8 @@ Item {
         id: placeTimer
         interval: Metrics.anchorDelayMs
         onTriggered: {
+            // A wheel notch still in flight was aimed into the rows this is putting back (`WheelGlide.halt`).
+            place.view.haltGlide()
             const want = place.heldY
             place.heldY = -1
             place.view.contentY = Math.max(0, Math.min(want, place.view.contentHeight - place.view.height))

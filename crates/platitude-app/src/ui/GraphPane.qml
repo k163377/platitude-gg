@@ -447,6 +447,8 @@ Rectangle {
     /// Starts autoscroll from a point in this pane's frame, and moves the pointer of one already under way. The presses
     /// and the automation hook both come through here.
     function startAutoScroll(x, y) {
+        // A wheel notch still in flight would pull against the drift for its last beat (`WheelGlide.halt`).
+        graphList.haltGlide()
         autoScroll.start(x, y)
     }
     function driftPointer(x, y) {

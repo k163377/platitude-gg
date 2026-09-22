@@ -57,6 +57,8 @@ Item {
     /// not built, and a walk that trusts it is cut to the viewport (P3-確認事項: the WIP list's range selection is the
     /// standing example).
     function revealStep(row, near) {
+        // A wheel notch still in flight was aimed at rows this step is walking away from (`WheelGlide.halt`).
+        walk.view.haltGlide()
         if (!near) {
             walk.view.positionViewAtIndex(row, ListView.Center)
             return
@@ -135,6 +137,7 @@ Item {
         }
     }
     function jumpToRow(row) {
+        walk.view.haltGlide()
         walk.view.currentIndex = row
         walk.view.positionViewAtIndex(row, ListView.Center)
     }
@@ -175,6 +178,7 @@ Item {
         property int showRow: -1
         interval: Metrics.anchorDelayMs
         onTriggered: {
+            walk.view.haltGlide()
             const rows = shiftTimer.pending
             shiftTimer.pending = 0
             if (rows !== 0)
@@ -189,6 +193,7 @@ Item {
         id: anchorTimer
         interval: Metrics.anchorDelayMs
         onTriggered: {
+            walk.view.haltGlide()
             if (walk.view.currentIndex >= 0)
                 walk.view.positionViewAtIndex(walk.view.currentIndex, ListView.Center)
         }

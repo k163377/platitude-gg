@@ -181,12 +181,19 @@ Rectangle {
         const flick = textView.contentItem
         const pixels = dy / 120 * box.wheelStep
         const max = Math.max(0, flick.contentHeight - flick.height)
-        const next = Math.max(0, Math.min(max, flick.contentY - pixels))
-        if (Math.abs(next - flick.contentY) > 0.5) {
-            flick.contentY = next
+        // **Measured from where the notch in flight is aiming**, not from where the text is right now: two notches in
+        // a row would otherwise both measure from the same place and land as one (`WheelGlide.at`).
+        const from = glide.at
+        const next = Math.max(0, Math.min(max, from - pixels))
+        if (Math.abs(next - from) > 0.5) {
+            glide.sendTo(next)
             return
         }
         box.wheelPastEnd(pixels)
+    }
+    WheelGlide {
+        id: glide
+        view: textView.contentItem
     }
     /// Smoke hook: the caret in the box, the way a click puts it there. Called `takeCaret` -- Item already has a
     /// `focus` property, and the name `focus()` resolves to that one, so the call is a TypeError at the point it is

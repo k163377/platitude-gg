@@ -198,6 +198,20 @@ AppListView {
         const bottom = graphList.indexAt(0, graphList.contentY + graphList.height - Theme.graphRowHeight)
         return row >= graphList.firstVisibleRow() && (bottom < 0 || row <= bottom)
     }
+    /// One notch, sent. **The way in for a run as well**: a wheel cannot be injected any more than a hover can, so
+    /// what a run drives is this wiring rather than a copy of it (verify-ui スキル).
+    function sendRows(pixels) {
+        wheelGlide.sendTo(graphList.clampY(wheelGlide.at - pixels))
+    }
+    /// Something else is moving the view — an arrow key, a reveal, a restored position. The notch in flight loses it
+    /// (`WheelGlide.halt`), or it drags the reader back off the row they were just sent to.
+    function haltGlide() {
+        wheelGlide.halt()
+    }
+    WheelGlide {
+        id: wheelGlide
+        view: graphList
+    }
     // Mouse wheels scroll a fixed number of rows per notch; touchpads keep native Flickable panning.
     WheelHandler {
         acceptedDevices: PointerDevice.Mouse
@@ -207,8 +221,7 @@ AppListView {
             graphList.cancelFlick()
             if (event.angleDelta.x !== 0)
                 graphList.wheelPanned(event.angleDelta.x)
-            const step = (event.angleDelta.y / 120) * Metrics.wheelRows * Theme.graphRowHeight
-            graphList.contentY = graphList.clampY(graphList.contentY - step)
+            graphList.sendRows((event.angleDelta.y / 120) * Metrics.wheelRows * Theme.graphRowHeight)
         }
     }
 }
