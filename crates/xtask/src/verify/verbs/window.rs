@@ -88,17 +88,34 @@ pub(super) const TABLE: &[Verb] = &[
     // grew a second tab for the copy (`grew=`) or the tab it already had
     // moved into it (`stood=`), and those are the two answers this verb
     // exists to tell apart (デザイン規約 §タブの所作).
+    // `kept=` is the third of them and the one the other two cannot
+    // reach: the page that asked is the page that arrived, and its
+    // graph was never emptied on the way — the copy switch swaps the
+    // session under a standing page and replaces the rows in one go
+    // (`Hub::restand_tab`), where a rebuilt page photographs exactly
+    // the same.
     Verb {
         name: "carried-open",
         when: &[],
-        plain: "carried_open tabs=1 grew=false stood=true",
+        plain: "carried_open tabs=1 grew=false stood=true kept=true",
     },
     // The same landing by the left menu's door. One tab before and one
     // after, and the copy the row named is the one the session opened.
     Verb {
         name: "worktree-stand",
         when: &[],
-        plain: "worktree_stand tabs=1 grew=false stood=true",
+        plain: "worktree_stand tabs=1 grew=false stood=true kept=true",
+    },
+    // Away and back: `empty=` is the copy arrived at not wearing the
+    // words typed in the one left, `back=` those words standing in the
+    // box again, and `wip=` the pane holding them being the one on
+    // screen. None of the three is a picture — the last frame of this
+    // verb is one page with a commit message in it, which is what the
+    // first frame was.
+    Verb {
+        name: "copy-draft",
+        when: &[],
+        plain: "copy_draft empty=true back=true wip=true kept=true",
     },
     Verb {
         name: "tab-carry",

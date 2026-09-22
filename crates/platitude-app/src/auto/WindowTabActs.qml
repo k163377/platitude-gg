@@ -36,6 +36,28 @@ Item {
         return path !== "" && page.pageTab.repoPath.toLowerCase() === path.toLowerCase()
     }
 
+    /// The page the switch is about to be asked of, and what its graph stood at — **the half no picture holds**.
+    /// A window showing one repository frames the same whether the page was taken down and built again or stayed
+    /// where it was, and standing the tab elsewhere is supposed to keep it (デザイン規約 §タブの所作).
+    property var standPage: null
+    property int standFinished: -1
+    property int standReset: -1
+    function holdStand(page) {
+        acts.standPage = page
+        acts.standFinished = page.pageGraph.finishCount
+        acts.standReset = page.pageGraph.resetCount
+    }
+    /// The copy arrived at has been walked: a pass landed after the press. Without it the verb is answered by the
+    /// graph the *other* copy left drawn, which is exactly the picture this change is about.
+    function standWalked(page) {
+        return page.pageGraph.finishCount > acts.standFinished
+    }
+    /// …and it landed **over** that graph rather than in place of it: the same page object throughout, and a
+    /// stream that never started over (`GraphModel.resetCount`, which only a restart moves).
+    function standKept(page) {
+        return page === acts.standPage && page.pageGraph.resetCount === acts.standReset
+    }
+
     // What remains after a middle-click is the output under test. Wait for the tab-model count edge.
     // The two tabs this verb needs are a precondition of the press and
     // nothing else: read again after it, they turn the verb's own answer — one tab fewer — into a wait nothing can end.
@@ -237,7 +259,7 @@ Item {
 
     // Another working copy's uncommitted row stands this tab in that copy — the door to the changes it is about,
     // since this window's panes read the tree this tab is standing in. Window-level because the strip is what it
-    // lands in, and because the page that was asked is taken down on the way (デザイン規約 §タブの所作).
+    // lands in: the page stays, but what it stands in is the strip's answer (デザイン規約 §タブの所作).
     SampleTimer {
         id: carriedOpenTimer
         running: Harness.autoAct === "carried-open"
@@ -268,6 +290,7 @@ Item {
                     return
                 carriedOpenTimer.wanted = page.pageGraph.carriedPath(row)
                 carriedOpenTimer.beforeCount = pageRepeater.count
+                acts.holdStand(page)
                 if (item.doubleClick(Qt.NoModifier) !== true)
                     return
                 carriedOpenTimer.asked = true
@@ -279,13 +302,14 @@ Item {
                 return
             const front = window.curPage
             if (front === null || front.pageTab.state !== "open"
-                    || !front.pageWt.loaded || front.pageGraph.finishCount === 0
+                    || !front.pageWt.loaded || !acts.standWalked(front)
                     || !acts.standsIn(front, carriedOpenTimer.wanted))
                 return
             stop()
             Harness.report("carried_open tabs=" + pageRepeater.count
                               + " grew=" + (pageRepeater.count !== carriedOpenTimer.beforeCount)
                               + " stood=" + acts.standsIn(front, carriedOpenTimer.wanted)
+                              + " kept=" + acts.standKept(front)
                               + " wanted=" + carriedOpenTimer.wanted
                               + " where=" + front.pageTab.repoPath)
             window.finishAutoAct()
@@ -317,6 +341,7 @@ Item {
                     return
                 worktreeStandTimer.wanted = full
                 worktreeStandTimer.beforeCount = pageRepeater.count
+                acts.holdStand(page)
                 // The pane's own door — the one the row's double-click calls (`SidebarRowGestures.activateRow`).
                 page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfCopy(full))
                 worktreeStandTimer.asked = true
@@ -326,15 +351,93 @@ Item {
                 return
             const front = window.curPage
             if (front === null || front.pageTab.state !== "open"
-                    || !front.pageWt.loaded || front.pageGraph.finishCount === 0
+                    || !front.pageWt.loaded || !acts.standWalked(front)
                     || !acts.standsIn(front, worktreeStandTimer.wanted))
                 return
             stop()
             Harness.report("worktree_stand tabs=" + pageRepeater.count
                               + " grew=" + (pageRepeater.count !== worktreeStandTimer.beforeCount)
                               + " stood=" + acts.standsIn(front, worktreeStandTimer.wanted)
+                              + " kept=" + acts.standKept(front)
                               + " wanted=" + worktreeStandTimer.wanted
                               + " where=" + front.pageTab.repoPath)
+            window.finishAutoAct()
+        }
+    }
+
+    // …and away and back again, which is the one claim about a copy switch no single landing can make: the unsent
+    // words are filed under the copy they were written in, so leaving takes them off the screen and coming back puts
+    // them there (デザイン規約 §タブの所作「未コミットのコミットメッセージは立ち位置ごとに憶える」). One page
+    // throughout — that is what `kept=` says, and it is why the words can be read as having been put back rather
+    // than never taken away.
+    SampleTimer {
+        id: copyDraftTimer
+        running: Harness.autoAct === "copy-draft"
+        /// 0 = write and leave, 1 = read the other copy's empty box and come back, 2 = read the words again.
+        property int step: 0
+        /// Words no repository can produce, so finding them again cannot be anything but this page having kept them.
+        readonly property string typed: "chore: words written in one working copy"
+        /// The copy they were written in, and the one stood in between.
+        property string home: ""
+        property string away: ""
+        property bool awayEmpty: false
+        /// Whether the tab has answered for where it now stands: the strip asks git before it moves, and the page
+        /// holds its doors until the session opens (`RepoTab.standing`).
+        function settled(page, copy) {
+            return page !== null && page.pageTab.state === "open" && !page.pageTab.standing
+                   && page.pageWt.loaded && acts.standsIn(page, copy)
+        }
+        /// The WORKTREES row naming `copy`, activated the way a double-click does. Answers whether it was there.
+        function standIn(page, copy) {
+            const trees = page.pageSidebar.worktreesModel
+            for (let row = 0; row < trees.shown(); row++) {
+                const full = trees.fullAt(row)
+                if (full !== "" && full.toLowerCase() === copy.toLowerCase()) {
+                    page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfCopy(full))
+                    return true
+                }
+            }
+            return false
+        }
+        onTriggered: {
+            const page = window.curPage
+            if (page === null || page.pageTab.state !== "open" || page.pageTab.standing
+                    || !page.pageWt.loaded || page.pageGraph.finishCount === 0)
+                return
+            if (copyDraftTimer.step === 0) {
+                const trees = page.pageSidebar.worktreesModel
+                if (trees.shown() < 2)
+                    return
+                const full = trees.fullAt(1)
+                if (full === "" || acts.standsIn(page, full))
+                    return
+                copyDraftTimer.home = page.pageTab.repoPath
+                copyDraftTimer.away = full
+                page.pageWip.setMessage(copyDraftTimer.typed, "")
+                acts.holdStand(page)
+                if (!copyDraftTimer.standIn(page, full))
+                    return
+                copyDraftTimer.step = 1
+                return
+            }
+            if (copyDraftTimer.step === 1) {
+                if (!copyDraftTimer.settled(page, copyDraftTimer.away))
+                    return
+                copyDraftTimer.awayEmpty = page.pageWip.subjectText === "" && page.pageWip.bodyText === ""
+                if (!copyDraftTimer.standIn(page, copyDraftTimer.home))
+                    return
+                copyDraftTimer.step = 2
+                return
+            }
+            if (!copyDraftTimer.settled(page, copyDraftTimer.home))
+                return
+            stop()
+            Harness.report("copy_draft empty=" + copyDraftTimer.awayEmpty
+                              + " back=" + (page.pageWip.subjectText === copyDraftTimer.typed)
+                              // …and the pane holding them is the one on screen, the same half `tab-carry` reads.
+                              + " wip=" + page.wipShown
+                              + " kept=" + acts.standKept(page)
+                              + " away=" + copyDraftTimer.away)
             window.finishAutoAct()
         }
     }
