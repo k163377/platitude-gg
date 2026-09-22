@@ -98,7 +98,6 @@ impl RepoTab {
         self.write_report_remote = String::new();
         self.write_report_name = String::new();
         self.write_report_reason = String::new();
-        self.write_running = false;
         self.move_ask_local = String::new();
         self.move_ask_start = String::new();
         self.auto_fetch_running = false;

@@ -1179,20 +1179,9 @@ FocusScope {
     /// same one `GraphPane.view` is (app-ui.md).
     signal renameRemoteAsked(string from, string to)
 
-    /// Refusals this page already has an answer for. The question bar explains them, so the command log stays where
-    /// it was (デザイン規約 §git が言ったことを読む場所). Counted, because the refusal and the write result arrive on
-    /// separate paths, in no fixed order.
-    property int expectedRefusals: 0
-    /// The plain delete's landing, read the way the card reads it (`RefBranchMenu`): the refusal armed above is not
-    /// coming, so the credit goes back. An edge — a fetch answering in the same drain leaves the group saying fetch,
-    /// and the landing would never be seen.
-    readonly property string deleteLanded: repoTab.branchDeleteLanded
-    onDeleteLandedChanged: {
-        if (page.deleteLanded !== "")
-            page.expectedRefusals = Math.max(0, page.expectedRefusals - 1)
-    }
-    /// The same, for the failures a report has already answered — armed by the report when the row it is about has
-    /// not reached the log yet (`absorbWriteResult`), spent by that row's own arrival.
+    /// The failures a report has already answered — armed by the report when the row it is about has not reached the
+    /// log yet (`absorbWriteResult`), spent by that row's own arrival. Counted, because the refusal and the write
+    /// result arrive on separate paths, in no fixed order.
     property int answeredFailures: 0
     /// The answer to the plain delete a card stayed up for — **its own answer**, out of the ones this notify
     /// carried (`RepoTab.branchDeleteAnswer`, -1 where it carried none). The name it was asked with is what the card
@@ -1283,7 +1272,6 @@ FocusScope {
         // (デザイン規約 §左メニューの所作). Which branch the answer is about is the tab's to keep, and the card that asked
         // reads it there (`RefBranchMenu`); the row leaves the screen at the press, which is the same slot's doing
         // (`ops_delete`).
-        page.expectedRefusals++
         repoTab.deleteBranch(id, false)
         page.deleteRowAsked = true
     }
@@ -1809,10 +1797,10 @@ FocusScope {
                 // git's words under its red edge — that is the record, and the record is what the panel is for.
                 //
                 // **The row it is about may not have reached the log yet.** The write's answer and the command's own
-                // end travel separate feeds, in no fixed order (`expectedRefusals` is counted for the same reason):
-                // where the row has landed already, taking the mark down is the whole of it; where it has not, it puts
-                // the mark back up when it does — and raises the log with it, over the news this bar is already giving
-                // (measured, 1 Linux run in 5, and none of 5 on Windows — the picture is identical either way).
+                // end travel separate feeds, in no fixed order: where the row has landed already, taking the mark
+                // down is the whole of it; where it has not, it puts the mark back up when it does, and this is the
+                // credit that takes it down again (measured, 1 Linux run in 5, and none of 5 on Windows — the
+                // picture is identical either way).
                 if (!commandsModel.failed)
                     page.answeredFailures++
                 commandsModel.noteAnswered()
@@ -1839,8 +1827,8 @@ FocusScope {
             page.pendingRenameTo = ""
             return
         }
-        // A plain delete that landed is not answered here: the card that stayed up for it goes by itself, and the
-        // credit armed for its refusal goes back off the same edge (`deleteLanded`).
+        // A plain delete that landed is not answered here: the card that stayed up for it goes by itself
+        // (`RefBranchMenu` reads `RepoTab.branchDeleteLanded`).
         //
         // The name went in, so the box that was holding it has done its job and comes down (デザイン規約 §答えの要らない報せ:
         // a rename keeps its box until git answers).

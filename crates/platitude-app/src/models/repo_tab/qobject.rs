@@ -205,7 +205,6 @@ impl RepoTab {
         Member = write_report_reason,
         Notify = changed
     );
-    qproperty!("writeRunning", Member = write_running, Notify = changed);
     qproperty!("moveAskLocal", Member = move_ask_local, Notify = changed);
     qproperty!("moveAskStart", Member = move_ask_start, Notify = changed);
     qproperty!("moveAskSeq", Member = move_ask_seq, Notify = changed);

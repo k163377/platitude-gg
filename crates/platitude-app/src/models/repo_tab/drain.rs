@@ -199,10 +199,6 @@ impl RepoTab {
                 } => {
                     if running {
                         self.busy_count += 1;
-                        // Only the write's own answer knows what to make
-                        // of a command that fails inside it
-                        // (`write_running`).
-                        self.write_running = true;
                         self.replaying = kind.replays_history();
                         // The word the band reads (`busyOp`), made here
                         // from the kind: the kind itself is what the
@@ -292,7 +288,6 @@ impl RepoTab {
             self.busy_op = String::new();
             self.replaying = false;
         }
-        self.write_running = self.busy_count > 0;
         // Who said no and what about — the halves the notice is
         // made of. **The kind is named here**, on this side of the
         // bridge, so the page picks its sentence off meanings alone

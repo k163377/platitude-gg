@@ -446,13 +446,6 @@ pub struct RepoTab {
     write_report_remote: String,
     write_report_name: String,
     write_report_reason: String,
-    /// A write the user asked for is in flight. **The log raises itself
-    /// on the operation's own answer**: an operation is several
-    /// commands and only that answer says whether it failed,
-    /// or whether the far side turned it down with something to report
-    /// (デザイン規約 §git が言ったことを読む場所 — 開く判断は操作の
-    /// 答えで下し、コマンド 1 本の終了コードでは下さない).
-    write_running: bool,
     /// A branch move that would leave commits unreachable, waiting to be
     /// asked about. Nothing has happened yet.
     move_ask_local: String,
