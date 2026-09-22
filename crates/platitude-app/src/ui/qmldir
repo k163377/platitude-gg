@@ -156,6 +156,8 @@ RefBranchMenu 1.0 RefBranchMenu.qml
 RefRowMenu 1.0 RefRowMenu.qml
 RefTagMenu 1.0 RefTagMenu.qml
 RemoteRowMenu 1.0 RemoteRowMenu.qml
+RenameCarryFlow 1.0 RenameCarryFlow.qml
+RenameCarryForm 1.0 RenameCarryForm.qml
 RefusalBadge 1.0 RefusalBadge.qml
 RemoteDialog 1.0 RemoteDialog.qml
 ReclickGesture 1.0 ReclickGesture.qml

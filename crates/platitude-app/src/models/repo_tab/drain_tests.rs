@@ -175,6 +175,17 @@ fn a_branch_answer_says_so_whichever_way_it_went() {
     assert!(!settled(K::Tag, "").write_branch_op);
 }
 
+#[test]
+fn a_tag_answer_says_so_whichever_way_it_went() {
+    assert!(settled(K::Tag, "").write_tag_op);
+    assert!(settled(K::Tag, "fatal: tag 'v1.0' already exists").write_tag_op);
+    assert!(settled(K::DeleteTagEverywhere, "").write_tag_op);
+    assert!(!settled(K::Branch, "").write_tag_op);
+    // The remote half of a rename is a push, so the pending question is
+    // not re-raised by its own answer.
+    assert!(!settled(K::Push, "").write_tag_op);
+}
+
 // ---- the toolbar's push ----------------------------------------------
 
 /// The button pressed: the push went to the queue under `OURS`, for

@@ -216,6 +216,7 @@ Rectangle {
         askBar.answerable = true
         askBar.neutral = false
         askBar.alert = false
+        askBar.plainWords = false
         askBar.labelSentence = refName === "" ? "" : label
         askBar.labelRef = refName
         askBar.label = refName === "" ? label : label.arg(refName)
@@ -234,14 +235,21 @@ Rectangle {
     /// something to send.
     property alias askAnswerable: askBar.answerable
     /// Whether it is asking for information, how it is answered, and what it says while it
-    /// stands — these change under a publish question as the remote answers what the typed name means. The wording of
-    /// the pill is not among them: the command it names is settled when the question opens (デザイン規約 §はじめてリモートへ送る).
+    /// stands — these change under a publish question as the remote answers what the typed name means.
     property alias askNeutral: askBar.neutral
     property alias askHold: askBar.hold
+    /// The word on the pill. **It may move while the question stands, and where it does the gesture moves with it**
+    /// (デザイン規約 §はじめてリモートへ送る: `push` becomes `push -f` and the click becomes a hold). A publish
+    /// question leaves this empty and lets `askCode` say the command instead; a question whose answer is picked out
+    /// of a chooser writes the picked answer's own word here (`RenameCarryFlow`).
+    property alias askAccept: askBar.accept
     /// The command the pill answers with, and whether the far side could be read at all — both move under a publish
     /// question as the remote answers, because what would run depends on what is over there.
     property alias askCode: askBar.code
     property alias askAlert: askBar.alert
+    /// Whether the heading is written in the plain ink — the one question whose colour follows what is picked in it
+    /// asks for that (`AskBar.plainWords`).
+    property alias askPlainWords: askBar.plainWords
     property alias askDetail: askBar.detail
     property alias askTip: askBar.tip
     /// The live form, so its owner can read what was typed into it.

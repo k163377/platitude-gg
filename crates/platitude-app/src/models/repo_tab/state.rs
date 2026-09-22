@@ -78,6 +78,7 @@ impl Default for RepoTab {
             write_moved_head: false,
             write_reworded: false,
             write_branch_op: false,
+            write_tag_op: false,
             write_fetched: false,
             write_answers: Vec::new(),
             commit_out: crate::ops::Press::default(),

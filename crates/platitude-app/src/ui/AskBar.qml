@@ -141,6 +141,15 @@ Rectangle {
     /// (`GraphPane.startAsking` dresses the bar and then raises it; `stopAsking` only lowers it).
     property bool open: false
     readonly property color tone: bar.danger ? Theme.danger : bar.neutral ? Theme.accent : Theme.warning
+    /// Whether the heading is written in the plain ink instead of the bar's colour.
+    ///
+    /// **For the one question whose colour follows an answer being picked in it** (`RenameCarryFlow`): the frame and
+    /// the pill already turn as the chooser is worked through, and a heading turning with them is the same thing said
+    /// a third time — read as though the words themselves were changing. Every other
+    /// question's colour is settled when it opens and the heading is where it says what it costs (デザイン規約 §状態),
+    /// so this is off unless a flow asks for it — and put down again as each question is dressed
+    /// (`GraphPane.startAsking`).
+    property bool plainWords: false
     // A question walked away from mid-press takes the press with it: a fill left standing would carry on into whatever
     // is asked next.
     //
@@ -253,7 +262,7 @@ Rectangle {
                     id: askWord
                     text: bar.label
                     markup: bar.labelWords
-                    color: bar.tone
+                    color: bar.plainWords ? Theme.textPrimary : bar.tone
                     pixelSize: Theme.fontMd
                     weight: Font.DemiBold
                     Layout.fillWidth: true
@@ -265,8 +274,13 @@ Rectangle {
                                       ? 0 : Math.max(0, (askCode.implicitHeight - askWord.lineHeight) / 2)
                 }
             }
+            // **Gone where there is nothing to say**, not merely empty: an empty `CardText` still stands a line high,
+            // and a question whose answers say the whole of it themselves would carry a blank band under its heading
+            // (`RenameCarryFlow` is the one, デザイン規約 §手元の改名をリモートへ運ぶ). A layout skips what is not
+            // visible, spacing and all.
             CardText {
                 text: bar.detail
+                visible: bar.detail !== ""
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
                 Layout.fillWidth: true

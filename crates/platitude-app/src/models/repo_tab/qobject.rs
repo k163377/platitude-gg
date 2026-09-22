@@ -181,6 +181,7 @@ impl RepoTab {
     );
     qproperty!("writeReworded", Member = write_reworded, Notify = changed);
     qproperty!("writeBranchOp", Member = write_branch_op, Notify = changed);
+    qproperty!("writeTagOp", Member = write_tag_op, Notify = changed);
     qproperty!("writeFetched", Member = write_fetched, Notify = changed);
     // What a write that did not happen has to say for itself — the page
     // makes a notice out of these
@@ -879,6 +880,22 @@ impl RepoTab {
         self.ask_session(|s| s.push_tag(remote.clone(), tag.clone(), lease_expect.clone()));
     }
 
+    /// Renames a tag on a remote. git has none, so core pushes the new
+    /// name and deletes the old — the UI holds the answer down first,
+    /// because the old name is destroyed.
+    #[qslot]
+    fn rename_remote_tag(&mut self, remote: String, from: String, to: String) {
+        let asked =
+            self.ask_session(|s| s.rename_remote_tag(remote.clone(), from.clone(), to.clone()));
+        // Keyed the way every other tag write that leaves this machine is
+        // (`ops_delete::remote_tag_delete`), and on the name that goes:
+        // git's answer to **this** press is what the page reports.
+        self.ref_push_asked(
+            &format!("{remote}/{from}"),
+            asked.map(platitude_core::OperationId::as_u64),
+        );
+    }
+
     /// The remote's copy of a tag. `rowGoes` is whether the sidebar's row
     /// leaves with it — true where only the remote had the name
     /// (`ops_delete::remote_tag_delete`).
@@ -1175,6 +1192,20 @@ impl RepoTab {
             force,
             lease_expect,
         )
+    }
+
+    /// Points a branch at a remote branch and sends it there, in that
+    /// order — the half of a carried rename that takes nothing away.
+    #[qslot]
+    fn point_upstream_and_push(&mut self, branch: String, remote: String, remote_branch: String) {
+        if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
+            return;
+        }
+        let row = format!("{remote}/{remote_branch}");
+        let asked = self.ask_session(|s| {
+            s.point_upstream_and_push(branch.clone(), remote.clone(), remote_branch.clone())
+        });
+        self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
     }
 
     /// Renames a branch on a remote. git has none, so core pushes the new

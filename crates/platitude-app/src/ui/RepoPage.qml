@@ -949,6 +949,7 @@ FocusScope {
         // (measured). The flow raising this one turns its own back on after this returns.
         publishFlow.publishAsking = false
         upstreamFlow.asking = false
+        renameCarryFlow.asking = false
         page.rowAskRun = run
         graphPane.startAsking(oidHex, label, detail, acceptText, danger, hold, tip, form, code, refName)
     }
@@ -956,6 +957,7 @@ FocusScope {
         page.rowAskRun = null
         publishFlow.publishAsking = false
         upstreamFlow.asking = false
+        renameCarryFlow.asking = false
         graphPane.stopAsking()
     }
     function answerRowAsk() {
@@ -992,6 +994,37 @@ FocusScope {
     function startUpstreamAsk(branch, counterpart) {
         upstreamFlow.startAsk(branch, branchesModel.oidOfName(branch), counterpart)
     }
+
+    // ---- what a name changed here does to the remote ----------------
+    RenameCarryFlow {
+        id: renameCarryFlow
+        repoTab: repoTab
+        graphPane: graphPane
+        onAskRequested: (oidHex, label, accept, run, form) =>
+            page.startRowAsk(oidHex, label, "", false, accept, run, false, "", form, "")
+        onCarryAsked: (kind, from, to) => page.renameCarryAsked(kind, from, to)
+    }
+    /// Automation: the question above was raised, and the two names it is between. An automation-only exposure, the
+    /// same one `GraphPane.view` is (app-ui.md).
+    signal renameCarryAsked(string kind, string from, string to)
+    /// A branch took a new name here and the remote it was measured against still carries the old one. The cut is
+    /// the configured remote name where one owns the ref (a remote's own name may contain `/`), the first slash
+    /// otherwise — either way the question still fires (`GitFacts.remoteOfRef`).
+    function carryBranchRenameOver(remoteRef, name) {
+        const remote = GitFacts.remoteOfRef(remoteRef, repoTab.remoteNames)
+        if (remote === "")
+            return
+        const from = GitFacts.branchOfRef(remoteRef, repoTab.remoteNames)
+        // Nothing worth asking where the remote already carries the name that would be made: both answers that make
+        // one are a plain push, which fast-forwards the branch already over there and reports success — so somebody
+        // else's branch would move. The box refuses it too; this catches the way in that has no box.
+        if (name === from || remotesModel.oidOfName(remote + "/" + name) !== "")
+            return
+        renameCarryFlow.startAsk("branch", remote, from, name, remotesModel.oidOfName(remoteRef))
+    }
+    /// Automation: the chooser inside it, which no injected click can open.
+    function openCarryChoices() { return renameCarryFlow.openChoices() }
+    function pickCarryChoice(index) { return renameCarryFlow.pickChoice(index) }
 
     // ---- sending the branch to its remote ---------------------------
     PublishFlow {
@@ -1131,6 +1164,9 @@ FocusScope {
             page.pendingRenameTo = name
             repoTab.renameBranch(id, name, false)
         } else if (kind === "tag") {
+            // And which remote carries this name, read before the rename for the same reason: afterwards the row
+            // answers to the new one (デザイン規約 §手元の改名をリモートへ運ぶ).
+            page.armRenameTagRemote(id, name)
             repoTab.renameTag(id, name)
         } else if (kind === "stash") {
             repoTab.renameStash(id, name)
@@ -1148,6 +1184,46 @@ FocusScope {
     /// name over waits until git says the local rename landed.
     property string pendingRenameRemote: ""
     property string pendingRenameTo: ""
+
+    /// The same three for a tag: the remote that carries the name too, and the two names the rename is between. A tag
+    /// has no upstream to read them off, so they are the tags section's answers about the name itself
+    /// (`NavSectionModel.tagSides`) — and the section stops answering for the old name the moment the rename lands,
+    /// which is why they are taken before it.
+    property string pendingRenameTagRemote: ""
+    property string pendingRenameTagFrom: ""
+    property string pendingRenameTagTo: ""
+    /// And the commit the bar marks. **Taken with them, before the write.** A rename moves the name and never the
+    /// object ([`tag::rename`]), so the old name's commit is the new name's — while asking the model for the new name
+    /// at the moment the answer lands is a race the bar loses: the rows are rebuilt by the read behind the write, and
+    /// a question raised before that read arrives would stand over no row at all.
+    property string pendingRenameTagOid: ""
+    /// Reads them, and **only where the pair over there would be a rename and nothing else** (デザイン規約
+    /// §手元の改名をリモートへ運ぶ): the remote's copy has to stand where this one does, since the push and the delete
+    /// the answer runs would otherwise move the mark as well as the name; and the new name has to be free over
+    /// there, since a push to one it already carries is refused outright. Nothing is armed where the answer would be
+    /// a question nobody can say yes to.
+    function armRenameTagRemote(from, to) {
+        page.forgetRenameTagRemote()
+        const remote = repoTab.defaultRemote
+        if (remote === "" || from === to)
+            return
+        if (tagsModel.tagSides(from) !== "both" || tagsModel.remoteTagDrift(from, remote) !== "")
+            return
+        // A name standing anywhere already: held here as well, git's own rename refuses it first and this never
+        // lands; held only over there, the push would be the refusal.
+        if (tagsModel.tagSides(to) !== "")
+            return
+        page.pendingRenameTagRemote = remote
+        page.pendingRenameTagFrom = from
+        page.pendingRenameTagTo = to
+        page.pendingRenameTagOid = tagsModel.oidOfName(from)
+    }
+    function forgetRenameTagRemote() {
+        page.pendingRenameTagRemote = ""
+        page.pendingRenameTagFrom = ""
+        page.pendingRenameTagTo = ""
+        page.pendingRenameTagOid = ""
+    }
 
     /// A rename's box stays open until git answers, and these are the two words back to it. **Both boxes are asked**
     /// and only the one that was waiting acts: a rename comes from the left menu's row or from the chip on the graph,
@@ -1818,6 +1894,7 @@ FocusScope {
                 commandsModel.noteAnswered()
                 page.pendingRenameRemote = ""
                 page.pendingRenameTo = ""
+                page.forgetRenameTagRemote()
                 page.writeReported(repoTab.writeReportKind,
                                    repoTab.writeReportRemote,
                                    repoTab.writeReportName)
@@ -1837,6 +1914,7 @@ FocusScope {
             // A rename that did not happen has nothing to carry over.
             page.pendingRenameRemote = ""
             page.pendingRenameTo = ""
+            page.forgetRenameTagRemote()
             return
         }
         // A plain delete that landed is not answered here: the card that stayed up for it goes by itself
@@ -1851,14 +1929,24 @@ FocusScope {
         // flight when the rename's own answer lands, so `busyCount` is the gate.
         if (repoTab.busyCount === 0)
             page.noteRenameLanded()
-        // The branch took its new name here; the remote it speaks for is still under the old one. Asked only now, and
-        // only because there is a remote to ask about (デザイン規約 §左メニューの所作).
+        // The branch took its new name here; the remote it was measured against is still under the old one. Asked
+        // only now, and only because there is a remote to ask about (デザイン規約 §手元の改名をリモートへ運ぶ).
         if (repoTab.writeBranchOp && page.pendingRenameRemote !== "") {
             const spokenFor = page.pendingRenameRemote
             const took = page.pendingRenameTo
             page.pendingRenameRemote = ""
             page.pendingRenameTo = ""
-            page.askRenameRemote(spokenFor, took)
+            page.carryBranchRenameOver(spokenFor, took)
+        }
+        // And the tag's own half, on the same terms and through the same bar: the name over there is still the old
+        // one, and what to do about it is the same three answers.
+        if (repoTab.writeTagOp && page.pendingRenameTagRemote !== "") {
+            const on = page.pendingRenameTagRemote
+            const was = page.pendingRenameTagFrom
+            const now = page.pendingRenameTagTo
+            const at = page.pendingRenameTagOid
+            page.forgetRenameTagRemote()
+            renameCarryFlow.startAsk("tag", on, was, now, at)
         }
         // Where the answer sends the reader — **read out of the answers this notify carried**. One drain empties the
         // whole queue and notifies once (`RepoTab::write_answers`), so a write *starting* in the same batch — the

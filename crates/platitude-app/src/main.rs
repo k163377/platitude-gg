@@ -238,6 +238,8 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/RefRowMenu.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefTagMenu.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RemoteRowMenu.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/RenameCarryFlow.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/RenameCarryForm.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RefusalBadge.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/RemoteDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ReclickGesture.qml", "qt/qml/platitude");

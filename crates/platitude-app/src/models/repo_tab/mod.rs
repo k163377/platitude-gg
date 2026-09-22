@@ -329,6 +329,11 @@ pub struct RepoTab {
     /// wear `-D`, a rename to carry to the remote — reads this beside
     /// its own state.
     write_branch_op: bool,
+    /// The answer was about a tag (create / delete / rename), whichever
+    /// way it went — the same reading as `write_branch_op`, for the half
+    /// of the page armed on a tag: a rename waiting to be carried to the
+    /// remote reads this beside its own state.
+    write_tag_op: bool,
     /// The answer was a fetch, landed or not. A fetch that could not
     /// reach the far side has already said so in the tab's own terms —
     /// the button's count, the header's line, the panel raised once for

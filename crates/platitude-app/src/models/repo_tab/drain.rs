@@ -494,6 +494,12 @@ impl RepoTab {
             kind,
             OperationKind::Branch | OperationKind::DeleteBranchEverywhere
         );
+        // The tag's own pair, read the same way: the row a delete that
+        // reaches over to the remote took was a tag's either way.
+        self.write_tag_op = matches!(
+            kind,
+            OperationKind::Tag | OperationKind::DeleteTagEverywhere
+        );
         self.write_fetched = kind == OperationKind::Fetch;
         // The report travels on the answer; the group shows the one that
         // came with the answer it is describing.
@@ -514,6 +520,7 @@ impl RepoTab {
         self.write_moved_head = false;
         self.write_reworded = false;
         self.write_branch_op = false;
+        self.write_tag_op = false;
         self.write_fetched = false;
         self.write_report_kind = String::new();
         self.write_report_remote = String::new();
