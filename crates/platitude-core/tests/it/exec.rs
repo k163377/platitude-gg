@@ -161,6 +161,83 @@ async fn open_rejects_a_bare_repository_as_bare() {
     );
 }
 
+/// Every copy of one repository answers with the same repository, and
+/// each answers with the copy the folder is actually in — the two halves
+/// the strip needs to tell "another copy of what is already open" from
+/// "another repository" (デザイン規約 §タブの所作).
+#[tokio::test]
+async fn place_names_the_copy_and_the_repository_it_hangs_off() {
+    let mut repo_dir = TestRepo::init();
+    repo_dir.commit_file("a.txt", "hello\n", "initial");
+    let linked = repo_dir.path.with_file_name("linked");
+    repo_dir.git(&["worktree", "add", "-b", "topic", &linked.to_string_lossy()]);
+
+    let (executor, cancel) = env();
+    let main = bounded(
+        "place the copy",
+        repo::place(&executor, &repo_dir.path, &cancel),
+    )
+    .await
+    .unwrap();
+    let hung = bounded("place the copy", repo::place(&executor, &linked, &cancel))
+        .await
+        .unwrap();
+
+    let real = |path: &std::path::Path| std::fs::canonicalize(path).unwrap();
+    assert_eq!(real(&main.info.workdir), real(&repo_dir.path));
+    assert_eq!(real(&hung.info.workdir), real(&linked));
+    assert_eq!(
+        real(&main.repo),
+        real(&repo_dir.path),
+        "the repository's own copy names it"
+    );
+    assert_eq!(
+        real(&hung.repo),
+        real(&repo_dir.path),
+        "and the linked copy answers with the same one"
+    );
+}
+
+/// A folder deeper in the tree opens the copy above it, and that copy is
+/// filed under the same repository — the same fold the tab strip makes,
+/// asked of one answer.
+#[tokio::test]
+async fn place_from_a_subdirectory_answers_for_the_copy_around_it() {
+    let mut repo_dir = TestRepo::init();
+    repo_dir.commit_file("sub/dir/file.txt", "x\n", "nested");
+    let linked = repo_dir.path.with_file_name("linked");
+    repo_dir.git(&["worktree", "add", "-b", "topic", &linked.to_string_lossy()]);
+
+    let (executor, cancel) = env();
+    let deep = linked.join("sub").join("dir");
+    let place = bounded("place the copy", repo::place(&executor, &deep, &cancel))
+        .await
+        .unwrap();
+
+    let real = |path: &std::path::Path| std::fs::canonicalize(path).unwrap();
+    assert_eq!(real(&place.info.workdir), real(&linked));
+    assert_eq!(real(&place.repo), real(&repo_dir.path));
+}
+
+/// Two repositories sitting side by side are two, however alike their
+/// folders look.
+#[tokio::test]
+async fn place_keeps_two_repositories_apart() {
+    let mut one = TestRepo::init();
+    one.commit_file("a.txt", "one\n", "initial");
+    let mut two = TestRepo::init();
+    two.commit_file("a.txt", "two\n", "initial");
+
+    let (executor, cancel) = env();
+    let first = bounded("place the copy", repo::place(&executor, &one.path, &cancel))
+        .await
+        .unwrap();
+    let second = bounded("place the copy", repo::place(&executor, &two.path, &cancel))
+        .await
+        .unwrap();
+    assert_ne!(first.repo, second.repo);
+}
+
 #[tokio::test]
 async fn failed_commands_surface_gits_stderr() {
     let mut repo_dir = TestRepo::init();

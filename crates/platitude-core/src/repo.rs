@@ -130,6 +130,61 @@ async fn is_bare(executor: &GitExecutor, path: &Path, cancel: &CancellationToken
     }
 }
 
+/// Where a folder opens: the working copy it is in, and the repository
+/// that copy belongs to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Place {
+    /// What git answered about the folder itself. `workdir` is the root
+    /// of the working copy the folder sits in — a folder deeper in the
+    /// tree opens the copy above it, because that is the one git runs
+    /// in.
+    pub info: RepoInfo,
+    /// The repository's own working copy — what a tab is named after.
+    /// The listing opens on it wherever it is run from
+    /// ([`crate::worktrees::WorktreeEntry::main`]), so every copy of one
+    /// repository answers with the same path and none of them answers
+    /// with a path belonging to another repository.
+    ///
+    /// A bare repository puts its bare directory here: nothing else
+    /// names that repository, and the copies hanging off it still have
+    /// to be told apart from the copies of the one next door.
+    pub repo: PathBuf,
+}
+
+/// [`open`], and the repository the working copy it found belongs to.
+///
+/// **The second question is what a strip of tabs needs and [`open`]
+/// cannot answer**: two folders side by side are two repositories, and
+/// two linked working copies of one repository are one
+/// (デザイン規約 §タブの所作「同じリポジトリのタブは 1 枚」). It costs a
+/// second process, paid on the way into a tab — where the answer decides
+/// whether a tab is opened at all, and where a whole repository is about
+/// to be read either way.
+///
+/// **A listing git will not give does not stop the opening.** The folder
+/// is a working copy whatever the second question did; what is left
+/// unanswered is only which repository to file it under, and the copy
+/// then stands for itself — one tab per copy, which is what every tab
+/// was before the question was asked.
+pub async fn place(
+    executor: &GitExecutor,
+    path: &Path,
+    cancel: &CancellationToken,
+) -> Result<Place, GitError> {
+    let info = open(executor, path, cancel).await?;
+    let repo = match crate::worktrees::load(executor, &info.workdir, cancel).await {
+        Ok(entries) => entries
+            .into_iter()
+            .find(|entry| entry.main)
+            .map_or_else(|| info.workdir.clone(), |entry| PathBuf::from(entry.path)),
+        Err(error) => {
+            tracing::warn!(%error, path = %info.workdir.display(), "no worktree listing: the copy stands for itself");
+            info.workdir.clone()
+        }
+    };
+    Ok(Place { info, repo })
+}
+
 /// The key two paths are judged to be the same folder by — what decides
 /// whether a repository is already open.
 ///
