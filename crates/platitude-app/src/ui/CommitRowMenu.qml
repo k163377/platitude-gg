@@ -67,6 +67,10 @@ Item {
     /// (offers::ref_menu — the same two answers the sidebar's row reads).
     required property bool canSwitch
     required property bool switchAsks
+    /// …or leads to the working copy holding that name instead, which is that copy's folder (`RefRowMenu.heldLeaf`).
+    /// **Same words in the same seat as the sidebar's row** — one operation reads the same however it is met
+    /// (デザイン規約 §メニュー).
+    required property string heldLeaf
     /// And whether that name has a far side to pull from — the third answer off those same rules.
     required property bool canPull
     /// Whether that press would be turned down before git did anything, which is what greys the row
@@ -228,7 +232,14 @@ Item {
         // would leave HEAD on no branch (§ブランチ・コミットへの移動).
         AppMenuItem {
             id: switchCommitItem
-            code: "switch"
+            // A branch another working copy holds is a road to that copy rather than a move, and the row says where
+            // it leads — the same words in the same seat as the sidebar's row (デザイン規約 §メニュー).
+            code: rowMenu.heldLeaf === "" ? "switch" : ""
+            //: The row that leads to the working copy holding this branch; the folder's name follows it.
+            text: rowMenu.heldLeaf === "" ? "" : qsTr("Open")
+            nameMark: rowMenu.heldLeaf === "" ? "" : "tree"
+            nameMarkTint: Theme.success
+            markName: rowMenu.heldLeaf
             offered: rowMenu.canSwitch
             // The press raises a question where something stands in the move's way, and the mark says so before it
             // is made — the same rule the sidebar's row follows (`RefRowMenu`).

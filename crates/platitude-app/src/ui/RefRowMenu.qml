@@ -49,10 +49,15 @@ Item {
 
     /// What this menu offers, decided as it opens (see the note above).
     property bool canSwitch: false
-    /// Whether that row will raise a question — an operation standing, files still waiting on a decision, or the
-    /// branch out in another working copy. Worn as the `!` in the row's mark seat, so the press is read for what it
-    /// is before it is made (デザイン規約 §進行中の操作から出る).
+    /// Whether that row will raise a question — an operation standing, or files still waiting on a decision. Worn as
+    /// the `!` in the row's mark seat, so the press is read for what it is before it is made
+    /// (デザイン規約 §進行中の操作から出る).
     property bool switchAsks: false
+    /// The folder of the other working copy holding this row's branch, empty when none does — and the whole of what
+    /// makes that row lead somewhere else: the press stands the tab in that copy, so the row names it
+    /// (`RepoPage.switchToRef`, offers::SwitchAction::OpenHolder). The leaf, because that is what every other place
+    /// a copy is named calls it — the WORKTREES rows, the tab, the graph's marker (デザイン規約 §ref の種別).
+    property string heldLeaf: ""
     property bool canBranchHere: false
     property bool canIntegrateFrom: false
     /// Whether this row has a far side a `git pull` would go to: the branch the working tree is on, or the upstream
@@ -237,6 +242,7 @@ Item {
             refRowMenu.workTree.upstream)
         refRowMenu.canSwitch = offers.includes("switch")
         refRowMenu.switchAsks = offers.includes("asks")
+        refRowMenu.heldLeaf = held === "" ? "" : GitFacts.pathLeaf(held)
         refRowMenu.canBranchHere = offers.includes("branch-here")
         refRowMenu.canIntegrateFrom = offers.includes("integrate")
         refRowMenu.canPull = offers.includes("pull")
@@ -275,10 +281,19 @@ Item {
         }
         AppMenuItem {
             id: refSwitchItem
-            code: "switch"
+            // **A branch another working copy holds is not a move at all** — git keeps a branch to one copy, so the
+            // press goes to that copy instead (offers::SwitchAction::OpenHolder). The row says so: the command it
+            // cannot run gives its chip up, and what takes its place is where the press lands — the copy's own name,
+            // behind the mark it is read by everywhere else (デザイン規約 §進行中の操作から出る).
+            code: refRowMenu.heldLeaf === "" ? "switch" : ""
+            //: The row that leads to the working copy holding this branch; the folder's name follows it.
+            text: refRowMenu.heldLeaf === "" ? "" : qsTr("Open")
+            nameMark: refRowMenu.heldLeaf === "" ? "" : "tree"
+            nameMarkTint: Theme.success
+            markName: refRowMenu.heldLeaf
             offered: refRowMenu.canSwitch
-            // **What stands in the move's way presses through to a question**: a branch another copy holds and a tree
-            // with unmerged files both do, and the mark is what says so before the press
+            // **What stands in the move's way presses through to a question**: an operation standing and a tree with
+            // unmerged files both do, and the mark is what says so before the press
             // (デザイン規約 §進行中の操作から出る). Greying is the delete rows' answer — a row that cannot be
             // pressed says why only on hover, and the reader who reached for it is the one who needs to read it.
             //

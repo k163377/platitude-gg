@@ -47,6 +47,21 @@ MenuItem {
     property color markTint: Theme.textSecondary
     readonly property bool heads: menuItem.markKind !== ""
 
+    /// **A name inside the row's words, with the mark its kind is read by against it** — a working copy's folder
+    /// behind the WORKTREES mark, wherever a row leads to one (`RefRowMenu` の `Open`). `text` carries the words
+    /// before it and **the name ends them**: a mark is drawn, not written, so it cannot be put in a sentence's seat
+    /// the way a coloured name can (`refWords`) — and a row that led somewhere *through* a name would be naming two
+    /// things at once.
+    property string nameMark: ""
+    property string markName: ""
+    property color nameMarkTint: Theme.textSecondary
+    readonly property bool namesMark: menuItem.nameMark !== "" && menuItem.markName !== ""
+    /// The step in front of that mark. **A mark inside a word is a letter, not a thing standing in a row**
+    /// (デザイン規約 §余白 / §タブの所作): the word's own step, less the air the mark's box already holds — and
+    /// between the mark and the name it is about, nothing is spent at all.
+    readonly property real markWordGap:
+        Theme.spaceXs - (Theme.iconSm - nameMarkIcon.inkWidth) / 2
+
     /// The width this row asks the menu's shared chip column to hold: its chip's own glyphs, whether or not words
     /// follow them. A chip that ends its row asks too — the column has to clear the widest command, or it would end
     /// past where the other rows' words begin (デザイン規約 §git 用語のコード表記). Only a row with no chip asks for nothing —
@@ -153,6 +168,11 @@ MenuItem {
     implicitWidth: (codeChip.visible ? codeChip.implicitWidth + Theme.spaceSm : 0)
                    + (menuItem.growsForText
                       ? itemLabel.implicitWidth : Math.min(itemLabel.implicitWidth, Metrics.labelColW))
+                   // The marked name is data — a folder can be called anything — so it bids the seat a name gets
+                   // and elides past it, whatever the words in front of it are allowed (デザイン規約 §メニュー).
+                   + (menuItem.namesMark
+                      ? menuItem.markWordGap + Theme.iconSm
+                        + Math.min(markNameLabel.implicitWidth, Metrics.labelColW) : 0)
                    + (menuItem.note !== "" ? noteLabel.implicitWidth + Theme.spaceSm : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
@@ -192,10 +212,15 @@ MenuItem {
     // A blocked row's line is what the hover is for, so it comes before the elision's. Nothing else changes: one
     // tooltip, one delay.
     ToolTip.visible: (menuItem.hovered || menuItem.tipForced)
-                     && (menuItem.blocked || itemLabel.truncated)
+                     && (menuItem.blocked || itemLabel.truncated
+                         || (menuItem.namesMark && markNameLabel.truncated))
     ToolTip.delay: Metrics.tipDelayMs
+    // The whole line, marked name included: the mark is not a word, so what the hover hands over is the sentence
+    // with the name in it — and the copy the row leads to is the one thing a cut name takes away.
     ToolTip.text: menuItem.blocked ? menuItem.blockedWhy
-                : menuItem.code !== "" ? menuItem.code + " " + menuItem.text : menuItem.text
+                : menuItem.code !== "" ? menuItem.code + " " + menuItem.text
+                : menuItem.namesMark ? menuItem.text + " " + menuItem.markName
+                : menuItem.text
 
     // The mark, inside the padding the whole menu carries for it: it stands against the card's own padding with nothing
     // but air to its left, and the words follow at the distance `holdIndent` sets (デザイン規約 §長押し). A row of the menu that
@@ -249,7 +274,10 @@ MenuItem {
     }
 
     contentItem: RowLayout {
-        spacing: Theme.spaceSm
+        // **The steps are written on the items, not on the row.** All but one of them is the gap between two things
+        // the row says and takes `spaceSm`; the marked name is the last word of one sentence and takes a word's step
+        // (`markWordGap`), which a shared spacing could not tell apart.
+        spacing: 0
         // The chip spends no width of its own beyond the column: the layout sees the menu's shared chip column — never
         // less than its own glyphs — so every row's words start on the same x (デザイン規約 §git 用語のコード表記). The word itself
         // starts where every other row starts its words, and the tint hangs outside its glyphs — left into the row
@@ -257,6 +285,9 @@ MenuItem {
         Item {
             id: codeChip
             visible: menuItem.code !== ""
+            // The row's own step, off the item now that the layout keeps none. An invisible item is out of the
+            // layout altogether, margin and all, which is what a shared spacing did for it before.
+            Layout.rightMargin: Theme.spaceSm
             implicitWidth: {
                 const own = codeLabel.implicitWidth
                 if (!menuItem.menu)
@@ -300,7 +331,9 @@ MenuItem {
         }
         Label {
             id: itemLabel
-            Layout.fillWidth: true
+            // The width goes to whichever of the two carries the name: a row with a marked name has its data there,
+            // and these words are the fixed part in front of it.
+            Layout.fillWidth: !menuItem.namesMark
             // The row's own words, or the same line spelled as markup where one of them is a name in a colour of its
             // own (`refWords`). What the row *says* is `text` either way — the tooltip and the reader who cannot see
             // it are handed the sentence.
@@ -325,9 +358,52 @@ MenuItem {
             font.weight: menuItem.heads ? Font.DemiBold : menuItem.font.weight
             color: menuItem.heads ? Theme.textSecondary : menuItem.wordColor
         }
+        // The name the row leads to, with its mark set in front of it as a letter of the same word
+        // (`markWordGap`): one mark for one idea, the very one the WORKTREES rows, the tab and the graph's chips
+        // wear for a working copy (デザイン規約 §ref の種別).
+        RowLayout {
+            visible: menuItem.namesMark
+            Layout.fillWidth: menuItem.namesMark
+            Layout.leftMargin: menuItem.namesMark ? menuItem.markWordGap : 0
+            spacing: 0
+            Item {
+                Layout.preferredWidth: Theme.iconSm
+                Layout.preferredHeight: Theme.iconSm
+                Layout.alignment: Qt.AlignVCenter
+                NavIcon {
+                    id: nameMarkIcon
+                    anchors.centerIn: parent
+                    width: Theme.iconSm
+                    height: Theme.iconSm
+                    // The 16-grid scales with the seat and the line does not, so a mark set in a word would
+                    // otherwise carry more weight than the letters beside it (`NavIcon.stroke`).
+                    stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
+                    // `NavIcon` paints on a kind it is given; an empty one would be a shape nobody asked for.
+                    kind: menuItem.namesMark ? menuItem.nameMark : "tree"
+                    tint: menuItem.blocked || !menuItem.enabled || menuItem.armedMs > 0
+                          ? menuItem.wordColor : menuItem.nameMarkTint
+                    // A `Canvas` in the overlay layer can miss its first chance to paint — the card is built before
+                    // it is shown, and a mark that never painted frames as one nobody wired.
+                    Component.onCompleted: nameMarkIcon.requestPaint()
+                    onVisibleChanged: if (visible) nameMarkIcon.requestPaint()
+                }
+            }
+            Label {
+                id: markNameLabel
+                Layout.fillWidth: true
+                text: menuItem.markName
+                font.family: Theme.uiFamily
+                font.pixelSize: menuItem.font.pixelSize
+                elide: Text.ElideRight
+                verticalAlignment: Text.AlignVCenter
+                color: menuItem.wordColor
+            }
+        }
         Label {
             id: noteLabel
             visible: menuItem.note !== ""
+            // The row's own step, for the same reason the chip's is on the chip.
+            Layout.leftMargin: Theme.spaceSm
             text: menuItem.note
             verticalAlignment: Text.AlignVCenter
             rightPadding: menuItem.subMenu && menuItem.arrow ? menuItem.arrow.width + Theme.spaceXs : 0

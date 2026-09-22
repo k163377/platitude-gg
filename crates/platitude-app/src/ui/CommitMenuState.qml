@@ -51,6 +51,9 @@ QtObject {
     /// (offers::ref_menu).
     property bool menuCanSwitch: false
     property bool menuSwitchAsks: false
+    /// …or leads to another working copy instead: the folder of the one holding that name, empty when none does
+    /// (`RefRowMenu.heldLeaf` — the same road, entered from the graph).
+    property string menuHeldLeaf: ""
     /// Whether that name has a far side a `git pull` would go to, off the same rules and in the same one ask
     /// (offers::ref_menu) — the chip's entrance to the row the sidebar's own draws.
     property bool menuCanPull: false
@@ -71,6 +74,7 @@ QtObject {
     function askRefRows(kind, name, oidHex) {
         menuState.menuCanSwitch = false
         menuState.menuSwitchAsks = false
+        menuState.menuHeldLeaf = ""
         menuState.menuCanPull = false
         menuState.menuPullBlocked = false
         if (kind !== "branch" && kind !== "remote")
@@ -92,6 +96,7 @@ QtObject {
             menuState.workTree.upstream)
         menuState.menuCanSwitch = offers.includes("switch")
         menuState.menuSwitchAsks = offers.includes("asks")
+        menuState.menuHeldLeaf = held === "" ? "" : GitFacts.pathLeaf(held)
         menuState.menuCanPull = offers.includes("pull")
         menuState.menuPullBlocked = menuState.menuCanPull && menuState.workTree.pullBlocked
     }

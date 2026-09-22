@@ -1453,6 +1453,7 @@ FocusScope {
             published: commitMenuState.menuPublished
             canSwitch: commitMenuState.menuCanSwitch
             switchAsks: commitMenuState.menuSwitchAsks
+            heldLeaf: commitMenuState.menuHeldLeaf
             canPull: commitMenuState.menuCanPull
             pullBlocked: commitMenuState.menuPullBlocked
             canSequence: commitMenuState.menuCanSequence

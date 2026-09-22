@@ -38,6 +38,7 @@ Item {
         tipHeldElsewhere: false
         canSwitch: true
         switchAsks: false
+        heldLeaf: ""
         canPull: true
         pullBlocked: false
         hardResetTakes: 0
@@ -65,8 +66,8 @@ Item {
     /// The menu aimed at a name, the way the door aims it. `fields` names only what this case is about.
     function aimAt(fields) {
         const all = { "targetKind": "branch", "targetName": "feature/topic-a", "canSwitch": true,
-                      "switchAsks": false, "canPull": true, "pullBlocked": false, "published": false,
-                      "canIntegrate": true, "canSequence": true, "hardResetTakes": 0 }
+                      "switchAsks": false, "heldLeaf": "", "canPull": true, "pullBlocked": false,
+                      "published": false, "canIntegrate": true, "canSequence": true, "hardResetTakes": 0 }
         for (const key in fields)
             all[key] = fields[key]
         for (const key in all)
@@ -86,10 +87,16 @@ Item {
                 { tag: "a branch the tree is not on", fields: { canSwitch: true }, offered: true, asks: false },
                 { tag: "the branch the tree is on", fields: { canSwitch: false }, offered: false, asks: false },
                 {
-                    tag: "one another copy holds",
+                    tag: "one with an operation standing",
                     fields: { canSwitch: true, switchAsks: true },
                     offered: true,
                     asks: true,
+                },
+                {
+                    tag: "one another copy holds",
+                    fields: { canSwitch: true, heldLeaf: "topic" },
+                    offered: true,
+                    asks: false,
                 },
             ]
         }
@@ -99,6 +106,22 @@ Item {
             compare(menu.switchItem.offered, data.offered)
             compare(menu.switchItem.asks, data.asks, "the mark says a question is coming before it is asked")
             compare(menu.switchItem.blockedReason, "", "a move that cannot be made is not a greyed row")
+        }
+
+        /// **A row that leads to another working copy names it**, in place of the command it cannot run: the press
+        /// stands the tab in that copy and asks nothing, so the words are the whole of what is read before it
+        /// (offers::SwitchAction::OpenHolder). The mark beside the name is the WORKTREES one — the same mark that
+        /// copy wears on its row, on the tab and on the graph's chips.
+        function test_a_held_branch_names_the_copy_instead_of_a_command() {
+            root.aimAt({ canSwitch: true, heldLeaf: "topic" })
+            compare(menu.switchItem.code, "", "there is no git command for opening a working copy")
+            compare(menu.switchItem.text, "Open")
+            compare(menu.switchItem.markName, "topic")
+            compare(menu.switchItem.nameMark, "tree")
+            verify(menu.switchItem.namesMark)
+            root.aimAt({ canSwitch: true })
+            compare(menu.switchItem.code, "switch", "an ordinary move is the command it runs")
+            verify(!menu.switchItem.namesMark)
         }
 
         /// **Which kind the press is sent as is this file's alone**: the word the menu was aimed with, `remote` for
