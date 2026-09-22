@@ -287,13 +287,6 @@ async fn settle(s: Arc<RepoSession>, path: PathBuf) {
             // place in it (`session::write_order`).
             s.join_write_order(&info);
             s.sink.event(SessionEvent::Opened { info });
-            // The network before the reads: a round trip is the longest
-            // thing an opening starts, and starting it first is what
-            // lets the reads below run inside it. It holds nothing up —
-            // the reads do not wait on the write queue, and what the
-            // fetch brings down is published by its own refresh
-            // (`AfterWrite::Graph`).
-            let fetching = s.take_open_fetch(&workdir).await;
             // Before anything else: a missing identity turns the first
             // commit into a wall of git text, and the UI can ask for one
             // instead.
@@ -306,16 +299,31 @@ async fn settle(s: Arc<RepoSession>, path: PathBuf) {
                 FirstPass::Swapped => s.refresh_log(),
             }
             s.refresh_quick();
-            // A fetch reads what the remotes carry under `refs/tags/` on
-            // its way out, so only an opening without one has anything
-            // to ask. Asked here: `set_auto_fetch`, which the
-            // application calls the instant this session is handed over,
-            // has no workdir to read from until the lines above, and the
-            // interval it installs is what grants permission to look at
-            // all.
-            if !fetching {
-                s.catch_up_remote_tags();
-            }
+            // **The reads are asked for first, and the network is asked
+            // for beside them.** Deciding whether to fetch reads the
+            // remote list, and awaiting that here put a whole process
+            // launch in front of the graph's own reads — two of them on
+            // a repository whose remotes had not been read yet, which is
+            // most of what such a read costs
+            // (ci/baseline/code-costs-windows-x64.md).
+            //
+            // It holds nothing up on the way out either: the reads do
+            // not wait on the write queue, and what the fetch brings
+            // down is published by its own refresh (`AfterWrite::Graph`).
+            let opening = Arc::clone(&s);
+            s.runtime.spawn(async move {
+                let fetching = opening.take_open_fetch(&workdir).await;
+                // A fetch reads what the remotes carry under `refs/tags/`
+                // on its way out, so only an opening without one has
+                // anything to ask. Asked here: `set_auto_fetch`, which
+                // the application calls the instant this session is
+                // handed over, has no workdir to read from until the
+                // lines above, and the interval it installs is what
+                // grants permission to look at all.
+                if !fetching {
+                    opening.catch_up_remote_tags();
+                }
+            });
         }
         Err(error) => {
             if !error.is_cancelled() {
