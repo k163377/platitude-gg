@@ -59,6 +59,44 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&CHECK, &SYNC];
 const ROOTS: [&str; 3] = ["internal-docs", ".claude/rules", ".claude/rules-refs"];
 const LOOSE: [&str; 1] = ["CLAUDE.md"];
 
+/// The bytes an always-loaded rule document may hold. CLAUDE.md is in
+/// the context of every call a session makes, and a file under
+/// .claude/rules in every call after its crate is first touched, so a
+/// byte in either is paid again on every call that follows — which is
+/// what makes a rule here dearer than the same rule anywhere else. What
+/// a name can find (a type, a part, a command, a function) belongs in
+/// .claude/rules-refs, which nothing loads unasked.
+pub(crate) const CLAUDE_CAP: usize = 12 * 1024;
+pub(crate) const RULE_CAP: usize = 8 * 1024;
+
+/// The cap a document carries, when it carries one: CLAUDE.md and the
+/// files directly under .claude/rules. Answers for a hook payload's
+/// path (absolute, forward slashes) and for one relative to the root.
+pub(crate) fn cap_of(path: &str) -> Option<usize> {
+    if path == "CLAUDE.md" || path.ends_with("/CLAUDE.md") {
+        Some(CLAUDE_CAP)
+    } else if path.ends_with(".md")
+        && (path.starts_with(".claude/rules/") || path.contains("/.claude/rules/"))
+    {
+        Some(RULE_CAP)
+    } else {
+        None
+    }
+}
+
+/// The finding for a capped document that has grown past its cap.
+pub(crate) fn oversize(path: &str, bytes: usize) -> Option<String> {
+    let cap = cap_of(path)?;
+    (bytes > cap).then(|| {
+        format!(
+            "OVER-CAP: {bytes} bytes against a cap of {cap} — this document is read again by \
+             every call after it, so cut what it says: what a name can find (a type, a part, \
+             a command, a function) goes to .claude/rules-refs, and only what applies whatever \
+             file is touched stays (CLAUDE.md 規約の置き場所)"
+        )
+    })
+}
+
 pub fn run(args: &[String]) -> Result<(), String> {
     let mut sync = false;
     for arg in args {
@@ -81,20 +119,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     files.extend(LOOSE.iter().map(|name| root.join(name)));
     files.sort();
 
-    let mut torn: Vec<String> = Vec::new();
-    for file in &files {
-        let text = std::fs::read_to_string(file).map_err(|e| format!("{}: {e}", file.display()))?;
-        let relative = file
-            .strip_prefix(&root)
-            .unwrap_or(file)
-            .to_string_lossy()
-            .replace('\\', "/");
-        for found in breaks(&text) {
-            torn.push(format!("{relative}:{}: {}", found.line, found.kind.say()));
-        }
-    }
+    let (torn, over) = read_each(&root, &files)?;
 
-    for finding in &torn {
+    for finding in torn.iter().chain(&over) {
         println!("docs: {finding}");
     }
     for finding in &quoted.findings {
@@ -111,6 +138,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
              is why these read as fine — so read each one where it stands and put it back into \
              the block it belongs to",
             torn.len()
+        ));
+    }
+    if !over.is_empty() {
+        wrong.push(format!(
+            "{} always-loaded document(s) over cap: every byte of one is read again by every \
+             call after it, so what a name can find goes to .claude/rules-refs and only what \
+             applies whatever file is touched stays",
+            over.len()
         ));
     }
     if !quoted.findings.is_empty() {
@@ -153,6 +188,28 @@ pub fn run(args: &[String]) -> Result<(), String> {
     } else {
         Err(wrong.join("; and "))
     }
+}
+
+/// Every document read once: its torn blocks, and its size against the
+/// cap it carries, each finding named by the path relative to the root.
+fn read_each(root: &Path, files: &[PathBuf]) -> Result<(Vec<String>, Vec<String>), String> {
+    let mut torn: Vec<String> = Vec::new();
+    let mut over: Vec<String> = Vec::new();
+    for file in files {
+        let text = std::fs::read_to_string(file).map_err(|e| format!("{}: {e}", file.display()))?;
+        let relative = file
+            .strip_prefix(root)
+            .unwrap_or(file)
+            .to_string_lossy()
+            .replace('\\', "/");
+        for found in breaks(&text) {
+            torn.push(format!("{relative}:{}: {}", found.line, found.kind.say()));
+        }
+        if let Some(finding) = oversize(&relative, text.len()) {
+            over.push(format!("{relative}: {finding}"));
+        }
+    }
+    Ok((torn, over))
 }
 
 /// Write what the catalogue owns, when asked to.
@@ -636,5 +693,26 @@ paths:
         assert!(covers("/p/CLAUDE.md"));
         assert!(!covers("/p/ci/baseline/perf-windows-x64.md"));
         assert!(!covers("/p/internal-docs/notes.txt"));
+    }
+
+    /// The caps sit on the documents every call loads — CLAUDE.md and
+    /// the rules — and on nothing a session reads by choice, spelled as
+    /// a hook's absolute path and as the check's relative one alike.
+    #[test]
+    fn the_caps_sit_on_the_always_loaded_documents() {
+        use super::{CLAUDE_CAP, RULE_CAP, cap_of, oversize};
+        assert_eq!(cap_of("C:/p/CLAUDE.md"), Some(CLAUDE_CAP));
+        assert_eq!(cap_of("CLAUDE.md"), Some(CLAUDE_CAP));
+        assert_eq!(cap_of("/p/.claude/rules/app-ui.md"), Some(RULE_CAP));
+        assert_eq!(cap_of(".claude/rules/core.md"), Some(RULE_CAP));
+        assert_eq!(cap_of("/p/.claude/rules-refs/app-ui.md"), None);
+        assert_eq!(cap_of(".claude/rules-refs/core.md"), None);
+        assert_eq!(cap_of("internal-docs/デザイン規約.md"), None);
+        assert_eq!(cap_of("/p/.claude/rules/notes.txt"), None);
+        assert!(oversize(".claude/rules/core.md", RULE_CAP).is_none());
+        let over = oversize(".claude/rules/core.md", RULE_CAP + 1).unwrap();
+        assert!(over.starts_with("OVER-CAP: "), "{over}");
+        assert!(over.contains("rules-refs"), "{over}");
+        assert!(oversize("internal-docs/x.md", usize::MAX).is_none());
     }
 }

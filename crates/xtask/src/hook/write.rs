@@ -66,10 +66,12 @@ pub(super) fn post_write(input: &str) -> Result<(), String> {
 }
 
 /// The blocks an edit to this tree's markdown just tore off the list they
-/// belonged to (`crate::docs`). Said here
-/// because nothing about one looks wrong in the source — every word is
-/// still there, in the order it was written — so the turn that made it is
-/// the only one that still knows what it meant to say.
+/// belonged to, and the cap an always-loaded document just grew past
+/// (`crate::docs`). Said here because nothing about a torn block looks
+/// wrong in the source — every word is still there, in the order it was
+/// written — so the turn that made it is the only one that still knows
+/// what it meant to say; and because the turn that grew the document is
+/// the one that knows what it added.
 fn doc_notes(path: &str) -> Vec<String> {
     if !crate::docs::covers(path) {
         return Vec::new();
@@ -82,8 +84,10 @@ fn doc_notes(path: &str) -> Vec<String> {
     let Ok(text) = std::fs::read_to_string(path) else {
         return Vec::new();
     };
+    let over = crate::docs::oversize(path, text.len());
     crate::docs::findings(&text)
         .into_iter()
+        .chain(over)
         .map(|finding| format!("{name} {finding}"))
         .collect()
 }
