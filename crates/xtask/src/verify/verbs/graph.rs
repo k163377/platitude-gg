@@ -577,4 +577,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[(Arg::Is("message"), "middle_scroll lanes=false x=0")],
         plain: "middle_scroll lanes=true",
     },
+    // How the gesture ends, which no picture can answer: a drift that
+    // stayed and one that ended with the hand frame alike, and so do a
+    // hand holding still inside the dead zone and one that never
+    // asked. Each half wants the other's line to be wrong, which is
+    // what the argument is for.
+    Verb {
+        name: "middle-scroll-exit",
+        when: &[(
+            Arg::Is("click"),
+            "middle_scroll_exit case=click travelled=false scrolling=true sent=false",
+        )],
+        plain: "middle_scroll_exit case=held travelled=true scrolling=false sent=true",
+    },
 ];

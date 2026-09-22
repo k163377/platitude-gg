@@ -63,6 +63,9 @@ Item {
     /// read back (a middle button cannot be injected any more than a hover can — verify-ui).
     function startHand(x, y) { hand.start(x, y) }
     function driftHand(x, y) { hand.drift(x, y) }
+    /// The hand is over by something other than a click in this pane — the wheel, or Escape. Everything standing in
+    /// this window answers Escape (デザイン規約 §hover のツールチップ).
+    function stopHand() { hand.stop() }
     readonly property alias handScrolling: hand.scrolling
     readonly property alias barShown: bar.visible
 

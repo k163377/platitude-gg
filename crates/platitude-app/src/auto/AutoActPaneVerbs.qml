@@ -70,6 +70,8 @@ Item {
                    || act === "graph-head-back" || act === "graph-head-go"
                    || act === "graph-head-lit") {
             graphHeadTimer.start()
+        } else if (act === "middle-scroll-exit") {
+            middleExitTimer.begin()
         } else if (act === "graph-bar" || act === "graph-bar-away"
                    || act === "middle-scroll") {
             // Both want lanes that do not fit their column, and no demo repository has that many — the divider is
@@ -480,6 +482,56 @@ Item {
     // The flag is kept for the whole gesture (デザイン規約 §グラフを横へ送る), and nothing here ends the gesture, so a wait on
     // `autoPanning` going false never completed for the lane column's own case (measured, watchdog on both systems,
     // `message` passing beside it because that one never pans).
+    // **The two ways a middle-click gesture ends**, which is what a browser's does and what this one did not
+    // (デザイン規約 §グラフを横へ送る). Both go in at the pane's own three entries — the press, the pointer moving, and
+    // the button coming up — so what the run drives is the wiring and not a copy of it.
+    //
+    // The argument is the hand: `held` pulls out of the dead zone before letting go (the drift ends with the hand),
+    // `click` never leaves it (the drift stays for the next press to take down, and nothing has moved). **The ticker
+    // has to have run** before either can be read — an absence of movement cannot say whether anything asked.
+    SampleTimer {
+        id: middleExitTimer
+        property int step: 0
+        property real fromY: 0
+        property bool movedAway: false
+        function begin() {
+            middleExitTimer.step = 0
+            middleExitTimer.start()
+        }
+        onTriggered: {
+            if (middleExitTimer.step === 0) {
+                if (graphPane.view.count === 0)
+                    return
+                const y = graphPane.height / 2
+                // The subject column: this verb is about how the gesture ends, and a press on the lanes would carry
+                // the sideways drift into the answer as well.
+                const x = graphPane.labelW + graphPane.graphColW + Theme.spaceXl
+                middleExitTimer.fromY = graphPane.view.contentY
+                graphPane.startAutoScroll(x, y)
+                // Past the pad for `held`, well inside it for `click`.
+                graphPane.driftPointer(x, y + (Harness.autoActArg === "click"
+                                               ? Metrics.middleScrollDeadZone - 5 : 200))
+                middleExitTimer.step = 1
+                return
+            }
+            if (middleExitTimer.step === 1) {
+                if (graphPane.autoTicks < 2)
+                    return
+                middleExitTimer.movedAway =
+                    Math.abs(graphPane.view.contentY - middleExitTimer.fromY) > 0.5
+                graphPane.letGoAutoScroll()
+                middleExitTimer.step = 2
+                return
+            }
+            middleExitTimer.stop()
+            Harness.report("middle_scroll_exit case=" + (Harness.autoActArg === "click" ? "click" : "held")
+                           + " travelled=" + graphPane.autoTravelled
+                           + " scrolling=" + graphPane.autoScrolling
+                           + " sent=" + middleExitTimer.movedAway
+                           + " ticks=" + graphPane.autoTicks)
+            driver.complete()
+        }
+    }
     SampleTimer {
         id: middleScrollTimer
         onTriggered: {

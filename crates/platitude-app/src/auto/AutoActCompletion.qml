@@ -214,7 +214,7 @@ QtObject {
                 "wip-embedded",
                 "changes-fold", "changes-unfold",
                 "graph-bar", "graph-bar-away", "pane-bar", "pane-bar-away",
-                "text-bar", "text-bar-away", "middle-scroll",
+                "text-bar", "text-bar-away", "middle-scroll", "middle-scroll-exit",
                 "graph-tail", "graph-tail-more",
                 "graph-head", "graph-head-below", "graph-head-back",
                 "graph-head-go", "graph-head-lit", "wip-lanes",

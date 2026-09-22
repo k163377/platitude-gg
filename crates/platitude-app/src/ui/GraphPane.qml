@@ -452,9 +452,28 @@ Rectangle {
     function driftPointer(x, y) {
         autoScroll.drift(x, y)
     }
+    /// The middle button came up. **Which exit that is was decided while it was down** (`MiddleAutoScroll.letGo`) —
+    /// the press and the automation hook come through here for the same reason `startAutoScroll` exists.
+    function letGoAutoScroll() {
+        autoScroll.letGo()
+    }
+    /// Whether the hand left the dead zone before letting go, and how many times the drift has been asked for a
+    /// distance — automation only, the way `view` is (app-ui.md).
+    readonly property alias autoTravelled: autoScroll.travelled
+    readonly property alias autoTicks: autoScroll.ticks
+    /// The gesture is over by something other than a click in this pane — Escape, or the pane going off the screen
+    /// (`RepoPage.escapePressed`). Everything standing in this window answers Escape (デザイン規約 §hover のツールチップ),
+    /// and a pointer mode that has taken the cursor and the view is the most standing thing there is.
+    function stopAutoScroll() {
+        autoScroll.stop()
+    }
     MiddleAutoScroll {
         id: autoScroll
         anchors.fill: parent
+        // **Over the rows.** The anchor is the one thing on screen saying where this gesture is measured from, and at
+        // the default z it went behind the history: the mark showed only where the pane had run out of rows, which is
+        // the one place nobody presses. Above the lane strip's own z and below the dividers, as the stand-in is.
+        z: 1
         panFrom: graphArea.labelW
         panTo: graphArea.labelW + graphArea.graphColW
         canPan: graphArea.graphXMax > 0

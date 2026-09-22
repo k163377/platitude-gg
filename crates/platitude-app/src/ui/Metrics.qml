@@ -15,6 +15,8 @@ import QtQuick
 import platitude.ui
 
 QtObject {
+    id: metrics
+
     // ---- 1. 基礎: how a gesture is answered, anywhere it is made ----
     readonly property real iconStroke: 1.5
     readonly property int spinMs: 1000
@@ -47,8 +49,17 @@ QtObject {
     readonly property int wheelRows: 6
     // Middle-click autoscroll, and the send a dragged tab gets once it crosses the band's edge — both are "how far
     // the hand pointed past what it can reach = how fast", and two sensitivities would make one gesture run at
-    // different speeds depending on where it was made.
-    readonly property real middleScrollGain: 0.12
+    // different speeds depending on where it was made. **The three below are one curve**, read through `handSent`.
+    //
+    // Pixels per millisecond, per distance raised to `middleScrollCurve` — the units the browsers' own autoscroll
+    // states it in (Chromium `autoscroll_controller.cc`: `pow(fabs(distance), 2.2) * -0.000008`).
+    readonly property real middleScrollGain: 0.000008
+    // The curve, not a straight line: a hand a little way off the anchor gets fine control and one held far out gets
+    // out of the way. Linear was twitchy at the near end and weak at the far one.
+    readonly property real middleScrollCurve: 2.2
+    // The pad around the anchor where the hand is holding still, not asking. Without it no hand can hold a view
+    // still — a pixel of drift is a speed. Per axis, so a hand drifting straight down does not creep sideways.
+    readonly property int middleScrollDeadZone: 15
     // The chip column's default width. Its floor is a count of
     // characters, measured at run time from the font in use.
     readonly property int labelColW: 152
@@ -92,4 +103,17 @@ QtObject {
     // has to be short enough that a crash loses a layout nobody would miss. Persistence timing is not something drawn,
     // so the design document has no seat for it and this is the one value that lives here alone.
     readonly property int stateFlushMs: 2000
+
+    /// How far a hand pointing `away` pixels past what it can reach sends the thing under it in `ms` milliseconds —
+    /// the one answer to "distance = speed" the whole window gives (デザイン規約 §グラフを横へ送る / §タブの所作).
+    /// Signed like `away`, and zero inside the dead zone.
+    ///
+    /// **A rule that reads its arguments** (`Words` keeps the same kind): two surfaces ask it — the middle-click
+    /// autoscroll and a tab carried past the band's edge — and a second copy of the curve would be a second answer.
+    function handSent(away, ms) {
+        const off = Math.abs(away)
+        if (off <= metrics.middleScrollDeadZone)
+            return 0
+        return Math.sign(away) * Math.pow(off, metrics.middleScrollCurve) * metrics.middleScrollGain * ms
+    }
 }

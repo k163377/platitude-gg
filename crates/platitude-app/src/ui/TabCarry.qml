@@ -68,7 +68,7 @@ Item {
         if (at < 0)
             return
         const room = carry.view.contentWidth - carry.view.width
-        const asked = carry.view.contentX + carry.heldPush * Metrics.middleScrollGain
+        const asked = carry.view.contentX + Metrics.handSent(carry.heldPush, run.interval)
         const settled = Math.max(0, Math.min(asked, room))
         if (settled === carry.view.contentX)
             return
@@ -142,10 +142,13 @@ Item {
         carry.heldPush = 0
     }
 
-    // The strip travels while a tab is held past the end of the run. One frame a tick and the sensitivity the app's
-    // other autoscroll reads (`MiddleAutoScroll`, デザイン規約 §グラフを横へ送る): the two are the same gesture seen
-    // from different ends — a hand asking for somewhere it cannot reach, and the distance saying how badly.
+    // The strip travels while a tab is held past the end of the run. One frame a tick and the curve the app's other
+    // autoscroll reads (`Metrics.handSent`, デザイン規約 §グラフを横へ送る): the two are the same gesture seen
+    // from different ends — a hand asking for somewhere it cannot reach, and the distance saying how badly. **The
+    // dead zone comes with it**: the first pixels past the edge are a hand steadying a tab on the last place, not
+    // asking for the next one.
     Timer {
+        id: run
         interval: 16
         repeat: true
         running: carry.heldId >= 0 && carry.heldPush !== 0 && carry.view.contentWidth > carry.view.width
