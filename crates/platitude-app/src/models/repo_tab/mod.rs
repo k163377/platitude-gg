@@ -63,7 +63,10 @@ pub struct RepoTab {
     repo_path: String,
     /// Where the picker opens: the folder this repository sits in, as
     /// a URL — repositories are kept side by side far more often than
-    /// inside one another.
+    /// inside one another. **The repository's own working copy is what
+    /// it is read off** (`Hub::home_copy`), so a tab standing in a
+    /// linked copy opens the picker where the repositories are and not
+    /// where that repository's copies are.
     picker_folder_url: String,
     /// Why the repository would not open: git's own words. Read only on
     /// the `other` kind — for the two the application can name itself,

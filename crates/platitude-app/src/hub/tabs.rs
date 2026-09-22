@@ -151,6 +151,11 @@ impl Hub {
     /// holds both paths as well, but it holds them for the row — this
     /// answers for the tab id the page has, which is the one thing a
     /// page knows about itself.
+    ///
+    /// **And asked on every opening**, for the folder the picker comes
+    /// up in (`RepoTab::picker_folder_url`): the next repository a
+    /// reader opens sits beside the repository, not beside the copy
+    /// this tab is standing in.
     pub fn home_copy(&self, id: i32) -> Option<String> {
         let tab = self.tabs.get(&id)?;
         (tab.home != tab.path).then(|| tab.home.to_string_lossy().into_owned())

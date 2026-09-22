@@ -41,7 +41,17 @@ impl RepoTab {
                 TabMsg::Opened { title, path } => {
                     self.state = "open".into();
                     self.title = title;
-                    self.picker_folder_url = picker_folder_url(std::path::Path::new(&path));
+                    // **Beside the repository, not beside the copy this
+                    // tab happens to be standing in** (`Hub::home_copy`).
+                    // A reader keeps their linked copies together
+                    // somewhere of their own, and the folder they hold is
+                    // full of copies of the one repository — the next
+                    // repository to open sits beside the repository, which
+                    // is where this opens whichever copy the tab is in.
+                    let beside = Hub::with(|hub| hub.home_copy(self.tab_id))
+                        .flatten()
+                        .unwrap_or_else(|| path.clone());
+                    self.picker_folder_url = picker_folder_url(std::path::Path::new(&beside));
                     self.repo_path = path;
                     self.stood();
                 }
