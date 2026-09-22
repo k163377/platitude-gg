@@ -38,10 +38,7 @@ async fn head_is_unborn(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<bool, GitError> {
-    Ok(refs::head_state(executor, workdir, cancel)
-        .await?
-        .oid
-        .is_none())
+    Ok(refs::head_tip(executor, workdir, cancel).await?.is_none())
 }
 
 /// `git add -- <paths>`: stages modifications, additions and deletions.

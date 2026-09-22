@@ -196,6 +196,39 @@ async fn empty_repository_has_unborn_head_and_says_so_by_code() {
     assert!(refs_list.is_empty());
 }
 
+/// **The walk's HEAD read asks one question.** Where a caller has no use
+/// for the branch — the walk names commits, not branches — the pair
+/// `head_state` runs is a second process launch in front of the first
+/// chunk, and on Windows the launch is most of what a read costs
+/// (ci/baseline/code-costs-windows-x64.md). The answers are the same
+/// ones, exit code and all.
+#[tokio::test]
+async fn the_narrow_head_read_asks_for_the_commit_and_nothing_else() {
+    let mut repo = TestRepo::init();
+    let (executor, log, cancel) = logged();
+
+    let unborn = refs::head_tip(&executor, &repo.path, &cancel)
+        .await
+        .unwrap();
+    assert_eq!(unborn, None, "no commit yet");
+
+    let sha = repo.commit_file_id("a.txt", "1\n", "initial");
+    let born = refs::head_tip(&executor, &repo.path, &cancel)
+        .await
+        .unwrap();
+    assert_eq!(born, Some(Oid::from_hex_str(&sha).unwrap()));
+
+    assert_eq!(
+        log.ends_of(&["rev-parse", "--verify"]),
+        vec![CommandEnd::Answered(1), CommandEnd::Answered(0)],
+        "unborn is an answer, not a failed row"
+    );
+    assert!(
+        log.ends_of(&["symbolic-ref"]).is_empty(),
+        "the branch is nobody's question here"
+    );
+}
+
 /// The counts a sidebar row draws, taken from real git: a placeholder
 /// spelled wrong reads as an empty leg, and every branch would
 /// then look level with its upstream while the parser still

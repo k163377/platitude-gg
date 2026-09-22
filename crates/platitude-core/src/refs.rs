@@ -318,32 +318,21 @@ pub async fn remote_tips(
         .collect())
 }
 
-pub async fn head_state(
+/// Just the commit HEAD stands on — the half [`head_state`] spends its
+/// second process on, for a caller with no use for the branch.
+///
+/// **One process, where two stood in front of the first chunk.** The
+/// walk asks this when no refs read has landed yet (`session::walk`),
+/// and the branch is not in the walk's command at all; on Windows the
+/// launch is most of what a read costs
+/// (ci/baseline/code-costs-windows-x64.md).
+///
+/// `None` is an unborn HEAD, which git answers here with exit 1.
+pub async fn head_tip(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
-) -> Result<HeadState, GitError> {
-    // The full name, cut here: `--short` shortens to whatever reads back
-    // unambiguously, so a tag of the same name would spell the branch
-    // `heads/x` while the status spells it `x`, and the one record would
-    // take the two for two HEADs.
-    let sym = executor
-        .run_unchecked(
-            GitCommand::new()
-                .cwd(workdir)
-                // Exit 1 is the answer "HEAD is detached".
-                .answers_by_code(1)
-                .args(["symbolic-ref", "-q", "HEAD"]),
-            cancel,
-        )
-        .await?;
-    let branch = (sym.code == 0).then(|| {
-        let full = sym.stdout_utf8().trim().to_string();
-        full.strip_prefix("refs/heads/")
-            .unwrap_or(&full)
-            .to_string()
-    });
-
+) -> Result<Option<Oid>, GitError> {
     let head = executor
         .run_unchecked(
             GitCommand::new()
@@ -354,20 +343,50 @@ pub async fn head_state(
             cancel,
         )
         .await?;
-    let oid = if head.code == 0 {
-        Some(
-            Oid::from_hex(head.stdout_utf8().trim().as_bytes()).map_err(|_| {
-                GitError::UnexpectedOutput {
-                    command: "git rev-parse --verify -q HEAD".to_string(),
-                    message: head.stdout_utf8().trim().to_string(),
-                }
-            })?,
-        )
-    } else {
-        None
-    };
+    if head.code != 0 {
+        return Ok(None);
+    }
+    Oid::from_hex(head.stdout_utf8().trim().as_bytes())
+        .map(Some)
+        .map_err(|_| GitError::UnexpectedOutput {
+            command: "git rev-parse --verify -q HEAD".to_string(),
+            message: head.stdout_utf8().trim().to_string(),
+        })
+}
 
-    Ok(HeadState::of(branch, oid))
+/// Where HEAD is: the branch it is on, if any, and the commit it stands
+/// on.
+///
+/// **The two reads go out together.** They ask git different questions
+/// and neither answer feeds the other, so one after the other is a
+/// second process launch nobody is served by.
+pub async fn head_state(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<HeadState, GitError> {
+    // The full name, cut here: `--short` shortens to whatever reads back
+    // unambiguously, so a tag of the same name would spell the branch
+    // `heads/x` while the status spells it `x`, and the one record would
+    // take the two for two HEADs.
+    let symbolic = executor.run_unchecked(
+        GitCommand::new()
+            .cwd(workdir)
+            // Exit 1 is the answer "HEAD is detached".
+            .answers_by_code(1)
+            .args(["symbolic-ref", "-q", "HEAD"]),
+        cancel,
+    );
+    let (sym, oid) = tokio::join!(symbolic, head_tip(executor, workdir, cancel));
+    let sym = sym?;
+    let branch = (sym.code == 0).then(|| {
+        let full = sym.stdout_utf8().trim().to_string();
+        full.strip_prefix("refs/heads/")
+            .unwrap_or(&full)
+            .to_string()
+    });
+
+    Ok(HeadState::of(branch, oid?))
 }
 
 /// Splits a remote-tracking display name (`origin/main`) into the remote
