@@ -40,11 +40,12 @@ RowLayout {
     readonly property string homeName: body.homeCopy ? body.row.bucket : ""
     /// The colour a row wears where this window is standing. A branch says it in the link colour everywhere a name
     /// of it is drawn (デザイン規約 §ref の種別), and the main working copy keeps that colour — it is the one row
-    /// that answers with a branch. **A linked copy says it in the WORKTREES section's own green**: the two are the
-    /// two kinds of place a reader can be standing in, and the colour is what tells them apart without reading a
-    /// word (デザイン規約 §ref の種別 の名前の色).
+    /// that answers with a branch. **A linked copy says it in the WORKTREES section's green, a step brighter**
+    /// (`textHereTree`): the two are the two kinds of place a reader can be standing in, and the colour is what tells
+    /// them apart without reading a word — the hue is the section this row belongs to, and the brightness is what
+    /// says the reader is standing on this one (デザイン規約 §ref の種別 の名前の色).
     readonly property color hereTone:
-        body.row.kindHint === "worktree" && !body.homeCopy ? Theme.success : Theme.textLink
+        body.row.kindHint === "worktree" && !body.homeCopy ? Theme.textHereTree : Theme.textLink
 
     spacing: Theme.spaceXs
     // The mark and the name, in the part both file lists share (`NameCell`): the slot every row opens with — a

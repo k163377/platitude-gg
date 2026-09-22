@@ -143,6 +143,23 @@ QtObject {
     // textSecondary, detached HEAD = warning (that one really is a state).
     readonly property color refTag: "#D946EF"
 
+    // ---- colors: which working copy the reader is standing in ----
+    // The name on the WORKTREES row of the copy this window has open, where that copy is a linked worktree. **The
+    // section's own green, a step up the ramp**: the green is what the WORKTREES section *is* (its icon, the tree
+    // mark, the chip's frame), so the hue says which kind of place this row is and the brightness says the reader is
+    // standing on this one — hue for the kind, lightness for where, the split the tag chips are already read by
+    // (デザイン規約 §ref の種別). The repository's own copy answers the same question in `textLink`, because that row
+    // is named by its branch and a branch says it in `textLink` wherever its name is drawn.
+    // Tailwind green 500, one step over `success`'s green 600: 1.53x its luminance, and CIEDE2000 9.6 from it — no
+    // narrower than 9.5 under any of the three CVD types (Machado 2009 severity 1.0), over the 8.8 floor colours
+    // told apart in one place are held to (規約 §暗く落とした段). 8.9:1 over `bgSurface`, 6.5:1 over `bgSelected`,
+    // and no closer than 11.2 to any other name colour in the panel (`textLink`, under tritanopia).
+    // **The two it does stand close to are never in a list with it**: `danger` at 7.7 (deuteranopia) is a conflict's
+    // mark on a file row, and `diffAddedFg` at 6.8 is an added file's — neither is ever drawn in the WORKTREES
+    // section, and a colour read apart by which column it is in is how `success` itself is already read
+    // (規約 §ref の種別).
+    readonly property color textHereTree: "#22C55E"
+
     // ---- colors: git / diff ----
     readonly property color diffAddedFg: "#4ADE80"
     readonly property color diffAddedBg: "#14301D"
