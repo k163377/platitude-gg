@@ -3690,35 +3690,30 @@ FocusScope {
         }
     }
 
-    // A command the user asked for failed. Nothing else on screen says what git said, so the log comes up by itself
-    // and stays up — closing it is the reader's call (the one exception is the panel a failed fetch raised, which a
-    // fetch that lands takes back down: `absorbFetchRecovery`). Unless this page asked for the refusal and turned it
-    // into a question: then the bar is already saying it, and the log would say it twice while pushing the graph out
-    // of the way.
+    // A command the user asked for failed. **The panel is not raised here, and who it belongs to is not decided
+    // here** (デザイン規約 §git が言ったことを読む場所 — 開く判断は「操作」の答えで下し、コマンド 1 本の終了コードでは
+    // 下さない): every command the reader asks for runs inside a write (`session::open` hands out one asked-for
+    // executor and writes are all that spawn on it), one operation is several commands, and a non-zero one part way
+    // through is not a failure yet. The write's own answer raises the log and says whose the panel is in the same
+    // breath — `tellRefusal` for the presses that named their write, `absorbLeftoverAnswer` for the ones nobody did,
+    // and `onFetchFirstFailed` for the fetch.
     //
-    // And unless a write is in flight, whose own answer decides instead (デザイン規約 §git が言ったことを読む場所 — 開く判断は
-    // 「操作」の答えで下し、コマンド 1 本の終了コードでは下さない). One operation is several commands, so a non-zero one part
-    // way through is not a failure yet; and the answer is the only thing that knows whether the far side turned it
-    // down with something to report (`absorbWriteResult`, which raises the log itself).
+    // **Raised from here as well, it was raised twice on two feeds in no fixed order.** The command's end and its
+    // write's answer travel separate queues (`hub::Feeds`), and where this one came second the fetch's own refusal
+    // was read as somebody else's news and took the panel off the fetch that raised it; where it came first, the
+    // fetch found a panel already standing and left it to the reader. Either way the recovery had nothing to take
+    // down, and a laptop that woke up kept the news of the network it had lost (verify-linux `fetch-recover`,
+    // `open=true` under gate load, green on its own).
+    //
+    // What is left here is the mark, which is this row's own: a report has already said what git said, so it goes
+    // back down when the row it is about finally arrives (デザイン規約 §答えの要らない報せ).
     Connections {
         target: commandsModel
         function onFailure() {
-            if (repoTab.writeRunning)
-                return
-            // The report that answers this one is already standing; this is only its row arriving late. The mark goes
-            // back down and the log stays where the reader left it (デザイン規約 §答えの要らない報せ).
             if (page.answeredFailures > 0) {
                 page.answeredFailures--
                 commandsModel.noteAnswered()
-                return
             }
-            if (page.expectedRefusals > 0) {
-                page.expectedRefusals--
-                return
-            }
-            // Somebody else's news is going into the panel now, so a fetch that lands later leaves it standing.
-            commandsOwner.newsTakes()
-            page.commandsOpen = true
         }
     }
 

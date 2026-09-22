@@ -212,9 +212,16 @@ impl CommandsModel {
     #[qsignal]
     fn changed(&mut self);
 
-    /// A command the user asked for failed. The page opens the panel on
-    /// this; a background read failing stays quiet
-    /// (デザイン規約 §git が言ったことを読む場所).
+    /// A command the user asked for failed; a background read failing
+    /// stays quiet (デザイン規約 §git が言ったことを読む場所).
+    ///
+    /// **The panel is not raised on this.** Every command the reader
+    /// asks for runs inside a write, and whether the *operation* failed
+    /// is a question only its own answer can settle — which arrives on
+    /// the tab's feed, not this one, and the two drain in no fixed
+    /// order (`RepoPage`). What this is read for is the panel putting
+    /// the newest row back in view (`CommandsPane`) and the mark a
+    /// report has already answered (`note_answered`).
     #[qsignal]
     fn failure(&mut self);
 

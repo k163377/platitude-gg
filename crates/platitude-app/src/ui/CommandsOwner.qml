@@ -31,10 +31,14 @@ QtObject {
         owner.heldByFetch = false
     }
 
-    /// News that is not this fetch's has been raised into the panel: another command's failure, or the answer to a
-    /// write that nothing else on screen explains. The panel is saying two things now and only one of them goes down
-    /// by itself, so it stops going down at all. **News that came before the fetch's does not reach here** — it was
+    /// News that is not this fetch's has been raised into the panel: the answer to a write that nothing else on
+    /// screen explains, whoever sent it. The panel is saying two things now and only one of them goes down by
+    /// itself, so it stops going down at all. **News that came before the fetch's does not reach here** — it was
     /// raised into a panel the reader has already taken down, and the mark in the corner is what still carries it.
+    ///
+    /// **Every caller is an answer, and every answer arrives on the tab's own feed.** A command's own end travels
+    /// another one, in no fixed order against this, so a panel raised there raised it twice for one refusal — and a
+    /// fetch's, read here as somebody else's, never came down again (`RepoPage`'s `CommandsModel.onFailure`).
     function newsTakes() {
         owner.heldByFetch = false
     }

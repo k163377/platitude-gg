@@ -166,6 +166,12 @@ async fn each_write_is_settled_before_the_next_one_starts() {
 /// refusal — and every one of them stands in the log under the pop's id,
 /// the apply's under the apply's. The log holds only what the user asked
 /// for, and every such command names its write.
+///
+/// **The last assertion is the one the window is built on**: a command
+/// the reader asked for that ran under no write would be a failure
+/// nothing on screen answers for, and the page raises the log off the
+/// operation's answer alone (rules-refs/app-ui.md — `CommandsModel`'s
+/// failure touches no panel).
 #[tokio::test(flavor = "multi_thread")]
 async fn every_command_of_a_compound_write_carries_its_id() {
     let repo = holding_one_stash();
