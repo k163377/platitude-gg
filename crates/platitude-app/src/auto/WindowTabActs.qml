@@ -42,20 +42,33 @@ Item {
     property var standPage: null
     property int standFinished: -1
     property int standReset: -1
+    /// The command log's rows as the page was left, which is the other thing standing a tab elsewhere used to take
+    /// away: the log is the record of what this window ran, and the window has not changed (`CommandMsg`).
+    property int standLogged: -1
     function holdStand(page) {
         acts.standPage = page
         acts.standFinished = page.pageGraph.finishCount
         acts.standReset = page.pageGraph.resetCount
+        acts.standLogged = page.pageCommands.rowsHeld()
     }
-    /// The copy arrived at has been walked: a pass landed after the press. Without it the verb is answered by the
-    /// graph the *other* copy left drawn, which is exactly the picture this change is about.
-    function standWalked(page) {
+    /// Whether the graph was drawn again on the way: a pass landed after the press.
+    ///
+    /// **Not a wait** — the session taking over is handed the record of the graph on screen
+    /// (`platitude_core::session::DrawnGraph`), so a pass that arrives at the picture already there sends nothing
+    /// at all, and two copies whose rows agree are a switch with no redraw in it. What the run waits for is the
+    /// copy it stood in having answered (`PageSettled`), and this says which of the two it was.
+    function standDrew(page) {
         return page.pageGraph.finishCount > acts.standFinished
     }
     /// …and it landed **over** that graph rather than in place of it: the same page object throughout, and a
     /// stream that never started over (`GraphModel.resetCount`, which only a restart moves).
     function standKept(page) {
         return page === acts.standPage && page.pageGraph.resetCount === acts.standReset
+    }
+    /// …and the log with it: every row it held before the switch is still there, whatever the copy arrived at has
+    /// run since. `> 0` because a log with nothing in it would answer this with any behaviour at all.
+    function standLogKept(page) {
+        return acts.standLogged > 0 && page.pageCommands.rowsHeld() >= acts.standLogged
     }
 
     // What remains after a middle-click is the output under test. Wait for the tab-model count edge.
@@ -302,13 +315,19 @@ Item {
                 return
             const front = window.curPage
             if (front === null || front.pageTab.state !== "open"
-                    || !front.pageWt.loaded || !acts.standWalked(front)
-                    || !acts.standsIn(front, carriedOpenTimer.wanted))
+                    || !PageSettled.settled(front)
+                    || !acts.standsIn(front, carriedOpenTimer.wanted)
+                    // …and the graph has stopped calling that copy somebody else's: the rows this verb is about
+                    // are the synthetic ones, and the copy arrived at is drawn as another copy until the pass that
+                    // lays them again lands (`GraphModel.carriedRowOf`). The settled rule above cannot see it —
+                    // both copies are dirty in this preset, so the working-tree row it reads stands either way.
+                    || front.pageGraph.carriedRowOf(carriedOpenTimer.wanted) >= 0)
                 return
             stop()
             Harness.report("carried_open tabs=" + pageRepeater.count
                               + " grew=" + (pageRepeater.count !== carriedOpenTimer.beforeCount)
                               + " stood=" + acts.standsIn(front, carriedOpenTimer.wanted)
+                              + " drew=" + acts.standDrew(front)
                               + " kept=" + acts.standKept(front)
                               + " wanted=" + carriedOpenTimer.wanted
                               + " where=" + front.pageTab.repoPath)
@@ -322,6 +341,9 @@ Item {
         id: worktreeStandTimer
         running: Harness.autoAct === "worktree-stand"
         property bool asked: false
+        /// Whether this run has already asked for a read to be written down (see the branch below) — asked once,
+        /// not once per tick.
+        property bool logging: false
         property int beforeCount: -1
         property string wanted: ""
         onTriggered: {
@@ -329,6 +351,18 @@ Item {
             if (page === null || page.pageTab.state !== "open" || page.pageGraph.finishCount === 0)
                 return
             if (!worktreeStandTimer.asked) {
+                // Rows in the log before the switch, which is what `log=` is read against — an empty log would
+                // answer it whatever the switch did to one. The reads an opening makes are not the reader's and
+                // are not written down (`Recording::UserOnly`), so this run asks for them to be, and then asks
+                // for a read (`refreshQuick`, the same one the window coming back makes).
+                if (page.pageCommands.rowsHeld() === 0) {
+                    if (!worktreeStandTimer.logging) {
+                        worktreeStandTimer.logging = true
+                        page.pageCommands.setBackgroundReads(true)
+                        page.pageTab.refreshQuick()
+                    }
+                    return
+                }
                 // The row, off the section's own model: which copies there are is what it is listing, and the
                 // argument names one of its rows (the first linked copy by default — row 0 is the copy this window
                 // is already standing in, whose row leads nowhere).
@@ -351,14 +385,16 @@ Item {
                 return
             const front = window.curPage
             if (front === null || front.pageTab.state !== "open"
-                    || !front.pageWt.loaded || !acts.standWalked(front)
+                    || !PageSettled.settled(front)
                     || !acts.standsIn(front, worktreeStandTimer.wanted))
                 return
             stop()
             Harness.report("worktree_stand tabs=" + pageRepeater.count
                               + " grew=" + (pageRepeater.count !== worktreeStandTimer.beforeCount)
                               + " stood=" + acts.standsIn(front, worktreeStandTimer.wanted)
+                              + " drew=" + acts.standDrew(front)
                               + " kept=" + acts.standKept(front)
+                              + " log=" + acts.standLogKept(front)
                               + " wanted=" + worktreeStandTimer.wanted
                               + " where=" + front.pageTab.repoPath)
             window.finishAutoAct()

@@ -94,17 +94,30 @@ pub(super) const TABLE: &[Verb] = &[
     // session under a standing page and replaces the rows in one go
     // (`Hub::restand_tab`), where a rebuilt page photographs exactly
     // the same.
+    // `drew=` is the pair's other half, and the two presets answer it
+    // the two ways there are: another copy's uncommitted row becomes
+    // this tree's own, so the rows differ and the graph is swapped
+    // (`drew=true`), where standing in a copy whose picture is the same
+    // swaps nothing at all (`worktree-stand`). Both are read against
+    // the record of the graph the session taking over is handed
+    // (`session::DrawnGraph`), which is what lets a pass say "this is
+    // already on screen".
     Verb {
         name: "carried-open",
         when: &[],
-        plain: "carried_open tabs=1 grew=false stood=true kept=true",
+        plain: "carried_open tabs=1 grew=false stood=true drew=true kept=true",
     },
     // The same landing by the left menu's door. One tab before and one
     // after, and the copy the row named is the one the session opened.
+    // `log=` is the second thing the page keeps: the command log is the
+    // record of what this window ran, and the window is the same one —
+    // the copy arrived at numbers its own commands from one without
+    // touching the rows the copy left behind put there
+    // (`CommandMsg::run`).
     Verb {
         name: "worktree-stand",
         when: &[],
-        plain: "worktree_stand tabs=1 grew=false stood=true kept=true",
+        plain: "worktree_stand tabs=1 grew=false stood=true drew=false kept=true log=true",
     },
     // Away and back: `empty=` is the copy arrived at not wearing the
     // words typed in the one left, `back=` those words standing in the
