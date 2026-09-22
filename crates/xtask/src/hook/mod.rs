@@ -130,6 +130,7 @@ fn stop(input: &str) -> Result<(), String> {
 fn session_end(input: &str) -> Result<(), String> {
     chips::session_end(input);
     repeat::session_end(input);
+    seat::session_end(input);
     Ok(())
 }
 

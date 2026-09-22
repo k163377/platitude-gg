@@ -19,6 +19,7 @@ use std::time::SystemTime;
 
 mod claim;
 pub(crate) mod commands;
+pub(crate) mod entry;
 mod survey;
 
 pub(crate) use claim::{
@@ -67,17 +68,49 @@ impl Assigned {
     /// What the session is told. An instruction: this path
     /// is the one EnterWorktree argument that will be let through, because
     /// the claim behind it is already this session's.
-    pub(crate) fn report(&self) -> String {
+    pub(crate) fn report(&self, me: &Identity) -> String {
         let standing = if self.held {
             "was already this session's"
         } else {
             "is this session's now"
         };
-        format!(
-            "seat {} {standing}{}\nenter it with EnterWorktree path={}",
-            self.seat, self.note, self.path
-        )
+        let entry = if self.already_in(me) {
+            "this session is already working in it — nothing to enter".to_string()
+        } else {
+            format!("enter it with EnterWorktree path={}", self.path)
+        };
+        format!("seat {} {standing}{}\n{entry}", self.seat, self.note)
     }
+
+    /// Whether the session is already working in this seat, so that
+    /// EnterWorktree would only refuse the tree it is run from.
+    ///
+    /// The entry the session made is what settles it (`entry::entered`)
+    /// — the shell this report is printed from is the weaker witness of
+    /// the two, because `cd <checkout> && cargo xtask seat` stands in
+    /// the checkout while the session works in the seat.
+    fn already_in(&self, me: &Identity) -> bool {
+        let entered = seat_in_repository(&self.path).is_some_and(|(root, seat)| {
+            entry::entered(std::path::Path::new(&root), &me.session, seat)
+        });
+        entered || inside(&self.path)
+    }
+}
+
+/// Whether this shell already stands in `path`, which settles it for a
+/// session whose entry was never recorded — one that entered the seat
+/// before the mark existed, or by a path the hook did not see.
+fn inside(path: &str) -> bool {
+    let Ok(at) = std::env::current_dir() else {
+        return false;
+    };
+    let here = at.to_string_lossy().replace('\\', "/");
+    let (here, path) = if cfg!(windows) {
+        (here.to_ascii_lowercase(), path.to_ascii_lowercase())
+    } else {
+        (here, path.to_string())
+    };
+    here == path || here.starts_with(&format!("{path}/"))
 }
 
 /// `cargo xtask seat`: the roster hands this session a seat.
@@ -93,7 +126,7 @@ pub fn take(args: &[String]) -> Result<(), String> {
     let me = Identity::current(None);
     match args {
         [] => {
-            println!("{}", assign(&root, &me)?.report());
+            println!("{}", assign(&root, &me)?.report(&me));
             Ok(())
         }
         [verb] if verb == "release" => release(&root, &me, None),
@@ -256,7 +289,7 @@ fn takeover(root: &str, me: &Identity, letter: &str) -> Result<(), String> {
         Some(entry) => grow_back(&primary, seat, me, Some(&entry.tree))?,
         None => grow_back(&primary, seat, me, None)?,
     };
-    println!("{}", taken.report());
+    println!("{}", taken.report(me));
     Ok(())
 }
 

@@ -204,12 +204,32 @@ pub(super) fn post_worktree(input: &str) -> Result<(), String> {
     else {
         return Ok(());
     };
+    // Written down here because nothing downstream can see it: the seat
+    // report runs in whatever directory the session's shell line put it
+    // in, which is not where the session works (`seats::entry`).
+    if let Some(root) = crate::tree::primary_root(&cwd)
+        && let Some(session) = string_field(input, "session_id")
+    {
+        seats::entry::mark(&root, &session, seat);
+    }
     println!(
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PostToolUse\",\
          \"additionalContext\":\"{}\"}}}}",
         announce(seat)
     );
     Ok(())
+}
+
+/// SessionEnd: the entry mark goes with the session that made it. The
+/// seat itself stays claimed — a conversation ending is not a seat
+/// changing hands (`seats::how_claims_move`).
+pub(super) fn session_end(input: &str) {
+    let cwd = string_field(input, "cwd").unwrap_or_default();
+    if let Some(root) = crate::tree::primary_root(&cwd)
+        && let Some(session) = string_field(input, "session_id")
+    {
+        seats::entry::forget(&root, &session);
+    }
 }
 
 /// What a session owes the user the moment a seat becomes its own.

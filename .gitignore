@@ -27,6 +27,11 @@ target/
 # of the shell lines it ran. Cleared when that session ends.
 .repeats/
 
+# Which seat a session entered (hook seat): one file per session, beside
+# this .git, so the roster's report knows the session is already in the
+# tree it would otherwise name. Cleared when that session ends.
+.entered/
+
 # The landing permit (hook permit): one file per session, beside this
 # .git so a seat's landing reads what the prompt hook wrote wherever the
 # session sat. Opened by the user's message, spent by one landing.

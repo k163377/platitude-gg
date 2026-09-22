@@ -12,9 +12,8 @@
 //! in is that session's, and only landing, releasing and the user's
 //! takeover move a letter.
 
-use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 use crate::support::{EXE, Sandbox, output_past_a_busy_image};
 
@@ -83,30 +82,19 @@ fn letter_of(text: &str) -> String {
 /// What a hook says to a tool call from `cwd` under `session`. Empty is
 /// the hook's way of saying it has no objection.
 fn hook(sb: &Sandbox, event: &str, session: &str, cwd: &Path, tool: &str, input: &str) -> String {
-    let file = sb.root.join("hook-payload.json");
     let phase = if event.starts_with("post") {
         "PostToolUse"
     } else {
         "PreToolUse"
     };
-    let payload = format!(
-        "{{\"session_id\":\"{session}\",\"cwd\":\"{}\",\"hook_event_name\":\"{phase}\",\
-         \"tool_name\":\"{tool}\",\"tool_input\":{input}}}",
-        slashed(cwd)
-    );
-    std::fs::write(&file, payload).expect("payload");
-    let mut process = Command::new(EXE);
-    process
-        .args(["hook", event])
-        .stdin(Stdio::from(File::open(&file).expect("payload open")));
-    process.current_dir(&sb.repo);
-    sb.env(&mut process);
-    // The payload's id is the session's; the environment's, if the run
-    // that started this suite is a session, is not.
-    process.env_remove("CLAUDE_CODE_SESSION_ID");
-    process.env_remove("CLAUDE_PID");
-    let output = output_past_a_busy_image(&mut process, || {}).expect("spawn xtask");
-    String::from_utf8_lossy(&output.stdout).into_owned()
+    sb.hook(
+        event,
+        &format!(
+            "{{\"session_id\":\"{session}\",\"cwd\":\"{}\",\"hook_event_name\":\"{phase}\",\
+             \"tool_name\":\"{tool}\",\"tool_input\":{input}}}",
+            slashed(cwd)
+        ),
+    )
 }
 
 fn shell(sb: &Sandbox, cwd: &Path, session: &str, command: &str) -> String {
@@ -117,6 +105,13 @@ fn shell(sb: &Sandbox, cwd: &Path, session: &str, command: &str) -> String {
 fn enter(sb: &Sandbox, cwd: &Path, session: &str, path: &Path) -> String {
     let input = format!("{{\"path\":\"{}\"}}", slashed(path));
     hook(sb, "pre-worktree", session, cwd, "EnterWorktree", &input)
+}
+
+/// The entry itself, as the harness reports it once the session is in
+/// the tree.
+fn entered(sb: &Sandbox, session: &str, path: &Path) -> String {
+    let input = format!("{{\"path\":\"{}\"}}", slashed(path));
+    hook(sb, "post-worktree", session, path, "EnterWorktree", &input)
 }
 
 fn write_door(sb: &Sandbox, cwd: &Path, session: &str, file: &Path) -> String {
@@ -771,4 +766,31 @@ fn the_git_that_would_move_a_letter_by_hand_is_held_back() {
         "",
         "a throwaway repository's branches are its own"
     );
+}
+
+/// What settles that a seat needs entering is the entry the session
+/// made, not where the shell printing the report stands: `cd <checkout>
+/// && cargo xtask seat` leaves that process in the checkout while the
+/// session works in the seat, and EnterWorktree refuses the tree it is
+/// run from.
+#[test]
+fn a_seat_this_session_entered_is_not_one_to_enter_again() {
+    let sb = Sandbox::new("entered");
+    let (ok, first) = seat(&sb, &[], "s1");
+    assert!(ok, "{first}");
+    assert!(first.contains("enter it with EnterWorktree"), "{first}");
+    let tree = sb.repo.join(".claude/worktrees").join(letter_of(&first));
+
+    entered(&sb, "s1", &tree);
+
+    let (ok, again) = seat(&sb, &[], "s1");
+    assert!(ok, "{again}");
+    assert!(again.contains("nothing to enter"), "{again}");
+    assert!(!again.contains("EnterWorktree"), "{again}");
+
+    // The mark is one session's: the next session is told how to enter
+    // the seat it is handed.
+    let (ok, other) = seat(&sb, &[], "s2");
+    assert!(ok, "{other}");
+    assert!(other.contains("enter it with EnterWorktree"), "{other}");
 }
