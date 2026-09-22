@@ -220,6 +220,11 @@ impl<T> FeedOps for Feed<T> {
     }
 }
 
+/// The command log's name in [`Feeds::each`] — spelled once, because
+/// one walk skips it by name ([`Feeds::clear_queued_reads`]) and a
+/// rename that missed that walk would empty the log's queue in silence.
+const COMMANDS: &str = "commands";
+
 impl Feeds {
     /// Every feed with its report name. **The list of feeds is written
     /// once, here** — the walks below and the depth report
@@ -244,7 +249,7 @@ impl Feeds {
             ("worktrees", &*self.worktrees),
             ("details", &*self.details),
             ("diff", &*self.diff),
-            ("commands", &*self.commands),
+            (COMMANDS, &*self.commands),
             ("plan", &*self.plan),
             ("op-progress", &*self.op_progress),
         ]
@@ -257,10 +262,25 @@ impl Feeds {
         }
     }
 
-    /// Empties every queue and keeps the consumers ([`Feed::clear_queued`]).
-    pub fn clear_queued_all(&self) {
-        for (_, feed) in self.each() {
-            feed.clear_queued();
+    /// Empties the queue of everything the *repository* was read into
+    /// and keeps the consumers ([`Feed::clear_queued`]), leaving the
+    /// command log's queue where it is — what a session opening over a
+    /// page that is already standing empties (`Hub::open_session`).
+    ///
+    /// **The log is the one feed that outlives the session.** Every
+    /// other message here describes a repository read from the copy
+    /// being left, and the page is about to read another; a command
+    /// message describes what this window ran, names the session that
+    /// ran it (`CommandMsg`), and belongs to rows that are staying on
+    /// screen.
+    ///
+    /// Named off the one list every walk over the feeds takes, so a feed
+    /// added later is emptied unless it is spelled out here.
+    pub fn clear_queued_reads(&self) {
+        for (name, feed) in self.each() {
+            if name != COMMANDS {
+                feed.clear_queued();
+            }
         }
     }
 }

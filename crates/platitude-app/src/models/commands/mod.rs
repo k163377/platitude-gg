@@ -101,7 +101,15 @@ impl platitude_core::mem::Footprint for CommandWash {
 /// reader is the one who asked for it. A fetch nobody asked for reaches
 /// the log only when git said no, and its row says so without raising
 /// anything (デザイン規約 §git が言ったことを読む場所).
+///
+/// **The id is the session's, so the session is part of it.** This log
+/// outlives one: a tab standing in another working copy keeps its rows
+/// and opens a session over the same feed, and that one numbers its
+/// commands from one as well (`CommandMsg`). Matched by the id alone,
+/// the first command of the copy arrived at would end the row the first
+/// command of the copy left began.
 struct Invocation {
+    run: u64,
     id: u64,
     asked: bool,
 }
@@ -342,6 +350,7 @@ impl CommandsModel {
         for msg in feed.drain() {
             match msg {
                 CommandMsg::Started {
+                    run,
                     id,
                     display,
                     full,
@@ -359,7 +368,7 @@ impl CommandsModel {
                     if gone > 0 {
                         self.shift_selection(gone);
                     }
-                    self.ids.push(Invocation { id, asked });
+                    self.ids.push(Invocation { run, id, asked });
                     let args = display
                         .split_once(' ')
                         .map(|(_, rest)| rest.to_string())
@@ -375,6 +384,7 @@ impl CommandsModel {
                     touched = true;
                 }
                 CommandMsg::Finished {
+                    run,
                     id,
                     code,
                     note,
@@ -384,8 +394,15 @@ impl CommandsModel {
                     message,
                 } => {
                     // Newest first: the command that just ended is nearly
-                    // always the last row.
-                    let Some(index) = self.ids.iter().rposition(|got| got.id == id) else {
+                    // always the last row. Found by the session as well
+                    // as the id (see `Invocation`) — a write the copy
+                    // being left was still running ends here long after
+                    // the tab moved on.
+                    let Some(index) = self
+                        .ids
+                        .iter()
+                        .rposition(|got| got.id == id && got.run == run)
+                    else {
                         continue;
                     };
                     let Some(row) = self.rows.get(index).cloned() else {

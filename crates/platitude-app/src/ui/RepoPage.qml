@@ -2395,9 +2395,13 @@ FocusScope {
             planModel.cancelPlan()
         // The pane goes back to this tab's own tree — which is about to be the copy it was reading.
         page.dropCarried()
-        // A diff of a file in the tree being left is that tree's; one still being read was asked of the session
-        // being closed, and no answer is coming for it. A commit's, already drawn, is the repository's and stays.
-        if (page.diffShown && (page.diffKind !== "commit" || diffModel.loading))
+        // A diff of a file in the tree being left is that tree's and goes with it. A commit's is the repository's
+        // and stays open — the rows are the same on both sides of a linked copy — but a read still out was asked
+        // of the session being closed, so that one is written down and asked again (`standSettled`).
+        //
+        // **Written down before the close below**, which is what takes the answer to "what was being read" away.
+        page.owedDiff = page.diffShown && page.diffKind === "commit" && diffModel.loading
+        if (page.diffShown && page.diffKind !== "commit")
             page.closeDiff()
         // A read still out was asked of the session about to be closed, so no answer is coming for it — and the
         // details pane is the one place that would wait for it in silence. Written down here, where it can still be
@@ -2429,9 +2433,10 @@ FocusScope {
         worktreeModel.restand()
         stagedModel.restand()
         carriedModel.restand()
-        // The command log is the session's: a new one numbers its commands from the start, so rows kept here would
-        // be rewritten by answers about other commands entirely (`CommandMsg::Finished`).
-        commandsModel.clear()
+        // **The command log is not on this list.** It is the record of what this window ran, and the window is the
+        // same one: its rows name the session that made them (`CommandMsg`), so the copy arrived at numbers its own
+        // commands from one without touching them — and a write the copy being left is still running ends in its own
+        // row, where it has been saying "running" all along (`BridgeSink::retire_reads`).
     }
 
     /// …and the other side of it: the tab is standing in the copy that was asked for, and the session reading it is
@@ -2444,10 +2449,17 @@ FocusScope {
         if (page.blank)
             return
         page.restoreDraft()
+        // The log's switch is a setting of the *session* (`Recording`), and this is a new one — which opens
+        // keeping the reader's commands and nothing else. The panel is still on screen saying otherwise, so what
+        // it says is said again; the rows it asks for are the only thing the reader would notice missing.
+        if (commandsModel.backgroundReads)
+            commandsModel.setBackgroundReads(true)
     }
 
-    /// A read the closed session was still owing this page when the tab was stood elsewhere (`leaveCopy`).
+    /// The reads the closed session was still owing this page when the tab was stood elsewhere (`leaveCopy`): the
+    /// commit being read about, and the file of it open in the diff.
     property bool owedDetails: false
+    property bool owedDiff: false
 
     /// The session reading the copy this tab now stands in has said where it is (`RepoTab.standing` going down), so
     /// the reads that died with the last one can be asked again.
@@ -2467,6 +2479,13 @@ FocusScope {
         }
         if (page.selectedOid !== "" && repoTab.signatureOid !== page.selectedOid)
             page.askSignature(page.selectedOid)
+        // The file the diff is holding open, for the same reason and in the same words it was asked in
+        // (`askCommitDiff` reads the pane's own header, which has not moved).
+        if (page.owedDiff) {
+            page.owedDiff = false
+            if (page.diffShown && page.diffKind === "commit")
+                page.askCommitDiff(page.diffPath, page.diffOrigPath)
+        }
     }
 
     /// …and the other half: what the last page on this tab was holding, put back into the boxes.

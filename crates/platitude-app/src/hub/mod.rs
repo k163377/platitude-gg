@@ -19,7 +19,7 @@ use platitude_core::parse::diff::FilePatch;
 use platitude_core::preview::FilePreview;
 use platitude_core::process::{CommandEnd, GitExecutor};
 use platitude_core::session::{
-    FirstPass, LogRow, RefLabel, RefsSnapshot, RepoSession, SessionEvent, SessionSink,
+    DrawnGraph, FirstPass, LogRow, RefLabel, RefsSnapshot, RepoSession, SessionEvent, SessionSink,
 };
 use platitude_core::settings::{Settings, State, Store};
 use platitude_core::stash::StashEntry;
@@ -68,6 +68,18 @@ struct Tab {
     /// and a tab that has been switched away from goes back to costing
     /// the same nothing (`Hub::release_tab`).
     session: Option<Arc<RepoSession>>,
+    /// How many sessions this tab has opened, counting from one. The
+    /// command log outlives them — a tab standing in another working
+    /// copy keeps its rows — and every session numbers its invocations
+    /// from one, so this is what tells two of them apart
+    /// (`CommandMsg`).
+    runs: u64,
+    /// The graph the page on this tab is showing, between the session
+    /// that drew it being let go of and the one taking its place
+    /// (`platitude_core::session::DrawnGraph`). `None` at every other
+    /// moment — a page that goes down takes its graph with it, and one
+    /// that stays hands this straight on.
+    drawn: Option<DrawnGraph>,
     /// Kept after opening too: it is the name a per-repository setting is
     /// filed under (`reapply_settings`).
     path: PathBuf,

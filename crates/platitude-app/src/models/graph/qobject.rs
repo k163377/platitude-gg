@@ -127,17 +127,16 @@ impl GraphModel {
     /// arrives as one replacement, which keeps the reader's place in it
     /// ([`FirstPass::Swapped`], `GraphModel::splice_notified`).
     ///
-    /// What goes is the number the streams are told apart by: a session
-    /// counts its passes from zero, so a model left holding the last
-    /// one's count would refuse every message the new one sends. Safe
-    /// because the session that numbered them is closed and its sink
-    /// retired, and the queue this feed held went with it
-    /// (`Hub::let_go_of_session`).
+    /// **The number the streams are told apart by stays too.** The
+    /// session taking over is handed the record of this graph and
+    /// counts its own passes on from there
+    /// (`platitude_core::session::DrawnGraph`), so what arrives next is
+    /// the pass after the one these rows came from — which is what
+    /// every arm here already reads it as.
     ///
     /// [`FirstPass::Swapped`]: platitude_core::session::FirstPass::Swapped
     #[qslot]
     fn restand(&mut self) {
-        self.generation = 0;
         // The press that asked for a wider window was the old session's
         // to answer, and it never will — the footer would wear the wait
         // for as long as the page stands.

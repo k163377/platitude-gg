@@ -342,9 +342,17 @@ pub enum GraphMsg {
 }
 
 /// Command-log messages: one git invocation, start and end.
+///
+/// **Both halves name the session they came from** (`run`), because the
+/// log outlives it: a tab standing in another working copy keeps its
+/// rows and opens a session over the same feeds, and that session counts
+/// its invocations from one like every other. Matched by the id alone,
+/// its first command would answer for the row the last session's first
+/// command left (`CommandsModel::Invocation`).
 #[derive(Debug)]
 pub enum CommandMsg {
     Started {
+        run: u64,
         id: u64,
         display: String,
         full: String,
@@ -356,6 +364,7 @@ pub enum CommandMsg {
         asked: bool,
     },
     Finished {
+        run: u64,
         id: u64,
         /// Exit code, or `None` when git never ran to a code of its own
         /// (killed by the timeout, cancelled, failed to start).

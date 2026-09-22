@@ -125,6 +125,8 @@ impl Hub {
             id,
             Tab {
                 session: None,
+                runs: 0,
+                drawn: None,
                 path,
                 feeds: Arc::new(Feeds::default()),
                 sink: None,
@@ -188,12 +190,18 @@ impl Hub {
             return;
         };
         let executor = self.executor.clone();
-        let Some(tab) = self.tabs.get(&id) else {
+        let Some(tab) = self.tabs.get_mut(&id) else {
             return;
         };
         if tab.session.is_some() {
             return;
         }
+        tab.runs += 1;
+        let run = tab.runs;
+        // Taken whichever opening this is: a graph left behind by a
+        // page that has gone down is not this one's to carry, and
+        // nothing else ever puts one here (`Hub::let_go_of_session`).
+        let drawn = tab.drawn.take();
         let path = tab.path.clone();
         // Nothing queued here can be about the session about to be opened,
         // because there is no session yet — so anything waiting came from
@@ -202,18 +210,28 @@ impl Hub {
         // new session's, one such message is enough to leave the graph
         // holding a generation the new stream never reaches
         // (`Feed::clear_queued`).
-        tab.feeds.clear_queued_all();
+        //
+        // **The command log keeps what it is holding**: those messages
+        // name the session that made them and are the record of what
+        // this window ran, which the next session does not replace
+        // (`Feeds::clear_queued_reads`).
+        tab.feeds.clear_queued_reads();
         let feeds = Arc::clone(&tab.feeds);
         let applied = self.settings.defaults.clone();
-        let sink = Arc::new(BridgeSink::new(feeds));
+        let sink = Arc::new(BridgeSink::new(feeds, run));
         let hooks = crate::harness::pass_hooks();
         let session = match first_pass {
             FirstPass::Streamed => {
                 RepoSession::open(executor, handle, path, Arc::clone(&sink) as _, hooks)
             }
-            FirstPass::Swapped => {
-                RepoSession::open_standing_in(executor, handle, path, Arc::clone(&sink) as _, hooks)
-            }
+            FirstPass::Swapped => RepoSession::open_standing_in(
+                executor,
+                handle,
+                path,
+                Arc::clone(&sink) as _,
+                hooks,
+                drawn,
+            ),
         };
         apply_repo_settings(&session, &applied);
         // The saved tags flag takes the same door the settings do: the
@@ -297,23 +315,40 @@ impl Hub {
         let Some(session) = tab.session.take() else {
             return false;
         };
-        session.close();
-        // Before the feeds are let go: a write the close let run on
-        // answers late, and the next session on this tab attaches to the
-        // same feeds — the retired sink is what keeps that answer out of
-        // its page.
+        // The sink first, and before the close: a write the close lets
+        // run on answers late, and the next session on this tab
+        // attaches to the same feeds — retiring it here is what keeps
+        // that answer out of the page, and what makes the record taken
+        // below the last word about what is on screen.
+        //
+        // **A page that is staying keeps the log's half of it.** The
+        // rows that write put on screen are still there saying it is
+        // running, and this is what lets it say how it ended
+        // (`BridgeSink::retire_reads`).
         if let Some(sink) = tab.sink.take() {
-            sink.retire();
+            match page {
+                PageAfter::TakenDown => sink.retire(),
+                PageAfter::Standing => sink.retire_reads(),
+            }
         }
+        // The graph the page is showing, for the session taking this
+        // one's place — before the close, which is what throws it away
+        // (`DrawnGraph`). A page going down has no use for it.
+        tab.drawn = match page {
+            PageAfter::TakenDown => None,
+            PageAfter::Standing => Some(session.take_drawn_graph()),
+        };
+        session.close();
         match page {
             PageAfter::TakenDown => tab.feeds.release_all(),
             // The invokers name QML objects that are still there and
             // about to read the next session: letting them go would
             // leave a live page attached to nothing, with no second
             // `attach` coming (the page attaches once, when it is
-            // built). What the queues hold is the copy being left's, and
-            // that goes either way.
-            PageAfter::Standing => tab.feeds.clear_queued_all(),
+            // built). What the queues hold about a repository is the
+            // copy being left's; what they hold about a command is the
+            // log's, and the log is staying.
+            PageAfter::Standing => tab.feeds.clear_queued_reads(),
         }
         // The rows a delete took off the screen go back with it, and so
         // do the readings the lists had drawn: the answer that would have

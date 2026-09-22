@@ -23,7 +23,7 @@ fn details(hex: char, message: &str) -> CommitDetails {
 #[test]
 fn a_late_old_details_answer_cannot_erase_the_current_answer() {
     let feeds = Arc::new(Feeds::default());
-    let sink = BridgeSink::new(Arc::clone(&feeds));
+    let sink = BridgeSink::new(Arc::clone(&feeds), 1);
     // The user asked A, then B. B finishes first; A arrives before the UI drains.
     sink.event(SessionEvent::DetailsLoaded {
         generation: 2,
@@ -44,7 +44,7 @@ fn a_late_old_details_answer_cannot_erase_the_current_answer() {
 #[test]
 fn returning_to_the_same_oid_still_requires_the_latest_attempt() {
     let feeds = Arc::new(Feeds::default());
-    let sink = BridgeSink::new(Arc::clone(&feeds));
+    let sink = BridgeSink::new(Arc::clone(&feeds), 1);
     for (generation, oid, message) in [(3, 'a', "new A"), (2, 'b', "old B"), (1, 'a', "old A")] {
         sink.event(SessionEvent::DetailsLoaded {
             generation,
@@ -70,7 +70,7 @@ fn returning_to_the_same_oid_still_requires_the_latest_attempt() {
 #[test]
 fn an_old_failure_cannot_replace_a_new_success_or_raise_an_error() {
     let feeds = Arc::new(Feeds::default());
-    let sink = BridgeSink::new(Arc::clone(&feeds));
+    let sink = BridgeSink::new(Arc::clone(&feeds), 1);
     sink.event(SessionEvent::DetailsLoaded {
         generation: 2,
         details: details('b', "current B"),

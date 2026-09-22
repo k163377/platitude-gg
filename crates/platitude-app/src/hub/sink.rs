@@ -6,6 +6,10 @@ use super::*;
 /// tokio threads, blocking only for the short feed locks.
 pub(super) struct BridgeSink {
     pub(super) feeds: Arc<Feeds>,
+    /// Which session of its tab this one speaks for, counting from one.
+    /// Stamped on the command log's messages, which are the only ones
+    /// that outlive the session that made them (`CommandMsg`).
+    run: u64,
     /// Set when the tab this sink fed was released or closed
     /// (`Hub::release_tab` / `Hub::close_tab`). A write the close let run
     /// on (`RepoSession::close`) answers minutes later — into a page that
@@ -13,6 +17,14 @@ pub(super) struct BridgeSink {
     /// tab has opened over the same `Feeds`. Retired, the late answers
     /// go nowhere at all.
     pub(super) retired: std::sync::atomic::AtomicBool,
+    /// The same, for a page that is *staying*: the tab has been stood in
+    /// another working copy (`Hub::restand_tab`), so everything this
+    /// session has left to say about a repository would land on a page
+    /// reading another copy of it — but the command log is the record of
+    /// what this window ran, and the write the close let run on is still
+    /// running. Its row is on screen saying so, and this is what lets it
+    /// say how it ended.
+    retired_for_reads: std::sync::atomic::AtomicBool,
     /// The refs snapshot the tab was last told its remotes out of. A quiet
     /// tick republishes the very same one (`session::chips`), and the tab
     /// — every binding on it — is woken only for a snapshot it has
@@ -21,12 +33,30 @@ pub(super) struct BridgeSink {
 }
 
 impl BridgeSink {
-    pub(super) fn new(feeds: Arc<Feeds>) -> Self {
+    pub(super) fn new(feeds: Arc<Feeds>, run: u64) -> Self {
         Self {
             feeds,
+            run,
             retired: std::sync::atomic::AtomicBool::new(false),
+            retired_for_reads: std::sync::atomic::AtomicBool::new(false),
             remotes_told: Mutex::new(std::sync::Weak::new()),
         }
+    }
+
+    /// Whether `event` is one this sink still carries. Everything is,
+    /// until the session is let go of; after that it is nothing, or —
+    /// where the page stayed and only the copy under it changed — the
+    /// command log alone (see the two members).
+    fn carries(&self, event: &SessionEvent) -> bool {
+        use std::sync::atomic::Ordering::SeqCst;
+        if self.retired.load(SeqCst) {
+            return false;
+        }
+        !self.retired_for_reads.load(SeqCst)
+            || matches!(
+                event,
+                SessionEvent::CommandStarted { .. } | SessionEvent::CommandFinished { .. }
+            )
     }
 
     /// Whether `snapshot` is the one the tab already has its remotes
@@ -49,12 +79,20 @@ impl BridgeSink {
         self.retired
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
+
+    /// Nothing this session has left to say about a repository reaches
+    /// the feeds, and what it has left to say about its own commands
+    /// still does (see `retired_for_reads`).
+    pub(super) fn retire_reads(&self) {
+        self.retired_for_reads
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
 }
 
 impl SessionSink for BridgeSink {
     #[expect(clippy::too_many_lines)]
     fn event(&self, event: SessionEvent) {
-        if self.retired.load(std::sync::atomic::Ordering::SeqCst) {
+        if !self.carries(&event) {
             return;
         }
         match event {
@@ -322,6 +360,7 @@ impl SessionSink for BridgeSink {
                 asked,
                 operation: _,
             } => self.feeds.commands.push(CommandMsg::Started {
+                run: self.run,
                 id,
                 display,
                 full,
@@ -344,6 +383,7 @@ impl SessionSink for BridgeSink {
                     CommandEnd::Failed => (None, "did not run".to_string()),
                 };
                 self.feeds.commands.push(CommandMsg::Finished {
+                    run: self.run,
                     id,
                     code,
                     note,
