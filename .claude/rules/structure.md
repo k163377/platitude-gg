@@ -26,7 +26,6 @@ paths:
 - 挙動不変・**移動だけのコミット**(変更・リネームは別で)。公開名は `pub use` / qmldir で不変に保つ
 - Rust: ディレクトリ化は **mod.rs 方式(既存踏襲)**。mod.rs は mod 宣言・re-export・共有型のみ。`#[cfg(test)]` は対象と同じファイルへ付いて行く(テストだけ巨大なら同ディレクトリの `#[cfg(test)]` 専用ファイルへ)
 - **クレート root(lib.rs / main.rs / tests/it/main.rs)は宣言と再エクスポートだけ** — root は全モジュールへ dispatch し、そこにヘルパがあると全モジュールが root を読む = gate の依存木でどの変更も全体へ届くハブになる。**機械化済み: 毎回の `cargo xtask gate`(`gate::graph::complaints` — 走らせる前に拒む)と `cargo test -p xtask`(同じ関数)** — 置き場は責務名のモジュール(`tree` / `subprocess`、core は `model`)
-- 統合テストは tests/it/ 内のモジュール分割(1 バイナリ規約は core.md)
 - QML: **1 ファイル = 1 コンポーネント**(Qt の指針。ファイル名がそのまま型名で、粒度は qmldir と型システムが決める)。子コンポーネント切り出し(ui/ フラット・登録 2 箇所は app-ui.md)。inline `component` は 2 ファイル目が使う時か親が閾値を超えた時に独立ファイル化
 - Qt: `#[qobject]` ブロック(`qproperty!` / `#[qsignal]` / `#[qslot]`)は QMetaInfo の一貫性で **1 型 1 ファイルから動かせない** — スロット本体を素の `impl` へ委譲して痩せさせる(委譲化は移動と別コミット)。それでも割れない分は §長さの閾値 の「分割不能と決めたファイルは理由を書く」へ
 
@@ -36,7 +35,6 @@ paths:
 - 置き場は**使う全員から到達できる最深のモジュール**。モジュール名は責務(util / misc / helpers は作らない)
 - **コマンド行の正本は、それを走らせるモジュール側の宣言** — 参照する側は id で引く。**機械化済み: `cargo xtask docs`**。記法も手順も限界も [rules-refs/structure.md](../rules-refs/structure.md) の §コマンドの正本
 - xtask は依存 std のみ — core / app とは重複を許容
-- QML の繰り返す意匠は既存部品を先に探す(一覧は ui/qmldir)
 
 ## QML 整理
 
