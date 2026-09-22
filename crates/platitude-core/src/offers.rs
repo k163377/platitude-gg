@@ -90,12 +90,16 @@ pub struct RefMenuOffers {
     /// `switch` lands somewhere else: only a branch (local or remote)
     /// names a place to move to, and the branch the tree is on is not a
     /// move. **A branch another working copy holds keeps this offer** —
-    /// everything that stands in the move's way is answered by the
-    /// question the press raises.
+    /// the row leads to that copy instead, and says so in its words
+    /// ([`SwitchAction::OpenHolder`]).
     pub switch_to: bool,
     /// That move raises a question before it moves: an operation or
-    /// unmerged files to clear first, or the branch out in another
-    /// working copy. Worn as the `!` in the row's mark seat.
+    /// unmerged files to clear first. Worn as the `!` in the row's mark
+    /// seat.
+    ///
+    /// **A branch another working copy holds is not one of them**: that
+    /// press asks nothing, it goes — so the row names where it goes and
+    /// wears no mark (デザイン規約 §進行中の操作から出る).
     pub switch_asks: bool,
     /// A new branch on this row's commit. Every ref that names a commit
     /// takes one — the current branch and a detached HEAD included, which
@@ -271,7 +275,7 @@ pub fn ref_menu(
     let tag_on_remote = sides.is_some_and(TagSides::on_remote);
     RefMenuOffers {
         switch_to: branchy && full != current_branch,
-        switch_asks: held || op_standing || conflict_count > 0,
+        switch_asks: op_standing || conflict_count > 0,
         branch_here: kind != RefKind::Stash && !oid_hex.is_empty() && !busy && !op_standing,
         integrate_from: open
             && !busy

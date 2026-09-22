@@ -22,6 +22,13 @@ pub enum SwitchAction {
     /// worktree at …`, measured), locked or not. The only refusal
     /// no stash can get past and no operation put down can clear — the
     /// branch is simply somewhere else, and the way to it is that copy.
+    ///
+    /// **So the press goes there**: the tab stands in that copy, which
+    /// is the one thing a hand reaching for this branch can be given
+    /// (デザイン規約 §進行中の操作から出る). Nothing is asked first —
+    /// standing a tab in another copy writes nothing and is one press
+    /// back — and the rows that carry words name the copy before they
+    /// are pressed.
     OpenHolder,
     /// An ordinary `switch` onto an existing local branch.
     Switch,

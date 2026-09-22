@@ -212,7 +212,7 @@ fn a_pull_asks_the_same_standing_the_rows_that_integrate_ask() {
 }
 
 #[test]
-fn a_branch_out_in_another_copy_keeps_switch_but_it_asks() {
+fn a_branch_out_in_another_copy_keeps_switch_and_asks_nothing() {
     let offers = ref_menu(
         RefKind::Branch,
         "feat",
@@ -230,8 +230,11 @@ fn a_branch_out_in_another_copy_keeps_switch_but_it_asks() {
         "here",
         "",
     );
-    assert!(offers.switch_to, "the press goes through to the question");
-    assert!(offers.switch_asks);
+    assert!(offers.switch_to, "the press goes through to that copy");
+    assert!(
+        !offers.switch_asks,
+        "it leads somewhere instead of asking, and the row's words say where"
+    );
     assert!(!offers.delete, "git refuses the delete too (measured)");
 }
 
@@ -258,8 +261,8 @@ fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
     );
     assert!(offers.delete);
     assert!(
-        offers.switch_asks,
-        "the move still lands on the held branch"
+        !offers.switch_asks,
+        "the move lands on the held branch, which is a road to that copy and not a question"
     );
 }
 
