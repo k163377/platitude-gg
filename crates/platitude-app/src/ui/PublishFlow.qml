@@ -356,6 +356,17 @@ Item {
         const form = publishFlow.graphPane.askForm
         return Boolean(form && form.remotePick && form.remotePick.markedRow !== "")
     }
+    /// Automation: Enter in the name box. No key reaches the box on the offscreen platform, so what is raised is the
+    /// box's own `accepted` — the signal Qt raises on Enter, and the door the form's handler hangs off. **That Enter
+    /// is what raises it is fixed in `tst_askanswer`**, where a real keystroke can be injected; from here on, this
+    /// is the wiring a hand goes through.
+    function enterBranch() {
+        const form = publishFlow.graphPane.askForm
+        if (!form || !form.branchField)
+            return false
+        form.branchField.accepted()
+        return true
+    }
     /// Automation reads the popup itself: the call that requested it may not have put it on screen.
     function publishRemotesOpen() {
         const form = publishFlow.graphPane.askForm

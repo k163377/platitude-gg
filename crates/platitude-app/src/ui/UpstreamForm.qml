@@ -28,6 +28,10 @@ ColumnLayout {
 
     signal remotePicked(int index)
     signal branchEdited(string name)
+    /// The name is finished: the question is answered from the box the keyboard is already in (デザイン規約
+    /// §立っている質問は 1 か所で聞く). The bar takes it from here — whether there is an answer to send at all is the
+    /// bar's own question, and so is what answering runs (`AskBar`).
+    signal answered()
 
     /// Automation only: neither list can be opened by an injected click on the offscreen platform, and how the two
     /// boxes share the row is a thing only a laid-out row can answer (`tst_askfields`).
@@ -80,6 +84,8 @@ ColumnLayout {
             model: upstreamForm.branches
             wanted: upstreamForm.branch
             onWantedChanged: upstreamForm.branchEdited(upstreamBranchField.wanted)
+            // Enter, with the box's own list not standing in front of it (`AppCombo.submitted`).
+            onSubmitted: upstreamForm.answered()
             Component.onCompleted: upstreamBranchField.forceActiveFocus()
         }
     }

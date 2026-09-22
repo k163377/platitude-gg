@@ -33,7 +33,7 @@ Item {
     /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
         if (act === "publish" || act === "publish-taken"
-                || act === "publish-add" || act === "publish-go"
+                || act === "publish-add" || act === "publish-go" || act === "publish-enter"
                 || act === "publish-new-go" || act === "publish-remotes"
                 || act === "publish-dismiss") {
             // The button's own path, so the state machine in front of the question is exercised
@@ -47,8 +47,11 @@ Item {
                 publishFlow.setPublishBranch(arg)
             if (act === "publish-new-go")
                 publishNewTimer.start()
-            else if (act === "publish-go")
+            else if (act === "publish-go" || act === "publish-enter") {
+                // Which door the answer goes through: the pill's, or Enter in the name box.
+                publishAnswerTimer.byKey = act === "publish-enter"
                 publishAnswerTimer.start()
+            }
             else if (act === "publish-remotes")
                 publishRemotesTimer.start()
             else if (act === "publish-dismiss")
@@ -544,6 +547,10 @@ Item {
     /// Automation: the answer, given after the remote has had time to say what it has — the pill is dead until it has.
     SampleTimer {
         id: publishAnswerTimer
+        /// Whether the answer comes from the name box instead of the pill (`PublishFlow.enterBranch`). **A held
+        /// question is never answered this way** — the key is not a gesture (`AskBar.answerFromForm`) — so the run
+        /// that asks for one waits out its watchdog, which is the rule saying so.
+        property bool byKey: false
         onTriggered: {
             if (!publishFlow.publishChecked || !graphPane.askAnswerable)
                 return
@@ -566,6 +573,8 @@ Item {
                 driver.holdToEnd(graphPane)
             else
                 driver.pressWrite("answer-ask", () => {
+                    if (publishAnswerTimer.byKey)
+                        return publishFlow.enterBranch()
                     page.answerRowAsk()
                     return true
                 })

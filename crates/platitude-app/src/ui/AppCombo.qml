@@ -236,6 +236,17 @@ ComboBox {
     /// and that is not a thing a photograph can answer.
     readonly property bool typing: !combo.pickOnly && input.activeFocus
 
+    /// The name in this box is finished: Enter, with nothing standing in front of the box.
+    ///
+    /// **Not `accepted`, which fires under the open list and with the value the list is about to replace.** Qt raises
+    /// the input's `accepted` on the key press and picks the highlighted row on the release, in that order, so a
+    /// handler hung on `accepted` answers with the name that was in the box *before* the row the reader just chose
+    /// (measured — `tst_appcombo`). And a key pressed while something stands belongs to the thing standing, the way
+    /// Escape does (デザイン規約 §立っている質問は 1 か所で聞く): under the list, Enter picks the row, and the press
+    /// after it is the one that finishes.
+    signal submitted()
+    onAccepted: if (!combo.popup.visible) combo.submitted()
+
     /// Opens the list. A read still out counts as something to open — the card says so with its own ring (see
     /// `hasList`).
     function offer() {

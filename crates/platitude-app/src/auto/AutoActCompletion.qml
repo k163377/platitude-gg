@@ -21,7 +21,7 @@ QtObject {
 
 
     function isWriteAct(act) {
-        return ["publish", "publish-taken", "publish-add", "publish-go",
+        return ["publish", "publish-taken", "publish-add", "publish-go", "publish-enter",
                 "publish-new-go", "commit", "commit-refused", "notice-over-diff",
                 "stale-part", "amend", "amend-reset-author",
                 "stash", "stash-lands", "stash-file", "stage-many-go",
@@ -33,7 +33,7 @@ QtObject {
                 "delete-branch-go", "delete-tag-go", "delete-stash-go",
                 "delete-remote-go", "remote-refused", "delete-force", "delete-branch-refused",
                 "delete-branch-chip", "delete-stood-down",
-                "set-upstream-go", "publish-upstream",
+                "set-upstream-go", "set-upstream-enter", "publish-upstream",
                 "delete-stash-row", "stash-apply-row", "stash-pop-row",
                 "branch-at-tag", "dbl-local", "dbl-remote", "ref-list-pick", "graph-rename", "move-branch",
                 "name-branch", "squash", "reword", "cherry-pick", "reset-soft",
@@ -80,7 +80,7 @@ QtObject {
 
     function defersCompletion(act) {
         return ["publish", "publish-taken", "publish-remotes", "publish-add",
-                "publish-go", "publish-new-go", "publish-dismiss",
+                "publish-go", "publish-enter", "publish-new-go", "publish-dismiss",
                 "amend-reset-author", "amend-author",
                 "eol-commit", "eol-hover", "commit-face",
                 "stage-hunk", "stage-line", "discard-hunk", "discard-hunk-go",
@@ -164,8 +164,8 @@ QtObject {
                 // A write does come, but the subject is the question its answer raises,
                 // so the bar settling is the completion (the bar takes 200ms to come down).
                 "rename-local-upstream",
-                // The write barrier is behind this one: the question is answered from the timer, after it.
-                "set-upstream-go",
+                // The write barrier is behind these two: the question is answered from the timer, after it.
+                "set-upstream-go", "set-upstream-enter",
                 // And behind this one twice over: the upstream goes down first, and what the run is about is the
                 // press made once the status behind that write has been read back.
                 "publish-upstream",

@@ -20,6 +20,11 @@ ColumnLayout {
 
     signal remotePicked(int index)
     signal branchEdited(string name)
+    /// The name is finished: the question is answered from the box the keyboard is already in (デザイン規約
+    /// §立っている質問は 1 か所で聞く). Nothing stands in front of this box — it has no list of its own, so the key
+    /// is never somebody else's — and what answering costs is the bar's to weigh (`AskBar`): a first push the far
+    /// side has not answered for yet is unanswerable, and one that turns out to replace their work is held.
+    signal answered()
 
     /// Automation only: the list cannot be opened by an injected click on the offscreen platform, and how the two
     /// boxes share the row is a thing only a laid-out row can answer (`tst_askfields`).
@@ -79,6 +84,7 @@ ColumnLayout {
             Layout.fillWidth: true
             text: publishForm.branch
             onTextEdited: publishForm.branchEdited(text)
+            onAccepted: publishForm.answered()
             Component.onCompleted: publishBranchField.forceActiveFocus()
         }
     }

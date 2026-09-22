@@ -42,9 +42,37 @@ Item {
         wanted: root.longName
     }
 
+    /// The keyboard's own field: a list with rows to walk, so Enter has both a row to land on and a name to finish.
+    AppCombo {
+        id: keys
+        width: 160
+        y: 120
+        model: ["origin/main", "origin/taken", "origin/carried"]
+        wanted: "origin/main"
+    }
+
     TestCase {
+        id: tc
         name: "AppCombo"
         when: windowShown
+
+        property int submits: 0
+        /// What the box was holding at the moment Qt accepted the input — the value a question answered from
+        /// `accepted` would have been given.
+        property string acceptedWanted: ""
+
+        // Named through the id: a `Connections` function sees the target's scope, not the test's.
+        Connections {
+            target: keys
+            function onSubmitted() { tc.submits++ }
+            function onAccepted() { tc.acceptedWanted = keys.wanted }
+        }
+
+        function init() {
+            tc.submits = 0
+            tc.acceptedWanted = ""
+            keys.popup.close()
+        }
 
         /// The x, in the field's own coordinates, past which the input draws nothing.
         function textRight(combo) {
@@ -113,6 +141,37 @@ Item {
             verify(!bare.indicator.visible, "no list, no arrow")
             compare(bare.contentItem.rightPadding, bare.contentItem.leftPadding,
                     "so both insets are the one every boxed field shares")
+        }
+
+        /// **Enter with the list shut is the name being finished** — the one keystroke a question with a form is
+        /// answered by (デザイン規約 §立っている質問は 1 か所で聞く), fixed here because nothing but a real
+        /// keystroke can say that Qt raises `accepted` on it.
+        function test_return_with_the_list_shut_is_a_finished_name() {
+            keys.wanted = "origin/main"
+            keys.popup.close()
+            keys.contentItem.forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            compare(tc.submits, 1)
+            keyClick(Qt.Key_Enter)
+            compare(tc.submits, 2, "and the keypad's own, which is a second key for the same word")
+        }
+
+        /// **Under the open list the same key belongs to the list**, and the box says nothing is finished.
+        ///
+        /// The order is the whole reason: Qt raises `accepted` on the press and picks the highlighted row on the
+        /// release, so a question answered from `accepted` would be answered with the name the pick is about to
+        /// replace — measured here, where `wanted` is still the old one at the moment the field accepts.
+        function test_return_under_the_open_list_picks_and_finishes_nothing() {
+            keys.wanted = "origin/main"
+            keys.contentItem.forceActiveFocus()
+            keys.popup.open()
+            tryCompare(keys.popup, "visible", true)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            compare(tc.submits, 0, "nothing was finished")
+            compare(tc.acceptedWanted, "origin/main",
+                    "and this is what a handler on `accepted` would have sent: the name before the pick")
+            compare(keys.wanted, "origin/taken", "while the press itself picked the row the keyboard was on")
         }
     }
 }

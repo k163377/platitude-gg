@@ -366,6 +366,30 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "there=true answerable=true",
     },
+    // The first push's question, answered from its name box instead of
+    // the pill (デザイン規約 §立っている質問は 1 か所で聞く). The line
+    // is `publish-go`'s own, read the same way; the write barrier
+    // behind it is what says the key reached the pill's run. **Not for
+    // a question that is held** (`taken`): a keystroke is not a
+    // gesture, so that run would wait out the watchdog — which is the
+    // rule, not a gap.
+    Verb {
+        name: "publish-enter",
+        when: &[],
+        plain: "publish answering far=free unsure=false answerable=true",
+    },
+    // The same answer given from the name box instead of the pill
+    // (デザイン規約 §立っている質問は 1 か所で聞く). **The write
+    // barrier is the whole of the claim**: the run raises the box's own
+    // `accepted` and nothing else, so a build where Enter reaches
+    // nothing waits out the watchdog. The line below is the same one
+    // the pill's run reads, and the picture is the same picture — what
+    // separates the two verbs is which door the write came through.
+    Verb {
+        name: "set-upstream-enter",
+        when: &[],
+        plain: "there=true answerable=true",
+    },
     // **What the toolbar does with an upstream the far side has not got
     // yet.** The counts are silent there (`tracked=false`), which is the
     // standing that used to send the press back to a question about a

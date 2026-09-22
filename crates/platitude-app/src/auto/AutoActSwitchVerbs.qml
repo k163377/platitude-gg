@@ -113,14 +113,17 @@ Item {
             sidebarPane.beginRename("branch", local, local)
             sidebarPane.submitEdit(arg)
             localUpstreamAskTimer.start()
-        } else if (act === "set-upstream" || act === "set-upstream-go" || act === "set-upstream-list") {
+        } else if (act === "set-upstream" || act === "set-upstream-go" || act === "set-upstream-list"
+                   || act === "set-upstream-enter") {
             // `<branch>[:<name to answer with>]` — `:` cannot be in a ref name (`check-ref-format`), so it separates
             // the two without ambiguity. Without the second half the question stands as it opened, on whatever the
             // branch already speaks for.
             const want = arg.split(":")
             const on = want[0]
             upstreamAskTimer.wantName = want.length > 1 ? want[1] : ""
-            upstreamAskTimer.answers = act === "set-upstream-go"
+            upstreamAskTimer.answers = act === "set-upstream-go" || act === "set-upstream-enter"
+            // Which door the answer goes through: the pill's, or Enter in the name box.
+            upstreamAskTimer.byKey = act === "set-upstream-enter"
             upstreamAskTimer.lists = act === "set-upstream-list"
             upstreamAskTimer.typed = false
             upstreamAskTimer.dropped = false
@@ -386,6 +389,8 @@ Item {
         id: upstreamAskTimer
         /// Whether this run answers the question or only photographs it.
         property bool answers: false
+        /// And whether it answers from the name box instead of the pill (`UpstreamFlow.enterBranch`).
+        property bool byKey: false
         /// Whether it drops the name box's list first — no injected click can reach a popup on the offscreen
         /// platform, so the same door a press uses is called instead (`UpstreamFlow.openBranches`).
         property bool lists: false
@@ -432,6 +437,8 @@ Item {
                 return
             }
             driver.pressWrite("answer-ask", () => {
+                if (upstreamAskTimer.byKey)
+                    return upstreamFlow.enterBranch()
                 page.answerRowAsk()
                 return true
             })

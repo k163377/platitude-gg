@@ -82,6 +82,28 @@ Rectangle {
     property Component form: null
     /// The loaded form, so the owner can read what was put into it.
     readonly property alias formItem: formLoader.item
+    /// A form that says its answer is finished answers the question, exactly as the pill does.
+    ///
+    /// **Because the keyboard is in the form, not on the pill.** A question answered by the pill alone hands it the
+    /// focus as the bar opens and is answered with Space or Enter there (デザイン規約 §立っている質問は 1 か所で聞く);
+    /// a question with a form leaves the focus in the box, so the same Enter has to be the box's — otherwise the one
+    /// question that *is* typed into is the one nobody can finish without reaching for the pointer. Which keystroke
+    /// means "finished" is the form's to decide (`AppCombo.submitted`), and what it costs is the bar's.
+    function answerFromForm() {
+        // Nothing to send yet — the pill is dark, and a key cannot do what the press it stands for cannot. A held
+        // question is the pill's alone for the same reason it is held at all (§進行中・長押しの定数): the gesture is
+        // the intent, and a keystroke is not one.
+        if (!bar.answerable || bar.hold)
+            return
+        bar.confirmed()
+    }
+    /// `ignoreUnknownSignals`, since a form is free to have no such keystroke: a form that is all choosers has
+    /// nothing a key could finish, and answers with the pill alone.
+    Connections {
+        target: formLoader.item
+        ignoreUnknownSignals: true
+        function onAnswered() { bar.answerFromForm() }
+    }
     /// Whether the pill can be pressed yet. A form that has nothing in it is a question with no answer to give, and the
     /// pill says so by going quiet — the shape of the bar holds while it is being
     /// filled in.

@@ -159,6 +159,17 @@ Item {
         const form = upstreamFlow.graphPane.askForm
         return Boolean(form && form.branchPick && form.branchPick.popup.visible)
     }
+    /// Automation: Enter in the name box. No key reaches the box on the offscreen platform, so what is raised is the
+    /// box's own `accepted` — the signal Qt raises on Enter, and the door everything downstream of it hangs off
+    /// (`AppCombo.submitted`). **That Enter is what raises it is fixed in `tst_appcombo`**, where a real keystroke
+    /// can be injected; from here on, this is the wiring a hand goes through.
+    function enterBranch() {
+        const form = upstreamFlow.graphPane.askForm
+        if (!form || !form.branchPick)
+            return false
+        form.branchPick.accepted()
+        return true
+    }
 
     Component {
         id: upstreamForm
