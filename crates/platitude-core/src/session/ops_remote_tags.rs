@@ -224,6 +224,43 @@ impl RepoSession {
         )
     }
 
+    /// Renames a tag on a remote, which git does as a push and a delete
+    /// (see [`remote::rename_remote_tag`]). The UI asks first: the old
+    /// name is destroyed.
+    ///
+    /// Reads that remote's tags afterwards for the reason
+    /// [`Self::push_tag`] does — and here both halves moved, so the badge
+    /// on the new name and the row the old one left behind both come off
+    /// this read.
+    pub fn rename_remote_tag(
+        self: &Arc<Self>,
+        remote_name: String,
+        from: String,
+        to: String,
+    ) -> Option<OperationId> {
+        let timeout = self.network_timeout();
+        let s = Arc::clone(self);
+        self.write(
+            OperationKind::Push,
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                remote::rename_remote_tag(
+                    &exec,
+                    &repo.workdir,
+                    &remote_name,
+                    &from,
+                    &to,
+                    timeout,
+                    &cancel,
+                )
+                .await?;
+                s.read_remote_tags(&exec, &repo.workdir, Some(&remote_name), timeout, &cancel)
+                    .await;
+                Ok(())
+            },
+        )
+    }
+
     /// Deletes a tag here and on the remote as one queued write.
     ///
     /// The local half goes first to match [`Self::delete_branch_everywhere`],

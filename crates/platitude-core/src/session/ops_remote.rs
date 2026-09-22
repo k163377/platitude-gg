@@ -354,6 +354,50 @@ impl RepoSession {
         )
     }
 
+    /// Points a branch at a remote branch and then sends it there — the
+    /// half of a rename that takes nothing away
+    /// (デザイン規約 §手元の改名をリモートへ運ぶ).
+    ///
+    /// **The setting goes down first, and that order is the point.** git's
+    /// own `push --set-upstream` records the pair only once the push has
+    /// landed, so a push the far side turned down leaves the branch still
+    /// measured against the name it was renamed away from. Written first,
+    /// a refused push leaves a branch already pointing where it belongs
+    /// and the toolbar's `push` is the retry ([`branch::set_upstream`]
+    /// writes the pair straight for a name this repository has not
+    /// fetched, which is exactly the name this pair is making).
+    pub fn point_upstream_and_push(
+        self: &Arc<Self>,
+        branch: String,
+        remote_name: String,
+        remote_branch: String,
+    ) -> Option<OperationId> {
+        let timeout = self.network_timeout();
+        self.write(
+            OperationKind::Push,
+            AfterWrite::Graph,
+            move |exec, repo, cancel| async move {
+                branch::set_upstream(
+                    &exec,
+                    &repo.workdir,
+                    &branch,
+                    &remote_name,
+                    &remote_branch,
+                    &cancel,
+                )
+                .await?;
+                let spec = remote::PushSpec {
+                    remote: remote_name,
+                    local: format!("refs/heads/{branch}"),
+                    remote_branch,
+                    set_upstream: false,
+                    force: remote::PushForce::None,
+                };
+                remote::push(&exec, &repo.workdir, &spec, timeout, &cancel).await
+            },
+        )
+    }
+
     /// Renames a branch on a remote, which git does as a push and a delete
     /// (see [`remote::rename_remote_branch`]). The UI asks first: the old
     /// name is destroyed.

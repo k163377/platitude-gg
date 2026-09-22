@@ -135,6 +135,37 @@ pub async fn delete_remote_tag(
     Err(super::refusal::refused(command, &out, remote, tag, true))
 }
 
+/// Renames a tag on a remote: the composition git has no command for,
+/// the tag's counterpart to [`super::rename_remote_branch`].
+///
+/// The new name goes up from the copy here. A tag has no tracking ref to
+/// push from — nothing local records what a remote carries under
+/// `refs/tags/` ([`list_tags`]) — and the name here already points at the
+/// object the old one marked, because the local rename that comes first
+/// moves the name and never the object ([`crate::tag::rename`]). Whether
+/// the remote's copy stands on that same object is the caller's to know
+/// before it asks: a drifted one would be renamed **and** moved by this
+/// pair (`offers::TagSides`, デザイン規約 §手元の改名をリモートへ運ぶ).
+///
+/// The push goes first, for the reason it does on a branch: a name the
+/// remote refuses leaves the old one standing and nothing lost.
+///
+/// The far side sees a tag created and a tag deleted, so whatever hung
+/// off the old name — a release built from it — stays behind on the name
+/// that went. The UI warns about this before it runs.
+pub async fn rename_remote_tag(
+    executor: &GitExecutor,
+    workdir: &Path,
+    remote: &str,
+    from: &str,
+    to: &str,
+    timeout: Duration,
+    cancel: &CancellationToken,
+) -> Result<(), GitError> {
+    push_tag(executor, workdir, remote, to, "", timeout, cancel).await?;
+    delete_remote_tag(executor, workdir, remote, from, timeout, cancel).await
+}
+
 /// One tag as a remote advertises it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteTag {

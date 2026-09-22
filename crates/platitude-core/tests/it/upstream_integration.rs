@@ -436,6 +436,53 @@ async fn an_upstream_the_next_push_has_to_make_is_recorded_all_the_same() {
     );
 }
 
+/// **A refused push leaves the branch pointing where it belongs.** This is
+/// the whole reason the pair is written in this order rather than left to
+/// git's `push --set-upstream`, which records the keys only once the push
+/// has landed — measured below from git's own command, and then from the
+/// session op that exists to invert it
+/// (`RepoSession::point_upstream_and_push`, デザイン規約 §手元の改名をリモートへ運ぶ).
+///
+/// The remote is a path with nothing at the end of it: no network, and
+/// the refusal is git's own (実装計画 §11.3).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_push_the_far_side_turns_down_still_leaves_the_upstream_written() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("a.txt", "one\n", "root");
+    let nowhere = repo.path.join("nowhere");
+    repo.git(&["remote", "add", "origin", &nowhere.display().to_string()]);
+
+    // git's own pair, for contrast: the push fails and the keys are not
+    // written, which is the behaviour this op exists to turn around.
+    repo.git_expect_failure(&["push", "--set-upstream", "origin", "main"]);
+    assert_eq!(
+        upstream_of(&mut repo, "main"),
+        None,
+        "git records the pair only on a push that landed"
+    );
+
+    let (sink, session) = crate::support::session::opened(&repo).await;
+    session.point_upstream_and_push("main".into(), "origin".into(), "main-renamed".into());
+    let error = sink
+        .wait_for("WriteFinished", |evs| {
+            evs.iter().find_map(|e| match e {
+                platitude_core::session::SessionEvent::WriteFinished { error, .. } => {
+                    Some(error.clone())
+                }
+                _ => None,
+            })
+        })
+        .await;
+    assert!(error.is_some(), "the push had nowhere to go");
+
+    assert_eq!(
+        upstream_of(&mut repo, "main").as_deref(),
+        Some("refs/remotes/origin/main-renamed"),
+        "and the branch is already measured against the name the push was to make"
+    );
+    session.close();
+}
+
 /// What `%(upstream:track)` prints for a local branch: `[gone]` where
 /// the upstream it names is not here, and empty where the two are level
 /// (`refs::parse_track`).

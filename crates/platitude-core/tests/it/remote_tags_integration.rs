@@ -221,6 +221,79 @@ async fn deleting_a_tag_the_remote_has_not_got_is_not_an_error() {
         .expect("git answers with a warning, not a refusal");
 }
 
+/// A tag renamed on the remote: the new name arrives, the old one goes,
+/// and the object under both is the one this repository holds.
+///
+/// The local rename runs first in the application
+/// (デザイン規約 §手元の改名をリモートへ運ぶ), so what is pushed is the name
+/// here — pinned in the assertions, since a pair that pushed the wrong
+/// side would leave a name over there on a commit nobody asked about.
+#[tokio::test]
+async fn renaming_a_tag_on_a_remote_pushes_the_new_name_and_deletes_the_old() {
+    let (_bare, mut work, root, _head) = tag_scenario();
+    let exec = crate::support::exec::isolated();
+    let cancel = CancellationToken::new();
+    let path = work.path.clone();
+    // The rename this end has already made: `v-both` becomes `v-moved`,
+    // on the same object. It is the annotated one, so what travels is the
+    // tag object and the peel under it is what has to line up.
+    work.git(&["tag", "v-moved", "v-both"]);
+    work.git(&["tag", "--delete", "v-both"]);
+    let object = work.git(&["rev-parse", "v-moved"]);
+
+    remote::rename_remote_tag(&exec, &path, "origin", "v-both", "v-moved", NET, &cancel)
+        .await
+        .expect("the push and the delete both go through");
+
+    assert_eq!(at_origin(&mut work, "v-both"), "", "the old name is gone");
+    assert_eq!(
+        at_origin(&mut work, "v-moved"),
+        object,
+        "and the new one carries the very object this repository has"
+    );
+    assert_eq!(
+        work.git(&["rev-list", "-n", "1", "v-moved"]),
+        root,
+        "which is still the commit the old name marked"
+    );
+}
+
+/// **A name the remote already carries is refused, and the old one
+/// survives it.** The push is the first of the two halves for exactly
+/// this: git turns down a tag that is over there on another commit, and
+/// nothing has been taken away yet when it does. The application does
+/// not ask this question at all (`RepoPage.armRenameTagRemote`); what is
+/// pinned here is that the order makes a refusal harmless.
+#[tokio::test]
+async fn a_rename_the_remote_refuses_leaves_the_old_name_standing() {
+    let (_bare, mut work, _root, _head) = tag_scenario();
+    let exec = crate::support::exec::isolated();
+    let cancel = CancellationToken::new();
+    let path = work.path.clone();
+    let both = at_origin(&mut work, "v-both");
+    let drift = at_origin(&mut work, "v-drift");
+
+    // `v-drift` is here on the head commit and over there on the root
+    // one, so pushing this end's copy under that name is the refusal.
+    let refused =
+        remote::rename_remote_tag(&exec, &path, "origin", "v-both", "v-drift", NET, &cancel).await;
+
+    assert!(
+        refused.is_err(),
+        "git will not move a tag with a plain push"
+    );
+    assert_eq!(
+        at_origin(&mut work, "v-both"),
+        both,
+        "and the name the rename was leaving is still over there"
+    );
+    assert_eq!(
+        at_origin(&mut work, "v-drift"),
+        drift,
+        "with the one it was refused for where it was"
+    );
+}
+
 /// The lease is what makes the hold safe to offer without a dialog: it
 /// is pinned to the commit the reader was being shown, so a remote that
 /// has moved since is refused.
