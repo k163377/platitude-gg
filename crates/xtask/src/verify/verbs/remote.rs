@@ -181,7 +181,9 @@ pub(super) const TABLE: &[Verb] = &[
     // Which remote a push goes to. The mark is one badge on one row:
     // a picture of the band cannot tell "marked" from "the badge was
     // never wired", and `local=true` is what says the repository's own
-    // config holds it.
+    // config holds it. The run only ends once `checkout.defaultRemote`
+    // names the remote as well — the two keys arrive in one snapshot —
+    // and `origin=` on the line is that name.
     Verb {
         name: "push-default",
         when: &[],

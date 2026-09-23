@@ -63,6 +63,7 @@ impl Default for RepoTab {
             default_remote: String::new(),
             push_default: String::new(),
             push_default_local: false,
+            marked_origin: String::new(),
             head_subject: String::new(),
             head_body: String::new(),
             head_author_name: String::new(),

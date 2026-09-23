@@ -168,27 +168,28 @@ impl RepoSession {
         )
     }
 
-    /// Marks where a push goes when no branch says otherwise, or clears the
-    /// mark (`remote.pushDefault`).
+    /// Marks a remote as this repository's origin, or clears the mark —
+    /// both of its keys either way (`remote.pushDefault` and
+    /// `checkout.defaultRemote`, [`remote::OriginMarks`]).
     ///
     /// An empty name clears it. **That reaches the repository's own
     /// config only** — a value set globally stays, and git has no local
-    /// spelling for "not set" that would shadow it (measured: an empty
-    /// local value means "no destination"). Moving the mark to another
-    /// remote is what a repository has against a global one, and that
-    /// is a set.
+    /// spelling for "not set" that would shadow the push's (measured: an
+    /// empty local value means "no destination"). Moving the mark to
+    /// another remote is what a repository has against a global one, and
+    /// that is a set.
     ///
     /// Goes through the write queue for the refresh behind it: the mark is
     /// in the refs snapshot, and the sidebar reads it from there.
-    pub fn set_push_default(self: &Arc<Self>, name: String) -> Option<OperationId> {
+    pub fn mark_origin(self: &Arc<Self>, name: String) -> Option<OperationId> {
         self.write(
             OperationKind::Remote,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 if name.is_empty() {
-                    remote::clear_push_default(&exec, &repo.workdir, &cancel).await
+                    remote::clear_origin(&exec, &repo.workdir, &cancel).await
                 } else {
-                    remote::set_push_default(&exec, &repo.workdir, &name, &cancel).await
+                    remote::mark_origin(&exec, &repo.workdir, &name, &cancel).await
                 }
             },
         )

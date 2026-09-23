@@ -114,6 +114,7 @@ impl RepoTab {
         Member = push_default_local,
         Notify = changed
     );
+    qproperty!("markedOrigin", Member = marked_origin, Notify = changed);
     qproperty!("headSubject", Member = head_subject, Notify = changed);
     qproperty!("headBody", Member = head_body, Notify = changed);
     qproperty!(
@@ -1124,13 +1125,13 @@ impl RepoTab {
             .unwrap_or_default()
     }
 
-    /// Marks the remote a push goes to (`remote.pushDefault`); an empty
-    /// name clears the mark. Clearing reaches this repository's config
-    /// only — a mark set for every repository stays, and marking another
-    /// remote is what moves it.
+    /// Marks a remote as origin — `remote.pushDefault` and
+    /// `checkout.defaultRemote` both; an empty name clears the two.
+    /// Clearing reaches this repository's config only — a mark set for
+    /// every repository stays, and marking another remote is what moves it.
     #[qslot]
-    fn set_push_default(&mut self, name: String) {
-        self.ask_session(|s| s.set_push_default(name.clone()));
+    fn mark_origin(&mut self, name: String) {
+        self.ask_session(|s| s.mark_origin(name.clone()));
     }
 
     /// `git remote set-url <name> <url>` — the way back from a typo.

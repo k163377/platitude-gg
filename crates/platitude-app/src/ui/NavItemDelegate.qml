@@ -52,6 +52,8 @@ Item {
     /// The remote this repository sends pushes to, empty where none is marked (`RepoTab.pushDefault`). Handed down:
     /// one answer for the whole list, and a delegate is recycled row to row.
     property string markedRemote: ""
+    /// The remote both origin keys name, empty where they part (`RepoTab.markedOrigin`) — handed down the same way.
+    property string originRemote: ""
     /// The configured remote names, so a folder row can tell whether it stands for a remote or only for the shape of
     /// the names below it. Both exist in this section: a remote called `my/fork` puts a plain `my` folder above its
     /// own row, and only the second of the two is a remote.
@@ -60,8 +62,12 @@ Item {
     /// above work on a name with a slash in it.
     readonly property bool isRemoteRow:
         navRow.kindHint === "remote" && navRow.folder && navRow.remoteNames.indexOf(navRow.fullName) >= 0
-    /// Whether this row is the marked one.
+    /// Whether this row is the one pushes go to — what its badge says.
     readonly property bool pushesHere: navRow.isRemoteRow && navRow.fullName === navRow.markedRemote
+    /// Whether this row is wholly origin — what its hover says. A remote only the push's key names wears the badge
+    /// and is not this yet: its own menu is offering to finish the mark, and a hover calling it origin would say
+    /// the opposite of the row under it.
+    readonly property bool holdsOrigin: navRow.isRemoteRow && navRow.fullName === navRow.originRemote
     property real listWidth: 200
     /// Where this row's ink begins, and how far each fold of the names steps it in. Handed down because the left panel
     /// sets its rows in from the pane's edge by the room its own bar takes at the other one, so a row stands between
@@ -653,11 +659,11 @@ Item {
         // opens under a folder, so nothing would be standing on top of anything.
         if (navRow.expands)
             return ""
-        // The one folder row that is a thing in itself says what it is for when it holds the mark. The role
+        // The one folder row that is a thing in itself says what it is for when it is origin. The role
         // leads and the name follows it (デザイン規約 §hover のツールチップ: 結論から 1 行 — the same shape the line a
         // working copy's row opens says its state in), and `origin` is the word git gives the role
         // (§リモートを書き留める).
-        if (navRow.pushesHere)
+        if (navRow.holdsOrigin)
             return qsTr("Default remote (origin) — %1").arg(full)
         // **Every folder row says its own path** — the sections that open are no exception, because a fold parent
         // has nothing to open (`expands`) and the path is the one thing the row cannot show: what it draws is the

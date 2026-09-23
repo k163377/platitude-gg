@@ -100,9 +100,9 @@ Item {
             driver.remoteTarget = act === "publish-remotes-marked" ? repoTab.defaultRemote
                                 : marked ? arg.substring(0, arg.length - ":marked".length) : arg
             driver.markWanted = marked || act !== "remote-menu" && act !== "remote-url"
-                                ? driver.remoteTarget : repoTab.pushDefault
-            if (repoTab.pushDefault !== driver.markWanted)
-                repoTab.setPushDefault(driver.markWanted)
+                                ? driver.remoteTarget : repoTab.markedOrigin
+            if (repoTab.markedOrigin !== driver.markWanted)
+                repoTab.markOrigin(driver.markWanted)
             if (act === "push-default")
                 pushDefaultTimer.start()
             else if (act === "remote-menu")
@@ -176,16 +176,17 @@ Item {
         return true
     }
     /// PGG_AUTO_ACT=push-default: the mark lands on a remote and the run stops with the sidebar showing it. The write
-    /// is the barrier — `pushDefault` only says the name once `git config` has run and the refresh behind it has
-    /// republished the snapshot, so a picture taken here is of a repository that really is marked.
+    /// is the barrier — `markedOrigin` only says the name once both `git config` writes have run and the refresh
+    /// behind them has republished the snapshot, so a picture taken here is of a repository that really is marked.
     SampleTimer {
         id: pushDefaultTimer
         onTriggered: {
-            if (repoTab.pushDefault !== driver.markWanted || repoTab.busyCount > 0)
+            if (repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0)
                 return
             pushDefaultTimer.stop()
             // The judged fields lead, and together: `must_say` reads one run of the line.
             Harness.report("push_default local=" + repoTab.pushDefaultLocal
+                              + " origin=" + repoTab.markedOrigin
                               + " marked=" + repoTab.pushDefault
                               + " target=" + repoTab.defaultRemote
                               + " remotes=" + repoTab.remoteCount)
@@ -281,7 +282,7 @@ Item {
     SampleTimer {
         id: publishMarkedTimer
         onTriggered: {
-            if (repoTab.pushDefault !== driver.markWanted || repoTab.busyCount > 0)
+            if (repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0)
                 return
             if (!publishFlow.publishAsking) {
                 page.pushNow()
@@ -299,12 +300,12 @@ Item {
         }
     }
     /// PGG_AUTO_ACT=remote-menu: the menu a remote's own row raises, left standing (overlay.png). `rows=` is what it is
-    /// offering — two on a remote that is not the destination, one on the remote that already is, since a row with
+    /// offering — two on a remote that is not origin, one on the remote both keys already name, since a row with
     /// nothing to do is gone (デザイン規約 §メニュー).
     SampleTimer {
         id: remoteMenuTimer
         onTriggered: {
-            if (repoTab.pushDefault !== driver.markWanted || repoTab.busyCount > 0)
+            if (repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0)
                 return
             if (!driver.remoteMenu.opened && !page.openRemoteMenu(driver.remoteTarget))
                 return
@@ -323,7 +324,7 @@ Item {
     SampleTimer {
         id: remoteUrlTimer
         onTriggered: {
-            if (repoTab.pushDefault !== driver.markWanted || repoTab.busyCount > 0)
+            if (repoTab.markedOrigin !== driver.markWanted || repoTab.busyCount > 0)
                 return
             if (!driver.remoteDialog.visible) {
                 driver.publishFlow.startEditRemote(driver.remoteTarget)

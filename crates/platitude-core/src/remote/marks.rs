@@ -1,6 +1,6 @@
-//! The push marks: where a plain `git push` goes when configuration
-//! decides it — reading them, setting the repository's, and clearing
-//! it.
+//! The marks: where a plain `git push` goes when configuration decides
+//! it, and which remote this repository calls origin — reading them,
+//! setting the repository's, and clearing it.
 
 use std::path::Path;
 
@@ -29,22 +29,54 @@ pub struct PushDefault {
     pub local: bool,
 }
 
-/// Reads `remote.pushDefault`, and which level of configuration set it.
+impl PushDefault {
+    fn at(scope: &str, remote: &str) -> Self {
+        Self {
+            remote: remote.to_string(),
+            // Every other level — global, system, worktree, a `-c` on the
+            // command line — is one this repository cannot unset.
+            local: scope == "local",
+        }
+    }
+}
+
+/// The keys `Mark as origin` writes ([`mark_origin`]), as this repository
+/// reads them.
 ///
-/// `--get` answers with the effective value alone, so the pair that comes
-/// back names the level that decided it — the pair, because `-z` writes
-/// `<scope>\0<value>\0` (measured 2.55: `local\0origin\0`; unset is exit 1 with
-/// nothing on stdout, which is an answer).
+/// Two, because the role answers two questions in git: where a push goes
+/// when no branch says otherwise (`remote.pushDefault`), and which remote
+/// `git switch <name>` takes `<name>` from when more than one carries it
+/// (`checkout.defaultRemote` — unset, git refuses with `'topic' matched
+/// multiple (2) remote tracking branches`, measured 2.55). **Read as two
+/// because git keeps them as two**: `git remote rename` moves
+/// `remote.pushDefault` to the new name and `remove` unsets it, and both
+/// leave `checkout.defaultRemote` naming the old remote (measured 2.55),
+/// so a remote can hold one without the other.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OriginMarks {
+    /// The push's, with the level that set it.
+    pub push_default: Option<PushDefault>,
+    /// The remote `checkout.defaultRemote` names. Its level is not kept:
+    /// all it decides here is whether marking that remote still has
+    /// anything to write.
+    pub checkout_default: Option<String>,
+}
+
+/// Reads both [`OriginMarks`] keys with one `--get-regexp`, and which
+/// level set the push's.
+///
+/// The record shape and the level order are [`push_marks`]'s; neither
+/// key set is exit 1, which is an answer.
 ///
 /// A key written without a remote name behind it (`remote.pushDefault=`)
 /// answers `None`: no remote is called that, so there is nothing here to
 /// point at. What git does with it is refuse the push outright, and only
 /// git can say that (measured).
-pub async fn push_default(
+pub async fn origin_marks(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
-) -> Result<Option<PushDefault>, GitError> {
+) -> Result<OriginMarks, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
         // Unset is the usual state and it is an answer.
@@ -53,34 +85,60 @@ pub async fn push_default(
             "config",
             "-z",
             "--show-scope",
-            "--get",
-            "remote.pushDefault",
+            "--get-regexp",
+            r"^(remote\.pushdefault|checkout\.defaultremote)$",
         ]);
     let out = executor.run_unchecked(cmd, cancel).await?;
     match out.code {
-        0 => Ok(parse_push_default(&out.stdout)),
-        1 => Ok(None),
+        0 => Ok(parse_origin_marks(&out.stdout)),
+        1 => Ok(OriginMarks::default()),
         code => Err(GitError::Failed {
-            command: "git config --get remote.pushDefault".to_string(),
+            command: "git config --get-regexp remote.pushDefault checkout.defaultRemote"
+                .to_string(),
             code,
             stderr: out.failure_message(),
         }),
     }
 }
 
-fn parse_push_default(bytes: &[u8]) -> Option<PushDefault> {
+fn parse_origin_marks(bytes: &[u8]) -> OriginMarks {
+    let mut marks = OriginMarks::default();
+    each_scoped_record(bytes, |scope, key, value| match key {
+        "remote.pushdefault" => {
+            marks.push_default = value.map(|remote| PushDefault::at(scope, remote));
+        }
+        "checkout.defaultremote" => marks.checkout_default = value.map(str::to_string),
+        _ => {}
+    });
+    marks
+}
+
+/// Walks a `-z --show-scope --get-regexp` answer: `<scope>\0<key>\n<value>\0`
+/// per record, every level in precedence order, lowest first — so a key
+/// seen again overwrites what an earlier record said, and the last one is
+/// the effective value.
+///
+/// A value that is empty or blank comes through as `None`, as does a key
+/// written bare, whose record has no newline in it (measured 2.55: a bare
+/// `pushDefault` line arrives as `local\0remote.pushdefault\0`). Both still
+/// override a level below.
+fn each_scoped_record(bytes: &[u8], mut each: impl FnMut(&str, &str, Option<&str>)) {
     let mut fields = bytes
         .split(|b| *b == 0)
         .filter(|field| !field.is_empty())
         .map(String::from_utf8_lossy);
-    let scope = fields.next()?;
-    let remote = fields.next()?.trim().to_string();
-    (!remote.is_empty()).then(|| PushDefault {
-        remote,
-        // Every other level — global, system, worktree, a `-c` on the
-        // command line — is one this repository cannot unset.
-        local: scope == "local",
-    })
+    while let (Some(scope), Some(record)) = (fields.next(), fields.next()) {
+        // The separating newline is inside the record.
+        let (key, value) = match record.as_ref().split_once('\n') {
+            Some((key, value)) => (key, Some(value)),
+            None => (record.as_ref(), None),
+        };
+        each(
+            &scope,
+            key,
+            value.map(str::trim).filter(|value| !value.is_empty()),
+        );
+    }
 }
 
 /// Both marks at once: the branch's own `branch.<branch>.pushRemote`, and
@@ -149,117 +207,152 @@ pub async fn push_marks(
 fn parse_push_marks(branch: &str, bytes: &[u8]) -> PushMarks {
     let branch_key = format!("branch.{branch}.pushremote");
     let mut marks = PushMarks::default();
-    let mut fields = bytes
-        .split(|b| *b == 0)
-        .filter(|field| !field.is_empty())
-        .map(String::from_utf8_lossy);
-    while let (Some(scope), Some(record)) = (fields.next(), fields.next()) {
-        // The separating newline is inside the record; a key written with
-        // no value at all has no newline in its record (measured 2.55: a bare
-        // `pushDefault` line arrives as `local\0remote.pushdefault\0`).
-        let (key, value) = match record.as_ref().split_once('\n') {
-            Some((key, value)) => (key, Some(value)),
-            None => (record.as_ref(), None),
-        };
-        let value = value.map(str::trim).filter(|value| !value.is_empty());
-        // Later records overwrite earlier ones on purpose: levels arrive
-        // lowest first, and the last one per key is the effective value.
+    each_scoped_record(bytes, |scope, key, value| {
         if key == branch_key {
             marks.push_remote = value.map(str::to_string);
         } else if key == "remote.pushdefault" {
-            marks.push_default = value.map(|remote| PushDefault {
-                remote: remote.to_string(),
-                // Every other level — global, system, worktree, a `-c` on
-                // the command line — is one this repository cannot unset.
-                local: scope == "local",
-            });
+            marks.push_default = value.map(|remote| PushDefault::at(scope, remote));
         }
-    }
+    });
     marks
 }
 
-/// `git config remote.pushDefault <name>` — marks where pushes go.
+/// The [`OriginMarks`] keys in the order they are written and cleared: the
+/// push's first, because it is the one the remote's row draws its badge
+/// from. Either half left behind by a second call that fails reads as a
+/// mark not wholly set, so the row still offers it — marking finishes it,
+/// and marking then clearing takes the rest off.
+const ORIGIN_KEYS: [&str; 2] = ["remote.pushDefault", "checkout.defaultRemote"];
+
+/// Marks `name` as this repository's origin: `git config
+/// remote.pushDefault <name>`, then `git config checkout.defaultRemote
+/// <name>`.
 ///
 /// The old spelling on purpose (規約 git最低バージョン整合: `git config
-/// set` is 2.46). The key ends the options: git stops looking for them
-/// after it, so a remote actually named `-x` — which `remote add` will
-/// make — is taken as the value (measured, 2.55).
-pub async fn set_push_default(
+/// set` is 2.46), which sets one key per process. The key ends the
+/// options: git stops looking for them after it, so a remote actually
+/// named `-x` — which `remote add` will make — is taken as the value
+/// (measured, 2.55).
+pub async fn mark_origin(
     executor: &GitExecutor,
     workdir: &Path,
     name: &str,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let cmd = GitCommand::new()
-        .cwd(workdir)
-        .args(["config", "remote.pushDefault", name]);
-    executor.run(cmd, cancel).await?;
+    for key in ORIGIN_KEYS {
+        let cmd = GitCommand::new().cwd(workdir).args(["config", key, name]);
+        executor.run(cmd, cancel).await?;
+    }
     Ok(())
 }
 
-/// `git config --unset remote.pushDefault`.
+/// `git config --unset` on both [`OriginMarks`] keys.
 ///
-/// The key not being set is the state the caller asked for, and git says so
-/// with exit 5 (measured).
-pub async fn clear_push_default(
+/// A key not being set is the state the caller asked for, and git says so
+/// with exit 5 (measured). This repository's own config is all it reaches
+/// ([`PushDefault::local`]).
+pub async fn clear_origin(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    let cmd = GitCommand::new().cwd(workdir).answers_by_code(5).args([
-        "config",
-        "--unset",
-        "remote.pushDefault",
-    ]);
-    let out = executor.run_unchecked(cmd, cancel).await?;
-    match out.code {
-        0 | 5 => Ok(()),
-        code => Err(GitError::Failed {
-            command: "git config --unset remote.pushDefault".to_string(),
-            code,
-            stderr: out.failure_message(),
-        }),
+    for key in ORIGIN_KEYS {
+        let cmd = GitCommand::new()
+            .cwd(workdir)
+            .answers_by_code(5)
+            .args(["config", "--unset", key]);
+        let out = executor.run_unchecked(cmd, cancel).await?;
+        match out.code {
+            0 | 5 => {}
+            code => {
+                return Err(GitError::Failed {
+                    command: format!("git config --unset {key}"),
+                    code,
+                    stderr: out.failure_message(),
+                });
+            }
+        }
     }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Recorded from git 2.55: `config -z --show-scope --get` writes the
-    /// level and the value as two NUL-terminated fields.
+    /// Recorded from git 2.55: `config -z --show-scope --get-regexp` over
+    /// the two keys, `<scope>\0<key>\n<value>\0` per record.
     #[test]
-    fn a_push_default_names_its_remote_and_its_level() {
-        let read = parse_push_default(b"local\0fork\0").expect("a value");
-        assert_eq!(read.remote, "fork");
-        assert!(read.local, "the repository's own config can be unset here");
+    fn the_origin_marks_name_their_remotes_and_the_push_level() {
+        let read = parse_origin_marks(
+            b"local\0remote.pushdefault\nfork\0local\0checkout.defaultremote\nfork\0",
+        );
+        let pushes = read.push_default.expect("a push mark");
+        assert_eq!(pushes.remote, "fork");
+        assert!(
+            pushes.local,
+            "the repository's own config can be unset here"
+        );
+        assert_eq!(read.checkout_default.as_deref(), Some("fork"));
     }
 
     #[test]
     fn a_push_default_from_anywhere_else_is_not_local() {
         for scope in ["global", "system", "worktree", "command"] {
-            let bytes = format!("{scope}\0fork\0").into_bytes();
-            let read = parse_push_default(&bytes).expect("a value");
+            let bytes = format!("{scope}\0remote.pushdefault\nfork\0").into_bytes();
+            let read = parse_origin_marks(&bytes).push_default.expect("a value");
             assert!(!read.local, "{scope} is not this repository's config");
         }
+    }
+
+    /// Each key stands alone: a remote renamed in a terminal takes the push
+    /// mark along and leaves the checkout one behind (measured 2.55).
+    #[test]
+    fn the_two_keys_may_name_different_remotes() {
+        let read = parse_origin_marks(
+            b"local\0remote.pushdefault\nhome\0local\0checkout.defaultremote\nfork\0",
+        );
+        assert_eq!(read.push_default.expect("a push mark").remote, "home");
+        assert_eq!(read.checkout_default.as_deref(), Some("fork"));
+        let checkout_only = parse_origin_marks(b"global\0checkout.defaultremote\norigin\0");
+        assert!(checkout_only.push_default.is_none());
+        assert_eq!(checkout_only.checkout_default.as_deref(), Some("origin"));
+    }
+
+    /// Levels arrive lowest first, so the last record per key is the
+    /// effective value.
+    #[test]
+    fn the_last_origin_record_per_key_is_the_effective_one() {
+        let read = parse_origin_marks(
+            b"global\0checkout.defaultremote\norigin\0global\0remote.pushdefault\norigin\0\
+              local\0checkout.defaultremote\nfork\0local\0remote.pushdefault\nfork\0",
+        );
+        let pushes = read.push_default.expect("a push mark");
+        assert_eq!(pushes.remote, "fork");
+        assert!(pushes.local);
+        assert_eq!(read.checkout_default.as_deref(), Some("fork"));
     }
 
     /// A remote may be named `-x` (`remote add --end-of-options` makes one),
     /// and the value comes back as it was written.
     #[test]
     fn a_dashed_remote_name_survives_the_read() {
-        let read = parse_push_default(b"local\0-x\0").expect("a value");
-        assert_eq!(read.remote, "-x");
+        let read = parse_origin_marks(b"local\0remote.pushdefault\n-x\0");
+        assert_eq!(read.push_default.expect("a value").remote, "-x");
     }
 
     /// The key written with nothing behind it. No remote is called that, so
     /// there is nothing to mark — git refuses the push, and only git can
     /// say so.
     #[test]
-    fn a_push_default_without_a_remote_names_nothing() {
-        assert!(parse_push_default(b"local\0\0").is_none());
-        assert!(parse_push_default(b"local\0").is_none());
-        assert!(parse_push_default(b"").is_none());
+    fn an_origin_mark_without_a_remote_names_nothing() {
+        let empty =
+            parse_origin_marks(b"local\0remote.pushdefault\n\0local\0checkout.defaultremote\n\0");
+        assert_eq!(empty, OriginMarks::default());
+        let bare =
+            parse_origin_marks(b"local\0remote.pushdefault\0local\0checkout.defaultremote\0");
+        assert_eq!(bare, OriginMarks::default());
+        assert_eq!(parse_origin_marks(b""), OriginMarks::default());
     }
 
     /// Recorded from git 2.55: `config -z --show-scope --get-regexp`

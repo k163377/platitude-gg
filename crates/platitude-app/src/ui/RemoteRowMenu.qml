@@ -5,8 +5,8 @@ import platitude.ui
 // repository configuration, so this menu is its own from the ground up: the two have nothing in
 // common but the gesture that opens them.
 //
-// Both rows stand bare. One opens a form, and the other runs `git config remote.pushDefault <name>` — `config` is a
-// word only the command log spells (デザイン規約 §git 用語のコード表記).
+// Both rows stand bare. One opens a form, and the other runs `git config` on `remote.pushDefault` and
+// `checkout.defaultRemote` — `config` is a word only the command log spells (デザイン規約 §git 用語のコード表記).
 Item {
     id: remoteRowMenu
 
@@ -50,15 +50,16 @@ Item {
         // rows are the same group — what to do with this remote. That one opens a form and the other runs at once is
         // what the `…` on the first row already says.
         //
-        // Gone on the remote that already holds the mark: git keeps one value, so there is nothing for this row to do
-        // there (デザイン規約 §メニュー — 選べない行は消す). Clearing the mark is the box in the form, and moving it is this row
-        // on another remote.
+        // Gone on the remote both keys already name: git keeps one value for each, so there is nothing for this row to
+        // do there (デザイン規約 §メニュー — 選べない行は消す). A remote only one of them names keeps the row — a rename in a
+        // terminal carries the push's key along and leaves the other behind, and this row is how the mark is finished.
+        // Clearing the mark is the box in the form, and moving it is this row on another remote.
         AppMenuItem {
             id: markItem
             text: qsTr("Mark as default remote (origin)")
-            offered: remoteRowMenu.remote !== "" && remoteRowMenu.remote !== remoteRowMenu.repoTab.pushDefault
+            offered: remoteRowMenu.remote !== "" && remoteRowMenu.remote !== remoteRowMenu.repoTab.markedOrigin
             blockedReason: remoteRowMenu.repoTab.busyCount === 0 ? "" : Words.otherCommandRunning
-            onTriggered: remoteRowMenu.repoTab.setPushDefault(remoteRowMenu.remote)
+            onTriggered: remoteRowMenu.repoTab.markOrigin(remoteRowMenu.remote)
         }
     }
 }

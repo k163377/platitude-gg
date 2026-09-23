@@ -453,6 +453,7 @@ fn a_branch_another_copy_holds_wears_the_state_in_the_shared_slot() {
         remote_names: Vec::new(),
         remote_urls: Vec::new(),
         push_default: None,
+        checkout_default: None,
     };
     snap.locals.sort_by(|a, b| a.short.cmp(&b.short));
     let mut model = section("branches", Source::Locals(std::sync::Arc::new(snap)));
@@ -503,6 +504,7 @@ fn a_branch_carries_the_upstream_that_is_not_here_in_the_shared_slot() {
         remote_names: Vec::new(),
         remote_urls: Vec::new(),
         push_default: None,
+        checkout_default: None,
     };
     snap.locals.sort_by(|a, b| a.short.cmp(&b.short));
     let mut model = section("branches", Source::Locals(std::sync::Arc::new(snap)));

@@ -10,11 +10,12 @@ AppListView {
     property var sectionModel
     property bool expanded: true
     property string kindHint: "branch"
-    /// REMOTES only: the configured remote names (`RepoTab.remoteNames`), and which of them this repository sends
-    /// pushes to. Held here — the rows are recycled, so neither answer can be theirs to keep
-    /// (デザイン規約 §その他の操作).
+    /// REMOTES only: the configured remote names (`RepoTab.remoteNames`), which of them this repository sends
+    /// pushes to, and which of them both origin keys name (`RepoTab.markedOrigin`). Held here — the rows are
+    /// recycled, so none of the answers can be theirs to keep (デザイン規約 §その他の操作).
     property var remoteNames: []
     property string markedRemote: ""
+    property string originRemote: ""
     /// This list holds whatever height the panel it is in has over its rows. Only the one section the folded rail
     /// opens beside itself wants that — it is alone in its panel, so the spare height has nowhere else to go. In the
     /// sidebar proper the ground at the foot of the column takes it, and no section stretches
@@ -391,6 +392,7 @@ AppListView {
         kindHint: navList.kindHint
         remoteNames: navList.remoteNames
         markedRemote: navList.markedRemote
+        originRemote: navList.originRemote
         pointedTipRow: navList.pointedTipRow
         rowKey: navList.gestures ? navList.keyOf(full, name) : ""
         activeKey: navList.gestures ? navList.gestures.activeKey : ""

@@ -280,6 +280,7 @@ AppCard {
             stretch: true
             remoteNames: peek.repoTab.remoteNames
             markedRemote: peek.repoTab.pushDefault
+            originRemote: peek.repoTab.markedOrigin
             onRefActivated: oidHex => peek.refActivated(oidHex)
             onRefMenuRequested: (kind, name, full, oidHex) => peek.refMenuRequested(kind, name, full, oidHex)
             onRemoteMenuRequested: name => peek.remoteMenuRequested(name)

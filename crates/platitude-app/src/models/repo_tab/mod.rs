@@ -260,10 +260,16 @@ pub struct RepoTab {
     /// empty where none is marked, and whether the mark is this
     /// repository's own to clear. `default_remote` is what actually
     /// decides a destination and falls back to a remote called `origin`;
-    /// this is the mark itself, which is what the sidebar draws and the
-    /// dialog's box reads.
+    /// this is the push's key itself, which is what the sidebar's badge
+    /// draws and whether the dialog's box can be cleared.
     push_default: String,
     push_default_local: bool,
+    /// The remote both keys `Mark as origin` writes name
+    /// (`remote.pushDefault` and `checkout.defaultRemote`), empty where
+    /// they part or neither is set. What the menu row, the form's box and
+    /// the row's hover read: a remote only one key names still has the
+    /// mark to finish.
+    marked_origin: String,
     /// HEAD's message split into the editor's two fields, filled on
     /// request so an amend starts from it.
     head_subject: String,

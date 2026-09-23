@@ -186,6 +186,9 @@ pub enum TabMsg {
         urls: Vec<String>,
         push_default: String,
         push_default_local: bool,
+        /// `checkout.defaultRemote`, the other key marking a remote as
+        /// origin; empty where unset.
+        checkout_default: String,
     },
     /// HEAD's message and author, for prefilling an amend.
     HeadCommit {

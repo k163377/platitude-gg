@@ -382,10 +382,27 @@ fn a_changed_remote_url_moves_the_join_key() {
             push_url: url.to_string(),
         }],
         push_default: None,
+        checkout_default: None,
     };
     assert_ne!(
         joins::join_key(1, 0, 0, &remotes("https://old.example/repo")),
         joins::join_key(1, 0, 0, &remotes("https://new.example/repo")),
+    );
+}
+
+/// Finishing a half-set origin mark changes `checkout.defaultRemote` alone
+/// — the push's key already names the remote — and that change is the
+/// whole of what takes away the row offering it.
+#[test]
+fn a_moved_checkout_mark_moves_the_join_key() {
+    let remotes = |checkout: Option<&str>| crate::remote::Remotes {
+        list: Vec::new(),
+        push_default: None,
+        checkout_default: checkout.map(str::to_string),
+    };
+    assert_ne!(
+        joins::join_key(1, 0, 0, &remotes(None)),
+        joins::join_key(1, 0, 0, &remotes(Some("fork"))),
     );
 }
 

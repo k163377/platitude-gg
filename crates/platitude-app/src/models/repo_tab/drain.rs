@@ -120,6 +120,7 @@ impl RepoTab {
                     urls,
                     push_default,
                     push_default_local,
+                    checkout_default,
                 } => {
                     // The marked remote is where pushes go. Only where
                     // nothing is marked does the old guess stand: `origin`
@@ -136,6 +137,14 @@ impl RepoTab {
                         .unwrap_or_default();
                     self.push_default = marked.cloned().unwrap_or_default();
                     self.push_default_local = push_default_local;
+                    // Both keys or none: `git remote rename` carries the
+                    // push's along and leaves the checkout one on the old
+                    // name, and that remote still has the mark to finish.
+                    self.marked_origin = if self.push_default == checkout_default {
+                        self.push_default.clone()
+                    } else {
+                        String::new()
+                    };
                     self.remote_count = names.len() as i32;
                     self.remote_names = names.clone();
                     self.remotes = names;

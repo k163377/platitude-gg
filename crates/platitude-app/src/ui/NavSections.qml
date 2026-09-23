@@ -242,6 +242,7 @@ ColumnLayout {
         worktreesModel: sections.worktreesModel
         remoteNames: sections.repoTab.remoteNames
         markedRemote: sections.repoTab.pushDefault
+        originRemote: sections.repoTab.markedOrigin
         Layout.verticalStretchFactor: sections.sectionPull
         onRefActivated: oidHex => sections.refActivated(oidHex)
         onRefMenuRequested: (kind, name, full, oidHex) => sections.refMenuRequested(kind, name, full, oidHex)

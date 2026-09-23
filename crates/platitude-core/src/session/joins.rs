@@ -424,11 +424,12 @@ pub(super) fn join_key(
     // here would notice it — and the mark it decides is on rows the
     // joins build.
     worktrees_gen.hash(&mut hasher);
-    // Which remote a push goes to is the same kind of thing: it moves no
-    // ref, it rides in the snapshot, and the sidebar reads it from there.
-    // Left out, moving it republishes the held snapshot and the mark stays
-    // on the row it was on.
+    // Which remote is origin is the same kind of thing: it moves no ref,
+    // it rides in the snapshot, and the sidebar reads it from there. Left
+    // out, moving it republishes the held snapshot and the mark stays on
+    // the row it was on.
     remotes.push_default.hash(&mut hasher);
+    remotes.checkout_default.hash(&mut hasher);
     for r in &remotes.list {
         r.name.hash(&mut hasher);
         // The URL rides in the snapshot too (the settings screen reads it

@@ -57,6 +57,9 @@ pub struct RefsSnapshot {
     /// nothing is marked — then a branch's own upstream decides, and a
     /// branch with none falls back to whichever remote is called `origin`.
     pub push_default: Option<crate::remote::PushDefault>,
+    /// The remote `checkout.defaultRemote` names — the other key marking a
+    /// remote as origin ([`crate::remote::OriginMarks`]). `None` where unset.
+    pub checkout_default: Option<String>,
 }
 
 impl RefsSnapshot {

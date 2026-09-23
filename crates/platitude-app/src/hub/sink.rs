@@ -200,6 +200,7 @@ impl SessionSink for BridgeSink {
                             .push_default
                             .as_ref()
                             .is_some_and(|marked| marked.local),
+                        checkout_default: snapshot.checkout_default.clone().unwrap_or_default(),
                     });
                 }
                 self.feeds.refs_branches.push_coalescing(RefsMsg::Snapshot {

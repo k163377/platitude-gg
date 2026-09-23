@@ -123,6 +123,7 @@ pub(super) fn carried(
         remote_names: Vec::new(),
         remote_urls: Vec::new(),
         push_default: None,
+        checkout_default: None,
     };
     // The index the name lookups go through, the way the joins build it.
     snapshot.index_tags();

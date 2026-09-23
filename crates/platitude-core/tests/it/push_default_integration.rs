@@ -1,11 +1,13 @@
 //! Where a push goes when the repository decides it
-//! (`remote.pushDefault`) — against real git, with `file://` remotes so
-//! nothing leaves the machine (実装計画 §11.3).
+//! (`remote.pushDefault`), and the remote the repository calls origin —
+//! that key with `checkout.defaultRemote` beside it — against real git,
+//! with `file://` remotes so nothing leaves the machine (実装計画 §11.3).
 //!
 //! Every expectation here was recorded from git itself before it was
 //! written down: the order it resolves the three keys in, the name it
 //! pushes a branch under once the destination is not the one it tracks,
-//! and the exit codes its reads answer with.
+//! which remote an ambiguous `switch` takes, and the exit codes its reads
+//! answer with.
 //!
 //! **What is left here is what only git can answer**: that the four
 //! reads come back with what git holds — at every scope, and for a
@@ -84,7 +86,7 @@ async fn a_marked_remote_takes_the_push_from_the_upstream() {
     let (_origin, _fork, mut repo) = origin_fork_and_clone();
     let (exec, cancel) = env();
 
-    remote::set_push_default(&exec, &repo.path, "fork", &cancel)
+    remote::mark_origin(&exec, &repo.path, "fork", &cancel)
         .await
         .expect("mark fork");
 
@@ -108,41 +110,93 @@ async fn a_marked_remote_takes_the_push_from_the_upstream() {
     );
 }
 
+/// Both keys go on together and come off together, and the read gives
+/// each back — the push's with the level that set it.
 #[tokio::test]
-async fn the_mark_reads_back_with_the_level_that_set_it() {
-    let (_origin, _fork, repo) = origin_fork_and_clone();
+async fn the_origin_mark_reads_back_with_both_keys() {
+    let (_origin, _fork, mut repo) = origin_fork_and_clone();
     let (exec, cancel) = env();
 
-    assert!(
-        remote::push_default(&exec, &repo.path, &cancel)
+    assert_eq!(
+        remote::origin_marks(&exec, &repo.path, &cancel)
             .await
-            .expect("an answer")
-            .is_none(),
-        "unset is an answer, not a failure"
+            .expect("unset is an answer, not a failure"),
+        remote::OriginMarks::default()
     );
 
-    remote::set_push_default(&exec, &repo.path, "fork", &cancel)
+    remote::mark_origin(&exec, &repo.path, "fork", &cancel)
         .await
         .expect("mark fork");
-    let marked = remote::push_default(&exec, &repo.path, &cancel)
+    // Asked of git by name, not through the reader under test.
+    assert_eq!(
+        repo.git(&["config", "--get", "checkout.defaultRemote"])
+            .trim(),
+        "fork"
+    );
+    let marks = remote::origin_marks(&exec, &repo.path, &cancel)
         .await
-        .expect("an answer")
-        .expect("a mark");
+        .expect("an answer");
+    let marked = marks.push_default.expect("a push mark");
     assert_eq!(marked.remote, "fork");
     assert!(marked.local, "this repository's own config set it");
+    assert_eq!(marks.checkout_default.as_deref(), Some("fork"));
 
-    remote::clear_push_default(&exec, &repo.path, &cancel)
+    remote::clear_origin(&exec, &repo.path, &cancel)
         .await
         .expect("clear");
-    assert!(
-        remote::push_default(&exec, &repo.path, &cancel)
+    assert_eq!(
+        remote::origin_marks(&exec, &repo.path, &cancel)
             .await
-            .expect("an answer")
-            .is_none()
+            .expect("an answer"),
+        remote::OriginMarks::default()
     );
-    remote::clear_push_default(&exec, &repo.path, &cancel)
+    remote::clear_origin(&exec, &repo.path, &cancel)
         .await
         .expect("clearing a mark that is already gone is the state asked for");
+}
+
+/// What the second key is for: a name more than one remote carries is one
+/// `git switch` refuses to guess at, until a remote is marked — and then
+/// it tracks the marked one.
+#[tokio::test]
+async fn a_marked_remote_is_where_an_ambiguous_switch_takes_its_branch() {
+    let (_origin, _fork, mut repo) = origin_fork_and_clone();
+    let (exec, cancel) = env();
+
+    repo.git(&["push", "origin", "main:topic"]);
+    repo.git(&["push", "fork", "main:topic"]);
+    repo.git(&["fetch", "fork"]);
+    repo.git_expect_failure(&["switch", "topic"]);
+
+    remote::mark_origin(&exec, &repo.path, "fork", &cancel)
+        .await
+        .expect("mark fork");
+    repo.git(&["switch", "topic"]);
+    assert_eq!(
+        repo.git(&["rev-parse", "--abbrev-ref", "topic@{upstream}"])
+            .trim(),
+        "fork/topic"
+    );
+}
+
+/// Why the read keeps the two keys apart: a remote renamed in a terminal
+/// takes the push's key along and leaves the checkout one on the old name
+/// (measured 2.55).
+#[tokio::test]
+async fn a_remote_renamed_in_a_terminal_leaves_the_checkout_key_behind() {
+    let (_origin, _fork, mut repo) = origin_fork_and_clone();
+    let (exec, cancel) = env();
+
+    remote::mark_origin(&exec, &repo.path, "fork", &cancel)
+        .await
+        .expect("mark fork");
+    repo.git(&["remote", "rename", "fork", "home"]);
+
+    let marks = remote::origin_marks(&exec, &repo.path, &cancel)
+        .await
+        .expect("an answer");
+    assert_eq!(marks.push_default.expect("a push mark").remote, "home");
+    assert_eq!(marks.checkout_default.as_deref(), Some("fork"));
 }
 
 /// The fork arrangement the label used to get wrong: the branch marks its
@@ -297,7 +351,7 @@ async fn a_global_mark_is_read_and_sent_alike() {
     );
 
     // This repository's own mark beats the global one…
-    remote::set_push_default(&exec, &repo.path, "home", &cancel)
+    remote::mark_origin(&exec, &repo.path, "home", &cancel)
         .await
         .expect("mark home locally");
     let marks = remote::push_marks(&exec, &repo.path, "main", &cancel)
@@ -327,7 +381,7 @@ async fn one_read_answers_for_both() {
     let (_origin, _fork, repo) = origin_fork_and_clone();
     let (exec, cancel) = env();
 
-    remote::set_push_default(&exec, &repo.path, "fork", &cancel)
+    remote::mark_origin(&exec, &repo.path, "fork", &cancel)
         .await
         .expect("mark fork");
 
@@ -337,4 +391,5 @@ async fn one_read_answers_for_both() {
     let names: Vec<&str> = read.list.iter().map(|r| r.name.as_str()).collect();
     assert_eq!(names, ["fork", "origin"]);
     assert_eq!(read.push_default.expect("a mark").remote, "fork");
+    assert_eq!(read.checkout_default.as_deref(), Some("fork"));
 }

@@ -153,11 +153,11 @@ Item {
     function startAddRemote() {
         remoteDialog.start("", "", publishFlow.publishRemotes, false, true)
     }
-    /// The same form with the half that is already known filled in: this remote's URL, and whether it is the one
-    /// pushes go to. Raised from the remote's own row on the left menu (デザイン規約 §リモートを書き留める).
+    /// The same form with the half that is already known filled in: this remote's URL, and whether it is origin.
+    /// Raised from the remote's own row on the left menu (デザイン規約 §リモートを書き留める).
     function startEditRemote(name) {
         remoteDialog.start(name, publishFlow.repoTab.remoteUrl(name), publishFlow.publishRemotes,
-                           name === publishFlow.repoTab.pushDefault,
+                           name === publishFlow.repoTab.markedOrigin,
                            publishFlow.repoTab.pushDefaultLocal)
     }
     function choosePublishRemote(index) {
@@ -401,7 +401,7 @@ Item {
         }
         // Clearing goes through the same slot with nothing to point at. It reaches this repository's config only —
         // the box says so itself where the mark came from somewhere else, and is not offered there.
-        onMarkChanged: (name, marked) => publishFlow.repoTab.setPushDefault(marked ? name : "")
+        onMarkChanged: (name, marked) => publishFlow.repoTab.markOrigin(marked ? name : "")
     }
 
     Component {

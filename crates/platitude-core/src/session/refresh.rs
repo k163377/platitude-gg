@@ -149,6 +149,7 @@ impl RepoSession {
                     .map(|r| (r.name, r.fetch_url))
                     .unzip();
                 snapshot.push_default = remotes.push_default;
+                snapshot.checkout_default = remotes.checkout_default;
                 let label_map = build_label_map(&refs, &head, &remote_tags, &joins);
                 self.sink.event(SessionEvent::RefsLoaded {
                     snapshot: self.share_snapshot(snapshot),

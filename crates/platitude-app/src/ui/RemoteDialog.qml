@@ -20,9 +20,9 @@ AppDialog {
     /// Names this repository already has. git refuses a duplicate itself (`remote <name> already exists`, exit 3), but
     /// that refusal would arrive after the dialog had closed, with nothing on screen left for it to be about.
     property var taken: []
-    /// Whether this remote is the one pushes go to, and whether that is this repository's own to change. A mark set
-    /// for every repository cannot be cleared from here — git has no local spelling for "not set" (measured), and
-    /// the only move against it is marking another remote.
+    /// Whether this remote is origin — both keys the box writes name it (`RepoTab.markedOrigin`) — and whether that
+    /// is this repository's own to change. A mark set for every repository cannot be cleared from here — git has no
+    /// local spelling for "not set" (measured), and the only move against it is marking another remote.
     property bool marked: false
     property bool markLocal: true
 
@@ -35,9 +35,9 @@ AppDialog {
     /// The remote was written down. The URL goes in as typed: `git remote add` contacts nothing, so only a push
     /// can find it wrong.
     signal submitted(string name, string url)
-    /// The box was left in a different state than it opened in. Its own signal: what it changes is one config
-    /// key, and a form that reported both would have the caller work out which of the two it was being told
-    /// about.
+    /// The box was left in a different state than it opened in. Its own signal: what it changes is config keys
+    /// rather than the remote, and a form that reported both would have the caller work out which of the two it
+    /// was being told about.
     signal markChanged(string name, bool marked)
 
     function start(name, url, takenNames, marked, markLocal) {
@@ -132,9 +132,10 @@ AppDialog {
             }
         }
 
-        // Where pushes go. The word is the role and `origin` is what git calls it — the name of the remote actually
-        // holding it is this form's own heading (デザイン規約 §リモートを書き留める). The same words as the row on the left menu's
-        // menu: two ways into one operation say one sentence (§メニュー).
+        // Which remote is origin: where pushes go, and where a `switch` to a name several remotes carry takes it from.
+        // The word is the role and `origin` is what git calls it — the name of the remote actually holding it is
+        // this form's own heading (デザイン規約 §リモートを書き留める). The same words as the row on the left menu's menu:
+        // two ways into one operation say one sentence (§メニュー).
         //
         // Offered from the second remote on — the line is about taking the destination from somewhere else, and a
         // repository's first remote is where every push goes anyway.
