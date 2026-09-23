@@ -38,8 +38,10 @@ ToolButton {
     /// where `hovered` is read and nowhere else, so a run lights what a hand lights — wash and tip together, as
     /// one.
     property bool pointedAt: false
-    /// A hand is on this button, whichever of the two put it there.
-    readonly property bool lit: hoverToolButtonSelf.hovered || hoverToolButtonSelf.pointedAt
+    /// A hand is on this button, whichever of the two put it there. A run's hand is only ever the stand-in: the
+    /// pointer the platform leaves in the window's corner is not one anybody put there (`Hand`).
+    readonly property bool lit:
+        (hoverToolButtonSelf.hovered && !Hand.away) || hoverToolButtonSelf.pointedAt
     /// Automation: the tip this button raised is up. The attached tooltip waits out `tipDelayMs` before it stands, so
     /// this is the one thing that says the words are on screen.
     readonly property bool tipShown: hoverToolButtonSelf.ToolTip.visible

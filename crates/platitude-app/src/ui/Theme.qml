@@ -27,6 +27,12 @@ QtObject {
     readonly property color bgBase: "#020617"
     readonly property color bgSurface: "#020617"
     readonly property color bgElevated: "#0F172A"
+    // The one surface that stands above the chrome's own: the operation panel, which is a second row and has to read
+    // as one. Halfway between `bgElevated` and `borderSubtle`, because a whole step up made it the brightest wide
+    // surface in the window — and the window is 82% graph ground, so the brightest wide surface is what the eye goes
+    // to first (measured: at `borderSubtle` the panel was 4.4% of the window and louder than every row in the graph).
+    // Here it is 1.09 from the band below it and 1.25 from the graph, which reads as a separate row and no more.
+    readonly property color bgRaised: "#17202F"
     readonly property color bgSelected: "#172554"
     readonly property color bgHover: "#14FFFFFF"
     readonly property color bgPressed: "#1FFFFFFF"
@@ -211,6 +217,12 @@ QtObject {
     // Also the height of a collapsed rail cell: ☰ stands in a cell of the band's full height and the five cells under
     // it must answer to the same depth, or the height that can be pressed changes partway down one column.
     readonly property int toolbarHeight: 40
+    // 操作パネル: **the branch written on two lines** — its own name and, under it, the upstream it is measured
+    // against — with `spaceSm` over and under. Two `fontMd` lines come to 36 at the metrics this window is set in,
+    // and the buttons' `controlHeight` 28 sits inside that with room to spare. **Thicker than the band above it**:
+    // this is the row a hand comes to, and the one that says which repository, which working copy and which branch
+    // the window is standing in.
+    readonly property int opsBarHeight: 52
     readonly property int controlHeight: 28
     // A floor for buttons that draw a frame, and only those — a button without one is a word rather than a box, and a
     // floor under it puts the hover wash and the hold fill wider than the word.

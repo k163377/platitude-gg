@@ -48,9 +48,9 @@ Item {
     readonly property real openFloorWidth:
         Math.max(topBar.floorWidth, mainUi.floorPage !== null ? mainUi.floorPage.openFloorWidth : 0)
     readonly property real floorHeight:
-        // The band, the divider under it, and the line the window's bottom edge is drawn as — the three rows of
-        // `bodyColumn` that are not the page (they carry their own heights; the page's is its own floor).
-        Theme.toolbarHeight + Theme.splitterWidth + Theme.borderWidth
+        // The chrome's two rows and the line the window's bottom edge is drawn as — the rows of `bodyColumn` that are
+        // not the page (they carry their own heights; the page's is its own floor).
+        Theme.toolbarHeight + Theme.opsBarHeight + Theme.borderWidth
         + (mainUi.floorPage !== null ? mainUi.floorPage.floorHeight : 0)
 
     // Where the hand is, for whoever has to open something beside it. Declared here, on the parent of the whole
@@ -86,9 +86,6 @@ Item {
             // group gives up its words there (`TopBar.windowAtFloor`). Read here: the floor is the larger of
             // band's and page's.
             windowAtFloor: mainUi.window.width <= Math.ceil(mainUi.floorWidth)
-            // …and the width the three actions have to be down to their marks by, which is that floor with the list
-            // open. Read here for the same reason: only this body has both halves of it.
-            windowFloorWidth: mainUi.openFloorWidth
             onOpenRepositoryRequested: mainUi.window.openRepositoryPicker()
             onCloneRepositoryRequested: mainUi.window.startClone()
             onIdentityEditRequested: mainUi.dialogSeat.openSettingsAt("git")
@@ -98,12 +95,9 @@ Item {
             onCloseRequested: mainUi.window.close()
             onCaptionStripMoved: mainUi.chrome.reportCaptionStrip()
         }
-        // Divider under the tab toolbar — same look as the pane splitters.
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: Theme.splitterWidth
-            color: Theme.borderSubtle
-        }
+        // No divider under the chrome. The pane splitters' 4px band was what separated a toolbar from the content
+        // under it; the panel has its own ground now (`TopBar`), and a band of the very ink that ground is drawn in
+        // adds four pixels to the panel's own depth instead of parting anything from it.
 
         // Nothing open: the blank page. Built only while needed, so an app that starts with tabs never pays for it.
         Loader {

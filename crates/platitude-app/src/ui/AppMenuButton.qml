@@ -37,9 +37,11 @@ ToolButton {
     hoverEnabled: true
     Accessible.name: qsTr("Application menu")
     // Written out here: an open menu keeps the wash, which no hover of its own can
-    // say — what is on screen has to say which mark put it there (`NavRail`).
+    // say — what is on screen has to say which mark put it there (`NavRail`). The hand is asked for the same way the
+    // tool buttons ask (`HoverToolButton.lit`): this cell stands in the window's own corner, which is where a headless
+    // run's platform leaves a pointer nobody put there (`Hand`).
     background: Rectangle {
-        color: menuButton.hovered || appMenu.opened ? Theme.bgHover : "transparent"
+        color: (menuButton.hovered && !Hand.away) || appMenu.opened ? Theme.bgHover : "transparent"
     }
     contentItem: Item {
         NavIcon {

@@ -21,6 +21,11 @@ MenuItem {
     /// that says what it costs, the same shape the amend editor uses.
     property string note: ""
 
+    /// A second name after the row's own, for a row that names something standing somewhere: the working copy a tab
+    /// is in. **Drawn the way the tab itself draws it** (デザイン規約 §タブの所作) — the WORKTREES mark as a letter of
+    /// the run, then the folder's name, a step down and a shade quieter. Empty draws none.
+    property string trail: ""
+
     /// A git term said in git's own spelling — lowercase, mono, on a faint chip
     /// (デザイン 規約 §git 用語のコード表記). Left untranslated: it is the command itself. It sits ahead of
     /// `text`, which carries whatever of the sentence is left ("this file"), often nothing.
@@ -46,6 +51,17 @@ MenuItem {
     property string markKind: ""
     property color markTint: Theme.textSecondary
     readonly property bool heads: menuItem.markKind !== ""
+    /// Whether that mark makes this row a heading — the weight and the quiet colour that go with naming a card.
+    /// **A mark about the row itself is not a heading**: a working copy's padlock, the house on the repository's
+    /// own, the tree on a branch another copy is standing on. Those are the marks the left menu's rows wear in the
+    /// seat their names begin at (`NavRowBody.seatMark`), and a row that took the heading's dress for one of them
+    /// would read as a title with nothing under it.
+    property bool headed: true
+    readonly property bool titled: menuItem.heads && menuItem.headed
+    /// How far this row's branch stands from its upstream, counted the way the left menu counts it (`HeadTrack`).
+    /// Both zero draws nothing: level with the upstream is not a number worth a seat (§左メニューの所作).
+    property int ahead: 0
+    property int behind: 0
 
     /// **A name inside the row's words, with the mark its kind is read by against it** — a working copy's folder
     /// behind the WORKTREES mark, wherever a row leads to one (`RefRowMenu` の `Open`). `text` carries the words
@@ -355,8 +371,17 @@ MenuItem {
                           ? menuItem.arrow.width + Theme.spaceXs : 0
             // The section band's own spelling, for a row that names a card: the same weight and colour the sidebar
             // gives BRANCHES and TAGS, so the two read as one kind of thing wherever they are met (NavHeader).
-            font.weight: menuItem.heads ? Font.DemiBold : menuItem.font.weight
-            color: menuItem.heads ? Theme.textSecondary : menuItem.wordColor
+            font.weight: menuItem.titled ? Font.DemiBold : menuItem.font.weight
+            color: menuItem.titled ? Theme.textSecondary : menuItem.wordColor
+        }
+        // How far this row's branch stands from what it follows, in the seat the left menu keeps for it — the same
+        // marks, the same order, so the two listings are read the same way (`NavRowBody`'s `trackSeat`).
+        HeadTrack {
+            visible: menuItem.ahead > 0 || menuItem.behind > 0
+            Layout.leftMargin: Theme.spaceSm
+            Layout.alignment: Qt.AlignVCenter
+            ahead: menuItem.ahead
+            behind: menuItem.behind
         }
         // The name the row leads to, with its mark set in front of it as a letter of the same word
         // (`markWordGap`): one mark for one idea, the very one the WORKTREES rows, the tab and the graph's chips
@@ -398,6 +423,28 @@ MenuItem {
                 verticalAlignment: Text.AlignVCenter
                 color: menuItem.wordColor
             }
+        }
+        // The working copy this row's repository is standing in, set after its name as one run — the same shape the
+        // tab and the operation panel draw (`TabTreeMark` / `OpsPicker.trail`): the mark is a letter of the run, so
+        // nothing is written either side of it (§余白).
+        NavIcon {
+            visible: menuItem.trail !== ""
+            Layout.leftMargin: Theme.spaceXs
+            Layout.alignment: Qt.AlignVCenter
+            Layout.preferredWidth: Theme.iconXs
+            Layout.preferredHeight: Theme.iconXs
+            kind: "tree"
+            stroke: Metrics.iconStroke * Theme.iconXs / Theme.iconMd
+            tint: Theme.textSecondary
+        }
+        Label {
+            id: trailLabel
+            visible: menuItem.trail !== ""
+            text: menuItem.trail
+            verticalAlignment: Text.AlignVCenter
+            color: Theme.textSecondary
+            font.family: Theme.uiFamily
+            font.pixelSize: Theme.fontSm
         }
         Label {
             id: noteLabel

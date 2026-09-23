@@ -114,11 +114,13 @@ Rectangle {
         return kind === "remote" && rail.countOf(kind) === 0
     }
 
-    /// How tall one cell stands. **The ☰'s own cell**, which is the band it sits in (`toolbarHeight` — TopBar): the
-    /// mark at the head of this column and the five under it answer the pointer over the same run, and a reach that
-    /// changes partway down a column of one kind of thing is a difference nobody can see and everybody feels. Written
-    /// as the relationship, so the two move together (デザイン規約 §ウィンドウの縁 — 近い値を
-    /// 書き写さない).
+    /// How tall one cell stands: `toolbarHeight`, which is a mark of `iconXl` with the `fontSm` line of its word under
+    /// it — what a cell holds, measured. The five of this column all answer to it, because a reach that changes
+    /// partway down a column of one kind of thing is a difference nobody can see and everybody feels.
+    ///
+    /// **Not the ☰'s cell any more.** That one stands in the tab band, and the band is slimmer than this since the
+    /// operation panel came between them (`Theme.toolbarHeight` — TopBar): they are no longer one column, so they no
+    /// longer have to be one reach.
     ///
     /// `railWidth` is the window's own outer edge, and what sets it is the mark at the head of this
     /// column plus a step either side (§左メニューを畳む). Two questions, and once the edge came in they stopped

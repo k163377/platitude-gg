@@ -4,6 +4,7 @@ singleton Metrics 1.0 Metrics.qml
 singleton Words 1.0 Words.qml
 singleton Ink 1.0 Ink.qml
 singleton Motion 1.0 Motion.qml
+singleton Hand 1.0 Hand.qml
 singleton MiddleHand 1.0 MiddleHand.qml
 singleton NavFacts 1.0 NavFacts.qml
 ActionButton 1.0 ActionButton.qml
@@ -142,6 +143,7 @@ OpExitCard 1.0 OpExitCard.qml
 OpExitRow 1.0 OpExitRow.qml
 OpenFailedDialog 1.0 OpenFailedDialog.qml
 OpenFailedScreen 1.0 OpenFailedScreen.qml
+OpsPicker 1.0 OpsPicker.qml
 PageLayout 1.0 PageLayout.qml
 PaneHeader 1.0 PaneHeader.qml
 PaneScrollBar 1.0 PaneScrollBar.qml

@@ -67,6 +67,16 @@ Menu {
         return true
     }
 
+    /// The same, for a menu that drops from the control it belongs to rather than from the pointer: the card places
+    /// itself under that control by its own `x`/`y` (`AppMenuButton`), so all this has left to decide is whether
+    /// there is anything to open. Says whether it opened.
+    function offerHere() {
+        if (!appMenu.applies || appMenu.offeredRows === 0)
+            return false
+        appMenu.open()
+        return true
+    }
+
     /// Opens the card one of this menu's rows carries, and lights that row the way resting on it would. The
     /// automation's only way in — hover cannot be injected (app-ui.md §UI 自動化の因果性) — and the same `offer()`
     /// the card would get from a hand, so a card with nothing in it still does not come up. Says whether it opened.
