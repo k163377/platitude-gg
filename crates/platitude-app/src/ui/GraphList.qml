@@ -174,6 +174,7 @@ AppListView {
         graphColWidth: graphList.graphColWidth
         graphXOffset: graphList.graphXOffset
         graphFullWidth: graphList.graphFullWidth
+        findOn: graphList.findOn
     }
     // Manual contentY math must respect originY: after positionViewAtIndex jumps, the ListView shifts its
     // coordinate origin as item positions are fixed up, so [0, contentHeight-height] no longer matches the real

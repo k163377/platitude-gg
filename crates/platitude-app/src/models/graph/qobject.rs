@@ -64,6 +64,7 @@ impl GraphModel {
         Member = tail_geometry,
         Notify = stats_changed
     );
+    qproperty!("tailMatched", Member = tail_matched, Notify = stats_changed);
     // Which row the working tree stands on and what a stand-in for it
     // draws. Properties for the reason `matchCount` is one: the rows
     // arrive in chunks and their chips a pass later, and the pane has to

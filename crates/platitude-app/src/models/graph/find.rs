@@ -54,7 +54,7 @@ impl GraphModel {
             }
         }
         self.match_count = count;
-        self.settle_first();
+        self.settle_ends();
         self.settle_head();
         self.notify_runs(ranges);
     }
@@ -74,10 +74,11 @@ impl GraphModel {
         }
     }
 
-    /// Re-reads whether the newest row answers the query. Called wherever
-    /// the rows or their marks move.
-    pub(super) fn settle_first(&mut self) {
+    /// Re-reads whether the newest and the oldest loaded rows answer the
+    /// query. Called wherever the rows or their marks move.
+    pub(super) fn settle_ends(&mut self) {
         self.first_matched = self.rows.first().is_some_and(|r| r.matched);
+        self.tail_matched = self.rows.last().is_some_and(|r| r.matched);
     }
 
     /// Rows answering the query, as their indices in order.
@@ -142,5 +143,35 @@ mod tests {
         model.query = None;
         model.remark_notified();
         assert!(!model.head_matched, "the search is off");
+    }
+
+    /// The footer carries the oldest loaded row's lanes on past the cut,
+    /// at that row's strength, so a re-marking re-reads that row too.
+    #[test]
+    fn a_search_marks_the_oldest_row_for_the_footer() {
+        let mut model = GraphModel::default();
+        model.rows = vec![
+            GraphRowItem {
+                oid_hex: "b2".repeat(20),
+                subject: "the newest".into(),
+                ..GraphRowItem::default()
+            },
+            GraphRowItem {
+                oid_hex: "c3".repeat(20),
+                subject: "the oldest".into(),
+                ..GraphRowItem::default()
+            },
+        ];
+        model.query = Query::new("newest");
+        model.remark_notified();
+        assert!(!model.tail_matched, "the oldest row was passed over");
+
+        model.query = Query::new("oldest");
+        model.remark_notified();
+        assert!(model.tail_matched, "the oldest row answers the search");
+
+        model.query = None;
+        model.remark_notified();
+        assert!(!model.tail_matched, "the search is off");
     }
 }

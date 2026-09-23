@@ -113,6 +113,7 @@ impl GraphModel {
             // re-count them.
             self.match_count = 0;
             self.first_matched = false;
+            self.tail_matched = false;
             self.max_lanes = 1;
             self.first_chunk_ms = -1;
             self.total_ms = -1;
@@ -150,7 +151,7 @@ impl GraphModel {
         self.match_count += items.iter().filter(|i| i.matched).count() as i32;
         self.extend_marks(rows);
         self.extend_notified(items);
-        self.settle_first();
+        self.settle_ends();
         self.row_total = self.rows.len() as i32;
         debug_assert_eq!(self.marks.len(), self.rows.len());
     }
@@ -181,7 +182,7 @@ impl GraphModel {
                 self.set(idx, updated);
             }
         }
-        self.settle_first();
+        self.settle_ends();
     }
 
     fn finish_walk(
@@ -229,6 +230,7 @@ impl GraphModel {
         self.mark_incoming(&mut items);
         self.match_count = items.iter().filter(|i| i.matched).count() as i32;
         self.first_matched = items.first().is_some_and(|i| i.matched);
+        self.tail_matched = items.last().is_some_and(|i| i.matched);
         self.max_lanes = rows
             .iter()
             .map(|row| i32::from(row.width))

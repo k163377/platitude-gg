@@ -152,6 +152,9 @@ pub struct GraphModel {
     /// Lanes running off the end of the window (`encode::tail_lanes`),
     /// drawn by the truncation footer.
     tail_geometry: Lanes,
+    /// Whether the oldest loaded row is one of the answers: the footer's
+    /// lanes carry on from that row's, so they start at its strength.
+    tail_matched: bool,
     /// The loaded row the working tree stands on, and what a stand-in for
     /// it draws — the chips it carries and the subject it says.
     /// -1 and empty answers while HEAD is outside the window, which

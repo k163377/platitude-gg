@@ -27,6 +27,13 @@ Item {
     required property real graphColWidth
     required property real graphXOffset
     required property real graphFullWidth
+    /// A search is on (`GraphList.findOn`).
+    required property bool findOn
+
+    /// The search passed the last row over, so its lanes are down (規約 §コミットを探す) and the run of lane here
+    /// starts from that strength — a lit tail under a dimmed row is a step where the eye is following a line down.
+    readonly property bool dimmed: tail.findOn && !tail.graphModel.tailMatched
+    onDimmedChanged: tailCanvas.requestPaint()
 
     /// Whether a press here would load anything: the walk stopped at the window, and the last press has been answered.
     readonly property bool canLoadMore: tail.graphModel.truncated && !tail.graphModel.growing
@@ -76,12 +83,12 @@ Item {
                 for (const seg of tail.graphModel.tailGeometry) {
                     const x = Metrics.laneInset + seg.lane * Metrics.laneW + Metrics.laneW / 2
                     // **The lanes go out.** Drawn flat at `dimFade` they put a step between the last
-                    // row and this one exactly where the eye is following a line down. Full
-                    // strength where the last row leaves off, gone by the bottom — the history past the cut is not
+                    // row and this one exactly where the eye is following a line down. The last row's own
+                    // strength where it leaves off (`dimmed`), gone by the bottom — the history past the cut is not
                     // there to be drawn, so what stands for it fades out.
                     const fade = ctx.createLinearGradient(0, 0, 0, height)
                     const hex = Theme.graphLane[seg.color % Theme.graphLane.length]
-                    fade.addColorStop(0, tailCanvas.faded(hex, 1))
+                    fade.addColorStop(0, tailCanvas.faded(hex, tail.dimmed ? Metrics.dimFade : 1))
                     fade.addColorStop(1, tailCanvas.faded(hex, 0))
                     ctx.strokeStyle = fade
                     ctx.setLineDash(seg.dashed ? Metrics.laneDash : [])
