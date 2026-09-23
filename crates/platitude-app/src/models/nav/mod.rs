@@ -218,5 +218,13 @@ pub struct NavSectionModel {
     carried_name: String,
     stash_feed: Option<Arc<Feed<crate::hub::StashList>>>,
     worktrees_feed: Option<Arc<Feed<Vec<platitude_core::worktrees::WorktreeEntry>>>>,
+    /// The repository's own working copy — the first entry git prints,
+    /// which is the main one by definition (`git worktree list`). Empty
+    /// on every section but the worktrees, and until the first listing
+    /// arrives. **What a repository is named by**: the copy a window is
+    /// open on may be a linked one whose folder is called anything, and
+    /// the two are the same folder only in the ordinary case
+    /// (`TopBar.repoName`).
+    main_path: String,
     tab_id: i32,
 }

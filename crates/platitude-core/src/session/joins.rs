@@ -708,6 +708,6 @@ pub(super) fn shown_name(path: &str) -> crate::Name {
 /// How two spellings of one folder are compared. git prints worktree
 /// paths its own way and the session holds the platform's, which differ
 /// in separator on Windows and in case on both Windows and macOS.
-pub(super) fn same_path_key(path: &str) -> String {
+pub fn same_path_key(path: &str) -> String {
     path.replace('\\', "/").to_lowercase()
 }

@@ -119,6 +119,7 @@ use graph_refresh::{GraphPasses, GraphRun};
 pub use graph_refresh::{
     RefreshOutcome, RefreshTask, RemoteTagRefreshOutcome, RemoteTagRefreshTask,
 };
+pub use joins::same_path_key;
 use latest::Latest;
 pub(crate) use model::LabelIndex;
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel};

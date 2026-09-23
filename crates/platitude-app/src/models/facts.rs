@@ -308,6 +308,18 @@ impl GitFacts {
             .unwrap_or_default()
     }
 
+    /// Whether two spellings name one folder
+    /// (`session::same_path_key`) — git prints a worktree path its
+    /// own way and a session holds the platform's, and the two differ in
+    /// separator on Windows and in case on both Windows and macOS. Two
+    /// empty paths are not the same folder: neither of them is a folder.
+    #[qslot]
+    fn same_path(&self, one: String, other: String) -> bool {
+        !one.is_empty()
+            && platitude_core::session::same_path_key(&one)
+                == platitude_core::session::same_path_key(&other)
+    }
+
     /// The local path a `file://` URL names
     /// (`urlpath::file_url_to_path`) — what a box shows once the
     /// platform's chooser has answered with one. Folder or file: the

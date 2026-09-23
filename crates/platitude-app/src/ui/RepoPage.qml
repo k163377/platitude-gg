@@ -2262,6 +2262,22 @@ FocusScope {
     // Exposed for the window toolbar (acts on the active tab).
     readonly property var pageTab: repoTab
     readonly property var pageWt: workTree
+    /// The branch list, for the one reading the band takes off it: whether what this branch is measured against has
+    /// gone from the remote (`headUpstreamGone`, git's own `[gone]`).
+    readonly property var pageBranches: branchesModel
+    /// The copies this repository has, for the panel's own door into them (`TopBar`'s WORKTREE rows). The same
+    /// listing the left menu's WORKTREES section draws, so the two name the same places in the same order.
+    readonly property var pageWorktrees: worktreesModel
+    /// What the repository itself is called: the folder of its own working copy, which is not this tab's whenever the
+    /// tab was opened on a linked one (`NavSectionModel.mainPath`). Falls back to the tab's name until the listing
+    /// arrives — a name that is right in the ordinary case beats an empty picker on every launch.
+    readonly property string pageRepoName:
+        worktreesModel.mainPath === "" ? repoTab.title : GitFacts.pathLeaf(worktreesModel.mainPath)
+    /// Whether this tab is open on that copy rather than on a linked one. Compared the way the listing's own `current`
+    /// is (`nav::drain`): git prints one separator and Windows the other, and a path is not a name.
+    readonly property bool pageOnMainCopy:
+        worktreesModel.mainPath !== ""
+        && GitFacts.samePath(worktreesModel.mainPath, repoTab.repoPath)
     /// What the band's Stash button would name the entry — the commit box is on this page, the button is not
     /// (デザイン規約 §変更を退避する). Decided by the pane that owns the box, so the file row's `stash` reads the same one.
     readonly property string pageStashName: wipPane.stashName
