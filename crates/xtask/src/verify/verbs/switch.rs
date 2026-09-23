@@ -75,6 +75,14 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "replace_ask hold=true code=",
     },
+    // The same question with a hand on its pill: the tip is the only
+    // place the bar says what the hold is for, and a picture of the bar
+    // alone cannot hold it — `tip=true` is the words having opened.
+    Verb {
+        name: "replace-remote-tip",
+        when: &[],
+        plain: "replace_ask hold=true code= tip=true",
+    },
     // The branch half of the same question: a name changed here, and what
     // the remote it was measured against does about it
     // (デザイン規約 §手元の改名をリモートへ運ぶ). The fields are the tag
@@ -105,6 +113,14 @@ pub(super) const TABLE: &[Verb] = &[
         // is live from the first frame.
         plain: "rename_carry kind=branch rows=3 pick=none shown=true answerable=true \
                 hold=false neutral=true pill=Create",
+    },
+    // …and with a hand on the pill of the one answer that has a tip —
+    // the held one, whose tip is where the running order is said.
+    Verb {
+        name: "rename-local-upstream-tip",
+        when: &[],
+        plain: "rename_carry kind=branch rows=3 pick=replace shown=true answerable=true \
+                hold=true neutral=false pill=Replace tip=true",
     },
     // …and the same road with the answer given. **`replace` is not on
     // this one**: the branch it renames is the one the working tree is

@@ -139,9 +139,10 @@ Item {
             // weighed against, so a run that opened the box on the wrong row says so.
             tagNameBoxTimer.begin(arg)
         } else if (act === "replace-remote" || act === "replace-remote-box"
-                   || act === "replace-remote-go") {
+                   || act === "replace-remote-go" || act === "replace-remote-tip") {
             // Named outright (`origin/billing:billing-v2`) because the remote's rows are behind a fold. "-box" leaves
-            // the box standing, the plain act stops at the question, "-go" holds the pill to the end.
+            // the box standing, the plain act stops at the question, "-go" holds the pill to the end, "-tip" stops at
+            // the question with a hand on the pill.
             const parts = arg.split(":")
             const ref = parts[0]
             const was = GitFacts.branchOfRef(ref, repoTab.remoteNames)
@@ -162,18 +163,22 @@ Item {
             sidebarPane.submitEdit(parts[1])
             // The hold's end is the press the write barrier is armed on (`holdToEnd`), said by the pane when the
             // pill confirms.
-            if (act === "replace-remote-go")
+            if (act === "replace-remote-go") {
                 driver.holdToEnd(graphPane)
-            else
+            } else {
+                replaceAskTimer.points = act === "replace-remote-tip"
+                replaceAskTimer.pointed = false
                 replaceAskTimer.start()
-        } else if (act === "rename-tag-remote" || act === "rename-tag-remote-go") {
+            }
+        } else if (act === "rename-tag-remote" || act === "rename-tag-remote-go" || act === "rename-tag-remote-tip") {
             // A tag whose name a remote carries too, renamed here — and the question that comes back for the copy
             // over there. `<tag>:<新しい名前>[:<選ぶ答え>]`, the answer being `replace` / `add` / `leave`;
             // **the tag is named, not numbered**, since which row a name sorts to is the preset's business while a
             // name both sides hold is what this run needs (`nav-open-tag` の同じ理由). Without an answer the bar
             // stands as it comes down, on the answer it opens with. "-go" answers it, and picks `replace` where the argument
-            // names none.
-            tagRemoteRenameTimer.begin(arg, act === "rename-tag-remote-go")
+            // names none. "-tip" puts a hand on the pill instead, and picks `replace` whatever the argument names: it
+            // is the one answer whose pill has anything to say.
+            tagRemoteRenameTimer.begin(arg, act === "rename-tag-remote-go", act === "rename-tag-remote-tip")
         } else if (act === "nav-branch-box" || act === "nav-rename-box" || act === "nav-tag-box") {
             // The two boxes the left menu opens on a row, left standing — the copy of the chip
             // column's box on the side with no lanes to grow into, and the rename box that shares the field with it.
@@ -301,14 +306,33 @@ Item {
     // line with nothing on it. The plain verb ends here — the write is "-go"'s half.
     SampleTimer {
         id: replaceAskTimer
+        /// A hand goes on the pill once the bar has stopped moving (`replace-remote-tip`): what the hold is for, and
+        /// the order the pair runs in, is said in the pill's tip and nowhere else on the bar. The tip places itself
+        /// against the pill as it opens, so a pill still travelling down would leave it where the pill was.
+        property bool points: false
+        /// Whether the hand has gone on — the one step this run takes past the plain verb's, said as it is taken.
+        property bool pointed: false
         onTriggered: {
             if (!graphPane.askCard.settled)
                 return
+            if (replaceAskTimer.points && !graphPane.askCard.tipStanding) {
+                // Put back on every beat until the tip stands: it is the hand the tip opens for.
+                graphPane.askCard.pointedAt = true
+                if (!replaceAskTimer.pointed) {
+                    replaceAskTimer.pointed = true
+                    // A run that ends at the ceiling after this line stopped at the tip. `words=` is whether the bar
+                    // has a tip to open at all, and `pill=` the word it is standing on.
+                    Harness.report("replace_ask step=pointed pill=" + graphPane.askCard.accept
+                                   + " words=" + (graphPane.askCard.tip !== ""))
+                }
+                return
+            }
             replaceAskTimer.stop()
             // `code=` being empty is part of the claim: a push and a delete make no one command, so the pill answers
             // in the ordinary voice (規約 §git 用語のコード表記 の 1:1 規則 — the same reading `move_ask` makes).
             Harness.report("replace_ask hold=" + graphPane.askHold
-                              + " code=" + graphPane.askCode)
+                              + " code=" + graphPane.askCode
+                              + (replaceAskTimer.points ? " tip=" + graphPane.askCard.tipStanding : ""))
             driver.complete()
         }
     }
@@ -337,12 +361,19 @@ Item {
         property bool picked: false
         /// Whether the line has gone out — see the head of `onTriggered`.
         property bool said: false
-        function begin(arg, holds) {
+        /// Whether a hand goes on the pill once the pick has dressed the bar (`rename-tag-remote-tip`).
+        property bool points: false
+        /// Whether it has gone on — said as it is taken.
+        property bool pointed: false
+        function begin(arg, holds, points) {
             const parts = ("" + arg).split(":")
             tagRemoteRenameTimer.tag = parts[0]
             tagRemoteRenameTimer.name = parts.length > 1 ? parts[1] : ""
-            tagRemoteRenameTimer.choice = parts.length > 2 ? parts[2] : (holds ? "replace" : "")
+            tagRemoteRenameTimer.choice = points ? "replace"
+                : parts.length > 2 ? parts[2] : (holds ? "replace" : "")
             tagRemoteRenameTimer.holds = holds
+            tagRemoteRenameTimer.points = points
+            tagRemoteRenameTimer.pointed = false
             tagRemoteRenameTimer.sent = false
             tagRemoteRenameTimer.picked = false
             tagRemoteRenameTimer.said = false
@@ -394,6 +425,19 @@ Item {
                 tagRemoteRenameTimer.picked = true
                 return
             }
+            // A beat after the pick, so the tip places itself against the pill wearing the picked answer's word — and
+            // put back on every beat until the tip stands.
+            if (tagRemoteRenameTimer.points && !graphPane.askCard.tipStanding) {
+                graphPane.askCard.pointedAt = true
+                if (!tagRemoteRenameTimer.pointed) {
+                    tagRemoteRenameTimer.pointed = true
+                    // A run that ends at the ceiling after this line stopped at the tip: `pill=` is the answer the
+                    // bar is wearing, `words=` whether it has a tip to open at all.
+                    Harness.report("rename_carry step=pointed pill=" + graphPane.askCard.accept
+                                   + " words=" + (graphPane.askCard.tip !== ""))
+                }
+                return
+            }
             tagRemoteRenameTimer.said = true
             // `here=` is what the wait above was for, said out loud. `mark=` is the row under the question, read off
             // the list and weighed against where the tags section has the new name: the commit the bar is marked
@@ -402,7 +446,8 @@ Item {
                               + " here=" + (tagsModel.rowOfName(tagRemoteRenameTimer.name) >= 0)
                               + " mark=" + (graphPane.view.askOid !== ""
                                   && graphPane.view.askOid
-                                     === tagsModel.oidOfName(tagRemoteRenameTimer.name)))
+                                     === tagsModel.oidOfName(tagRemoteRenameTimer.name))
+                              + (tagRemoteRenameTimer.points ? " tip=" + graphPane.askCard.tipStanding : ""))
             if (!tagRemoteRenameTimer.holds) {
                 tagRemoteRenameTimer.stop()
                 driver.complete()

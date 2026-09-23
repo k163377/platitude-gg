@@ -30,7 +30,8 @@ QtObject {
                 "discard-staged-go", "switch", "switch-remote", "nav-dbl",
                 "rename-branch", "rename-tag", "rename-stash", "rename-taken",
                 "replace-remote-go", "rename-local-upstream", "rename-local-upstream-go",
-                "rename-tag-remote", "rename-tag-remote-go", "delete-branch",
+                "rename-local-upstream-tip", "rename-tag-remote", "rename-tag-remote-go", "rename-tag-remote-tip",
+                "delete-branch",
                 "delete-branch-go", "delete-tag-go", "delete-stash-go",
                 "delete-remote-go", "remote-refused", "delete-force", "delete-branch-refused",
                 "delete-branch-chip", "delete-stood-down",
@@ -161,13 +162,13 @@ QtObject {
                 "switch-remote-twice",
                 // Stops at its question, so the ask bar settling is the completion — the write is
                 // the "-go" half, which stays a write act above.
-                "replace-remote", "set-upstream", "set-upstream-list",
+                "replace-remote", "replace-remote-tip", "set-upstream", "set-upstream-list",
                 // A write does come, but the subject is the question its answer raises,
                 // so the bar settling is the completion (the bar takes 200ms to come down).
-                "rename-local-upstream", "rename-local-upstream-go",
+                "rename-local-upstream", "rename-local-upstream-go", "rename-local-upstream-tip",
                 // The tag's own pair, and one wait longer: what a remote carries under `refs/tags/` has no local
                 // record, so the reading has to be in before the rename that raises the question is made at all.
-                "rename-tag-remote", "rename-tag-remote-go",
+                "rename-tag-remote", "rename-tag-remote-go", "rename-tag-remote-tip",
                 // The write barrier is behind these two: the question is answered from the timer, after it.
                 "set-upstream-go", "set-upstream-enter",
                 // And behind this one twice over: the upstream goes down first, and what the run is about is the

@@ -122,6 +122,16 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "rename_carry kind=tag rows=3 pick=replace shown=true answerable=true hold=true \
                 neutral=false pill=Replace here=true mark=true",
     },
+    // …and with a hand on the pill of the one answer that has a tip — the
+    // held one, whose tip is where the running order is said. `tip=true`
+    // is the words having opened; a picture of the bar alone cannot hold
+    // them.
+    Verb {
+        name: "rename-tag-remote-tip",
+        when: &[],
+        plain: "rename_carry kind=tag rows=3 pick=replace shown=true answerable=true hold=true \
+                neutral=false pill=Replace here=true mark=true tip=true",
+    },
     // Every door onto the history while a rebase replays behind the
     // screen — the graph's and the left pane's. **None of it is a
     // picture**: a switch the road turned away, a box that never opened, a

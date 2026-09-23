@@ -114,7 +114,8 @@ Item {
             // press did anything, and a build with no gate says it did.
             switchTwiceTimer.held = page.switchToRef("remote", arg) === false
             switchTwiceTimer.start()
-        } else if (act === "rename-local-upstream" || act === "rename-local-upstream-go") {
+        } else if (act === "rename-local-upstream" || act === "rename-local-upstream-go"
+                   || act === "rename-local-upstream-tip") {
             // The question about what the remote does with the new name, which comes back only when git says the
             // local rename landed — the write's own answer is what raises the bar, so the completion is the bar
             // settling (a shot at the write barrier catches a bar whose words are written and whose height is still
@@ -126,8 +127,13 @@ Item {
             // the working tree is on, whose upstream is the remote's own HEAD — and git refuses to delete that
             // (`replace-remote-go` の同項), so `replace` cannot be answered for real down this road. The write behind
             // it is the same one `replace-remote-go` runs.
-            localUpstreamAskTimer.pick = want.length > 1 ? want[1] : (goes ? "add" : "")
+            // "-tip" puts a hand on the pill instead of answering, and only the answer that takes a name away has
+            // anything to say there — so it is the one picked, whatever the argument names.
+            const points = act.endsWith("-tip")
+            localUpstreamAskTimer.pick = points ? "replace" : want.length > 1 ? want[1] : (goes ? "add" : "")
             localUpstreamAskTimer.answers = goes
+            localUpstreamAskTimer.points = points
+            localUpstreamAskTimer.pointed = false
             const local = workTree.branch
             sidebarPane.beginRename("branch", local, local)
             sidebarPane.submitEdit(want[0])
@@ -270,6 +276,11 @@ Item {
         /// Whether the line has gone out. Past it this timer is waiting on one thing only — the bar going back up
         /// after the answer that writes nothing, which has no write barrier to stand on.
         property bool said: false
+        /// Whether a hand goes on the pill once the pick has dressed the bar (`rename-local-upstream-tip`) — a beat
+        /// after the pick, so the tip places itself against the pill wearing the picked answer's word.
+        property bool points: false
+        /// Whether it has gone on — said as it is taken.
+        property bool pointed: false
         onTriggered: {
             if (!localUpstreamAskTimer.said) {
                 if (!graphPane.askCard.settled)
@@ -283,8 +294,21 @@ Item {
                     localUpstreamAskTimer.picked = true
                     return
                 }
+                if (localUpstreamAskTimer.points && !graphPane.askCard.tipStanding) {
+                    // Put back on every beat until the tip stands: it is the hand the tip opens for.
+                    graphPane.askCard.pointedAt = true
+                    if (!localUpstreamAskTimer.pointed) {
+                        localUpstreamAskTimer.pointed = true
+                        // A run that ends at the ceiling after this line stopped at the tip: `pill=` is the answer
+                        // the bar is wearing, `words=` whether it has a tip to open at all.
+                        Harness.report("rename_carry step=pointed pill=" + graphPane.askCard.accept
+                                       + " words=" + (graphPane.askCard.tip !== ""))
+                    }
+                    return
+                }
                 localUpstreamAskTimer.said = true
-                Harness.report(driver.carryWords("branch", localUpstreamAskTimer.pick))
+                Harness.report(driver.carryWords("branch", localUpstreamAskTimer.pick)
+                               + (localUpstreamAskTimer.points ? " tip=" + graphPane.askCard.tipStanding : ""))
                 if (!localUpstreamAskTimer.answers) {
                     localUpstreamAskTimer.stop()
                     driver.complete()
