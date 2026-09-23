@@ -52,8 +52,9 @@ use std::time::{Duration, Instant};
 /// Added to the run's own ceiling: how long one station may stand past
 /// the ceiling before it is a wedge, and so where the first look is
 /// taken — the earliest a station reached at the ceiling can have stood
-/// it. One number on purpose: the grace and the wedge are one judgement.
-/// Well inside the grace the harness allows beyond the same ceiling
+/// it. A run ordered to hold at a station is given the same grace from
+/// the moment it got there ([`first_look`]). One number on purpose: the
+/// grace and the wedge are one judgement. Well inside the grace the harness allows beyond the same ceiling
 /// (`xtask::verify::child`), so the process names its own death. The
 /// QML watchdog's clock starts later than this one's — at `begin()`,
 /// once the QML is loaded — so a run whose QML took longer than this to
@@ -421,7 +422,7 @@ struct Ended {
     stood: Stood,
 }
 
-/// Sleeps out the ceiling and the grace past it, then looks at the
+/// Sleeps out to the first look ([`find_first_look`]), then looks at the
 /// station until one has stood still for the grace or the last look has
 /// come, and says which.
 ///
@@ -435,7 +436,7 @@ struct Ended {
 /// harness's own reaping is always still behind them
 /// (`xtask::verify::child`).
 fn hold_out(clock: Instant, ceiling: Duration) -> Ended {
-    let first_look = ceiling + PAST_THE_CEILING;
+    let first_look = find_first_look(clock, ceiling);
     let last_look = first_look + ONE_MORE_LOOK;
     // A ceiling, and only a diagnosis: the run's own ceiling and the grace
     // past it, which names a run that has not ended — one that has takes
@@ -455,6 +456,62 @@ fn hold_out(clock: Instant, ceiling: Duration) -> Ended {
             Look::Again(pace) => std::thread::sleep(pace),
         }
     }
+}
+
+/// Where the first look is taken: the grace past the run's own ceiling —
+/// or, for a run ordered to hold at a station, the grace past the moment
+/// it got there, where that comes first.
+///
+/// **The hold is where that run's wait begins** (rules-refs/core.md
+/// 「天井の起点を因果の駅に置く」). It is the stop the run is about, and it
+/// comes after the act: a first look counted from the start of the run
+/// asks the act to be done inside a ceiling the machine's load decides,
+/// a race the run's own watchdog wins on a loaded machine
+/// (`xtask::verify::faults`).
+fn first_look(ceiling: Duration, held_since: Option<Duration>) -> Duration {
+    let past_the_ceiling = ceiling + PAST_THE_CEILING;
+    held_since.map_or(past_the_ceiling, |since| {
+        (since + PAST_THE_CEILING).min(past_the_ceiling)
+    })
+}
+
+/// The first look, found. A run nobody ordered to hold sleeps straight to
+/// the ceiling's; one ordered to hold at a station is looked at on the
+/// pace until it is standing there, which nothing else can tell this
+/// thread ([`at`] is one store).
+fn find_first_look(clock: Instant, ceiling: Duration) -> Duration {
+    let past_the_ceiling = first_look(ceiling, None);
+    let Some(ordered) = ordered_hold() else {
+        return past_the_ceiling;
+    };
+    loop {
+        let stood = Stood::unpack(STOOD.load(Ordering::Relaxed));
+        if stood.station == ordered {
+            return first_look(ceiling, Some(stood.reached));
+        }
+        let now = clock.elapsed();
+        if now >= past_the_ceiling {
+            return past_the_ceiling;
+        }
+        // waits(paced): the station is announced by nothing this thread can block on, and the ceiling's own look
+        // bounds the wait
+        std::thread::sleep(LOOK_AGAIN.min(past_the_ceiling - now));
+    }
+}
+
+/// The station a run was ordered to hold at (`PGG_FAULT_HANG`), if any.
+#[cfg(feature = "automation")]
+fn ordered_hold() -> Option<Station> {
+    let slug = super::knobs().fault_hang.as_str();
+    Station::ALL
+        .into_iter()
+        .find(|station| station.slug() == slug)
+}
+
+/// A build without the harness is ordered to hold nowhere.
+#[cfg(not(feature = "automation"))]
+fn ordered_hold() -> Option<Station> {
+    None
 }
 
 /// The decision, apart from the clock: a station that has stood for the
@@ -646,7 +703,7 @@ mod tests {
 
     use super::{
         Ended, LOOK_AGAIN, Limit, Look, ONE_MORE_LOOK, PAST_THE_CEILING, Station, Stood, account,
-        judge, secs,
+        first_look, judge, secs,
     };
 
     /// The list is what the number decodes by, so every station's place
@@ -718,6 +775,24 @@ mod tests {
             reached: Duration::MAX,
         };
         assert_eq!(Stood::unpack(stood.pack()).station, Station::HubDown);
+    }
+
+    /// A run nobody ordered to hold is first looked at the grace past its
+    /// ceiling. One ordered to hold is looked at the grace past the moment
+    /// it got there — however long the act before it took, so a loaded
+    /// machine and a quiet one give the same answer — and never later than
+    /// the ceiling's own look, which still bounds a hold never reached.
+    #[test]
+    fn a_held_run_is_first_looked_at_from_the_hold() {
+        let ceiling = Duration::from_secs(60);
+        assert_eq!(first_look(ceiling, None), ceiling + PAST_THE_CEILING);
+        let held = Duration::from_millis(4_300);
+        assert_eq!(first_look(ceiling, Some(held)), held + PAST_THE_CEILING);
+        let short = Duration::from_secs(4);
+        assert_eq!(
+            first_look(short, Some(Duration::from_secs(20))),
+            short + PAST_THE_CEILING
+        );
     }
 
     /// The first look is taken at the ceiling plus the grace, so a station

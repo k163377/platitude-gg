@@ -33,20 +33,15 @@ use std::time::Instant;
 /// beside the point.
 const VERB: &str = "band";
 
-/// The ceiling the held run with its deadline thread up is given. Above
-/// what the verb costs on a loaded machine, so the act completes and the
-/// hold is past it; and small, because that case is paid in wall clock —
-/// this plus the ten seconds the thread waits past it before it looks
-/// (`harness::deadline`). The one race left here: a verb that outruns
-/// this on a busier machine reads as an aborted act.
-const HELD_MS: &str = "4000";
-
-/// The ceiling the two held runs with no deadline thread are given. **A
-/// backstop**: the parent ends those on the trail's
-/// word, the moment the station they were ordered to hold at is on the
-/// disk (`super::child::ordered_hold`), so this is only what a run that
-/// never gets there pays — and wide enough that no loaded machine reaches
-/// it with the act still under way.
+/// The ceiling the three held runs are given. **A backstop**, and the
+/// same one whichever way the hold is read: the parent ends the two with
+/// no deadline thread on the trail's word, the moment the station they
+/// were ordered to hold at is on the disk (`super::child::ordered_hold`),
+/// and the thread of the third takes its first look the grace past that
+/// same moment (`harness::deadline::first_look`). So this is only what a
+/// run that never gets there pays — and wide enough that no loaded
+/// machine reaches it with the act still under way, which is the one
+/// thing a ceiling counted from the start of the run cannot promise.
 const BACKSTOP_MS: &str = "60000";
 
 /// The ceiling the turning run is given. Long enough that the verb runs
@@ -143,7 +138,7 @@ const CASES: &[Case] = &[
     },
     Case {
         shape: "held past the exit with its deadline thread up — both records, agreeing",
-        args: &["--watchdog-ms", HELD_MS, "--fault-hang", "exiting"],
+        args: &["--watchdog-ms", BACKSTOP_MS, "--fault-hang", "exiting"],
         wants: &[
             "auto_act complete=band",
             "screenshot saved=true",
@@ -272,14 +267,17 @@ fn drive(me: &std::path::Path, case: &Case, build: bool) -> Result<String, Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{BACKSTOP_MS, CASES, HELD_MS, TURNING_MS, VERB};
+    use super::{BACKSTOP_MS, CASES, TURNING_MS, VERB};
 
     /// The two runs with no deadline thread are ended on the trail's word
     /// alone, so the ceiling they carry is the
     /// backstop and the words they want are a hold's.
-    /// The one whose thread is up keeps the ceiling it is paid in.
+    /// **The one whose thread is up carries the backstop as well**: its
+    /// thread looks from the hold, so no ceiling counted from the start of
+    /// the run stands between the act and the account — a race a loaded
+    /// machine loses (rules-refs/core.md「天井の起点を因果の駅に置く」).
     #[test]
-    fn the_runs_with_no_deadline_are_read_as_held_and_carry_only_a_backstop() {
+    fn every_held_run_carries_only_a_backstop() {
         let mut seen = 0;
         for case in CASES
             .iter()
@@ -287,7 +285,6 @@ mod tests {
         {
             seen += 1;
             assert!(case.args.contains(&BACKSTOP_MS), "{}", case.shape);
-            assert!(!case.args.contains(&HELD_MS), "{}", case.shape);
             assert!(case.wants.contains(&"HELD AT exiting"), "{}", case.shape);
             assert!(!case.wants.contains(&"TIMED OUT"), "{}", case.shape);
         }
@@ -299,7 +296,7 @@ mod tests {
                     .contains(&"the app's own account: wedged in `exiting`")
             })
             .expect("the case with the thread up");
-        assert!(own.args.contains(&HELD_MS));
+        assert!(own.args.contains(&BACKSTOP_MS));
         assert!(!own.args.contains(&"--fault-no-deadline"));
     }
 
