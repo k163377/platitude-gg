@@ -889,6 +889,27 @@ pub(super) const TABLE: &[Verb] = &[
     // report because the picture holds only one of the two states,
     // and the card the run is about fades — so `shown=` says which
     // end of that fade the picture was taken at.
+    // The jump the bar makes to a match far down the history sends
+    // HEAD's own row off, and its stand-in has to go down with the row
+    // the search passed over: lit, it reads as one of the matches. The
+    // query is the one that makes that jump on `deep` (HEAD is row 0,
+    // the first match row 591), and every other run still has to reach
+    // the line that follows the jump. No spaces in it: the census
+    // replays a line word by word.
+    Verb {
+        name: "find",
+        when: &[(Arg::Is("150"), "pin=dim")],
+        plain: "find_settled shift=",
+    },
+    // The search drawn and then scrolled through: the scroll has to
+    // have waited for the frame that drew the search, or the run is
+    // `find` again. On `deep` with `5` the scroll sends HEAD's row (a
+    // commit with no 5 in it) off the top.
+    Verb {
+        name: "find-scroll",
+        when: &[(Arg::Is("5"), "find_scroll grabbed=true moved=true pin=dim")],
+        plain: "find_scroll grabbed=true moved=true",
+    },
     Verb {
         name: "find-drop",
         when: &[(Arg::Is(""), "find_drop open=false shown=false")],

@@ -93,6 +93,14 @@ Item {
                               + " cap=" + Math.round(graphPane.width - graphPane.subjectTextX)
                               + " clears=" + graphPane.findCard.findClears)
             findSettled.restart()
+        } else if (act === "find-scroll") {
+            // The search drawn, and then the list sent on by a screen — the order a reader scrolling through a search
+            // makes. `find` never reaches it: the query and the jump land in one call, so every row it shows is drawn
+            // once. Here the rows the scroll brings in are drawn by delegates handed on from rows just drawn dimmed or
+            // lit, which is where a row's ink can carry over into the next row's.
+            page.startFind()
+            graphPane.findCard.query = arg
+            findScrolled.start()
         } else if (act === "find-drop") {
             // The card standing while a press lands somewhere else. Presses cannot be injected (verify-ui スキル), so
             // this enters where `FocusRelease.pressedAway` enters and gives the press no place of its own — which is
@@ -201,15 +209,61 @@ Item {
     // What the graph did about the find bar, read after it finished doing it. The step down out from under the card is
     // animated, so the value in the same call stack as the verb is always the one before it moved — reporting that
     // would be reporting the intent, which the line above already carries as `clears=`.
+    //
+    // `pin=` is HEAD's stand-in as drawn, once the jump has sent HEAD's own row off: `none`, or whether its words are
+    // at full strength (`lit`) or went down with a row the search passed over (`dim`). A stand-in that stayed lit
+    // photographs as a highlighted row at the edge of the pane, which is exactly what a match looks like.
     SampleTimer {
         id: findSettled
         onTriggered: {
             if (!graphPane.findCard.open)
                 return
             findSettled.stop()
-            Harness.report(
-            "find_settled shift=" + Math.round(graphPane.findShift))
+            const pin = graphPane.headPin
+            Harness.report("find_settled shift=" + Math.round(graphPane.findShift)
+                              + " pin=" + (!pin.visible ? "none" : pin.wordsOpacity < 1 ? "dim" : "lit"))
             driver.complete()
+        }
+    }
+    // PGG_AUTO_ACT=find-scroll: the scroll waits for the frame that drew the search — a grab's callback is that frame
+    // (verify-ui: the render boundary is the grab's callback) — and the picture is of the screen the scroll brought
+    // in. `grabbed=` says the wait happened: without it the scroll lands in the same turn as the query and the run is
+    // `find` again. `pin=` is read the way `find_settled` reads it; the scroll sends HEAD's row off the top.
+    //
+    // **Two screens, not one.** A jump builds the rows it brings in before it lets go of the ones it leaves, so the
+    // first screen is drawn by new delegates and the drawn ones only go to the pool; the second screen is where they
+    // are handed on (measured: one screen showed the pre-fix lanes whole, two showed them striped).
+    SampleTimer {
+        id: findScrolled
+        property string stage: "wait"
+        property bool grabbed: false
+        property bool moved: false
+        function scroll() {
+            const view = graphPane.view
+            const before = view.contentY
+            view.contentY = before + view.height
+            view.contentY = before + 2 * view.height
+            findScrolled.moved = view.contentY > before
+            findScrolled.stage = "done"
+        }
+        onTriggered: {
+            if (findScrolled.stage === "wait") {
+                if (!graphPane.findCard.open || !graphModel.searching)
+                    return
+                findScrolled.stage = "drawing"
+                findScrolled.grabbed = graphPane.view.grabToImage(() => findScrolled.scroll())
+                if (!findScrolled.grabbed)
+                    findScrolled.scroll()
+                return
+            }
+            if (findScrolled.stage !== "done")
+                return
+            findScrolled.stop()
+            const pin = graphPane.headPin
+            Harness.report("find_scroll grabbed=" + findScrolled.grabbed + " moved=" + findScrolled.moved
+                              + " pin=" + (!pin.visible ? "none" : pin.wordsOpacity < 1 ? "dim" : "lit")
+                              + " matches=" + graphPane.findCard.matches)
+            renderedBarrier.begin()
         }
     }
     // The card fades in and out, so both halves of `find-drop` are photographed at one end of that fade or the other:

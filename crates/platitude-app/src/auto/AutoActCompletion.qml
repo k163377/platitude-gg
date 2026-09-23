@@ -264,7 +264,7 @@ QtObject {
                 "op-exit-lands",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
                 "avatar-rest", "avatar-hover", "avatar-tip",
-                "find", "find-next", "find-prev", "find-drop",
+                "find", "find-next", "find-prev", "find-drop", "find-scroll",
                 // These flows are completed by Main/WindowAutoActDriver. Some still begin here (picker, command
                 // failure, recovery), but the page photographs them only once the
                 // window-level predicate has answered.
