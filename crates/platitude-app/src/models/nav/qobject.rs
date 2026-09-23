@@ -283,6 +283,16 @@ impl NavSectionModel {
             .collect()
     }
 
+    /// The branches as the operation panel's card offers them, one card of
+    /// the nest at a time — the rows filed directly under the folder at
+    /// `path`, the top of the card for an empty one — whatever the section
+    /// is folding or filtering to (`level_rows`). Read as each card opens,
+    /// the way a menu decides its rows (デザイン規約 §メニュー).
+    #[qslot]
+    fn card_level(&self, path: String) -> CardRows {
+        CardRows::new(self.level_rows(&path))
+    }
+
     /// Which row on show this ref sits on; -1 when it is on none. What a
     /// list asks before scrolling to a row nobody clicked on.
     #[qslot]

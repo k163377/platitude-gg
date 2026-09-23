@@ -167,6 +167,13 @@ impl NavSectionModel {
     /// the source holds is its depth, and the segment it shows falls out
     /// of that (`shown_name`).
     pub(super) fn build_tree(&self) -> Vec<Arranged> {
+        self.build_tree_with(|key, depth| self.folder_expanded(key, depth))
+    }
+
+    /// The same tree, with `open` answering which folders are open — the
+    /// section's own folds (`build_tree`), or every folder at once for a
+    /// reader who is not reading this list (`card`).
+    pub(super) fn build_tree_with(&self, open: impl Fn(&str, i32) -> bool) -> Vec<Arranged> {
         let mut out = Vec::new();
         let mut open_path: Vec<String> = Vec::new();
         // Depth at which a collapsed folder swallows its descendants.
@@ -206,7 +213,7 @@ impl NavSectionModel {
                     continue;
                 }
                 let key = open_path.join("/");
-                let expanded = self.folder_expanded(&key, depth as i32);
+                let expanded = open(&key, depth as i32);
                 out.push(Arranged::Made(Box::new(NavItem {
                     name: (*segment).to_string(),
                     full: key,

@@ -230,19 +230,25 @@ impl NavSectionModel {
 
     pub(super) fn row_at(&self, at: usize) -> Option<Row<'_>> {
         match &self.arranged {
-            Some(arranged) => match arranged.get(at)? {
-                Arranged::At { at, depth, from } => Some(Row::Shown {
-                    of: self.all.entry(*at as usize)?,
-                    depth: *depth,
-                    from: *from as usize,
-                }),
-                Arranged::Made(item) => Some(Row::Made(item)),
-            },
+            Some(arranged) => self.read_arranged(arranged.get(at)?),
             None => Some(Row::Shown {
                 of: self.all.entry(at)?,
                 depth: 0,
                 from: 0,
             }),
+        }
+    }
+
+    /// One arranged row as the view reads it — the list on screen's, or a
+    /// tree arranged for somebody else (`card`).
+    pub(super) fn read_arranged<'a>(&'a self, arranged: &'a Arranged) -> Option<Row<'a>> {
+        match arranged {
+            Arranged::At { at, depth, from } => Some(Row::Shown {
+                of: self.all.entry(*at as usize)?,
+                depth: *depth,
+                from: *from as usize,
+            }),
+            Arranged::Made(item) => Some(Row::Made(item)),
         }
     }
 

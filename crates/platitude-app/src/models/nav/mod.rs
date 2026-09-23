@@ -43,6 +43,7 @@ impl Record for TagCarrier {
 }
 
 mod attach;
+mod card;
 mod drain;
 #[cfg(test)]
 mod drain_tests;
@@ -64,6 +65,7 @@ mod walk;
 #[cfg(test)]
 mod walk_tests;
 
+use card::CardRows;
 //
 // The folded marker is written through `fold_state` and read back where
 // a fold has to be told from an open folder (`view::folded_over_head`).
