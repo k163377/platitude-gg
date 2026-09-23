@@ -220,6 +220,9 @@ QtObject {
                 "changes-fold", "changes-unfold",
                 "graph-bar", "graph-bar-away", "pane-bar", "pane-bar-away",
                 "text-bar", "text-bar-away", "middle-scroll", "middle-scroll-exit",
+                // The surface is put up and filled on the sampler's own ticks, and the claim is that it went under
+                // the hand — a render barrier in front of that photographs it before the press.
+                "middle-hand",
                 "graph-tail", "graph-tail-more",
                 "graph-head", "graph-head-below", "graph-head-back",
                 "graph-head-go", "graph-head-lit", "wip-lanes",
@@ -294,7 +297,7 @@ QtObject {
                 "old-git-fold", "state", "middle-close", "open-again",
                 "force-push-hold", "fetch-busy", "fetch-fail", "fetch-hover", "fetch-resume", "fetch-tip",
                 "stash-state",
-                "settings-tools", "settings-tools-loading", "settings-tools-enter",
+                "settings-tools", "settings-tools-loading", "settings-tools-enter", "settings-hand",
                 "settings-switch", "settings-sweep",
                 "settings-repo", "settings-repo-pick", "settings-eol", "settings-git-path",
                 "settings-git-leave", "settings-processes",

@@ -49,6 +49,9 @@ Flickable {
     readonly property alias bodyText: msgEditor.bodyText
     readonly property alias descriptionColor: msgEditor.descriptionColor
     readonly property alias descriptionFocused: msgEditor.descriptionFocused
+    /// How far the words in the two boxes stand (verify-ui).
+    readonly property alias descriptionAt: msgEditor.descriptionAt
+    readonly property alias summaryAt: msgEditor.summaryAt
     readonly property alias descRefuses: msgEditor.descRefuses
     readonly property alias descPoint: msgEditor.descPoint
     readonly property alias descGrips: msgEditor.descGrips
@@ -68,6 +71,11 @@ Flickable {
     readonly property alias commitSeat: commitButton
     readonly property alias commitEnabled: commitButton.enabled
     readonly property alias signingTipShown: commitButton.phraseSignatureTipShown
+    /// Automation only: the block's own hand and the two the boxes carry, started and drifted without a pointer (a
+    /// middle button cannot be injected).
+    readonly property alias hand: hand
+    readonly property alias summaryHand: msgEditor.summaryHand
+    readonly property alias descriptionHand: msgEditor.descriptionHand
 
     // -- and what it does on the pane's word --
     function setMessage(subject, body) { msgEditor.setMessage(subject, body) }

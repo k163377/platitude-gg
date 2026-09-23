@@ -491,6 +491,7 @@ fn embed_harness_qml() {
     qtbridge::include_bytes_qml!("auto/AutoActFileRowVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/AutoActFindVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/AutoActGraphRowVerbs.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("auto/AutoActHandVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/AutoActHistoryVerbs.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/AutoActLandings.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("auto/AutoActNavBoxVerbs.qml", "qt/qml/platitude");

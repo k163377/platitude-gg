@@ -95,6 +95,10 @@ AppDialog {
     readonly property real chaptersContent: chapterCol.implicitHeight
     readonly property real chaptersView: chapters.height
     readonly property bool chaptersBarShown: chaptersBar.visible
+    /// The chapters' middle-button hand, started and drifted without a pointer (a middle button cannot be injected),
+    /// and where it has sent them — automation only, the same exposure as the three above.
+    readonly property alias autoMiddleHand: middleHand
+    readonly property real chaptersAt: chapters.contentY
 
     /// The merge editor's list comes down as the screen opens, the way a finger on the field brings it. Written from
     /// outside before the screen is opened, and false wherever nobody wrote it — a reader opens it themselves.

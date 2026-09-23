@@ -155,6 +155,8 @@ AppCard {
     function scrollToEnd() {
         peekList.scrollToEnd()
     }
+    /// Automation only: the list itself, for a run that sends it by its own hand and reads where it went.
+    readonly property alias list: peekList
     // The section opens flush against the rail, so walking into it takes
     // the pointer off the cell, and walking back out puts it on again —
     // the beat between the two is the same one every hover card in the

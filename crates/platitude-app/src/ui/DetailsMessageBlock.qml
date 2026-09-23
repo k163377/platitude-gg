@@ -75,6 +75,7 @@ Flickable {
     readonly property alias descriptionFocused: msgEditor.descriptionFocused
     readonly property alias descriptionBarInk: msgEditor.descriptionBarInk
     readonly property alias descriptionAt: msgEditor.descriptionAt
+    readonly property alias summaryAt: msgEditor.summaryAt
     readonly property alias descRefuses: msgEditor.descRefuses
     readonly property alias descPoint: msgEditor.descPoint
     readonly property alias descGrips: msgEditor.descGrips
@@ -84,6 +85,11 @@ Flickable {
     readonly property alias descListRows: msgEditor.descListRows
     readonly property alias blockScrolls: msgEditor.blockScrolls
     readonly property alias descKeeps: msgEditor.descKeeps
+    /// Automation only: the block's own hand and the two the boxes carry, started and drifted without a pointer (a
+    /// middle button cannot be injected).
+    readonly property alias hand: hand
+    readonly property alias summaryHand: msgEditor.summaryHand
+    readonly property alias descriptionHand: msgEditor.descriptionHand
 
     // -- and what it does on the pane's word --
     function coAuthorName(i) { return authorRow.coAuthorName(i) }

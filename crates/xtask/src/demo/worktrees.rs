@@ -78,6 +78,25 @@ pub(super) fn carried(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// How many more untracked files `carried-many` leaves in `../here`.
+const CARRIED_MANY: usize = 40;
+
+/// `carried`, with the copy standing where this window stands holding
+/// forty more untracked files: the one shape in which the pane reading
+/// another copy has more rows than it has room for (`middle-hand
+/// carried`). Its own preset, because the counts `carried` is read by
+/// are the point of its verbs.
+pub(super) fn carried_many(repo: &mut DemoRepo) -> Result<(), String> {
+    carried(repo)?;
+    let here = repo.root.join("here");
+    for n in 0..CARRIED_MANY {
+        let name = format!("scrap_{n:02}.txt");
+        std::fs::write(here.join(&name), format!("scrap {n:02}\n"))
+            .map_err(|e| format!("writing {name}: {e}"))?;
+    }
+    Ok(())
+}
+
 /// The same copies, over a tree with nothing uncommitted in it and a
 /// branch whose one commit lands on the line this one just moved.
 ///

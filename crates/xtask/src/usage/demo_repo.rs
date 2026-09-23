@@ -80,6 +80,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   newest and a branch on the base: what the interactive-
                   rebase plan opens over (rebase-plan, rebase-plan-run,
                   rebase-edit-stop, plan-fold-carry)
+        mergetools  a dozen merge editors written into the repository's
+                  own config: more than the chooser's card shows at once,
+                  whatever the machine has installed (settings-hand tools)
         signed    ssh-signed commits: verified, unjudgeable, unsigned
         errsig    an embedded OpenPGP signature no key can verify: the E
                   verdict (signature-tip passes only on this preset)
@@ -159,6 +162,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   on the same commit, holding an untracked file), one on
                   a branch further down holding a staged edit, and one
                   clean (no row at all)
+        carried-many  carried, with forty more untracked files in the
+                  copy standing where this window stands: the one shape
+                  the pane reading another copy scrolls in (middle-hand
+                  carried)
         worktree-detached  one linked copy, detached, with a commit made
                   in it: the one shape where a working copy stands
                   somewhere no branch, tag or remote reaches (nav-jump)

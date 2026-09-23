@@ -263,6 +263,10 @@ ComboBox {
     /// With neither, the field is just a box to type in and says so by dropping the seat's mark: a chevron over a list
     /// that can never open is a lie.
     readonly property bool hasList: combo.count > 0 || combo.loading
+    /// Automation only: the card's middle-button hand, and how far it has sent the rows (a middle button cannot be
+    /// injected).
+    readonly property alias listHand: listHand
+    readonly property real listAt: rows.contentY
     // The read came back with nothing while the card was up. Nothing is an answer, and the card has no way to say it —
     // so the card goes, and the mark goes with it.
     onHasListChanged: if (!combo.hasList) combo.popup.close()

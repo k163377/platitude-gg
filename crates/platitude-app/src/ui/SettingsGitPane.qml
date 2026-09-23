@@ -59,6 +59,9 @@ ColumnLayout {
     /// the answer: an automation-only exposure, the same one `GraphPane.view` is (app-ui.md).
     readonly property bool toolListOpen: toolField.popup.opened
     readonly property bool toolsSettled: pane.curPage !== null && !pane.curPage.pageTab.mergeToolsLoading
+    /// The candidate list's middle-button hand, and how far it has sent the rows — the same exposure.
+    readonly property alias toolListHand: toolField.listHand
+    readonly property alias toolListAt: toolField.listAt
     /// Automation: Enter in that box, and the list taken back down where the run wants it shut. No key reaches the
     /// box on the offscreen platform, so what is raised is the box's own `accepted` — the signal Qt raises on Enter
     /// (`tst_appcombo` fixes that it does), and the door the handler below hangs off.

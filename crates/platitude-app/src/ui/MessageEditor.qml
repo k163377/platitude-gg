@@ -214,6 +214,10 @@ ColumnLayout {
         id: summaryGlide
         view: summaryView.contentItem
     }
+    /// Automation only: the two boxes' middle-button hands, started and drifted without a pointer (a middle button
+    /// cannot be injected).
+    readonly property alias summaryHand: summaryHand
+    readonly property alias descriptionHand: descBox.hand
     /// The middle button's drift over the summary, the words and nothing else (`DescriptionBox.driftText` says why the
     /// block under the boxes is left alone).
     function driftSummary(dy) {
@@ -239,6 +243,7 @@ ColumnLayout {
     /// How much ink is on the box's own bar, and how far the text stands (verify-ui).
     readonly property real descriptionBarInk: descBox.bar.opacity
     readonly property real descriptionAt: descBox.textAt
+    readonly property real summaryAt: summaryView.contentItem ? summaryView.contentItem.contentY : 0
 
     spacing: Theme.spaceXs
 

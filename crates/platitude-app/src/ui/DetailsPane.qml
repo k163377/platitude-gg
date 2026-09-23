@@ -396,6 +396,8 @@ ColumnLayout {
     function chosenRowAt(index) {
         return chosenList.itemAtIndex(index)
     }
+    /// Automation only: the commit list itself, for a run that sends it by its own hand and reads where it went.
+    readonly property alias chosenView: chosenList
     /// Automation only: the commit list has laid its rows out, and how far past the view its content runs — **the
     /// view's own margins counted** (verify-ui). A picture answers neither: two pixels of scroll on a list that has
     /// nothing below the fold frames exactly like none.

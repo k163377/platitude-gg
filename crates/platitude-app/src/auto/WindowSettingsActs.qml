@@ -668,4 +668,94 @@ Item {
             window.finishAutoAct()
         }
     }
+
+    // PGG_AUTO_ACT=settings-hand <chapters|tools>: the middle button's hand on the two surfaces this screen scrolls —
+    // the chapters, and the merge editor's card — pressed at its own `press` and left drifting for the shot. The page's
+    // `middle-hand` is the same claim on the page's surfaces and says why each is pressed where it stands; what is
+    // waited for is the surface having gone. **`tools` wants `--preset mergetools`**: the card holds eight rows, and
+    // the stock-take a machine makes of its own merge editors names fewer than that on most of them.
+    SampleTimer {
+        id: handTimer
+        running: Harness.autoAct === "settings-hand"
+        /// What the surface was last seen waiting for, named once each time it changes, and then the press — a run
+        /// that stops at the ceiling says where (規約 §UI 自動化: 段を持つドライバは段が変わるたびに名乗る).
+        property string waitingFor: ""
+        property bool pressed: false
+        property real fromAt: 0
+        property bool took: false
+        /// The frame the hand stood in on the last tick — pressed once it has stood still for one, so the ring is
+        /// anchored in the card that is there and not in the one still opening (`middle-hand` waits the same).
+        property string seatSize: ""
+        readonly property bool tools: Harness.autoActArg === "tools"
+        function hand() {
+            return handTimer.tools ? acts.gitPane.toolListHand : settingsDialog.autoMiddleHand
+        }
+        function at() {
+            return handTimer.tools ? acts.gitPane.toolListAt : settingsDialog.chaptersAt
+        }
+        /// What the surface is still waiting for, or "" once it stands with more in it than room. The card's list is
+        /// the hand's own parent — the hand is laid on the list's frame (`AppCombo`).
+        function waitingOn() {
+            // The door the menu entry uses, re-asked until the screen stands; told on the way in to bring the card
+            // down with it where the card is the surface (`settings-tools` opens it the same way).
+            if (!settingsDialog.opened) {
+                settingsDialog.pressToolOnOpen = handTimer.tools
+                settingsDialog.openAt("git")
+                return "the screen"
+            }
+            if (!handTimer.tools)
+                return settingsDialog.chaptersContent > settingsDialog.chaptersView + 1 ? "" : "chapters past the view"
+            if (!acts.gitPane.toolListOpen || !acts.gitPane.toolsSettled)
+                return "the candidates"
+            const list = acts.gitPane.toolListHand.parent
+            return list.contentHeight > list.height + 1 ? "" : "more candidates than room"
+        }
+        onTriggered: {
+            const hand = handTimer.hand()
+            if (!handTimer.pressed) {
+                const wait = handTimer.waitingOn()
+                if (wait !== "") {
+                    if (wait !== handTimer.waitingFor) {
+                        handTimer.waitingFor = wait
+                        Harness.report("settings_hand surface=" + Harness.autoActArg + " waiting=" + wait)
+                    }
+                    return
+                }
+                const size = hand.width + "x" + hand.height
+                if (size !== handTimer.seatSize) {
+                    handTimer.seatSize = size
+                    return
+                }
+                handTimer.fromAt = handTimer.at()
+                // Down the middle of the frame to the first point nothing under the hand claims — a box on the
+                // chapters keeps the middle press where the platform pastes with it (`MiddleAutoScroll.claimedAt`),
+                // and that claim is the page's `middle-hand` runs' to read.
+                let x = hand.width / 2
+                let y = hand.height / 2
+                for (const fy of [0.5, 0.25, 0.75, 0.1, 0.9]) {
+                    if (!hand.claimedAt(x, hand.height * fy)) {
+                        y = hand.height * fy
+                        break
+                    }
+                }
+                handTimer.took = hand.press(x, y)
+                if (handTimer.took)
+                    hand.drift(x, y + Metrics.middleScrollDeadZone + 64)
+                handTimer.pressed = true
+                Harness.report("settings_hand surface=" + Harness.autoActArg + " pressed took=" + handTimer.took)
+                return
+            }
+            const went = Math.abs(handTimer.at() - handTimer.fromAt) > 8
+            if (handTimer.took && (!went || hand.ticks < 2))
+                return
+            handTimer.stop()
+            Harness.report("settings_hand surface=" + Harness.autoActArg
+                           + " answered=" + (handTimer.took && went && hand.scrolling)
+                           + " took=" + handTimer.took
+                           + " moved=" + went
+                           + " scrolling=" + hand.scrolling
+                           + " ticks=" + hand.ticks)
+            window.finishAutoAct()
+        }
+    }
 }

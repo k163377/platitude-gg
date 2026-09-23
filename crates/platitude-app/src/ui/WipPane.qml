@@ -694,6 +694,10 @@ ColumnLayout {
     readonly property real descWants: commitBlock.descWants
     readonly property real descCap: commitBlock.descCap
     readonly property int descListRows: commitBlock.descListRows
+    /// Automation only: the block itself, handed to a run whole — what a run asks of the hands in it is the block's
+    /// answer, and a relay per hand here would say nothing more (the details pane hands its own the same way,
+    /// `DetailsPane.messageBlock`).
+    readonly property alias commitBlock: commitBlock
     /// Whether anything in the block is below the fold, and its complement — the editor holds the numbers, this pane
     /// says them out loud for the headless runs (`PGG_AUTO_ACT=window-floor wip`).
     readonly property bool blockScrolls: commitBlock.blockScrolls

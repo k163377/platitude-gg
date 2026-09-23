@@ -319,6 +319,10 @@ Rectangle {
     }
 
     // ---- the middle button ----------------------------------------------------------------------------------------
+    /// Automation only: the log's hand, started and drifted without a pointer (a middle button cannot be injected),
+    /// and the list it sends, for the run to read where it went.
+    readonly property alias hand: hand
+    readonly property alias view: list
     // **Declared after the hand that picks the text, so it stands over it** — the list's own hand would sit under that
     // one, where the click that ends a gesture lands on the text picker and starts a selection instead
     // (`AppListView.ownsHand`). Over the rows' own frame: the column this panel is laid out in fills it, so the list's

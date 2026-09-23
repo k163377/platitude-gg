@@ -275,6 +275,27 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "text_bar ink=0.3",
     },
+    // The middle button's hand on one surface that scrolls, left running
+    // for the shot. **The picture cannot say the surface went** — the
+    // anchor's ring stands the same over a list that moved and one whose
+    // hand drives nothing — so `answered=` is read off the surface itself.
+    // The working tree's two boxes are the one place where the answer
+    // turns on the platform: text being written keeps the middle button
+    // for a paste where the platform has one, and there `answered=` is the
+    // hand having stepped aside (`MiddleAutoScroll.claimedAt`).
+    Verb {
+        name: "middle-hand",
+        when: &[(
+            Arg::OneOf(&["wip-description", "wip-summary"]),
+            "answered=true",
+        )],
+        plain: "answered=true took=true",
+    },
+    Verb {
+        name: "settings-hand",
+        when: &[],
+        plain: "answered=true took=true",
+    },
     // A commit git wrote, and the boxes it was typed into being let go.
     // **The picture cannot judge this either**, for a reason of its own:
     // git answers before the reading that redraws the pane

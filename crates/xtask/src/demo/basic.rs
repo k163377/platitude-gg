@@ -360,3 +360,24 @@ pub(super) fn shallow(repo: &mut DemoRepo) -> Result<(), String> {
     repo.reclone_shallow(2)?;
     Ok(())
 }
+
+/// How many merge editors `mergetools` writes down.
+const MERGE_TOOLS: usize = 12;
+
+/// A dozen merge editors written into the repository's own config
+/// (`mergetool.<name>.cmd`): more than the chooser's card shows at once
+/// (eight rows), whatever this machine has installed — the stock-take
+/// `git mergetool --tool-help` makes is the machine's, and on most of
+/// them it names two or three. The one shape in which that card has
+/// anywhere to scroll (`settings-hand tools`).
+pub(super) fn mergetools(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit("README.md", "# demo\n", "docs: start the readme")?;
+    for n in 1..=MERGE_TOOLS {
+        repo.git(&[
+            "config",
+            &format!("mergetool.editor{n:02}.cmd"),
+            "true \"$MERGED\"",
+        ])?;
+    }
+    Ok(())
+}

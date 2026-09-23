@@ -191,6 +191,8 @@ AppCard {
     function rowGuarded(i) {
         return refList.rowClicks ? refList.rowClicks.rowClickGuarded : false
     }
+    /// Automation only: the list itself, for a run that sends it by its own hand and reads where it went.
+    readonly property alias list: rowsList
 
     /// Lays the rows out and measures them now, for an owner that is about to show this in the same turn it handed
     /// over the records. Without it the card is shown at the size it had before the records arrived — measured at 8x8,

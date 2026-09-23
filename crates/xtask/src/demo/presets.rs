@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 
 use super::authorship::{authorship, co_authors};
 use super::basic::{
-    basic, detached, dirty, embedded, eol, nested, noremote, one_commit, plan, rewrite_merge,
-    shallow, stashes,
+    basic, detached, dirty, embedded, eol, mergetools, nested, noremote, one_commit, plan,
+    rewrite_merge, shallow, stashes,
 };
 use super::conflict::{
     cherry_pick_conflict, cherry_pick_quit, clashing, conflict, conflict_kinds, conflict_ours,
@@ -25,7 +25,8 @@ use super::signing::{errsig, signed};
 use super::stack::{stack, stack_max};
 use super::tags::{manytags, tagonly, tagremotes, tags};
 use super::worktrees::{
-    carried, carried_clashing, nested_copy, tracked_elsewhere, worktree_detached, worktrees,
+    carried, carried_clashing, carried_many, nested_copy, tracked_elsewhere, worktree_detached,
+    worktrees,
 };
 
 pub fn run(args: &[String]) -> Result<PathBuf, String> {
@@ -184,6 +185,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "noremote" => noremote(&mut repo)?,
         "unreachable" => unreachable(&mut repo)?,
         "plan" => plan(&mut repo)?,
+        "mergetools" => mergetools(&mut repo)?,
         "signed" => signed(&mut repo)?,
         "errsig" => errsig(&mut repo)?,
         "co-authors" => co_authors(&mut repo)?,
@@ -231,6 +233,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "widelines" => widelines(&mut repo)?,
         "worktrees" => worktrees(&mut repo)?,
         "carried" => carried(&mut repo)?,
+        "carried-many" => carried_many(&mut repo)?,
         "carried-clashing" => carried_clashing(&mut repo)?,
         "worktree-detached" => worktree_detached(&mut repo)?,
         "nested-copy" => nested_copy(&mut repo)?,
