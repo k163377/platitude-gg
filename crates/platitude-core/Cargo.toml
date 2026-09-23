@@ -86,6 +86,15 @@ syntect = { version = "5.3", default-features = false, features = [
 two-face = { version = "0.5", default-features = false, features = [
     "syntect-fancy",
 ] }
+# Mocks for the daily tests: an attribute on a read that asks the machine
+# rather than the repository (`conflict::available_tools`), so a test
+# stands its own machine in for it without a seam in the code. The mock
+# half is built into debug builds only; a release carries the function as
+# written. Licenses surveyed on crates.io 2026-09-23: mry, mry_macros and
+# the rest are MIT OR Apache-2.0 except darling / strsim (MIT) and
+# unicode-ident ((MIT OR Apache-2.0) AND Unicode-3.0) — all in the
+# allowed set.
+mry = "0.14"
 
 [dev-dependencies]
 insta = "1"

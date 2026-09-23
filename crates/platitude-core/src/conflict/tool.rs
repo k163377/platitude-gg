@@ -139,6 +139,12 @@ static INSTALLED: tokio::sync::OnceCell<Vec<String>> = tokio::sync::OnceCell::co
 /// returning nothing — which lands on the plain text field the caller
 /// already has. It also loses `emerge`, which a graphical Emacs would run
 /// fine; typing the name still works.
+///
+/// **The daily tests stand a machine of their own in here**
+/// (`mock_available_tools`, debug builds only) and leave this one's read
+/// to the `periodic` tests. mry copies what a mock matches on, so the
+/// three borrowed arguments are skipped.
+#[mry::mry(skip_args(GitExecutor, Path, CancellationToken))]
 pub async fn available_tools(
     executor: &GitExecutor,
     workdir: &Path,

@@ -7,7 +7,15 @@
 //! `ask_merge_tools` has to end in that event. The two roads that do not
 //! run the search at all — a session still opening, and one whose
 //! opening failed — are the ones these hold.
+//!
+//! **Where the read reaches the machine, the machine is the test's**
+//! (`conflict::mock_available_tools`): what is judged is the session's
+//! answer. The mock of a free function is one for the whole binary, so
+//! every test that sets it — or reads the real one — holds
+//! `#[mry::lock(conflict::available_tools)]`. The same ask against this
+//! machine's own tools is in [`periodic`].
 
+use platitude_core::conflict;
 use platitude_core::session::{RepoSession, SessionEvent};
 
 use crate::support::session::CaptureSink;
@@ -86,9 +94,13 @@ async fn a_session_whose_open_failed_answers_the_merge_tool_ask() {
 /// is the order the settings verb runs in — the screen is up before the
 /// repository has finished opening — and the read has to wait the
 /// opening out rather than give up on a working tree that is about to
-/// exist.
+/// exist. What config names comes first, and a tool the machine has as
+/// well is named once.
 #[tokio::test]
-async fn an_ask_inside_the_opening_still_names_the_configured_tool() {
+#[mry::lock(conflict::available_tools)]
+async fn an_ask_inside_the_opening_names_the_configured_tool_first() {
+    conflict::mock_available_tools()
+        .returns_with(|| Ok(vec!["meld".to_string(), "demo-editor".to_string()]));
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "a\n", "first");
     repo.git(&["config", "mergetool.demo-editor.cmd", "true"]);
@@ -105,11 +117,7 @@ async fn an_ask_inside_the_opening_still_names_the_configured_tool() {
     // the ask the screen makes while `workdir()` is `None`.
     session.ask_merge_tools();
 
-    let names = settled_names(&sink).await;
-    assert!(
-        names.iter().any(|n| n == "demo-editor"),
-        "the configured tool is missing from {names:?}"
-    );
+    assert_eq!(settled_names(&sink).await, ["demo-editor", "meld"]);
 }
 
 /// **An ask made after the opening has already given up is answered
@@ -178,4 +186,44 @@ async fn a_session_closed_inside_its_opening_answers_every_ask() {
         nth_settled(&sink, 2).await.is_empty(),
         "the second ask was left waiting on an opening that had already settled"
     );
+}
+
+/// **What the daily run leaves out**: the same ask, answered from this
+/// machine's own installed tools. That read takes seconds on Windows and
+/// guards a screen seldom changed, so the full gate runs it
+/// (`-- --ignored ::periodic::`) rather than every change.
+mod periodic {
+    use super::*;
+
+    /// **The configured tool survives the machine's own sweep** — the
+    /// settled answer names it next to whatever this machine has.
+    #[tokio::test]
+    #[ignore = "this machine's merge tools: seconds on Windows, not worth the daily run"]
+    #[mry::lock(conflict::available_tools)]
+    async fn an_ask_inside_the_opening_still_names_the_configured_tool() {
+        // Held and told to call through, so no daily test's machine can
+        // stand in for this one.
+        conflict::mock_available_tools().calls_real_impl();
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "a\n", "first");
+        repo.git(&["config", "mergetool.demo-editor.cmd", "true"]);
+
+        let sink = CaptureSink::new();
+        let session = RepoSession::open(
+            exec::isolated(),
+            tokio::runtime::Handle::current(),
+            repo.path.clone(),
+            sink.clone(),
+            None,
+        );
+        // Before anything is awaited: the opening is still out, so this is
+        // the ask the screen makes while `workdir()` is `None`.
+        session.ask_merge_tools();
+
+        let names = settled_names(&sink).await;
+        assert!(
+            names.iter().any(|n| n == "demo-editor"),
+            "the configured tool is missing from {names:?}"
+        );
+    }
 }

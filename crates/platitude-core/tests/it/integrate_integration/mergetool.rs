@@ -105,27 +105,6 @@ async fn user_defined_tools_come_from_their_keys() {
     assert_eq!(names, vec!["alpha".to_string(), "beta".to_string()]);
 }
 
-/// Opt-in: `--tool-help` takes seconds on Windows, because it sources
-/// every tool definition twice and probes the registry for each.
-/// The parsing it feeds is covered by unit tests against captured output;
-/// this only checks that the command still answers in the shape they
-/// assume. Run it with `--ignored` after touching either.
-#[tokio::test]
-#[ignore = "git mergetool --tool-help takes seconds on Windows"]
-async fn available_tools_never_offers_one_that_needs_a_terminal() {
-    let repo = TestRepo::init();
-    let (exec, cancel) = env();
-    let names = conflict::available_tools(&exec, &repo.path, &cancel)
-        .await
-        .expect("ask git what is installed");
-    // Git for Windows ships vim, so vimdiff is always "available" — and
-    // always unusable here, since the subprocess gets no console.
-    assert!(
-        !names.iter().any(|n| n.starts_with("vimdiff")),
-        "a terminal tool got offered: {names:?}"
-    );
-}
-
 /// Closing the editor without saving comes back as a failed file, and
 /// the markers are put back.
 ///
@@ -196,4 +175,35 @@ async fn clearing_a_tool_that_was_never_set_answers_by_code() {
         .expect("nothing to unset is not a failure");
 
     assert_eq!(log.ends_of(&["--unset"]), vec![CommandEnd::Answered(5)]);
+}
+
+/// **What the daily run leaves out**: this machine's own answer, run by
+/// the full gate (`-- --ignored ::periodic::`) rather than by every
+/// change.
+mod periodic {
+    use super::*;
+
+    /// `--tool-help` sources every tool definition twice and probes the
+    /// registry for each. The parsing it feeds is covered by unit tests
+    /// against captured output; this only checks that the command still
+    /// answers in the shape they assume.
+    #[tokio::test]
+    #[ignore = "this machine's merge tools: seconds on Windows, not worth the daily run"]
+    #[mry::lock(conflict::available_tools)]
+    async fn available_tools_never_offers_one_that_needs_a_terminal() {
+        // Held and told to call through, so no daily test's machine can
+        // stand in for this one.
+        conflict::mock_available_tools().calls_real_impl();
+        let repo = TestRepo::init();
+        let (exec, cancel) = env();
+        let names = conflict::available_tools(&exec, &repo.path, &cancel)
+            .await
+            .expect("ask git what is installed");
+        // Git for Windows ships vim, so vimdiff is always "available" — and
+        // always unusable here, since the subprocess gets no console.
+        assert!(
+            !names.iter().any(|n| n.starts_with("vimdiff")),
+            "a terminal tool got offered: {names:?}"
+        );
+    }
 }
