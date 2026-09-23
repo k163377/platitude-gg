@@ -136,6 +136,10 @@ impl Options {
             || self.fault_no_deadline
             || self.fault_hold_act
             || std::env::var_os(crate::linux::IN_CONTAINER).is_some()
+            // The line is read back one word per argument (`suite_words`),
+            // so an argument with a space in it comes back as several and
+            // the gate's replay is refused before the app starts.
+            || self.arg.contains(char::is_whitespace)
         {
             return None;
         }
@@ -439,6 +443,27 @@ mod tests {
                 Some("delete-gone v0.3-local")
             );
         }
+    }
+
+    /// An argument with a space in it is a run the census could write
+    /// down and never type again: the replay splits the line on
+    /// whitespace, and `find` handed three words is refused as too many
+    /// positional arguments on both sides of the gate.
+    #[test]
+    fn an_argument_with_a_space_is_no_line_for_the_census() {
+        let spaced = parse(&[
+            "find".to_string(),
+            "filler commit 150".to_string(),
+            "--preset".to_string(),
+            "deep".to_string(),
+        ])
+        .expect("a query with spaces, typed as one argument");
+        assert_eq!(spaced.arg, "filler commit 150");
+        assert_eq!(spaced.census_line(), None);
+        let Err(refusal) = parse(&suite_words("find filler commit 150 --preset deep")) else {
+            panic!("the line read back is not the run that was recorded");
+        };
+        assert!(refusal.contains("positional"), "{refusal}");
     }
 
     /// And a preset that is not that default keeps its words: a second
