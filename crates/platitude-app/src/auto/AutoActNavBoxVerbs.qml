@@ -342,7 +342,12 @@ Item {
     // **The reading is waited on before the rename is made at all.** Nothing local records what a remote carries
     // under `refs/tags/` (`remote::tags::list_tags`), so a run that renamed before `ls-remote` answered would be
     // changing a name this window believes only it has — nothing would be armed, and the bar this waits for would
-    // never come (`nav-open-tag` の同じ待ち). The fetch is this run's, for the same reason that one's is.
+    // never come (`nav-open-tag` の同じ待ち). The fetch is this run's, for the same reason that one's is, and **it is
+    // waited on by the id its ask was given** (`AutoActDriver.pressWrite`): its start and its end can be drained
+    // together, so a beat watching for the busy count to rise can miss the fetch altogether and wait out the ceiling.
+    //
+    // Each step is said as it is taken (`rename_carry step=`), so a run that ends at the ceiling names the one it
+    // stopped at.
     SampleTimer {
         id: tagRemoteRenameTimer
         property string tag: ""
@@ -352,9 +357,6 @@ Item {
         /// Whether the rename has gone in. The two halves of this timer are one state apart: before it the run is
         /// waiting on the reading, after it on the bar.
         property bool sent: false
-        /// A fetch has been seen running. **The edge, not the count** — the count is 0 before the ask as well, so a
-        /// beat that read it before git started would walk straight past the wait (`nav-open-tag` の同じ理由).
-        property bool ran: false
         /// Which of the three answers the run picks, empty for the bar as it comes down.
         property string choice: ""
         /// Whether the picked answer has been given to the chooser already.
@@ -377,8 +379,10 @@ Item {
             tagRemoteRenameTimer.sent = false
             tagRemoteRenameTimer.picked = false
             tagRemoteRenameTimer.said = false
-            tagRemoteRenameTimer.ran = false
-            repoTab.fetch("")
+            driver.pressWrite("fetch", () => {
+                repoTab.fetch("")
+                return true
+            })
             tagRemoteRenameTimer.start()
         }
         onTriggered: {
@@ -391,17 +395,16 @@ Item {
                 driver.complete()
                 return
             }
-            if (repoTab.busyCount !== 0) {
-                tagRemoteRenameTimer.ran = true
+            if (repoTab.busyCount !== 0)
                 return
-            }
             if (!tagRemoteRenameTimer.sent) {
                 // Both sides holding the name is what the arming is made on, and it is the tags section that
-                // answers for it (`RepoPage.armRenameTagRemote`).
-                if (!tagRemoteRenameTimer.ran
+                // answers for it (`RepoPage.armRenameTagRemote`) — read once this run's fetch is through.
+                if (!driver.wroteAndSettled()
                     || tagsModel.tagSides(tagRemoteRenameTimer.tag) !== "both")
                     return
                 tagRemoteRenameTimer.sent = true
+                Harness.report("rename_carry step=renamed")
                 // Through the row's own road, so a build where the gesture stopped reaching the rename waits here.
                 sidebarPane.beginRename("tag", tagRemoteRenameTimer.tag, tagRemoteRenameTimer.tag)
                 sidebarPane.submitEdit(tagRemoteRenameTimer.name)
@@ -423,6 +426,7 @@ Item {
                 if (!page.pickCarryChoice(driver.carryChoiceIndex(tagRemoteRenameTimer.choice)))
                     return
                 tagRemoteRenameTimer.picked = true
+                Harness.report("rename_carry step=picked")
                 return
             }
             // A beat after the pick, so the tip places itself against the pill wearing the picked answer's word — and
@@ -813,7 +817,8 @@ Item {
         /// `drift` until one is heard carrying it somewhere else. Both are answers only `ls-remote --tags` brings, so
         /// either one fetches. Left empty, the run is about a name nobody out there has — and it fetches too: an
         /// empty row before the reading and an empty row after it are the same picture, so what that run waits on
-        /// is the reading having been taken at all (`ran`).
+        /// is the reading having been taken at all: this run's own fetch, answered and read through
+        /// (`AutoActDriver.wroteAndSettled`).
         property string wants: ""
         /// Whether the hand goes on from the open row to **the first of the lines it opened**. The rest is taken
         /// there and nowhere else on purpose: a run that searched the lines for the one holding a supplement would
@@ -822,9 +827,6 @@ Item {
         /// window acts on (a line with nothing to add raises nothing, and the run waits out the ceiling).
         property bool tip: false
         property bool rested: false
-        /// A fetch has been seen running. **The edge, not the count**: the count is 0 before the ask as well, so a
-        /// run that read it on the beat after asking would go on before git had been started.
-        property bool ran: false
         /// The geometry the last beat read, so a beat reading the same one knows the layout has come to rest.
         property string stood: ""
         function begin(arg) {
@@ -834,8 +836,12 @@ Item {
             navOpenTagTimer.tip = parts[parts.length - 1] === "tip"
             navOpenTagTimer.stood = ""
             navOpenTagTimer.rested = false
-            navOpenTagTimer.ran = false
-            repoTab.fetch("")
+            // Waited on by the id its ask was given: the fetch's start and its end can be drained together, so a
+            // beat watching for the busy count to rise can miss it altogether (`rename-tag-remote` の同じ待ち).
+            driver.pressWrite("fetch", () => {
+                repoTab.fetch("")
+                return true
+            })
             navOpenTagTimer.start()
         }
         /// Whether what this run waits on has arrived, asked of the same lookups the lines are drawn from
@@ -847,13 +853,11 @@ Item {
                 const sides = tagsModel.tagSides(navOpenTagTimer.tag)
                 return sides === "remote" || sides === "both"
             }
-            return navOpenTagTimer.ran
+            return driver.wroteAndSettled()
         }
         onTriggered: {
-            if (repoTab.busyCount !== 0) {
-                navOpenTagTimer.ran = true
+            if (repoTab.busyCount !== 0)
                 return
-            }
             if (!navOpenTagTimer.ready())
                 return
             // Asked and re-applied every beat: the rows arrive on a read of their own, and the fetch above rebuilds
