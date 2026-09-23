@@ -24,11 +24,11 @@ HoverToolButton {
     /// What stands there while there is no name — a repository that has not answered yet, an unborn HEAD. Said in the
     /// muted ink, so "nothing yet" never reads as something's name (デザイン規約 §テキスト).
     property string blank: ""
-    /// The one thing about this name that is not part of it — the remote a branch is measured against. Drawn in
-    /// brackets after the name, as its own label at the same step in `Font.Normal` and the muted ink: the same shape a
-    /// band heading's count takes, and for the same reason (規約 §タイポグラフィ「帯の見出しは『語 + 数え』の 2 ラベルで書く」).
-    /// **Never folded into `name`** — spelt into the string it would take the name's weight and colour, and the
-    /// brackets would read as part of what the branch is called. Empty says nothing.
+    /// The one thing about this name that is not part of it — the ref a branch is measured against. **Written on a
+    /// line of its own under the name**, a step down (`noteSize`), in `Font.Normal` and the muted ink, behind the mark
+    /// that says it is a remote's (規約 §操作パネル). **Never folded into `name`** — spelt into the string it would take
+    /// the name's weight and colour, and read as part of what the branch is called. Empty says nothing, and the picker
+    /// is one line.
     property string note: ""
     /// Whether the name is one the reader chose rather than a state git is in — a detached HEAD is the second kind,
     /// and takes the state's colour the way its chip does (規約 §ref の種別).
@@ -63,15 +63,15 @@ HoverToolButton {
     /// mark is a letter of the run** — nothing is written either side of it, and what opens around it is the air its
     /// own box holds (§余白). Empty draws none.
     property string trail: ""
-    /// What each of the three has been asked to give up, in pixels. **Written from outside** — what a word costs is
-    /// this picker's question, but the order they give way in runs across both pickers (`TopBar` §譲る順).
+    /// How much narrower than whole this picker has been asked to be, in pixels. **Written from outside** — what a
+    /// word costs is this picker's question, but the order the two pickers give way in is the row's (`TopBar`
+    /// §譲る順). **One figure, handed out here**: the two lines are one box, so what the box gives up comes off
+    /// whichever line is the longer — a line that is not the longer one frees nothing by being cut.
     ///
     /// **Nothing is dropped, only cut**: a run that went
     /// missing at one width and came back at another would have the panel saying different things about the same
     /// repository, and the reader who is short of room is the one who needs the mark to still be there.
-    property real trailGiven: 0
-    property real nameGiven: 0
-    property real noteGiven: 0
+    property real given: 0
     /// What each can give up before it reaches its own floor — both ends of a name and the mark between them.
     readonly property real trailSlack:
         picker.trail === "" ? 0
@@ -81,9 +81,18 @@ HoverToolButton {
     readonly property real noteSlack:
         picker.note === "" ? 0
         : Math.max(0, Math.ceil(noteRuler.advanceWidth) - Math.ceil(noteFloorRuler.advanceWidth))
+    /// The width the lines are cut to: the longer line whole, less what was asked for — and never under the widest
+    /// either line comes to at its own floor.
+    readonly property real textRoom: picker.textWhole - Math.min(Math.max(0, picker.given), picker.slack)
+    /// …and what that takes off each run. **The first line gives its copy's run before its name** (§譲る順); the
+    /// second line is the upstream and nothing else.
+    readonly property real lineOneShort: Math.max(0, picker.lineOneWhole - picker.textRoom)
+    readonly property real trailGiven: Math.min(picker.lineOneShort, picker.trailSlack)
+    readonly property real nameGiven: Math.min(picker.lineOneShort - picker.trailGiven, picker.nameSlack)
+    readonly property real noteGiven:
+        Math.min(Math.max(0, picker.lineTwoWhole - picker.textRoom), picker.noteSlack)
     /// What this picker comes out at once it has given up what it was asked for.
-    readonly property real drawnWidth:
-        picker.wholeWidth - picker.trailGiven - picker.nameGiven - picker.noteGiven
+    readonly property real drawnWidth: picker.bareBox + picker.textRoom
 
     // ---- which register this one is said in ----------------------------
     // Three pickers stand in a row and they are not three of a kind: one of them holds the other two. The panel says
@@ -112,53 +121,64 @@ HoverToolButton {
     /// How tall what this picker writes comes out: one line, or two where there is an upstream under the name.
     readonly property real linesHeight:
         nameRuler.height + (picker.note === "" ? 0 : noteRuler.height)
-    /// **Where a mark stands among the letters it is set in**: its box's middle on the middle of those letters,
-    /// measured down from the top of the line they are set on. Centred in the line instead it rides above them — a
-    /// line box holds far more under the baseline than it holds over the letters, and a box centred in it answers
-    /// to the descent (observed: every mark sat high against its own word). **Each answers to the face it stands
-    /// in**, the way its size already does (§寸法).
-    function markMiddle(seat, metrics) {
-        return Math.max(0, Math.round(metrics.ascent - metrics.xHeight / 2 - seat / 2))
+    /// …and how tall the two stand when both are written, **whatever is written now**: read off the faces, not the
+    /// words. The depth the panel's buttons are drawn to — their own two lines are there whether or not this branch
+    /// has an upstream to write under its name, and a picker still waiting on its repository writes neither.
+    readonly property real pairHeight: nameMetrics.height + noteMetrics.height
+    /// **Where a mark stands among the letters it is set in**, measured down from the top of the line they are set
+    /// on: **standing on the baseline the way a letter does**, and where it is taller than the capitals, centred on
+    /// them. Centred in the line box instead it rides above the letters — the box holds far more under the baseline
+    /// than over them. Centred on the x-height, a mark taller than the capitals hangs under the baseline by what it
+    /// has over them, and reads as sitting low beside its word (observed: the branch's lower ring under the line).
+    /// **Each answers to the face it stands in**, the way its size already does (§寸法), and to its own ink — a mark's
+    /// box holds air of its own above and below (`NavIcon.inkTallGrid`).
+    function markMiddle(seat, metrics, mark) {
+        const ink = mark.inkTallGrid / 16 * mark.height + mark.stroke
+        const stands = Math.min(Math.max(ink, metrics.xHeight), metrics.capitalHeight)
+        return Math.max(0, Math.round(metrics.ascent - stands / 2 - seat / 2))
     }
-    readonly property real kindDrop: picker.markMiddle(picker.kindSize, nameMetrics)
-    readonly property real noteMarkDrop: picker.markMiddle(picker.noteSeat, noteMetrics)
+    readonly property real kindDrop: picker.markMiddle(picker.kindSize, nameMetrics, kindMark)
+    readonly property real noteMarkDrop: picker.markMiddle(picker.noteSeat, noteMetrics, noteMark)
 
     readonly property bool saying: picker.name !== ""
     readonly property string shown: picker.saying ? picker.name : picker.blank
 
-    /// The width this picker asks for when nothing is short — the mark, the steps around the name, and the name laid
-    /// out whole.
-    readonly property real naturalWidth:
-        picker.boxWidth + Math.ceil(nameRuler.advanceWidth)
-    /// …and the narrowest it may be laid out at: **the bare box** with room for **both ends of a name** — three
-    /// characters each side and the mark between them, which is the floor a tab's title stands on
-    /// (規約 §レイアウト初期値「両端に 3 文字ずつ + `…`」). A name told apart by its tail is not told apart by a head alone.
-    ///
-    /// **Neither run is counted here.** They go before a letter of the name does (§譲る順), so a floor that held room
-    /// for them would hold the whole window wider than the panel needs (observed: the floor stopped at 821px with
-    /// both runs still in the sum).
-    readonly property real foldWidth:
-        picker.wholeWidth - picker.trailSlack - picker.nameSlack - picker.noteSlack
-    /// The box with neither run in it — the marks and the steps that are paid whatever the row can afford.
+    /// The box with no words in it — the paddings, the chevron's seat and the step after it, paid whatever the row
+    /// can afford.
     readonly property real bareBox:
         picker.leftPadding + picker.rightPadding + picker.markSeat + picker.markGap
-        + (picker.kind === "" ? 0 : picker.kindSize + picker.kindGap)
-    /// What each run costs whole: **one step off what it follows, its mark, and its own name** — the mark is a letter
-    /// of the run, so nothing is counted on either side of it (§余白).
+    /// The column the kind mark stands in at the head of each line, and the step after it.
+    readonly property real kindColumn: picker.kind === "" ? 0 : picker.markColumn + picker.kindGap
+    /// What the copy's run costs whole: **one step off what it follows, its mark, and its own name** — the mark is a
+    /// letter of the run, so nothing is counted on either side of it (§余白).
     readonly property real trailWidth:
         picker.trail === "" ? 0 : picker.gap + picker.trailSeat + Math.ceil(trailRuler.advanceWidth)
-    readonly property real noteWidth:
-        picker.note === "" ? 0 : picker.gap + picker.noteSeat + Math.ceil(noteRuler.advanceWidth)
-    /// Everything the box holds around the name **as it is drawn now** — the runs at whatever width is left them.
-    readonly property real boxWidth:
-        picker.bareBox
-        + (picker.trailWidth === 0 ? 0 : picker.trailWidth - picker.trailGiven)
-        + (picker.noteWidth === 0 ? 0 : picker.noteWidth - picker.noteGiven)
-    /// …and with both runs whole, which is what this picker asks the row for before anything gives way. **Read
-    /// without the answer in it** — the row decides what it can afford from this, so a figure that already counted
-    /// the decision would close the ring.
-    readonly property real wholeWidth:
-        picker.bareBox + picker.trailWidth + picker.noteWidth + Math.ceil(nameRuler.advanceWidth)
+    /// Whether there are counts beside the name, and what they cost: the step off the name and the counts' own
+    /// width. **The step is a word's-worth rather than a letter's** — the counts are a figure about the branch, not
+    /// a letter of its name, and set at a letter's step the two read as one word (observed: `main↑2`).
+    readonly property bool tracked: picker.ahead > 0 || picker.behind > 0
+    property int trackGap: Theme.spaceSm
+    readonly property real trackRun: picker.tracked ? picker.trackGap + Math.ceil(trackSeat.implicitWidth) : 0
+    /// **Each line is measured as the line it is.** The upstream is written under the name rather than after it, so
+    /// the box is as wide as the longer of the two — never the two laid end to end, which holds a whole upstream's
+    /// width of air past both of them.
+    readonly property real lineOneWhole:
+        picker.kindColumn + Math.ceil(nameRuler.advanceWidth) + picker.trailWidth + picker.trackRun
+    readonly property real lineTwoWhole:
+        picker.note === "" ? 0 : picker.kindColumn + Math.ceil(noteRuler.advanceWidth)
+    readonly property real textWhole: Math.max(picker.lineOneWhole, picker.lineTwoWhole)
+    /// …and each at its floor: the runs and the name cut down as far as they go, the counts whole.
+    readonly property real lineOneFloor: picker.lineOneWhole - picker.trailSlack - picker.nameSlack
+    readonly property real lineTwoFloor: picker.lineTwoWhole - picker.noteSlack
+    /// The width this picker asks the row for before anything gives way. **Read without the answer in it** — the row
+    /// decides what it can afford from this, so a figure that already counted the decision would close the ring.
+    readonly property real wholeWidth: picker.bareBox + picker.textWhole
+    /// …and the narrowest it may be laid out at: every name at **both of its ends** — three characters each side and
+    /// the mark between them, which is the floor a tab's title stands on (規約 §レイアウト初期値「両端に 3 文字ずつ +
+    /// `…`」). A name told apart by its tail is not told apart by a head alone.
+    readonly property real foldWidth: picker.bareBox + Math.max(picker.lineOneFloor, picker.lineTwoFloor)
+    /// What lies between the two — the most this picker can give.
+    readonly property real slack: picker.wholeWidth - picker.foldWidth
     /// The two runs' marks, each at the step its own words are set in (規約 §寸法「語の中に組む印は、その語の段に
     /// 従う」): the copy's name is a step down, so its mark is too; the upstream is set at the row's own step.
     readonly property int trailSeat: Theme.iconXs
@@ -167,13 +187,19 @@ HoverToolButton {
     ///. The wider of the two, centred: a column sized to one of them would put the other's
     /// word a pixel or two along from its neighbour above.
     readonly property int markColumn: Math.max(picker.kindSize, picker.noteSeat)
-    /// The air the mark keeps inside its own square, on each side. **Turned a quarter while the list is open**, so
-    /// which of the two spans answers is the mark's own question (`NavIcon.inkWidth`).
+    /// The air the mark keeps inside its own square, on each side — **measured on the mark at rest**. It is turned a
+    /// quarter while the list is open, and a turned chevron spans more sideways than a resting one: read off the mark
+    /// as drawn, the air changes as the card comes up, the steps worked out from it change with it, and every name in
+    /// the row moves under the hand that has just pressed one. The ink turns inside its seat; nothing else moves.
     ///
     /// Measured from the middle out rather than off `inkRight`: that one answers where the far edge of the ink falls
     /// and only the kinds set against a corner carry an entry for it, so a mark centred in its square reports its
     /// whole box and the step comes out **wider** than it was asked for (observed — the gap grew by half a stroke).
-    readonly property real markAir: (picker.markSeat - mark.inkWidth) / 2
+    readonly property real markAir:
+        (picker.markSeat - (mark.inkGrid / 16 * mark.width + mark.stroke)) / 2
+    /// The air between the box's leading edge and the first ink in it — what a hand sees between the wash's edge and
+    /// the chevron.
+    readonly property real leadAir: picker.leftPadding + picker.markAir
     /// The same for the kind mark, which keeps more of it: it is drawn on a grid a step smaller and none of the family
     /// reaches its own edge.
     readonly property real kindAir: picker.kind === "" ? 0 : (kindMark.width - kindMark.inkWidth) / 2
@@ -191,6 +217,18 @@ HoverToolButton {
     /// unwired (`NameCell.foldTurn` takes the same reading).
     readonly property bool nameCut: nameCell.cutting
     readonly property real foldTurn: mark.rotation
+    /// …and where the counts came out, which a picture cannot be read for to the pixel: `after` the name at their own
+    /// step, carried out to the `end` of a longer second line, or `off` both — `none` where there are none. Read off
+    /// the items as laid out, so a run cannot go green on the arithmetic alone.
+    readonly property string trackPlace: {
+        if (!picker.tracked)
+            return "none"
+        const step = trackSeat.x - (trailCell.visible ? trailCell.x + trailCell.width : nameCell.x + nameCell.width)
+        const past = nameLine.width - (trackSeat.x + trackSeat.width)
+        if (Math.abs(step - picker.trackGap) < 0.5)
+            return "after"
+        return past < 0.5 && step > picker.trackGap ? "end" : "off"
+    }
 
     // Both ends of the box are the theme's dense step rather than the style's own padding: this control is not one of
     // a set that has to keep its widths in step with the band's (`ActionButton.slack`), what it holds is a word rather
@@ -201,8 +239,13 @@ HoverToolButton {
     /// later name stands closer to what is before it than the first one does — and two marks doing the same job with
     /// different air either side read as two different marks. The row hands in the difference.
     property real markLeadIn: 0
+    /// The air the box keeps after its last ink. The row decides: a picker the next one follows keeps the family's
+    /// step, since the next one's own lead-in is the rest of the gap between them; **the one that ends the names keeps
+    /// the air it opens with**, so its wash is as wide past the words as it is before the chevron — more reads as a
+    /// box nobody shrank to what it holds, less as one cut short under the hand.
+    property real endAir: picker.gap
     leftPadding: Math.max(0, Math.ceil(picker.gap - picker.markAir)) + picker.markLeadIn
-    rightPadding: picker.gap
+    rightPadding: Math.ceil(picker.endAir)
     topPadding: 0
     bottomPadding: 0
     implicitHeight: Theme.controlHeight
@@ -212,6 +255,8 @@ HoverToolButton {
     washRadius: 0
     // The whole name, wherever the row could not draw it (規約 §hover のツールチップ).
     tip: picker.nameGiven ? picker.shown : ""
+    // The card this name opens keeps it lit while it stands, and the chevron turned (`opened`).
+    standing: picker.opened
 
     TextMetrics {
         id: nameRuler
@@ -303,10 +348,14 @@ HoverToolButton {
             Layout.leftMargin: picker.markGap
             // Centred as a pair, so a name written on two lines and one written on one come out on the same middle.
             Layout.alignment: Qt.AlignVCenter
+            // As wide as the longer line, which is what the box was measured to (`textRoom`), so the first line can
+            // reach the far end of the second.
+            Layout.fillWidth: true
             spacing: 0
 
             RowLayout {
                 id: nameLine
+                Layout.fillWidth: true
                 spacing: 0
 
                 // **The two lines' marks stand in one column and their words begin on one line**
@@ -376,14 +425,23 @@ HoverToolButton {
                     pixelSize: Theme.fontSm
                     color: Theme.textSecondary
                 }
+                // **The counts end the longer of the two lines.** Where the upstream under the name runs further than
+                // the name and its counts do, the counts are carried out to where it ends, so the pair closes on one
+                // right edge; where it does not, they follow the name at a word's step (`trackGap`) — the step is this
+                // item's floor, and what the second line has over the first is what it grows by.
+                Item {
+                    visible: picker.tracked
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: picker.trackGap
+                    Layout.preferredWidth: picker.trackGap
+                }
                 // **Where this branch stands against what it follows**, in the mark the left panel counts it with
                 // (`HeadTrack`). Nothing at all where there is nothing to count: level with
                 // the upstream, or no upstream to measure against (§左メニューの所作 — 数えない 0 に列は要らない).
                 Loader {
                     id: trackSeat
-                    active: picker.ahead > 0 || picker.behind > 0
+                    active: picker.tracked
                     visible: trackSeat.active
-                    Layout.leftMargin: picker.gap
                     Layout.alignment: Qt.AlignVCenter
                     sourceComponent: HeadTrack {
                         ahead: picker.ahead

@@ -23,7 +23,6 @@ impl NavSectionModel {
     qproperty!("refsLoaded", Member = refs_loaded, Notify = changed);
     qproperty!("carriedAt", Member = carried_at, Notify = changed);
     qproperty!("carriedName", Member = carried_name, Notify = changed);
-    qproperty!("mainPath", Member = main_path, Notify = changed);
     qproperty!("treeView", Member = tree_view, Notify = changed);
     qproperty!(
         "pointedEolPath",

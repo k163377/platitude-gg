@@ -225,6 +225,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/OpExitRow.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/OpenFailedDialog.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/OpenFailedScreen.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/OpsBranchMenu.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/OpsPicker.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PageLayout.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/PaneHeader.qml", "qt/qml/platitude");

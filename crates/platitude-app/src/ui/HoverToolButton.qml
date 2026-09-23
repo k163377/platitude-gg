@@ -31,8 +31,12 @@ ToolButton {
     readonly property color washColor:
         !hoverToolButtonSelf.enabled ? "transparent"
         : hoverToolButtonSelf.down ? Theme.bgPressed
-        : hoverToolButtonSelf.lit || hoverToolButtonSelf.visualFocus ? Theme.bgHover
+        : hoverToolButtonSelf.lit || hoverToolButtonSelf.visualFocus || hoverToolButtonSelf.standing ? Theme.bgHover
         : "transparent"
+    /// Whether what this button opened is standing. **The wash stays for as long as it is**, the way the ☰'s does
+    /// (`AppMenuButton`): the hand has gone on into the card, and a button that let its light go as it left would
+    /// leave the card hanging off nothing on screen.
+    property bool standing: false
 
     /// Stands in for the pointer, which headless cannot inject (`NavItemDelegate.tipPointedAt` and its kin). Read
     /// where `hovered` is read and nowhere else, so a run lights what a hand lights — wash and tip together, as

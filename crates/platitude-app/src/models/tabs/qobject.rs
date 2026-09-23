@@ -21,6 +21,18 @@ impl TabsModel {
         Member = current_tab_id,
         Notify = current_index_changed
     );
+    // The two names of the tab in front. Their own signal: a tab stood
+    // in another copy changes them with the same tab still in front.
+    qproperty!(
+        "currentRepoName",
+        Member = current_repo_name,
+        Notify = front_names_changed
+    );
+    qproperty!(
+        "currentCopyName",
+        Member = current_copy_name,
+        Notify = front_names_changed
+    );
 
     // Every tab, one record each — see the member. Its own signal: this changes
     // on a name settling and on a carry across the strip, neither of
@@ -46,6 +58,9 @@ impl TabsModel {
 
     #[qsignal]
     pub(super) fn open_repos_changed(&mut self);
+
+    #[qsignal]
+    pub(super) fn front_names_changed(&mut self);
 
     #[qsignal]
     pub(super) fn opening_changed(&mut self);

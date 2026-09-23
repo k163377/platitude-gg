@@ -28,6 +28,54 @@ Menu {
     /// names a command says so with the chip, one that names a kind says so with the mark.
     property string titleKind: ""
     property color titleTint: Theme.textSecondary
+    /// Whether that row is **a folder of the rows under it** rather than a heading — a card the left menu draws as a
+    /// folder row, said here the way that row says it: its name in the quieter ink, nothing in the seat, and the card
+    /// of the names filed under it opening off it (`OpsBranchMenu`).
+    property bool titleFolder: false
+
+    /// Whether the rows of this card keep **the left menu's seat** — the column a mark about the row stands in, held
+    /// open on the rows that have none, so every name begins on one x (`AppMenuItem.seated`). For a card that lists
+    /// what a section of the left menu lists and writes its rows the way that section does (§操作パネル).
+    property bool keepsSeat: false
+    /// …and whether any row on offer wears a mark in it. **The seat is held open for the rows without one only while
+    /// a row has one to put there**: a card whose rows carry no mark at all starts its words where every other card
+    /// does, and air held for a mark nobody wears reads as a margin nobody set.
+    readonly property bool seatWorn: {
+        if (!appMenu.keepsSeat)
+            return false
+        for (let i = 0; i < appMenu.count; i++) {
+            const row = appMenu.itemAt(i)
+            if (row && row.offered && row.wearsSeat === true)
+                return true
+        }
+        return false
+    }
+    /// Whether this card, **made as it opens**, has rows to offer once it is — said before any row exists, so the
+    /// row that opens it is on offer while the card is still empty (`OpsBranchMenu`'s folders). A card whose rows
+    /// already stand answers with them (`offeredRows`) and leaves this alone.
+    property bool promises: false
+    /// Whether the rows of this card that open cards of their own begin their words on one x — **the heading marks'
+    /// step, held open on the headings that wear none**. For a card made of nothing but such rows (`TopBar`'s
+    /// REPOSITORY and WORKTREE), where a heading with a mark beside one without starts its words a mark later, and
+    /// the two read as two margins (デザイン規約 §操作パネル).
+    property bool alignsHeadings: false
+    /// That step: the widest heading mark on offer and the step after its ink, or nothing where none wears one.
+    readonly property real headingSeat: {
+        if (!appMenu.alignsHeadings)
+            return 0
+        let widest = 0
+        for (let i = 0; i < appMenu.count; i++) {
+            const row = appMenu.itemAt(i)
+            if (row && row.offered && row.headInk !== undefined && row.headInk > 0)
+                widest = Math.max(widest, row.headInk + Theme.spaceXs)
+        }
+        return widest
+    }
+    /// The narrowest this card is drawn at. **The floor is for a card holding a held row** (`Metrics.menuMinW`): a
+    /// hold reports itself by filling the row from the left, and a row only as wide as its words gives it too little
+    /// travel to read as progress. A card that lists places to go holds none, and fits its rows — held to the floor,
+    /// the air after its longest name is wider than the air before its first mark.
+    property real widthFloor: Metrics.menuMinW
 
     /// Whether the row that opens this menu is worth offering at all, for a menu that hangs off a row of another one
     /// (RepoPage's reset submenu). A submenu cannot say this through `visible` — on a Menu that means "the card is on
@@ -161,9 +209,10 @@ Menu {
         }
         return Math.ceil(widest)
     }
-    // ...and at least `menuMinW` wide. A held row reports itself by filling from the left, and on a row only as
-    // wide as its own words there is too little travel to read as progress (デザイン規約 §進行中・長押しの定数).
-    implicitWidth: Math.max(Metrics.menuMinW, appMenu.widestRow + appMenu.leftPadding + appMenu.rightPadding)
+    // ...and at least its floor wide (`widthFloor` — `menuMinW` unless the card says otherwise). A held row reports
+    // itself by filling from the left, and on a row only as wide as its own words there is too little travel to read
+    // as progress (デザイン規約 §進行中・長押しの定数).
+    implicitWidth: Math.max(appMenu.widthFloor, appMenu.widestRow + appMenu.leftPadding + appMenu.rightPadding)
 
     // The window is reached through the item the menu was declared under: a menu that opens as a window of its own
     // would otherwise measure itself and never find a limit.
@@ -176,18 +225,25 @@ Menu {
     // Rows the menu builds itself (a submenu's own title row) get the same treatment as the declared ones — including
     // the code chip, when the submenu asked for one on its title.
     delegate: AppMenuItem {
+        // **The card's own title, bound.** Qt hands the row the title once, in the middle of building it — before
+        // the row's own binding on `text` is first read, which then writes over it — and says it again only when the
+        // title changes. A card declared in a file gets its title after its row is built, so it comes through; a card
+        // that already has one when it is added (one built as it opens — `OpsBranchMenu`) draws an empty row
+        // (`tests/qml/tst_opsbranchmenu.qml`).
+        text: subMenu !== null ? subMenu.title : ""
         code: subMenu && subMenu.titleCode !== undefined ? subMenu.titleCode : ""
-        // The title's own name, so the row draws it the colour every other place draws it. The menu above sets this
-        // row's `text` itself, from the title the two halves already made — the row only needs to know where in it
-        // the name sits.
+        // The title's own name, so the row draws it the colour every other place draws it. The title itself is made
+        // from the two halves already (`titleSentence` / `titleRef`) — the row only needs to know where in it the name
+        // sits.
         refSentence: subMenu && subMenu.titleSentence !== undefined ? subMenu.titleSentence : ""
         refName: subMenu && subMenu.titleRef !== undefined ? subMenu.titleRef : ""
         markKind: subMenu && subMenu.titleKind !== undefined ? subMenu.titleKind : ""
         markTint: subMenu && subMenu.titleTint !== undefined ? subMenu.titleTint : Theme.textSecondary
+        folderRow: subMenu !== null && subMenu.titleFolder === true
         // A submenu with nothing to offer takes its own title row with it, the way any other row that cannot be chosen
         // goes — whether it said so itself (`applies`) or simply came out empty. Without the second half a row would
         // open a card with nothing in it, which `offer()` already refuses to do at the top level.
-        offered: !subMenu || (subMenu.applies !== false && subMenu.offeredRows > 0)
+        offered: !subMenu || (subMenu.applies !== false && (subMenu.offeredRows > 0 || subMenu.promises === true))
     }
 
     background: AppCardFace {}

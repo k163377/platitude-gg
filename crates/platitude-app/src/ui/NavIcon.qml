@@ -76,14 +76,19 @@ InkCanvas {
         default: return 16
         }
     }
-    /// The same span measured across the mark's other axis, for callers that stand it upright (`rotation`). Only kinds
-    /// that are actually turned need an entry — the rest answer with their sideways figure.
+    /// The same span measured across the mark's other axis, for callers that stand it upright (`rotation`) — and for
+    /// the ones that stand it on a line of words, which ask how tall it is (`OpsPicker.markMiddle`). Only kinds one of
+    /// those actually asks about need an entry — the rest answer with their sideways figure.
     readonly property real inkTallGrid: {
         switch (icon.kind) {
         // Stood on end, what spans sideways is the pair of barbs (5.2..10.8 of the grid).
         case "arrow": return 5.6
         // Turned a quarter, what spans sideways is the stroke's length down the grid — 4 to 12.
         case "chevron": return 8
+        // The two rings on the stem, 1.7 to 14.3 down the grid.
+        case "branch": return 12.6
+        // The dome's top to the flat base, 3.1 to 12.9.
+        case "remote": return 9.8
         default: return icon.inkGrid
         }
     }

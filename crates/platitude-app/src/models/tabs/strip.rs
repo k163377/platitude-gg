@@ -279,18 +279,30 @@ impl TabsModel {
         self.notify_runs(runs);
     }
 
-    /// Names the tab the front row is holding (`current_tab_id`).
+    /// Names the tab the front row is holding (`current_tab_id`), and
+    /// the repository and copy it stands in (`current_repo_name` /
+    /// `current_copy_name`).
     ///
     /// Called from [`TabsModel::report`], which every act on the strip
-    /// ends with — so this cannot be left out of one. The signal goes out
-    /// only on a change of tab, which is what makes a row closed to the
-    /// left, or a tab carried past another, silent here: the strip
-    /// renumbered, and the same repository is still in front.
+    /// ends with — so this cannot be left out of one. Each signal goes
+    /// out only on a change of what it names, which is what makes a row
+    /// closed to the left, or a tab carried past another, silent here:
+    /// the strip renumbered, and the same repository is still in front.
     pub(super) fn settle_current(&mut self) {
-        let id = usize::try_from(self.current_index)
+        let front = usize::try_from(self.current_index)
             .ok()
-            .and_then(|at| self.items.get(at))
-            .map_or(-1, |tab| tab.tab_id);
+            .and_then(|at| self.items.get(at));
+        let id = front.map_or(-1, |tab| tab.tab_id);
+        let (repo_name, copy_name) = front.map_or_else(Default::default, |tab| {
+            (title_of(&tab.repo_path), tab.copy_name.clone())
+        });
+        // The names before the row's own signal: whatever reads the tab
+        // in front off it finds the names already said.
+        if repo_name != self.current_repo_name || copy_name != self.current_copy_name {
+            self.current_repo_name = repo_name;
+            self.current_copy_name = copy_name;
+            self.front_names_changed();
+        }
         if id != self.current_tab_id {
             self.current_tab_id = id;
             self.current_index_changed();

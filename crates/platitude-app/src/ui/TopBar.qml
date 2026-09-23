@@ -76,13 +76,33 @@ Rectangle {
     /// worth anything once the band has settled on an answer.
     readonly property bool fetchLive: fetchButton.enabled
 
+    /// A press on either name. **Each is a toggle**: the name is the way into its card and the way out of it, the way
+    /// the ☰ is (`AppMenuButton`) — `open()` on a card already up does nothing, which reads as a name that can never
+    /// be pressed a second time. The branch's card is assembled as it opens (`OpsBranchMenu.offerFrom`). Each says
+    /// whether it opened a card.
+    function pressRepoName() {
+        if (standMenu.opened) {
+            standMenu.close()
+            return false
+        }
+        return standMenu.offerHere()
+    }
+    function pressBranchName() {
+        if (branchMenu.opened) {
+            branchMenu.close()
+            return false
+        }
+        return branchMenu.offerFrom()
+    }
     /// Automation: the panel's two doors, opened the way a press opens them — a press is the one input a headless run
-    /// cannot make (app-ui.md §UI 自動化). Each says whether the card came up, which a picture of a window with no
-    /// card in it cannot tell from a card that opened somewhere off screen.
-    function openStandMenu() { return standMenu.offerHere() }
+    /// cannot make (app-ui.md §UI 自動化), so these go in at the press's own handler. Each says whether the card came
+    /// up, which a picture of a window with no card in it cannot tell from a card that opened somewhere off screen.
+    function openStandMenu() { return topBar.pressRepoName() }
     function openStandRepos() { return standMenu.openSub(repoSub) }
     function openStandCopies() { return standMenu.openSub(copySub) }
-    function openBranchMenu() { return branchMenu.offerHere() }
+    function openBranchMenu() { return topBar.pressBranchName() }
+    /// …and a folder of the branch card, opened the way resting on its row opens it (`OpsBranchMenu.openFolder`).
+    function openBranchFolder(path) { return branchMenu.openFolder(path) }
     /// …and what each of them came out holding. A card is assembled from a listing that may not have landed yet, so
     /// a run that photographed an empty one has to be able to say so (`AppMenu.offeredRows`).
     readonly property bool standMenuOpen: standMenu.opened
@@ -91,13 +111,59 @@ Rectangle {
     /// not opened leaves the card above it on screen, and a run that judged only that something was open would go
     /// green on a card it was never about (observed: the copies' tier photographed for the repositories' run).
     readonly property string standDoor:
-        branchMenu.opened ? "branch"
+        branchMenu.folderStanding !== "" ? "folder"
+        : branchMenu.opened ? "branch"
         : repoSub.opened ? "repos"
         : copySub.opened ? "copies"
         : standMenu.opened ? "stand" : "none"
     readonly property int standRepoRows: repoSub.offeredRows
     readonly property int standCopyRows: copySub.offeredRows
     readonly property int branchMenuRows: branchMenu.offeredRows
+    /// Which folder of the branch card is standing, by its path (`OpsBranchMenu.folderStanding`).
+    readonly property string branchFolderOpen: branchMenu.folderStanding
+    /// Automation: what the two names are washed in and which way their chevrons point — **the output side**, the
+    /// colour the wash was handed and the turn the mark is drawn at: a picture of a lit name and one of a name under
+    /// a pointer are the same picture (`HoverToolButton.washColor`).
+    readonly property bool repoNameLit: Qt.colorEqual(repoPick.washColor, Theme.bgHover)
+    readonly property bool branchNameLit: Qt.colorEqual(branchPick.washColor, Theme.bgHover)
+    readonly property bool repoNameTurned: repoPick.foldTurn === 90
+    /// …and where the branch's counts came out against the two lines (`OpsPicker.trackPlace`).
+    readonly property string branchTrackPlace: branchPick.trackPlace
+    readonly property bool branchNameTurned: branchPick.foldTurn === 90
+    /// Automation: a row of each card pressed — the row's own `triggered`, which is what a click on it emits, so the
+    /// handler that runs is the row's and everything it reaches from there is the wiring a hand goes through
+    /// (`AppMenuButton.clickCloneRow`). Each answers whether it found an offered row to press: a card is assembled
+    /// from a listing that may not have landed, and a press at nothing is not one to wait on.
+    function pickBranchRow(name) {
+        // Through the card's own lookup: a folder's rows are made as its card opens (`OpsBranchMenu.rowFor`).
+        const row = branchMenu.rowFor(name)
+        if (row === null || !row.offered)
+            return false
+        row.triggered()
+        return true
+    }
+    function pickCopyRow(leaf) {
+        return topBar.pickIn(copySub, row => GitFacts.pathLeaf(row.full) === leaf)
+    }
+    function pickRepoRow(index) {
+        return topBar.pickIn(repoSub, row => row.index === index)
+    }
+    /// The row `matches` names, looked for down every card this one folds.
+    function pickIn(menu, matches) {
+        for (let i = 0; i < menu.count; i++) {
+            const row = menu.itemAt(i)
+            if (!row || !row.offered)
+                continue
+            if (row.subMenu) {
+                if (topBar.pickIn(row.subMenu, matches))
+                    return true
+            } else if (matches(row)) {
+                row.triggered()
+                return true
+            }
+        }
+        return false
+    }
 
     signal openRepositoryRequested()
     signal cloneRepositoryRequested()
@@ -318,19 +384,19 @@ Rectangle {
     readonly property bool tabNamesCut: tabStrip.tabNamesCut
     readonly property bool tabMarksFolded: tabStrip.tabMarksFolded
 
-    /// What the panel under the band says this window is standing in. Handed down from the page rather than read out
-    /// of a model here: the band is built once and the page under it changes with the tab in front.
-    readonly property string repoName: topBar.curPage !== null ? topBar.curPage.pageRepoName : ""
-    /// The working copy — the leaf of the path this tab was opened on, which is what tells one worktree of a
+    /// What the panel under the band says this window is standing in: **the tab in front's own names**
+    /// (`TabsModel.currentRepoName`). The strip has them the moment the window moves — git named both places when the
+    /// tab was made — where the page moved to has read nothing yet, and a name taken from the page arrives after its
+    /// repository does (規約 §操作パネル).
+    readonly property string repoName: topBar.tabsModel.currentRepoName
+    /// The working copy — the folder of the copy this tab is standing in, which is what tells one worktree of a
     /// repository from another (規約 §別の作業コピーを読む).
     ///
     /// **Empty in the repository's own copy**, the way the tab above says nothing there either (規約 §タブの所作).
     /// The left panel names that copy by the branch it holds rather than by its folder, and the branch is already the
     /// next name in this row — a word here would be the row saying the same thing twice, in a language the panel
     /// beside it does not use. **A run that appears is the row saying "this is not the usual place".**
-    readonly property string copyName:
-        topBar.curPage === null || topBar.curPage.pageOnMainCopy ? ""
-        : GitFacts.pathLeaf(topBar.curPage.pageTab.repoPath)
+    readonly property string copyName: topBar.tabsModel.currentCopyName
     /// Whether HEAD is on no branch at all — a state rather than a name, and coloured as one.
     readonly property bool detachedHead: topBar.curPage !== null && topBar.curPage.pageWt.detached
     /// The branch HEAD is on, or the marker for a HEAD that is on no branch at all.
@@ -354,6 +420,11 @@ Rectangle {
     /// what is drawn, not which of the three gave way.
     readonly property string opsNames: topBar.repoName + "/" + topBar.copyName + "/" + topBar.branchName
     readonly property bool opsNameCut: repoPick.nameCut || branchPick.nameCut
+    /// Automation: whether every button at the panel's right end is as deep as what it draws — one laid out shorter
+    /// than its own two lines stands its word over its frame and its mark under it, and a picture of it reads as a
+    /// style of its own until it is set beside a panel that has an upstream to write (`OpsPicker.pairHeight`).
+    readonly property bool actionsBoxed: [fetchButton, pushButton, stashButton, findButton].every(
+        button => !button.visible || button.height >= button.implicitHeight - 0.5)
 
     /// What the names ask for between them when nothing has given way — the run the actions may not be centred into
     /// (`actionSeat.x`), and the width the row is held to when there is room for all of it. **Read off the whole
@@ -361,27 +432,20 @@ Rectangle {
     /// answer would close the ring.
     readonly property real picksWant:
         repoPick.wholeWidth + branchPick.wholeWidth + opsRow.spacing
-    /// **The order the names give way in** (§譲る順 past the buttons): the working
-    /// copy, then the repository's name, then the upstream, and last the branch. Each run is **dropped whole** rather
-    /// than cut to nothing — a mark with two letters after it says less than no run at all, and the reader who has
-    /// lost the run still has the left panel. The two names are cut, the repository's first: it is the one the tab
-    /// above says again, and the branch is what every write in this row acts on.
+    /// **The order the names give way in** (§譲る順 past the buttons): the repository's picker first — its copy's run,
+    /// then its name — and the branch's last, the upstream before the name wherever the upstream is the longer of its
+    /// two lines (`OpsPicker.given`). The repository is the one the tab above says again, and the branch is what every
+    /// write in this row acts on.
     readonly property real opsRoom: opsRow.width
-    /// How much more the names want than the row has. **Nothing is dropped to close it** — each of the four is cut
-    /// towards its own floor, in turn, and every one of them is still on screen at the floor.
+    /// How much more the names want than the row has. **Nothing is dropped to close it** — each name is cut towards
+    /// its own floor, in turn, and every one of them is still on screen at the floor.
     readonly property real opsOver: Math.max(0, topBar.picksWant - topBar.opsRoom)
     /// The narrowest the names are ever laid out at — every word at its own floor, and **all of them still drawn**.
     readonly property real picksFloor:
         repoPick.foldWidth + branchPick.foldWidth + opsRow.spacing
-    /// …taken from them one at a time, in the order above. Each gives what it can and passes the rest on.
-    readonly property real opsTrailCut: Math.min(topBar.opsOver, repoPick.trailSlack)
-    readonly property real opsRepoNameCut:
-        Math.min(topBar.opsOver - topBar.opsTrailCut, repoPick.nameSlack)
-    readonly property real opsNoteCut:
-        Math.min(topBar.opsOver - topBar.opsTrailCut - topBar.opsRepoNameCut, branchPick.noteSlack)
-    readonly property real opsBranchNameCut:
-        Math.min(topBar.opsOver - topBar.opsTrailCut - topBar.opsRepoNameCut - topBar.opsNoteCut,
-                 branchPick.nameSlack)
+    /// …taken from the two in the order above. Each gives what it can and passes the rest on.
+    readonly property real opsRepoCut: Math.min(topBar.opsOver, repoPick.slack)
+    readonly property real opsBranchCut: Math.min(topBar.opsOver - topBar.opsRepoCut, branchPick.slack)
     /// The seat the two smaller chevrons stand in. **The same proportion to their own mark that the repository's keeps
     /// to its** — its seat is the ☰'s cell and its mark is a step larger, so the two written as one ratio put the same
     /// amount of air, to the eye, around every chevron in the row.
@@ -600,25 +664,28 @@ Rectangle {
                 // the answer would take the door to the other copies with it every time the window stood in the
                 // repository's own.
                 trail: topBar.copyName
-                trailGiven: topBar.opsTrailCut
-                nameGiven: topBar.opsRepoNameCut
+                given: topBar.opsRepoCut
+                opened: standMenu.opened
                 Layout.fillHeight: true
                 Layout.preferredWidth: repoPick.drawnWidth
                 Accessible.name: qsTr("Repository")
-                // Written as a toggle, like the ☰'s: a press outside an open card closes it, and the click that
-                // follows the same press would open it again (`AppMenuButton`).
-                onClicked: standMenu.opened ? standMenu.close() : standMenu.offerHere()
+                onClicked: topBar.pressRepoName()
             }
             OpsPicker {
                 id: branchPick
                 name: topBar.branchName
                 note: topBar.branchUpstream
                 noteTone: topBar.upstreamGone ? Theme.warning : Theme.textMuted
-                noteGiven: topBar.opsNoteCut
                 ahead: topBar.curPage === null ? 0 : topBar.curPage.pageWt.ahead
                 behind: topBar.curPage === null ? 0 : topBar.curPage.pageWt.behind
-                nameGiven: topBar.opsBranchNameCut
-                blank: qsTr("No branch")
+                given: topBar.opsBranchCut
+                opened: branchMenu.opened
+                // **Said as what it is while the page in front is reading**: a tab moved to reads its repository from
+                // the start (`Hub::release_tab`), and until its status answers, "no branch" would be a claim about the
+                // repository that is not so (規約 §操作パネル). A page whose repository would not open is reading
+                // nothing, and one whose status answered has said what HEAD is.
+                blank: topBar.curPage !== null && !topBar.curPage.openFailed && !topBar.curPage.pageWt.headKnown
+                       ? qsTr("Loading…") : qsTr("No branch")
                 // A local branch is the accent wherever it is drawn — the left panel's BRANCHES section, a graph row's
                 // chip, and this mark (規約 §ref の種別). A detached HEAD is not a branch but a state, and takes the
                 // state's colour on both the mark and the word: it is the one thing in this row a reader has to be
@@ -641,10 +708,17 @@ Rectangle {
                 // …and the same air in front of it. The first seat is a column and this one is the mark's own size,
                 // so without this the second chevron stands closer to what precedes it than the first one does.
                 markLeadIn: Math.max(0, repoPick.markAir - branchPick.markAir - repoPick.rightPadding)
+                // …and the same air after it, to the ink of what it opens — the first chevron's is the column's own
+                // half. Left to the family's step, the second chevron stands against its mark at half the distance
+                // the first one keeps from its name, and reads as the lesser door.
+                markStep: repoPick.markAir + repoPick.markGap
+                // **The last of the names keeps the air it opens with past its words** (`OpsPicker.endAir`): its wash
+                // is the one a hand sees end in the open panel, and nothing after it takes a share of its step.
+                endAir: branchPick.leadAir
                 Layout.fillHeight: true
                 Layout.preferredWidth: branchPick.drawnWidth
                 Accessible.name: qsTr("Branch")
-                onClicked: branchMenu.opened ? branchMenu.close() : branchMenu.offerHere()
+                onClicked: topBar.pressBranchName()
             }
         }
 
@@ -656,14 +730,27 @@ Rectangle {
             // **Dropped from the name it opens**, the way the ☰'s card is dropped from the ☰ (`AppMenuButton`): this
             // door is a word in a row rather than a right-click, and a card left where the pointer was would open in
             // a different place every time the same word was pressed.
-            x: opsRow.x + repoPick.x
-            y: opsRow.y + opsRow.height
+            //
+            // **Hung off the name itself**, so the name is what "outside" is measured from: the default policy calls
+            // a press on the name outside and shuts the card on it, and the click that follows the same press opens it
+            // again — a name that opens its card and never closes it (`AppMenuButton` answers the ☰ the same way).
+            parent: repoPick
+            x: 0
+            y: repoPick.height
+            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+            // None of the panel's cards holds a held row, so none is held to the floor a hold needs: each fits its
+            // rows (`AppMenu.widthFloor`).
+            widthFloor: 0
+            // Both rows are headings and one of them wears the WORKTREES section's mark: the other holds its step, so
+            // the two words begin on one x (`AppMenu.alignsHeadings`).
+            alignsHeadings: true
             // **The word git uses**, and singular like the two cards that already open this way
             // (`RefBranchMenu` = `BRANCH`, `RefTagMenu` = `TAG`): the row names the one thing about to be chosen,
             // not the list behind it.
             AppMenu {
                 id: repoSub
                 title: qsTr("REPOSITORY")
+                widthFloor: 0
                 // **The repositories this window already has open**, less the one it is standing in: a tab is a
                 // repository the reader has already chosen, and the row moves the window to it rather than opening
                 // anything. What was open in some earlier run is a listing this window does not keep
@@ -681,7 +768,7 @@ Rectangle {
                         text: repoRow.title
                         trail: repoRow.copy_name
                         offered: repoRow.index !== topBar.tabsModel.currentIndex
-                        onPicked: topBar.tabsModel.setCurrentIndex(repoRow.index)
+                        onTriggered: topBar.tabsModel.setCurrentIndex(repoRow.index)
                     }
                     onObjectAdded: (at, object) => repoSub.insertItem(at, object)
                     onObjectRemoved: (at, object) => repoSub.removeItem(object)
@@ -695,6 +782,10 @@ Rectangle {
                 title: qsTr("WORKTREE")
                 titleKind: "tree"
                 titleTint: Theme.success
+                // Every row keeps the section's seat, so a copy wearing the padlock and one wearing nothing begin their
+                // names on one x, the way the section's rows do (`NameCell`).
+                keepsSeat: true
+                widthFloor: 0
                 // **The same listing the left menu's WORKTREES section draws**, less the copy this tab is already
                 // standing in, and down the same road a row of that section takes (`openRepositoryPathRequested`).
                 // The section has no folders in it, so every row here is a copy.
@@ -708,8 +799,7 @@ Rectangle {
                         required property string change
                         required property bool folder
                         /// Where this tab is standing. Compared the way the listing's own `current` is
-                        /// (`RepoPage.pageOnMainCopy`): git prints one separator and Windows the other, and a path
-                        /// is not a name.
+                        /// (`nav::drain`): git prints one separator and Windows the other, and a path is not a name.
                         readonly property bool here:
                             topBar.curPage !== null
                             && GitFacts.samePath(copyRow.full, topBar.curPage.pageTab.repoPath)
@@ -727,13 +817,13 @@ Rectangle {
                                 : copyRow.change === "PRUNABLE" ? "bang"
                                 : copyRow.homeCopy ? "home" : ""
                         markTint: copyRow.change === "PRUNABLE" ? Theme.warning : Theme.textSecondary
-                        // The branch that copy has out, in the column the left menu keeps it in. The main copy's
-                        // row is named by it already, and saying it twice would be this row's one fact said twice.
-                        nameMark: "branch"
-                        markName: copyRow.homeCopy ? "" : copyRow.bucket
-                        nameMarkTint: Theme.accent
+                        // The branch that copy has out, **in the column the left menu keeps it in** — at the row's far
+                        // end, a step down and in the quieter ink (`NavRowBody.branchSeat`): a fact about the copy, where
+                        // the copy's own name is what the row is read for. The main copy's row is named by it already,
+                        // and saying it twice would be this row's one fact said twice.
+                        sideName: copyRow.homeCopy ? "" : copyRow.bucket
                         offered: !copyRow.folder && !copyRow.here
-                        onPicked: topBar.curPage.openRepositoryPathRequested(copyRow.full)
+                        onTriggered: topBar.curPage.openRepositoryPathRequested(copyRow.full)
                     }
                     onObjectAdded: (at, object) => copySub.insertItem(at, object)
                     onObjectRemoved: (at, object) => copySub.removeItem(object)
@@ -741,46 +831,18 @@ Rectangle {
             }
         }
 
-        // The branches this repository has, less the one the window is already standing on — **the same listing the
-        // left menu's BRANCHES section draws, in the same order**, with its headings left out and every name written
-        // whole (a heading is a run of a name here, not a place to go). Down the same road that section's rows take
-        // (`RepoPage.switchToRef`), which is also what answers for a branch another copy is standing on: it goes to
-        // that copy rather than refusing.
-        AppMenu {
+        // The branches this repository has, less the one the window is already standing on — **the left menu's
+        // BRANCHES section, filed the way it files them** (`OpsBranchMenu`). Down the same road that section's rows
+        // take (`RepoPage.switchToRef`), which is also what answers for a branch another copy is standing on: it goes
+        // to that copy rather than refusing. Hung off the name for the reason the stand card is.
+        OpsBranchMenu {
             id: branchMenu
-            x: opsRow.x + branchPick.x
-            y: opsRow.y + opsRow.height
-            Instantiator {
-                model: topBar.curPage === null ? null : topBar.curPage.pageBranches
-                delegate: AppMenuItem {
-                    id: branchRow
-                    required property string name
-                    required property string full
-                    required property string change
-                    required property bool folder
-                    required property bool is_head
-                    required property int ahead
-                    required property int behind
-                    // **Whole, where the left menu writes the leaf under a heading**: a card has no tree to hang
-                    // the rest of the name on, and two branches can share a leaf under different headings.
-                    text: branchRow.full !== "" ? branchRow.full : branchRow.name
-                    // The mark that says another working copy is standing on this branch, in the WORKTREES
-                    // section's own colour — the same mark the left menu's row wears in the seat its name begins
-                    // at (`NavRowBody.seatMark`). The press still lands: it goes to that copy (`switchToRef`).
-                    headed: false
-                    markKind: branchRow.change === "HELD" ? "tree" : ""
-                    markTint: Theme.success
-                    // How far it stands from what it follows, in the left menu's own marks.
-                    ahead: branchRow.ahead
-                    behind: branchRow.behind
-                    // The branch the window is on has no row of its own: a menu offers what can be chosen on the
-                    // thing it was opened from (規約 §メニュー), and that one is what it was opened from.
-                    offered: !branchRow.folder && !branchRow.is_head
-                    onPicked: topBar.curPage.switchToRef("branch", branchRow.text)
-                }
-                onObjectAdded: (at, object) => branchMenu.insertItem(at, object)
-                onObjectRemoved: (at, object) => branchMenu.removeItem(object)
-            }
+            page: topBar.curPage
+            parent: branchPick
+            x: 0
+            y: branchPick.height
+            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+            onBranchPicked: name => topBar.curPage.switchToRef("branch", name)
         }
 
         // ---- the three actions -----------------------------------------
@@ -813,7 +875,10 @@ Rectangle {
                 // width that decided to. Folded, the box is the band's end cell over the panel's whole depth: the mark
                 // stands in the same square the ☰ and the window's own three do (規約 §ウィンドウの縁).
                 width: topBar.actionCap
-                height: fetchButton.folded ? opsBand.height : branchPick.linesHeight
+                // **Two lines deep whatever the branch writes** (`OpsPicker.pairHeight`): a branch following nothing,
+                // and a page still reading its repository, write one line there — and a button held to that stands its
+                // own word over its frame and its mark under it.
+                height: fetchButton.folded ? opsBand.height : branchPick.pairHeight
             }
             // Push, in whichever shape this branch's standing with its remote allows (`BandPushButton`).
             BandPushButton {
@@ -827,7 +892,7 @@ Rectangle {
                 wordFloor: topBar.actionWordFloor
                 foldRequested: topBar.actionsFolded
                 width: topBar.actionCap
-                height: pushButton.folded ? opsBand.height : branchPick.linesHeight
+                height: pushButton.folded ? opsBand.height : branchPick.pairHeight
             }
             // Everything uncommitted, set aside in one entry, on the press (`BandStashButton`).
             BandStashButton {
@@ -840,33 +905,8 @@ Rectangle {
                 wordFloor: topBar.actionWordFloor
                 foldRequested: topBar.actionsFolded
                 width: topBar.actionCap
-                height: stashButton.folded ? opsBand.height : branchPick.linesHeight
+                height: stashButton.folded ? opsBand.height : branchPick.pairHeight
             }
-        }
-
-        // ---- the lines between the groups ---------------------------------
-        // **Where two of the panel's groups have run out of air between them**. The same
-        // line the band above draws between what the app owns and what the window owns (`chromeDivider`), for the
-        // same reason: two things that have lost the gap between them read as one run, and the boundary has to be
-        // said by something. **Only while they touch** — a line drawn into air nobody is short of would be a claim
-        // that the groups are further apart than they are (§余白).
-        Rectangle {
-            id: namesDivider
-            visible: actionSeat.x - (opsRow.x + opsRow.width) <= Theme.spaceLg
-            x: Math.round((opsRow.x + opsRow.width + actionSeat.x - width) / 2)
-            anchors.verticalCenter: parent.verticalCenter
-            width: Theme.borderWidth
-            height: Theme.iconMd
-            color: Theme.borderDefault
-        }
-        Rectangle {
-            id: findDivider
-            visible: findButton.x - (actionSeat.x + actionSeat.width) <= Theme.spaceMd
-            x: Math.round((actionSeat.x + actionSeat.width + findButton.x - width) / 2)
-            anchors.verticalCenter: parent.verticalCenter
-            width: Theme.borderWidth
-            height: Theme.iconMd
-            color: Theme.borderDefault
         }
 
         // ---- the find ----------------------------------------------------
@@ -899,7 +939,7 @@ Rectangle {
             foldRequested: topBar.findFolded
             wordFloor: topBar.actionWordFloor
             width: topBar.findCap
-            height: findButton.folded ? opsBand.height : branchPick.linesHeight
+            height: findButton.folded ? opsBand.height : branchPick.pairHeight
             frameColor: Theme.borderStrong
             // The canvas inside the frame, like the three beside it (`BandFetchButton`).
             faceColor: Theme.bgSurface

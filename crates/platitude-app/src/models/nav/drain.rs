@@ -106,16 +106,9 @@ impl NavSectionModel {
                 .flatten()
                 .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
                 .unwrap_or_default();
-            // The main one, before the filter below can take it away: git
-            // prints it first, and a bare repository's first entry is the
-            // bare directory — which is still what the repository is
-            // named by, and still no working copy.
-            let main_path = list.first().map(|w| w.path.clone()).unwrap_or_default();
-            let named = self.main_path != main_path;
-            self.main_path = main_path;
             // A bare entry has no working copy to show.
             let list = list.into_iter().filter(|w| !w.bare).collect();
-            arrived |= self.take(Source::Worktrees { list, current }) || named;
+            arrived |= self.take(Source::Worktrees { list, current });
         }
         let mut stashes_arrived = false;
         if let Some(feed) = self.stash_feed.clone()

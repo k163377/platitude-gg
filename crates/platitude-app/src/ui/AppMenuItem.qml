@@ -58,10 +58,35 @@ MenuItem {
     /// would read as a title with nothing under it.
     property bool headed: true
     readonly property bool titled: menuItem.heads && menuItem.headed
+    /// Whether the menu this row is in keeps **the left menu's seat** on every row (`AppMenu.seatWorn`): the column
+    /// a mark about the row stands in, held open on the rows that have none, so every name on the card begins on one
+    /// x — the invariant `NameCell` holds its own seat open for. A mark about the row stands in it, drawn the size
+    /// that seat draws it (`iconSm`), and the name follows at that seat's step.
+    readonly property bool seated:
+        menuItem.menu !== null && menuItem.menu.seatWorn !== undefined && menuItem.menu.seatWorn === true
+    /// Whether this row has a mark to put in that seat — one about the row itself, not a heading's.
+    readonly property bool wearsSeat: menuItem.heads && !menuItem.headed
+    /// Where that seat begins: the row's own step in, past the hold mark's seat where the menu has one.
+    readonly property real seatX: Theme.spaceSm + menuItem.holdIndent
+    /// The ink of the heading mark this row wears, for a card lining its headings up (`AppMenu.headingSeat`).
+    readonly property real headInk: menuItem.titled ? rowMark.inkWidth : 0
+    /// …and the step every heading on such a card starts its words at, marked or not. Zero on any other card.
+    readonly property real headingSeat:
+        menuItem.subMenu !== null && menuItem.menu !== null && menuItem.menu.headingSeat !== undefined
+        ? menuItem.menu.headingSeat : 0
+    /// A folder of names rather than a name — the section's folder row, said in the quieter ink the section says it
+    /// in (`NameCell.folder`). What it opens is the card of the names filed under it.
+    property bool folderRow: false
     /// How far this row's branch stands from its upstream, counted the way the left menu counts it (`HeadTrack`).
     /// Both zero draws nothing: level with the upstream is not a number worth a seat (§左メニューの所作).
     property int ahead: 0
     property int behind: 0
+    /// The badge the left menu's row ends with (`NavRowBody.remoteSeat`): a remote carries the branch, a pull request
+    /// is open for it, or the upstream it is measured against has gone. One mark, one size — the badge itself.
+    property bool remoteBadge: false
+    property bool badgePr: false
+    property bool badgeGone: false
+    readonly property bool badged: menuItem.remoteBadge || menuItem.badgePr || menuItem.badgeGone
 
     /// **A name inside the row's words, with the mark its kind is read by against it** — a working copy's folder
     /// behind the WORKTREES mark, wherever a row leads to one (`RefRowMenu` の `Open`). `text` carries the words
@@ -72,6 +97,11 @@ MenuItem {
     property string markName: ""
     property color nameMarkTint: Theme.textSecondary
     readonly property bool namesMark: menuItem.nameMark !== "" && menuItem.markName !== ""
+    /// **A fact about the row, in the column the left menu keeps at its far edge** — the branch a working copy has
+    /// out (`NavRowBody.branchSeat`): set against the row's right end, a step down and in the quieter ink, and at
+    /// least a column's step from the words before it, so the two read as two columns and not as one run of words.
+    /// Empty draws none.
+    property string sideName: ""
     /// The step in front of that mark. **A mark inside a word is a letter, not a thing standing in a row**
     /// (デザイン規約 §余白 / §タブの所作): the word's own step, less the air the mark's box already holds — and
     /// between the mark and the name it is about, nothing is spent at all.
@@ -173,8 +203,15 @@ MenuItem {
     // `spaceXs` of air behind the ink and no more, with the box's own air on either side not spent a second time. The
     // same seat the copy mark takes beside a hash and the face takes beside a name (`HashPlate`, `CommitAuthorRow` —
     // デザイン規約 §余白「印が自分で持っている余白は、隣の詰めに数える」).
-    leftPadding: menuItem.heads ? menuItem.markX + rowMark.inkWidth + Theme.spaceXs
-                                : Theme.spaceSm + menuItem.holdIndent
+    //
+    // **A row on a card that keeps the seat starts its words past it** whatever it holds — the seat's own width and
+    // the step the left menu's name keeps after it (`NameCell`'s spacing), so a name with a mark in front of it and one
+    // without begin on one x.
+    leftPadding: menuItem.headingSeat > 0 ? menuItem.markX + menuItem.headingSeat
+               : menuItem.titled ? menuItem.markX + rowMark.inkWidth + Theme.spaceXs
+               : menuItem.seated ? menuItem.seatX + Theme.iconXs + Theme.spaceXs
+               : menuItem.heads ? menuItem.markX + rowMark.inkWidth + Theme.spaceXs
+               : Theme.spaceSm + menuItem.holdIndent
     topPadding: 0
     bottomPadding: 0
     // A row this menu is not offering takes no room. The list lays its rows out by height, so an invisible one that
@@ -190,6 +227,15 @@ MenuItem {
                       ? menuItem.markWordGap + Theme.iconSm
                         + Math.min(markNameLabel.implicitWidth, Metrics.labelColW) : 0)
                    + (menuItem.note !== "" ? noteLabel.implicitWidth + Theme.spaceSm : 0)
+                   // **Everything else the row draws after its words bids too** — the counts, the badge, the copy's
+                   // run. Left out, the row that sets the menu's width lays them out of its words' own width, and the
+                   // words give way: the name is cut on the one row the width was measured off.
+                   // Asked of what the row holds, not of `visible`: a closed card's rows answer that with false
+                   // whatever they hold, and the card is measured before it opens.
+                   + (menuItem.sideName !== "" ? sideLabel.implicitWidth + Theme.spaceLg : 0)
+                   + (menuItem.ahead > 0 || menuItem.behind > 0 ? rowTrack.implicitWidth + Theme.spaceSm : 0)
+                   + (menuItem.badged ? Theme.iconSm + Theme.spaceXs : 0)
+                   + (menuItem.trail !== "" ? Theme.spaceXs + Theme.iconXs + trailLabel.implicitWidth : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
     // The gesture is said here, for a reader who cannot see the mark.
@@ -280,13 +326,30 @@ MenuItem {
         anchors.verticalCenterOffset: Metrics.opticalDrop
         width: Theme.iconMd
         height: Theme.iconMd
-        visible: menuItem.heads
+        visible: menuItem.heads && (menuItem.titled || !menuItem.seated)
         kind: menuItem.heads ? menuItem.markKind : "branch"
         tint: menuItem.markTint
         // A `Canvas` in the overlay layer can miss its first chance to paint — the card is built before it is shown,
         // and a mark that never painted frames as one nobody wired.
         Component.onCompleted: rowMark.requestPaint()
         onVisibleChanged: if (visible) rowMark.requestPaint()
+    }
+    // …and a mark about the row, where the card keeps the left menu's seat: **drawn the way that seat draws it** —
+    // `iconSm`, its box set against the seat's left edge and hanging past the right one, which is air the step after
+    // the seat already holds (`NameCell.seatNudge`). A mark sized for the heading's seat here stands a step taller than
+    // the one the same row wears in the left menu.
+    NavIcon {
+        id: seatMark
+        x: menuItem.seatX
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: Metrics.opticalDrop
+        width: Theme.iconSm
+        height: Theme.iconSm
+        visible: menuItem.heads && !menuItem.titled && menuItem.seated
+        kind: menuItem.heads ? menuItem.markKind : "branch"
+        tint: !menuItem.enabled || menuItem.blocked ? Theme.textMuted : menuItem.markTint
+        Component.onCompleted: seatMark.requestPaint()
+        onVisibleChanged: if (visible) seatMark.requestPaint()
     }
 
     contentItem: RowLayout {
@@ -370,18 +433,46 @@ MenuItem {
             rightPadding: !noteLabel.visible && menuItem.subMenu && menuItem.arrow
                           ? menuItem.arrow.width + Theme.spaceXs : 0
             // The section band's own spelling, for a row that names a card: the same weight and colour the sidebar
-            // gives BRANCHES and TAGS, so the two read as one kind of thing wherever they are met (NavHeader).
+            // gives BRANCHES and TAGS, so the two read as one kind of thing wherever they are met (NavHeader). A
+            // folder takes the quieter ink alone — it is a row of the section, not the section's own name.
             font.weight: menuItem.titled ? Font.DemiBold : menuItem.font.weight
-            color: menuItem.titled ? Theme.textSecondary : menuItem.wordColor
+            color: menuItem.titled || (menuItem.folderRow && menuItem.enabled && !menuItem.blocked)
+                   ? Theme.textSecondary : menuItem.wordColor
+        }
+        // The row's far column, set against its right end by the words before it taking the rest (`sideName`). A
+        // column's step off them, where the steps between things the row says are a word's: two things side by side
+        // at a word's step read as one run.
+        Label {
+            id: sideLabel
+            visible: menuItem.sideName !== ""
+            Layout.leftMargin: Theme.spaceLg
+            Layout.alignment: Qt.AlignVCenter
+            text: menuItem.sideName
+            textFormat: Text.PlainText
+            font.family: Theme.uiFamily
+            font.pixelSize: Theme.fontSm
+            color: !menuItem.enabled || menuItem.blocked ? menuItem.wordColor : Theme.textSecondary
         }
         // How far this row's branch stands from what it follows, in the seat the left menu keeps for it — the same
         // marks, the same order, so the two listings are read the same way (`NavRowBody`'s `trackSeat`).
         HeadTrack {
+            id: rowTrack
             visible: menuItem.ahead > 0 || menuItem.behind > 0
             Layout.leftMargin: Theme.spaceSm
             Layout.alignment: Qt.AlignVCenter
             ahead: menuItem.ahead
             behind: menuItem.behind
+        }
+        // …and the badge after it, in the order the left menu's row ends in (`NavRowBody`'s `remoteSeat`) at the step
+        // between that row's columns.
+        GoneBadge {
+            visible: menuItem.badged
+            Layout.leftMargin: Theme.spaceXs
+            Layout.alignment: Qt.AlignVCenter
+            Layout.preferredWidth: Theme.iconSm
+            Layout.preferredHeight: Theme.iconSm
+            pullRequest: menuItem.badgePr
+            gone: menuItem.badgeGone
         }
         // The name the row leads to, with its mark set in front of it as a letter of the same word
         // (`markWordGap`): one mark for one idea, the very one the WORKTREES rows, the tab and the graph's chips
@@ -474,12 +565,13 @@ MenuItem {
         // says *where the hand is* — every row gets that — and this says **what is about to open**, which is the one
         // thing this row does that no other row does (デザイン規約 §メニュー の入れ子). Across the whole row:
         // it is the card below that is being named.
+        // **The heading's alone**: a mark about the row itself names no card (`headed`).
         Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             height: Theme.borderWidth
-            visible: menuItem.heads && (menuItem.hovered || menuItem.highlighted)
+            visible: menuItem.titled && (menuItem.hovered || menuItem.highlighted)
             color: menuItem.markTint
         }
     }

@@ -42,9 +42,11 @@ Item {
     /// drag, snap and the double-click for exactly that long, which is what a platform menu does with the click that
     /// dismisses it.
     ///
-    /// Only the cards that close on an outside press belong here. A modal dialog is not one of them — nothing about it
-    /// would close, and the window would merely stop being draggable while it stood.
-    readonly property bool captionYielded: chrome.topBar.appMenuOpen
+    /// Only the cards that close on an outside press belong here: the ☰'s and the two the panel's names drop
+    /// (`TopBar`'s `standMenu` / `branchMenu`). A modal dialog is not one of them — nothing about it would close, and
+    /// the window would merely stop being draggable while it stood.
+    readonly property bool captionYielded:
+        chrome.topBar.appMenuOpen || chrome.topBar.standMenuOpen || chrome.topBar.branchMenuOpen
     onCaptionYieldedChanged: chrome.reportCaptionStrip()
 
     /// Automation: what the platform was last told the run past the tabs is, `none` while the scene has it back

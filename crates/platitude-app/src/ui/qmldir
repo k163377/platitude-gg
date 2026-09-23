@@ -143,6 +143,7 @@ OpExitCard 1.0 OpExitCard.qml
 OpExitRow 1.0 OpExitRow.qml
 OpenFailedDialog 1.0 OpenFailedDialog.qml
 OpenFailedScreen 1.0 OpenFailedScreen.qml
+OpsBranchMenu 1.0 OpsBranchMenu.qml
 OpsPicker 1.0 OpsPicker.qml
 PageLayout 1.0 PageLayout.qml
 PaneHeader 1.0 PaneHeader.qml

@@ -146,6 +146,19 @@ pub struct TabsModel {
     /// repository that will not read itself again (measured: the graph
     /// stayed empty and `middle-close` waited out its watchdog).
     current_tab_id: i32,
+    /// What the tab in front's repository is called and the copy it is
+    /// standing in (`TabItem::copy_name`) — the names the operation panel
+    /// writes under the strip. **Settled with the row**, so the panel
+    /// says where the window has moved the moment it moves: the page's
+    /// own answer waits on git for the same two words.
+    ///
+    /// The repository by its own working copy's folder, **not by the
+    /// strip's name for the tab**: that one takes a parent folder into
+    /// it wherever another tab's repository shares the folder's name
+    /// (`tab_name::names_for`), and the panel names one repository with
+    /// no namesake beside it.
+    current_repo_name: String,
+    current_copy_name: String,
     /// The strip as a list: one record per tab (`OpenRepo`), the name it
     /// is shown by and its work tree path.
     ///
@@ -181,6 +194,8 @@ impl Default for TabsModel {
             // not exist, and the UI reads "no repository open" as < 0.
             current_index: -1,
             current_tab_id: -1,
+            current_repo_name: String::new(),
+            current_copy_name: String::new(),
             open_repos: OpenRepos::default(),
             asks: Arc::new(Feed::default()),
             attached: false,
