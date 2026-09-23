@@ -56,6 +56,10 @@ InkCanvas {
         case "remote": return 12.9
         // The two rings, each 1.8 either side of its own centre (5 and 11): 3.2 to 12.8, stem and curve inside that.
         case "branch": return 9.6
+        // **Drawn on end** — one stroke from 6 to 10 across, 4 to 12 down, and every caller turns it a quarter so the
+        // list it opens is below it. So the figure that answers for its width is the tall one (`inkTallGrid`), and
+        // this is what is left over sideways once it has been turned.
+        case "chevron": return 4
         // A square of 7.2 turned an eighth of a turn about the middle, so it spans its own diagonal.
         case "tag": return 10.18
         // Ring and bar are the same diameter, 2.5 to 13.5. Asked for because this one stands at the end of a line of
@@ -66,6 +70,9 @@ InkCanvas {
         // A frame of ten, 3 to 13 — the span `hier` and `list` take, since the three stand in one band's toggles.
         case "unified":
         case "split": return 10
+        // Lens left edge to handle end, 2.8 to 13.2 — the same span down the other axis, so the default answers for
+        // a turned one too.
+        case "search": return 10.4
         default: return 16
         }
     }
@@ -75,6 +82,8 @@ InkCanvas {
         switch (icon.kind) {
         // Stood on end, what spans sideways is the pair of barbs (5.2..10.8 of the grid).
         case "arrow": return 5.6
+        // Turned a quarter, what spans sideways is the stroke's length down the grid — 4 to 12.
+        case "chevron": return 8
         default: return icon.inkGrid
         }
     }
@@ -566,6 +575,19 @@ InkCanvas {
             ctx.lineTo(8 * s, 4.8 * s)
             ctx.moveTo(8 * s, 8 * s)
             ctx.lineTo(10.4 * s, 8 * s)
+            ctx.stroke()
+        } else if (icon.kind === "search") {
+            // **The handle starts on the lens's circle**, the way `branch`'s lines stop on the ring they run into: the
+            // round cap hangs half a weight back over the ring's own line, which is a join. Started outside it, the
+            // two marks stand apart at `iconLg` and touch only at `iconXs`, since the weight does not scale with the
+            // grid.
+            const reach = 4.2 / Math.SQRT2
+            ctx.beginPath()
+            ctx.arc(7 * s, 7 * s, 4.2 * s, 0, 2 * Math.PI)
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.moveTo((7 + reach) * s, (7 + reach) * s)
+            ctx.lineTo(13.2 * s, 13.2 * s)
             ctx.stroke()
         }
     }
