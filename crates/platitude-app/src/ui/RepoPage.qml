@@ -1152,7 +1152,7 @@ FocusScope {
             repoTab.renameBranch(id, name, false)
         } else if (kind === "tag") {
             // And which remote carries this name, read before the rename for the same reason: afterwards the row
-            // answers to the new one (デザイン規約 §手元の改名をリモートへ運ぶ).
+            // answers to the new one (デザイン規約 §手元の改名の後のリモート).
             page.armRenameTagRemote(id, name)
             repoTab.renameTag(id, name)
         } else if (kind === "stash") {
@@ -1185,7 +1185,7 @@ FocusScope {
     /// a question raised before that read arrives would stand over no row at all.
     property string pendingRenameTagOid: ""
     /// Reads them, and **only where the pair over there would change the name and nothing else** (デザイン規約
-    /// §手元の改名をリモートへ運ぶ): the remote's copy has to stand where this one does, since the push and the delete
+    /// §手元の改名の後のリモート): the remote's copy has to stand where this one does, since the push and the delete
     /// the answer runs would otherwise move the mark as well as the name; and the new name has to be free over
     /// there, since a push to one it already carries is refused outright. Nothing is armed where the answer would be
     /// a question nobody can say yes to.
@@ -1241,13 +1241,14 @@ FocusScope {
             return
         page.startRowAsk(
             remotesModel.oidOfName(remoteRef),
-            qsTr("Rename %1 to %2?").arg(remoteRef).arg(remote + "/" + name),
+            //: %1 and %2 are remote branches, e.g. origin/main. The old name goes and the new one is made.
+            qsTr("Replace %1 with %2?").arg(remoteRef).arg(remote + "/" + name),
             qsTr("The old branch is deleted, not moved."),
             false,
-            qsTr("Rename"),
+            qsTr("Replace"),
             function () { repoTab.replaceRemoteBranch(remote, from, name) },
             true,
-            qsTr("Hold to rename. git has no rename on a remote: %1 is pushed, then %2 is deleted. Anything the old name carried — an open pull request, a running check — does not follow it.").arg(remote + "/" + name).arg(remoteRef))
+            qsTr("Hold to replace. %1 goes up first, then %2 comes off — so a push the far side turns down leaves the old name where it is. Anything it carried — an open pull request, a running check — does not follow the new name.").arg(remote + "/" + name).arg(remoteRef))
         page.replaceRemoteAsked(remoteRef, name)
     }
     /// Automation: the question above was raised, and the two names it is between. An automation-only exposure, the
@@ -1918,7 +1919,7 @@ FocusScope {
         if (repoTab.busyCount === 0)
             page.noteRenameLanded()
         // The branch took its new name here; the remote it was measured against is still under the old one. Asked
-        // only now, and only because there is a remote to ask about (デザイン規約 §手元の改名をリモートへ運ぶ).
+        // only now, and only because there is a remote to ask about (デザイン規約 §手元の改名の後のリモート).
         if (repoTab.writeBranchOp && page.pendingRenameRemote !== "") {
             const spokenFor = page.pendingRenameRemote
             const took = page.pendingRenameTo

@@ -441,7 +441,7 @@ async fn an_upstream_the_next_push_has_to_make_is_recorded_all_the_same() {
 /// git's `push --set-upstream`, which records the keys only once the push
 /// has landed — measured below from git's own command, and then from the
 /// session op that exists to invert it
-/// (`RepoSession::point_upstream_and_push`, デザイン規約 §手元の改名をリモートへ運ぶ).
+/// (`RepoSession::point_upstream_and_push`, デザイン規約 §手元の改名の後のリモート).
 ///
 /// The remote is a path with nothing at the end of it: no network, and
 /// the refusal is git's own (実装計画 §11.3).

@@ -4,7 +4,7 @@ import QtQuick
 import platitude
 import platitude.ui
 
-// What happens on the remote after a name is changed here (デザイン規約 §手元の改名をリモートへ運ぶ).
+// What happens on the remote after a name is changed here (デザイン規約 §手元の改名の後のリモート).
 //
 // **A question, because git has no answer.** A branch renamed here goes on being measured against the name it was
 // renamed away from, and a tag renamed here leaves the remote's copy under the old spelling — and which of those the
@@ -115,7 +115,7 @@ Item {
     }
 
     /// The word on the pill, which is the picked answer's own — **not one word standing for all three**
-    /// (デザイン規約 §手元の改名をリモートへ運ぶ). A pill that named the act it was about to run would otherwise be
+    /// (デザイン規約 §手元の改名の後のリモート). A pill that named the act it was about to run would otherwise be
     /// the one part of this bar that did not, and "do nothing" is not a change. It moves with the chooser, and where
     /// it moves to `Replace` the gesture becomes a hold — the pair the publish question already makes when its own
     /// word turns (§はじめてリモートへ送る).
@@ -194,9 +194,9 @@ Item {
         target: carryFlow.graphPane
         property: "askTip"
         value: !carryFlow.takesAway ? "" : carryFlow.kind === "branch"
-            ? qsTr("Hold to change. git has no rename on a remote: %1 goes up first, then %2 comes off — so a push the far side turns down leaves the old name where it is. Anything it carried — an open pull request, a running check — does not follow the new name.")
+            ? qsTr("Hold to replace. %1 goes up first, then %2 comes off — so a push the far side turns down leaves the old name where it is. Anything it carried — an open pull request, a running check — does not follow the new name.")
               .arg(carryFlow.newSide).arg(carryFlow.oldSide)
-            : qsTr("Hold to change. git has no rename on a remote: %1 goes up first, then %2 comes off — so a push the far side turns down leaves the old name where it is. Anything built from it stays with the name that goes.")
+            : qsTr("Hold to replace. %1 goes up first, then %2 comes off — so a push the far side turns down leaves the old name where it is. Anything built from it stays with the name that goes.")
               .arg(carryFlow.newSide).arg(carryFlow.oldSide)
         when: carryFlow.asking
         restoreMode: Binding.RestoreNone

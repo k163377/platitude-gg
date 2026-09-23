@@ -225,7 +225,7 @@ async fn deleting_a_tag_the_remote_has_not_got_is_not_an_error() {
 /// and the object under both is the one this repository holds.
 ///
 /// The local rename runs first in the application
-/// (デザイン規約 §手元の改名をリモートへ運ぶ), so what is pushed is the name
+/// (デザイン規約 §手元の改名の後のリモート), so what is pushed is the name
 /// here — pinned in the assertions, since a pair that pushed the wrong
 /// side would leave a name over there on a commit nobody asked about.
 #[tokio::test]

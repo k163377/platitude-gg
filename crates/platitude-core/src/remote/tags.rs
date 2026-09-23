@@ -146,7 +146,7 @@ pub async fn delete_remote_tag(
 /// moves the name and never the object ([`crate::tag::rename`]). Whether
 /// the remote's copy stands on that same object is the caller's to know
 /// before it asks: a drifted one would change its object **as well as**
-/// its name under this pair (`offers::TagSides`, デザイン規約 §手元の改名をリモートへ運ぶ).
+/// its name under this pair (`offers::TagSides`, デザイン規約 §手元の改名の後のリモート).
 ///
 /// The push goes first, for the reason it does on a branch: a name the
 /// remote refuses leaves the old one standing and nothing lost.

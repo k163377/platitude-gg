@@ -85,7 +85,7 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The branch half of the same question: a name changed here, and what
     // the remote it was measured against does about it
-    // (デザイン規約 §手元の改名をリモートへ運ぶ). The fields are the tag
+    // (デザイン規約 §手元の改名の後のリモート). The fields are the tag
     // half's, minus the two that are a tag's alone
     // (`nav::TABLE`, where what each one claims is written down).
     Verb {

@@ -40,7 +40,7 @@ Rectangle {
     /// (デザイン規約 §git 用語のコード表記). The question opens with it and the pill answers with it — one word said twice, from a
     /// single place, so the press that raises the bar and the press that answers it cannot come to name two different
     /// things. Empty leaves both in the ordinary voice, which is what every question whose act git has no one word for
-    /// takes (`Move` / `Rename`).
+    /// takes (`Move` / `Replace`).
     property string code: ""
     /// Throwing away work in hand — danger; reaching past this machine — warning (§状態).
     property bool danger: false
@@ -281,7 +281,7 @@ Rectangle {
             }
             // **Gone where there is nothing to say**, not merely empty: an empty `CardText` still stands a line high,
             // and a question whose answers say the whole of it themselves would carry a blank band under its heading
-            // (`RenameCarryFlow` is the one, デザイン規約 §手元の改名をリモートへ運ぶ). A layout skips what is not
+            // (`RenameCarryFlow` is the one, デザイン規約 §手元の改名の後のリモート). A layout skips what is not
             // visible, spacing and all.
             CardText {
                 text: bar.detail

@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import platitude.ui
 
 // What a rename made here asks back: which of the three things happens on the remote
-// (デザイン規約 §手元の改名をリモートへ運ぶ). It stands inside the question's bar, which is why it is built from a
+// (デザイン規約 §手元の改名の後のリモート). It stands inside the question's bar, which is why it is built from a
 // `Component`.
 //
 // **One chooser, not three pills.** Two of the three answers reach past this machine and one of those cannot be

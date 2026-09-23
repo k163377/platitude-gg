@@ -65,7 +65,7 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // A tag both sides hold, renamed here, and the bar that comes down
     // asking what the remote does about it
-    // (デザイン規約 §手元の改名をリモートへ運ぶ). **The picture cannot answer
+    // (デザイン規約 §手元の改名の後のリモート). **The picture cannot answer
     // the halves that matter**: a bar that never came down and a bar
     // still on its way frame alike once it is settled, and what stands in
     // the chooser is not the same claim as the name here having changed.

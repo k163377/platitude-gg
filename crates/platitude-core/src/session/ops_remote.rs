@@ -357,7 +357,7 @@ impl RepoSession {
 
     /// Points a branch at a remote branch and then sends it there — the
     /// answer to a rename here that takes nothing away over there
-    /// (デザイン規約 §手元の改名をリモートへ運ぶ).
+    /// (デザイン規約 §手元の改名の後のリモート).
     ///
     /// **The setting goes down first, and that order is the point.** git's
     /// own `push --set-upstream` records the pair only once the push has
