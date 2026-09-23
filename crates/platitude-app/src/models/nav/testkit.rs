@@ -75,6 +75,19 @@ pub(super) fn snapshot(
     drifted(remotes, tags, Vec::new())
 }
 
+/// A remotes snapshot that knows the configured remote names — what the
+/// filtered list cuts its rows by (`build_remote_groups`).
+pub(super) fn named(
+    remotes: Vec<platitude_core::session::BranchItem>,
+    names: &[&str],
+) -> Arc<platitude_core::session::RefsSnapshot> {
+    Arc::new(platitude_core::session::RefsSnapshot {
+        remotes,
+        remote_names: names.iter().map(|name| (*name).into()).collect(),
+        ..Default::default()
+    })
+}
+
 /// The same, with the run the tag menu's push row reads (`remote_tag_drift`).
 pub(super) fn drifted(
     remotes: Vec<platitude_core::session::BranchItem>,

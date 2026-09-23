@@ -397,19 +397,22 @@ fn a_branch_and_the_reading_it_names_answer_the_same_pair() {
         // are a binary search over it (`RefsSnapshot::remote_named`).
         Source::Remotes(snapshot(vec![remote("fork/main"), read], Vec::new())),
     );
-    // Flattened, so the rows addressed here are the readings and not the
-    // folders they fold under.
+    // Filtered, so each reading stands right under its remote's own row
+    // (`build_remote_groups`) and the rows addressed here are the
+    // readings and not the folders of their names.
     theirs.filter = "main".to_string();
     theirs.arrange();
-    assert_eq!(says(&theirs, 0, Role::Name), "fork/main");
+    assert_eq!(says(&theirs, 0, Role::Name), "fork");
+    assert_eq!(says(&theirs, 1, Role::Full), "fork/main");
     assert_eq!(
-        numbers(&theirs, 0, Role::Ahead),
+        numbers(&theirs, 1, Role::Ahead),
         0,
         "a name alone joins nothing"
     );
-    assert_eq!(says(&theirs, 1, Role::Name), "origin/main");
-    assert_eq!(numbers(&theirs, 1, Role::Ahead), 2);
-    assert_eq!(numbers(&theirs, 1, Role::Behind), 1);
+    assert_eq!(says(&theirs, 2, Role::Name), "origin");
+    assert_eq!(says(&theirs, 3, Role::Full), "origin/main");
+    assert_eq!(numbers(&theirs, 3, Role::Ahead), 2);
+    assert_eq!(numbers(&theirs, 3, Role::Behind), 1);
     assert_eq!(theirs.tracked_by("origin/main".to_string()), "main");
     assert_eq!(theirs.tracked_by("fork/main".to_string()), "");
     assert_eq!(

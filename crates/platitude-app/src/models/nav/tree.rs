@@ -67,11 +67,97 @@ impl NavSectionModel {
 
     /// Section default: remote roots (one per remote) start collapsed —
     /// that is the per-repository fold — everything else starts open.
+    /// **Under a filter a remote's row starts open**: what the filter
+    /// found is what the reader asked to see (`build_remote_groups`).
+    /// The toggle reads the same default (`toggle_folder`), so the first
+    /// click on that row folds it rather than "opening" an open row.
     pub(super) fn folder_expanded(&self, key: &str, depth: i32) -> bool {
         self.folder_overrides
             .get(key)
             .copied()
-            .unwrap_or(!(self.section == "remotes" && depth == 0))
+            .unwrap_or(!(self.section == "remotes" && depth == 0 && self.filter.is_empty()))
+    }
+
+    /// The REMOTES under a filter: every remote with a branch that
+    /// answers keeps a row of its own, open, and those branches stand
+    /// flat under it by their branch names — `feature/topic-a` under
+    /// `origin` (デザイン規約 §左メニューの所作「絞り込み中も REMOTES は remote
+    /// ごとの行を残す」). A remote is where a branch is rather than a folder
+    /// of its name: its row is what the right-click and the push mark
+    /// stand on, and no name drawn in this panel begins with it, so no
+    /// cut ever takes it out.
+    ///
+    /// The match is still read off the whole name (`origin/feat` finds
+    /// the row). The cut between the two halves is by configured name,
+    /// and by the first slash while no configured name owns the ref
+    /// (`refs::split_remote_ref_or_first_slash` — the names may not have
+    /// arrived, or the remote may be gone from configuration). A ref
+    /// with no slash at all stands flat, ahead of the groups.
+    ///
+    /// **Open by default, and foldable.** A filter that hid what it found
+    /// would answer "nothing" for "something", so the row starts open
+    /// here whatever the tree's default is; the arrow folds it the way
+    /// the tree's rows fold, and the override carries over into the tree
+    /// (`folder_expanded`).
+    pub(super) fn build_remote_groups(&self, needle: &str) -> Vec<Arranged> {
+        let Source::Remotes(snapshot) = &self.all else {
+            return Vec::new();
+        };
+        let remotes: Vec<&str> = snapshot
+            .remote_names
+            .iter()
+            .map(|name| name.as_str())
+            .collect();
+        // The groups in the order their first branch is met. The rows are
+        // name-ordered, and a remote called `my` beside one called
+        // `my/fork` has its branches on both sides of the other's, so a
+        // group is looked up rather than closed when the name moves on.
+        let mut groups: Vec<(&str, Vec<Arranged>)> = Vec::new();
+        let mut out = Vec::new();
+        for at in 0..self.all.len() {
+            let Some(leaf) = self.all.entry(at).filter(|_| !self.hidden_at(at)) else {
+                continue;
+            };
+            let name = leaf.name();
+            if !name.to_lowercase().contains(needle) {
+                continue;
+            }
+            let Some((remote, branch)) = platitude_core::refs::split_remote_ref_or_first_slash(
+                name,
+                remotes.iter().copied(),
+            ) else {
+                out.push(Arranged::At {
+                    at: at as u32,
+                    depth: 0,
+                    from: 0,
+                });
+                continue;
+            };
+            let row = Arranged::At {
+                at: at as u32,
+                depth: 1,
+                from: (name.len() - branch.len()) as u32,
+            };
+            match groups.iter_mut().find(|(of, _)| *of == remote) {
+                Some((_, rows)) => rows.push(row),
+                None => groups.push((remote, vec![row])),
+            }
+        }
+        for (remote, rows) in groups {
+            let expanded = self.folder_expanded(remote, 0);
+            out.push(Arranged::Made(Box::new(NavItem {
+                name: remote.to_string(),
+                full: remote.to_string(),
+                depth: 0,
+                folder: true,
+                change: fold_state(expanded),
+                ..Default::default()
+            })));
+            if expanded {
+                out.extend(rows);
+            }
+        }
+        out
     }
 
     /// Turns the flat sorted name list into an indented tree with

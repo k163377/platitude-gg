@@ -462,7 +462,7 @@ pub(super) const TABLE: &[Verb] = &[
             // exactly here.
             (Arg::Is("head::1"), "open=true under=1 sat=true"),
             (
-                Arg::Is("remote:0:topic-a"),
+                Arg::Is("remote:1:topic-a"),
                 "says=origin/feature/topic-a local=feature/topic-a track=1/0 held=topic",
             ),
             // The two shapes of a state, on the rows of the `worktrees`

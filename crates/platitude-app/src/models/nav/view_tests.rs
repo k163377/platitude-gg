@@ -5,21 +5,115 @@
 use super::testkit::*;
 use super::*;
 
+/// The filtered REMOTES keep each remote as its own open row and lay the
+/// branches that answer flat under it by their branch names; the match
+/// is read off the whole name, and the row is named to git by it
+/// (`build_remote_groups`).
 #[test]
-fn a_filtered_remote_row_shows_its_whole_name() {
+fn a_filtered_remote_keeps_its_row_and_lays_its_branches_flat_under_it() {
     let mut model = section(
         "remotes",
-        Source::Remotes(snapshot(
-            vec![remote("origin/feature/one"), remote("origin/main")],
-            Vec::new(),
+        Source::Remotes(named(
+            vec![
+                remote("fork/feature/two"),
+                remote("origin/feature/one"),
+                remote("origin/main"),
+            ],
+            &["origin", "fork"],
         )),
     );
     model.filter = "feature".to_string();
     model.arrange();
 
-    assert_eq!(model.shown_rows(), 1);
-    assert_eq!(says(&model, 0, Role::Name), "origin/feature/one");
-    assert_eq!(says(&model, 0, Role::Full), "");
+    assert_eq!(model.shown_rows(), 4);
+    assert_eq!(says(&model, 0, Role::Name), "fork");
+    assert_eq!(says(&model, 0, Role::Full), "fork");
+    assert!(flags(&model, 0, Role::Folder));
+    assert_eq!(
+        says(&model, 0, Role::Change),
+        "",
+        "open, whatever the fold's default"
+    );
+    assert_eq!(says(&model, 1, Role::Name), "feature/two");
+    assert_eq!(says(&model, 1, Role::Full), "fork/feature/two");
+    assert_eq!(depth_of(&model, 1), 1);
+    assert_eq!(says(&model, 2, Role::Name), "origin");
+    assert_eq!(says(&model, 3, Role::Name), "feature/one");
+    assert_eq!(says(&model, 3, Role::Full), "origin/feature/one");
+
+    // The match reaches across the two halves of the name.
+    model.filter = "origin/feat".to_string();
+    model.arrange();
+    assert_eq!(model.shown_rows(), 2);
+    assert_eq!(says(&model, 0, Role::Name), "origin");
+    assert_eq!(says(&model, 1, Role::Full), "origin/feature/one");
+}
+
+/// The cut is by configured name — `my/fork` carries `my/fork/topic` and
+/// `my` carries `my/topic` — and by the first slash where nothing
+/// configured owns the ref, so a remote gone from configuration still
+/// heads its rows.
+#[test]
+fn the_filtered_remotes_are_cut_by_configured_name_and_then_by_the_first_slash() {
+    let mut model = section(
+        "remotes",
+        Source::Remotes(named(
+            vec![
+                remote("gone/topic"),
+                remote("my/fork/topic"),
+                remote("my/topic"),
+            ],
+            &["my", "my/fork"],
+        )),
+    );
+    model.filter = "topic".to_string();
+    model.arrange();
+
+    assert_eq!(model.shown_rows(), 6);
+    assert_eq!(says(&model, 0, Role::Name), "gone");
+    assert_eq!(says(&model, 1, Role::Full), "gone/topic");
+    assert_eq!(says(&model, 2, Role::Name), "my/fork");
+    assert_eq!(says(&model, 3, Role::Name), "topic");
+    assert_eq!(says(&model, 3, Role::Full), "my/fork/topic");
+    assert_eq!(says(&model, 4, Role::Name), "my");
+    assert_eq!(says(&model, 5, Role::Full), "my/topic");
+}
+
+/// A remote's row under a filter starts open whatever the tree's default
+/// for it is, folds the way the tree's rows fold, and the fold is one
+/// answer for both shapes (`folder_expanded`).
+#[test]
+fn a_filtered_remote_starts_open_and_folds_like_its_row_in_the_tree() {
+    let mut model = section(
+        "remotes",
+        Source::Remotes(named(
+            vec![remote("fork/feature/two"), remote("origin/feature/one")],
+            &["origin", "fork"],
+        )),
+    );
+    // In the tree the remote's root is folded by default.
+    model.arrange();
+    assert_eq!(says(&model, 0, Role::Change), FOLDED);
+    assert!(!model.folder_expanded("origin", 0));
+
+    // Under a filter it is open by default, so the first toggle folds it.
+    model.filter = "feature".to_string();
+    model.arrange();
+    assert!(model.folder_expanded("origin", 0));
+    model.folder_overrides.insert("origin".to_string(), false);
+    model.arrange();
+    assert_eq!(
+        model.shown_rows(),
+        3,
+        "fork open over its branch, origin folded over its own"
+    );
+    assert_eq!(says(&model, 2, Role::Name), "origin");
+    assert_eq!(says(&model, 2, Role::Change), FOLDED);
+
+    // And the fold carries over into the tree once the filter is gone.
+    model.filter.clear();
+    model.arrange();
+    assert!(!model.folder_expanded("origin", 0));
 }
 
 /// What the sticky stand-in steps itself in by (`HeadPinRow`): the folds
@@ -343,7 +437,11 @@ fn a_filtered_list_leaves_out_the_row_shown_as_gone_as_well() {
     model.hidden = vec!["origin/feature/one".to_string()];
     model.arrange();
 
-    assert_eq!(model.shown_rows(), 1);
-    assert_eq!(says(&model, 0, Role::Name), "origin/feature/two");
+    assert_eq!(
+        model.shown_rows(),
+        2,
+        "the remote's row and the one branch left"
+    );
+    assert_eq!(says(&model, 1, Role::Full), "origin/feature/two");
     assert_eq!(model.total, 1);
 }

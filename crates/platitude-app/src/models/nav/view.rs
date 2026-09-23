@@ -5,8 +5,15 @@ impl NavSectionModel {
     /// filtered — and finds the current entry among them.
     pub(super) fn arrange(&mut self) {
         let needle = self.filter.to_lowercase();
-        self.tree_named =
-            needle.is_empty() && matches!(self.section.as_str(), "branches" | "remotes");
+        // A tree places the rows of both ref sections. Under a filter the
+        // branches stand flat by their whole names, while the remotes keep
+        // each remote as a row over its branches (`build_remote_groups`),
+        // so their refs are named by a tree either way.
+        self.tree_named = match self.section.as_str() {
+            "remotes" => true,
+            "branches" => needle.is_empty(),
+            _ => false,
+        };
         self.arranged = if needle.is_empty() {
             match self.section.as_str() {
                 "branches" | "remotes" => Some(self.build_tree()),
@@ -55,6 +62,8 @@ impl NavSectionModel {
                         .collect(),
                 ),
             }
+        } else if self.section == "remotes" {
+            Some(self.build_remote_groups(&needle))
         } else {
             // Filtering shows flat full names (folders would hide context).
             Some(
