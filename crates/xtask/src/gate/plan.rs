@@ -595,6 +595,9 @@ fn select(
     steps.extend(clippy_steps(&sorted));
     steps.extend(unit_steps(g, &sorted));
     steps.extend(it_steps(g, &sorted));
+    if ask.all {
+        steps.extend(periodic_steps(g, read.dir, &sorted));
+    }
     let (binary, would_have) = binary_steps(read, &sorted, reach, changed, ask);
     steps.extend(binary);
     (steps, would_have)
@@ -837,6 +840,61 @@ fn it_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
         }
     }
     steps
+}
+
+/// The filter that picks out the tests the daily tiers leave out: every
+/// test under a `periodic` module, `#[ignore]`d so no plain run takes it.
+const PERIODIC: &str = "::periodic::";
+
+/// Stage 3's own steps: the `periodic` tests of every test target that
+/// holds some, on both sides where the package is. Seldom-changed
+/// promises whose check is slow on some OS — not worth the daily run,
+/// still owed a full one.
+fn periodic_steps(g: &Graph, dir: &Path, sorted: &Sorted) -> Vec<Step> {
+    let unit = sorted.unit_files.iter().map(|(package, files)| {
+        let mut command = words(&["cargo", "test", "--locked", "-p", package]);
+        command.extend(
+            unit_target(package)
+                .iter()
+                .filter(|w| !w.is_empty())
+                .map(|w| (*w).to_string()),
+        );
+        (format!("test {package} periodic"), package, command, files)
+    });
+    let integration = sorted
+        .integration
+        .iter()
+        .map(|((package, binary), (_, files))| {
+            let command = words(&["cargo", "test", "--locked", "-p", package, "--test", binary]);
+            (format!("test {binary} periodic"), package, command, files)
+        });
+    let mut steps = Vec::new();
+    for (id, package, mut command, files) in unit.chain(integration) {
+        let holds = files.iter().any(|file| {
+            std::fs::read_to_string(dir.join(file)).is_ok_and(|text| holds_periodic(&text))
+        });
+        if !holds {
+            continue;
+        }
+        command.extend(words(&["--", "--ignored", PERIODIC]));
+        let mut inputs: Vec<String> = g.inputs(files).into_iter().collect();
+        inputs.extend(cargo_inputs(&[]));
+        steps.push(step(&id, Side::Host, false, command.clone(), &inputs));
+        if tested_on_linux(package) {
+            steps.push(on_linux(&id, &command, &inputs));
+        }
+    }
+    steps
+}
+
+/// Whether a test file declares a `periodic` module — inline, or in a
+/// file of its own beside it.
+fn holds_periodic(text: &str) -> bool {
+    text.lines().any(|line| {
+        line.trim_start()
+            .strip_prefix("mod periodic")
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with([' ', '{', ';']))
+    })
 }
 
 /// Components for a narrower candidate only.
@@ -1128,7 +1186,19 @@ pub(crate) fn describe(plan: &Plan) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_ls_tree;
+    use super::{holds_periodic, parse_ls_tree};
+
+    /// A `periodic` module is found inline and declared, and a module
+    /// that only starts with the word is not one.
+    #[test]
+    fn a_periodic_module_is_found_by_its_declaration() {
+        assert!(holds_periodic(
+            "fn a() {}\nmod periodic {\n    use super::*;\n}\n"
+        ));
+        assert!(holds_periodic("    mod periodic;\n"));
+        assert!(!holds_periodic("mod periodic_helpers;\n"));
+        assert!(!holds_periodic("// see mod periodic in merge_tools.rs\n"));
+    }
 
     /// The runner's own steps are spelled `--locked`, like every cargo
     /// the gate starts: a cargo that would rewrite the lock says so and

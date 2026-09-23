@@ -74,7 +74,8 @@ commands:
       before stamping — commit the generated file and run it again.
       options:
         --host-only   the daily tier: no container; stamps the host half
-        --all         every file counts as changed — stage 2 in full
+        --all         every file counts as changed — stage 2 in full, and the
+                      `periodic` tests the daily tiers leave out
         --fresh       ignore the stamps and run everything owed
         --dry-run     print the reach and the steps, run nothing
         --verb <l>    a verify-ui line to run besides the census's
