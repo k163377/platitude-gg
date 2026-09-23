@@ -23,8 +23,14 @@ ActionButton {
     // state: nothing here changes what the press costs, so there is no second shape to say.
     text: "stash"
     code: true
-    // The word alone: a stash destroys nothing (デザイン規約 §変更を退避する). The ring names a wait on the network and this write
-    // is local (§進行中・長押しの定数); while it runs the band is busy and the button is down, like the commit button beside its
+    // The panel's resting frame, like the two beside it (`BandFetchButton`), and never any other colour: a stash
+    // destroys nothing, so nothing here ever turns it.
+    frameColor: Theme.borderStrong
+    // The canvas inside the frame, like the two beside it (`BandFetchButton`).
+    faceColor: Theme.bgSurface
+    // Nothing worn on top of that: a stash destroys nothing, so no `!` and no hold (デザイン規約
+    // §変更を退避する). No ring either — the ring names a wait on the network and this write is local (§進行中・
+    // 長押しの定数); while it runs the band is busy and the button is down, like the commit button beside its
     // own write.
     // Held down with the sidebar while a rebase plan is being composed: the one write that runs then is the plan's
     // own button, and fetch is the only other door left open.

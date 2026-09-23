@@ -13,6 +13,15 @@ Item {
     property string text: ""
     /// The label is a git command said in git's own spelling, and wears the chip that says so (デザイン規約 §git 用語のコード表記).
     property bool code: false
+    /// The box this word is measured into, where it is one line of a button written on two (`ActionButton.stacked`).
+    /// **The two families answer a line box differently at the same step**, so a first line left to the family stands
+    /// the mark under it a row off the marks beside it (measured: the find button's magnifier 2px under the three
+    /// commands'). Zero takes the family's own, which is every word that has a line to itself.
+    property int lineBox: 0
+    /// What the wording is set at. Normal everywhere a word stands on a ground of its own; heavier where it has to
+    /// hold its own beside the mono chips of a command (`TopBar`'s find button — a UI face at the same size reads
+    /// lighter than a mono one, and the row is read as one set).
+    property int wordWeight: Font.Normal
     /// Text the box is measured for, and whether that wording is a command (the two families measure differently, so
     /// the box has to be told which one it is holding).
     property string widestText: ""
@@ -176,7 +185,8 @@ Item {
     implicitWidth: btnLabel.phrased ? phraseRow.implicitWidth
                    : btnLabel.folded ? 0
                    : btnLabel.headRun + (btnLabel.splitFlag ? flagRow.width : 0)
-    implicitHeight: btnLabel.phrased ? phraseRow.implicitHeight : headText.implicitHeight
+    implicitHeight: btnLabel.phrased ? phraseRow.implicitHeight
+                    : btnLabel.lineBox > 0 ? btnLabel.lineBox : headText.implicitHeight
     Layout.maximumWidth: btnLabel.phrased ? Number.POSITIVE_INFINITY : btnLabel.wordCeiling
     // Its own width: what the shared box asks for past this wording is held by the button's padding (`slack`), so the
     // chip and the mark, both measured off this cell, keep sitting on the word.
@@ -204,6 +214,9 @@ Item {
         visible: false
         text: btnLabel.text
         font.family: btnLabel.code ? Theme.monoFamily : Theme.uiFamily
+        // The weight the word is drawn at, or what it wants is measured in a face it is not set in
+        // (rules-refs/app-ui.md: 測る側と描く側は同じ font で).
+        font.weight: btnLabel.wordWeight
         font.wordSpacing: btnLabel.code ? -Theme.spaceXs : 0
         font.pixelSize: btnLabel.fontSize
     }
@@ -220,6 +233,16 @@ Item {
         id: mateFull
         visible: false
         text: btnLabel.mateWord
+        font.family: Theme.uiFamily
+        font.pixelSize: btnLabel.fontSize
+    }
+    // Measured only, and only where the word is one of two (`lineBox`): the line that box is a box for. The step's
+    // line is the plain word's, and the two families put their glyphs at different heights inside the same box — so a
+    // command left to its own box sits a row off the plain word beside it (measured: `fetch` one row over `Search`).
+    Label {
+        id: lineRef
+        visible: false
+        text: "Ag"
         font.family: Theme.uiFamily
         font.pixelSize: btnLabel.fontSize
     }
@@ -342,6 +365,14 @@ Item {
         visible: !btnLabel.phrased && !btnLabel.folded
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
+        // **On the row the plain word's baseline lands on, where this word is one of two.** Each family is centred
+        // by a box of its own and the two are different heights at one step (`lineRef`), so a command came out a row
+        // under the plain word beside it. Both sides are taken down to the row they are *drawn* on, which is the
+        // only place the reader compares them.
+        anchors.verticalCenterOffset: btnLabel.lineBox > 0
+            ? Math.floor((btnLabel.lineBox - lineRef.height) / 2 + lineRef.baselineOffset)
+              - Math.floor((btnLabel.lineBox - headText.height) / 2 + headText.baselineOffset)
+            : 0
         // Bounded by the cell's own ceiling: the cell's width comes from this, so reading it back
         // would close a loop. The cap is what the *button* left this word
         // (`ActionButton.wordRoom`), which is arrived at from the width the row handed the button and nothing here.
@@ -351,6 +382,7 @@ Item {
         text: btnLabel.head
         color: btnLabel.tint
         font.family: btnLabel.code ? Theme.monoFamily : Theme.uiFamily
+        font.weight: btnLabel.wordWeight
         // A command and its flag are one thing said, and a mono space is far wider than the air the chip keeps at its
         // own ends — left alone, `-f` drifts away from the `push` it belongs to and the chip reads as two words on one
         // ground (デザイン規約 §git 用語のコード表記).
@@ -407,7 +439,9 @@ Item {
         // command wore a wash on Windows and a tag on Ubuntu, while the glyphs themselves sat
         // on the same rows on both (デザイン規約 §git 用語のコード表記).
         height: btnLabel.fontSize + Theme.spaceXs / 2
-        anchors.verticalCenter: parent.verticalCenter
+        // The word's own middle, not the cell's: a word set to the line's baseline rather than to the cell
+        // (`headText`) would leave its ground behind it.
+        anchors.verticalCenter: headText.verticalCenter
         radius: Theme.radiusSm
         color: Theme.bgHover
     }
@@ -432,8 +466,11 @@ Item {
            ? phraseRow.x - width + Theme.spaceXs / 2
            : btnLabel.inkWidth - (btnLabel.splitFlag ? Theme.spaceXs / 2 : 0)
              - (btnLabel.alertTight ? Theme.spaceXs : 0)
+        // **On the line, where the word is the first of two.** There is nothing over that word but the button's own
+        // frame, and the raised seat put the mark's stem on the frame's top line (measured). The mark's ink starts at
+        // the top of its box, so it still stands over the word it follows.
         y: btnLabel.phrased
            ? phraseRow.y - Theme.spaceXs
-           : -Theme.spaceXs
+           : btnLabel.lineBox > 0 ? headText.y : -Theme.spaceXs
     }
 }

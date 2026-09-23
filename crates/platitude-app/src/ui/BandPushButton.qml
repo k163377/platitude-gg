@@ -45,7 +45,10 @@ ActionButton {
     // The ring and the frame keep the warning through the wait, a step down. The word
     // takes the disabled step, which is the one way a word says "not now" (デザイン規約 §暗く落とした段 / §無効).
     toneDim: pushButton.warned ? Theme.warningDim : Theme.textMuted
-    frameColor: pushButton.warned ? Theme.warning : "transparent"
+    // Framed in every state, like the two beside it (`BandFetchButton`); what the warning owns is the colour.
+    frameColor: pushButton.warned ? Theme.warning : Theme.borderStrong
+    // The canvas inside the frame, like the two beside it (`BandFetchButton`).
+    faceColor: Theme.bgSurface
     // The frame's colour is worn by the diverged shape as well, so on its own it would not tell "cannot land
     // plainly" from "did not land".
     alert: pushButton.failed

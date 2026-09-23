@@ -37,7 +37,11 @@ Item {
     readonly property int spread: Theme.iconMd - Theme.spaceXs
     /// The step this button's icon is drawn at (see `besideWord`). A button that can pair keeps the band's step
     /// whatever it is asked for: the fraction is built out of two `iconSm` halves and has no room to give.
-    readonly property int step: seat.besideWord && seat.holdMs <= 0 ? Theme.iconSm : Theme.iconMd
+    ///
+    /// **A caller may raise it** where the mark has the room a word gave up: a button written on two lines keeps
+    /// its depth when the word goes, and the mark grows into the line the word was on rather than leaving it empty
+    /// (`ActionButton.stacked`).
+    property int step: seat.besideWord && seat.holdMs <= 0 ? Theme.iconSm : Theme.iconMd
     /// The air the mark keeps inside its own box, which the seat gives back so that the padding on one side and the
     /// row's spacing on the other land on the **ink** (デザイン規約 §余白「印が自分で持っている余白は、隣の 詰めに数える」). The icon overflows the
     /// seat by this much either side.

@@ -68,9 +68,16 @@ ActionButton {
     // that cannot be pressed, and the ring, the mark and the frame where there is one are what still say this is
     // the fetch that has been failing (デザイン規約 §暗く落とした段).
     toneDim: fetchButton.fails > 0 ? Theme.warningDim : Theme.textMuted
-    // Only the step that wants a hand wears a frame: a run the timer is still working through will come right on
-    // its own, so it says so with the mark alone (デザイン規約 §リモートから取り込む — 枠は手が要る段のもの).
-    frameColor: fetchButton.stopped ? Theme.warning : "transparent"
+    // Every action in the panel wears a frame: the panel is the one row of this window that is pressed, and a bare
+    // word in it reads as a label rather than a button (デザイン規約 §進行中・長押しの定数 — 枠を持てる場所). What the
+    // step that wants a hand still owns is the frame's **colour**, and a fetch the timer has given up on turns it
+    // (デザイン規約 §リモートから取り込む). The resting line is the strong border rather than the ordinary one, which
+    // is what the panel's own lightness takes back (`Theme.bgRaised`: 2.16 against it, where the ordinary line
+    // reached 1.41).
+    frameColor: fetchButton.stopped ? Theme.warning : Theme.borderStrong
+    // The canvas, laid inside the frame: on the operated row a box a hand goes to is cut back to what the window is
+    // showing, so the row stays the one surface and the boxes on it are holes onto the work.
+    faceColor: Theme.bgSurface
     alert: fetchButton.fails > 0
     alertTone: Theme.warning
     // `Resume` is the wording the shared box is measured for, so it is the one with no air of its own to stand the

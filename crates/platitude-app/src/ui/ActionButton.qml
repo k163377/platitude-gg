@@ -66,6 +66,15 @@ HoverToolButton {
     /// faint ground (デザイン規約 §git 用語のコード表記). The command is the whole label, so `text` itself is what the chip is drawn
     /// around — and that text is left untranslated: it is the command itself.
     property bool code: false
+    /// **The word over the mark rather than beside it**. The operation panel's own shape:
+    /// that row is two lines deep, and a button that set its mark beside its word would be the one thing in it
+    /// written on one. **The height does not move with it** — what a stacked button gives up as it narrows is its
+    /// word, and then the mark grows into the room the word was in (`foldGrow`), so the row's depth is the same
+    /// whatever any button in it is saying.
+    property bool stacked: false
+    /// What the wording is set at (`ActionButtonLabel.wordWeight`). Normal by default, which is every button whose
+    /// word is a command on a chip.
+    property int wordWeight: Font.Normal
     /// The label is a phrase with a command at each end — a chip, `text` between them, and a second chip in a colour
     /// of its own (`ActionButtonLabel.phraseHead`). Empty is the ordinary single-wording button.
     property string phraseHead: ""
@@ -293,15 +302,14 @@ HoverToolButton {
     /// (measured, `OpExitCard` / `DiffPaneHeader` reported a loop on this property).
     readonly property real frameInset:
         actionBtn.folded ? Math.max(0, (actionBtn.height - actionBtn.implicitHeight) / 2) : 0
+    /// What the inside of the frame is filled with. Transparent everywhere the button is a word on the ground it
+    /// stands on; a colour where the button has to read as a box laid on that ground instead — which is what a button
+    /// on the operated row is. **Under the wash, not over it**: the hand still lights the box.
+    property color faceColor: "transparent"
 
     background: Rectangle {
-        // The same wash every other tool button answers with (`HoverToolButton.washColor`), read here:
-        // a background handed in replaces the one that carries it, so the wash, the frame, the hold's fill and the
-        // focus ring all have to be drawn here.
-        //
-        // Only while it is answering: a button with git out on the network is as deaf as a disabled one (`live`), and
-        // the hand that started the fetch is still resting on it — the wash comes down for the whole call.
-        color: actionBtn.live ? actionBtn.washColor : "transparent"
+        id: btnGround
+        color: "transparent"
         radius: Theme.radiusSm
         // The frame, and the fill a hold puts inside it. Its own item, so that a cell
         // taller than the button's box can wash edge to edge and still draw the frame round the box (`frameInset`).
@@ -309,7 +317,7 @@ HoverToolButton {
             anchors.fill: parent
             anchors.topMargin: actionBtn.frameInset
             anchors.bottomMargin: actionBtn.frameInset
-            color: "transparent"
+            color: actionBtn.faceColor
             // The frame goes a step down with the rest of the button while git is out on the network: the button is
             // still the one that overwrites a remote, and a frame that dropped to grey would take that back for as
             // long as the wait lasted.
@@ -325,8 +333,20 @@ HoverToolButton {
                 inset: actionBtn.framed ? Theme.borderWidth : 0
             }
         }
-        // Drawn outside the frame: the frame's colour is already saying this button is the dangerous
-        // one, and focus leaves that in sight.
+        // The same wash every other tool button answers with (`HoverToolButton.washColor`), drawn rather than left
+        // out: a background handed in replaces the one that carries it. **Over the face and under the focus ring** —
+        // the face is opaque where a button has one, and a wash beneath it would never be seen; and it covers the
+        // whole cell rather than the frame's box, so the target is the same size as the cells beside it.
+        //
+        // Only while it is answering: a button with git out on the network is as deaf as a disabled one (`live`), and
+        // the hand that started the fetch is still resting on it — the wash must not stay up for the whole call.
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.radiusSm
+            color: actionBtn.live ? actionBtn.washColor : "transparent"
+        }
+        // Drawn outside the frame rather than in it: the frame's colour is already saying this button is the dangerous
+        // one, and focus must not be able to take that over.
         //
         // `visualFocus`, which is focus that arrived from the keyboard (a press gives `activeFocus` as well, and
         // `focusPolicy` is StrongFocus and nothing on this band takes it back, so an `activeFocus` ring would
@@ -363,6 +383,11 @@ HoverToolButton {
     // is centred in it, the way the ☰'s is and the window's three are (規約 §ウィンドウの縁「帯の両端は同じ組み方」).
     leftPadding: actionBtn.folded ? 0 : actionBtn.padding + actionBtn.headAir
     rightPadding: actionBtn.folded ? 0 : actionBtn.padding + (actionBtn.slack - actionBtn.headAir)
+    // **Nothing over or under the pair**: the two lines are what the button
+    // is, and the row around them already keeps its own step over and under (`opsBarHeight`). A button written on
+    // one line keeps the style's own padding, which is what holds its word off the frame.
+    topPadding: actionBtn.stacked ? 0 : actionBtn.padding
+    bottomPadding: actionBtn.stacked ? 0 : actionBtn.padding
 
     /// **What a button laid out by the band asks for does not move with the shape it is in** — the same rule
     /// `naturalWidth` and `foldWidth` are written under, said on the one number the style answers for us.
@@ -386,12 +411,13 @@ HoverToolButton {
     // leaves the layout: the word stays where it is and only its colour steps
     // down, and the ring turns inside the seat the icon was already measured into.
     contentItem: Item {
-        implicitWidth: btnRow.implicitWidth
-        implicitHeight: btnRow.implicitHeight
+        implicitWidth: actionBtn.stacked ? stackCol.implicitWidth : btnRow.implicitWidth
+        implicitHeight: actionBtn.stacked ? stackCol.implicitHeight : btnRow.implicitHeight
 
         RowLayout {
             id: btnRow
             anchors.fill: parent
+            visible: !actionBtn.stacked
             spacing: Theme.spaceXs
             Item {
                 Layout.fillWidth: true
@@ -401,6 +427,7 @@ HoverToolButton {
                 //
                 // A folded button centres the same way: with no word beside it the mark is the whole content, and a
                 // mark packed against the left of a cell would not line up with the ones either side of it.
+                //
                 visible: (actionBtn.centred || actionBtn.folded) && !btnLabel.phrased
             }
             ActionButtonSeat {
@@ -435,6 +462,7 @@ HoverToolButton {
                 visible: !actionBtn.folded
                 text: actionBtn.text
                 code: actionBtn.code
+                wordWeight: actionBtn.wordWeight
                 widestText: actionBtn.widestText
                 widestCode: actionBtn.widestCode
                 // What the cell left the word, and the two ends of the answer to that: -1 is "as much as it wants",
@@ -466,6 +494,84 @@ HoverToolButton {
             Item {
                 Layout.fillWidth: true
                 visible: (actionBtn.centred || actionBtn.folded) && !btnLabel.phrased
+            }
+        }
+
+        // **The panel's own shape: the word over the mark**. Its own pair rather than the
+        // row above stood on its side — a `RowLayout` cannot be turned, and the layout that can was measured and
+        // took the window's floor down with it (observed: the window came out 1px wide).
+        //
+        // **What it gives up is the word, never the depth**: folded, the word goes and the mark grows into the room
+        // it was in, so the panel is the same two lines deep whatever any button in it is saying.
+        ColumnLayout {
+            id: stackCol
+            visible: actionBtn.stacked
+            // **The pair is centred, not laid into the cell.** A layout given more room than its children want shares
+            // the rest out between their cells, and what sits in these two is a word's box and a mark's seat — so
+            // every button in the row drew its mark at a height of its own (measured: the magnifier 2px under the
+            // three commands').
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.verticalCenter: parent.verticalCenter
+            // The mark's seat carries air its ink never uses — a step either side of the icon
+            // (`ActionButtonSeat.implicitHeight`), and the room the drawing leaves inside its own grid — while the
+            // word above it is ink from the first row. Centred by their boxes the pair reads high (measured against
+            // the frame's own middle).
+            anchors.verticalCenterOffset: Metrics.opticalDrop
+            // **No step of its own between the two lines.** The air is there twice over already: the word's box
+            // keeps a descent under the baseline and the mark's seat keeps a step over its ink
+            // (`ActionButtonSeat.implicitHeight`), and neither is drawn on. A step on top of those left the mark
+            // half again as far from the word as the word is from the frame (measured, against the frame's own two).
+            spacing: 0
+
+            ActionButtonLabel {
+                id: stackLabel
+                Layout.alignment: Qt.AlignHCenter | Qt.AlignBottom
+                visible: !actionBtn.folded
+                text: actionBtn.text
+                code: actionBtn.code
+                // The line the step carries, rather than the one the family does: the mark under this word has to
+                // stand on the same row as the marks beside it (`ActionButtonLabel.lineBox`).
+                lineBox: Theme.fontSmLine
+                wordWeight: actionBtn.wordWeight
+                widestText: actionBtn.widestText
+                widestCode: actionBtn.widestCode
+                cap: actionBtn.wordFloor > 0 ? actionBtn.wordRoom : -1
+                folded: actionBtn.folded
+                tint: actionBtn.fg
+                alert: actionBtn.alert
+                alertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
+                alertTight: actionBtn.alertTight
+                // **A step under the band's**, because this word shares its button with a mark under it rather than
+                // standing beside one: two lines in a row that is two lines deep, and the word is the half a reader
+                // already knows.
+                fontSize: Theme.fontSm
+            }
+            ActionButtonSeat {
+                id: stackSeat
+                // Under the word while there is one, and **on the button's own middle once there is not**
+                //: with nothing over it, a mark still held to the top would sit in the
+                // upper half of a box that is two lines deep.
+                Layout.alignment: actionBtn.folded ? Qt.AlignHCenter | Qt.AlignVCenter
+                                                   : Qt.AlignHCenter | Qt.AlignTop
+                // **A step up.** The seat's air is not even about its ink — a step over it, a step under it, and a
+                // drawing that reaches the floor of its own grid more often than the ceiling — so a mark hung at the
+                // seat's own middle comes to rest low in the button. The two margins cancel, so the cell keeps its
+                // depth and nothing else on the button moves.
+                Layout.topMargin: actionBtn.folded ? 0 : -Metrics.opticalDrop
+                Layout.bottomMargin: actionBtn.folded ? 0 : Metrics.opticalDrop
+                kind: actionBtn.kind
+                holdMs: actionBtn.armedMs
+                // **The mark is what this button is read by here**:
+                // a word set under a mark is the half a reader already knows, so the mark takes the step a mark
+                // standing alone in a band takes (規約 §寸法). **Into the room the word was in** once the word is
+                // gone — the button's depth does not move, so that line is the mark's.
+                step: actionBtn.folded ? Theme.iconXl : Theme.iconLg
+                besideWord: false
+                holdProgress: actionBtn.holdProgress
+                busy: actionBtn.busy
+                tint: actionBtn.markFg
+                cornerAlert: actionBtn.folded && actionBtn.alert
+                cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
             }
         }
     }
