@@ -30,22 +30,27 @@ async fn settled_names(sink: &CaptureSink) -> Vec<String> {
 /// second answer with a predicate the first one already satisfies.
 async fn nth_settled(sink: &CaptureSink, nth: usize) -> Vec<String> {
     sink.wait_for(&format!("MergeToolsLoaded settled #{nth}"), |evs| {
-        let mut seen = 0;
-        for event in evs {
-            if let SessionEvent::MergeToolsLoaded {
-                names,
-                settled: true,
-            } = event
-            {
-                seen += 1;
-                if seen == nth {
-                    return Some(names.clone());
-                }
-            }
-        }
-        None
+        nth_settled_in(evs, nth)
     })
     .await
+}
+
+/// The `nth` settled answer among `evs`, once it has arrived.
+fn nth_settled_in(evs: &[SessionEvent], nth: usize) -> Option<Vec<String>> {
+    let mut seen = 0;
+    for event in evs {
+        if let SessionEvent::MergeToolsLoaded {
+            names,
+            settled: true,
+        } = event
+        {
+            seen += 1;
+            if seen == nth {
+                return Some(names.clone());
+            }
+        }
+    }
+    None
 }
 
 /// **The opening is over by the time this returns.** `settle` says the
@@ -220,7 +225,12 @@ mod periodic {
         // the ask the screen makes while `workdir()` is `None`.
         session.ask_merge_tools();
 
-        let names = settled_names(&sink).await;
+        // Through the silence: this machine's read says nothing until it
+        // ends, and a busy machine stretches it past the silence budget
+        // with nothing wrong.
+        let names = sink
+            .wait_through_silence("MergeToolsLoaded settled #1", |evs| nth_settled_in(evs, 1))
+            .await;
         assert!(
             names.iter().any(|n| n == "demo-editor"),
             "the configured tool is missing from {names:?}"

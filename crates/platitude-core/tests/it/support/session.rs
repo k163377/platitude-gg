@@ -2,6 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::support::wait::bounded;
 use crate::support::{Patience, TestRepo};
 use platitude_core::session::{
     FollowUp, PassHooks, PassStep, RepoSession, SessionEvent, SessionSink,
@@ -270,6 +271,31 @@ impl CaptureSink {
                 patience.check(what, &self.events);
             }
         }
+    }
+
+    /// [`Self::wait_for`] for an answer that comes after one long silent
+    /// step the test means to take — a `periodic` test's read of this
+    /// machine, which says nothing until it ends and lasts as long as the
+    /// load makes it. The silence budget would call that a hang, so only
+    /// the overall one stands under this ([`bounded`]).
+    pub async fn wait_through_silence<T>(
+        &self,
+        what: &str,
+        pred: impl Fn(&[SessionEvent]) -> Option<T>,
+    ) -> T {
+        let mut changed = self.changed.subscribe();
+        bounded(what, async {
+            loop {
+                if let Some(v) = pred(&self.events.lock().unwrap()) {
+                    return v;
+                }
+                changed
+                    .changed()
+                    .await
+                    .expect("the sink outlives every wait on it");
+            }
+        })
+        .await
     }
 }
 

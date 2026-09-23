@@ -36,5 +36,5 @@ paths:
 - **`cargo xtask waits` が全テストコードと試験装置の本体を読む**(gate の常時ステップ。範囲は rules-refs)— 直接の sleep / `yield_now` / `Instant::now` / `Duration` 直書きの `timeout` / 答えを捨てた待ち / `bounded` 無しの silent wait を名指す。**残す時は文の上か同じ行に `// waits(<purpose>): <reason>`**(`paced` 再試行の間隔 / `ceiling` 診断だけの天井 / `measured` 判定に使わない時計 / `timed` 製品の実時間を下限で見る)。**何も覆わないマーカーは赤**。単体テストの backstop は `crate::wait::bounded`
 - **専有(一時 repository / 設定 / port — CLAUDE.md Rust 規約)の所有権は原子的な作成成功で取る**。in-process の mutex は別バイナリ・別セッションを隔離しない。重複排除を主張する実装は single-flight にし、同時 miss と read 中の invalidation を再現して呼出回数も固定する(`Derived`)
 - **外部設定は executor 単位で隔離する** — 一時 `GIT_CONFIG_GLOBAL` / `XDG_CONFIG_HOME` と `GIT_CONFIG_NOSYSTEM=1` を全 subprocess に渡す。process-global env は書き換えない(host config を読む test だけ raw executor を明示)
-- **待ちの上限は失敗検出の backstop**(`Patience` = 進捗ごとに沈黙予算を更新 + livelock 用の全体上限)。**沈黙予算は無言の 1 手の上限でもある** — 負荷で 1 手は桁で伸びる。単独で秒の桁の手(機械の棚卸し等)は待ちに入れない(要れば mry の属性で差し替え、実物を読むテストは `periodic`)。性能予算は benchmark / baseline で判定する
+- **待ちの上限は失敗検出の backstop**(`Patience` = 進捗ごとに沈黙予算を更新 + livelock 用の全体上限)。**沈黙予算は無言の 1 手の上限でもある** — 負荷で 1 手は桁で伸びる。単独で秒の桁の手(機械の棚卸し等)は待ちに入れない(要れば mry の属性で差し替え、実物を読むテストは `periodic` で全体予算で待つ)。性能予算は benchmark / baseline で判定する
 - **runner の終了コードは外まで通す**(pipe・整形・後続の先まで。並列起動は全 child を回収し、1 件でも非ゼロなら全体を非ゼロ)
