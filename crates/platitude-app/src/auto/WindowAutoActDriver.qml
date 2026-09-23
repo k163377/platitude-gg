@@ -117,6 +117,11 @@ Item {
     // The standing panel is a precondition of the branch that fetches and is read nowhere else (規約 §UI 自動化の因果性):
     // for `fetch-recover` it would otherwise be this verb's own answer — the panel gone — barring the way to the
     // report.
+    //
+    // **Both halves of the failure are waited for before the recovery goes.** The mark on the band and the line under
+    // it come down separate paths in no fixed order — the command's own row and the write's answer — and the report
+    // claims both (`was=` / `hadline=`). Over a panel that is already standing (`-held`) nothing else holds the branch
+    // back, so going on the first of them reads the other as `false` on a run that is right.
     SampleTimer {
         id: fetchRecoverActTimer
         running: Harness.autoAct === "fetch-recover" || Harness.autoAct === "fetch-recover-held"
@@ -128,14 +133,16 @@ Item {
             if (window.curPage === null)
                 return
             if (!fetchRecoverActTimer.fetchRequested) {
-                if ((!driver.commandsWrongSeen && !driver.errorLineSeen)
-                        || !window.curPage.commandsShown)
+                if (!driver.commandsWrongSeen || !driver.errorLineSeen || !window.curPage.commandsShown)
                     return
                 fetchRecoverActTimer.was = driver.commandsWrongSeen
                 fetchRecoverActTimer.hadLine = driver.errorLineSeen
                 fetchRecoverActTimer.wasOpen = window.curPage.commandsShown
                 fetchRecoverActTimer.fetchRequested = true
                 window.curPage.pageTab.fetch("")
+                // The one step between the two readings, said as it is taken: a run that ends at the ceiling after
+                // this line stopped waiting for the recovery to take the news down.
+                Harness.report("fetch_recover step=fetched")
                 return
             }
             if (window.curPage.commandsWrong
