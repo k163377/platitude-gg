@@ -1,7 +1,7 @@
 //! The preset for the WORKTREES section: every annotation `git worktree
 //! list` can put on an entry, in one repository.
 
-use super::repo::DemoRepo;
+use super::repo::{DemoRepo, file_url};
 
 /// Other working copies with something uncommitted in them, so the rows
 /// they draw on the graph have something to say.
@@ -353,6 +353,89 @@ pub(super) fn nested_copy(repo: &mut DemoRepo) -> Result<(), String> {
         "-b",
         "side/nested",
         &format!("../{NESTED_COPY}"),
+    ])?;
+    Ok(())
+}
+
+/// Every name the operation panel writes, long enough to be cut — so the
+/// order it gives them up in, and the shapes its actions take as they
+/// give their words up, can be photographed at widths a hand can drag
+/// the window to. **Short names never reach those shapes**: the panel
+/// only runs short when the names are long, so a repository called
+/// `repo` on a branch called `main` photographs the whole set as one
+/// picture of a band with room to spare.
+///
+/// **The names are the subject**, so the history under them is the
+/// shortest one that still gives a branch an upstream to be measured
+/// against, a remote that has moved on without it, and a copy to be
+/// standing in.
+pub(super) fn long_names(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nEvery name in the panel, long.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.add_origin()?;
+    repo.git(&[
+        "switch",
+        "--create",
+        "release/2026-08-candidate-with-a-very-long-branch-name",
+    ])?;
+    repo.commit(
+        "src/release.txt",
+        "release v1\n",
+        "feat: prepare the release",
+    )?;
+    repo.git(&[
+        "push",
+        "--set-upstream",
+        "origin",
+        "release/2026-08-candidate-with-a-very-long-branch-name",
+    ])?;
+    // The remote moves on under it, from a clone of its own, and this
+    // end is never told: what the panel then says is a branch that has
+    // one of each, and a push git will not send.
+    let seeder = repo.root.join("seeder");
+    let url = file_url(&repo.root.join("origin.git"));
+    let root = repo.root.clone();
+    repo.git_at(&root, &["clone", &url, "seeder"])?;
+    for (key, value) in [
+        ("user.name", "Away Colleague"),
+        ("user.email", "away@example.com"),
+    ] {
+        repo.git_at(&seeder.clone(), &["config", key, value])?;
+    }
+    repo.git_at(
+        &seeder.clone(),
+        &[
+            "switch",
+            "release/2026-08-candidate-with-a-very-long-branch-name",
+        ],
+    )?;
+    std::fs::write(seeder.join("src/release.txt"), "release v1\nremote work\n")
+        .map_err(|e| e.to_string())?;
+    repo.git_at(&seeder.clone(), &["add", "--", "src/release.txt"])?;
+    repo.git_at(
+        &seeder.clone(),
+        &["commit", "-m", "feat: pushed while you slept"],
+    )?;
+    repo.git_at(&seeder.clone(), &["push"])?;
+    // One commit the remote has not got, so the counts stand beside the
+    // name and give way with it.
+    repo.commit(
+        "src/release.txt",
+        "release v2\n",
+        "feat: finish the release",
+    )?;
+    // …and a copy with a name of its own, which the panel writes after
+    // the repository's as one run.
+    repo.git(&[
+        "worktree",
+        "add",
+        "-b",
+        "side/long-lived-integration-branch",
+        "../a-very-long-working-copy-folder-name",
     ])?;
     Ok(())
 }

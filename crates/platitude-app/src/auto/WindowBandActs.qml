@@ -64,7 +64,7 @@ Item {
                 return
             stop()
             Harness.report("fetch_busy busy=" + topBar.holdFetchBusy
-                              + " fails=" + topBar.fetchFails + " framed=" + topBar.fetchFramed)
+                              + " fails=" + topBar.fetchFails + " turned=" + topBar.fetchFrameTurned)
             window.finishAutoAct()
         }
     }
@@ -148,7 +148,105 @@ Item {
                 + " buttonsX=" + topBar.bandButtonsX
                 + " width=" + topBar.width
                 + " tabsW=" + topBar.bandTabsWidth
-                + " rightMargin=" + topBar.bandRightMargin)
+                + " rightMargin=" + topBar.bandRightMargin
+                // The panel's three names and the upstream in brackets after the branch. A photograph cannot be read
+                // for either: a name cut at both ends looks like a short name, and an empty bracket looks like no
+                // bracket.
+                + " names=" + topBar.opsNames + " upstream=" + topBar.branchUpstream)
+            window.finishAutoAct()
+        }
+    }
+
+    // PGG_AUTO_ACT=ops-panel: the panel standing, once the repository it names has landed — the verb the state
+    // matrix is photographed with, run once per repository shape and once per width. An argument that parses as a
+    // number is a width to stand the window at; the window's own floor may refuse it, which is why the width the
+    // run came out at rides back in the line.
+    //
+    // **Everything a picture cannot be read for comes back in the line**: a name cut at both ends looks like a short
+    // name, a button that gave its word up looks like a narrow band, and a badge that never stood looks like a
+    // window with nothing the matter.
+    SampleTimer {
+        id: opsPanelTimer
+        running: Harness.autoAct === "ops-panel"
+        onTriggered: {
+            if (!window.visible || topBar.width <= 0 || window.curPage === null
+                    || !window.curPage.pageRefsLoaded || !window.curPage.pageWt.loaded)
+                return
+            const tab = window.curPage.pageTab
+            if (tab.busyCount !== 0 || tab.autoFetchRunning)
+                return
+            // Asked for again until it takes or is refused: the width is the window's to allow, and the panel is
+            // laid out again after it moves.
+            const wanted = parseInt(Harness.autoActArg)
+            if (!isNaN(wanted) && wanted > 0 && Math.round(window.width) !== wanted
+                    && wanted >= Math.ceil(window.floorWidth)) {
+                window.width = wanted
+                return
+            }
+            if (topBar.width !== mainUi.width)
+                return
+            stop()
+            Harness.report(
+                "ops_panel settled=true width=" + Math.round(window.width)
+                + " floor=" + Math.ceil(window.floorWidth)
+                + " names=" + topBar.opsNames + " upstream=" + topBar.branchUpstream
+                + " namesCut=" + topBar.opsNameCut
+                + " folded=" + topBar.actionsFolded + " cut=" + topBar.actionWordCut
+                + " alert=" + topBar.actionAlertShown
+                + " push=" + topBar.pushMode + " stash=" + topBar.stashMode
+                + " badges=" + [topBar.opBadgeShown, topBar.conflictBadgeShown,
+                                topBar.identityBadgeShown, topBar.oldGitBadgeShown,
+                                topBar.staleBadgeShown].join(","))
+            window.finishAutoAct()
+        }
+    }
+
+    // PGG_AUTO_ACT=ops-stand / ops-stand-repos / ops-stand-copies / ops-branch: the panel's own two doors — the one
+    // the repository's name opens, either tier of it, and the one the branch's name opens.
+    //
+    // **The rows are counted as well as photographed.** Each card is assembled from a listing that arrives after the
+    // tab does, and a card holding nothing looks in a picture exactly like a card holding rows that were all left
+    // out (`AppMenu.offeredRows`). A run waits for the listing rather than for a beat: the refs and the copies come
+    // back on separate reads, and which of them is last is the machine's business, not the verb's.
+    SampleTimer {
+        id: opsDoorTimer
+        running: Harness.autoAct === "ops-stand" || Harness.autoAct === "ops-stand-repos"
+                 || Harness.autoAct === "ops-stand-copies" || Harness.autoAct === "ops-branch"
+        /// Which step this run is on: the card, then the tier inside it.
+        property int opened: 0
+        onTriggered: {
+            // **Both listings, not a beat**: the refs and the copies come back on separate reads, and a card asked
+            // for between them is a card with rows still missing. Every repository has its own copy in the second
+            // of them, so a zero there is a listing that has not landed rather than a repository without one.
+            if (!window.visible || topBar.width <= 0 || window.curPage === null
+                    || !window.curPage.pageRefsLoaded
+                    || window.curPage.pageWorktrees.total <= 0)
+                return
+            const branchDoor = Harness.autoAct === "ops-branch"
+            if (opsDoorTimer.opened === 0) {
+                opsDoorTimer.opened = 1
+                // **Asked for once, and reported however it went.** `offerHere` turns away a card with nothing in
+                // it, which is the right answer for a repository that has nowhere else to stand — and a run that
+                // kept asking would sit out its watchdog on a window that was never going to open one (observed).
+                if (branchDoor)
+                    topBar.openBranchMenu()
+                else
+                    topBar.openStandMenu()
+                return
+            }
+            if (opsDoorTimer.opened === 1 && !branchDoor && topBar.standMenuOpen) {
+                if (Harness.autoAct === "ops-stand-repos")
+                    topBar.openStandRepos()
+                if (Harness.autoAct === "ops-stand-copies")
+                    topBar.openStandCopies()
+            }
+            stop()
+            Harness.report(
+                "ops_door open=" + (branchDoor ? topBar.branchMenuOpen : topBar.standMenuOpen)
+                + " tier=" + topBar.standDoor
+                + " repos=" + topBar.standRepoRows
+                + " copies=" + topBar.standCopyRows
+                + " branches=" + topBar.branchMenuRows)
             window.finishAutoAct()
         }
     }
@@ -337,7 +435,7 @@ Item {
             // refused push — and the two put their mark on different corners of different marks.
             if (Harness.autoAct === "band-actions-stopped")
                 Harness.report("band_stopped suspended=" + window.curPage.pageTab.autoFetchSuspended
-                                  + " framed=" + topBar.fetchFramed
+                                  + " turned=" + topBar.fetchFrameTurned
                                   + " alert=" + topBar.actionAlertShown)
             acts.reportBandActions()
         }
@@ -349,23 +447,26 @@ Item {
         const wanted = parseInt(arg)
         if (!isNaN(wanted) && wanted > 0)
             return wanted
-        const floor = Math.ceil(window.openFloorWidth)
+        // The two ends, and the step between them, are the panel's own arithmetic — asked for rather than worked out
+        // again here, so a run cannot pass a build whose schedule has moved (`TopBar.actionsWholeAt`).
+        //
+        // `fold` is the widest panel that has given every wording up; `whole` the narrowest that still says all three
+        // in full. A band that folded early photographs as a band that is merely narrow, and no other width can tell
+        // the two apart.
         if (arg === "fold")
-            return floor
-        // The other end: the narrowest window at which nothing has given yet. A band that folded early would
-        // photograph as a band that is merely narrow, and no other width can tell the two apart.
+            return topBar.actionsFoldAt
+        // Never under the window's own floor: with a panel this wide the wordings are whole there already, and a run
+        // that asked for less would photograph a window no hand can make.
         if (arg === "whole")
-            return Math.ceil(floor + 3 * (topBar.actionNaturalW - Theme.railWidth))
-        // The narrowest cell that still has a word in it — the last step before the marks.
+            return Math.max(topBar.actionsWholeAt, Math.ceil(window.floorWidth))
+        // The default: the narrowest cell that still has a word in it — the last step before the marks.
         //
         // **How long the stretch where the wordings are cut is depends on the installed
         // fonts, and for a four-letter command it can be nothing at all** (measured, Linux: `push` and
         // `…` + two characters measure the same 27px, so `push -f` goes from whole to given up with no cut in
         // between). Landing on the last labelled cell is a shape that exists on every machine, and `cut=` rides along
         // to say whether this one had a cut in it.
-        //
-        // Rounded **up**, so the cap lands at or above the fold.
-        return Math.ceil(floor + 3 * (topBar.actionFoldW - Theme.railWidth))
+        return topBar.actionsFoldAt + 1
     }
     /// What the three came out as. `cut=` and `folded=` are the two the picture cannot answer on its own: a wording
     /// that ends in `…` of its own reads like an elided one, and a band photographed at one width says nothing about

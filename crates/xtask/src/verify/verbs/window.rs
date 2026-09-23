@@ -290,6 +290,47 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "app_menu open=true yield=true",
     },
+    // The panel's own doors. The counts ride along because a card is
+    // assembled from listings that arrive after the tab does, and a card
+    // holding nothing photographs exactly like one whose rows were all
+    // left out — and because `open=false` is the right answer for a
+    // repository with nowhere else to stand, which is a preset fault
+    // rather than a wiring one and has to be legible as such.
+    // The panel standing, which is the verb the state matrix is
+    // photographed with. `settled=true` is the whole claim a picture
+    // needs behind it — the repository landed, nothing running — and
+    // everything beside it is what the picture cannot be read for.
+    Verb {
+        name: "ops-panel",
+        when: &[],
+        plain: "ops_panel settled=true",
+    },
+    Verb {
+        name: "ops-stand",
+        when: &[],
+        plain: "ops_door open=true tier=stand",
+    },
+    // …and each tier of it, opened the way resting on the row opens it.
+    // **Which card is standing is judged**, not that one is: a tier
+    // asked for and not opened leaves the card above it on screen, and
+    // the two frame alike once the picture is cropped to the panel.
+    Verb {
+        name: "ops-stand-repos",
+        when: &[],
+        plain: "ops_door open=true tier=repos",
+    },
+    Verb {
+        name: "ops-stand-copies",
+        when: &[],
+        plain: "ops_door open=true tier=copies",
+    },
+    // The branch door, which offers every local branch this repository
+    // has bar the one the window is on (`TopBar`'s `branchMenu`).
+    Verb {
+        name: "ops-branch",
+        when: &[],
+        plain: "ops_door open=true tier=branch",
+    },
     // And the mark pressed a second time. The card that reopened on that
     // press and the card that was never closed are the same photograph —
     // which is how this went unnoticed — so what is judged is the card
@@ -315,6 +356,13 @@ pub(super) const TABLE: &[Verb] = &[
     // a window is still for — a group the band had the room for, and the
     // same group narrowed by a real crowd of tabs.
     //
+    // **The width is the run's, and it is calibrated to the band.** The
+    // three actions moved off this row and into the panel, so the strip
+    // — which is at the front of the queue for what the band has
+    // (`TopBar`) — takes the room they held, and the group starts
+    // narrowing at a window width where it used to keep its words. What
+    // the run is for is the shape, so the number moves with the band.
+    //
     // The claim stops before the fit: the widths that show the last
     // shape are below the floor a hand can drag the window to
     // (`fits=false` is what was asked for there), and the folded mark is
@@ -324,7 +372,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "badges",
         when: &[(
-            Arg::Is("1200:6"),
+            Arg::Is("1000:6"),
             "op=true conflicts=true identity=true oldGit=false narrowed=true words=true mark=false",
         )],
         plain: "op=true conflicts=true identity=true oldGit=false narrowed=false words=true \
@@ -415,10 +463,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "wip_stop_landing held=true otherTop=true owed=true early=false earlyCopy=false wip=true copy=false op=REBASING lit=0",
     },
-    // The band's three actions at the last cell that still has a word
+    // The panel's three actions at the last cell that still has a word
     // in it. A band shot at one width says nothing about the width its
     // shape was supposed to change at, so what is judged is that the
     // words were still there at the narrowest cell that holds one.
+    //
+    // **Run where the names are long** (`--preset longnames`). What the
+    // panel runs short of comes off the names first, so with a
+    // repository called `repo` on a branch called `main` the actions
+    // are still saying every word at the floor a hand can drag the
+    // window to — the shapes below exist, and no width this window
+    // takes reaches them.
     // `cut=` rides along as diagnosis: how long the stretch
     // where the wordings are cut lasts is a question about the
     // installed fonts, and for a four-letter command it can be nothing
@@ -460,7 +515,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "band-actions-stopped",
         when: &[],
-        plain: "band_stopped suspended=true framed=true alert=true",
+        plain: "band_stopped suspended=true turned=true alert=true",
     },
     // Kept beside its pair so the two read together.
     Verb {

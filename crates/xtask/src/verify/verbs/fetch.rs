@@ -174,14 +174,14 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "push_hold mode=diverged busy=true",
     },
-    // The bare button's wait. `framed=false` is judged: a frame that
-    // grew while git was out would be a line in the picture, but a
-    // frame that did not grow is nothing at all, and nothing is what
-    // a correct run looks like too.
+    // The resting button's wait. `turned=false` is judged: the frame
+    // is drawn either way in this panel, so what a wait must not do
+    // is change its colour — and one line the same colour as the two
+    // beside it is a thing a picture cannot be judged on.
     Verb {
         name: "fetch-busy",
         when: &[],
-        plain: "fetch_busy busy=true fails=0 framed=false",
+        plain: "fetch_busy busy=true fails=0 turned=false",
     },
     // Both halves are absences on the picture: a dim button says
     // nothing about why it is dim, and a tooltip that stays away

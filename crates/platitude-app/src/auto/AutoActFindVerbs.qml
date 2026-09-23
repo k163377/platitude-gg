@@ -101,6 +101,15 @@ Item {
             page.startFind()
             graphPane.findCard.query = arg
             findScrolled.start()
+        } else if (act === "band-find") {
+            // The panel's own mark, pressed (`TopBar.findNow`). Put in at the button, so what answers is the panel's
+            // real wiring — the key and the mark meet at `RepoPage.startFind`, and a run that called that would pass
+            // a build where the mark reaches nothing. **Answers whether the press went in**: the mark is down while a
+            // plan stands over the graph, and a shot fired at nothing is not one to latch.
+            if (!driver.inputWent(page.pageBand.findNow()))
+                return
+            Harness.report("band_find open=" + graphPane.findCard.open)
+            findSettled.restart()
         } else if (act === "find-drop") {
             // The card standing while a press lands somewhere else. Presses cannot be injected (verify-ui スキル), so
             // this enters where `FocusRelease.pressedAway` enters and gives the press no place of its own — which is

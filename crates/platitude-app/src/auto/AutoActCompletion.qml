@@ -268,7 +268,7 @@ QtObject {
                 "op-exit-lands",
                 "push-retry", "fetch-ref-list", "avatar-assign", "avatar-badge",
                 "avatar-rest", "avatar-hover", "avatar-tip",
-                "find", "find-next", "find-prev", "find-drop", "find-scroll",
+                "find", "find-next", "find-prev", "find-drop", "find-scroll", "band-find",
                 // These flows are completed by Main/WindowAutoActDriver. Some still begin here (picker, command
                 // failure, recovery), but the page photographs them only once the
                 // window-level predicate has answered.
@@ -286,6 +286,7 @@ QtObject {
                 "quit-save-held",
                 "open-fail-tab-bare", "open-fail-tab-log", "open-fail-sweep", "identity",
                 "identity-half", "identity-tip", "band", "app-menu", "app-menu-reclick", "tab-widths",
+                "ops-panel", "ops-stand", "ops-stand-repos", "ops-stand-copies", "ops-branch",
                 "tab-mark", "tab-name", "tab-drag", "tab-hold", "tab-edge", "tab-carry",
                 "tab-pin", "tab-pin-go", "tab-open-go",
                 "window-fill", "solo", "gate-sweep", "window-floor",

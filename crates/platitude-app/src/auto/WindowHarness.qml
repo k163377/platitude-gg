@@ -60,6 +60,14 @@ Item {
         harness.dialogSeat.keepBuilt = Harness.autoAct !== "" || Harness.autoIdentity !== ""
         // The offscreen platform reports an 800x800 screen, which would cut every picture down to fit.
         harness.windowShape.keepSavedSize = Harness.automated
+        // **A run has no hand.** It cannot inject a pointer, so what it means to light it lights through a stand-in
+        // (`HoverToolButton.pointedAt`) — and yet the offscreen platform keeps a cursor at the screen's own origin,
+        // which the window comes up on, so whatever the window's top left corner holds is handed that pointer and
+        // washes in every picture (measured: the ☰'s cell came out `bgHover` over the band, in the cell's exact
+        // bounds). **Nothing here can take it back afterwards**: `hovered` is read-only to QML, no leave ever follows
+        // because nothing moves that cursor, and the window is already up when this runs, so a place given to it now
+        // is a place the enter was not decided from (all three measured).
+        Hand.away = Harness.automated
         // A turning ring photographs differently every time.
         Motion.stilled = Harness.shotDir !== ""
         harness.screensUp = true

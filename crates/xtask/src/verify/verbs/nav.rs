@@ -925,6 +925,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[(Arg::Is(""), "find_drop open=false shown=false")],
         plain: "find_drop open=true shown=true",
     },
+    // The panel's own mark opening the find bar. The picture shows a
+    // bar over the graph, which the key opens the same way — so what
+    // the run is about, the press reaching the page from the mark,
+    // is the line and not the picture.
+    Verb {
+        name: "band-find",
+        when: &[],
+        plain: "band_find open=true",
+    },
     Verb {
         name: "name-box-drop",
         when: &[(Arg::Has(":"), "name_drop box=true")],
