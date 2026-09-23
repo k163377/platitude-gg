@@ -468,6 +468,33 @@ fn the_stages_are_the_ones_the_dockerfile_builds() {
     assert_eq!(built, STAGES);
 }
 
+/// The registry volume is shared by every container on the machine, so the
+/// locks cargo guards it with have to be as well: cargo takes them in
+/// CARGO_HOME itself, and the image links both into the registry the volume
+/// is mounted over. A registry mounted anywhere but CARGO_HOME's own, or a
+/// link dropped from the image, puts two containers back to unpacking the
+/// same new crate at once — the second failing on its `.cargo-ok`.
+#[test]
+fn the_package_cache_locks_live_in_the_shared_registry() {
+    let path = crate::tree::workspace_root()
+        .join("ci")
+        .join("linux")
+        .join("Dockerfile");
+    let text = std::fs::read_to_string(&path).expect("ci/linux/Dockerfile");
+    let home = text
+        .split("CARGO_HOME=")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .expect("the image sets CARGO_HOME");
+    assert_eq!(REGISTRY_MOUNT, format!("{home}/registry"));
+    for lock in [".package-cache", ".package-cache-mutate"] {
+        assert!(
+            text.contains(&format!("ln -s registry/{lock} {home}/{lock}")),
+            "the image links {lock} into the registry"
+        );
+    }
+}
+
 #[test]
 fn mount_paths_are_forward_slashed() {
     assert_eq!(

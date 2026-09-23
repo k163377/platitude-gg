@@ -42,6 +42,18 @@ RUN curl --proto '=https' --tlsv1.2 --silent --show-error --fail \
 COPY rust-toolchain.toml /tmp/pin/
 RUN cd /tmp/pin && rustup toolchain install && rm -rf /tmp/pin
 
+# The registry is a volume every container on the machine mounts
+# (`linux::REGISTRY_MOUNT`), and cargo guards it with two lock files in
+# CARGO_HOME itself, which would be each container's own. Linked into the
+# registry, the locks are the volume's too: two containers after the same new
+# crate take turns instead of both unpacking it, the second failing on the
+# `.cargo-ok` the first created (cargo's `unpack_package` makes it
+# `create_new`). The directory stands in the image as well, so the links
+# resolve in a container that mounts nothing there.
+RUN mkdir -p /usr/local/cargo/registry \
+    && ln -s registry/.package-cache /usr/local/cargo/.package-cache \
+    && ln -s registry/.package-cache-mutate /usr/local/cargo/.package-cache-mutate
+
 # /work arrives as a bind mount owned by whoever owns it on the host, and git
 # refuses to touch a repository it believes belongs to someone else. The
 # integration tests are indifferent either way — they set GIT_CONFIG_NOSYSTEM
