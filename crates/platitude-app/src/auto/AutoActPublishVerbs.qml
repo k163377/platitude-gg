@@ -32,14 +32,14 @@ Item {
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
     /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
-        if (act === "publish" || act === "publish-taken"
+        if (act === "publish" || act === "publish-taken" || act === "publish-tip"
                 || act === "publish-add" || act === "publish-go" || act === "publish-enter"
                 || act === "publish-new-go" || act === "publish-remotes"
                 || act === "publish-dismiss") {
             // The button's own path, so the state machine in front of the question is exercised
             // too.
             page.pushNow()
-            if (act === "publish-taken")
+            if (act === "publish-taken" || act === "publish-tip")
                 publishFlow.setPublishBranch(arg === "" ? "taken" : arg)
             else if (act === "publish-add" || act === "publish-new-go")
                 publishFlow.startPublishAddRemote(arg)
@@ -60,6 +60,8 @@ Item {
                 publishDialogTimer.start()
             else if (act === "publish")
                 publishSurfaceTimer.start()
+            else if (act === "publish-tip")
+                publishTipTimer.start()
             else
                 publishSettleTimer.start()
             // `dialog=` / `name=` say whether the remote dialog stands and what its name box holds — the no-remote push
@@ -84,6 +86,9 @@ Item {
             // The destination is a binding, and this run is about what it says once the repository
             // it is about has finished arriving.
             pushTargetTimer.start()
+        } else if (act === "push-hover") {
+            // A hand on the band's push button once the standing it speaks for has been read.
+            pushHoverTimer.start()
         } else if (act === "push-default" || act === "remote-menu" || act === "remote-url"
                    || act === "publish-remotes-marked") {
             // `<remote>`, or `<remote>:marked` to put the mark on it first. All three go in at the same doors a hand
@@ -237,6 +242,36 @@ Item {
                               + " branch_mark=" + workTree.pushRemote
                               + " repo_mark=" + repoTab.pushDefault
                               + " tracks=" + workTree.upstream)
+            driver.complete()
+        }
+    }
+    /// PGG_AUTO_ACT=push-hover: a hand on the band's push button, and the words it opens there — the one place the
+    /// count a push sends, or an overwrite drops, is said (the button's own word carries no count).
+    ///
+    /// The standing is read first, as `push-target` reads it, and the opening's fetch is waited out as well: the tip's
+    /// words go to the shared tooltip when it opens and are not taken again, so a count that moved after the hand went
+    /// on would be photographed from before.
+    SampleTimer {
+        id: pushHoverTimer
+        property bool pointed: false
+        onTriggered: {
+            if (!pushHoverTimer.pointed) {
+                if (!workTree.loaded || repoTab.state !== "open" || repoTab.busyCount > 0
+                        || repoTab.autoFetchRunning)
+                    return
+                pushHoverTimer.pointed = true
+                // The hand goes on where a real one is read (`HoverToolButton.pointedAt`).
+                page.pageBand.pushPointedAt = true
+                return
+            }
+            // The tip waits out `tipDelayMs` before it stands.
+            if (!page.pageBand.pushTipStanding)
+                return
+            pushHoverTimer.stop()
+            Harness.report("push_hover tip=" + page.pageBand.pushTipStanding
+                              + " mode=" + page.pageBand.pushMode
+                              + " ahead=" + workTree.ahead
+                              + " behind=" + workTree.behind)
             driver.complete()
         }
     }
@@ -541,6 +576,31 @@ Item {
                                        + " alert=" + graphPane.askAlert
                                        + " lease=" + (publishFlow.publishLease !== "")
                                        + " theirs=" + repoTab.remoteBranchTheirs)
+            driver.complete()
+        }
+    }
+    /// PGG_AUTO_ACT=publish-tip: the question `publish-taken` stops at, with a hand on its pill. What an overwrite
+    /// would drop is said in the pill's tip and nowhere else on the bar, so a picture of the bar alone cannot hold it.
+    ///
+    /// The hand goes on once the far side has answered and the bar has stopped moving: the tooltip places itself
+    /// against the pill as it opens, and a pill still travelling down would leave it standing where the pill was.
+    SampleTimer {
+        id: publishTipTimer
+        property bool pointed: false
+        onTriggered: {
+            if (!publishTipTimer.pointed) {
+                if (!publishFlow.publishChecked || !graphPane.askCard.settled)
+                    return
+                publishTipTimer.pointed = true
+                graphPane.askCard.pointedAt = true
+                return
+            }
+            if (!graphPane.askCard.tipStanding)
+                return
+            publishTipTimer.stop()
+            Harness.report("publish_tip tip=" + graphPane.askCard.tipStanding
+                              + " far=" + publishFlow.publishState
+                              + " theirs=" + repoTab.remoteBranchTheirs)
             driver.complete()
         }
     }

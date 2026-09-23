@@ -21,7 +21,7 @@ QtObject {
 
 
     function isWriteAct(act) {
-        return ["publish", "publish-taken", "publish-add", "publish-go", "publish-enter",
+        return ["publish", "publish-taken", "publish-tip", "publish-add", "publish-go", "publish-enter",
                 "publish-new-go", "commit", "commit-refused", "notice-over-diff",
                 "stale-part", "amend", "amend-reset-author",
                 "stash", "stash-lands", "stash-file", "stage-many-go",
@@ -80,7 +80,7 @@ QtObject {
     }
 
     function defersCompletion(act) {
-        return ["publish", "publish-taken", "publish-remotes", "publish-add",
+        return ["publish", "publish-taken", "publish-tip", "publish-remotes", "publish-add",
                 "publish-go", "publish-enter", "publish-new-go", "publish-dismiss",
                 "amend-reset-author", "amend-author",
                 "eol-commit", "eol-hover", "commit-face",
@@ -134,7 +134,7 @@ QtObject {
                 // Both wait for the readings that decide the push row's shape, and the second runs its press from
                 // there — so the barrier is behind the wait.
                 "tag-menu", "push-tag", "delete-remote-tag", "delete-tag-both", "tag-refused",
-                "nav-add-remote", "push-default", "push-target", "remote-menu", "remote-url",
+                "nav-add-remote", "push-default", "push-target", "push-hover", "remote-menu", "remote-url",
                 "publish-remotes-marked", "tags-eye",
                 "delete-branch-refused", "delete-branch-chip", "remote-refused", "chip-menu", "chip-menu-current",
                 // The card has to be up before the row it came for can be read; the second waits for the line under

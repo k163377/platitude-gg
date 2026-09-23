@@ -51,6 +51,11 @@ Rectangle {
     /// What the pill says on hover: that it is held, and what the far side will make of what it does. The bar's own
     /// line has room for one thing only, and this is where §長押し puts the rest.
     property string tip: ""
+    /// Stands in for a hand on the pill, which headless cannot inject (`HoverToolButton.pointedAt`). Read only where a
+    /// real hover is — the pill's wash and its tip — so what a run lights is what a hand lights.
+    property bool pointedAt: false
+    /// The tip standing: `tipDelayMs` waited out and the words on screen (`publish-tip`).
+    readonly property bool tipStanding: acceptPill.ToolTip.visible
     /// The far side could not be read — the remote never answered, or what it named is not in this repository. The
     /// frame goes `warning` and a `!` follows the word, which is the same news the toolbar's own pair carries in the
     /// same two marks (デザイン規約 §リモートへ送る): **the word and the gesture stay as they were**, because what could not be read
@@ -300,11 +305,13 @@ Rectangle {
         // the only thing on the bar that acts, so nothing else here can be hit by accident.
         Rectangle {
             id: acceptPill
+            /// A hand on the pill, or its stand-in (`AskBar.pointedAt`).
+            readonly property bool lit: acceptMouse.containsMouse || bar.pointedAt
             Layout.alignment: Qt.AlignVCenter
             implicitWidth: acceptRow.implicitWidth + 2 * Theme.spaceMd
             implicitHeight: Theme.controlHeight
             radius: Theme.radiusSm
-            color: acceptMouse.containsMouse && bar.holdProgress === 0 ? Theme.bgHover : "transparent"
+            color: acceptPill.lit && bar.holdProgress === 0 ? Theme.bgHover : "transparent"
             border.color: bar.alert ? Theme.warning : bar.tone
             border.width: Theme.borderWidth
             // The ink for everything the pill says — the mark, the word, the chip a command wears — decided once so the
@@ -427,7 +434,7 @@ Rectangle {
                     }
                 }
             }
-            ToolTip.visible: bar.tip !== "" && acceptMouse.containsMouse
+            ToolTip.visible: bar.tip !== "" && acceptPill.lit
             ToolTip.delay: Metrics.tipDelayMs
             ToolTip.text: bar.tip
             MouseArea {

@@ -210,6 +210,19 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "push_target label=origin/main state=ready branch_mark=",
     },
+    // A hand on that same button, and the words it opens. `tip=true`
+    // is the words on screen (`tipDelayMs` waited out); `mode=` says
+    // which of the button's sentences they are — `ready` says what a
+    // push sends, `diverged` what the overwrite drops — and the counts
+    // are the number that sentence carries, pinned to the fixture.
+    Verb {
+        name: "push-hover",
+        when: &[(
+            Arg::WithPreset("diverged"),
+            "push_hover tip=true mode=diverged ahead=1 behind=1",
+        )],
+        plain: "push_hover tip=true mode=ready ahead=1 behind=0",
+    },
     // The row a remote's own menu is offering. `open=true` because a
     // menu that never opened photographs as the sidebar it stands on,
     // and the count because the row that is gone on the marked remote
@@ -282,6 +295,19 @@ pub(super) const TABLE: &[Verb] = &[
             ),
         ],
         plain: "publish settled far=",
+    },
+    // The refusal above with a hand on its pill: what the overwrite
+    // drops is said in the pill's tip and nowhere else on the bar.
+    // `tip=true` is the words on screen; `far=` and `theirs=` pin the
+    // fixture whose count those words carry. Any other argument is
+    // asked only that a tip stood over some answer.
+    Verb {
+        name: "publish-tip",
+        when: &[(
+            Arg::OneOf(&["", "taken"]),
+            "publish_tip tip=true far=refused theirs=1",
+        )],
+        plain: "publish_tip tip=true far=",
     },
     // The answer, given — the line goes out in
     // the same turn as the press.

@@ -126,6 +126,9 @@ Rectangle {
     property alias fetchPointedAt: fetchButton.pointedAt
     readonly property bool fetchTipStanding: fetchButton.tipShown
     readonly property bool fetchWordFull: Qt.colorEqual(fetchButton.fg, Theme.textPrimary)
+    /// The same stand-in on the push button, and its tip standing (`push-hover`).
+    property alias pushPointedAt: pushButton.pointedAt
+    readonly property bool pushTipStanding: pushButton.tipShown
     /// How the fetch button stands: how many fetches have failed, and whether it is wearing a frame. `framed` is
     /// read because "a button that never wore a frame grows none while it waits" (デザイン規約 §進行中・長押しの定数) is a
     /// claim about a line that is not there, and a picture cannot be judged on the absence of one.
