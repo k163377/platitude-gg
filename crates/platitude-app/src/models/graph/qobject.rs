@@ -79,6 +79,7 @@ impl GraphModel {
         Notify = stats_changed
     );
     qproperty!("headAvatar", Member = head_avatar, Notify = stats_changed);
+    qproperty!("headMatched", Member = head_matched, Notify = stats_changed);
     qproperty!(
         "headAvatarUrl",
         Member = head_avatar_url,

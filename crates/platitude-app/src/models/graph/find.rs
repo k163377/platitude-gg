@@ -55,6 +55,7 @@ impl GraphModel {
         }
         self.match_count = count;
         self.settle_first();
+        self.settle_head();
         self.notify_runs(ranges);
     }
 
@@ -110,5 +111,36 @@ mod tests {
         // and the list on the left shows the message.
         assert!(!hits("stash@{0}", &row));
         assert!(!hits("stash@", &row));
+    }
+
+    /// The stand-in for HEAD's row reads its mark off the model, not off
+    /// a delegate — the row is off screen whenever the stand-in is up —
+    /// so a search that re-marks the rows has to re-mark that answer too.
+    #[test]
+    fn a_search_marks_the_head_row_for_its_stand_in() {
+        let head = "a1".repeat(20);
+        let oid = Oid::from_hex_str(&head).expect("an id");
+        let mut model = GraphModel::default();
+        model.rows = vec![GraphRowItem {
+            oid_hex: head,
+            subject: "the login refactor".into(),
+            ..GraphRowItem::default()
+        }];
+        model.index = vec![(oid, 0)];
+        model.head_oid = Some(oid);
+        model.settle_head();
+        assert!(!model.head_matched, "no search, no mark");
+
+        model.query = Query::new("login");
+        model.remark_notified();
+        assert!(model.head_matched, "HEAD's row answers the search");
+
+        model.query = Query::new("nowhere");
+        model.remark_notified();
+        assert!(!model.head_matched, "HEAD's row was passed over");
+
+        model.query = None;
+        model.remark_notified();
+        assert!(!model.head_matched, "the search is off");
     }
 }

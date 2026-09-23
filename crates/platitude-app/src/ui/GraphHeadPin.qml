@@ -70,6 +70,11 @@ Rectangle {
     readonly property var goneChips: pin.graphModel.goneChips
     readonly property var records: GitFacts.chipsShown(pin.graphModel.headLabels, pin.goneChips)
     readonly property color laneColor: Theme.graphLane[pin.graphModel.headColor % Theme.graphLane.length]
+    /// The search passed the row this stands for over — said the way the row says it (`GraphRowDelegate.dimmed`):
+    /// the chip, the lanes, the face and the message go down, and the lanes going out start from that strength. Read
+    /// off the model, because the row is off screen whenever this is up; a stand-in that stayed lit would light the
+    /// row as it scrolled off.
+    readonly property bool dimmed: pin.view.findOn && !pin.graphModel.headMatched
 
     // ---- the three bands ---------------------------------------------------------------------------------------------
     //
@@ -188,6 +193,8 @@ Rectangle {
     /// ground is not wired to them (verify-ui).
     readonly property alias lit: pinHover.visible
     readonly property alias picked: pinPicked.visible
+    /// The message's strength as drawn, for the headless run: what tells a stand-in the search passed over from a lit one.
+    readonly property alias wordsOpacity: subject.opacity
 
     // The chip column, laid out as a row's is (`GraphRowChips`): the chip against the column's right edge, its names
     // cut to the column, and level with the row.
@@ -195,6 +202,7 @@ Rectangle {
         id: pinStack
         x: pin.labelWidth - width - Theme.spaceXs
         y: pin.rowMidY - height / 2 - pinStack.lift
+        opacity: pin.dimmed ? Metrics.dimFade : 1
         records: pin.records
         maxWidth: pin.labelWidth - Theme.spaceSm
     }
@@ -222,7 +230,7 @@ Rectangle {
             avatarUrl: pin.graphModel.headAvatarUrl
             isWip: false
             stashRef: ""
-            dimmed: false
+            dimmed: pin.dimmed
         }
     }
     // Where its lanes go: out of the node and into the ground, gone by the far edge of the hold. Only the ones that
@@ -243,14 +251,16 @@ Rectangle {
                 const ctx = getContext("2d")
                 ctx.clearRect(0, 0, width, height)
                 ctx.lineWidth = Metrics.laneStroke
+                // Out of the node at the strength the row's own lanes have, so a dimmed row does not grow a lit tail.
+                const full = pin.dimmed ? Metrics.dimFade : 1
                 for (const seg of pin.graphModel.headGeometry) {
                     if (seg.kind !== "through" && seg.kind !== (pin.rowAbove ? "out" : "into"))
                         continue
                     const hex = Theme.graphLane[seg.color % Theme.graphLane.length]
                     const x = Metrics.laneInset + seg.lane * Metrics.laneW + Metrics.laneW / 2 - pin.graphXOffset
                     const fade = ctx.createLinearGradient(0, 0, 0, height)
-                    fade.addColorStop(0, goingOut.faded(hex, pin.rowAbove ? 1 : 0))
-                    fade.addColorStop(1, goingOut.faded(hex, pin.rowAbove ? 0 : 1))
+                    fade.addColorStop(0, goingOut.faded(hex, pin.rowAbove ? full : 0))
+                    fade.addColorStop(1, goingOut.faded(hex, pin.rowAbove ? 0 : full))
                     ctx.strokeStyle = fade
                     ctx.setLineDash(seg.dashed ? Metrics.laneDash : [])
                     ctx.beginPath()
@@ -271,9 +281,10 @@ Rectangle {
             }
         }
     }
-    // A canvas repaints only when it is asked to, and neither of these is its own property.
+    // A canvas repaints only when it is asked to, and none of these is its own property.
     onGraphXOffsetChanged: goingOut.requestPaint()
     onRowAboveChanged: goingOut.requestPaint()
+    onDimmedChanged: goingOut.requestPaint()
     Connections {
         target: pin.graphModel
         function onStatsChanged() { goingOut.requestPaint() }
@@ -286,6 +297,7 @@ Rectangle {
         width: 2 * Theme.borderWidth
         height: Theme.iconMd
         radius: Theme.borderWidth
+        opacity: pin.dimmed ? Metrics.dimFade : 1
         color: pin.laneColor
     }
     CutName {
@@ -297,6 +309,7 @@ Rectangle {
         // — a stand-in that stopped at the bar's box cut a word earlier than the row it
         // stands for, and the message changed length as the reader scrolled it off.
         width: pin.width - subject.x - Theme.spaceXs
+        opacity: pin.dimmed ? Metrics.dimFade : 1
         cutAt: "end"
         text: pin.graphModel.headSubject
         pixelSize: Theme.fontMd

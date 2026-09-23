@@ -164,6 +164,9 @@ pub struct GraphModel {
     head_avatar: i32,
     head_avatar_url: String,
     head_geometry: Lanes,
+    /// Whether the search found that row — the stand-in dims with it, or
+    /// the row would change its light as it scrolled off.
+    head_matched: bool,
     error: String,
     /// The walk stopped, so the rows drawn are not all of them. **A
     /// state apart from `error`**: a walk that ended without an answer at

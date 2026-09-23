@@ -20,9 +20,11 @@ fn take<T: PartialEq + Clone>(slot: &mut T, value: &T, moved: &mut bool) {
 impl GraphModel {
     /// Re-reads which loaded row the working tree stands on, and takes
     /// off it everything the stand-in draws — its chips, its subject, its
-    /// lane and colour, its face, and the lanes it is on. Called at the
-    /// end of every drain: the rows, their chips and the report of where
-    /// HEAD is all move the answer, and each lands on its own.
+    /// lane and colour, its face, the lanes it is on, and whether the
+    /// search found it. Called at the end of every drain and after every
+    /// re-marking: the rows, their chips, the report of where HEAD is
+    /// and the find bar's line all move the answer, and each lands on
+    /// its own.
     ///
     /// **The row is found by the id the session reported**
     /// (`GraphMsg::Head`), through the index. So the row is found the
@@ -65,6 +67,7 @@ impl GraphModel {
         take(&mut self.head_subject, &row.subject, &mut moved);
         take(&mut self.head_avatar_url, &row.avatar_url, &mut moved);
         take(&mut self.head_geometry, &row.geometry, &mut moved);
+        take(&mut self.head_matched, &row.matched, &mut moved);
         let (color, lane, avatar) = (row.node_color, row.node_lane, row.avatar);
         if (self.head_color, self.head_lane, self.head_avatar) != (color, lane, avatar) {
             (self.head_color, self.head_lane, self.head_avatar) = (color, lane, avatar);
