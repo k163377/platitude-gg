@@ -720,4 +720,7 @@
 - **「まだ答えが無い」と値 0 / false を分ける** — 非同期モデルは `loaded` / request generation / sequence 等の readiness を公開し、自動化は readiness の後で値を読む。初期値 0 は「まだ答えが無い」
 - **一瞬だけ立つ状態は signal で観測して latch する** — error / busy / loading が polling 1 周より短くても、その実 edge を見た証拠を保持し、非同期 `grabToImage` が終わるまで意図した中間表示を保つ。証拠は実 edge を見た時だけ
 - **描画境界は画像 callback が答える** — completion 後に `requestUpdate()` と event-loop turn を通し、app / overlay 両方の `grabToImage` callback が返ってから終了する。静止した offscreen scene は `frameSwapped` を出さないことがある
+- **効果を待つ要求は拍ごとに撃ち直す**(rules/app-ui.md §UI 自動化)— 1 回の `requestUpdate()` は frame を約束しない(上の行)/ `RepoSession::restart_log` は後から来た ask に取って代わられ、取られた pass は cancel される(`take_log_run`)/ 故障の注入(`failGraphPass`)は立ったままなので、撃ち直しても同じ故障にしかならない。**撃ち直さずに待てるのは完了境界を持つ要求だけ**(書き込みの答え・`grabToImage` の callback)
+- **`PagePerfDriver` / `WindowPerfDriver` はドライバの組み方(rules/app-ui.md §UI 自動化)に反している** — sampler を持たず signal だけで段を進め、`-frame` 段は `frameSwapped` 単独で抜ける(font walk の完了も `PagePerfDriver` の `perfFinished` 待ち)。直すまで perf 系の動詞は天井まで止まりうる(P3 §check ハング調査)
+- **`graph-stopped` の故障注入は 1 回きり**(`WindowBadgeActs` の `staleActTimer`: `PageSettled` → `failGraphPass` 1 回 → 状態カード)— 撃ち直しも段の行も無く、天井で終わった run からは 3 つの門のどこで止まったかが読めない(P3 §check ハング調査)
 - **QML テストの待ちも `cargo xtask waits` が見る** — 待ちは `tryCompare` / `tryVerify` の既定 timeout(`wait(ms)` は赤。message だけなら timeout の席は `undefined`)・`waitForRendering` / `waitForItemPolished` の戻り値は `verify()` で読む。残す理由は `// waits(<purpose>): <reason>`(core.md §非同期・並行テスト)

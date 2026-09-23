@@ -29,12 +29,12 @@ paths:
 ## 非同期・並行テストの実装方針
 
 - **正しさは因果で待つ** — 完了イベント・join handle・ack・世代番号・最終状態のいずれかを本体が返し、テストはその後だけ assert する。イベントが lock / queue の途中で送られるなら owner の返却まで待つ。出さない経路には完了境界を足す(`RefreshTask` / `RefreshOutcome`)。タイマは手で進めて tick の ack を待つ
-- **待つ述語は、待っている当の物だけが満たせる形にする** — 人向けレポートの部分一致は、見出しの同じ語で**その物が生まれる前に真になる**。到着は当人が言う(ack / 完了イベント / その行だけが持つ形)
+- **待つ述語は、待っている当の物だけが満たせる形にし、主張を決める最初の境界で止める** — 人向けレポートの部分一致は、見出しの同じ語で**その物が生まれる前に真になる**。到着は当人が言う(ack / 完了イベント / その行だけが持つ形)
 - **「もう起きない」は完了後の件数・状態で証明する** — quiet は「止まった」と「遅い」を区別できない。完了境界を作れないなら実装の観測可能性を直す
 - **競合の相手は手で目的の地点まで進める** — `yield_now` / sleep / 大量反復は推測。所有する future は `crate::wait::poll_once`(統合スイートは `support::wait::poll_once`)で最初の待ち地点に止め、`Pending` を確かめてから相手を解放する。spawn した相手には到着を言う境界を持たせる
 - **時間の仕様は機能テストから外す** — タイマの間隔・順序は手回しの clock を挿した単体テストで固定し、統合テストは全 tick を手で進める。製品の clock も仮想時計で見る(`#[tokio::test(start_paused = true)]`)
 - **`cargo xtask waits` が全テストコードと試験装置の本体を読む**(gate の常時ステップ。範囲は rules-refs)— 直接の sleep / `yield_now` / `Instant::now` / `Duration` 直書きの `timeout` / 答えを捨てた待ち / `bounded` 無しの silent wait を名指す。**残す時は文の上か同じ行に `// waits(<purpose>): <reason>`**(`paced` 再試行の間隔 / `ceiling` 診断だけの天井 / `measured` 判定に使わない時計 / `timed` 製品の実時間を下限で見る)。**何も覆わないマーカーは赤**。単体テストの backstop は `crate::wait::bounded`
 - **専有(一時 repository / 設定 / port — CLAUDE.md Rust 規約)の所有権は原子的な作成成功で取る**。in-process の mutex は別バイナリ・別セッションを隔離しない。重複排除を主張する実装は single-flight にし、同時 miss と read 中の invalidation を再現して呼出回数も固定する(`Derived`)
 - **外部設定は executor 単位で隔離する** — 一時 `GIT_CONFIG_GLOBAL` / `XDG_CONFIG_HOME` と `GIT_CONFIG_NOSYSTEM=1` を全 subprocess に渡す。process-global env は書き換えない(host config を読む test だけ raw executor を明示)
-- **待ちの上限は失敗検出の backstop**(`Patience` = 進捗ごとに沈黙予算を更新 + livelock 用の全体上限)。性能予算は benchmark / baseline で判定する
+- **待ちの上限は失敗検出の backstop**(`Patience` = 進捗ごとに沈黙予算を更新 + livelock 用の全体上限)。**沈黙予算は無言の 1 手の上限でもある** — 負荷で 1 手は桁で伸びる。単独で秒の桁の手(機械の棚卸し等)は待ちに入れない(要れば mry の属性で差し替え、実物を読むテストは `periodic`)。性能予算は benchmark / baseline で判定する
 - **runner の終了コードは外まで通す**(pipe・整形・後続の先まで。並列起動は全 child を回収し、1 件でも非ゼロなら全体を非ゼロ)
