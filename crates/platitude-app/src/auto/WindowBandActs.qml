@@ -168,12 +168,10 @@ Item {
     SampleTimer {
         id: opsPanelTimer
         running: Harness.autoAct === "ops-panel"
+        /// A frame has been asked for and not yet drawn (`reportOpsPanel`).
+        property bool drawing: false
         onTriggered: {
-            if (!window.visible || topBar.width <= 0 || window.curPage === null
-                    || !window.curPage.pageRefsLoaded || !window.curPage.pageWt.loaded)
-                return
-            const tab = window.curPage.pageTab
-            if (tab.busyCount !== 0 || tab.autoFetchRunning)
+            if (!acts.opsPanelLoaded())
                 return
             // Asked for again until it takes or is refused: the width is the window's to allow, and the panel is
             // laid out again after it moves.
@@ -183,37 +181,80 @@ Item {
                 window.width = wanted
                 return
             }
-            if (topBar.width !== mainUi.width)
+            if (topBar.width !== mainUi.width || opsPanelTimer.drawing)
                 return
-            stop()
-            Harness.report(
-                "ops_panel settled=true width=" + Math.round(window.width)
-                + " floor=" + Math.ceil(window.floorWidth)
-                + " names=" + topBar.opsNames + " upstream=" + topBar.branchUpstream
-                + " namesCut=" + topBar.opsNameCut
-                + " folded=" + topBar.actionsFolded + " cut=" + topBar.actionWordCut
-                + " alert=" + topBar.actionAlertShown
-                + " push=" + topBar.pushMode + " stash=" + topBar.stashMode
-                + " badges=" + [topBar.opBadgeShown, topBar.conflictBadgeShown,
-                                topBar.identityBadgeShown, topBar.oldGitBadgeShown,
-                                topBar.staleBadgeShown].join(","))
-            window.finishAutoAct()
+            // **Read off a drawn frame, not off the tick that saw the readings land**: where the counts stand is
+            // where the row's layout put them, and a layout places its items on the way to a frame — read on the
+            // tick, the counts' seat was the one before the last reading arrived (`track=off` on a loaded machine).
+            // The grab's callback is that boundary (rules/app-ui.md §UI 自動化). **And the frame has to be of what is
+            // read**: the callback is posted, so a reading that lands after the frame was drawn and before it runs
+            // is said beside the frame before it — such a frame is let go and the next one asked for.
+            const drawnFor = acts.opsPanelKey()
+            opsPanelTimer.drawing = topBar.grabToImage(() => {
+                opsPanelTimer.drawing = false
+                if (opsPanelTimer.running && acts.opsPanelLoaded() && topBar.width === mainUi.width
+                        && acts.opsPanelKey() === drawnFor)
+                    acts.reportOpsPanel()
+            })
         }
     }
+    /// What the panel's picture is of: the names, the upstream and the counts it writes, at the width it has.
+    function opsPanelKey() {
+        const wt = window.curPage === null ? null : window.curPage.pageWt
+        return topBar.opsNames + "|" + topBar.branchUpstream + "|" + (wt === null ? "" : wt.ahead + "/" + wt.behind)
+            + "|" + topBar.width
+    }
+    /// Whether the panel has everything it names: the repository landed and nothing running on it.
+    function opsPanelLoaded() {
+        if (!window.visible || topBar.width <= 0 || window.curPage === null
+                || !window.curPage.pageRefsLoaded || !window.curPage.pageWt.loaded)
+            return false
+        const tab = window.curPage.pageTab
+        return tab.busyCount === 0 && !tab.autoFetchRunning
+    }
+    function reportOpsPanel() {
+        opsPanelTimer.stop()
+        Harness.report(
+            "ops_panel settled=true"
+            // None is in the picture as a claim: a lit name frames like a name under a pointer, a button shorter
+            // than its two lines frames like a style of its own, and counts a pixel off the end of the upstream
+            // read as set against it. Said beside the claim they are judged with.
+            + " lit=" + (topBar.repoNameLit || topBar.branchNameLit)
+            + " boxed=" + topBar.actionsBoxed
+            + " track=" + topBar.branchTrackPlace
+            + " width=" + Math.round(window.width)
+            + " floor=" + Math.ceil(window.floorWidth)
+            + " names=" + topBar.opsNames + " upstream=" + topBar.branchUpstream
+            + " namesCut=" + topBar.opsNameCut
+            + " folded=" + topBar.actionsFolded + " cut=" + topBar.actionWordCut
+            + " alert=" + topBar.actionAlertShown
+            + " push=" + topBar.pushMode + " stash=" + topBar.stashMode
+            + " badges=" + [topBar.opBadgeShown, topBar.conflictBadgeShown,
+                            topBar.identityBadgeShown, topBar.oldGitBadgeShown,
+                            topBar.staleBadgeShown].join(","))
+        window.finishAutoAct()
+    }
 
-    // PGG_AUTO_ACT=ops-stand / ops-stand-repos / ops-stand-copies / ops-branch: the panel's own two doors — the one
-    // the repository's name opens, either tier of it, and the one the branch's name opens.
+    // PGG_AUTO_ACT=ops-stand / ops-stand-repos / ops-stand-copies / ops-branch / ops-branch-folder <path>: the
+    // panel's own two doors — the one the repository's name opens, either tier of it, and the one the branch's name
+    // opens, with a folder of it where the argument names one.
     //
     // **The rows are counted as well as photographed.** Each card is assembled from a listing that arrives after the
     // tab does, and a card holding nothing looks in a picture exactly like a card holding rows that were all left
     // out (`AppMenu.offeredRows`). A run waits for the listing rather than for a beat: the refs and the copies come
     // back on separate reads, and which of them is last is the machine's business, not the verb's.
+    //
+    // **And the name that opened it is read too** — whether it is still lit with its chevron turned, which a picture
+    // of a name under the hand that pressed it shows the same whether or not the card is what keeps it lit.
     SampleTimer {
         id: opsDoorTimer
         running: Harness.autoAct === "ops-stand" || Harness.autoAct === "ops-stand-repos"
                  || Harness.autoAct === "ops-stand-copies" || Harness.autoAct === "ops-branch"
+                 || Harness.autoAct === "ops-branch-folder"
         /// Which step this run is on: the card, then the tier inside it.
         property int opened: 0
+        /// Whether a folder of the branch card was there to be opened (`ops-branch-folder`).
+        property bool folderAsked: false
         onTriggered: {
             // **Both listings, not a beat**: the refs and the copies come back on separate reads, and a card asked
             // for between them is a card with rows still missing. Every repository has its own copy in the second
@@ -222,7 +263,7 @@ Item {
                     || !window.curPage.pageRefsLoaded
                     || window.curPage.pageWorktrees.total <= 0)
                 return
-            const branchDoor = Harness.autoAct === "ops-branch"
+            const branchDoor = Harness.autoAct === "ops-branch" || Harness.autoAct === "ops-branch-folder"
             if (opsDoorTimer.opened === 0) {
                 opsDoorTimer.opened = 1
                 // **Asked for once, and reported however it went.** `offerHere` turns away a card with nothing in
@@ -240,10 +281,27 @@ Item {
                 if (Harness.autoAct === "ops-stand-copies")
                     topBar.openStandCopies()
             }
+            if (opsDoorTimer.opened === 1 && Harness.autoAct === "ops-branch-folder" && topBar.branchMenuOpen) {
+                opsDoorTimer.opened = 2
+                opsDoorTimer.folderAsked = topBar.openBranchFolder(Harness.autoActArg)
+                Harness.report("ops_door step=folder asked=" + opsDoorTimer.folderAsked)
+                return
+            }
+            // The folder's card says it is up on its own `opened` (`OpsBranchMenu.folderStanding`), which is a turn
+            // behind the ask. One that was never asked for — no such folder on the card — is reported now.
+            if (opsDoorTimer.opened === 2 && opsDoorTimer.folderAsked && topBar.branchFolderOpen === "")
+                return
             stop()
             Harness.report(
                 "ops_door open=" + (branchDoor ? topBar.branchMenuOpen : topBar.standMenuOpen)
                 + " tier=" + topBar.standDoor
+                // The name the card hangs off: still lit, and its chevron turned down.
+                + " lit=" + (branchDoor ? topBar.branchNameLit : topBar.repoNameLit)
+                + " turned=" + (branchDoor ? topBar.branchNameTurned : topBar.repoNameTurned)
+                // The band's grab runs handed back to the scene while the card stands, so a press on them closes it
+                // the way a press anywhere else does (`WindowChrome.captionYielded`) — nothing in the picture says so.
+                + " yield=" + chrome.captionYielded
+                + " folder=" + topBar.branchFolderOpen
                 + " repos=" + topBar.standRepoRows
                 + " copies=" + topBar.standCopyRows
                 + " branches=" + topBar.branchMenuRows)

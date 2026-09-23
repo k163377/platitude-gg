@@ -198,6 +198,12 @@ Item {
         mainUi: driver.mainUi
         identityDialog: driver.identityDialog
     }
+    WindowOpsActs {
+        window: driver.window
+        tabsModel: driver.tabsModel
+        pageRepeater: driver.pageRepeater
+        topBar: driver.topBar
+    }
     WindowFrameActs {
         window: driver.window
         tabsModel: driver.tabsModel

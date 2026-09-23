@@ -290,25 +290,58 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "app_menu open=true yield=true",
     },
+    // The panel standing, which is the verb the state matrix is
+    // photographed with. `settled=true` is the whole claim a picture
+    // needs behind it — the repository landed, nothing running — and
+    // everything beside it is what the picture cannot be read for.
+    //
+    // **No name is lit**: no hand is on the panel, and a lit name is a
+    // shade in the picture.
+    //
+    // `boxed=true` is every button at the panel's right end as deep as its
+    // own two lines. The branch's name writes one line for a branch
+    // following nothing (`worktrees`) and for a page still reading its
+    // repository, and a button held to that depth stands its word over
+    // its frame and its mark under it — a shape a picture of that end
+    // alone cannot tell from a style.
+    //
+    // `track=` is where the branch's counts came out: carried to the `end`
+    // of an upstream longer than the name and its counts (`panel` — `main`
+    // over `origin/main`), or `after` the name at their own step where the
+    // name's line is the longer (`longnames`). A pixel either way reads
+    // as set against the upstream in the picture.
+    Verb {
+        name: "ops-panel",
+        when: &[
+            (
+                Arg::WithPreset("panel"),
+                "ops_panel settled=true lit=false boxed=true track=end",
+            ),
+            (
+                Arg::WithPreset("longnames"),
+                "ops_panel settled=true lit=false boxed=true track=after",
+            ),
+        ],
+        plain: "ops_panel settled=true lit=false boxed=true",
+    },
     // The panel's own doors. The counts ride along because a card is
     // assembled from listings that arrive after the tab does, and a card
     // holding nothing photographs exactly like one whose rows were all
     // left out — and because `open=false` is the right answer for a
     // repository with nowhere else to stand, which is a preset fault
     // rather than a wiring one and has to be legible as such.
-    // The panel standing, which is the verb the state matrix is
-    // photographed with. `settled=true` is the whole claim a picture
-    // needs behind it — the repository landed, nothing running — and
-    // everything beside it is what the picture cannot be read for.
-    Verb {
-        name: "ops-panel",
-        when: &[],
-        plain: "ops_panel settled=true",
-    },
+    //
+    // `lit=true turned=true` on every door: the name the card hangs off
+    // stays washed with its chevron turned down while the card stands —
+    // and a name under the hand that pressed it frames the same whether
+    // the card is what keeps it lit or not. `yield=true` is the band's
+    // grab runs handed back to the scene while the card stands
+    // (`WindowChrome.captionYielded`): the platform takes a press on them
+    // otherwise, and the card stands through the click meant to close it.
     Verb {
         name: "ops-stand",
         when: &[],
-        plain: "ops_door open=true tier=stand",
+        plain: "ops_door open=true tier=stand lit=true turned=true yield=true",
     },
     // …and each tier of it, opened the way resting on the row opens it.
     // **Which card is standing is judged**, not that one is: a tier
@@ -317,19 +350,65 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "ops-stand-repos",
         when: &[],
-        plain: "ops_door open=true tier=repos",
+        plain: "ops_door open=true tier=repos lit=true turned=true yield=true",
     },
     Verb {
         name: "ops-stand-copies",
         when: &[],
-        plain: "ops_door open=true tier=copies",
+        plain: "ops_door open=true tier=copies lit=true turned=true yield=true",
     },
     // The branch door, which offers every local branch this repository
-    // has bar the one the window is on (`TopBar`'s `branchMenu`).
+    // has bar the one the window is on, filed the way the left menu files
+    // them (`OpsBranchMenu`).
     Verb {
         name: "ops-branch",
         when: &[],
-        plain: "ops_door open=true tier=branch",
+        plain: "ops_door open=true tier=branch lit=true turned=true yield=true",
+    },
+    // …and a folder of it, opened the way resting on its row opens it.
+    // **Which folder stands is judged**, one row per folder the census
+    // runs: a folder asked for and not opened leaves the card above it
+    // standing, and the two frame alike once the picture is cropped to
+    // the panel. An argument with no row of its own is judged on the tier
+    // alone.
+    Verb {
+        name: "ops-branch-folder",
+        when: &[
+            (
+                Arg::Is("feature"),
+                "ops_door open=true tier=folder lit=true turned=true yield=true folder=feature repos=",
+            ),
+            (
+                Arg::Is("topic"),
+                "ops_door open=true tier=folder lit=true turned=true yield=true folder=topic repos=",
+            ),
+        ],
+        plain: "ops_door open=true tier=folder lit=true turned=true yield=true",
+    },
+    // A row of each card pressed, judged where the press lands — the
+    // branch the panel names, the copy the tab reads, the tab in front.
+    // **`landed=` is the claim**: a row that closes its card and reaches
+    // nothing is the same picture as one that landed. `card=none` is the
+    // card gone with the press.
+    Verb {
+        name: "ops-branch-pick",
+        when: &[],
+        plain: "ops_pick door=branch found=true landed=true card=none",
+    },
+    Verb {
+        name: "ops-copy-pick",
+        when: &[],
+        plain: "ops_pick door=copy found=true landed=true card=none",
+    },
+    // `named=true` is the panel naming the tab it moved to in the press
+    // itself, before that tab has read a thing: the names were the page's
+    // answer and waited on git for it, and in the picture of the landing
+    // a name that arrived late and one that was there all along are the
+    // same name.
+    Verb {
+        name: "ops-repo-pick",
+        when: &[],
+        plain: "ops_pick door=repo found=true landed=true card=none named=true",
     },
     // And the mark pressed a second time. The card that reopened on that
     // press and the card that was never closed are the same photograph —
@@ -365,18 +444,41 @@ pub(super) const TABLE: &[Verb] = &[
     //
     // The claim stops before the fit: the widths that show the last
     // shape are below the floor a hand can drag the window to
-    // (`fits=false` is what was asked for there), and the folded mark is
-    // photographed on both sides by `old-git-fold`, which reaches it
-    // through the floor instead of through the arithmetic. The floor
-    // itself is `window-floor`'s question.
+    // (`fits=false` is what was asked for there). The folded mark is
+    // reached through the floor instead of through the arithmetic —
+    // the floor folds the group whatever the share-out says, so it lands
+    // the same on both sides — here in red, and in yellow by
+    // `old-git-fold`. The floor itself is `window-floor`'s question.
+    //
+    // `floor`'s claim is the fold and its width: `fitted=true` is the
+    // group cut to its mark's cell. A folded group that kept the width
+    // its words asked for stands empty band beside the mark, which the
+    // picture reads as a wider grab run behind the tabs and nothing in
+    // the frame names. `narrowed=` is left out — what the share-out came
+    // to under the fold is the fonts' answer, not this row's.
+    //
+    // `shadow=true` is on every row: the shape is decided on a second
+    // laying-out of the band with the words kept (`TopBar`'s `bandAsked`),
+    // and a cell that shadow does not mirror — the window's own buttons,
+    // which set their width rather than asking for it, measured — hands
+    // the words room the group's cell does not have, and they run out of
+    // it over the strip's grab run. Only a band with those buttons (a
+    // Windows run) can tell; elsewhere it holds trivially.
     Verb {
         name: "badges",
-        when: &[(
-            Arg::Is("1000:6"),
-            "op=true conflicts=true identity=true oldGit=false narrowed=true words=true mark=false",
-        )],
+        when: &[
+            (
+                Arg::Is("1000:6"),
+                "op=true conflicts=true identity=true oldGit=false narrowed=true words=true \
+                 mark=false shadow=true",
+            ),
+            (
+                Arg::Starts("floor"),
+                "words=false mark=true shadow=true tint=danger fitted=true",
+            ),
+        ],
         plain: "op=true conflicts=true identity=true oldGit=false narrowed=false words=true \
-                mark=false",
+                mark=false shadow=true",
     },
     // The card, opened. `rows=` is the half the picture cannot carry
     // on its own: a card with one row and a card with three frame the
@@ -548,11 +650,13 @@ pub(super) const TABLE: &[Verb] = &[
     // about. `tint=` is named — what is being judged is which rule
     // painted it (規約 §状態: 最も重い状態が
     // 決める), and a red mark over a lone warning is the way that rule
-    // fails silently.
+    // fails silently. `fitted=true` is the band's cell cut to the mark:
+    // a folded group that kept the words' allotment reads in the picture
+    // as a wider grab run, which nothing else in the frame names.
     Verb {
         name: "old-git-fold",
         when: &[],
-        plain: "mark=true tint=warning",
+        plain: "mark=true tint=warning fitted=true",
     },
     // The picker is the platform's own window and stands in neither
     // photograph — the overlay never holds it (`popups=0`) — so a run

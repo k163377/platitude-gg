@@ -128,7 +128,13 @@ Item {
             // narrowed to (-1 = none was).
             + " words=" + topBar.stateWordsShown
             + " mark=" + topBar.stateMarkShown
+            // The band laid out with the words handing the strip and the group what the real band does
+            // (`TopBar.bandShadowAgrees`): the shape above was decided on that shadow's room, and a cell it does not
+            // mirror is room the words are narrowed into and do not have — they run past the group's own cell.
+            + " shadow=" + topBar.bandShadowAgrees
             + " tint=" + acts.stateTint
+            // A folded group as wide as its mark and no wider (`BandStateGroup.markFitted`).
+            + " fitted=" + topBar.stateMarkFitted
             + " cap=" + topBar.stateCapW
             + " groupW=" + topBar.stateGroupW
             + " badgeMin=" + topBar.stateBadgeMinW
@@ -340,6 +346,9 @@ Item {
                 + " words=" + topBar.stateWordsShown
                 + " mark=" + topBar.stateMarkShown
                 + " tint=" + acts.stateTint
+                // Whether the folded group is its mark's width and no more: kept at the room its words asked for, it
+                // stood that much empty band beside the mark, which a picture reads as a fat grab run.
+                + " fitted=" + topBar.stateMarkFitted
                 + " cap=" + topBar.stateCapW
                 + " version=" + AppBackend.gitVersion
                 + " min=" + AppBackend.minimumGit

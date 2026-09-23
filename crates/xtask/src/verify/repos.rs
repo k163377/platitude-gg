@@ -143,8 +143,9 @@ pub(super) fn band_state_repos(count: usize, presets: &[String]) -> Result<Vec<P
 pub(super) const DEFAULT_PRESET: &str = "basic";
 
 /// One fresh demo repository per preset, in the order they were asked
-/// for — which is the order the tabs come up in.
-fn preset_repos(presets: &[String]) -> Result<Vec<PathBuf>, String> {
+/// for — which is the order the tabs come up in. Each is called `repo`,
+/// or after its preset where `named` ([`Route::NamedPresets`]).
+fn preset_repos(presets: &[String], named: bool) -> Result<Vec<PathBuf>, String> {
     let default = [DEFAULT_PRESET.to_string()];
     let presets = if presets.is_empty() {
         &default[..]
@@ -153,7 +154,8 @@ fn preset_repos(presets: &[String]) -> Result<Vec<PathBuf>, String> {
     };
     let mut made = Vec::with_capacity(presets.len());
     for preset in presets {
-        let repo = crate::demo::create(preset, None)?;
+        let name = if named { preset.as_str() } else { "repo" };
+        let repo = crate::demo::create_named(preset, None, name)?;
         println!("demo repo ({preset}): {}", repo.display());
         made.push(repo);
     }
@@ -429,7 +431,8 @@ pub(super) fn for_run(opts: &super::options::Options) -> Result<Vec<PathBuf>, St
             Route::Colliding => tab_name_repos()?,
             Route::BandStrip(count) => band_state_repos(count, &opts.preset)?,
             Route::NestedCopy => nested_copy_repo()?,
-            Route::Presets => preset_repos(&opts.preset)?,
+            Route::Presets => preset_repos(&opts.preset, false)?,
+            Route::NamedPresets => preset_repos(&opts.preset, true)?,
         }
     };
     Ok(repos)
@@ -464,6 +467,11 @@ enum Route {
     /// One fresh demo repository per preset, [`DEFAULT_PRESET`] where the
     /// run names none.
     Presets,
+    /// The same, **each folder named after its preset**: the run is about
+    /// the names the operation panel says as the window moves between the
+    /// tabs, and repositories all called `repo` say one name on every tab
+    /// — a panel still saying the tab it left would read as right.
+    NamedPresets,
 }
 
 fn route_of(verb: &str, arg: &str) -> Result<Route, String> {
@@ -513,6 +521,7 @@ fn route_of(verb: &str, arg: &str) -> Result<Route, String> {
             Some(count) => Route::BandStrip(count),
             None => Route::Presets,
         },
+        "ops-repo-pick" => Route::NamedPresets,
         _ => Route::Presets,
     })
 }
@@ -520,11 +529,14 @@ fn route_of(verb: &str, arg: &str) -> Result<Route, String> {
 /// Whether the `--preset` flag as typed asks for exactly the fixture
 /// leaving it off would have built.
 ///
-/// Only [`Route::Presets`] has that default to compare against, so the
-/// answer is the route's; every other route either ignores the flag or
-/// reads it for something that has no default of its own, and a run on
-/// one of them keeps the words it was typed with.
+/// Only [`Route::Presets`] and [`Route::NamedPresets`] have that default
+/// to compare against, so the answer is the route's; every other route
+/// either ignores the flag or reads it for something that has no default
+/// of its own, and a run on one of them keeps the words it was typed with.
 pub(super) fn preset_is_the_default(verb: &str, arg: &str, presets: &[String]) -> bool {
     matches!(presets, [one] if one == DEFAULT_PRESET)
-        && matches!(route_of(verb, arg), Ok(Route::Presets))
+        && matches!(
+            route_of(verb, arg),
+            Ok(Route::Presets | Route::NamedPresets)
+        )
 }
