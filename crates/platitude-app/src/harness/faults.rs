@@ -31,6 +31,12 @@ struct GraphFaults {
     /// is one of them, and lowered by the run when it has read what that
     /// pass left the page holding.
     holds_the_row: std::sync::atomic::AtomicBool,
+    /// How many passes have reached a step, whether the last of them met
+    /// the fault standing there, and the word each one sends on the way
+    /// in — what [`fail_graph_pass`] keeps the fault's picture up by.
+    reached: std::sync::atomic::AtomicU64,
+    last_met: std::sync::atomic::AtomicBool,
+    reaching: tokio::sync::Notify,
 }
 
 #[cfg(feature = "automation")]
@@ -46,19 +52,38 @@ impl GraphFaults {
             Err(poisoned) => poisoned.into_inner(),
         }
     }
+
+    fn reached(&self) -> u64 {
+        self.reached.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn last_met(&self) -> bool {
+        self.last_met.load(std::sync::atomic::Ordering::SeqCst)
+    }
 }
 
 #[cfg(feature = "automation")]
 impl PassHooks for GraphFaults {
-    /// Nothing: a screen is driven by a fault that stands, and this
-    /// door is the tests'.
-    fn before(&self, _at: PassStep) {}
+    /// Counted and said: a pass that gets this far is one that can take
+    /// the fault's picture down, until it too meets the fault
+    /// ([`fail_graph_pass`]).
+    fn before(&self, _at: PassStep) {
+        self.last_met
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.reached
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.reaching.notify_one();
+    }
 
     fn fault(&self, at: PassStep) -> Option<platitude_core::GitError> {
         let standing = *self.lock();
-        (standing == Some(at)).then(|| platitude_core::GitError::UnexpectedOutput {
-            command: "git log".to_string(),
-            message: "the graph walk was made to fail".to_string(),
+        (standing == Some(at)).then(|| {
+            self.last_met
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+            platitude_core::GitError::UnexpectedOutput {
+                command: "git log".to_string(),
+                message: "the graph walk was made to fail".to_string(),
+            }
         })
     }
 
@@ -140,9 +165,23 @@ pub(crate) fn pass_hooks() -> Option<Arc<dyn PassHooks>> {
 
 /// Every graph pass that reaches the step `step` names fails there from
 /// here on, in place of the walk it would have made, and one is asked
-/// for of the tab's session in the same call (`GraphModel.failGraphPass`
-/// — `swapping` for the off-screen rebuild, anything else for the
-/// stream; the words are the harness QML's, `WindowBadgeActs`).
+/// for of the tab's session — and asked for again, for as long as the
+/// run lasts, whenever the passes have all stopped and the last to reach
+/// a step is one the fault did not meet (`GraphModel.failGraphPass` —
+/// `swapping` for the off-screen rebuild, anything else for the stream;
+/// the words are the harness QML's, `WindowBadgeActs`).
+///
+/// **An ask is not a pass.** Asking takes the stream over, and the page
+/// takes it back for its own reasons: a read that moved asks for a
+/// rebuild, which cancels the pass it displaces (`take_log_run`). A pass
+/// of the other kind never meets the fault, and a rebuild that finds the
+/// picture on screen says nothing at all — so nothing the window shows
+/// tells the harness QML that its ask was lost, or that a later pass
+/// took the picture down. The session's own boundary says when the
+/// passes have stopped (`RepoSession::wait_for_graph_passes`), and the
+/// passes say whether the last of them met the fault ([`GraphFaults`]).
+/// An ask no pass got anywhere with ends it: the session was closed, and
+/// asking again would be answered by the same nothing.
 #[cfg(feature = "automation")]
 pub(crate) fn fail_graph_pass(tab_id: i32, step: &str) {
     let at = if step == "swapping" {
@@ -150,14 +189,44 @@ pub(crate) fn fail_graph_pass(tab_id: i32, step: &str) {
     } else {
         PassStep::Streaming
     };
-    *GraphFaults::standing().lock() = Some(at);
-    crate::hub::with_session(tab_id, |s| match at {
-        // Off screen, so the whole graph is left standing and goes out
-        // of date where it is.
-        PassStep::Swapping => s.refresh_log(),
-        // The column is emptied first, so the walk stops with rows
-        // missing.
-        PassStep::Streaming => s.restart_log(),
+    let faults = Arc::clone(GraphFaults::standing());
+    *faults.lock() = Some(at);
+    let Some(session) = crate::hub::from_session(tab_id, Arc::downgrade) else {
+        return;
+    };
+    let Some(runtime) = crate::hub::Hub::with(|hub| hub.runtime_handle()).flatten() else {
+        return;
+    };
+    runtime.spawn(async move {
+        loop {
+            let reached = faults.reached();
+            let Some(asked) = session.upgrade() else {
+                return;
+            };
+            match at {
+                // Off screen, so the whole graph is left standing and goes
+                // out of date where it is.
+                PassStep::Swapping => asked.refresh_log(),
+                // The column is emptied first, so the walk stops with rows
+                // missing.
+                PassStep::Streaming => asked.restart_log(),
+            }
+            asked.wait_for_graph_passes().await;
+            drop(asked);
+            if faults.reached() == reached {
+                return;
+            }
+            // Held for as long as it stands: the next pass to reach a step
+            // is the one that can take it down.
+            while faults.last_met() {
+                faults.reaching.notified().await;
+                let Some(watched) = session.upgrade() else {
+                    return;
+                };
+                watched.wait_for_graph_passes().await;
+            }
+            tracing::info!(step = ?at, "the last graph pass did not meet the fault; asking again");
+        }
     });
 }
 

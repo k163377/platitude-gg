@@ -158,6 +158,7 @@ Item {
         id: staleActTimer
         running: Harness.autoAct === "graph-stale" || Harness.autoAct === "graph-stopped"
         property bool faultArmed: false
+        property bool badgeSaid: false
         onTriggered: {
             const page = window.curPage
             if (page === null)
@@ -179,11 +180,18 @@ Item {
                 if (!PageSettled.settled(page))
                     return
                 staleActTimer.faultArmed = true
+                // Asked once, and kept up by the harness from here: an ask the page's own rebuild took over, or a
+                // picture a later pass took down, is invisible from this side (`harness::fail_graph_pass`).
                 graph.failGraphPass(Harness.autoAct === "graph-stale" ? "swapping" : "streaming")
+                Harness.report("graph_stale step=armed")
                 return
             }
             if (!topBar.staleBadgeShown || graph.loading)
                 return
+            if (!staleActTimer.badgeSaid) {
+                staleActTimer.badgeSaid = true
+                Harness.report("graph_stale step=badge")
+            }
             // The card, opened the one way the hand opens it (`badges-hover` の同じ 1 本): the line under the badge is
             // half of what this verb is for, and it is the only place the two states are told apart.
             topBar.statePointedAt = true
