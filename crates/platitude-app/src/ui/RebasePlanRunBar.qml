@@ -29,7 +29,9 @@ Item {
         anchors.bottomMargin: Theme.spaceSm
         centred: true
         phraseHead: "rebase -i"
-        text: qsTr("%n commit(s)", "", bar.plan.stepCount)
+        // A phrase for each count — `commit(s)` would reach the reader as written (デザイン規約 §タイポグラフィ).
+        text: bar.plan.stepCount === 1 ? qsTr("%n commit", "", bar.plan.stepCount)
+                                       : qsTr("%n commits", "", bar.plan.stepCount)
         // **The warning is a clause of the phrase.** The count is the fact, said in the tag's own words at the end of
         // what the button says; a line of its own would put a second thing to read in the seat this button fills, and
         // the two colours would then have to be told apart before either is read.

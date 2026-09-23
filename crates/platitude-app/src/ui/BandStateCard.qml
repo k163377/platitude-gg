@@ -216,7 +216,10 @@ AppCard {
                 }
             }
             CardText {
-                text: qsTr("%n file(s) waiting on a decision", "", stateCard.conflictCount)
+                // A sentence for each count — `file(s)` would reach the reader as written (デザイン規約 §タイポグラフィ).
+                text: stateCard.conflictCount === 1
+                      ? qsTr("%n file waiting on a decision", "", stateCard.conflictCount)
+                      : qsTr("%n files waiting on a decision", "", stateCard.conflictCount)
                 color: Theme.textSecondary
                 pixelSize: Theme.fontSm
             }

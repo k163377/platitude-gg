@@ -284,9 +284,13 @@ Item {
     Binding {
         target: publishFlow.graphPane
         property: "askTip"
+        // A sentence for each count — `commit(s)` would reach the reader as written (デザイン規約 §タイポグラフィ).
         value: publishFlow.publishRefused
-               ? qsTr("Hold to overwrite %1, dropping %n commit(s) it has and yours does not. A remote that moved since is refused.",
-                      "", publishFlow.repoTab.remoteBranchTheirs)
+               ? (publishFlow.repoTab.remoteBranchTheirs === 1
+                  ? qsTr("Hold to overwrite %1, dropping %n commit it has and yours does not. A remote that moved since is refused.",
+                         "", publishFlow.repoTab.remoteBranchTheirs)
+                  : qsTr("Hold to overwrite %1, dropping %n commits it has and yours does not. A remote that moved since is refused.",
+                         "", publishFlow.repoTab.remoteBranchTheirs))
                  .arg(publishFlow.publishTarget)
                : publishFlow.publishState === "unknown"
                  ? qsTr("%1 was never fetched here, so what it holds cannot be read — the push can only fast-forward it.")

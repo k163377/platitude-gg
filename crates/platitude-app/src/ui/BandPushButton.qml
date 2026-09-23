@@ -78,6 +78,8 @@ ActionButton {
         if (pushButton.curPage.planShown)
             return qsTr("A rebase plan is being composed — it rewrites the very commits a push would send")
         const to = pushButton.curPage.pushTargetLabel
+        const wt = pushButton.curPage.pageWt
+        // A sentence for each count — `commit(s)` would reach the reader as written (デザイン規約 §タイポグラフィ).
         const what = pushButton.mode === "unborn"
                      ? qsTr("No commits yet — git has no branch to send")
                    : pushButton.mode === "publish"
@@ -87,14 +89,18 @@ ActionButton {
                    : pushButton.mode === "elsewhere"
                      ? qsTr("Push to %1").arg(to)
                    : pushButton.mode === "ready"
-                     ? qsTr("Push %n commit(s) to %1", "", pushButton.curPage.pageWt.ahead).arg(to)
+                     ? (wt.ahead === 1 ? qsTr("Push %n commit to %1", "", wt.ahead)
+                                       : qsTr("Push %n commits to %1", "", wt.ahead)).arg(to)
                    : pushButton.mode === "clean"
                      ? qsTr("Nothing to push — %1 is up to date").arg(to)
                    // One sentence for both overwrite standings: what is lost is what the far side has either way,
                    // and `behind` says the rest of itself by having no count of its own to send.
                    : pushButton.forceShape
-                     ? qsTr("Hold to overwrite %1, dropping %n commit(s) it has (as of the last fetch)", "",
-                            pushButton.curPage.pageWt.behind).arg(to)
+                     ? (wt.behind === 1
+                        ? qsTr("Hold to overwrite %1, dropping %n commit it has (as of the last fetch)", "",
+                               wt.behind)
+                        : qsTr("Hold to overwrite %1, dropping %n commits it has (as of the last fetch)", "",
+                               wt.behind)).arg(to)
                    : ""
         // What git said, under what the button would do next — this is the one place with room for why.
         const why = pushButton.curPage.pushFailReason
