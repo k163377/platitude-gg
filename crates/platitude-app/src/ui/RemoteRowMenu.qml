@@ -56,7 +56,7 @@ Item {
         // Clearing the mark is the box in the form, and moving it is this row on another remote.
         AppMenuItem {
             id: markItem
-            text: qsTr("Mark as default remote (origin)")
+            text: qsTr("Mark as origin (default remote)")
             offered: remoteRowMenu.remote !== "" && remoteRowMenu.remote !== remoteRowMenu.repoTab.markedOrigin
             blockedReason: remoteRowMenu.repoTab.busyCount === 0 ? "" : Words.otherCommandRunning
             onTriggered: remoteRowMenu.repoTab.markOrigin(remoteRowMenu.remote)

@@ -613,7 +613,7 @@ Item {
     /// thing the row cannot show: the row shows the last segment, and the whole path is what the folds cost it.
     ///
     /// **The one leaf of REMOTES that is left out is the remote's own row** — it is a thing in itself rather than
-    /// the shape of the names under it, and what it has to say is the role it holds (the default remote), which is a
+    /// the shape of the names under it, and what it has to say is the role it holds (origin), which is a
     /// sentence and not a name. Every other leaf of that section opens, as every leaf of BRANCHES does, and so does
     /// every row of WORKTREES: what a working copy's row shows is a folder's name, and the whole of it is the path
     /// git lists it under.
@@ -661,10 +661,10 @@ Item {
             return ""
         // The one folder row that is a thing in itself says what it is for when it is origin. The role
         // leads and the name follows it (デザイン規約 §hover のツールチップ: 結論から 1 行 — the same shape the line a
-        // working copy's row opens says its state in), and `origin` is the word git gives the role
-        // (§リモートを書き留める).
+        // working copy's row opens says its state in), in the words of the row that marks it: `origin` is the one
+        // that reaches the reader, and the parenthesis says the role (§リモートを書き留める).
         if (navRow.holdsOrigin)
-            return qsTr("Default remote (origin) — %1").arg(full)
+            return qsTr("origin (default remote) — %1").arg(full)
         // **Every folder row says its own path** — the sections that open are no exception, because a fold parent
         // has nothing to open (`expands`) and the path is the one thing the row cannot show: what it draws is the
         // last segment, and the folders above it are what the reader lost to get it. In the working tree's list the

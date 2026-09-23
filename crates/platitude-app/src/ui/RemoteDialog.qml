@@ -133,9 +133,9 @@ AppDialog {
         }
 
         // Which remote is origin: where pushes go, and where a `switch` to a name several remotes carry takes it from.
-        // The word is the role and `origin` is what git calls it — the name of the remote actually holding it is
-        // this form's own heading (デザイン規約 §リモートを書き留める). The same words as the row on the left menu's menu:
-        // two ways into one operation say one sentence (§メニュー).
+        // `origin` is the word that reaches the reader and the parenthesis says the role — the name of the remote
+        // actually holding it is this form's own heading (デザイン規約 §リモートを書き留める). The same words as the row on the
+        // left menu's menu: two ways into one operation say one sentence (§メニュー).
         //
         // Offered from the second remote on — the line is about taking the destination from somewhere else, and a
         // repository's first remote is where every push goes anyway.
@@ -148,7 +148,7 @@ AppDialog {
                 id: markBox
                 /// Whether this form is asking the question at all.
                 readonly property bool offered: remoteDialog.editing !== "" || remoteDialog.taken.length > 0
-                text: qsTr("Mark as default remote (origin)")
+                text: qsTr("Mark as origin (default remote)")
                 enabled: remoteDialog.markLocal || !remoteDialog.marked
             }
             // What checking it costs, and what unchecking it gives back (デザイン規約 §長さ: 見出し 1 行 + 失うもの 1 行). The third
