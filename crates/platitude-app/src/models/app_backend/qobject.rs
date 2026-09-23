@@ -313,8 +313,8 @@ impl AppBackend {
     /// makes them drag, snap and answer a right-click with the window
     /// menu. The scene reports them; the platform does the rest.
     ///
-    /// Two of them: the run past the last tab, and the one the divider
-    /// before the window's buttons stands in. Both in the one call, so
+    /// Two of them: the run past the last tab, and the seam before the
+    /// window's own buttons. Both in the one call, so
     /// the platform never holds half an answer.
     #[qslot]
     fn set_caption_strips(

@@ -144,7 +144,7 @@ Item {
             Harness.report(
                 "band merged=" + window.captionMerged
                 + " systemTitleBar=" + AppBackend.systemTitleBar
-                + " grabRun=" + topBar.bandGrabRun + " dividerRun=" + topBar.bandDividerRun
+                + " grabRun=" + topBar.bandGrabRun + " seamRun=" + topBar.bandSeamRun
                 + " buttonsX=" + topBar.bandButtonsX
                 + " width=" + topBar.width
                 + " tabsW=" + topBar.bandTabsWidth

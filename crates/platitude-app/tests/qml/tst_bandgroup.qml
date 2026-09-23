@@ -86,6 +86,7 @@ Item {
         /// fails part-way would otherwise hand the next one the state it stopped in.
         function init() {
             group.width = 400
+            group.room = Qt.binding(() => group.width)
             group.windowAtFloor = false
             group.tabContentWidth = 100
             group.tabRunAvail = 400
@@ -173,6 +174,23 @@ Item {
             group.width = 400
             compare(group.stateCapW, -1)
             compare(badgesDrawn(), [group.opBadgeW, group.conflictBadgeW])
+        }
+
+        /// **The fold is read off the room the group is handed, not the width it is drawn at.** Folded, the band lays
+        /// the group out at its mark and nothing more (`TopBar`), so its own width then says nothing about whether the
+        /// words would fit again: a group that read it would stay folded however wide the window grew — and one that
+        /// kept the words' width to avoid that stands empty band beside its mark.
+        function test_the_fold_reads_the_room_handed_in_not_the_width_drawn() {
+            const folded = widestFolded()
+            verify(folded > 0, "the group never gave its words up at any width down to 16")
+            group.room = folded
+            group.width = group.foldedWidth
+            verify(group.stateMarkShown, "short of room, the mark stands")
+            verify(group.markFitted, "and the group is drawn at the mark and nothing more")
+
+            group.room = 400
+            verify(group.stateWordsShown, "handed room, the words come back while the group is still drawn narrow")
+            verify(!group.stateMarkShown)
         }
 
         /// **The strip's crowd reaches the group without the window moving.** The width stays where it was and the

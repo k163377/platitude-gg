@@ -171,6 +171,6 @@ pub fn set_caption_strips(runs: [(f64, f64); CAPTION_RUNS], bottom: f64) {
 }
 
 /// How many stretches of the band the hit test answers caption for: the
-/// empty run past the last tab, and the one the divider before the
-/// window's buttons stands in.
+/// empty run past the last tab, and the seam before the window's
+/// own buttons.
 pub const CAPTION_RUNS: usize = 2;

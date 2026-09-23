@@ -12,7 +12,9 @@ Rectangle {
     property bool danger: false
     signal triggered()
 
-    width: Theme.railWidth
+    // **Asked for, not set**: the band lays these out, and a second row that lays the band out with the state group's
+    // words (`TopBar`'s `bandAsked`) mirrors each cell by what it asks for — a width set outright asks for nothing.
+    implicitWidth: Theme.railWidth
     height: parent ? parent.height : Theme.toolbarHeight
     color: !winBtnMouse.containsMouse ? "transparent" : winBtn.danger ? Theme.danger : Theme.bgHover
     NavIcon {

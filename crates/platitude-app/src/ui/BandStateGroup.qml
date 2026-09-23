@@ -111,6 +111,15 @@ Item {
     /// What each badge's box is drawn at, once they have given way together. `Number.MAX_VALUE` is "nothing is
     /// narrowed". Settled by hand (`settleCap`), since it is read off a list of measurements.
     property real cap: Number.MAX_VALUE
+    /// The room the words are narrowed into — **what the band would hand the group while it keeps them**, which is its
+    /// own width until it folds (`TopBar`'s `bandAsked`). Folded, the group is laid out at its mark and nothing more,
+    /// so its own width is no longer the room the words would have; reading it would keep a group folded for want of
+    /// room folded however wide the window grew.
+    property real room: stateGroup.width
+    /// Automation: whether the mark, where it is what the group draws, is the whole of the group's width — a folded
+    /// group that kept the room its words asked for stands a stretch of empty band beside its mark, which reads in a
+    /// picture as a fat grab run and not as the group's (`old-git-fold`).
+    readonly property bool markFitted: !stateGroup.folded || Math.abs(stateGroup.width - stateToggle.width) < 1
     /// Whether the words have been given up altogether. Bound, because two of the three
     /// conditions can change without the group's own width moving, and an assignment made in `settleCap` would never be
     /// asked for again. **Every input is read in the expression itself**, so the binding takes its dependency on each
@@ -170,7 +179,7 @@ Item {
             want.push(stateGroup.staleBadgeW)
         if (stateGroup.oldGitBadgeShown)
             want.push(stateGroup.oldGitBadgeW)
-        stateGroup.cap = share.cap(want, stateGroup.width)
+        stateGroup.cap = share.cap(want, stateGroup.room)
     }
 
     /// The stand-in pointer is down on a group that can answer it: standing, and placed.
@@ -190,7 +199,7 @@ Item {
 
     onStateLitChanged: stateGroup.settleStateCard()
     onStandInAskingChanged: stateGroup.settleStateCard()
-    onWidthChanged: stateGroup.settleCap()
+    onRoomChanged: stateGroup.settleCap()
     onTabRunAvailChanged: stateGroup.settleCap()
 
     visible: stateGroup.stateShown
@@ -198,8 +207,9 @@ Item {
     // The row hands its leftover out in proportion to what each filling item asked for, so **what is asked for is what
     // decides who gives way** — asking for the mark got this group a sliver, asking with a stretch of 100 got it
     // everything (both measured). Asking for the words and no more puts the strip and this group in
-    // proportion.
-    implicitWidth: stateGroup.naturalWidth
+    // proportion. **Folded, it asks for the mark**: the words are not drawn, and the width they asked for would stand
+    // empty between the strip's grab run and the mark.
+    implicitWidth: stateGroup.folded ? stateGroup.foldedWidth : stateGroup.naturalWidth
 
     HoverCardHost {
         id: stateKeep

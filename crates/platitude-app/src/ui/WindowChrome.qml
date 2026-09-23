@@ -11,7 +11,7 @@ Item {
 
     /// The window these moves act on (`Main`).
     required property var window
-    /// The band whose grab-runs the hit test is told about (`TopBar.grabRunItem` / `dividerRunItem`).
+    /// The band whose grab-runs the hit test is told about (`TopBar.grabRunItem` / `seamRunItem`).
     required property var topBar
 
     /// The button and the band's double-click have to mean the same thing, so both go to the platform: Qt maximises
@@ -59,13 +59,13 @@ Item {
     /// gestures. Called from the strip's layout changes and from the one shift it cannot see: the window resizing,
     /// which maximising is.
     ///
-    /// Two runs: the empty band past the last tab, and the one the divider before the window's buttons stands in.
+    /// Two runs: the empty band past the last tab, and the seam before the window's own buttons.
     /// Both stand in this band and reach up to its top edge, so the one bottom carries them.
     function reportCaptionStrip() {
         if (!chrome.window.captionMerged || chrome.topBar.grabRunItem === null)
             return
         // Empty strips are how "there is no caption here" is said: the hit test takes `x1 > x0` as the question of each
-        // run (`winframe::hit_test`), so nothing else has to know about the yield. Both go — the divider's run closes
+        // run (`winframe::hit_test`), so nothing else has to know about the yield. Both go — the seam's run closes
         // the same card the same way.
         if (chrome.captionYielded) {
             chrome.sentStrip = "none"
@@ -74,7 +74,7 @@ Item {
         }
         const run = chrome.topBar.grabRunItem
         const at = run.mapToItem(null, 0, 0)
-        const gap = chrome.topBar.dividerRunItem
+        const gap = chrome.topBar.seamRunItem
         const gapAt = gap.mapToItem(null, 0, 0)
         chrome.sentStrip = Math.round(at.x) + "-" + Math.round(at.x + run.width)
         AppBackend.setCaptionStrips(at.x, at.x + run.width,

@@ -23,9 +23,9 @@ Rectangle {
     /// left to take hold of, or push either off the end — and none of that shows in a screenshot taken where the
     /// platform draws no buttons at all. The strip's readings come back through the band (`WindowAutoActDriver`).
     readonly property real bandGrabRun: tabStrip.grabRun
-    /// …and the band's other run, which a picture holds no better: the divider is drawn the same whether or not the
-    /// hit test was ever told about the stretch it stands in.
-    readonly property real bandDividerRun: dividerRun.width
+    /// …and the band's other run, which a picture holds no better: the seam before the window's own buttons is empty
+    /// band whether or not the hit test was ever told about it.
+    readonly property real bandSeamRun: seamRun.width
     readonly property real bandButtonsX: minimizeButton.x
     readonly property real bandRightMargin: bandRow.anchors.rightMargin
     readonly property real bandTabsWidth: tabStrip.tabsWidth
@@ -56,6 +56,13 @@ Rectangle {
     readonly property color stateMarkColor: stateGroup.stateMarkColor
     readonly property int stateCapW: stateGroup.stateCapW
     readonly property int stateGroupW: stateGroup.stateGroupW
+    /// …and whether a folded group is as wide as its mark and no wider (`BandStateGroup.markFitted`).
+    readonly property bool stateMarkFitted: stateGroup.markFitted
+    /// …and whether the band laid out with the words (`bandAsked`) hands the strip and the group together what the
+    /// real one does — the two rows share every other cell, so a cell the shadow does not mirror is the difference.
+    readonly property bool bandShadowAgrees:
+        Math.abs(stripAsked.width + (groupAsked.visible ? groupAsked.width : 0)
+                 - tabStrip.width - (stateGroup.visible ? stateGroup.width : 0)) < 1
     readonly property bool stateCardOpen: stateGroup.stateCardOpen
     /// Whether the row has ever placed the group — the third of the three things the stand-in pointer needs before a
     /// card can come up (`BandStateGroup.standInAsking`), and the only one of them a verb cannot otherwise read. A run
@@ -177,7 +184,7 @@ Rectangle {
     signal captionStripMoved()
     /// The two runs themselves, for `Main` to measure in scene coordinates.
     readonly property Item grabRunItem: tabStrip.grabRunItem
-    readonly property Item dividerRunItem: dividerRun
+    readonly property Item seamRunItem: seamRun
     /// Whether the ☰'s card is standing (`TabStrip`). The runs are the parts of the band a press never reaches, so it
     /// hands them back to the scene while the card is up (`WindowChrome.captionYielded`).
     readonly property bool appMenuOpen: tabStrip.appMenuOpen
@@ -477,7 +484,7 @@ Rectangle {
 
     // ---- the tab band ---------------------------------------------------
     // Anchored rather than laid out in a column: the two rows of this chrome are of fixed, different heights, and the
-    // run the platform is told about is measured off this row (`dividerRun`).
+    // run the platform is told about is measured off this row (`seamRun`).
     RowLayout {
         id: bandRow
         anchors.left: parent.left
@@ -517,9 +524,14 @@ Rectangle {
             curPage: topBar.curPage
             windowAtFloor: topBar.windowAtFloor
             pointedAt: topBar.statePointedAt
-            // The group folds off the strip's width as well as its own, and the two do not always change together.
+            // **What the group's words are narrowed and given up against is the band as it would be with them**
+            // (`bandAsked`): the room the row would hand the words, and the run the strip would have beside them. A
+            // group that has given its words up is laid out at its mark alone, so reading its own width or the strip's
+            // run beside it would read the room its folding handed out — and a group folded for want of room would
+            // never find the room to unfold into.
+            room: groupAsked.width
             tabContentWidth: tabStrip.contentWidth
-            tabRunAvail: tabStrip.runAvail
+            tabRunAvail: Math.max(0, tabStrip.runAvail + stripAsked.width - tabStrip.width)
             tabCount: tabStrip.tabCount
             // Measured off the pair beside it: what sets how big a target is
             // here is the padding a Fusion `ToolButton` keeps around its content — a number the theme does not have.
@@ -530,23 +542,17 @@ Rectangle {
             cellFolded: topBar.actionsFolded
             Layout.fillWidth: true
             Layout.fillHeight: stateGroup.cellFolded
-            Layout.maximumWidth: stateGroup.naturalWidth
+            // **Folded, the mark's cell and not a pixel more**: the width the words were asking for goes back to the
+            // strip, where it held nothing but air between the tabs' grab run and the mark.
+            Layout.maximumWidth: stateGroup.folded ? stateGroup.foldedWidth : stateGroup.naturalWidth
             Layout.minimumWidth: stateGroup.foldedWidth
             // Second in both queues (the strip's comment carries the order).
             Layout.horizontalStretchFactor: 1
             onIdentityEditRequested: topBar.identityEditRequested()
         }
-        // Where what the app owns ends and what the window owns begins.
-        Rectangle {
-            id: chromeDivider
-            visible: topBar.captionMerged
-            Layout.alignment: Qt.AlignVCenter
-            implicitWidth: Theme.borderWidth
-            implicitHeight: Theme.iconMd
-            color: Theme.borderDefault
-        }
         // The window's own three, drawn here: the platform's cannot be styled and its
-        // maximize mark never becomes a restore mark (P3-確認事項 §ウィンドウ chrome).
+        // maximize mark never becomes a restore mark (P3-確認事項 §ウィンドウ chrome). **Nothing is drawn between them
+        // and what the app owns** (規約 §ウィンドウの縁): the boxes keep the band's own step apart.
         WindowButton {
             id: minimizeButton
             visible: topBar.captionMerged
@@ -555,12 +561,14 @@ Rectangle {
             onTriggered: topBar.minimizeRequested()
         }
         WindowButton {
+            id: maximizeButton
             visible: topBar.captionMerged
             kind: topBar.windowMaximized ? "window-restore" : "window-maximize"
             Accessible.name: topBar.windowMaximized ? qsTr("Restore") : qsTr("Maximize")
             onTriggered: topBar.maximizeToggleRequested()
         }
         WindowButton {
+            id: closeButton
             visible: topBar.captionMerged
             kind: "close"
             danger: true
@@ -569,20 +577,62 @@ Rectangle {
         }
     }
 
-    // The run the divider stands in: the line, and the band's own spacing either side of it — which together are the
-    // whole stretch between the last thing the app can be asked and the first thing the window can. The hit test
-    // answers HTCAPTION for it the way it does for the run past the last tab (`TabStrip.grabArea`), so a press here
-    // is the platform's own gesture.
+    // **The band as it would be laid out with the state group asking for its words** — the same constraints the row
+    // above puts on each cell, less the one thing that differs: the group here never gives its words up. What the
+    // group is narrowed against and folded by is read off this (`stateGroup.room` / `tabRunAvail`), because the row
+    // above lays a folded group out at its mark and hands the rest to the strip. Unfolded, the two rows agree cell for
+    // cell. Nothing in it is drawn or takes a press: plain items, measured and nothing else.
+    RowLayout {
+        id: bandAsked
+        anchors.left: bandRow.left
+        anchors.right: bandRow.right
+        anchors.top: bandRow.top
+        height: bandRow.height
+        spacing: bandRow.spacing
+        Item {
+            id: stripAsked
+            implicitWidth: tabStrip.implicitWidth
+            Layout.fillWidth: true
+            Layout.minimumWidth: tabStrip.tabStripFloorW
+            Layout.horizontalStretchFactor: 100
+        }
+        Item {
+            id: groupAsked
+            visible: stateGroup.visible
+            implicitWidth: stateGroup.naturalWidth
+            Layout.fillWidth: true
+            Layout.maximumWidth: stateGroup.naturalWidth
+            Layout.minimumWidth: stateGroup.foldedWidth
+            Layout.horizontalStretchFactor: 1
+        }
+        Item {
+            visible: minimizeButton.visible
+            implicitWidth: minimizeButton.implicitWidth
+        }
+        Item {
+            visible: maximizeButton.visible
+            implicitWidth: maximizeButton.implicitWidth
+        }
+        Item {
+            visible: closeButton.visible
+            implicitWidth: closeButton.implicitWidth
+        }
+    }
+
+    // The seam between the last thing the app can be asked and the first thing the window can — the band's own step
+    // before the window's buttons, with nothing drawn in it. The hit test answers HTCAPTION for it the way it does for
+    // the run past the last tab (`TabStrip.grabArea`), so a press here is the platform's own gesture (規約
+    // §ウィンドウの縁「何も受けない空きは窓の掴み所」).
     //
     // Outside the row, so that measuring the row's own layout does not become part of it: a child of a `RowLayout` is
-    // laid out, and this one only wants to know where two of the row's items came to rest. `bandRow` fills the band,
+    // laid out, and this one only wants to know where one of the row's items came to rest. `bandRow` fills the band,
     // so its children's coordinates are this item's.
     Item {
-        id: dividerRun
-        x: bandRow.x + chromeDivider.x - bandRow.spacing
-        // Nothing at all while the band is not the title bar: the divider is not drawn there, and a `RowLayout` leaves
-        // an item it is not laying out at whatever geometry it last had.
-        width: chromeDivider.visible ? chromeDivider.width + 2 * bandRow.spacing : 0
+        id: seamRun
+        x: bandRow.x + minimizeButton.x - bandRow.spacing
+        // Nothing at all while the band is not the title bar: there are no window buttons to stand before, and a
+        // `RowLayout` leaves an item it is not laying out at whatever geometry it last had.
+        width: minimizeButton.visible ? bandRow.spacing : 0
         height: bandRow.height
         onXChanged: topBar.captionStripMoved()
         onWidthChanged: topBar.captionStripMoved()
