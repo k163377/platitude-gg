@@ -122,7 +122,7 @@ Item {
     /// Without it a press there reached nothing at all, which is the same dead corner the right pane's values had.
     ///
     /// `originY`: this list is sent to its end over rows of differing heights — a failure brings
-    /// git's words down with it — and a view that has been so moves its own origin (`CommandsPane.clampY`). An empty
+    /// git's words down with it — and a view that has been so moves its own origin (`AppListView.clampY`). An empty
     /// log has no band at all — the clamp then answers above its own last row, `indexAt` finds nothing, and the press
     /// goes down to the list as it always did.
     function onRows(y) {

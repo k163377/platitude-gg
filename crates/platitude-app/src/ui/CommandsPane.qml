@@ -254,17 +254,6 @@ Rectangle {
             onMovementEnded: list.follow = list.atYEnd
             onCountChanged: if (list.follow) list.positionViewAtEnd()
 
-            /// How far a drag may carry the view (`CommandsTextSelect`). `[0, contentHeight - height]` is not that
-            /// range: `positionViewAtEnd` over rows of differing heights — a failure brings git's words down with it —
-            /// moves the list's own origin, so the top of the log sits at `originY` and not at zero. Measured 55
-            /// pixels of it left out of a drag's reach after one open-and-walk (qmltestrunner measured), which
-            /// is the top rows of the log. The graph does the same arithmetic for the same reason (`GraphList.clampY`).
-            function clampY(y) {
-                const minY = list.originY - list.topMargin
-                const maxY = Math.max(minY, list.originY + list.contentHeight - list.height + list.bottomMargin)
-                return Math.max(minY, Math.min(y, maxY))
-            }
-
             // The one key this panel answers. `StandardKey`, so the platform's idea
             // of copy is what is matched — the same way the diff answers it (規約 §diff の中身をコピーする).
             Keys.onPressed: event => {

@@ -169,7 +169,7 @@ Item {
     /// Without it a press there reached nothing at all, which is the same dead corner the right pane's values had.
     ///
     /// `originY`: a list of rows with differing heights moves its own origin once it has been sent
-    /// to its end (app-ui.md, `CommandsPane.clampY`). An empty list has no band at all — the clamp then answers above
+    /// to its end (app-ui.md, `AppListView.clampY`). An empty list has no band at all — the clamp then answers above
     /// its own last row, `indexAt` finds nothing, and the press goes down to the list as it always did.
     function onRows(y) {
         const first = pick.view.originY

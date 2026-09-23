@@ -5,10 +5,10 @@ import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
-// The history itself: the rows, the viewport arithmetic every mover in the pane goes through (`clampY` /
-// `firstVisibleRow` / `rowOnScreen`), where the keyboard goes, and the state the delegates read back off
-// `ListView.view` — that state is held here, since the delegate is recycled the moment its row scrolls
-// off. Everything outside reaches it through this component's root, which is the list (`GraphPane.view`).
+// The history itself: the rows, the viewport arithmetic every mover in the pane goes through (`clampY`, which every
+// list has from `AppListView` / `firstVisibleRow` / `rowOnScreen`), where the keyboard goes, and the state the
+// delegates read back off `ListView.view` — that state is held here, since the delegate is recycled the moment its row
+// scrolls off. Everything outside reaches it through this component's root, which is the list (`GraphPane.view`).
 AppListView {
     id: graphList
 
@@ -175,17 +175,6 @@ AppListView {
         graphXOffset: graphList.graphXOffset
         graphFullWidth: graphList.graphFullWidth
         findOn: graphList.findOn
-    }
-    // Manual contentY math must respect originY: after positionViewAtIndex jumps, the ListView shifts its
-    // coordinate origin as item positions are fixed up, so [0, contentHeight-height] no longer matches the real
-    // scroll range (top rows become unreachable, the bottom overshoots the truncation footer).
-    function clampY(y) {
-        // topMargin lives above the content origin — forgetting it makes the top gap unreachable by wheel after any
-        // scroll.
-        const minY = graphList.originY - graphList.topMargin
-        const maxY = Math.max(minY, graphList.originY + graphList.contentHeight
-                                    - graphList.height + graphList.bottomMargin)
-        return Math.max(minY, Math.min(y, maxY))
     }
     /// Topmost row with any of itself on screen; 0 while the view is in its own top margin, where there is no row
     /// to be over.

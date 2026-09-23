@@ -37,6 +37,17 @@ ListView {
     /// strip of nothing answered.
     readonly property real barRoom: appList.ScrollBar.vertical.visible ? appList.ScrollBar.vertical.width : 0
 
+    /// Where the view may be sent to: every hand that moves it by a distance goes through this one clamp. **Not
+    /// `[0, contentHeight - height]`**: after `positionViewAtIndex` over rows of differing heights the list moves its
+    /// own origin as it fixes the items up, and the top rows go out of reach while the bottom overshoots the last
+    /// one. The margins are the list's own ground above and below the rows, so they are part of the range — left out,
+    /// the gap at the top cannot be reached again once the view has left it.
+    function clampY(y) {
+        const minY = appList.originY - appList.topMargin
+        const maxY = Math.max(minY, appList.originY + appList.contentHeight - appList.height + appList.bottomMargin)
+        return Math.max(minY, Math.min(y, maxY))
+    }
+
     clip: true
     reuseItems: true
     // Hard stop at the ends, as everywhere else that scrolls (デザイン規約 §QML 実装ルール).
