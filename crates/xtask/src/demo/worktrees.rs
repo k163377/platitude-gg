@@ -357,6 +357,12 @@ pub(super) fn nested_copy(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// The branch [`long_names`] stands on. Long enough, on its own line,
+/// that the panel's actions give their words up at a width over the
+/// window's floor on both platforms' fonts (`band-actions`,
+/// `band-actions-fold`).
+const LONG_BRANCH: &str = "release/2026-08-candidate-with-a-very-long-branch-name-for-the-panel";
+
 /// Every name the operation panel writes, long enough to be cut — so the
 /// order it gives them up in, and the shapes its actions take as they
 /// give their words up, can be photographed at widths a hand can drag
@@ -369,6 +375,11 @@ pub(super) fn nested_copy(repo: &mut DemoRepo) -> Result<(), String> {
 /// shortest one that still gives a branch an upstream to be measured
 /// against, a remote that has moved on without it, and a copy to be
 /// standing in.
+///
+/// **The branch's own line is what the panel pays for** — the upstream
+/// is written under it, not after it (`OpsPicker`) — so that line alone
+/// has to run long enough for the actions to give their words up above
+/// the window's floor ([`LONG_BRANCH`]).
 pub(super) fn long_names(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -377,22 +388,13 @@ pub(super) fn long_names(repo: &mut DemoRepo) -> Result<(), String> {
     )?;
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
     repo.add_origin()?;
-    repo.git(&[
-        "switch",
-        "--create",
-        "release/2026-08-candidate-with-a-very-long-branch-name",
-    ])?;
+    repo.git(&["switch", "--create", LONG_BRANCH])?;
     repo.commit(
         "src/release.txt",
         "release v1\n",
         "feat: prepare the release",
     )?;
-    repo.git(&[
-        "push",
-        "--set-upstream",
-        "origin",
-        "release/2026-08-candidate-with-a-very-long-branch-name",
-    ])?;
+    repo.git(&["push", "--set-upstream", "origin", LONG_BRANCH])?;
     // The remote moves on under it, from a clone of its own, and this
     // end is never told: what the panel then says is a branch that has
     // one of each, and a push git will not send.
@@ -406,13 +408,7 @@ pub(super) fn long_names(repo: &mut DemoRepo) -> Result<(), String> {
     ] {
         repo.git_at(&seeder.clone(), &["config", key, value])?;
     }
-    repo.git_at(
-        &seeder.clone(),
-        &[
-            "switch",
-            "release/2026-08-candidate-with-a-very-long-branch-name",
-        ],
-    )?;
+    repo.git_at(&seeder.clone(), &["switch", LONG_BRANCH])?;
     std::fs::write(seeder.join("src/release.txt"), "release v1\nremote work\n")
         .map_err(|e| e.to_string())?;
     repo.git_at(&seeder.clone(), &["add", "--", "src/release.txt"])?;
@@ -437,5 +433,52 @@ pub(super) fn long_names(repo: &mut DemoRepo) -> Result<(), String> {
         "side/long-lived-integration-branch",
         "../a-very-long-working-copy-folder-name",
     ])?;
+    Ok(())
+}
+
+/// The operation panel's two cards with something in every column they
+/// draw — the shape a repository being worked in gives them, where
+/// [`worktrees`] gives the copies' states one at a time.
+///
+/// **Every kind of row the branch card has**: a folder of two
+/// (`topic/`), a branch standing alone (`rig`), one measured against a
+/// remote it has parted from (`feature/tracked`, one each way — the
+/// counts and the cloud), and two another copy has out (`worktree-a`,
+/// `worktree-b` — the tree mark). **The branch the window stands on is
+/// ahead of what it reads by two**, with a name shorter than that
+/// reading: the panel's second line is then the longer of the two, which
+/// is where the counts are set against its end.
+///
+/// The copy the second branch is out in is locked, so the copies' card
+/// holds a row with a mark in its seat beside one without.
+pub(super) fn panel(repo: &mut DemoRepo) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nA repository being worked in.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
+    repo.add_origin()?;
+    repo.git(&["push", "--set-upstream", "origin", "main"])?;
+    repo.git(&["branch", "topic/competent-benz"])?;
+    repo.git(&["branch", "topic/wizardly-ellis"])?;
+    repo.git(&["branch", "rig"])?;
+    // Pushed, then taken back a step and moved on from there: one commit
+    // each side, with nothing fetched to arrange it.
+    repo.git(&["switch", "--create", "feature/tracked"])?;
+    repo.commit("src/tracked.txt", "tracked v1\n", "feat: track the topic")?;
+    repo.git(&["push", "--set-upstream", "origin", "feature/tracked"])?;
+    repo.git(&["reset", "--hard", "HEAD~1"])?;
+    repo.commit(
+        "src/tracked.txt",
+        "tracked, the other way\n",
+        "feat: track the topic another way",
+    )?;
+    repo.git(&["switch", "main"])?;
+    repo.git(&["worktree", "add", "-b", "worktree-a", "../a"])?;
+    repo.git(&["worktree", "add", "-b", "worktree-b", "../b"])?;
+    repo.git(&["worktree", "lock", "../b"])?;
+    repo.commit("src/app.txt", "app v2\n", "feat: grow the app")?;
+    repo.commit("docs/guide.md", "guide v1\n", "docs: add a guide")?;
     Ok(())
 }

@@ -177,6 +177,16 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   out in another copy, one commit past that reading: the
                   one shape where a REMOTES row opens on all three of
                   its lines (nav-open)
+        longnames every name the operation panel writes, long enough to
+                  be cut — a branch ahead and behind its upstream, and a
+                  copy with a folder of its own (ops-panel <width>,
+                  band-actions)
+        panel     the operation panel's cards with something in every
+                  column: a folder of two branches (topic/), one alone,
+                  one parted from its upstream both ways, two held by
+                  other copies (one of them locked), and main two ahead
+                  of origin/main (ops-branch, ops-branch-pick,
+                  ops-stand-copies)
         pictures  a picture in every bucket the diff pane previews from:
                   a logo changed in the tree (art/logo.png), a vector
                   mark changed beside it (art/mark.svg — rows and

@@ -25,7 +25,7 @@ use super::signing::{errsig, signed};
 use super::stack::{stack, stack_max};
 use super::tags::{manytags, tagonly, tagremotes, tags};
 use super::worktrees::{
-    carried, carried_clashing, carried_many, long_names, nested_copy, tracked_elsewhere,
+    carried, carried_clashing, carried_many, long_names, nested_copy, panel, tracked_elsewhere,
     worktree_detached, worktrees,
 };
 
@@ -233,6 +233,7 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "widelines" => widelines(&mut repo)?,
         "worktrees" => worktrees(&mut repo)?,
         "longnames" => long_names(&mut repo)?,
+        "panel" => panel(&mut repo)?,
         "carried" => carried(&mut repo)?,
         "carried-many" => carried_many(&mut repo)?,
         "carried-clashing" => carried_clashing(&mut repo)?,
