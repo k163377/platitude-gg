@@ -25,7 +25,7 @@ Item {
     required property string avatarUrl
     required property bool isWip
     required property string stashRef
-    /// The search passed this row over. Only the row's own marks dim — the lanes stay lit.
+    /// The search passed this row over: its lanes, its marks and its face all go down.
     required property bool dimmed
 
     /// Identicon code of the first co-author, or 0 when nobody is credited.
@@ -164,6 +164,10 @@ Item {
                 ctx.rect(0, 0, laneCell.xOffset + laneCell.width, height)
                 ctx.clip()
                 ctx.lineWidth = Metrics.laneStroke
+                // The row's lanes and the marks that ride them dim with it (規約 §コミットを探す): a lane crossing a
+                // match stays lit for that row alone. Set on every paint — the list hands this cell from row to row,
+                // and the alpha is the one piece of the context the next row's lanes read.
+                ctx.globalAlpha = laneCell.dimmed ? Metrics.dimFade : 1
                 const laneCount = Theme.graphLane.length
                 const cx = function (l) { return Metrics.laneInset + l * Metrics.laneW + Metrics.laneW / 2 }
                 const midY = height / 2
@@ -188,9 +192,6 @@ Item {
                     ctx.stroke()
                 }
                 ctx.setLineDash([])
-                // The marks below are the row's own — they dim with it while the lanes above stay lit. A lane is one
-                // line drawn across many rows: dimming it per row would break each line into a bright-and-dark ladder.
-                ctx.globalAlpha = laneCell.dimmed ? Metrics.dimFade : 1
                 // The WIP row has no commit and no author: a dashed, empty node. A lane mark, drawn
                 // inside the lanes' clip — nothing of it leans past the column.
                 const r = Metrics.nodeIcon / 2
@@ -231,8 +232,9 @@ Item {
                 }
                 // ---- the faces, leaning as far as the clipper goes ----
                 ctx.restore()
-                // The node is the row's own — it dims with the row while the lanes stay lit.
-                ctx.globalAlpha = laneCell.dimmed ? Metrics.dimFade : 1
+                // Saved like the lanes' half: the context outlives this paint, and the list hands this cell from row
+                // to row as it scrolls, so an alpha or a composite left on it is the next row's to start from.
+                ctx.save()
                 // The commit node is the author's picture where they were given one, and their identicon otherwise
                 // (5x5, mirrored; what stands in for the avatar services this application cannot use). The pattern uses
                 // only the inner part of the circle so the clip cuts less of it. A commit somebody shares steps its
@@ -242,6 +244,17 @@ Item {
                 const shared = laneCell.mateFace !== 0
                 const ax = shared ? laneCell.nodeMidX - Theme.borderWidth : laneCell.nodeMidX
                 const ay = shared ? midY - Theme.borderWidth : midY
+                // The node dims with its row. **Darker, not see-through**: at `dimFade` the face is a wash, and the
+                // lanes into and out of it would run on across it, so the disc it covers — outline and all — is taken
+                // out of the lanes first and the face goes down over the row's own ground.
+                if (laneCell.dimmed) {
+                    ctx.globalCompositeOperation = "destination-out"
+                    ctx.beginPath()
+                    ctx.arc(ax, ay, r + Theme.borderWidth / 2, 0, 2 * Math.PI)
+                    ctx.fill()
+                    ctx.globalCompositeOperation = "source-over"
+                    ctx.globalAlpha = Metrics.dimFade
+                }
                 ink.face(ctx, ax, ay, r, laneCell.avatar, laneCell.avatarUrl)
                 if (shared) {
                     const br = Theme.iconSm / 2
@@ -259,6 +272,7 @@ Item {
                     ctx.restore()
                     ink.face(ctx, laneCell.badgeCX, laneCell.badgeCY, br, laneCell.mateFace, "")
                 }
+                ctx.restore()
             }
         }
     }
