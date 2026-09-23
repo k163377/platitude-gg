@@ -214,6 +214,14 @@ ColumnLayout {
         id: summaryGlide
         view: summaryView.contentItem
     }
+    /// The middle button's drift over the summary, the words and nothing else (`DescriptionBox.driftText` says why the
+    /// block under the boxes is left alone).
+    function driftSummary(dy) {
+        editor.unpinSummary()
+        summaryGlide.halt()
+        const flick = summaryView.contentItem
+        flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, flick.contentY + dy))
+    }
     /// Smoke hook: the caret in the description box, the way a click in it puts it there.
     function focusDescription() {
         descBox.takeCaret()
@@ -255,6 +263,7 @@ ColumnLayout {
             // `DescriptionBox` for why each is so.
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
             ScrollBar.vertical: AutoScrollBar {
+                id: summaryBar
                 view: summaryView.contentItem
                 x: summaryView.width - width
                 y: summaryView.topPadding
@@ -286,6 +295,14 @@ ColumnLayout {
                     onWheel: event => editor.rollSummary(event.angleDelta.y)
                 }
             }
+        }
+        // The middle button's hand over the summary's words, on the terms the description box gives its own
+        // (`DescriptionBox`): over the text, only while there is somewhere to go, and out of the way of a paste.
+        MiddleAutoScroll {
+            id: summaryHand
+            anchors.fill: summaryView
+            visible: summaryBar.visible
+            onDrifted: dy => editor.driftSummary(dy)
         }
     }
     // Always shown, even empty, and taking whatever the summary above it left of the block.

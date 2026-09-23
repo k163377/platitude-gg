@@ -33,6 +33,9 @@ Rectangle {
     /// (デザイン規約 §色 スクロールバー), and what it paints is its own opacity — the side a run reads (verify-ui).
     readonly property alias bar: textBar
     readonly property real textAt: textView.contentItem ? textView.contentItem.contentY : 0
+    /// Automation only: the box's own middle-button hand, started and drifted without a pointer (a middle button
+    /// cannot be injected).
+    readonly property alias hand: hand
 
     /// What the pane has allotted this box at rest, before any pull. The pane works it out: the
     /// summary above it and this box are laid out inside one block of a single height (デザイン規約 §コミットメッセージの 2 つの枠), so
@@ -195,6 +198,16 @@ Rectangle {
         id: glide
         view: textView.contentItem
     }
+    /// The middle button's drift, through the clamp a notch has (`rollBy`) — **the words and nothing else**. The
+    /// wheel hands what the box cannot use to the surface under it; the hand does not, because its ring marks a
+    /// point on the screen and the box travels with that surface, taking the ring away from the pointer that set it.
+    function driftText(dy) {
+        box.unpin()
+        // A notch still in flight would pull against the drift for its last beat (`WheelGlide.halt`).
+        glide.halt()
+        const flick = textView.contentItem
+        flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, flick.contentY + dy))
+    }
     /// Smoke hook: the caret in the box, the way a click puts it there. Called `takeCaret` -- Item already has a
     /// `focus` property, and the name `focus()` resolves to that one, so the call is a TypeError at the point it is
     /// made.
@@ -349,5 +362,17 @@ Rectangle {
             // shade the pane spends on things being read.
             tint: grip.containsMouse || grip.pressed ? Theme.textSecondary : Theme.borderStrong
         }
+    }
+    // The middle button's hand, over the words. Last, so a gesture under way stands over the grip as well and the click
+    // that ends it ends it there too.
+    //
+    // **Only while the words have somewhere to go** — the bar's own answer (`AutoScrollBar`). A box that holds all of
+    // its text is part of whatever it stands on, and a middle press there is that surface's. **Written in where the
+    // middle button pastes, the words keep the press** (`MiddleAutoScroll.claimedAt`): there the click is the paste.
+    MiddleAutoScroll {
+        id: hand
+        anchors.fill: textView
+        visible: textBar.visible
+        onDrifted: dy => box.driftText(dy)
     }
 }

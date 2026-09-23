@@ -262,8 +262,6 @@ Rectangle {
     }
     readonly property alias codeBarShown: codeScroll.barShown
     readonly property alias codeHandOn: codeScroll.handScrolling
-    /// Puts that hand down from outside the pane — Escape (`RepoPage.escapePressed`).
-    function stopHand() { codeScroll.stopHand() }
     function sendCode(dx) { codeScroll.shift(dx) }
     function startCodeHand(x, y) { codeScroll.startHand(x, y) }
     function driftCodeHand(x, y) { codeScroll.driftHand(x, y) }
@@ -461,6 +459,9 @@ Rectangle {
             // The strip the sideways bar stands on, below the last row (`DiffCodeScroll.barRoom`).
             // A file with nowhere sideways to go has no bar and gets the strip back.
             Layout.bottomMargin: codeScroll.barRoom
+            // The middle button is the pane's: its hand goes sideways as well, over the hand that picks the text
+            // (`DiffCodeScroll`).
+            ownsHand: false
             model: diffPane.diffModel
             // The rows the write asked for have landed: put the view back where it was reading, and work out which of
             // the new rows the pointer is over. The filled half only — a reset shows up here as zero first.
@@ -511,9 +512,6 @@ Rectangle {
                 onWheel: event => {
                     // Sending the rows is the hand arriving here without a press to say so (規約 §diff のファイル一覧).
                     diffPane.handArrived()
-                    // And a hand on the wheel is a hand that has stopped pointing: the autoscroll it left latched
-                    // ends here, as the graph's does (`GraphList`).
-                    codeScroll.stopHand()
                     diffList.cancelFlick()
                     // The wheel's own sideways component — a tilt wheel, a touchpad — says where it wants to go in the
                     // input itself, so it is answered wherever the pointer is (デザイン規約 §グラフを横へ送る, same rule).

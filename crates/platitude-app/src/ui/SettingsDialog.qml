@@ -243,7 +243,12 @@ AppDialog {
             // them (Qt warns about exactly this).
             sequences: [StandardKey.Cancel]
             enabled: settingsDialog.opened
-            onActivated: settingsDialog.escapeOut()
+            // A middle-click gesture going on the chapters is the most standing thing on this screen, the way it is
+            // on the page (`RepoPage.escapePressed`): the first Escape puts that down and the screen stays.
+            onActivated: {
+                if (!MiddleHand.stop())
+                    settingsDialog.escapeOut()
+            }
         }
 
         // ---- the header band -------------------------------------------------
@@ -399,6 +404,17 @@ AppDialog {
                 ScrollBar.vertical: PaneScrollBar {
                     id: chaptersBar
                     idleColor: Theme.borderSubtle
+                }
+                // The middle button's hand, over the chapters and standing while they have somewhere to go. The boxes
+                // keep that press only where it is a paste (`MiddleAutoScroll.claimedAt`). On the view's own frame, not
+                // in its content, which travels with the scroll.
+                MiddleAutoScroll {
+                    id: middleHand
+                    parent: chapters
+                    anchors.fill: parent
+                    visible: chaptersBar.visible
+                    onDrifted: dy => chapters.contentY =
+                        Math.max(0, Math.min(chapters.contentY + dy, chapters.contentHeight - chapters.height))
                 }
 
                 // The hand the chapters' words are dragged over from the air around them

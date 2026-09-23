@@ -95,6 +95,16 @@ Flickable {
     // Hard stop at the ends, as everywhere else that scrolls (デザイン規約 §QML 実装ルール).
     boundsBehavior: Flickable.StopAtBounds
     ScrollBar.vertical: PaneScrollBar {}
+    // The middle button's hand, over the block and standing while it has somewhere to go — the same one the details
+    // pane's block carries (`DetailsMessageBlock`), and letting a press on a box with a hand of its own go to that one.
+    MiddleAutoScroll {
+        id: hand
+        parent: block
+        anchors.fill: parent
+        visible: block.ScrollBar.vertical.visible
+        // `rollBlock` takes the wheel's sense — content travels against `contentY`.
+        onDrifted: dy => block.rollBlock(-dy)
+    }
     ColumnLayout {
         id: blockCol
         width: block.width

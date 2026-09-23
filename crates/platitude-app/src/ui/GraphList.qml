@@ -19,6 +19,8 @@ AppListView {
     required property var columns
 
     model: graphList.graphModel
+    // The middle button is the pane's: its hand goes sideways over the lanes as well (`GraphPane`).
+    ownsHand: false
     // Nothing but the pane's own functions move the view — the chase is off in `AppListView`, and the arrow keys
     // move it themselves by as little as will do (`revealStep`).
     //
@@ -161,8 +163,6 @@ AppListView {
     property string rowCardOid: ""
     signal namingSubmitted(string oidHex, string name, string mode)
     signal namingCancelled()
-    /// The wheel took the view over: whatever gesture was carrying it ends here.
-    signal wheelTaken()
     /// The wheel asked for the lanes sideways. The pane owns how far they may go, so it is
     /// given the turn.
     signal wheelPanned(real delta)
@@ -206,8 +206,6 @@ AppListView {
     WheelHandler {
         acceptedDevices: PointerDevice.Mouse
         onWheel: event => {
-            // Wheel input exits middle-click autoscroll (Chrome-like behavior).
-            graphList.wheelTaken()
             graphList.cancelFlick()
             if (event.angleDelta.x !== 0)
                 graphList.wheelPanned(event.angleDelta.x)

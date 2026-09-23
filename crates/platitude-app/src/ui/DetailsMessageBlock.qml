@@ -116,6 +116,17 @@ Flickable {
     // What moves here is the block; the words inside the message boxes
     // move under a bar of their own, and that one is the style's.
     ScrollBar.vertical: PaneScrollBar {}
+    // The middle button's hand, over the block and standing while it has somewhere to go. A message box whose words
+    // run past it has a hand of its own, and this one lets a press on it go to that one (`MiddleAutoScroll.claimedAt`).
+    // On the view's own frame, not in its content.
+    MiddleAutoScroll {
+        id: hand
+        parent: block
+        anchors.fill: parent
+        visible: block.ScrollBar.vertical.visible
+        // `rollBlock` takes the wheel's sense — content travels against `contentY`.
+        onDrifted: dy => block.rollBlock(-dy)
+    }
     ColumnLayout {
         id: blockCol
         width: block.width

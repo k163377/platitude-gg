@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// The list every pane in the app scrolls: rows kept inside their box, delegates recycled, a hard stop at each end, and
-// the bar that only appears when there is somewhere to go.
+// The list every pane in the app scrolls: rows kept inside their box, delegates recycled, a hard stop at each end, the
+// bar that only appears when there is somewhere to go, and the middle button's hand (デザイン規約 §中クリックの自動スクロール).
 //
 // **The view stays put under a moving current item.** Chasing it drags a reader parked in the history to wherever a
 // background rebuild re-resolved the selection. Whatever moves the view moves it on purpose — an arrow key, a reveal,
@@ -37,6 +37,15 @@ ListView {
     /// strip of nothing answered.
     readonly property real barRoom: appList.ScrollBar.vertical.visible ? appList.ScrollBar.vertical.width : 0
 
+    /// Whether this list is sent by its own hand under the middle button. **Off where the pane lays one over it**:
+    /// the graph and the diff go sideways as well, and the log is drawn over by the hand that picks its text — so each
+    /// of the three seats a hand of its own above what it laid over the rows (`GraphPane` / `DiffCodeScroll` /
+    /// `CommandsPane`), where one in here would sit under all of it.
+    property bool ownsHand: true
+    /// Automation only: this list's own hand, started and drifted without a pointer — a middle button cannot be
+    /// injected any more than a hover can (verify-ui).
+    readonly property alias hand: hand
+
     /// Where the view may be sent to: every hand that moves it by a distance goes through this one clamp. **Not
     /// `[0, contentHeight - height]`**: after `positionViewAtIndex` over rows of differing heights the list moves its
     /// own origin as it fixes the items up, and the top rows go out of reach while the bottom overshoots the last
@@ -55,4 +64,16 @@ ListView {
     highlightFollowsCurrentItem: false
     // The one bar, built here from whatever the list named above.
     ScrollBar.vertical: appList.verticalBar.createObject(appList)
+
+    // The middle button's hand, over the rows, **standing while the list has somewhere to go** — the bar's own answer,
+    // a browser's too: a middle press on a list that holds all of its rows starts nothing.
+    MiddleAutoScroll {
+        id: hand
+        // The list's own frame, not its content: a child the list adopts goes into `contentItem` and travels with the
+        // rows (`CommandsPane` pins its empty label the same way).
+        parent: appList
+        anchors.fill: parent
+        visible: appList.ownsHand && appList.ScrollBar.vertical.visible
+        onDrifted: dy => appList.contentY = appList.clampY(appList.contentY + dy)
+    }
 }

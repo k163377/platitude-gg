@@ -4,6 +4,7 @@ singleton Metrics 1.0 Metrics.qml
 singleton Words 1.0 Words.qml
 singleton Ink 1.0 Ink.qml
 singleton Motion 1.0 Motion.qml
+singleton MiddleHand 1.0 MiddleHand.qml
 singleton NavFacts 1.0 NavFacts.qml
 ActionButton 1.0 ActionButton.qml
 ActionButtonLabel 1.0 ActionButtonLabel.qml

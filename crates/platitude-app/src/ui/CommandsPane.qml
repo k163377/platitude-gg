@@ -247,6 +247,9 @@ Rectangle {
             // rule and the first row, which a failure's lit ground and red edge draw for anyone to see (observed).
             // The graph keeps a top margin because it has no band over it (`GraphList`).
             bottomMargin: Theme.spaceXs
+            // The middle button is the pane's: the hand that picks the text is laid over these rows, and the one that
+            // sends them has to stand over that (below).
+            ownsHand: false
 
             /// Whether new rows pull the view along. Reading further up stops that until the end is reached again — the
             /// same rule the graph follows: the ground stays put under a reader.
@@ -313,5 +316,26 @@ Rectangle {
         barRoom: list.barRoom
         ruler: lineRuler
         onScrollWanted: dy => list.contentY = list.clampY(list.contentY + dy)
+    }
+
+    // ---- the middle button ----------------------------------------------------------------------------------------
+    // **Declared after the hand that picks the text, so it stands over it** — the list's own hand would sit under that
+    // one, where the click that ends a gesture lands on the text picker and starts a selection instead
+    // (`AppListView.ownsHand`). Over the rows' own frame: the column this panel is laid out in fills it, so the list's
+    // x and y are already in these coordinates (`CommandsTextSelect` stands on the same frame).
+    MiddleAutoScroll {
+        id: hand
+        x: list.x
+        y: list.y
+        width: list.width
+        height: list.height
+        // Standing while the log has somewhere to go, as every list's own hand does (`AppListView`).
+        visible: list.ScrollBar.vertical.visible
+        onDrifted: dy => {
+            list.contentY = list.clampY(list.contentY + dy)
+            // Where the hand leaves the log is where the reader parked it: up the log, new rows stop pulling the view
+            // along, and back at the end they pull it again (`follow`).
+            list.follow = list.atYEnd
+        }
     }
 }

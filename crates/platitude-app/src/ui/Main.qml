@@ -153,8 +153,10 @@ ApplicationWindow {
                 root.curPage.releasePressedAway(scenePos)
         }
         // And the press itself, whatever it was: the mark the right pane wears after a reader was sent to it stands
-        // until they do the next thing (デザイン規約 §hover のツールチップ).
+        // until they do the next thing (デザイン規約 §hover のツールチップ), and so does a middle-click gesture
+        // running anywhere in the window.
         onPressedAnywhere: {
+            MiddleHand.pressLanded()
             if (root.curPage !== null)
                 root.curPage.notePress()
         }

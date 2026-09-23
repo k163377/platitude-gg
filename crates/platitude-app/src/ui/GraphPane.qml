@@ -444,13 +444,12 @@ Rectangle {
                 graphArea.createBranchRequested(oidHex, name)
         }
         onNamingCancelled: graphArea.stopNaming()
-        onWheelTaken: graphArea.autoScrolling = false
         onWheelPanned: delta => graphArea.graphX = Math.max(0,
             Math.min(graphArea.graphX - delta / 2, graphArea.graphXMax))
     }
     /// Whether a middle-click autoscroll is under way, and whether it carries the lanes sideways as well — read by the
-    /// wheel, which ends the gesture, and by the automation hook.
-    property alias autoScrolling: autoScroll.scrolling
+    /// automation hook.
+    readonly property alias autoScrolling: autoScroll.scrolling
     readonly property alias autoPanning: autoScroll.panning
     /// Starts autoscroll from a point in this pane's frame, and moves the pointer of one already under way. The presses
     /// and the automation hook both come through here.
@@ -471,12 +470,6 @@ Rectangle {
     /// distance — automation only, the way `view` is (app-ui.md).
     readonly property alias autoTravelled: autoScroll.travelled
     readonly property alias autoTicks: autoScroll.ticks
-    /// The gesture is over by something other than a click in this pane — Escape, or the pane going off the screen
-    /// (`RepoPage.escapePressed`). Everything standing in this window answers Escape (デザイン規約 §hover のツールチップ),
-    /// and a pointer mode that has taken the cursor and the view is the most standing thing there is.
-    function stopAutoScroll() {
-        autoScroll.stop()
-    }
     MiddleAutoScroll {
         id: autoScroll
         anchors.fill: parent

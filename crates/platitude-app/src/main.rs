@@ -88,6 +88,7 @@ fn main() {
     qtbridge::include_bytes_qml!("ui/Words.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/Ink.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/Motion.qml", "qt/qml/platitude");
+    qtbridge::include_bytes_qml!("ui/MiddleHand.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ActionButton.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ActionButtonLabel.qml", "qt/qml/platitude");
     qtbridge::include_bytes_qml!("ui/ActionButtonSeat.qml", "qt/qml/platitude");

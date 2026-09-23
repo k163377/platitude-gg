@@ -315,6 +315,17 @@ ComboBox {
                 // the rows run under it, which is the frame's answer. Over the card's own ground the same ink
                 // reads `#303F54`.
                 ScrollBar.vertical: AutoScrollBar {}
+                // The middle button's hand, on the list's own frame and standing while there are more rows than the
+                // card shows — the one list here that is not an `AppListView`, so it is given the hand that one
+                // carries.
+                MiddleAutoScroll {
+                    id: listHand
+                    parent: rows
+                    anchors.fill: parent
+                    visible: rows.ScrollBar.vertical.visible
+                    onDrifted: dy => rows.contentY =
+                        Math.max(0, Math.min(rows.contentY + dy, rows.contentHeight - rows.height))
+                }
             }
         }
     }

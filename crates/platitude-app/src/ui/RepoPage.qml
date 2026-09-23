@@ -148,15 +148,10 @@ FocusScope {
         // **First, because it has taken the pointer and the view.** A middle-click autoscroll is a mode: the cursor
         // is not the one the reader put there and the rows are going by on their own, and everything standing in this
         // window answers Escape (デザイン規約 §hover のツールチップ). Nothing behind it is reached while it is up, so it
-        // is also the only door here that can never be the wrong one.
-        if (graphPane.autoScrolling) {
-            graphPane.stopAutoScroll()
+        // is also the only door here that can never be the wrong one. **Whichever surface it is running on** — every
+        // one that scrolls has a hand, and there is one gesture in the window (`MiddleHand`).
+        if (MiddleHand.stop())
             return true
-        }
-        if (diffPane.codeHandOn) {
-            diffPane.stopHand()
-            return true
-        }
         // The plan has the centre and names its own way out, so Escape is that door — and
         // **only while that door is a press**. With something composed to lose the button is a hold (規約 §長押し —
         // `RebasePlanPane.discards`), and one key down is not a hold; a key that threw away typed rows because it
