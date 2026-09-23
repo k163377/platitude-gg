@@ -14,6 +14,8 @@ Item {
     property bool walking: false
     property bool walked: false
     property int frameBefore: 0
+    // Waiting for the frame a run with no page ends on — asked for again on the beat until it arrives.
+    property bool framing: false
     readonly property bool expectsPage: Harness.autoOpen !== ""
     readonly property bool identityReady: AppBackend.identityState === "ready"
     // ScreenInfo names can be friendly labels. The runner separately records the
@@ -47,8 +49,13 @@ Item {
             return
         if (driver.expectsPage || driver.page !== null)
             return
+        // Said once as it is entered, the way `PagePerfDriver` says each of its stages.
+        if (!driver.framing)
+            Harness.report("perf_stage window-frame")
         driver.frameBefore = window.frameCounter
-        window.requestUpdate()
+        driver.framing = true
+        // `update()`: a bare `requestUpdate()` swaps nothing over a still offscreen scene (`PagePerfDriver.waitFrame`).
+        window.update()
     }
 
     function finish() {
@@ -75,9 +82,18 @@ Item {
         target: driver.window
         enabled: Harness.autoPerf && !driver.expectsPage && driver.page === null && !driver.finished
         function onFrameSwapped() {
-            if (driver.identityReady && driver.window.frameCounter > driver.frameBefore)
+            if (driver.identityReady && driver.window.frameCounter > driver.frameBefore) {
+                driver.framing = false
                 driver.finish()
+            }
         }
+    }
+
+    // Asked again on the beat until the first frame arrives — a request the window took while it was not visible is
+    // spent without a swap — and not after: the font walk that may follow is read over an idle window.
+    SampleTimer {
+        running: driver.framing && !driver.finished
+        onTriggered: driver.window.update()
     }
 
     Connections {

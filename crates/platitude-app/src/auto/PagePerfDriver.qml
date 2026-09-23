@@ -38,8 +38,15 @@ Item {
                                   && graphModel.finishCount > 0 && branchesModel.refsLoaded
                                   && worktreeModel.loaded
 
+    // Every stage is taken here and said as it is taken, so a run that ends at its ceiling names the stage it stopped
+    // in (規約 §UI 自動化: 段を持つドライバは段が変わるたびに 1 行名乗る).
+    function enter(next) {
+        driver.stage = next
+        Harness.report("perf_stage " + next + " operation=" + driver.operation)
+    }
+
     function fail(reason) {
-        driver.stage = "failed"
+        driver.enter("failed")
         Harness.report("perf_failed reason=" + reason)
         if (PerfProbe.verifying)
             Qt.quit()
@@ -50,8 +57,11 @@ Item {
         if (page.diffShown)
             diffPane.view.forceLayout()
         driver.frameBefore = driver.frames
-        driver.stage = next
-        page.Window.window.requestUpdate()
+        driver.enter(next)
+        // `update()`, not `requestUpdate()`: the offscreen run's software loop (and the basic one) swaps only for a
+        // window told to update, so a bare request over a still scene renders a frame nobody is sent
+        // (rules-refs/app-ui.md 描画境界).
+        page.Window.window.update()
     }
 
     function tick() {
@@ -122,7 +132,7 @@ Item {
             driver.fail("selection-delegate-missing")
             return
         }
-        driver.stage = "details"
+        driver.enter("details")
         driver.actionStart = PerfProbe.clockMs()
         page.releasePressedAway(null)
         item.leftClick(Qt.NoModifier)
@@ -153,7 +163,7 @@ Item {
             driver.fail("diff-file-missing")
             return
         }
-        driver.stage = "diff"
+        driver.enter("diff")
         driver.wantedPath = detailsModel.filePathAt(file)
         driver.actionStart = PerfProbe.clockMs()
         Harness.report("perf_file path=" + detailsModel.filePathAt(file))
@@ -206,7 +216,7 @@ Item {
     function beginDiffScroll() {
         driver.scrollStart = diffPane.view.contentY
         driver.scrollValid = true
-        driver.stage = "diff-scrolling"
+        driver.enter("diff-scrolling")
         PerfProbe.scrollSurface("diff")
         PerfProbe.scrollContext(driver.caseName, driver.operation)
         PerfProbe.beginScroll()
@@ -214,7 +224,7 @@ Item {
     }
 
     function finish() {
-        driver.stage = "finished"
+        driver.enter("finished")
         Harness.report("perf_complete selection=" + PerfProbe.selection + " details=" + driver.sawDetails
                           + " diff=" + driver.sawDiff + " graph=" + driver.graphVisible
                           + " scrolled=" + Harness.autoScroll + " rows=" + graphModel.rowTotal)
@@ -229,7 +239,7 @@ Item {
             driver.fail("scroll-hidden-or-no-overflow")
             return
         }
-        driver.stage = "scrolling"
+        driver.enter("scrolling")
         driver.scrollStart = graphPane.view.contentY
         PerfProbe.scrollSurface("graph")
         PerfProbe.beginScroll()
@@ -258,7 +268,7 @@ Item {
         if (!driver.stage.endsWith("-frame"))
             return
         if (driver.frames <= driver.frameBefore) {
-            page.Window.window.requestUpdate()
+            page.Window.window.update()
             return
         }
         if (driver.stage === "graph-frame") {
@@ -267,7 +277,7 @@ Item {
                 return
             }
             Harness.report("perf_graph_frame clock_ms=" + PerfProbe.clockMs() + " visible=true")
-            driver.stage = "ready"
+            driver.enter("ready")
             driver.tick()
         } else if (driver.stage === "none-frame") {
             if (graphPane.view.currentIndex >= 0)
@@ -281,7 +291,7 @@ Item {
             driver.wantedFingerprint = diffModel.fingerprint
             driver.note("perf_diff_frame")
             if (driver.wantsColour) {
-                driver.stage = "colour"
+                driver.enter("colour")
                 driver.tick()
             } else {
                 driver.afterDiff()
@@ -393,6 +403,23 @@ Item {
         }
     }
 
-    Component.onCompleted: driver.tick()
+    // **The predicates are read again on the beat, not only when a model says it moved.** What `tick()` reads includes
+    // inputs no signal here is wired to — the pane's size and visibility, the page's diff — and a run whose last change
+    // is one of those would otherwise stay at its stage until the watchdog. **And a stage waiting for a frame asks
+    // again on every beat until one arrives**: a request the window took while it was not visible is spent without a
+    // swap. Not over a scroll: that is the window being measured, and its animation's end is what moves it on.
+    SampleTimer {
+        running: driver.stage !== "finished" && driver.stage !== "failed" && !driver.stage.endsWith("scrolling")
+        onTriggered: {
+            driver.tick()
+            if (driver.stage.endsWith("-frame") && driver.frames <= driver.frameBefore)
+                driver.page.Window.window.update()
+        }
+    }
+
+    Component.onCompleted: {
+        driver.enter(driver.stage)
+        driver.tick()
+    }
     onReadyChanged: driver.tick()
 }
