@@ -539,7 +539,7 @@ FocusScope {
             return
         page.tellRefusal(answer)
     }
-    /// The answer to a push a **ref row** sent — the two `push --delete`s, the rename git has no command for, and the
+    /// The answer to a push a **ref row** sent — the two `push --delete`s, the replace git has no command for, and the
     /// two pairs that reach over there after doing something here (`RepoTab.refPushAnswer`, -1 where this notify
     /// carried none).
     ///
@@ -1158,17 +1158,17 @@ FocusScope {
         } else if (kind === "stash") {
             repoTab.renameStash(id, name)
         } else if (kind === "remote") {
-            // **The question goes out first**, carrying both names from now on (`askRenameRemote`). So the box that
-            // sent it has nothing to wait for and comes down, where every other rename keeps it until git answers
-            // (デザイン規約 §答えの要らない報せ). Left waiting, a dismissed question would leave it standing over the
-            // sidebar with nothing coming.
+            // A remote branch's box does not rename: what it leads to is the replace over there. **The question goes
+            // out first**, carrying both names from now on (`askReplaceRemote`). So the box that sent it has nothing
+            // to wait for and comes down, where every rename keeps it until git answers (デザイン規約 §答えの要らない報せ).
+            // Left waiting, a dismissed question would leave it standing over the sidebar with nothing coming.
             page.noteRenameLanded()
-            page.askRenameRemote(id, name)
+            page.askReplaceRemote(id, name)
         }
     }
 
-    /// The remote branch a just-renamed local one spoke for, and the name it took — the question about carrying the
-    /// name over waits until git says the local rename landed.
+    /// The remote branch a just-renamed local one spoke for, and the name it took — the question about what the remote
+    /// does with it waits until git says the local rename landed.
     property string pendingRenameRemote: ""
     property string pendingRenameTo: ""
 
@@ -1184,7 +1184,7 @@ FocusScope {
     /// at the moment the answer lands is a race the bar loses: the rows are rebuilt by the read behind the write, and
     /// a question raised before that read arrives would stand over no row at all.
     property string pendingRenameTagOid: ""
-    /// Reads them, and **only where the pair over there would be a rename and nothing else** (デザイン規約
+    /// Reads them, and **only where the pair over there would change the name and nothing else** (デザイン規約
     /// §手元の改名をリモートへ運ぶ): the remote's copy has to stand where this one does, since the push and the delete
     /// the answer runs would otherwise move the mark as well as the name; and the new name has to be free over
     /// there, since a push to one it already carries is refused outright. Nothing is armed where the answer would be
@@ -1224,10 +1224,10 @@ FocusScope {
         graphPane.renameRefused(why)
     }
 
-    /// Renaming a branch on a remote, which git has no command for: core pushes the new name and deletes the old, so
-    /// the question is asked first and its answer is held down — this is the one write here that another machine
-    /// keeps (デザイン規約 §長押し).
-    function askRenameRemote(remoteRef, name) {
+    /// Replacing a branch on a remote with one under a new name, which git has no command for: core pushes the new
+    /// name and deletes the old, so the question is asked first and its answer is held down — this is the one write
+    /// here that another machine keeps (デザイン規約 §長押し).
+    function askReplaceRemote(remoteRef, name) {
         // The cut is the configured remote name where one owns the ref (a remote's own name may contain `/`), the
         // first slash otherwise — either way the question still fires (`GitFacts.remoteOfRef`).
         const remote = GitFacts.remoteOfRef(remoteRef, repoTab.remoteNames)
@@ -1245,14 +1245,14 @@ FocusScope {
             qsTr("The old branch is deleted, not moved."),
             false,
             qsTr("Rename"),
-            function () { repoTab.renameRemoteBranch(remote, from, name) },
+            function () { repoTab.replaceRemoteBranch(remote, from, name) },
             true,
             qsTr("Hold to rename. git has no rename on a remote: %1 is pushed, then %2 is deleted. Anything the old name carried — an open pull request, a running check — does not follow it.").arg(remote + "/" + name).arg(remoteRef))
-        page.renameRemoteAsked(remoteRef, name)
+        page.replaceRemoteAsked(remoteRef, name)
     }
     /// Automation: the question above was raised, and the two names it is between. An automation-only exposure, the
     /// same one `GraphPane.view` is (app-ui.md).
-    signal renameRemoteAsked(string from, string to)
+    signal replaceRemoteAsked(string from, string to)
 
     /// The failures a report has already answered — armed by the report when the row it is about has not reached the
     /// log yet (`absorbWriteResult`), spent by that row's own arrival. Counted, because the refusal and the write

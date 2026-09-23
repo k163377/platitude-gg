@@ -1,5 +1,5 @@
 //! Branches on a remote: what one holds now, and removing or
-//! renaming one.
+//! replacing one.
 
 use std::path::Path;
 use std::time::Duration;
@@ -113,7 +113,9 @@ pub async fn delete_remote_branch(
     Err(super::refusal::refusal(command, &out, remote, branch, true))
 }
 
-/// Renames a branch on a remote: the composition git has no command for.
+/// Replaces a branch on a remote with one under a new name: the
+/// composition git has no command for, and **not a rename** — the far
+/// side sees a branch created and a branch deleted.
 ///
 /// The new name is pushed **from the remote-tracking ref**: the question
 /// asked was about a name, and a local branch of the same name that has
@@ -123,11 +125,10 @@ pub async fn delete_remote_branch(
 /// and a stale one sends the next push straight back to the name just
 /// deleted.
 ///
-/// The far side sees a branch created and a branch deleted, so whatever
-/// hung off the old name — an open pull request, a protected-branch rule
-/// — stays behind on the name that went. The UI warns about this before
-/// it runs.
-pub async fn rename_remote_branch(
+/// Whatever hung off the old name — an open pull request, a
+/// protected-branch rule — stays behind on the name that went. The UI
+/// warns about this before it runs.
+pub async fn replace_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,
     remote: &str,

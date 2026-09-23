@@ -119,7 +119,7 @@ SlimField {
     // **Asked of the box being on screen.** The box gives the keyboard up and takes it back as it is carried out of
     // its seat (the `parent` above), and that hand-off lands inside this binding's own write — Qt reads the re-entry
     // as a binding loop and drops the update, leaving what the reader is told to whatever asks next (measured on
-    // both OSes, every run of `rename-tag-box` / `rename-remote-box`). Nothing is given up by asking it this way: a
+    // both OSes, every run of `rename-tag-box` / `replace-remote-box`). Nothing is given up by asking it this way: a
     // box is on screen only while its row is the one being typed into, and the keyboard is in it for all of that but
     // the hand-off itself.
     ToolTip.visible: box.refused && box.visible && box.refusedWhy !== ""

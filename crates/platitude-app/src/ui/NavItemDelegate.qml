@@ -255,8 +255,8 @@ Item {
         }
     }
     // Rows whose name can be changed from here. A remote branch is one of them even though git has no rename over
-    // there — core builds the rename out of a push and a delete, and the bar asks before it runs. A folder is left
-    // out: it is the shape of the names below it.
+    // there — what its box leads to is a replace, which core builds out of a push and a delete, and the bar asks
+    // before it runs. A folder is left out: it is the shape of the names below it.
     readonly property bool nameable: !navRow.folder
         && (navRow.kindHint === "branch" || navRow.kindHint === "tag"
             || navRow.kindHint === "stash" || navRow.kindHint === "remote")

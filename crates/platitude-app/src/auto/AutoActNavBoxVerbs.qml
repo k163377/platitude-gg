@@ -6,8 +6,8 @@ import QtQuick.Controls.Fusion
 import platitude
 import platitude.ui
 
-/// The boxes the sidebar opens on a row — renaming a branch, a tag, a stash or a remote — and the tooltip a row
-/// puts out. All of them are one box over one row, and all of them close the same three ways.
+/// The boxes the sidebar opens on a row — renaming a branch, a tag or a stash, replacing a remote branch — and the
+/// tooltip a row puts out. All of them are one box over one row, and all of them close the same three ways.
 ///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
@@ -131,15 +131,15 @@ Item {
             sidebarPane.submitEdit(arg)
             renameTakenTimer.start()
         } else if (act === "rename-tag-box") {
-            // The box opened with the argument already typed in it, the way `rename-remote-box` is — so a name the box
-            // itself turns down can be photographed being turned down (デザイン規約 §答えの要らない報せ: 押す前に断る側).
+            // The box opened with the argument already typed in it, the way `replace-remote-box` is — so a name the
+            // box itself turns down can be photographed being turned down (デザイン規約 §答えの要らない報せ: 押す前に断る側).
             //
             // **The picture cannot judge this**: the answer is the frame's colour and a line that lives in a tooltip,
             // and a box that took the name frames the same as one that would not. `was=` is the name it is being
             // weighed against, so a run that opened the box on the wrong row says so.
             tagNameBoxTimer.begin(arg)
-        } else if (act === "rename-remote" || act === "rename-remote-box"
-                   || act === "rename-remote-go") {
+        } else if (act === "replace-remote" || act === "replace-remote-box"
+                   || act === "replace-remote-go") {
             // Named outright (`origin/billing:billing-v2`) because the remote's rows are behind a fold. "-box" leaves
             // the box standing, the plain act stops at the question, "-go" holds the pill to the end.
             const parts = arg.split(":")
@@ -148,11 +148,11 @@ Item {
             // "-box" opens with the argument already in it, so a name the remote already carries can be photographed
             // being refused — and the remote's fold has to come open for the row to be there at all (a remote root
             // starts closed).
-            if (act === "rename-remote-box")
+            if (act === "replace-remote-box")
                 remotesModel.toggleFolder(GitFacts.remoteOfRef(ref, repoTab.remoteNames))
             sidebarPane.beginRename("remote", ref,
-                                    act === "rename-remote-box" ? parts[1] : was)
-            if (act === "rename-remote-box") {
+                                    act === "replace-remote-box" ? parts[1] : was)
+            if (act === "replace-remote-box") {
                 renderedBarrier.begin()
                 // A known verb answers true even on its early way out —
                 // falsy would send the dispatch on asking every other
@@ -162,10 +162,10 @@ Item {
             sidebarPane.submitEdit(parts[1])
             // The hold's end is the press the write barrier is armed on (`holdToEnd`), said by the pane when the
             // pill confirms.
-            if (act === "rename-remote-go")
+            if (act === "replace-remote-go")
                 driver.holdToEnd(graphPane)
             else
-                renameAskTimer.start()
+                replaceAskTimer.start()
         } else if (act === "rename-tag-remote" || act === "rename-tag-remote-go") {
             // A tag whose name a remote carries too, renamed here — and the question that comes back for the copy
             // over there. `<tag>:<新しい名前>[:<選ぶ答え>]`, the answer being `replace` / `add` / `leave`;
@@ -297,17 +297,17 @@ Item {
     // Where the move came to rest, and what the carry left in the stash list. The branch itself is the edge — the
     // status pass after the move is what writes it — so a run that never landed waits out the
     // watchdog.
-    // The rename's own question, waited on for the same settle: a bar photographed before its words arrive is a red
+    // The replace's own question, waited on for the same settle: a bar photographed before its words arrive is a red
     // line with nothing on it. The plain verb ends here — the write is "-go"'s half.
     SampleTimer {
-        id: renameAskTimer
+        id: replaceAskTimer
         onTriggered: {
             if (!graphPane.askCard.settled)
                 return
-            renameAskTimer.stop()
+            replaceAskTimer.stop()
             // `code=` being empty is part of the claim: a push and a delete make no one command, so the pill answers
             // in the ordinary voice (規約 §git 用語のコード表記 の 1:1 規則 — the same reading `move_ask` makes).
-            Harness.report("rename_ask hold=" + graphPane.askHold
+            Harness.report("replace_ask hold=" + graphPane.askHold
                               + " code=" + graphPane.askCode)
             driver.complete()
         }

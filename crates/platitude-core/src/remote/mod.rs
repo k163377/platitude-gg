@@ -22,7 +22,9 @@ mod refusal;
 mod standing;
 mod tags;
 
-pub use self::branch::{RemoteBranchState, branch_tip, delete_remote_branch, rename_remote_branch};
+pub use self::branch::{
+    RemoteBranchState, branch_tip, delete_remote_branch, replace_remote_branch,
+};
 pub use self::clone::{clone, folder_name_for};
 pub use self::fetch::fetch;
 pub use self::list::{Remote, Remotes, add, list, read, set_url};
@@ -33,7 +35,7 @@ pub use self::pull::pull;
 pub use self::push::{PushForce, PushSpec, plan_current_push, plan_publish, push};
 pub use self::standing::{PushStanding, push_standing, push_target};
 pub use self::tags::{
-    RemoteTag, delete_remote_tag, list_tags, parse_ls_remote_tags, push_tag, rename_remote_tag,
+    RemoteTag, delete_remote_tag, list_tags, parse_ls_remote_tags, push_tag, replace_remote_tag,
 };
 
 /// Default time budget for commands that talk to a remote.

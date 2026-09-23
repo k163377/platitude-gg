@@ -881,13 +881,14 @@ impl RepoTab {
         self.ask_session(|s| s.push_tag(remote.clone(), tag.clone(), lease_expect.clone()));
     }
 
-    /// Renames a tag on a remote. git has none, so core pushes the new
-    /// name and deletes the old — the UI holds the answer down first,
-    /// because the old name is destroyed.
+    /// Replaces a tag on a remote with one under a new name. git has no
+    /// command for it, so core pushes the new name and deletes the old —
+    /// the UI holds the answer down first, because the old name is
+    /// destroyed.
     #[qslot]
-    fn rename_remote_tag(&mut self, remote: String, from: String, to: String) {
+    fn replace_remote_tag(&mut self, remote: String, from: String, to: String) {
         let asked =
-            self.ask_session(|s| s.rename_remote_tag(remote.clone(), from.clone(), to.clone()));
+            self.ask_session(|s| s.replace_remote_tag(remote.clone(), from.clone(), to.clone()));
         // Keyed the way every other tag write that leaves this machine is
         // (`ops_delete::remote_tag_delete`), and on the name that goes:
         // git's answer to **this** press is what the page reports.
@@ -1196,7 +1197,8 @@ impl RepoTab {
     }
 
     /// Points a branch at a remote branch and sends it there, in that
-    /// order — the half of a carried rename that takes nothing away.
+    /// order — the answer to a rename here that takes nothing away over
+    /// there.
     #[qslot]
     fn point_upstream_and_push(&mut self, branch: String, remote: String, remote_branch: String) {
         if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
@@ -1209,14 +1211,15 @@ impl RepoTab {
         self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
     }
 
-    /// Renames a branch on a remote. git has none, so core pushes the new
-    /// name and deletes the old — the UI holds the answer down first,
-    /// because the old name is destroyed.
+    /// Replaces a branch on a remote with one under a new name. git has no
+    /// command for it, so core pushes the new name and deletes the old —
+    /// the UI holds the answer down first, because the old name is
+    /// destroyed.
     #[qslot]
-    fn rename_remote_branch(&mut self, remote: String, from: String, to: String) {
+    fn replace_remote_branch(&mut self, remote: String, from: String, to: String) {
         let row = format!("{remote}/{from}");
         let asked =
-            self.ask_session(|s| s.rename_remote_branch(remote.clone(), from.clone(), to.clone()));
+            self.ask_session(|s| s.replace_remote_branch(remote.clone(), from.clone(), to.clone()));
         self.ref_push_asked(&row, asked.map(platitude_core::OperationId::as_u64));
     }
 

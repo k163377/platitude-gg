@@ -332,13 +332,13 @@ pub struct RepoTab {
     write_reworded: bool,
     /// The answer was about a branch (create / delete / rename),
     /// whichever way it went: what the page armed for one — a refusal to
-    /// wear `-D`, a rename to carry to the remote — reads this beside
-    /// its own state.
+    /// wear `-D`, the question a rename raises about the remote — reads
+    /// this beside its own state.
     write_branch_op: bool,
     /// The answer was about a tag (create / delete / rename), whichever
     /// way it went — the same reading as `write_branch_op`, for the half
-    /// of the page armed on a tag: a rename waiting to be carried to the
-    /// remote reads this beside its own state.
+    /// of the page armed on a tag: a rename whose question about the
+    /// remote is waiting reads this beside its own state.
     write_tag_op: bool,
     /// The answer was a fetch, landed or not. A fetch that could not
     /// reach the far side has already said so in the tab's own terms —
@@ -418,7 +418,7 @@ pub struct RepoTab {
     stash_answer: i32,
     /// The toolbar's push — plain, leased, or the first push the
     /// question took — waiting for the answer to its own press, with the
-    /// branch it was sent for (`ops::PushOut`). A remote branch's rename
+    /// branch it was sent for (`ops::PushOut`). A remote branch's replace
     /// and delete answer under the same word, and the fetch behind the
     /// press comes back in the same drain, so the word `push` on an
     /// answer says nothing about whose it was: the id does.
@@ -431,7 +431,7 @@ pub struct RepoTab {
     push_answer: i32,
     push_answer_branch: String,
     /// The pushes a **ref row** sends — the two `push --delete`s and the
-    /// rename git has no command for, and the two pairs that reach over
+    /// replace git has no command for, and the two pairs that reach over
     /// there after doing something here. The same arrangement as the
     /// toolbar's one door along, and for the same reason: they answer
     /// under the word `push` like everything else that reaches a remote,

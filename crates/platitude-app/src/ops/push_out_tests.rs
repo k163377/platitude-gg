@@ -7,7 +7,7 @@
 use super::*;
 
 /// The id the queue is pretending to have accepted this window's push
-/// under, and one it gave somebody else — a remote branch's rename, which
+/// under, and one it gave somebody else — a remote branch's replace, which
 /// also answers as a push, or the fetch running behind the press.
 const OURS: u64 = 7;
 const SOMEBODY_ELSE: u64 = 8;
@@ -26,7 +26,7 @@ fn the_answer_to_the_press_is_the_presss_own_and_names_its_branch() {
     assert_eq!(out.branch(), "topic");
 }
 
-// The remote rename behind the press answers as a push too, and git says
+// The remote replace behind the press answers as a push too, and git says
 // nothing about which of the two the button sent.
 #[test]
 fn an_answer_to_somebody_elses_push_is_not_taken() {

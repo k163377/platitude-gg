@@ -124,8 +124,8 @@ Item {
             const goes = act.endsWith("-go")
             // `add` is what "-go" takes where the argument names no answer: the branch this verb renames is the one
             // the working tree is on, whose upstream is the remote's own HEAD — and git refuses to delete that
-            // (`rename-remote-go` の同項), so `replace` cannot be answered for real down this road. The write behind
-            // it is the same one `rename-remote-go` runs.
+            // (`replace-remote-go` の同項), so `replace` cannot be answered for real down this road. The write behind
+            // it is the same one `replace-remote-go` runs.
             localUpstreamAskTimer.pick = want.length > 1 ? want[1] : (goes ? "add" : "")
             localUpstreamAskTimer.answers = goes
             const local = workTree.branch

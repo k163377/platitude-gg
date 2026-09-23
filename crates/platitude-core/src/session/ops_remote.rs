@@ -356,7 +356,7 @@ impl RepoSession {
     }
 
     /// Points a branch at a remote branch and then sends it there — the
-    /// half of a rename that takes nothing away
+    /// answer to a rename here that takes nothing away over there
     /// (デザイン規約 §手元の改名をリモートへ運ぶ).
     ///
     /// **The setting goes down first, and that order is the point.** git's
@@ -399,10 +399,10 @@ impl RepoSession {
         )
     }
 
-    /// Renames a branch on a remote, which git does as a push and a delete
-    /// (see [`remote::rename_remote_branch`]). The UI asks first: the old
-    /// name is destroyed.
-    pub fn rename_remote_branch(
+    /// Replaces a branch on a remote with one under a new name, which git
+    /// does as a push and a delete (see [`remote::replace_remote_branch`]).
+    /// The UI asks first: the old name is destroyed.
+    pub fn replace_remote_branch(
         self: &Arc<Self>,
         remote_name: String,
         from: String,
@@ -413,7 +413,7 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                remote::rename_remote_branch(
+                remote::replace_remote_branch(
                     &exec,
                     &repo.workdir,
                     &remote_name,

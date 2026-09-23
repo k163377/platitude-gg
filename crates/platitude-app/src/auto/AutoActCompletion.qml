@@ -29,7 +29,7 @@ QtObject {
                 "open-mergetool", "discard-file-go", "delete-file-go",
                 "discard-staged-go", "switch", "switch-remote", "nav-dbl",
                 "rename-branch", "rename-tag", "rename-stash", "rename-taken",
-                "rename-remote-go", "rename-local-upstream", "rename-local-upstream-go",
+                "replace-remote-go", "rename-local-upstream", "rename-local-upstream-go",
                 "rename-tag-remote", "rename-tag-remote-go", "delete-branch",
                 "delete-branch-go", "delete-tag-go", "delete-stash-go",
                 "delete-remote-go", "remote-refused", "delete-force", "delete-branch-refused",
@@ -161,7 +161,7 @@ QtObject {
                 "switch-remote-twice",
                 // Stops at its question, so the ask bar settling is the completion — the write is
                 // the "-go" half, which stays a write act above.
-                "rename-remote", "set-upstream", "set-upstream-list",
+                "replace-remote", "set-upstream", "set-upstream-list",
                 // A write does come, but the subject is the question its answer raises,
                 // so the bar settling is the completion (the bar takes 200ms to come down).
                 "rename-local-upstream", "rename-local-upstream-go",

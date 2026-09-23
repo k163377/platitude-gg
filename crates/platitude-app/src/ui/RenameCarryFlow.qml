@@ -53,7 +53,7 @@ Item {
     /// 「内部コマンドと UI 表記は分ける」). The row is read before it is picked, and what the reader is agreeing to
     /// there is the half that cannot be walked back: a name going off the remote leads. What runs puts the push
     /// first for the opposite reason — a pair that stops half-way has then made a name rather than lost one
-    /// (`remote::rename_remote_branch`). The hold's own words say the running order (`askTip` below).
+    /// (`remote::replace_remote_branch`). The hold's own words say the running order (`askTip` below).
     readonly property var choices: carryFlow.kind === ""
         ? []
         : [
@@ -133,12 +133,12 @@ Item {
     function answer() {
         if (carryFlow.kind === "branch") {
             if (carryFlow.takesAway)
-                carryFlow.repoTab.renameRemoteBranch(carryFlow.remote, carryFlow.from, carryFlow.to)
+                carryFlow.repoTab.replaceRemoteBranch(carryFlow.remote, carryFlow.from, carryFlow.to)
             else if (carryFlow.choice === carryFlow.keepsBoth)
                 carryFlow.repoTab.pointUpstreamAndPush(carryFlow.to, carryFlow.remote, carryFlow.to)
         } else if (carryFlow.kind === "tag") {
             if (carryFlow.takesAway)
-                carryFlow.repoTab.renameRemoteTag(carryFlow.remote, carryFlow.from, carryFlow.to)
+                carryFlow.repoTab.replaceRemoteTag(carryFlow.remote, carryFlow.from, carryFlow.to)
             else if (carryFlow.choice === carryFlow.keepsBoth)
                 carryFlow.repoTab.pushTag(carryFlow.remote, carryFlow.to, "")
         }

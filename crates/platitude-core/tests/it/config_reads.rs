@@ -86,7 +86,7 @@ async fn listing_remotes_answers_by_code() {
     assert_eq!(config_reads(&log), vec![CommandEnd::Answered(1)]);
 }
 
-/// Renaming a branch on a remote ends by re-pointing whatever tracked it,
+/// Replacing a branch on a remote ends by re-pointing whatever tracked it,
 /// which reads the whole `branch.` section.
 #[tokio::test]
 async fn reading_the_tracking_branches_answers_by_code() {
@@ -97,7 +97,7 @@ async fn reading_the_tracking_branches_answers_by_code() {
     work.commit_file("b.txt", "b\n", "billing work");
     work.git(&["push", "-u", "origin", "billing"]);
 
-    remote::rename_remote_branch(
+    remote::replace_remote_branch(
         &exec,
         &work.path,
         "origin",
@@ -107,7 +107,7 @@ async fn reading_the_tracking_branches_answers_by_code() {
         &cancel,
     )
     .await
-    .expect("rename remote branch");
+    .expect("replace remote branch");
 
     assert!(bare.git(&["branch", "--list"]).contains("billing-v2"));
     assert_answered(&config_reads(&log), "the tracking-branch read");

@@ -266,9 +266,9 @@ Item {
         return graphModel.stashRefOf(oid) !== "" ? "stash" : "commit"
     }
 
-    /// The row a word names in the chooser a carried rename asks with (`RenameCarryFlow.choices`): the answer that
-    /// makes one name and takes the other away, the one that makes it and leaves the other, and the one that writes
-    /// nothing. Named rather than numbered, so a run says which answer it is about.
+    /// The row a word names in the chooser a rename's question about the remote asks with (`RenameCarryFlow.choices`):
+    /// the answer that makes one name and takes the other away, the one that makes it and leaves the other, and the
+    /// one that writes nothing. Named rather than numbered, so a run says which answer it is about.
     function carryChoiceIndex(word) {
         return word === "replace" ? 0 : word === "add" ? 1 : word === "leave" ? 2 : -1
     }

@@ -54,7 +54,7 @@ QtObject {
         return GitFacts.branchOfRef(id, gestures.repoTab.remoteNames)
     }
     /// A name the remote already carries. Refused here: a plain push to a name that exists
-    /// fast-forwards it and reports success, so somebody else's branch would move instead of this one being renamed.
+    /// fast-forwards it and reports success, so somebody else's branch would move instead of this one being replaced.
     /// Only ever a rename's rule: the box for a new branch's name opens on a remote row too, and what it makes is a
     /// local branch — a name the remote happens to carry is no answer to that.
     readonly property bool editTaken: gestures.editMode === "rename" && gestures.editRemote !== ""

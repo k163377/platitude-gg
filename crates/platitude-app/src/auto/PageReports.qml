@@ -61,8 +61,8 @@ Item {
         function onMoveBranchAsked(local) {
             Harness.report("move_branch_asked local=" + local)
         }
-        function onRenameRemoteAsked(from, to) {
-            Harness.report("rename_remote_asked from=" + from + " to=" + to)
+        function onReplaceRemoteAsked(from, to) {
+            Harness.report("replace_remote_asked from=" + from + " to=" + to)
         }
         // What the write was about rides the signal: a report belongs to the answer that carried it, and one drain
         // can bring several (`RepoTab.writeAnswerReportKind`).

@@ -6,7 +6,7 @@ use super::Press;
 /// overwrite, the first push the question just took — and the branch it
 /// was about, until git's answer to that press and no other.
 ///
-/// **By id alone.** A remote branch's rename and delete answer under
+/// **By id alone.** A remote branch's replace and delete answer under
 /// the same label, and the fetch running behind a press comes back in
 /// the same drain: a property every answer rewrote said "a push
 /// answered" about somebody else's, and the button beside it put the

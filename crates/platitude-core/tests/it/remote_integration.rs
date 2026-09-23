@@ -191,10 +191,10 @@ async fn deleting_a_remote_branch_prunes_on_the_next_fetch() {
     );
 }
 
-/// The rename git has no command for: the name moves, what the branch
+/// The replace git has no command for: the name moves, what the branch
 /// pointed at stays, and the local branch that tracked it comes along.
 #[tokio::test]
-async fn renaming_a_remote_branch_moves_the_name_and_the_tracking() {
+async fn replacing_a_remote_branch_moves_the_name_and_the_tracking() {
     let (mut bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
 
@@ -202,10 +202,10 @@ async fn renaming_a_remote_branch_moves_the_name_and_the_tracking() {
     work.commit_file("b.txt", "b\n", "billing work");
     work.git(&["push", "-u", "origin", "billing"]);
     let tip = work.git(&["rev-parse", "billing"]);
-    // Renaming publishes nothing: this commit is only here.
+    // Replacing publishes nothing: this commit is only here.
     work.commit_file("b.txt", "b2\n", "not published");
 
-    remote::rename_remote_branch(
+    remote::replace_remote_branch(
         &exec,
         &work.path,
         "origin",
@@ -215,7 +215,7 @@ async fn renaming_a_remote_branch_moves_the_name_and_the_tracking() {
         &cancel,
     )
     .await
-    .expect("rename remote branch");
+    .expect("replace remote branch");
 
     let listed = bare.git(&["branch", "--list"]);
     assert!(listed.contains("billing-v2"), "{listed}");
@@ -242,9 +242,9 @@ async fn renaming_a_remote_branch_moves_the_name_and_the_tracking() {
 }
 
 /// A push git turns down leaves the old name where it was: nothing is
-/// deleted on the strength of a half-finished rename.
+/// deleted on the strength of a half-finished replace.
 #[tokio::test]
-async fn a_rename_whose_push_fails_deletes_nothing() {
+async fn a_replace_whose_push_fails_deletes_nothing() {
     let (mut bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
 
@@ -258,7 +258,7 @@ async fn a_rename_whose_push_fails_deletes_nothing() {
     work.git(&["push", "origin", "someone-else:billing-v2"]);
     work.git(&["switch", "billing"]);
 
-    let error = remote::rename_remote_branch(
+    let error = remote::replace_remote_branch(
         &exec,
         &work.path,
         "origin",

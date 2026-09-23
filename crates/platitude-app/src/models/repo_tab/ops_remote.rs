@@ -70,7 +70,7 @@ impl RepoTab {
     ///
     /// **Nothing on screen reaches this yet** (`pushBranch` has no caller
     /// in `ui/`): what a ref row sends today is the two `push --delete`s
-    /// and the rename. It is answered by id all the same, so a door
+    /// and the replace. It is answered by id all the same, so a door
     /// added to it arrives with the refusal already going to the press
     /// that made it
     /// (`ops::PushOut`, P3-確認事項).

@@ -71,9 +71,9 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "ask_sweep all=true caret=true hand=true words=true",
     },
     Verb {
-        name: "rename-remote",
+        name: "replace-remote",
         when: &[],
-        plain: "rename_ask hold=true code=",
+        plain: "replace_ask hold=true code=",
     },
     // The branch half of the same question: a name changed here, and what
     // the remote it was measured against does about it
@@ -109,7 +109,7 @@ pub(super) const TABLE: &[Verb] = &[
     // …and the same road with the answer given. **`replace` is not on
     // this one**: the branch it renames is the one the working tree is
     // on, whose upstream is the remote's own HEAD, and git refuses to
-    // delete that — the write behind that answer is `rename-remote-go`'s.
+    // delete that — the write behind that answer is `replace-remote-go`'s.
     // An argument naming no answer takes `add`.
     Verb {
         name: "rename-local-upstream-go",

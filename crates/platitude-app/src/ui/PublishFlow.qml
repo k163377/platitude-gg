@@ -113,7 +113,7 @@ Item {
                ? publishFlow.remotesModel.oidOfName(publishFlow.workTree.upstream)
                : ""
     }
-    /// A push this button sent has come back — found by the id its press was given, since a remote branch's rename
+    /// A push this button sent has come back — found by the id its press was given, since a remote branch's replace
     /// and delete carry the word `push` on an answer too (`RepoTab.pushAnswer`, -1 where this notify carried none;
     /// the page calls this once per notify). What git said is read off that answer: the fetch running behind the
     /// press answers in the same drain (デザイン規約 §リモートへ送る).

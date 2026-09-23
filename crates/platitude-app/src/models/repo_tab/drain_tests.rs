@@ -181,8 +181,8 @@ fn a_tag_answer_says_so_whichever_way_it_went() {
     assert!(settled(K::Tag, "fatal: tag 'v1.0' already exists").write_tag_op);
     assert!(settled(K::DeleteTagEverywhere, "").write_tag_op);
     assert!(!settled(K::Branch, "").write_tag_op);
-    // The remote half of a rename is a push, so the pending question is
-    // not re-raised by its own answer.
+    // What a rename's question sends to the remote is a push, so the
+    // pending question is not re-raised by its own answer.
     assert!(!settled(K::Push, "").write_tag_op);
 }
 
@@ -1171,7 +1171,7 @@ fn ref_push_pressed() -> RepoTab {
 /// order the drain carried the two answers in.
 ///
 /// **All of these answer under the word `push`** — the two `push
-/// --delete`s, the rename git has no command for, the two pairs that
+/// --delete`s, the replace git has no command for, the two pairs that
 /// reach over there after doing something here — and so does the fetch
 /// running behind them. One drain empties the whole queue and notifies
 /// once, and the group the page reads when any answer will do describes

@@ -224,15 +224,15 @@ impl RepoSession {
         )
     }
 
-    /// Renames a tag on a remote, which git does as a push and a delete
-    /// (see [`remote::rename_remote_tag`]). The UI asks first: the old
-    /// name is destroyed.
+    /// Replaces a tag on a remote with one under a new name, which git
+    /// does as a push and a delete (see [`remote::replace_remote_tag`]).
+    /// The UI asks first: the old name is destroyed.
     ///
     /// Reads that remote's tags afterwards for the reason
     /// [`Self::push_tag`] does — and here both halves moved, so the badge
     /// on the new name and the row the old one left behind both come off
     /// this read.
-    pub fn rename_remote_tag(
+    pub fn replace_remote_tag(
         self: &Arc<Self>,
         remote_name: String,
         from: String,
@@ -244,7 +244,7 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                remote::rename_remote_tag(
+                remote::replace_remote_tag(
                     &exec,
                     &repo.workdir,
                     &remote_name,
