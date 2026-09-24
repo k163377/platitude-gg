@@ -53,7 +53,9 @@ RowLayout {
     // **The row's own seat, to the pixel** (`NameCell.seatSize` / `seatNudge` on a list with no change codes): the
     // seat is the trimmed one and the mark is drawn a step wider inside it, hard against its left edge, so the mark
     // lands in the row's own mark column and the words begin exactly where the row's name begins. Measuring this
-    // seat by the mark instead put every line here 2px right of the name it belongs to (observed).
+    // seat by the mark instead put every line here 2px right of the name it belongs to (observed). **A TAGS row has
+    // no seat** (`NavRowBody.seated`), and its every line leads with a cloud: the mark stands under the name's head
+    // and the words one seat in.
     Item {
         Layout.preferredWidth: Theme.iconXs
         Layout.preferredHeight: Theme.iconXs

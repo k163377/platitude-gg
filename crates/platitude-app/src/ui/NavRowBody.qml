@@ -46,18 +46,26 @@ RowLayout {
     /// says the reader is standing on this one (デザイン規約 §ref の種別 の名前の色).
     readonly property color hereTone:
         body.row.kindHint === "worktree" && !body.homeCopy ? Theme.textHereTree : Theme.textLink
+    /// Whether this row's section ever puts anything in the mark seat. **STASHES and TAGS never do** — flat lists of
+    /// names, no folder to fold and no state a copy is in — so their names begin where the row does
+    /// (`NavList.rowInset`, デザイン規約 §余白 の左メニューの行の項; `AppMenu.seatWorn` reads a card the same way).
+    readonly property bool seated: body.row.kindHint !== "stash" && body.row.kindHint !== "tag"
 
     spacing: Theme.spaceXs
     // The mark and the name, in the part both file lists share (`NameCell`): the slot every row opens with — a
     // folder's fold arrow, a worktree file's change icon, and later the mark for a hidden branch — and the name
     // after it. A ref row has nothing to put in the slot and it stays open all the same, which is what keeps every
-    // name at a given depth beginning in one column.
+    // name at a given depth beginning in one column — in every section whose rows can wear something there (`seated`).
     NameCell {
         id: nameCell
+        // With no seat and the name gone into the box there is nothing left in this cell, and an empty cell still
+        // takes the spacing after it — the box would open a step right of where the name was.
+        visible: body.seated || !body.row.editing
         // The box below takes the row's slack while it is open, and the slot stays where it is: a name going into a
         // box leaves the columns beside it where they are.
         Layout.fillWidth: !body.row.editing
         showName: !body.row.editing
+        seated: body.seated
         // **While the row is open its name is shown whole, in its own place** — the arrangement the reader was
         // looking at does not move, and what could not be said on one line wraps downward (`NameCell.whole`).
         // **Whichever name the row is drawing**: the main copy's row is named by its branch, so that is the one

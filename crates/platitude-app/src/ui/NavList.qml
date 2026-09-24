@@ -179,7 +179,9 @@ AppListView {
         if (!row)
             return false
         const line = Theme.rowHeight / 2
-        row.linePressed(Qt.LeftButton, Theme.spaceSm, line)
+        // The row's own left edge: left of the name in every section, including the two whose names have no seat
+        // in front of them (`NavRowBody.seated`).
+        row.linePressed(Qt.LeftButton, 0, line)
         row.lineDragged(row.width, line)
         row.lineReleased()
         row.lineClicked(Qt.LeftButton, Qt.NoModifier)

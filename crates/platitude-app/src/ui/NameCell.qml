@@ -27,6 +27,10 @@ RowLayout {
     /// either way**: letting it collapse is what put a leaf's name to the *left* of the folder it sits under (layouts
     /// drop invisible children entirely), and at a given depth every name has to begin in the same column.
     property bool showChange: true
+    /// Whether the seat is in the row at all. **A list whose rows never wear anything there takes it off** — held
+    /// open with nothing ever in it, it reads as a margin nobody wrote. One answer per list, like `showChange`, so
+    /// neighbours still begin in one column.
+    property bool seated: true
     property string name: ""
     /// Where a renamed file came from, drawn ahead of the new name with the way between them. Empty on everything else.
     /// **Already written the way the row writes names** — the models cut it back exactly as far as they cut the new one
@@ -99,6 +103,8 @@ RowLayout {
     // per row on screen and every mark is a canvas, so a mark built and hidden on the rows it is not for is heap the
     // rows are measured by (rules-refs/app-ui.md, the Loader rule).
     Item {
+        // Invisible takes the layout's spacing after it as well (`seated`).
+        visible: nameCell.seated
         Layout.preferredWidth: nameCell.seatSize
         Layout.preferredHeight: nameCell.seatSize
         Layout.alignment: Qt.AlignVCenter
