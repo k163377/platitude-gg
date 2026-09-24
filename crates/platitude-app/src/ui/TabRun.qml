@@ -18,9 +18,13 @@ QtObject {
     readonly property bool travelling: tabRun.travel.running
 
     /// Where in the run a given offset lands. `contentX` is assigned by hand from every place that moves the strip,
-    /// and one left outside its run draws a band of nothing past the last tab.
+    /// and one left outside its run draws a band of nothing past the last tab. **The run starts at the list's origin,
+    /// not at 0** (`originX`): when tabs before the ones on screen change width, the list keeps the ones on screen
+    /// where they stand and moves its origin instead, and a bound read from 0 then stops a travel that far short of
+    /// the far end, with the tab it was sent for still cut.
     function clamp(x) {
-        return Math.max(0, Math.min(x, Math.max(0, tabRun.view.contentWidth - tabRun.view.width)))
+        const origin = tabRun.view.originX
+        return Math.max(origin, Math.min(x, origin + Math.max(0, tabRun.view.contentWidth - tabRun.view.width)))
     }
 
     /// How far the strip has travelled, and whether it has reached its far end. A strip with nothing to scroll has no
@@ -30,7 +34,7 @@ QtObject {
     }
     function atEnd() {
         return tabRun.view.contentWidth > tabRun.view.width
-            && tabRun.view.contentX >= tabRun.view.contentWidth - tabRun.view.width - 1
+            && tabRun.view.contentX >= tabRun.view.originX + tabRun.view.contentWidth - tabRun.view.width - 1
     }
 
     /// A travel in flight, called off. Whatever else is about to move the strip outranks it: two hands on `contentX`
@@ -91,7 +95,8 @@ QtObject {
         if (room <= 0 || !tab)
             return false
         tabRun.travel.stop()
-        tabRun.view.contentX = tab.x < tabRun.view.contentWidth / 2 ? room : 0
+        const origin = tabRun.view.originX
+        tabRun.view.contentX = tab.x - origin < tabRun.view.contentWidth / 2 ? origin + room : origin
         return true
     }
 

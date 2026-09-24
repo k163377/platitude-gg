@@ -67,9 +67,11 @@ Item {
         const at = carry.heldIndex()
         if (at < 0)
             return
+        // The run from the list's origin (`TabRun.clamp`).
+        const origin = carry.view.originX
         const room = carry.view.contentWidth - carry.view.width
         const asked = carry.view.contentX + Metrics.handSent(carry.heldPush, run.interval)
-        const settled = Math.max(0, Math.min(asked, room))
+        const settled = Math.max(origin, Math.min(asked, origin + room))
         if (settled === carry.view.contentX)
             return
         carry.view.contentX = settled
@@ -97,7 +99,8 @@ Item {
             return index
         // The strip is the whole of the run: a tab carried past either end stops there, the way everything else that
         // scrolls here stops (デザイン規約 §QML 実装ルール). A tab stays in the strip.
-        carry.heldX = Math.max(0, Math.min(left, carry.view.contentWidth - tab.width))
+        const origin = carry.view.originX
+        carry.heldX = Math.max(origin, Math.min(left, origin + carry.view.contentWidth - tab.width))
         let at = index
         // Bounded by the strip itself: each step passes one tab, so nothing can be passed more often than there are
         // tabs to pass.
