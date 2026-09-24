@@ -439,6 +439,15 @@ Rectangle {
     /// style of its own until it is set beside a panel that has an upstream to write (`OpsPicker.pairHeight`).
     readonly property bool actionsBoxed: [fetchButton, pushButton, stashButton, findButton].every(
         button => !button.visible || button.height >= button.implicitHeight - 0.5)
+    /// …and whether the line between the three and the find stands in the step between them, clear of both frames, and
+    /// ends where the frame on its other side does. A 1px line a pixel onto a frame reads as the frame's own edge in a
+    /// picture, and a pixel past its end reads as a line that missed. The line is measured off the find, so the frame
+    /// it is held against is the stash's, which the row beside it lays out on its own.
+    readonly property bool findRuled:
+        findRule.visible && findRule.x > actionSeat.x + actionSeat.width
+        && findRule.x + findRule.width < findButton.x
+        && Math.abs(findRule.y - (actionSeat.y + stashButton.y + stashButton.frameInset)) < 0.5
+        && Math.abs(findRule.height - (stashButton.height - 2 * stashButton.frameInset)) < 0.5
 
     /// What the names ask for between them when nothing has given way — the run the actions may not be centred into
     /// (`actionSeat.x`), and the width the row is held to when there is room for all of it. **Read off the whole
@@ -972,6 +981,23 @@ Rectangle {
                 width: topBar.actionCap
                 height: stashButton.folded ? opsBand.height : branchPick.pairHeight
             }
+        }
+
+        // ---- the line between the three and the find ----------------------
+        // **The three are a set and the find is not one of them**: no git command is behind a search, and four boxes
+        // in the same frame and ground read as four of a kind. The line says where the set ends. Drawn at every width —
+        // the step it stands in is paid for in `opsRightMargin` whatever the panel has, folded or not.
+        //
+        // **As tall as the frames it stands between**, ending on their top and bottom edges: the row then has one top
+        // and one bottom, and a line shorter than the boxes floats between them as a glyph of its own. The frame, not
+        // the cell — folded, the cell is the panel's whole depth and the frame keeps the box's own (`frameInset`).
+        Rectangle {
+            id: findRule
+            x: Math.round((actionSeat.x + actionSeat.width + findButton.x - width) / 2)
+            anchors.verticalCenter: parent.verticalCenter
+            width: Theme.borderWidth
+            height: findButton.height - 2 * findButton.frameInset
+            color: Theme.borderDefault
         }
 
         // ---- the find ----------------------------------------------------

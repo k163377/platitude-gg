@@ -217,10 +217,12 @@ Item {
         Harness.report(
             "ops_panel settled=true"
             // None is in the picture as a claim: a lit name frames like a name under a pointer, a button shorter
-            // than its two lines frames like a style of its own, and counts a pixel off the end of the upstream
-            // read as set against it. Said beside the claim they are judged with.
+            // than its two lines frames like a style of its own, the line before the find a pixel onto a frame reads
+            // as that frame's edge, and counts a pixel off the end of the upstream read as set against it. Said beside
+            // the claim they are judged with.
             + " lit=" + (topBar.repoNameLit || topBar.branchNameLit)
             + " boxed=" + topBar.actionsBoxed
+            + " rule=" + topBar.findRuled
             + " track=" + topBar.branchTrackPlace
             + " width=" + Math.round(window.width)
             + " floor=" + Math.ceil(window.floorWidth)

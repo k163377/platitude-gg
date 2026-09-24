@@ -316,6 +316,12 @@ pub(super) const TABLE: &[Verb] = &[
     // its frame and its mark under it — a shape a picture of that end
     // alone cannot tell from a style.
     //
+    // `rule=true` is the line between the three and the find standing in
+    // the step between them, clear of both frames — a pixel onto either
+    // reads as that frame's edge — and ending on the frames' own top and
+    // bottom, folded or not, which a 1px line in a picture cannot be read
+    // for without counting.
+    //
     // `track=` is where the branch's counts came out: carried to the `end`
     // of an upstream longer than the name and its counts (`panel` — `main`
     // over `origin/main`), or `after` the name at their own step where the
@@ -326,14 +332,14 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[
             (
                 Arg::WithPreset("panel"),
-                "ops_panel settled=true lit=false boxed=true track=end",
+                "ops_panel settled=true lit=false boxed=true rule=true track=end",
             ),
             (
                 Arg::WithPreset("longnames"),
-                "ops_panel settled=true lit=false boxed=true track=after",
+                "ops_panel settled=true lit=false boxed=true rule=true track=after",
             ),
         ],
-        plain: "ops_panel settled=true lit=false boxed=true",
+        plain: "ops_panel settled=true lit=false boxed=true rule=true",
     },
     // The panel's own doors. The counts ride along because a card is
     // assembled from listings that arrive after the tab does, and a card
