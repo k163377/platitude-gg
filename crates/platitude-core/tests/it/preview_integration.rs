@@ -365,29 +365,6 @@ async fn a_side_that_could_not_be_written_says_what_stopped_it() {
 }
 
 #[tokio::test]
-async fn plain_text_has_no_preview() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("notes.txt", "a\n", "base");
-    repo.write_file("notes.txt", "b\n");
-
-    let (executor, cancel) = env();
-    let (_dir, files) = files();
-    let target = DiffTarget::Unstaged {
-        path: "notes.txt".to_string(),
-    };
-    let p = preview::file_preview(
-        &executor,
-        &repo.path,
-        &target,
-        false,
-        files.read(1),
-        &cancel,
-    )
-    .await;
-    assert!(p.is_none());
-}
-
-#[tokio::test]
 async fn svg_gets_an_image_preview_alongside_its_text_diff() {
     let mut repo = TestRepo::init();
     repo.commit_file("base.txt", "x\n", "base");

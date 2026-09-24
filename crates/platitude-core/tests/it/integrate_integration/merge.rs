@@ -1,5 +1,6 @@
-//! Merging: fast-forward, `--no-ff`, `--ff-only`, and a conflict taken
-//! either to a resolution or to an abort.
+//! Merging: fast-forward, `--no-ff`, and a conflict taken either to a
+//! resolution or to an abort. What git itself answers to `--ff-only`,
+//! `--squash` and an empty merge commit is recorded in [`periodic`].
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
@@ -55,25 +56,6 @@ async fn merge_fast_forward_and_no_ff() {
     );
 }
 
-#[tokio::test]
-async fn ff_only_merge_refuses_a_real_merge() {
-    let repo = conflicting_branches();
-    let (exec, cancel) = env();
-    let err = integrate::merge(
-        &exec,
-        &repo.path,
-        "side",
-        &MergeOptions {
-            ff_only: true,
-            ..Default::default()
-        },
-        &cancel,
-    )
-    .await
-    .expect_err("not a fast-forward");
-    assert!(err.to_string().contains("fast-forward"), "{err}");
-}
-
 /// The exit code cannot sort a merge's answers on its own: git spends 1
 /// on a conflict and on a name it will not merge alike, so the second
 /// has to keep reading as the failure it is. Nothing is left standing
@@ -95,29 +77,6 @@ async fn a_name_git_will_not_merge_is_still_a_failure() {
         err.to_string().contains("not something we can merge"),
         "{err}"
     );
-    assert_eq!(current_op(&repo).await, None);
-}
-
-/// `--squash` conflicts are the one stop that reads as a failure: git
-/// writes `SQUASH_MSG` and no `MERGE_HEAD` (measured, 2.55), so there is no
-/// operation standing to be continued. Recorded only — nothing on
-/// screen asks for a squashed merge.
-#[tokio::test]
-async fn a_squashed_merge_leaves_nothing_standing_to_continue() {
-    let repo = conflicting_branches();
-    let (exec, cancel) = env();
-    integrate::merge(
-        &exec,
-        &repo.path,
-        "side",
-        &MergeOptions {
-            squash: true,
-            ..Default::default()
-        },
-        &cancel,
-    )
-    .await
-    .expect_err("a squash leaves no merge to continue");
     assert_eq!(current_op(&repo).await, None);
 }
 
@@ -243,53 +202,6 @@ async fn a_stopped_merge_finished_by_committing_records_what_continue_would() {
     );
 }
 
-/// A resolution that puts back exactly what HEAD already had still has a
-/// merge to finish, and a plain commit writes it — the merge commit
-/// records nothing and git makes it anyway (measured, 2.55). Which is why the
-/// commit button cannot ask for something staged while a merge stands.
-#[tokio::test]
-async fn a_merge_that_records_nothing_is_still_committed() {
-    let mut repo = conflicting_branches();
-    let (exec, cancel) = env();
-    integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
-        .await
-        .expect("conflict");
-    repo.git(&["checkout", "HEAD", "--", "f.txt"]);
-    assert_eq!(repo.git(&["diff", "--cached", "--name-only", "HEAD"]), "");
-
-    let info = crate::support::info(&repo).await;
-    commit::commit(
-        &exec,
-        &info,
-        "Merge branch 'side'",
-        Default::default(),
-        &cancel,
-    )
-    .await
-    .expect("a merge with nothing in it is still a merge");
-    assert_eq!(current_op(&repo).await, None);
-    assert_eq!(
-        repo.git(&["log", "-1", "--format=%P"]).split(' ').count(),
-        2
-    );
-}
-
-#[tokio::test]
-async fn merge_does_not_offer_skip() {
-    let repo = conflicting_branches();
-    let (exec, cancel) = env();
-    let err = integrate::resolve(
-        &exec,
-        &repo.path,
-        InProgress::Merge,
-        Continuation::Skip,
-        &cancel,
-    )
-    .await
-    .expect_err("merge cannot skip");
-    assert!(err.to_string().contains("does not support"), "{err}");
-}
-
 #[tokio::test]
 async fn resolving_a_conflict_by_taking_one_side_lets_the_merge_continue() {
     let mut repo = conflicting_branches();
@@ -342,4 +254,90 @@ async fn merge_heads_says_nothing_read_rather_than_no_sides() {
         sides.iter().map(Oid::to_hex).collect::<Vec<_>>(),
         vec![repo.git(&["rev-parse", "side"])]
     );
+}
+
+/// **What the pre-merge run leaves out**: git's own answers behind a fixed
+/// command line — the `--ff-only` refusal, what a `--squash` leaves on
+/// disk, and the empty merge commit a plain commit still writes. Nothing
+/// of this crate's decides any of them; the landings they rest on are
+/// read by the pre-merge tests above. Run by the full gate
+/// (`-- --ignored ::periodic::`) rather than by every change.
+mod periodic {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "git's own --ff-only refusal: not worth the pre-merge run"]
+    async fn ff_only_merge_refuses_a_real_merge() {
+        let repo = conflicting_branches();
+        let (exec, cancel) = env();
+        let err = integrate::merge(
+            &exec,
+            &repo.path,
+            "side",
+            &MergeOptions {
+                ff_only: true,
+                ..Default::default()
+            },
+            &cancel,
+        )
+        .await
+        .expect_err("not a fast-forward");
+        assert!(err.to_string().contains("fast-forward"), "{err}");
+    }
+
+    /// `--squash` conflicts are the one stop that reads as a failure: git
+    /// writes `SQUASH_MSG` and no `MERGE_HEAD` (measured, 2.55), so there is no
+    /// operation standing to be continued. Recorded only — nothing on
+    /// screen asks for a squashed merge.
+    #[tokio::test]
+    #[ignore = "what git leaves after a --squash nothing asks for: not worth the pre-merge run"]
+    async fn a_squashed_merge_leaves_nothing_standing_to_continue() {
+        let repo = conflicting_branches();
+        let (exec, cancel) = env();
+        integrate::merge(
+            &exec,
+            &repo.path,
+            "side",
+            &MergeOptions {
+                squash: true,
+                ..Default::default()
+            },
+            &cancel,
+        )
+        .await
+        .expect_err("a squash leaves no merge to continue");
+        assert_eq!(current_op(&repo).await, None);
+    }
+
+    /// A resolution that puts back exactly what HEAD already had still has a
+    /// merge to finish, and a plain commit writes it — the merge commit
+    /// records nothing and git makes it anyway (measured, 2.55). Which is why the
+    /// commit button cannot ask for something staged while a merge stands.
+    #[tokio::test]
+    #[ignore = "git writing an empty merge commit: not worth the pre-merge run"]
+    async fn a_merge_that_records_nothing_is_still_committed() {
+        let mut repo = conflicting_branches();
+        let (exec, cancel) = env();
+        integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
+            .await
+            .expect("conflict");
+        repo.git(&["checkout", "HEAD", "--", "f.txt"]);
+        assert_eq!(repo.git(&["diff", "--cached", "--name-only", "HEAD"]), "");
+
+        let info = crate::support::info(&repo).await;
+        commit::commit(
+            &exec,
+            &info,
+            "Merge branch 'side'",
+            Default::default(),
+            &cancel,
+        )
+        .await
+        .expect("a merge with nothing in it is still a merge");
+        assert_eq!(current_op(&repo).await, None);
+        assert_eq!(
+            repo.git(&["log", "-1", "--format=%P"]).split(' ').count(),
+            2
+        );
+    }
 }

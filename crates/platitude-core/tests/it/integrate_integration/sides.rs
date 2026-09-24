@@ -6,72 +6,9 @@ use crate::support::integrate::conflicting_branches;
 use platitude_core::conflict;
 use platitude_core::integrate::{self, InProgress, MergeOptions, RebaseOptions};
 
-/// What each stopped operation leaves behind to name its two sides by.
-/// The UI calls them by branch name, and this is what there is to build
-/// those names out of — measured, because the answer differs per
-/// operation and per rebase backend.
-#[tokio::test]
-async fn what_a_stopped_operation_says_about_its_two_sides() {
-    // ---- merge: HEAD is ours, MERGE_HEAD is theirs ----
-    let mut repo = conflicting_branches();
-    repo.git_expect_failure(&["merge", "side"]);
-    let merge_head = repo.git(&["rev-parse", "MERGE_HEAD"]);
-    assert!(!merge_head.is_empty());
-    assert_eq!(
-        repo.git(&[
-            "name-rev",
-            "--name-only",
-            "--refs=refs/heads/*",
-            &merge_head
-        ]),
-        "side",
-        "the branch merged in is named by its tip"
-    );
-    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
-
-    // ---- rebase, merge backend: head-name is theirs, onto is ours ----
-    let mut repo = conflicting_branches();
-    repo.git(&["checkout", "side"]);
-    repo.git_expect_failure(&["rebase", "main"]);
-    // The branch being replayed, as a full ref — the one side that comes
-    // back already named.
-    assert_eq!(
-        read_git_file(&mut repo, "rebase-merge/head-name"),
-        "refs/heads/side"
-    );
-    // The side being landed on is a bare object name, so it has to be
-    // asked for by name separately.
-    let onto = read_git_file(&mut repo, "rebase-merge/onto");
-    assert_eq!(onto.len(), 40, "a raw sha, not a ref: {onto}");
-    assert_eq!(
-        repo.git(&["name-rev", "--name-only", "--refs=refs/heads/*", &onto]),
-        "main"
-    );
-
-    // ---- rebase, apply backend: same answers, its own directory ----
-    let mut repo = conflicting_branches();
-    repo.git(&["checkout", "side"]);
-    repo.git_expect_failure(&["rebase", "--apply", "main"]);
-    assert_eq!(
-        read_git_file(&mut repo, "rebase-apply/head-name"),
-        "refs/heads/side",
-        "the apply backend keeps the same name under its own directory"
-    );
-
-    // ---- cherry-pick: the side coming in is a commit ----
-    let mut repo = conflicting_branches();
-    repo.git_expect_failure(&["cherry-pick", "side"]);
-    let picked = repo.git(&["rev-parse", "CHERRY_PICK_HEAD"]);
-    assert!(!picked.is_empty());
-    assert_eq!(
-        repo.git(&["name-rev", "--name-only", "--refs=refs/heads/*", &picked]),
-        "side",
-        "a tip picks up its branch's name; an older commit would be side~N"
-    );
-}
-
-/// And what `sides` makes of all that — including the reversal, which is
-/// the whole reason the names are read.
+/// What `sides` makes of what each stopped operation leaves behind (the
+/// files [`periodic`] records) — including the reversal, which is the
+/// whole reason the names are read.
 #[tokio::test]
 async fn sides_names_each_side_by_what_it_actually_is() {
     let (exec, cancel) = env();
@@ -151,10 +88,84 @@ async fn a_side_no_branch_reaches_is_left_unnamed() {
     assert_eq!(s.theirs, "", "git says `undefined`, which is not a name");
 }
 
-/// Reads a file in the git directory by the name git knows it by.
-fn read_git_file(repo: &mut TestRepo, rel: &str) -> String {
-    let path = repo.git(&["rev-parse", "--git-path", rel]);
-    std::fs::read_to_string(repo.path.join(path.trim()))
-        .map(|s| s.trim().to_string())
-        .unwrap_or_default()
+/// **What the pre-merge run leaves out**: the marker files each stopped
+/// operation writes, read straight off disk with no code of this crate's
+/// in the way — the ground `sides` stands on, which the tests above read
+/// through `sides` itself. Run by the full gate
+/// (`-- --ignored ::periodic::`) rather than by every change.
+mod periodic {
+    use super::*;
+
+    /// What each stopped operation leaves behind to name its two sides by.
+    /// The UI calls them by branch name, and this is what there is to build
+    /// those names out of — measured, because the answer differs per
+    /// operation and per rebase backend.
+    #[tokio::test]
+    #[ignore = "git's own marker files, no code of ours: not worth the pre-merge run"]
+    async fn what_a_stopped_operation_says_about_its_two_sides() {
+        // ---- merge: HEAD is ours, MERGE_HEAD is theirs ----
+        let mut repo = conflicting_branches();
+        repo.git_expect_failure(&["merge", "side"]);
+        let merge_head = repo.git(&["rev-parse", "MERGE_HEAD"]);
+        assert!(!merge_head.is_empty());
+        assert_eq!(
+            repo.git(&[
+                "name-rev",
+                "--name-only",
+                "--refs=refs/heads/*",
+                &merge_head
+            ]),
+            "side",
+            "the branch merged in is named by its tip"
+        );
+        assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+
+        // ---- rebase, merge backend: head-name is theirs, onto is ours ----
+        let mut repo = conflicting_branches();
+        repo.git(&["checkout", "side"]);
+        repo.git_expect_failure(&["rebase", "main"]);
+        // The branch being replayed, as a full ref — the one side that comes
+        // back already named.
+        assert_eq!(
+            read_git_file(&mut repo, "rebase-merge/head-name"),
+            "refs/heads/side"
+        );
+        // The side being landed on is a bare object name, so it has to be
+        // asked for by name separately.
+        let onto = read_git_file(&mut repo, "rebase-merge/onto");
+        assert_eq!(onto.len(), 40, "a raw sha, not a ref: {onto}");
+        assert_eq!(
+            repo.git(&["name-rev", "--name-only", "--refs=refs/heads/*", &onto]),
+            "main"
+        );
+
+        // ---- rebase, apply backend: same answers, its own directory ----
+        let mut repo = conflicting_branches();
+        repo.git(&["checkout", "side"]);
+        repo.git_expect_failure(&["rebase", "--apply", "main"]);
+        assert_eq!(
+            read_git_file(&mut repo, "rebase-apply/head-name"),
+            "refs/heads/side",
+            "the apply backend keeps the same name under its own directory"
+        );
+
+        // ---- cherry-pick: the side coming in is a commit ----
+        let mut repo = conflicting_branches();
+        repo.git_expect_failure(&["cherry-pick", "side"]);
+        let picked = repo.git(&["rev-parse", "CHERRY_PICK_HEAD"]);
+        assert!(!picked.is_empty());
+        assert_eq!(
+            repo.git(&["name-rev", "--name-only", "--refs=refs/heads/*", &picked]),
+            "side",
+            "a tip picks up its branch's name; an older commit would be side~N"
+        );
+    }
+
+    /// Reads a file in the git directory by the name git knows it by.
+    fn read_git_file(repo: &mut TestRepo, rel: &str) -> String {
+        let path = repo.git(&["rev-parse", "--git-path", rel]);
+        std::fs::read_to_string(repo.path.join(path.trim()))
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default()
+    }
 }

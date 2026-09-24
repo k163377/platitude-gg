@@ -1,4 +1,7 @@
-//! The working tree's own shapes, as real git spells them back.
+//! The working tree's own shapes, as real git spells them back. The pre-merge
+//! part reads what the pane says of a repository inside the working copy
+//! (`details::embedded`); how `status` lists one is git's answer, recorded
+//! in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::expect_used)]
@@ -21,37 +24,11 @@ fn embedded_repo(repo: &mut TestRepo, rel: &str, commit: bool) {
     }
 }
 
-/// A repository sitting inside the working copy is a boundary git will
-/// not cross. `-uall` opens every other new directory and lists the files
-/// in it; this one comes back as the single entry `nest/`, trailing slash
-/// and all, because the files under it are another repository's.
-///
-/// That slash is the only one a path from `status` ends with, and the
-/// file lists cut paths on `/` to file a row under its directories
-/// (`platitude_app::models::pathtree`) — so what git answers here decides
-/// whether that row is a directory of its own or a folder with a nameless
-/// row inside it.
-#[tokio::test]
-async fn a_repository_inside_the_working_copy_stays_one_entry() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "1\n", "root");
-    // A new directory git does open, for the contrast: its files are
-    // listed one by one, and the directory itself is never an entry.
-    repo.write_file("plain/loose.txt", "in the same repository\n");
-    embedded_repo(&mut repo, "vendor/nest", false);
-
-    let (executor, cancel) = env();
-    let state = status::load(&executor, &repo.path, &cancel)
-        .await
-        .expect("status load");
-    let untracked: Vec<&str> = state.untracked().map(|i| i.path()).collect();
-    assert_eq!(untracked, ["plain/loose.txt", "vendor/nest/"]);
-}
-
-/// What that row shows instead of a patch. A `git add` of the path writes
-/// one index entry pointing at the commit the repository there is on, so
-/// that commit is what the pane says — and there is no patch to ask for
-/// either: `--no-index` against a directory prints nothing.
+/// What the row of a repository inside the working copy (one `dir/`
+/// entry, [`periodic`]) shows instead of a patch. A `git add` of the path
+/// writes one index entry pointing at the commit the repository there is
+/// on, so that commit is what the pane says — and there is no patch to ask
+/// for either: `--no-index` against a directory prints nothing.
 #[tokio::test]
 async fn a_stage_of_an_embedded_repository_would_point_at_its_head() {
     let mut repo = TestRepo::init();
@@ -115,4 +92,43 @@ async fn a_directory_that_is_no_repository_of_its_own_says_nothing() {
         repo.git_in(&repo.path.join("plain"), &["rev-parse", "HEAD"]),
         outer
     );
+}
+
+/// **What the pre-merge run leaves out**: how `status` lists a repository
+/// inside the working copy. `status::load` hands the entry over as git
+/// wrote it, and `-uall` opening an ordinary new directory into its files
+/// is held before every merge by the staging tests
+/// (`stage_integration::partial::stage_part_of_an_untracked_file`), so
+/// what is left is git's boundary — the full gate runs it
+/// (`-- --ignored ::periodic::`) rather than every change.
+mod periodic {
+    use super::*;
+
+    /// A repository sitting inside the working copy is a boundary git will
+    /// not cross. `-uall` opens every other new directory and lists the files
+    /// in it; this one comes back as the single entry `nest/`, trailing slash
+    /// and all, because the files under it are another repository's.
+    ///
+    /// That slash is the only one a path from `status` ends with, and the
+    /// file lists cut paths on `/` to file a row under its directories
+    /// (`platitude_app::models::pathtree`) — so what git answers here decides
+    /// whether that row is a directory of its own or a folder with a nameless
+    /// row inside it.
+    #[tokio::test]
+    #[ignore = "git's boundary at a nested repository: not worth the pre-merge run"]
+    async fn a_repository_inside_the_working_copy_stays_one_entry() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "1\n", "root");
+        // A new directory git does open, for the contrast: its files are
+        // listed one by one, and the directory itself is never an entry.
+        repo.write_file("plain/loose.txt", "in the same repository\n");
+        embedded_repo(&mut repo, "vendor/nest", false);
+
+        let (executor, cancel) = env();
+        let state = status::load(&executor, &repo.path, &cancel)
+            .await
+            .expect("status load");
+        let untracked: Vec<&str> = state.untracked().map(|i| i.path()).collect();
+        assert_eq!(untracked, ["plain/loose.txt", "vendor/nest/"]);
+    }
 }

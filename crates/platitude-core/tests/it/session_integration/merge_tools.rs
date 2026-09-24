@@ -193,7 +193,7 @@ async fn a_session_closed_inside_its_opening_answers_every_ask() {
     );
 }
 
-/// **What the daily run leaves out**: the same ask, answered from this
+/// **What the pre-merge run leaves out**: the same ask, answered from this
 /// machine's own installed tools. That read takes seconds on Windows and
 /// guards a screen seldom changed, so the full gate runs it
 /// (`-- --ignored ::periodic::`) rather than every change.
@@ -203,10 +203,10 @@ mod periodic {
     /// **The configured tool survives the machine's own sweep** — the
     /// settled answer names it next to whatever this machine has.
     #[tokio::test]
-    #[ignore = "this machine's merge tools: seconds on Windows, not worth the daily run"]
+    #[ignore = "this machine's merge tools: seconds on Windows, not worth the pre-merge run"]
     #[mry::lock(conflict::available_tools)]
     async fn an_ask_inside_the_opening_still_names_the_configured_tool() {
-        // Held and told to call through, so no daily test's machine can
+        // Held and told to call through, so no pre-merge test's machine can
         // stand in for this one.
         conflict::mock_available_tools().calls_real_impl();
         let mut repo = TestRepo::init();

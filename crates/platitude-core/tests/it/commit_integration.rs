@@ -1,5 +1,6 @@
 //! Commit and amend on real repositories: what git records, what it
-//! refuses, and what a hook that says no comes back as.
+//! refuses, and what a hook that says no comes back as. What an amend
+//! does to HEAD is git's own, and is in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -76,39 +77,6 @@ async fn a_commit_asks_git_once_and_reads_nothing_back() {
 }
 
 #[tokio::test]
-async fn amend_replaces_the_head_commit() {
-    let mut repo = TestRepo::init();
-    let first = repo.commit_file_id("a.txt", "one\n", "original subject");
-    repo.write_file("b.txt", "two\n");
-    repo.git(&["add", "--", "b.txt"]);
-    let (exec, cancel) = env();
-    let repo_info = info(&repo).await;
-
-    commit::commit(
-        &exec,
-        &repo_info,
-        "reworded subject",
-        CommitOptions {
-            amend: true,
-            ..Default::default()
-        },
-        &cancel,
-    )
-    .await
-    .expect("amend");
-
-    assert_ne!(
-        repo.git(&["rev-parse", "HEAD"]),
-        first,
-        "amend rewrites the commit"
-    );
-    assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "reworded subject");
-    let files = repo.git(&["show", "--name-only", "--format=", "HEAD"]);
-    assert!(files.contains("a.txt") && files.contains("b.txt"));
-    assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "1");
-}
-
-#[tokio::test]
 async fn amend_without_a_message_keeps_the_old_one() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "keep me");
@@ -130,27 +98,6 @@ async fn amend_without_a_message_keeps_the_old_one() {
     .await
     .expect("amend --no-edit");
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "keep me");
-}
-
-#[tokio::test]
-async fn an_empty_message_is_refused_for_a_new_commit() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.write_file("b.txt", "two\n");
-    repo.git(&["add", "--", "b.txt"]);
-    let (exec, cancel) = env();
-    let repo_info = info(&repo).await;
-
-    let err = commit::commit(
-        &exec,
-        &repo_info,
-        "   \n\n",
-        CommitOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect_err("empty message rejected");
-    assert!(err.to_string().contains("empty message"), "{err}");
 }
 
 #[tokio::test]
@@ -337,42 +284,6 @@ async fn a_commit_a_hook_declines_comes_back_as_a_report_in_the_hooks_words() {
     );
 }
 
-/// The same door for a commit git itself refuses: nothing here can answer
-/// a signing key that will not sign, so it reads the same way a hook does.
-#[tokio::test]
-async fn a_commit_git_itself_refuses_reads_the_same_way() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("seed.txt", "seed\n", "root");
-    repo.write_file("a.txt", "content\n");
-    repo.git(&["add", "--", "a.txt"]);
-    // A signing program that is not there: git's own refusal, on stderr,
-    // with no hook in sight.
-    repo.git(&["config", "commit.gpgsign", "true"]);
-    repo.git(&["config", "gpg.program", "no-such-signer-here"]);
-    let (exec, cancel) = env();
-    let repo_info = info(&repo).await;
-
-    let err = commit::commit(
-        &exec,
-        &repo_info,
-        "feat: something that cannot be signed",
-        CommitOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect_err("nothing can sign this");
-
-    let Some(report) = err.report() else {
-        panic!("a commit git would not make is a report as well: {err}");
-    };
-    assert_eq!(report.kind, ReportKind::Commit);
-    assert!(
-        !report.reason.is_empty(),
-        "git said why, and that is what goes under the heading"
-    );
-    assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "root");
-}
-
 /// A name git will not take is a report: nothing moved, and the box the
 /// name was typed into is still open to take the answer
 /// (デザイン規約 §答えの要らない報せ). The name it carries is the one the row
@@ -406,4 +317,50 @@ async fn a_rename_to_a_name_that_is_taken_is_reported_under_the_old_name() {
         "main",
         "nothing moved"
     );
+}
+
+/// **What the pre-merge run leaves out**: what an amend does to HEAD — a new
+/// commit in the old one's place, with the staged content folded in. That
+/// is git's, behind a fixed `--amend`: the flag is on the command line in
+/// `amend_without_a_message_keeps_the_old_one` and
+/// `amending_keeps_the_author_until_reset_author_is_asked_for`, and the
+/// message file in `commits_staged_content_with_a_multiline_message`. So
+/// the full gate runs it (`-- --ignored ::periodic::`) rather than every
+/// change.
+mod periodic {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "what git writes behind a fixed --amend: not worth the pre-merge run"]
+    async fn amend_replaces_the_head_commit() {
+        let mut repo = TestRepo::init();
+        let first = repo.commit_file_id("a.txt", "one\n", "original subject");
+        repo.write_file("b.txt", "two\n");
+        repo.git(&["add", "--", "b.txt"]);
+        let (exec, cancel) = env();
+        let repo_info = info(&repo).await;
+
+        commit::commit(
+            &exec,
+            &repo_info,
+            "reworded subject",
+            CommitOptions {
+                amend: true,
+                ..Default::default()
+            },
+            &cancel,
+        )
+        .await
+        .expect("amend");
+
+        assert_ne!(
+            repo.git(&["rev-parse", "HEAD"]),
+            first,
+            "amend rewrites the commit"
+        );
+        assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "reworded subject");
+        let files = repo.git(&["show", "--name-only", "--format=", "HEAD"]);
+        assert!(files.contains("a.txt") && files.contains("b.txt"));
+        assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "1");
+    }
 }

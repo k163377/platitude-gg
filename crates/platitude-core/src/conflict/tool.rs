@@ -140,7 +140,7 @@ static INSTALLED: tokio::sync::OnceCell<Vec<String>> = tokio::sync::OnceCell::co
 /// already has. It also loses `emerge`, which a graphical Emacs would run
 /// fine; typing the name still works.
 ///
-/// **The daily tests stand a machine of their own in here**
+/// **The pre-merge tests stand a machine of their own in here**
 /// (`mock_available_tools`, debug builds only) and leave this one's read
 /// to the `periodic` tests. mry copies what a mock matches on, so the
 /// three borrowed arguments are skipped.

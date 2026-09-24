@@ -72,136 +72,6 @@ fn config_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
-/// Reads what git reports, from a repository whose local config sets it.
-///
-/// The "missing identity" case is a unit test on the parser instead: the
-/// application deliberately reads the effective configuration, so this
-/// process would fall back to the developer's own `~/.gitconfig` — unlike
-/// [`TestRepo`], which isolates the git commands it runs itself.
-#[tokio::test]
-async fn reads_the_effective_identity_and_signing_state() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    let (exec, cancel) = env();
-
-    let config = identity::load(&exec, &repo.path, &cancel)
-        .await
-        .expect("load");
-    assert_eq!(config.identity.name.as_deref(), Some("Test User"));
-    assert_eq!(config.identity.email.as_deref(), Some("test@example.com"));
-    assert!(config.identity.is_complete());
-    assert!(!config.signing.is_active(), "nothing is signed by default");
-}
-
-#[tokio::test]
-async fn writes_the_identity_and_leaves_sanitizing_to_git() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.git(&["config", "--unset", "user.name"]);
-    repo.git(&["config", "--unset", "user.email"]);
-    let (exec, cancel) = env();
-
-    let written = identity::set_identity(
-        &exec,
-        &repo.path,
-        "山田 太郎",
-        "taro@example.com",
-        ConfigScope::Local,
-        &cancel,
-    )
-    .await
-    .expect("set identity");
-    assert!(written.is_saved(), "both halves landed: {written:?}");
-    assert!(written.message.is_empty(), "nothing to report");
-
-    let config = identity::load(&exec, &repo.path, &cancel)
-        .await
-        .expect("load");
-    assert_eq!(config.identity.name.as_deref(), Some("山田 太郎"));
-    assert_eq!(config.identity.email.as_deref(), Some("taro@example.com"));
-
-    // A commit now works and carries what was set.
-    let repo_info = info(&repo).await;
-    repo.write_file("b.txt", "two\n");
-    repo.git(&["add", "--", "b.txt"]);
-    commit::commit(
-        &exec,
-        &repo_info,
-        "with the new identity",
-        CommitOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect("commit");
-    assert_eq!(
-        repo.git(&["log", "-1", "--format=%an <%ae>"]),
-        "山田 太郎 <taro@example.com>"
-    );
-
-    // A newline cannot smuggle in another setting: git escapes it as `\n`
-    // when it writes the config file. Nothing has to guard against it.
-    let injection = "Evil\n[core]\n\tpager = touch /tmp/pwned";
-    identity::set_identity(
-        &exec,
-        &repo.path,
-        injection,
-        "e@example.com",
-        ConfigScope::Local,
-        &cancel,
-    )
-    .await
-    .expect("set identity");
-    assert_eq!(repo.git(&["config", "--get", "user.name"]), injection);
-    repo.git_expect_failure(&["config", "--get", "core.pager"]);
-
-    // What git dislikes it drops itself: `<` and `>` never reach an author
-    // line, and neither do surrounding spaces.
-    identity::set_identity(
-        &exec,
-        &repo.path,
-        "  Ada Lovelace  ",
-        "ada<at>example.com",
-        ConfigScope::Local,
-        &cancel,
-    )
-    .await
-    .expect("set identity");
-    assert_eq!(
-        repo.git(&["config", "--get", "user.email"]),
-        "ada<at>example.com",
-        "stored as typed"
-    );
-    repo.write_file("c.txt", "three\n");
-    repo.git(&["add", "--", "c.txt"]);
-    commit::commit(
-        &exec,
-        &repo_info,
-        "with a sanitized identity",
-        CommitOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect("commit");
-    assert_eq!(
-        repo.git(&["log", "-1", "--format=%an <%ae>"]),
-        "Ada Lovelace <adaatexample.com>"
-    );
-
-    // The one thing git does refuse, refused before commit time (where it
-    // would surface as "Author identity unknown").
-    let err = identity::set_identity(
-        &exec,
-        &repo.path,
-        "   ",
-        "e@example.com",
-        ConfigScope::Local,
-        &cancel,
-    )
-    .await
-    .expect_err("an empty name is refused");
-    assert!(err.to_string().contains("must not be empty"), "{err}");
-}
-
 /// An identity is two `git config` calls, and the second one can fail on
 /// its own — the lock on the configuration file is taken and released per
 /// call, so another process can hold it for the second and not the first.
@@ -288,7 +158,7 @@ async fn a_dash_leading_identity_is_stored_verbatim() {
     repo.commit_file("a.txt", "one\n", "root");
     let (exec, cancel) = env();
 
-    identity::set_identity(
+    let written = identity::set_identity(
         &exec,
         &repo.path,
         "-dashed name",
@@ -298,6 +168,8 @@ async fn a_dash_leading_identity_is_stored_verbatim() {
     )
     .await
     .expect("set identity");
+    assert!(written.is_saved(), "both halves landed: {written:?}");
+    assert!(written.message.is_empty(), "nothing to report");
     let config = identity::load(&exec, &repo.path, &cancel)
         .await
         .expect("load");
@@ -521,85 +393,6 @@ async fn a_repository_that_sets_nothing_of_its_own_reads_as_empty() {
     assert_eq!(effective.email.as_deref(), Some("ada@example.com"));
 }
 
-/// The errand the whole thing exists for: another address for this
-/// project, under the name the person already goes by everywhere else.
-#[tokio::test]
-async fn one_key_is_overridden_while_the_other_stays_inherited() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.git(&["config", "--local", "--unset", "user.name"]);
-    repo.git(&["config", "--local", "--unset", "user.email"]);
-    repo.git(&["config", "--global", "user.name", "Ada Lovelace"]);
-    repo.git(&["config", "--global", "user.email", "ada@example.com"]);
-    let exec = isolated_global(repo.global_config());
-    let cancel = CancellationToken::new();
-
-    let written = identity::set_local_identity(&exec, &repo.path, "", "work@example.com", &cancel)
-        .await
-        .expect("set_local_identity");
-    assert!(written.is_saved(), "both halves as asked: {written:?}");
-    assert!(written.message.is_empty(), "nothing to report");
-    assert_eq!(written.identity.name, None, "the name is not written here");
-    assert_eq!(written.identity.email.as_deref(), Some("work@example.com"));
-
-    let effective = identity::load(&exec, &repo.path, &cancel)
-        .await
-        .expect("load")
-        .identity;
-    assert_eq!(
-        effective.name.as_deref(),
-        Some("Ada Lovelace"),
-        "inherited, because this repository says nothing about it"
-    );
-    assert_eq!(effective.email.as_deref(), Some("work@example.com"));
-
-    // A commit carries the pair git assembled out of the two files.
-    let repo_info = info(&repo).await;
-    repo.write_file("b.txt", "two\n");
-    repo.git(&["add", "--", "b.txt"]);
-    commit::commit(
-        &exec,
-        &repo_info,
-        "under the override",
-        CommitOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect("commit");
-    assert_eq!(
-        repo.git(&["log", "-1", "--format=%an <%ae>"]),
-        "Ada Lovelace <work@example.com>"
-    );
-}
-
-/// Emptying a box takes the key out of this repository's file, and out of
-/// that one only: what the person has set for themselves is still there
-/// to fall back to.
-#[tokio::test]
-async fn an_emptied_box_takes_the_override_out_and_leaves_the_global_alone() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.git(&["config", "--global", "user.name", "Ada Lovelace"]);
-    repo.git(&["config", "--global", "user.email", "ada@example.com"]);
-    let exec = isolated_global(repo.global_config());
-    let cancel = CancellationToken::new();
-
-    let written = identity::set_local_identity(&exec, &repo.path, "", "", &cancel)
-        .await
-        .expect("set_local_identity");
-    assert!(written.is_saved(), "both were taken out: {written:?}");
-    assert_eq!(written.identity, identity::Identity::default());
-
-    let effective = identity::load(&exec, &repo.path, &cancel)
-        .await
-        .expect("load")
-        .identity;
-    assert_eq!(effective.name.as_deref(), Some("Ada Lovelace"));
-    assert_eq!(effective.email.as_deref(), Some("ada@example.com"));
-    let global = std::fs::read_to_string(repo.global_config()).expect("read global config");
-    assert!(global.contains("Ada Lovelace"), "{global}");
-}
-
 /// What actually goes out to git is the list the decision made, key for
 /// key and value for value — and nothing else goes out at all.
 ///
@@ -667,4 +460,209 @@ fn writes(spawns: &Spawns) -> Vec<String> {
         .into_iter()
         .filter(|command| !command.contains("--get-regexp"))
         .collect()
+}
+
+/// **What the pre-merge run leaves out**: what git itself makes of an identity
+/// it was handed — a newline escaped when it writes the config file, `<`,
+/// `>` and surrounding spaces dropped from the author line, an author
+/// assembled out of two files where a repository overrides one key and
+/// inherits the other, and a `--local --unset` that leaves the user's own
+/// file alone. What this end writes and reads back is held before every merge above,
+/// and the refusal of an empty name is a unit test beside `set_identity`;
+/// the rest moves only with git, so the full gate
+/// (`-- --ignored ::periodic::`) runs it rather than every change.
+mod periodic {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "what git makes of the identity it was handed: not worth the pre-merge run"]
+    async fn writes_the_identity_and_leaves_sanitizing_to_git() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        repo.git(&["config", "--unset", "user.name"]);
+        repo.git(&["config", "--unset", "user.email"]);
+        let (exec, cancel) = env();
+
+        let written = identity::set_identity(
+            &exec,
+            &repo.path,
+            "山田 太郎",
+            "taro@example.com",
+            ConfigScope::Local,
+            &cancel,
+        )
+        .await
+        .expect("set identity");
+        assert!(written.is_saved(), "both halves landed: {written:?}");
+        assert!(written.message.is_empty(), "nothing to report");
+
+        let config = identity::load(&exec, &repo.path, &cancel)
+            .await
+            .expect("load");
+        assert_eq!(config.identity.name.as_deref(), Some("山田 太郎"));
+        assert_eq!(config.identity.email.as_deref(), Some("taro@example.com"));
+
+        // A commit now works and carries what was set.
+        let repo_info = info(&repo).await;
+        repo.write_file("b.txt", "two\n");
+        repo.git(&["add", "--", "b.txt"]);
+        commit::commit(
+            &exec,
+            &repo_info,
+            "with the new identity",
+            CommitOptions::default(),
+            &cancel,
+        )
+        .await
+        .expect("commit");
+        assert_eq!(
+            repo.git(&["log", "-1", "--format=%an <%ae>"]),
+            "山田 太郎 <taro@example.com>"
+        );
+
+        // A newline cannot smuggle in another setting: git escapes it as `\n`
+        // when it writes the config file. Nothing has to guard against it.
+        let injection = "Evil\n[core]\n\tpager = touch /tmp/pwned";
+        identity::set_identity(
+            &exec,
+            &repo.path,
+            injection,
+            "e@example.com",
+            ConfigScope::Local,
+            &cancel,
+        )
+        .await
+        .expect("set identity");
+        assert_eq!(repo.git(&["config", "--get", "user.name"]), injection);
+        repo.git_expect_failure(&["config", "--get", "core.pager"]);
+
+        // What git dislikes it drops itself: `<` and `>` never reach an author
+        // line, and neither do surrounding spaces.
+        identity::set_identity(
+            &exec,
+            &repo.path,
+            "  Ada Lovelace  ",
+            "ada<at>example.com",
+            ConfigScope::Local,
+            &cancel,
+        )
+        .await
+        .expect("set identity");
+        assert_eq!(
+            repo.git(&["config", "--get", "user.email"]),
+            "ada<at>example.com",
+            "stored as typed"
+        );
+        repo.write_file("c.txt", "three\n");
+        repo.git(&["add", "--", "c.txt"]);
+        commit::commit(
+            &exec,
+            &repo_info,
+            "with a sanitized identity",
+            CommitOptions::default(),
+            &cancel,
+        )
+        .await
+        .expect("commit");
+        assert_eq!(
+            repo.git(&["log", "-1", "--format=%an <%ae>"]),
+            "Ada Lovelace <adaatexample.com>"
+        );
+
+        // The one thing git does refuse, refused before commit time (where it
+        // would surface as "Author identity unknown").
+        let err = identity::set_identity(
+            &exec,
+            &repo.path,
+            "   ",
+            "e@example.com",
+            ConfigScope::Local,
+            &cancel,
+        )
+        .await
+        .expect_err("an empty name is refused");
+        assert!(err.to_string().contains("must not be empty"), "{err}");
+    }
+
+    /// The errand the whole thing exists for: another address for this
+    /// project, under the name the person already goes by everywhere else.
+    #[tokio::test]
+    #[ignore = "git assembling an author out of two files: not worth the pre-merge run"]
+    async fn one_key_is_overridden_while_the_other_stays_inherited() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        repo.git(&["config", "--local", "--unset", "user.name"]);
+        repo.git(&["config", "--local", "--unset", "user.email"]);
+        repo.git(&["config", "--global", "user.name", "Ada Lovelace"]);
+        repo.git(&["config", "--global", "user.email", "ada@example.com"]);
+        let exec = isolated_global(repo.global_config());
+        let cancel = CancellationToken::new();
+
+        let written =
+            identity::set_local_identity(&exec, &repo.path, "", "work@example.com", &cancel)
+                .await
+                .expect("set_local_identity");
+        assert!(written.is_saved(), "both halves as asked: {written:?}");
+        assert!(written.message.is_empty(), "nothing to report");
+        assert_eq!(written.identity.name, None, "the name is not written here");
+        assert_eq!(written.identity.email.as_deref(), Some("work@example.com"));
+
+        let effective = identity::load(&exec, &repo.path, &cancel)
+            .await
+            .expect("load")
+            .identity;
+        assert_eq!(
+            effective.name.as_deref(),
+            Some("Ada Lovelace"),
+            "inherited, because this repository says nothing about it"
+        );
+        assert_eq!(effective.email.as_deref(), Some("work@example.com"));
+
+        // A commit carries the pair git assembled out of the two files.
+        let repo_info = info(&repo).await;
+        repo.write_file("b.txt", "two\n");
+        repo.git(&["add", "--", "b.txt"]);
+        commit::commit(
+            &exec,
+            &repo_info,
+            "under the override",
+            CommitOptions::default(),
+            &cancel,
+        )
+        .await
+        .expect("commit");
+        assert_eq!(
+            repo.git(&["log", "-1", "--format=%an <%ae>"]),
+            "Ada Lovelace <work@example.com>"
+        );
+    }
+
+    /// Emptying a box takes the key out of this repository's file, and out of
+    /// that one only: what the person has set for themselves is still there
+    /// to fall back to.
+    #[tokio::test]
+    #[ignore = "git's --local unset leaving the global file alone: not worth the pre-merge run"]
+    async fn an_emptied_box_takes_the_override_out_and_leaves_the_global_alone() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        repo.git(&["config", "--global", "user.name", "Ada Lovelace"]);
+        repo.git(&["config", "--global", "user.email", "ada@example.com"]);
+        let exec = isolated_global(repo.global_config());
+        let cancel = CancellationToken::new();
+
+        let written = identity::set_local_identity(&exec, &repo.path, "", "", &cancel)
+            .await
+            .expect("set_local_identity");
+        assert!(written.is_saved(), "both were taken out: {written:?}");
+        assert_eq!(written.identity, identity::Identity::default());
+
+        let effective = identity::load(&exec, &repo.path, &cancel)
+            .await
+            .expect("load")
+            .identity;
+        assert_eq!(effective.name.as_deref(), Some("Ada Lovelace"));
+        assert_eq!(effective.email.as_deref(), Some("ada@example.com"));
+        let global = std::fs::read_to_string(repo.global_config()).expect("read global config");
+        assert!(global.contains("Ada Lovelace"), "{global}");
+    }
 }

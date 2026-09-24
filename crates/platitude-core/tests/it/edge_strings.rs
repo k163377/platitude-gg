@@ -1,5 +1,9 @@
-//! The shortest and longest strings git will hand over, with Japanese in
-//! all of them, carried end to end through the readers the UI feeds on.
+//! The longest strings git will hand over, with Japanese in all of them,
+//! carried end to end through the readers the UI feeds on. The short end
+//! (the table's last row) needs no walk: no parser has a minimum, and
+//! `parse::log`'s unit tests hold the empty subject and the empty address.
+//! A path of kanji and spaces read back through `status` is in
+//! [`periodic`].
 //!
 //! The walls, measured in throwaway repositories on both systems rather
 //! than assumed (CLAUDE.md: measure before writing the test, or the test
@@ -106,46 +110,6 @@ async fn a_ref_whose_last_character_ends_on_the_wall_comes_back_whole() {
     assert!(found(RefKind::Tag, &tag), "and so does the tag");
 }
 
-#[tokio::test]
-async fn one_character_is_a_name_too_and_so_is_one_kanji() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("q", "x\n", "日");
-    repo.git(&["branch", "あ"]);
-    repo.git(&["tag", "示"]);
-
-    let (executor, cancel) = env();
-    let listed = refs::load(&executor, &repo.path, &cancel)
-        .await
-        .expect("refs load");
-    assert!(
-        listed
-            .iter()
-            .any(|r| r.kind == RefKind::LocalBranch && r.short == "あ")
-    );
-    assert!(
-        listed
-            .iter()
-            .any(|r| r.kind == RefKind::Tag && r.short == "示")
-    );
-
-    let (commits, _) = walk(&repo).await;
-    assert_eq!(&*commits[0].subject, "日");
-}
-
-/// git takes `--allow-empty-message` and reads the subject back as the
-/// empty string. Nothing downstream may treat that as "no commit".
-#[tokio::test]
-async fn a_commit_with_no_message_at_all_reads_back_empty() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "1\n", "root");
-    repo.git(&["commit", "--allow-empty", "--allow-empty-message", "-m", ""]);
-
-    let (commits, _) = walk(&repo).await;
-    assert_eq!(commits.len(), 2);
-    assert_eq!(&*commits[0].subject, "", "the empty subject survives");
-    assert!(commits[0].time > 0, "and the commit is otherwise ordinary");
-}
-
 /// A subject and a body of the size somebody pastes, with the credit
 /// trailer *after* the long body — the trailer scan has to reach the end.
 #[tokio::test]
@@ -175,52 +139,84 @@ async fn a_pasted_paragraph_survives_the_walk_and_the_trailer_after_it() {
     );
 }
 
-/// git refuses only an empty author *name*; an empty address is a commit
-/// it will happily make, and `%aE` comes back as nothing at all.
-#[tokio::test]
-async fn an_author_may_be_a_paragraph_and_an_address_may_be_nothing() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "1\n", "root");
-    let name = pasted(300);
-    repo.git(&[
-        "commit",
-        "--allow-empty",
-        &format!("--author={name} <>"),
-        "-m",
-        "chore: 段落の著者",
-    ]);
+/// **What the pre-merge run leaves out**: a path of kanji and spaces read back
+/// through `status::load`, and the empty `%s` and `%aE` git writes for a
+/// commit with no message and an author with no address. Under `-z` git
+/// hands a path over as written and the status parser takes each token
+/// whole — real `-z` bytes with spaces and non-ASCII names are parsed before every merge
+/// from the committed fixture (`status_tests::committed_status_fixture_parses`)
+/// — and the log parser reads both empty fields from bytes written by hand
+/// (`log_tests::empty_subject_is_preserved`,
+/// `log_tests::an_empty_address_is_kept_as_one`). What is left is git's, and
+/// the full gate runs it (`-- --ignored ::periodic::`) rather than every
+/// change.
+mod periodic {
+    use super::*;
 
-    let (commits, parser) = walk(&repo).await;
-    let newest = &commits[0];
-    assert_eq!(
-        parser.pool().get(newest.author),
-        name,
-        "the name is handed over whole"
-    );
-    assert_eq!(
-        parser.pool().get(newest.author_email),
-        "",
-        "and an address nobody wrote reads as nothing, not as a failure"
-    );
-}
+    /// Kanji, a space and four levels of nesting in one path — the shapes a
+    /// status parser splits on.
+    #[tokio::test]
+    #[ignore = "duplicates committed_status_fixture_parses: not worth the pre-merge run"]
+    async fn a_path_of_kanji_and_spaces_comes_back_as_it_was_written() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "1\n", "root");
+        let deep = "第一階層/第二階層/第三階層/第四階層/深い場所のファイル.txt";
+        let spaced = "名前に 空白 が入る.txt";
+        repo.write_file(deep, "deep\n");
+        repo.write_file(spaced, "space\n");
+        repo.git(&["add", "--", deep]);
 
-/// Kanji, a space and four levels of nesting in one path — the shapes a
-/// status parser splits on.
-#[tokio::test]
-async fn a_path_of_kanji_and_spaces_comes_back_as_it_was_written() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "1\n", "root");
-    let deep = "第一階層/第二階層/第三階層/第四階層/深い場所のファイル.txt";
-    let spaced = "名前に 空白 が入る.txt";
-    repo.write_file(deep, "deep\n");
-    repo.write_file(spaced, "space\n");
-    repo.git(&["add", "--", deep]);
+        let (executor, cancel) = env();
+        let state = status::load(&executor, &repo.path, &cancel)
+            .await
+            .expect("status load");
+        let paths: Vec<&str> = state.items.iter().map(|i| i.path()).collect();
+        assert!(paths.contains(&deep), "staged deep path: {paths:?}");
+        assert!(paths.contains(&spaced), "untracked spaced path: {paths:?}");
+    }
 
-    let (executor, cancel) = env();
-    let state = status::load(&executor, &repo.path, &cancel)
-        .await
-        .expect("status load");
-    let paths: Vec<&str> = state.items.iter().map(|i| i.path()).collect();
-    assert!(paths.contains(&deep), "staged deep path: {paths:?}");
-    assert!(paths.contains(&spaced), "untracked spaced path: {paths:?}");
+    /// git takes `--allow-empty-message` and reads the subject back as the
+    /// empty string. Nothing downstream may treat that as "no commit".
+    #[tokio::test]
+    #[ignore = "the empty %s git writes for an empty message: not worth the pre-merge run"]
+    async fn a_commit_with_no_message_at_all_reads_back_empty() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "1\n", "root");
+        repo.git(&["commit", "--allow-empty", "--allow-empty-message", "-m", ""]);
+
+        let (commits, _) = walk(&repo).await;
+        assert_eq!(commits.len(), 2);
+        assert_eq!(&*commits[0].subject, "", "the empty subject survives");
+        assert!(commits[0].time > 0, "and the commit is otherwise ordinary");
+    }
+
+    /// git refuses only an empty author *name*; an empty address is a commit
+    /// it will happily make, and `%aE` comes back as nothing at all.
+    #[tokio::test]
+    #[ignore = "the empty %aE git writes for an address nobody gave: not worth the pre-merge run"]
+    async fn an_author_may_be_a_paragraph_and_an_address_may_be_nothing() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "1\n", "root");
+        let name = pasted(300);
+        repo.git(&[
+            "commit",
+            "--allow-empty",
+            &format!("--author={name} <>"),
+            "-m",
+            "chore: 段落の著者",
+        ]);
+
+        let (commits, parser) = walk(&repo).await;
+        let newest = &commits[0];
+        assert_eq!(
+            parser.pool().get(newest.author),
+            name,
+            "the name is handed over whole"
+        );
+        assert_eq!(
+            parser.pool().get(newest.author_email),
+            "",
+            "and an address nobody wrote reads as nothing, not as a failure"
+        );
+    }
 }

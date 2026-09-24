@@ -16,7 +16,9 @@
 //! The order those reads are weighed in is a switch over their values,
 //! and every arrangement of it is asked of `remote::push`'s own tests,
 //! where an arrangement costs nothing rather than a clone, two bare
-//! repositories and a `config` write.
+//! repositories and a `config` write. What git does with the checkout key
+//! on its own — the `switch` it steers and the `remote rename` that leaves
+//! it behind — is recorded in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -155,98 +157,6 @@ async fn the_origin_mark_reads_back_with_both_keys() {
         .expect("clearing a mark that is already gone is the state asked for");
 }
 
-/// What the second key is for: a name more than one remote carries is one
-/// `git switch` refuses to guess at, until a remote is marked — and then
-/// it tracks the marked one.
-#[tokio::test]
-async fn a_marked_remote_is_where_an_ambiguous_switch_takes_its_branch() {
-    let (_origin, _fork, mut repo) = origin_fork_and_clone();
-    let (exec, cancel) = env();
-
-    repo.git(&["push", "origin", "main:topic"]);
-    repo.git(&["push", "fork", "main:topic"]);
-    repo.git(&["fetch", "fork"]);
-    repo.git_expect_failure(&["switch", "topic"]);
-
-    remote::mark_origin(&exec, &repo.path, "fork", &cancel)
-        .await
-        .expect("mark fork");
-    repo.git(&["switch", "topic"]);
-    assert_eq!(
-        repo.git(&["rev-parse", "--abbrev-ref", "topic@{upstream}"])
-            .trim(),
-        "fork/topic"
-    );
-}
-
-/// Why the read keeps the two keys apart: a remote renamed in a terminal
-/// takes the push's key along and leaves the checkout one on the old name
-/// (measured 2.55).
-#[tokio::test]
-async fn a_remote_renamed_in_a_terminal_leaves_the_checkout_key_behind() {
-    let (_origin, _fork, mut repo) = origin_fork_and_clone();
-    let (exec, cancel) = env();
-
-    remote::mark_origin(&exec, &repo.path, "fork", &cancel)
-        .await
-        .expect("mark fork");
-    repo.git(&["remote", "rename", "fork", "home"]);
-
-    let marks = remote::origin_marks(&exec, &repo.path, &cancel)
-        .await
-        .expect("an answer");
-    assert_eq!(marks.push_default.expect("a push mark").remote, "home");
-    assert_eq!(marks.checkout_default.as_deref(), Some("fork"));
-}
-
-/// The fork arrangement the label can get wrong: the branch marks its
-/// own destination, the repository marks none, and the counts on screen
-/// are about the remote the branch tracks while the push goes
-/// elsewhere.
-#[tokio::test]
-async fn a_branch_marked_at_a_fork_says_so() {
-    let (_origin, _fork, mut repo) = origin_fork_and_clone();
-    let (exec, cancel) = env();
-    let remotes = ["fork", "origin"];
-
-    repo.git(&["config", "branch.main.pushRemote", "fork"]);
-
-    let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
-        .await
-        .expect("a plan");
-    assert_eq!(plan.remote, "fork");
-
-    assert_eq!(
-        remote::push_target("main", "origin/main", "fork", "", "origin", remotes),
-        "fork/main"
-    );
-    assert_eq!(
-        remote::push_standing(
-            false,
-            false,
-            "main",
-            "origin/main",
-            true,
-            2,
-            0,
-            "fork",
-            "",
-            remotes
-        ),
-        remote::PushStanding::Elsewhere,
-        "the counts are about origin, and the push is going to the fork"
-    );
-
-    remote::push(&exec, &repo.path, &plan, NET, &cancel)
-        .await
-        .expect("the push lands");
-    assert_eq!(
-        repo.git(&["config", "--get", "branch.main.remote"]).trim(),
-        "origin",
-        "where the branch fetches from is untouched"
-    );
-}
-
 /// The keys the snapshot reads, through the one reader both halves share
 /// — and one process for the pair.
 #[tokio::test]
@@ -374,22 +284,58 @@ async fn a_global_mark_is_read_and_sent_alike() {
     assert_eq!(plan.remote, "origin");
 }
 
-/// The list and the mark come back from one read, which is what the
-/// session keeps.
-#[tokio::test]
-async fn one_read_answers_for_both() {
-    let (_origin, _fork, repo) = origin_fork_and_clone();
-    let (exec, cancel) = env();
+/// **What the pre-merge run leaves out**: what git does with the checkout key
+/// once it is written — the remote an ambiguous `switch` takes, and the
+/// key a terminal's `remote rename` leaves on the old name. Writing that
+/// key and reading the two keys apart are held by the pre-merge tests above
+/// and by `remote::marks`' own, so the full gate runs these
+/// (`-- --ignored ::periodic::`) rather than every change.
+mod periodic {
+    use super::*;
 
-    remote::mark_origin(&exec, &repo.path, "fork", &cancel)
-        .await
-        .expect("mark fork");
+    /// What the second key is for: a name more than one remote carries is one
+    /// `git switch` refuses to guess at, until a remote is marked — and then
+    /// it tracks the marked one.
+    #[tokio::test]
+    #[ignore = "git's own use of checkout.defaultRemote: not worth the pre-merge run"]
+    async fn a_marked_remote_is_where_an_ambiguous_switch_takes_its_branch() {
+        let (_origin, _fork, mut repo) = origin_fork_and_clone();
+        let (exec, cancel) = env();
 
-    let read = remote::read(&exec, &repo.path, &cancel)
-        .await
-        .expect("read");
-    let names: Vec<&str> = read.list.iter().map(|r| r.name.as_str()).collect();
-    assert_eq!(names, ["fork", "origin"]);
-    assert_eq!(read.push_default.expect("a mark").remote, "fork");
-    assert_eq!(read.checkout_default.as_deref(), Some("fork"));
+        repo.git(&["push", "origin", "main:topic"]);
+        repo.git(&["push", "fork", "main:topic"]);
+        repo.git(&["fetch", "fork"]);
+        repo.git_expect_failure(&["switch", "topic"]);
+
+        remote::mark_origin(&exec, &repo.path, "fork", &cancel)
+            .await
+            .expect("mark fork");
+        repo.git(&["switch", "topic"]);
+        assert_eq!(
+            repo.git(&["rev-parse", "--abbrev-ref", "topic@{upstream}"])
+                .trim(),
+            "fork/topic"
+        );
+    }
+
+    /// Why the read keeps the two keys apart: a remote renamed in a terminal
+    /// takes the push's key along and leaves the checkout one on the old name
+    /// (measured 2.55).
+    #[tokio::test]
+    #[ignore = "what git's remote rename rewrites: not worth the pre-merge run"]
+    async fn a_remote_renamed_in_a_terminal_leaves_the_checkout_key_behind() {
+        let (_origin, _fork, mut repo) = origin_fork_and_clone();
+        let (exec, cancel) = env();
+
+        remote::mark_origin(&exec, &repo.path, "fork", &cancel)
+            .await
+            .expect("mark fork");
+        repo.git(&["remote", "rename", "fork", "home"]);
+
+        let marks = remote::origin_marks(&exec, &repo.path, &cancel)
+            .await
+            .expect("an answer");
+        assert_eq!(marks.push_default.expect("a push mark").remote, "home");
+        assert_eq!(marks.checkout_default.as_deref(), Some("fork"));
+    }
 }

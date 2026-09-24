@@ -1,5 +1,8 @@
 //! Remote traffic, exercised entirely offline: the remote is a `file://`
 //! URL of a second local repository (実装計画 §11.3).
+//!
+//! What git alone decides about that traffic — behind a command line
+//! that is ours only in its spelling — is recorded in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -42,51 +45,6 @@ async fn lists_remotes_from_config() {
     assert_eq!(remotes[0].fetch_url, "file:///tmp/a");
     assert_eq!(remotes[0].push_url, "file:///tmp/push");
     assert_eq!(remotes[1].name, "upstream");
-}
-
-#[tokio::test]
-async fn push_then_fetch_moves_commits_between_repositories() {
-    let (mut bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-
-    work.commit_file("b.txt", "two\n", "second");
-    remote::push(
-        &exec,
-        &work.path,
-        &PushSpec {
-            remote: "origin".into(),
-            local: "main".into(),
-            remote_branch: "main".into(),
-            set_upstream: true,
-            force: PushForce::None,
-        },
-        NET,
-        &cancel,
-    )
-    .await
-    .expect("push");
-
-    assert_eq!(
-        bare.git(&["log", "-1", "--format=%s", "main"]),
-        "second",
-        "the remote advanced"
-    );
-    assert_eq!(
-        work.git(&["rev-parse", "--abbrev-ref", "main@{upstream}"]),
-        "origin/main",
-        "--set-upstream recorded the tracking branch"
-    );
-
-    // A third repository fetches what was pushed.
-    let mut other = TestRepo::init();
-    other.git(&["remote", "add", "origin", &bare.file_url()]);
-    remote::fetch(&exec, &other.path, Some("origin"), NET, &cancel)
-        .await
-        .expect("fetch");
-    assert_eq!(
-        other.git(&["log", "-1", "--format=%s", "origin/main"]),
-        "second"
-    );
 }
 
 #[tokio::test]
@@ -148,46 +106,6 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
     assert_eq!(
         bare.git(&["log", "-1", "--format=%s", "main"]),
         "rewritten root"
-    );
-}
-
-#[tokio::test]
-async fn deleting_a_remote_branch_prunes_on_the_next_fetch() {
-    let (mut bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-
-    work.git(&["checkout", "-b", "temp"]);
-    work.commit_file("t.txt", "t\n", "temp work");
-    remote::push(
-        &exec,
-        &work.path,
-        &PushSpec {
-            remote: "origin".into(),
-            local: "temp".into(),
-            remote_branch: "temp".into(),
-            set_upstream: false,
-            force: PushForce::None,
-        },
-        NET,
-        &cancel,
-    )
-    .await
-    .expect("push temp");
-    assert!(bare.git(&["branch", "--list"]).contains("temp"));
-
-    remote::delete_remote_branch(&exec, &work.path, "origin", "temp", NET, &cancel)
-        .await
-        .expect("delete remote branch");
-    assert!(!bare.git(&["branch", "--list"]).contains("temp"));
-
-    remote::fetch(&exec, &work.path, Some("origin"), NET, &cancel)
-        .await
-        .expect("fetch --prune");
-    assert!(
-        !work
-            .git(&["branch", "-r", "--list"])
-            .contains("origin/temp"),
-        "--prune dropped the stale remote-tracking ref"
     );
 }
 
@@ -493,74 +411,6 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
     );
 }
 
-/// Adding a remote is bookkeeping: a URL that goes nowhere is
-/// accepted, which is why a failed push leaves the remote in place and
-/// `set-url` is the way back.
-#[tokio::test]
-async fn adding_a_remote_records_the_url_without_reaching_it() {
-    let (bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-
-    let nowhere = "file:///nowhere/there-is-no-such-repository.git";
-    remote::add(&exec, &work.path, "fork", nowhere, &cancel)
-        .await
-        .expect("add a remote nothing answers for");
-    assert_eq!(work.git(&["remote", "get-url", "fork"]), nowhere);
-
-    let again = remote::add(&exec, &work.path, "fork", nowhere, &cancel)
-        .await
-        .expect_err("git keeps its own names unique");
-    assert!(matches!(again, GitError::Failed { .. }), "{again:?}");
-
-    remote::set_url(&exec, &work.path, "fork", &bare.file_url(), &cancel)
-        .await
-        .expect("correct the URL");
-    assert_eq!(work.git(&["remote", "get-url", "fork"]), bare.file_url());
-
-    // And the corrected remote is usable, which is the whole point of
-    // keeping it.
-    let spec = remote::plan_publish(&exec, &work.path, "fork", "main", "", &cancel)
-        .await
-        .expect("plan publish");
-    remote::push(&exec, &work.path, &spec, NET, &cancel)
-        .await
-        .expect("push to the corrected remote");
-}
-
-/// The first push to a remote made by the same answer: when the URL turns
-/// out to go nowhere, the push fails and the remote stays. Undoing the add
-/// would throw away the only part of the answer that was worth keeping.
-#[tokio::test]
-async fn a_push_to_a_remote_that_goes_nowhere_leaves_the_remote_behind() {
-    let (_bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-
-    let nowhere = "file:///nowhere/there-is-no-such-repository.git";
-    remote::add(&exec, &work.path, "fork", nowhere, &cancel)
-        .await
-        .expect("add");
-    let spec = remote::plan_publish(&exec, &work.path, "fork", "main", "", &cancel)
-        .await
-        .expect("plan publish");
-    let error = remote::push(&exec, &work.path, &spec, NET, &cancel)
-        .await
-        .expect_err("nothing answers there");
-    assert!(matches!(error, GitError::Failed { .. }), "{error:?}");
-
-    assert_eq!(
-        work.git(&["remote", "get-url", "fork"]),
-        nowhere,
-        "the remote is still here to be corrected"
-    );
-    assert_eq!(
-        // `--default` so an unset key is an empty answer; the exit
-        // code would read to the harness as a broken command.
-        work.git(&["config", "--default", "", "--get", "branch.main.remote"]),
-        "",
-        "and a push that never landed recorded no upstream"
-    );
-}
-
 /// Writes a `pre-receive` hook into a bare repository that turns every
 /// push away, in the shape a forge writes its own refusals in.
 ///
@@ -828,31 +678,6 @@ fn origin_that_moved_on(bare: &TestRepo, file: &str, message: &str) -> TestRepo 
     other
 }
 
-#[tokio::test]
-async fn a_pull_brings_the_upstream_in_and_moves_the_branch() {
-    let (bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-    work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
-    let _far = origin_that_moved_on(&bare, "b.txt", "over there");
-
-    assert_eq!(
-        remote::pull(&exec, &work.path, NET, &cancel)
-            .await
-            .expect("pull"),
-        Landing::Done
-    );
-    assert_eq!(
-        work.git(&["log", "-1", "--format=%s", "main"]),
-        "over there",
-        "the branch is on what the far side holds"
-    );
-    assert_eq!(
-        work.git(&["log", "-1", "--format=%s", "origin/main"]),
-        "over there",
-        "and the reading of the remote came down with it"
-    );
-}
-
 /// Two lines that have grown apart, with the way to reconcile them
 /// written down: whichever way that is, the stop is not a failure — the
 /// same landing the merge and the rebase come to rest on.
@@ -880,40 +705,10 @@ async fn a_pull_that_conflicts_stops_with_the_operation_standing() {
     }
 }
 
-/// **git refuses a divergence it has no orders for** — `pull.rebase` and
-/// `pull.ff` unset, both sides holding commits of their own: exit 128
-/// with nothing started (measured, 2.55). Delegating means this reaches
-/// the reader as git's own words, hints and all
-/// (デザイン規約 §git が言ったことを読む場所), which is where the setting
-/// that answers it is named.
-#[tokio::test]
-async fn a_divergence_git_has_no_orders_for_is_a_failure() {
-    let (bare, mut work) = origin_and_clone();
-    let (exec, cancel) = env();
-    work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
-    let _far = origin_that_moved_on(&bare, "a.txt", "their line");
-    work.commit_file("a.txt", "our line\n", "ours");
-
-    let err = remote::pull(&exec, &work.path, NET, &cancel)
-        .await
-        .expect_err("git will not choose between merging and rebasing");
-    let GitError::Failed { code, stderr, .. } = &err else {
-        panic!("the refusal is git's own: {err}");
-    };
-    assert_eq!(*code, 128);
-    assert!(
-        stderr.contains("divergent branches"),
-        "git says what it needs: {stderr}"
-    );
-    assert!(
-        !work.path.join(".git").join("MERGE_HEAD").exists(),
-        "and nothing was started, so this is the failure it reads as"
-    );
-}
-
-/// And the refusals stay the failures they read as: both exit 1 with
-/// nothing standing (measured, 2.55), which is what tells them apart
-/// from the stop above.
+/// A refusal stays the failure it reads as: a branch with no tracking
+/// information and a tree the pull would write over both exit 1 with
+/// nothing standing (measured, 2.55), which is what tells them apart from
+/// the stop above.
 #[tokio::test]
 async fn a_pull_with_nothing_to_pull_from_is_a_failure() {
     let (_bare, mut work) = origin_and_clone();
@@ -930,18 +725,202 @@ async fn a_pull_with_nothing_to_pull_from_is_a_failure() {
 }
 
 #[tokio::test]
-async fn a_pull_over_changes_it_would_write_on_is_a_failure() {
+async fn a_pull_brings_the_upstream_in_and_moves_the_branch() {
     let (bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
     work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
-    let _far = origin_that_moved_on(&bare, "a.txt", "their line");
-    work.write_file("a.txt", "uncommitted\n");
+    let _far = origin_that_moved_on(&bare, "b.txt", "over there");
 
-    remote::pull(&exec, &work.path, NET, &cancel)
-        .await
-        .expect_err("git will not write over what is not committed");
-    assert!(
-        !work.git_ok(&["rev-parse", "--verify", "-q", "MERGE_HEAD"]),
-        "and it left nothing standing, so the words are the whole answer"
+    assert_eq!(
+        remote::pull(&exec, &work.path, NET, &cancel)
+            .await
+            .expect("pull"),
+        Landing::Done
     );
+    assert_eq!(
+        work.git(&["log", "-1", "--format=%s", "main"]),
+        "over there",
+        "the branch is on what the far side holds"
+    );
+    assert_eq!(
+        work.git(&["log", "-1", "--format=%s", "origin/main"]),
+        "over there",
+        "and the reading of the remote came down with it"
+    );
+}
+
+/// **What the pre-merge run leaves out**: what git itself does behind the
+/// fixed command lines these functions hand it (the lines are the unit
+/// tests' beside `remote::list` and `remote::fetch`) — the tracking ref a
+/// deleted branch leaves, a remote added with a URL nothing answers for
+/// and kept after a push there fails, and the pulls whose whole answer is
+/// git's (a divergence with no orders, a tree it would write over). Beyond
+/// the command line, what each reads of git's answer — the delete, a failed
+/// push's classification, the landing and the stop a pull leaves standing
+/// — is held by the pre-merge tests above and by `remote::refusal`'s
+/// own, so the full gate runs these (`-- --ignored ::periodic::`) rather
+/// than every change.
+mod periodic {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "git's own tracking-ref cleanup: not worth the pre-merge run"]
+    async fn deleting_a_remote_branch_prunes_on_the_next_fetch() {
+        let (mut bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+
+        work.git(&["checkout", "-b", "temp"]);
+        work.commit_file("t.txt", "t\n", "temp work");
+        remote::push(
+            &exec,
+            &work.path,
+            &PushSpec {
+                remote: "origin".into(),
+                local: "temp".into(),
+                remote_branch: "temp".into(),
+                set_upstream: false,
+                force: PushForce::None,
+            },
+            NET,
+            &cancel,
+        )
+        .await
+        .expect("push temp");
+        assert!(bare.git(&["branch", "--list"]).contains("temp"));
+
+        remote::delete_remote_branch(&exec, &work.path, "origin", "temp", NET, &cancel)
+            .await
+            .expect("delete remote branch");
+        assert!(!bare.git(&["branch", "--list"]).contains("temp"));
+
+        remote::fetch(&exec, &work.path, Some("origin"), NET, &cancel)
+            .await
+            .expect("fetch --prune");
+        assert!(
+            !work
+                .git(&["branch", "-r", "--list"])
+                .contains("origin/temp"),
+            "--prune dropped the stale remote-tracking ref"
+        );
+    }
+
+    /// Adding a remote is bookkeeping: a URL that goes nowhere is
+    /// accepted, which is why a failed push leaves the remote in place and
+    /// `set-url` is the way back.
+    #[tokio::test]
+    #[ignore = "what git records behind a fixed command line: not worth the pre-merge run"]
+    async fn adding_a_remote_records_the_url_without_reaching_it() {
+        let (bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+
+        let nowhere = "file:///nowhere/there-is-no-such-repository.git";
+        remote::add(&exec, &work.path, "fork", nowhere, &cancel)
+            .await
+            .expect("add a remote nothing answers for");
+        assert_eq!(work.git(&["remote", "get-url", "fork"]), nowhere);
+
+        let again = remote::add(&exec, &work.path, "fork", nowhere, &cancel)
+            .await
+            .expect_err("git keeps its own names unique");
+        assert!(matches!(again, GitError::Failed { .. }), "{again:?}");
+
+        remote::set_url(&exec, &work.path, "fork", &bare.file_url(), &cancel)
+            .await
+            .expect("correct the URL");
+        assert_eq!(work.git(&["remote", "get-url", "fork"]), bare.file_url());
+
+        // And the corrected remote is usable, which is the whole point of
+        // keeping it.
+        let spec = remote::plan_publish(&exec, &work.path, "fork", "main", "", &cancel)
+            .await
+            .expect("plan publish");
+        remote::push(&exec, &work.path, &spec, NET, &cancel)
+            .await
+            .expect("push to the corrected remote");
+    }
+
+    /// The first push to a remote made by the same answer: when the URL turns
+    /// out to go nowhere, the push fails and the remote stays. Undoing the add
+    /// would throw away the only part of the answer that was worth keeping.
+    #[tokio::test]
+    #[ignore = "what git keeps after a failed push: not worth the pre-merge run"]
+    async fn a_push_to_a_remote_that_goes_nowhere_leaves_the_remote_behind() {
+        let (_bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+
+        let nowhere = "file:///nowhere/there-is-no-such-repository.git";
+        remote::add(&exec, &work.path, "fork", nowhere, &cancel)
+            .await
+            .expect("add");
+        let spec = remote::plan_publish(&exec, &work.path, "fork", "main", "", &cancel)
+            .await
+            .expect("plan publish");
+        let error = remote::push(&exec, &work.path, &spec, NET, &cancel)
+            .await
+            .expect_err("nothing answers there");
+        assert!(matches!(error, GitError::Failed { .. }), "{error:?}");
+
+        assert_eq!(
+            work.git(&["remote", "get-url", "fork"]),
+            nowhere,
+            "the remote is still here to be corrected"
+        );
+        assert_eq!(
+            // `--default` so an unset key is an empty answer; the exit
+            // code would read to the harness as a broken command.
+            work.git(&["config", "--default", "", "--get", "branch.main.remote"]),
+            "",
+            "and a push that never landed recorded no upstream"
+        );
+    }
+
+    /// **git refuses a divergence it has no orders for** — `pull.rebase` and
+    /// `pull.ff` unset, both sides holding commits of their own: exit 128
+    /// with nothing started (measured, 2.55). Delegating means this reaches
+    /// the reader as git's own words, hints and all
+    /// (デザイン規約 §git が言ったことを読む場所), which is where the setting
+    /// that answers it is named.
+    #[tokio::test]
+    #[ignore = "git's own refusal text and exit code: not worth the pre-merge run"]
+    async fn a_divergence_git_has_no_orders_for_is_a_failure() {
+        let (bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+        work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+        let _far = origin_that_moved_on(&bare, "a.txt", "their line");
+        work.commit_file("a.txt", "our line\n", "ours");
+
+        let err = remote::pull(&exec, &work.path, NET, &cancel)
+            .await
+            .expect_err("git will not choose between merging and rebasing");
+        let GitError::Failed { code, stderr, .. } = &err else {
+            panic!("the refusal is git's own: {err}");
+        };
+        assert_eq!(*code, 128);
+        assert!(
+            stderr.contains("divergent branches"),
+            "git says what it needs: {stderr}"
+        );
+        assert!(
+            !work.path.join(".git").join("MERGE_HEAD").exists(),
+            "and nothing was started, so this is the failure it reads as"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "git's own dirty-tree refusal: not worth the pre-merge run"]
+    async fn a_pull_over_changes_it_would_write_on_is_a_failure() {
+        let (bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+        work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+        let _far = origin_that_moved_on(&bare, "a.txt", "their line");
+        work.write_file("a.txt", "uncommitted\n");
+
+        remote::pull(&exec, &work.path, NET, &cancel)
+            .await
+            .expect_err("git will not write over what is not committed");
+        assert!(
+            !work.git_ok(&["rev-parse", "--verify", "-q", "MERGE_HEAD"]),
+            "and it left nothing standing, so the words are the whole answer"
+        );
+    }
 }

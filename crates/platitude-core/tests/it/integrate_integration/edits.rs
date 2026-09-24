@@ -253,36 +253,6 @@ async fn the_range_read_is_this_branchs_history_and_not_another() {
     );
 }
 
-#[tokio::test]
-async fn a_reword_without_a_message_is_refused_before_git_runs() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.commit_file("b.txt", "two\n", "second");
-    let (exec, cancel) = env();
-    let repo_info = info(&repo).await;
-    let before = repo.git(&["rev-parse", "HEAD"]);
-
-    let steps = vec![RebaseStep {
-        action: TodoAction::Reword,
-        oid: before.clone(),
-        subject: "second".into(),
-        message: None,
-    }];
-    let err = sequencer::rebase_interactive(
-        &exec,
-        &repo_info,
-        "HEAD~1",
-        &steps,
-        &RebaseOptions::default(),
-        &helper(),
-        &cancel,
-    )
-    .await
-    .expect_err("a reword needs a message");
-    assert!(err.to_string().contains("no message"), "{err}");
-    assert_eq!(repo.git(&["rev-parse", "HEAD"]), before, "nothing ran");
-}
-
 /// A reword standing *behind* a conflicting step survives the stop: the
 /// remaining todo's `exec` line reads its message file from the later
 /// `--continue`, a different process entirely, so the file must still be

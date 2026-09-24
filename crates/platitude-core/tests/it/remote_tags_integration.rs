@@ -12,6 +12,9 @@
 //!   fetch. `--prune` leaves it silently; `--prune-tags` refuses it with
 //!   "would clobber existing tag" and exits 1. Nothing resolves the
 //!   disagreement on its own, which is why it has to keep showing.
+//!
+//! What git answers on its own terms, and the graph rows the join's unit
+//! tests already hold, are recorded in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -80,43 +83,6 @@ fn tag_scenario() -> (TestRepo, TestRepo, String, String) {
     (bare, work, root, head)
 }
 
-#[tokio::test]
-async fn a_remote_is_read_at_the_commits_its_tags_peel_to() {
-    let (_bare, work, root, head) = tag_scenario();
-    let exec = crate::support::exec::isolated();
-    let cancel = CancellationToken::new();
-
-    let tags = remote::list_tags(&exec, &work.path, "origin", NET, &cancel)
-        .await
-        .expect("ls-remote --tags");
-
-    let at = |name: &str| {
-        tags.iter()
-            .find(|t| t.name == name)
-            .map(|t| t.commit.to_hex())
-    };
-    assert_eq!(
-        at("v-both").as_deref(),
-        Some(root.as_str()),
-        "the ^{{}} line, which is what a local tag peels to as well"
-    );
-    assert!(
-        tags.iter().any(|t| t.name == "v-both" && t.annotated),
-        "the annotated tag is read at the commit, not the tag object"
-    );
-    assert_eq!(
-        at("v-drift").as_deref(),
-        Some(root.as_str()),
-        "the remote still has the tag where it was pushed"
-    );
-    assert!(at("v-remote").is_some(), "advertised even with no branch");
-    assert_eq!(at("v-local"), None, "never pushed");
-    assert_ne!(
-        head, root,
-        "the scenario needs two commits to drift between"
-    );
-}
-
 /// The two forms of the menu's push row, against the remote they are
 /// about. **A plain push cannot move a name the remote already has
 /// somewhere else** — git refuses it outright — which is the whole reason
@@ -168,8 +134,8 @@ fn at_origin(work: &mut TestRepo, name: &str) -> String {
         .to_string()
 }
 
-/// Taking a tag off a remote, and the two measurements that decide how
-/// it has to be spelled.
+/// Taking a tag off a remote, and the measurement that decides how it
+/// has to be spelled.
 ///
 /// **The name is qualified because a bare one is ambiguous.** A remote
 /// carrying a branch and a tag of the same name refuses `--delete <name>`
@@ -203,22 +169,6 @@ async fn a_qualified_delete_takes_the_tag_and_leaves_the_branch_of_the_same_name
         root,
         "nor was the one here"
     );
-}
-
-/// **git takes a name the remote has not got, in this
-/// spelling.** The qualified form needs no resolution over there, so the
-/// answer is `warning: deleting a non-existent ref` and exit 0 (measured) —
-/// where a bare name would have failed. Whether there is anything to
-/// delete is the menu's to know before it asks (`offers::TagSides`).
-#[tokio::test]
-async fn deleting_a_tag_the_remote_has_not_got_is_not_an_error() {
-    let (_bare, work, _root, _head) = tag_scenario();
-    let exec = crate::support::exec::isolated();
-    let cancel = CancellationToken::new();
-
-    remote::delete_remote_tag(&exec, &work.path, "origin", "v-local", NET, &cancel)
-        .await
-        .expect("git answers with a warning, not a refusal");
 }
 
 /// A tag replaced on the remote: the new name arrives, the old one goes,
@@ -381,14 +331,6 @@ async fn opened_recording(work: &TestRepo) -> (Arc<CaptureSink>, Arc<RepoSession
     })
     .await;
     (sink, session)
-}
-
-/// The chips each row carries right now, keyed by commit.
-fn rows_now(events: &[SessionEvent]) -> HashMap<String, Vec<RefLabel>> {
-    crate::support::replay_graph(events)
-        .into_values()
-        .map(|seen| (seen.oid_hex, seen.labels))
-        .collect()
 }
 
 fn tag<'a>(snapshot: &'a RefsSnapshot, name: &str) -> &'a TagItem {
@@ -715,46 +657,10 @@ async fn a_remote_tag_completion_returns_its_single_flight_slot() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn a_drifted_tag_puts_its_name_on_both_rows() {
-    let (_bare, work, root, head) = tag_scenario();
-    let (sink, session) = opened_recording(&work).await;
-    session.fetch(Some("origin".into()));
-    snapshot_after_the_fetch(&sink).await;
-
-    // Both sides of the drift are on main, so both have a row to stand on,
-    // and the name is on each of them — the whole of that signal.
-    sink.wait_for("v-drift on both rows", |evs| {
-        let rows = rows_now(evs);
-        let drift = |oid: &str| rows.get(oid)?.iter().find(|l| l.text == "v-drift").cloned();
-        let (mine, theirs) = (drift(&head)?, drift(&root)?);
-        if !mine.here || theirs.here {
-            return None;
-        }
-        assert_eq!(mine.kind, LabelKind::Tag);
-        assert_eq!(theirs.kind, LabelKind::Tag);
-        // And the two rows are the whole of it: on the graph the cloud
-        // says the remote's copy is on *this* row, so where the two sides
-        // disagree neither row wears one. The sidebar keeps the wider
-        // reading, which is asserted where the snapshot is read.
-        assert!(
-            !mine.has_remote && !theirs.has_remote,
-            "a badge here would answer for the row the other one is on"
-        );
-        // Which of the two is which cannot be read off the name — they
-        // are the same name — so the reading that came from over there
-        // says where it came from.
-        assert_eq!(theirs.remote, "origin");
-        assert_eq!(mine.remote, "", "this one was not read off anything");
-        Some(())
-    })
-    .await;
-}
-
-/// The same disagreement, in the form the menu reads it: which remote,
-/// and the commit the lease has to be pinned to. Off its own run — the
-/// sidebar lists a name that is here once, so a drift leaves no row of
-/// its own to read it from.
+/// A drifted tag in the form the menu reads it: which remote, and the
+/// commit the lease has to be pinned to. Off its own run — the sidebar
+/// lists a name that is here once, so a drift leaves no row of its own to
+/// read it from.
 #[tokio::test]
 async fn a_drift_is_listed_by_remote_with_the_commit_a_lease_would_name() {
     let (_bare, work, root, _head) = tag_scenario();
@@ -784,4 +690,79 @@ async fn a_drift_is_listed_by_remote_with_the_commit_a_lease_would_name() {
             .any(|t| t.short == "v-local" && !t.here),
         "a name only this repository has is nobody's drift"
     );
+}
+
+/// **What the pre-merge run leaves out**: git's answer to a delete of a name
+/// the remote has not got, and the drifted tag's two graph rows read
+/// through a whole session. The first is git's alone, behind the same
+/// qualified command line the pre-merge delete holds; the rows' labels are
+/// the join's own unit test
+/// (`session::join_tests::a_drifted_tag_stands_on_both_rows`), and the
+/// fetch that feeds them is walked by the pre-merge session tests above. The
+/// full gate runs these (`-- --ignored ::periodic::`) rather than every
+/// change.
+mod periodic {
+    use super::*;
+
+    /// **git takes a name the remote has not got, in this
+    /// spelling.** The qualified form needs no resolution over there, so the
+    /// answer is `warning: deleting a non-existent ref` and exit 0 (measured) —
+    /// where a bare name would have failed. Whether there is anything to
+    /// delete is the menu's to know before it asks (`offers::TagSides`).
+    #[tokio::test]
+    #[ignore = "git's answer to a ref that is not there: not worth the pre-merge run"]
+    async fn deleting_a_tag_the_remote_has_not_got_is_not_an_error() {
+        let (_bare, work, _root, _head) = tag_scenario();
+        let exec = crate::support::exec::isolated();
+        let cancel = CancellationToken::new();
+
+        remote::delete_remote_tag(&exec, &work.path, "origin", "v-local", NET, &cancel)
+            .await
+            .expect("git answers with a warning, not a refusal");
+    }
+
+    /// The chips each row carries right now, keyed by commit.
+    fn rows_now(events: &[SessionEvent]) -> HashMap<String, Vec<RefLabel>> {
+        crate::support::replay_graph(events)
+            .into_values()
+            .map(|seen| (seen.oid_hex, seen.labels))
+            .collect()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "duplicates a_drifted_tag_stands_on_both_rows: not worth the pre-merge run"]
+    async fn a_drifted_tag_puts_its_name_on_both_rows() {
+        let (_bare, work, root, head) = tag_scenario();
+        let (sink, session) = opened_recording(&work).await;
+        session.fetch(Some("origin".into()));
+        snapshot_after_the_fetch(&sink).await;
+
+        // Both sides of the drift are on main, so both have a row to stand on,
+        // and the name is on each of them — the whole of that signal.
+        sink.wait_for("v-drift on both rows", |evs| {
+            let rows = rows_now(evs);
+            let drift = |oid: &str| rows.get(oid)?.iter().find(|l| l.text == "v-drift").cloned();
+            let (mine, theirs) = (drift(&head)?, drift(&root)?);
+            if !mine.here || theirs.here {
+                return None;
+            }
+            assert_eq!(mine.kind, LabelKind::Tag);
+            assert_eq!(theirs.kind, LabelKind::Tag);
+            // And the two rows are the whole of it: on the graph the cloud
+            // says the remote's copy is on *this* row, so where the two sides
+            // disagree neither row wears one. The sidebar keeps the wider
+            // reading, which is asserted where the snapshot is read.
+            assert!(
+                !mine.has_remote && !theirs.has_remote,
+                "a badge here would answer for the row the other one is on"
+            );
+            // Which of the two is which cannot be read off the name — they
+            // are the same name — so the reading that came from over there
+            // says where it came from.
+            assert_eq!(theirs.remote, "origin");
+            assert_eq!(mine.remote, "", "this one was not read off anything");
+            Some(())
+        })
+        .await;
+    }
 }

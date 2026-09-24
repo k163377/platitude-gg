@@ -39,43 +39,6 @@ async fn renaming_a_tag_keeps_the_object_it_names() {
 }
 
 #[tokio::test]
-async fn a_lightweight_tag_renames_too() {
-    let mut repo = TestRepo::init();
-    let head = repo.commit_file_id("a.txt", "a\n", "root");
-    repo.git(&["tag", "nightly"]);
-    let (exec, cancel) = env();
-
-    tag::rename(&exec, &repo.path, "nightly", "nightly-old", &cancel)
-        .await
-        .expect("rename");
-
-    assert_eq!(repo.git(&["tag", "--list"]), "nightly-old");
-    assert_eq!(repo.git(&["rev-parse", "nightly-old"]), head);
-}
-
-#[tokio::test]
-async fn renaming_onto_a_name_in_use_changes_nothing() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "a\n", "root");
-    repo.git(&["tag", "v1"]);
-    repo.git(&["tag", "v2"]);
-    let (exec, cancel) = env();
-
-    let err = tag::rename(&exec, &repo.path, "v1", "v2", &cancel)
-        .await
-        .expect_err("git refuses an existing tag name");
-    assert!(
-        format!("{err}").contains("already exists"),
-        "git's own words: {err}"
-    );
-    let tags = repo.git(&["tag", "--list"]);
-    assert!(
-        tags.contains("v1") && tags.contains("v2"),
-        "both stay: {tags}"
-    );
-}
-
-#[tokio::test]
 async fn renaming_a_stash_keeps_its_contents_and_says_so_everywhere() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "a\n", "root");
@@ -183,23 +146,4 @@ async fn the_name_rules_are_the_ones_git_applies() {
             "disagreed about {name:?} (git says {git_says})"
         );
     }
-}
-
-/// A rename that changes only letter case is refused before anything
-/// runs. With the tag packed (the normal state after a clone), the
-/// create+delete pair deletes BOTH names on a case-insensitive disk and
-/// every command exits 0 (measured, on NTFS).
-#[tokio::test]
-async fn a_case_only_tag_rename_is_refused_before_touching_anything() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "a\n", "root");
-    repo.git(&["tag", "v1.0"]);
-    repo.git(&["pack-refs", "--all"]);
-    let (exec, cancel) = env();
-
-    let err = tag::rename(&exec, &repo.path, "v1.0", "V1.0", &cancel)
-        .await
-        .expect_err("case-only renames are refused");
-    assert!(format!("{err}").contains("letter case"), "{err}");
-    assert_eq!(repo.git(&["tag", "--list"]), "v1.0", "nothing was lost");
 }

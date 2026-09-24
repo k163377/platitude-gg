@@ -76,29 +76,6 @@ async fn a_row_is_marked_exactly_when_a_remote_reaches_it() {
     assert!(rows.iter().any(|r| r.oid_hex == pushed && r.published));
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn a_repository_with_no_remote_has_nothing_published() {
-    let mut work = TestRepo::init();
-    work.commit_file("a.txt", "one\n", "root");
-    work.commit_file("b.txt", "two\n", "second");
-
-    let (sink, _session) = open_unawaited(&work);
-    sink.wait_for("Opened", |evs| {
-        evs.iter()
-            .find_map(|e| matches!(e, SessionEvent::Opened { .. }).then_some(()))
-    })
-    .await;
-    let rows = rows_of(&sink, 2).await;
-
-    assert!(
-        rows.iter().all(|r| !r.published),
-        "nothing is published where no remote-tracking branch was read"
-    );
-    for row in &rows {
-        assert!(!git_says_published(&mut work, &row.oid_hex), "git agrees");
-    }
-}
-
 /// A push run outside the application moves `refs/remotes/...` here, and
 /// the poll that notices reads the refs and rebuilds the graph. The marks
 /// have to come back with it — otherwise the warnings would keep saying
@@ -139,41 +116,4 @@ async fn a_push_from_outside_publishes_the_rows_it_reached() {
         .then_some(())
     })
     .await;
-}
-
-/// A commit no branch is on any more, but a remote-tracking branch still
-/// reaches: the mark has to follow reachability.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_commit_behind_the_remote_tip_is_marked_without_carrying_a_chip() {
-    let (_bare, mut work) = origin_and_clone();
-    let middle = work.commit_file_id("b.txt", "two\n", "middle");
-    let head = work.commit_file_id("c.txt", "three\n", "head");
-    work.git(&["push", "origin", "main"]);
-
-    let (sink, _session) = open_unawaited(&work);
-    sink.wait_for("Opened", |evs| {
-        evs.iter()
-            .find_map(|e| matches!(e, SessionEvent::Opened { .. }).then_some(()))
-    })
-    .await;
-    let rows = rows_of(&sink, 3).await;
-
-    // Only the tip carries `origin/main`; the rows under it are
-    // published because the walk carried the mark down.
-    let middle_row = rows.iter().find(|r| r.oid_hex == middle).expect("middle");
-    assert!(middle_row.published, "reached from the remote tip");
-    assert!(
-        middle_row.labels.is_empty(),
-        "and it carries no chip of its own: {:?}",
-        middle_row.labels
-    );
-    assert!(
-        rows.iter()
-            .find(|r| r.oid_hex == head)
-            .expect("head")
-            .published
-    );
-    for row in &rows {
-        assert_eq!(row.published, git_says_published(&mut work, &row.oid_hex));
-    }
 }

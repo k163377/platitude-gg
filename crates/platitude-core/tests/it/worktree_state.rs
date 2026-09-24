@@ -1,9 +1,10 @@
 //! status / stash against real git. The committed parser fixtures under
 //! tests/fixtures/ are regenerated here (`capture_fixtures`); the checks
-//! that parse them live beside each parser as unit tests. Op-state
-//! detection is pinned where the operations that produce it live —
-//! `integrate_integration` stops a real merge / rebase / cherry-pick and
-//! reads the state back.
+//! that parse them live beside each parser as unit tests, and the same
+//! scenarios read live through `status::load` / `stash::load` are in
+//! [`periodic`]. Op-state detection is pinned where the operations that
+//! produce it live — `integrate_integration` stops a real merge / rebase /
+//! cherry-pick and reads the state back.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -26,79 +27,6 @@ fn dirty_scenario() -> TestRepo {
     repo.write_file("a.txt", "line1 changed\nline2\n");
     repo.write_file("untracked dir/inner.txt", "u\n");
     repo
-}
-
-#[tokio::test]
-async fn status_buckets_reflect_the_working_tree() {
-    let repo = dirty_scenario();
-    let (executor, cancel) = env();
-
-    let s = status::load(&executor, &repo.path, &cancel).await.unwrap();
-    assert_eq!(s.branch_head.as_deref(), Some("main"));
-    assert!(s.branch_oid.is_some());
-    assert!(!s.has_conflicts());
-
-    let staged: Vec<&str> = s.staged().map(StatusItem::path).collect();
-    assert!(staged.contains(&"staged.txt"));
-    assert!(staged.contains(&"новый 名前.txt"), "renamed target staged");
-
-    let rename = s
-        .items
-        .iter()
-        .find_map(|i| match i {
-            StatusItem::Tracked {
-                staged: 'R',
-                path,
-                orig_path: Some(orig),
-                ..
-            } => Some((path.as_str(), orig.as_str())),
-            _ => None,
-        })
-        .expect("rename entry present");
-    assert_eq!(rename, ("новый 名前.txt", "old name.txt"));
-
-    let unstaged: Vec<&str> = s.unstaged().map(StatusItem::path).collect();
-    assert_eq!(unstaged, vec!["a.txt"]);
-
-    let untracked: Vec<&str> = s.untracked().map(StatusItem::path).collect();
-    assert_eq!(
-        untracked,
-        vec!["untracked dir/inner.txt"],
-        "-uall expands a new directory into its files"
-    );
-}
-
-#[tokio::test]
-async fn stash_list_round_trips() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "base\n", "base");
-
-    repo.write_file("f.txt", "wip 1\n");
-    repo.git(&["stash", "push", "-m", "first stash メッセージ"]);
-    repo.write_file("f.txt", "wip 2\n");
-    repo.git(&["stash", "push"]);
-
-    let (executor, cancel) = env();
-    let stashes = stash::load(&executor, &repo.path, &cancel).await.unwrap();
-
-    assert_eq!(stashes.len(), 2);
-    assert_eq!(stashes[0].name, "stash@{0}");
-    assert_eq!(stashes[1].name, "stash@{1}");
-    assert!(stashes[0].message.starts_with("WIP on main"));
-    assert!(stashes[1].message.contains("first stash メッセージ"));
-    assert!(stashes.iter().all(|s| s.time > 0));
-}
-
-#[tokio::test]
-async fn clean_repo_has_empty_stash_and_status() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "base\n", "base");
-
-    let (executor, cancel) = env();
-    let s = status::load(&executor, &repo.path, &cancel).await.unwrap();
-    assert!(s.items.is_empty());
-    let stashes = stash::load(&executor, &repo.path, &cancel).await.unwrap();
-    assert!(stashes.is_empty());
 }
 
 // --- captured fixtures ----------------------------------------------------
@@ -128,4 +56,78 @@ async fn capture_fixtures() {
     stash_repo.git(&["stash", "push"]);
     let stash_bytes = stash_repo.git_raw(&["stash", "list", "-z", stash::STASH_FORMAT_ARG]);
     std::fs::write(fixture_dir().join("stash_list.bin"), &stash_bytes).unwrap();
+}
+
+/// **What the pre-merge run leaves out**: the fixtures' two scenarios read
+/// live through `status::load` and `stash::load`. The parsers read the
+/// committed bytes before every merge (`status_tests::committed_status_fixture_parses`,
+/// `stash_tests::committed_stash_fixture_parses`) and every session open
+/// reads a status and a stash list live, so what is left is whether git
+/// still writes those bytes — the full gate runs it
+/// (`-- --ignored ::periodic::`) rather than every change.
+mod periodic {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "duplicates committed_status_fixture_parses: not worth the pre-merge run"]
+    async fn status_buckets_reflect_the_working_tree() {
+        let repo = dirty_scenario();
+        let (executor, cancel) = env();
+
+        let s = status::load(&executor, &repo.path, &cancel).await.unwrap();
+        assert_eq!(s.branch_head.as_deref(), Some("main"));
+        assert!(s.branch_oid.is_some());
+        assert!(!s.has_conflicts());
+
+        let staged: Vec<&str> = s.staged().map(StatusItem::path).collect();
+        assert!(staged.contains(&"staged.txt"));
+        assert!(staged.contains(&"новый 名前.txt"), "renamed target staged");
+
+        let rename = s
+            .items
+            .iter()
+            .find_map(|i| match i {
+                StatusItem::Tracked {
+                    staged: 'R',
+                    path,
+                    orig_path: Some(orig),
+                    ..
+                } => Some((path.as_str(), orig.as_str())),
+                _ => None,
+            })
+            .expect("rename entry present");
+        assert_eq!(rename, ("новый 名前.txt", "old name.txt"));
+
+        let unstaged: Vec<&str> = s.unstaged().map(StatusItem::path).collect();
+        assert_eq!(unstaged, vec!["a.txt"]);
+
+        let untracked: Vec<&str> = s.untracked().map(StatusItem::path).collect();
+        assert_eq!(
+            untracked,
+            vec!["untracked dir/inner.txt"],
+            "-uall expands a new directory into its files"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "duplicates committed_stash_fixture_parses: not worth the pre-merge run"]
+    async fn stash_list_round_trips() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("f.txt", "base\n", "base");
+
+        repo.write_file("f.txt", "wip 1\n");
+        repo.git(&["stash", "push", "-m", "first stash メッセージ"]);
+        repo.write_file("f.txt", "wip 2\n");
+        repo.git(&["stash", "push"]);
+
+        let (executor, cancel) = env();
+        let stashes = stash::load(&executor, &repo.path, &cancel).await.unwrap();
+
+        assert_eq!(stashes.len(), 2);
+        assert_eq!(stashes[0].name, "stash@{0}");
+        assert_eq!(stashes[1].name, "stash@{1}");
+        assert!(stashes[0].message.starts_with("WIP on main"));
+        assert!(stashes[1].message.contains("first stash メッセージ"));
+        assert!(stashes.iter().all(|s| s.time > 0));
+    }
 }

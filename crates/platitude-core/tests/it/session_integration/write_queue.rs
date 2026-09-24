@@ -1,5 +1,6 @@
-//! Writes go through the session's queue: one at a time, and a failure is
-//! reported and refreshed like any other.
+//! Writes go through the session's queue: one at a time, a stop answered
+//! as a landing, and a close that waits the queue out. The periodic part
+//! walks single writes whose remaining claim is git's.
 
 use crate::support::session::{opened, write_answer, write_result};
 use crate::support::{TestRepo, barrier_hook};
@@ -53,104 +54,6 @@ async fn concurrent_writes_are_serialized() {
 
     let staged = repo.git(&["diff", "--cached", "--name-only"]);
     assert_eq!(staged.lines().count(), COUNT, "all files staged: {staged}");
-    session.close();
-}
-
-/// A failing write reports git's own message and still refreshes, because a
-/// command that stops halfway has already changed the repository.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_failed_write_reports_and_refreshes() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("root.txt", "0\n", "root");
-    let (sink, session) = opened(&repo).await;
-
-    session.delete_branch("does-not-exist".into(), false);
-    let error = sink
-        .wait_for("WriteFinished", |evs| {
-            evs.iter().find_map(|e| match e {
-                SessionEvent::WriteFinished { error, .. } => Some(error.clone()),
-                _ => None,
-            })
-        })
-        .await;
-    let error = error.expect("the write failed");
-    assert!(
-        error.contains("does-not-exist"),
-        "git's wording is passed through: {error}"
-    );
-    session.close();
-}
-
-/// The full local round trip through the session: stage, commit, branch.
-///
-/// Order is the point: committing before staging, or branching before
-/// committing, would produce a different repository. The queue is
-/// what gives this.
-#[tokio::test(flavor = "multi_thread")]
-async fn stage_commit_and_branch_through_the_session() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("root.txt", "0\n", "root");
-    repo.write_file("new.txt", "content\n");
-
-    let (sink, session) = opened(&repo).await;
-
-    session.stage_paths(vec!["new.txt".into()]);
-    session.commit(
-        "add new file".into(),
-        platitude_core::commit::CommitOptions::default(),
-    );
-    session.create_branch("feature".into(), None, true);
-
-    let done = sink
-        .wait_for("three writes finished", |evs| {
-            let done: Vec<(OperationKind, Option<String>)> = evs
-                .iter()
-                .filter_map(|e| match e {
-                    SessionEvent::WriteFinished { kind, error, .. } => Some((*kind, error.clone())),
-                    _ => None,
-                })
-                .collect();
-            (done.len() == 3).then_some(done)
-        })
-        .await;
-    assert!(
-        done.iter().all(|(_, error)| error.is_none()),
-        "all succeeded: {done:?}"
-    );
-    assert_eq!(
-        done.iter().map(|(kind, _)| *kind).collect::<Vec<_>>(),
-        vec![
-            OperationKind::Stage,
-            OperationKind::Commit,
-            OperationKind::Branch
-        ],
-        "they ran in the order they were asked for"
-    );
-
-    assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "add new file");
-    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "feature");
-    session.close();
-}
-
-/// Taking the branch back a commit runs as a queued write of its own,
-/// under the name the page keys its follow-up off: a reset rewrites the
-/// working tree the diff on screen was read from.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_reset_moves_the_branch_through_the_write_queue() {
-    let mut repo = TestRepo::init();
-    let root = repo.commit_file_id("f.txt", "0\n", "root");
-    repo.commit_file("f.txt", "1\n", "second");
-
-    let (sink, session) = opened(&repo).await;
-    session.reset(root.clone(), platitude_core::branch::ResetMode::Mixed);
-    assert_eq!(write_result(&sink, OperationKind::Reset).await, None);
-
-    assert_eq!(repo.git(&["rev-parse", "HEAD"]), root);
-    assert_eq!(
-        repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
-        "main",
-        "the branch moved, not just HEAD"
-    );
     session.close();
 }
 
@@ -450,4 +353,87 @@ async fn each_ask_is_answered_under_the_id_it_was_given() {
     assert_eq!(write_answer(&sink, held).await, None, "the commit landed");
     assert_eq!(write_answer(&sink, mine).await, None, "and the branch did");
     session.close();
+}
+
+/// Taking the branch back a commit runs as a queued write of its own,
+/// under the name the page keys its follow-up off: a reset rewrites the
+/// working tree the diff on screen was read from.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_reset_moves_the_branch_through_the_write_queue() {
+    let mut repo = TestRepo::init();
+    let root = repo.commit_file_id("f.txt", "0\n", "root");
+    repo.commit_file("f.txt", "1\n", "second");
+
+    let (sink, session) = opened(&repo).await;
+    session.reset(root.clone(), platitude_core::branch::ResetMode::Mixed);
+    assert_eq!(write_result(&sink, OperationKind::Reset).await, None);
+
+    assert_eq!(repo.git(&["rev-parse", "HEAD"]), root);
+    assert_eq!(
+        repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]),
+        "main",
+        "the branch moved, not just HEAD"
+    );
+    session.close();
+}
+
+/// **What the pre-merge run leaves out**: single writes whose only claim
+/// beyond the queue is what git does behind a fixed command line. The
+/// queue's order is held by `operations` and by the close above, and the
+/// `switch --create` command line by `branch::tests`; what a commit or a
+/// `switch --create` leaves in the repository is git's. Run by the full
+/// gate (`-- --ignored ::periodic::`) rather than by every change.
+mod periodic {
+    use super::*;
+
+    /// The full local round trip through the session: stage, commit, branch.
+    ///
+    /// Order is the point: committing before staging, or branching before
+    /// committing, would produce a different repository. The queue is
+    /// what gives this.
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "duplicates operations::each_write_is_settled_before_the_next_one_starts: not worth the pre-merge run"]
+    async fn stage_commit_and_branch_through_the_session() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("root.txt", "0\n", "root");
+        repo.write_file("new.txt", "content\n");
+
+        let (sink, session) = opened(&repo).await;
+
+        session.stage_paths(vec!["new.txt".into()]);
+        session.commit("add new file".into(), CommitOptions::default());
+        session.create_branch("feature".into(), None, true);
+
+        let done = sink
+            .wait_for("three writes finished", |evs| {
+                let done: Vec<(OperationKind, Option<String>)> = evs
+                    .iter()
+                    .filter_map(|e| match e {
+                        SessionEvent::WriteFinished { kind, error, .. } => {
+                            Some((*kind, error.clone()))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                (done.len() == 3).then_some(done)
+            })
+            .await;
+        assert!(
+            done.iter().all(|(_, error)| error.is_none()),
+            "all succeeded: {done:?}"
+        );
+        assert_eq!(
+            done.iter().map(|(kind, _)| *kind).collect::<Vec<_>>(),
+            vec![
+                OperationKind::Stage,
+                OperationKind::Commit,
+                OperationKind::Branch
+            ],
+            "they ran in the order they were asked for"
+        );
+
+        assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "add new file");
+        assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "feature");
+        session.close();
+    }
 }

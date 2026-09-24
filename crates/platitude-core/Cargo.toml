@@ -86,7 +86,7 @@ syntect = { version = "5.3", default-features = false, features = [
 two-face = { version = "0.5", default-features = false, features = [
     "syntect-fancy",
 ] }
-# Mocks for the daily tests: an attribute on a read that asks the machine
+# Mocks for the pre-merge tests: an attribute on a read that asks the machine
 # rather than the repository (`conflict::available_tools`), so a test
 # stands its own machine in for it without a seam in the code. The mock
 # half is built into debug builds only; a release carries the function as

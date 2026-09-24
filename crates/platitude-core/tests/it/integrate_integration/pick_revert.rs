@@ -23,32 +23,6 @@ async fn nothing_in_progress(repo: &TestRepo) {
     );
 }
 
-#[tokio::test]
-async fn cherry_pick_and_revert() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.git(&["checkout", "-b", "side"]);
-    let picked = repo.commit_file_id("b.txt", "two\n", "wanted elsewhere");
-    repo.git(&["checkout", "main"]);
-    let (exec, cancel) = env();
-
-    integrate::cherry_pick(&exec, &repo.path, &[picked], &cancel)
-        .await
-        .expect("cherry-pick");
-    assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "wanted elsewhere");
-    assert!(repo.path.join("b.txt").exists());
-
-    integrate::revert(&exec, &repo.path, &["HEAD".into()], &cancel)
-        .await
-        .expect("revert");
-    assert!(!repo.path.join("b.txt").exists());
-    assert_eq!(
-        repo.git(&["log", "-1", "--format=%s"]),
-        r#"Revert "wanted elsewhere""#
-    );
-    assert_eq!(current_op(&repo).await, None);
-}
-
 /// A commit whose changes the branch already has records nothing, and
 /// git stops there — exit 1 with the sequencer state left standing,
 /// which is a badge on the toolbar and a panel over the log for

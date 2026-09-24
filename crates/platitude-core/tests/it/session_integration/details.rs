@@ -1,5 +1,6 @@
-//! What the session answers about one commit: its details, its diff, the
-//! colours over that diff, and its signature.
+//! What the session answers about one commit beside its details
+//! (`details_order`): the diff, the colours over that diff, and its
+//! signature.
 
 use crate::support::TestRepo;
 use crate::support::session::opened;
@@ -7,57 +8,6 @@ use platitude_core::Oid;
 use platitude_core::details::DiffTarget;
 use platitude_core::identity::SignatureStatus;
 use platitude_core::session::{DiffReadOutcome, SessionEvent};
-
-#[tokio::test(flavor = "multi_thread")]
-async fn details_and_diff_round_trip_through_the_session() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "one\ntwo\n", "add f");
-    repo.write_file("f.txt", "one\ntwo changed\n");
-    repo.git(&["commit", "-am", "edit f"]);
-    let head = repo.git(&["rev-parse", "HEAD"]);
-
-    let (sink, session) = opened(&repo).await;
-
-    let oid = Oid::from_hex_str(&head).unwrap();
-    let task = session.load_details(oid).expect("open session");
-    sink.wait_for("DetailsLoaded", |evs| {
-        evs.iter().find_map(|e| match e {
-            SessionEvent::DetailsLoaded { details, .. } => {
-                assert_eq!(details.oid, oid);
-                assert_eq!(details.message, "edit f");
-                assert_eq!(details.files.len(), 1);
-                assert_eq!(details.files[0].path, "f.txt");
-                Some(())
-            }
-            _ => None,
-        })
-    })
-    .await;
-    assert_eq!(
-        crate::support::wait::bounded("details completion", task.outcome()).await,
-        platitude_core::session::DetailsOutcome::Sent
-    );
-
-    session.load_diff(DiffTarget::Commit {
-        oid,
-        parent: Some(Oid::from_hex_str(&repo.git(&["rev-parse", "HEAD^"])).unwrap()),
-        path: "f.txt".to_string(),
-        orig_path: None,
-    });
-    sink.wait_for("DiffLoaded", |evs| {
-        evs.iter().find_map(|e| match e {
-            SessionEvent::DiffLoaded { patches, .. } => {
-                assert_eq!(patches.len(), 1);
-                assert!(!patches[0].hunks.is_empty());
-                Some(())
-            }
-            _ => None,
-        })
-    })
-    .await;
-
-    session.close();
-}
 
 /// Colours arrive behind the rows they belong to.
 ///

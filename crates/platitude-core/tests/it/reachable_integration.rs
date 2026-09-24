@@ -32,9 +32,11 @@ async fn reached(repo: &TestRepo, tip: &str) -> bool {
 }
 
 /// One history, the walk asked again after each move of a second branch.
-/// The opening ask doubles as the no-stash case: a repository that never
-/// stashed has no `refs/stash`, and the walk has to survive naming it
-/// anyway (that is why it is spelled `--glob=refs/stash*` — core.md).
+/// The opening ask is the exclusion's own case — left in the walk, the
+/// branch holds its own tip and every repository reads as safe — and
+/// doubles as the no-stash case: a repository that never stashed has no
+/// `refs/stash`, and the walk has to survive naming it anyway (that is why
+/// it is spelled `--glob=refs/stash*` — core.md).
 #[tokio::test]
 async fn only_a_branch_at_or_beyond_the_tip_holds_it() {
     let (mut repo, tip) = scenario();
@@ -105,22 +107,4 @@ async fn remote_tracking_refs_and_the_stash_hold_the_tip_like_branches() {
         reached(&repo, &tip).await,
         "a stash made on the tip holds it"
     );
-}
-
-/// The exclusion is what makes the question mean anything: without it the
-/// branch negates its own tip and every repository reads as safe.
-#[tokio::test]
-async fn the_branch_being_asked_about_is_left_out_of_the_walk() {
-    let (repo, tip) = scenario();
-    let (executor, cancel) = env();
-
-    let excluded = reachable::reached_without_branch(&executor, &repo.path, &tip, "main", &cancel)
-        .await
-        .expect("ask with main left out");
-    let kept = reachable::reached_without_branch(&executor, &repo.path, &tip, "", &cancel)
-        .await
-        .expect("ask with nothing left out");
-
-    assert!(!excluded, "main must not hold its own tip");
-    assert!(kept, "with nothing excluded, main holds it");
 }

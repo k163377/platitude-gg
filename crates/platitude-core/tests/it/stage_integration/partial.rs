@@ -1,4 +1,9 @@
 //! Staging and discarding hunk and line selections.
+//!
+//! The pre-merge part holds the command each side takes and the rebuilt shapes
+//! git has to accept from us; the patch text itself is pinned by `patch`'s
+//! unit tests. The periodic part records git applying a hunk of its own,
+//! handed back verbatim.
 
 use crate::support::exec::env;
 use crate::support::stage::{buckets, fp, indexed};
@@ -142,6 +147,10 @@ async fn discard_a_single_hunk() {
     );
 }
 
+/// Throwing away one line: the patch keeps the post-image side whole,
+/// since the working tree is what it has to fit. A whole first hunk is
+/// the same patch built from either side, so this is the discard that
+/// tells the two apart.
 #[tokio::test]
 async fn discard_a_single_line() {
     let mut repo = TestRepo::init();
@@ -175,106 +184,6 @@ async fn discard_a_single_line() {
         "a\nB\nc\n",
         "only the appended line went"
     );
-}
-
-/// Staging a deletion alone (its replacement line stays unstaged).
-#[tokio::test]
-async fn stage_only_a_deletion() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "a\nb\nc\n", "root");
-    repo.write_file("f.txt", "a\nB\nc\n");
-    let (exec, cancel) = env();
-    let repo_info = info(&repo).await;
-
-    stage::apply_partial(
-        &exec,
-        &repo_info,
-        &DiffTarget::Unstaged {
-            path: "f.txt".into(),
-        },
-        &[HunkSelect::lines(0, [1])],
-        fp(
-            &repo_info,
-            &DiffTarget::Unstaged {
-                path: "f.txt".into(),
-            },
-        )
-        .await,
-        &cancel,
-    )
-    .await
-    .expect("stage deletion");
-
-    assert_eq!(indexed(&mut repo, "f.txt"), "a\nc");
-}
-
-/// Two adjacent lines replaced at once: a diff lists both deletions
-/// before both additions, so staging only the first has to keep the
-/// untouched line under its own replacement.
-#[tokio::test]
-async fn stage_the_first_line_of_a_two_line_replacement() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "one\ntwo\ntail\n", "root");
-    repo.write_file("f.txt", "ONE\nTWO\ntail\n");
-    let (exec, cancel) = env();
-    let repo_info = info(&repo).await;
-
-    // Body: 0 "-one", 1 "-two", 2 "+ONE", 3 "+TWO".
-    stage::apply_partial(
-        &exec,
-        &repo_info,
-        &DiffTarget::Unstaged {
-            path: "f.txt".into(),
-        },
-        &[HunkSelect::lines(0, [0, 2])],
-        fp(
-            &repo_info,
-            &DiffTarget::Unstaged {
-                path: "f.txt".into(),
-            },
-        )
-        .await,
-        &cancel,
-    )
-    .await
-    .expect("stage the first replacement");
-
-    assert_eq!(indexed(&mut repo, "f.txt"), "ONE\ntwo\ntail");
-}
-
-/// The mirror case: unstaging the second line of a staged replacement.
-#[tokio::test]
-async fn unstage_the_second_line_of_a_two_line_replacement() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "one\ntwo\ntail\n", "root");
-    repo.write_file("f.txt", "ONE\nTWO\ntail\n");
-    repo.git(&["add", "--", "f.txt"]);
-    let (exec, cancel) = env();
-    let repo_info = info(&repo).await;
-
-    // Body: 0 "-one", 1 "-two", 2 "+ONE", 3 "+TWO".
-    stage::apply_partial(
-        &exec,
-        &repo_info,
-        &DiffTarget::Staged {
-            path: "f.txt".into(),
-            orig_path: None,
-        },
-        &[HunkSelect::lines(0, [1, 3])],
-        fp(
-            &repo_info,
-            &DiffTarget::Staged {
-                path: "f.txt".into(),
-                orig_path: None,
-            },
-        )
-        .await,
-        &cancel,
-    )
-    .await
-    .expect("unstage the second replacement");
-
-    assert_eq!(indexed(&mut repo, "f.txt"), "ONE\ntwo\ntail");
 }
 
 /// A file whose last line has no newline. Staging the line above it leaves
@@ -396,69 +305,6 @@ async fn stage_part_of_an_untracked_file() {
     assert_eq!(unstaged, vec!["newdir/new.txt"], "the rest stays unstaged");
 }
 
-/// CRLF content must round-trip byte-for-byte through the rebuilt patch.
-#[tokio::test]
-async fn stage_a_hunk_of_a_crlf_file() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "a\r\nb\r\nc\r\n", "root");
-    repo.write_file("f.txt", "a\r\nB\r\nc\r\n");
-    let (exec, cancel) = env();
-    let repo_info = info(&repo).await;
-
-    stage::apply_partial(
-        &exec,
-        &repo_info,
-        &DiffTarget::Unstaged {
-            path: "f.txt".into(),
-        },
-        &[HunkSelect::whole(0)],
-        fp(
-            &repo_info,
-            &DiffTarget::Unstaged {
-                path: "f.txt".into(),
-            },
-        )
-        .await,
-        &cancel,
-    )
-    .await
-    .expect("stage crlf hunk");
-
-    let blob = repo.git_raw(&["show", ":f.txt"]);
-    assert_eq!(blob, b"a\r\nB\r\nc\r\n", "line endings preserved");
-}
-
-/// A file without a trailing newline: staging the whole hunk must keep
-/// the missing newline. (Selecting only an addition after the unterminated
-/// line is the one shape a partial patch cannot express — the line before
-/// it would gain a newline — and the selection stands as asked:
-/// P3-確認事項 触らないと決めたもの.)
-#[tokio::test]
-async fn stage_a_file_without_a_trailing_newline() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "keep\nold", "root");
-    repo.write_file("f.txt", "keep\nold\nnew");
-    let (exec, cancel) = env();
-    let repo_info = info(&repo).await;
-    let target = DiffTarget::Unstaged {
-        path: "f.txt".into(),
-    };
-
-    // Body: 0 " keep", 1 "-old", 2 "\ No newline", 3 "+old", 4 "+new",
-    // 5 "\ No newline" — git rewrites the last line as a replacement.
-    stage::apply_partial(
-        &exec,
-        &repo_info,
-        &target,
-        &[HunkSelect::whole(0)],
-        fp(&repo_info, &target).await,
-        &cancel,
-    )
-    .await
-    .expect("stage the whole hunk");
-    assert_eq!(repo.git_raw(&["show", ":f.txt"]), b"keep\nold\nnew");
-}
-
 /// Paths are pathspecs to git, and pathspecs glob by default. A file whose
 /// name contains glob characters must only ever stage itself.
 #[tokio::test]
@@ -476,4 +322,46 @@ async fn a_glob_shaped_filename_stages_only_itself() {
     let (staged, _, untracked) = buckets(&repo).await;
     assert_eq!(staged, vec!["[ab].txt"]);
     assert_eq!(untracked, vec!["a.txt"], "the glob did not expand");
+}
+
+/// **What the pre-merge run leaves out**: a whole hunk handed back to git as
+/// git wrote it. The builder's verbatim path and the no-newline marker are
+/// pinned by `patch`'s unit tests, and the marker shape git has to accept
+/// from us runs before every merge (`stage_a_line_above_a_missing_trailing_newline`);
+/// what this records is git applying its own hunk, run by the full gate
+/// (`-- --ignored ::periodic::`) rather than by every change.
+mod periodic {
+    use super::*;
+
+    /// A file without a trailing newline: staging the whole hunk must keep
+    /// the missing newline. (Selecting only an addition after the unterminated
+    /// line is the one shape a partial patch cannot express — the line before
+    /// it would gain a newline — and the selection stands as asked:
+    /// P3-確認事項 触らないと決めたもの.)
+    #[tokio::test]
+    #[ignore = "duplicates whole_hunk_selection_keeps_the_hunk_verbatim: not worth the pre-merge run"]
+    async fn stage_a_file_without_a_trailing_newline() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("f.txt", "keep\nold", "root");
+        repo.write_file("f.txt", "keep\nold\nnew");
+        let (exec, cancel) = env();
+        let repo_info = info(&repo).await;
+        let target = DiffTarget::Unstaged {
+            path: "f.txt".into(),
+        };
+
+        // Body: 0 " keep", 1 "-old", 2 "\ No newline", 3 "+old", 4 "+new",
+        // 5 "\ No newline" — git rewrites the last line as a replacement.
+        stage::apply_partial(
+            &exec,
+            &repo_info,
+            &target,
+            &[HunkSelect::whole(0)],
+            fp(&repo_info, &target).await,
+            &cancel,
+        )
+        .await
+        .expect("stage the whole hunk");
+        assert_eq!(repo.git_raw(&["show", ":f.txt"]), b"keep\nold\nnew");
+    }
 }

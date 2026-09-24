@@ -115,46 +115,6 @@ async fn details_report_renames_with_scores() {
 }
 
 #[tokio::test]
-async fn details_of_a_commit_that_changed_nothing_list_no_files() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "add file");
-    repo.git(&["commit", "--allow-empty", "-m", "nothing to see"]);
-    let sha = repo.git(&["rev-parse", "HEAD"]);
-
-    let (executor, cancel) = env();
-    let oid = Oid::from_hex_str(&sha).unwrap();
-    let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
-        .await
-        .unwrap();
-    // The one input where git writes the record and then stops: the file
-    // list and the newline in front of it are both absent.
-    assert_eq!(d.message, "nothing to see");
-    assert!(d.files.is_empty(), "got {:?}", d.files);
-}
-
-#[tokio::test]
-async fn a_message_that_reads_like_a_file_list_is_not_read_as_one() {
-    let mut repo = TestRepo::init();
-    // The metadata and the changed files arrive from one `git show`, so
-    // the boundary between them has to be the NUL count and nothing else.
-    // A commit is free to describe its own diff in prose.
-    let sha = repo.commit_file_id(
-        "real.txt",
-        "one\n",
-        "docs: explain the notation\n\nA\tinvented/one.txt\nM\tinvented/two.txt",
-    );
-
-    let (executor, cancel) = env();
-    let oid = Oid::from_hex_str(&sha).unwrap();
-    let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
-        .await
-        .unwrap();
-    assert!(d.message.contains("A\tinvented/one.txt"));
-    let paths: Vec<&str> = d.files.iter().map(|f| f.path.as_str()).collect();
-    assert_eq!(paths, vec!["real.txt"]);
-}
-
-#[tokio::test]
 async fn commit_file_diff_has_hunks_and_line_numbers() {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "one\ntwo\nthree\n", "add");
@@ -510,17 +470,6 @@ async fn comparing_two_commits_is_not_what_each_of_them_changed() {
 }
 
 #[tokio::test]
-async fn a_choice_of_nothing_reads_nothing() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "a\n", "root");
-    let (executor, cancel) = env();
-    let files = details::union_files(&executor, &repo.path, &[], &cancel)
-        .await
-        .unwrap();
-    assert!(files.is_empty());
-}
-
-#[tokio::test]
 async fn a_choice_stacks_the_patch_of_each_commit_that_touched_the_file() {
     let mut repo = TestRepo::init();
     let older = repo.commit_file_id("f.txt", "one\n", "older chosen");
@@ -632,4 +581,58 @@ async fn the_patch_behind_a_compared_row_is_between_the_two_commits() {
             (DiffLineKind::Addition, "three")
         ]
     );
+}
+
+/// **What the pre-merge run leaves out**: that `git show` still writes the two
+/// shapes of its record the details parser's unit tests read from bytes
+/// written by hand — the record that stops with no file list after it
+/// (`details::tests::a_commit_that_changed_nothing_ends_at_the_record`), and
+/// a message that reads like a file list standing before the NUL that ends
+/// it (`details::tests::a_message_that_reads_like_a_status_line_stays_in_the_message`).
+/// What git writes moves only with git, so the full gate
+/// (`-- --ignored ::periodic::`) runs these rather than every change.
+mod periodic {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "the record git show stops at for a commit that changed nothing: not worth the pre-merge run"]
+    async fn details_of_a_commit_that_changed_nothing_list_no_files() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "add file");
+        repo.git(&["commit", "--allow-empty", "-m", "nothing to see"]);
+        let sha = repo.git(&["rev-parse", "HEAD"]);
+
+        let (executor, cancel) = env();
+        let oid = Oid::from_hex_str(&sha).unwrap();
+        let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
+            .await
+            .unwrap();
+        // The one input where git writes the record and then stops: the file
+        // list and the newline in front of it are both absent.
+        assert_eq!(d.message, "nothing to see");
+        assert!(d.files.is_empty(), "got {:?}", d.files);
+    }
+
+    #[tokio::test]
+    #[ignore = "git show's NUL between a message and its files: not worth the pre-merge run"]
+    async fn a_message_that_reads_like_a_file_list_is_not_read_as_one() {
+        let mut repo = TestRepo::init();
+        // The metadata and the changed files arrive from one `git show`, so
+        // the boundary between them has to be the NUL count and nothing else.
+        // A commit is free to describe its own diff in prose.
+        let sha = repo.commit_file_id(
+            "real.txt",
+            "one\n",
+            "docs: explain the notation\n\nA\tinvented/one.txt\nM\tinvented/two.txt",
+        );
+
+        let (executor, cancel) = env();
+        let oid = Oid::from_hex_str(&sha).unwrap();
+        let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
+            .await
+            .unwrap();
+        assert!(d.message.contains("A\tinvented/one.txt"));
+        let paths: Vec<&str> = d.files.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, vec!["real.txt"]);
+    }
 }

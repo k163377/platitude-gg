@@ -18,7 +18,7 @@ use crate::integrate::InProgress;
 use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 use crate::status::{StatusItem, WorkTreeStatus};
 
-/// The daily tests' machine for [`available_tools`]: mry builds it into
+/// The pre-merge tests' machine for [`available_tools`]: mry builds it into
 /// debug builds only, so it is named here for them and nowhere else.
 #[cfg(debug_assertions)]
 pub use tool::mock_available_tools;

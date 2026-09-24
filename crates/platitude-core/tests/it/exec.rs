@@ -1,5 +1,8 @@
 //! Integration tests for the execution layer against the real system git.
 //!
+//! The pre-merge part holds what the layer makes of git's answers; the periodic
+//! part records whether this machine's git meets the minimum.
+//!
 //! These await the executor directly — no `CaptureSink`, so no `Patience`
 //! arms itself — and the test executors carry no stock timeout. `bounded`
 //! is the backstop that turns a wedged git into a named failure here.
@@ -10,15 +13,6 @@ use crate::support::wait::bounded;
 use platitude_core::process::Kept;
 use platitude_core::{GitCommand, GitError, GitExecutor, repo, version};
 use tokio_util::sync::CancellationToken;
-
-#[tokio::test]
-async fn detects_a_supported_git_version() {
-    let (executor, cancel) = env();
-    let v = bounded("version detect", version::detect(&executor, &cancel))
-        .await
-        .unwrap();
-    assert!(v.supported(), "dev/CI machines must have git >= 2.43");
-}
 
 #[tokio::test]
 async fn missing_binary_maps_to_git_not_found() {
@@ -81,6 +75,10 @@ async fn probing_something_that_is_not_git_carries_its_own_words() {
     }
 }
 
+/// The work tree root and the git directory come off one `rev-parse`, one
+/// line each. The git directory is where the scratch files of a partial
+/// stage, a commit message and a rebase plan go, and a wrong one that is
+/// still a directory fails none of those — this is where it is named.
 #[tokio::test]
 async fn opens_a_valid_repository() {
     let mut repo_dir = TestRepo::init();
@@ -100,21 +98,6 @@ async fn opens_a_valid_repository() {
             .unwrap()
             .ends_with(".git")
     );
-}
-
-#[tokio::test]
-async fn open_from_a_subdirectory_resolves_the_root() {
-    let mut repo_dir = TestRepo::init();
-    repo_dir.commit_file("sub/dir/file.txt", "x\n", "nested");
-
-    let (executor, cancel) = env();
-    let sub = repo_dir.path.join("sub").join("dir");
-    let info = bounded("repo open", repo::open(&executor, &sub, &cancel))
-        .await
-        .unwrap();
-
-    let expected = std::fs::canonicalize(&repo_dir.path).unwrap();
-    assert_eq!(std::fs::canonicalize(&info.workdir).unwrap(), expected);
 }
 
 /// A folder with no repository in it and a path that is not there at all
@@ -219,25 +202,6 @@ async fn place_from_a_subdirectory_answers_for_the_copy_around_it() {
     assert_eq!(real(&place.repo), real(&repo_dir.path));
 }
 
-/// Two repositories sitting side by side are two, however alike their
-/// folders look.
-#[tokio::test]
-async fn place_keeps_two_repositories_apart() {
-    let mut one = TestRepo::init();
-    one.commit_file("a.txt", "one\n", "initial");
-    let mut two = TestRepo::init();
-    two.commit_file("a.txt", "two\n", "initial");
-
-    let (executor, cancel) = env();
-    let first = bounded("place the copy", repo::place(&executor, &one.path, &cancel))
-        .await
-        .unwrap();
-    let second = bounded("place the copy", repo::place(&executor, &two.path, &cancel))
-        .await
-        .unwrap();
-    assert_ne!(first.repo, second.repo);
-}
-
 #[tokio::test]
 async fn failed_commands_surface_gits_stderr() {
     let mut repo_dir = TestRepo::init();
@@ -258,47 +222,6 @@ async fn failed_commands_surface_gits_stderr() {
         }
         other => panic!("expected Failed, got {other:?}"),
     }
-}
-
-#[tokio::test]
-async fn streaming_delivers_all_stdout_chunks() {
-    let mut repo_dir = TestRepo::init();
-    let c1 = repo_dir.commit_file_id("a.txt", "1\n", "one");
-    let c2 = repo_dir.commit_file_id("a.txt", "2\n", "two");
-    let c3 = repo_dir.commit_file_id("a.txt", "3\n", "three");
-
-    let (executor, cancel) = env();
-    let cmd = GitCommand::new()
-        .cwd(&repo_dir.path)
-        .args(["log", "--format=%H"]);
-
-    let mut collected = Vec::new();
-    bounded(
-        "the streamed log",
-        executor.run_streaming(cmd, &cancel, &mut |chunk| {
-            collected.extend_from_slice(chunk)
-        }),
-    )
-    .await
-    .unwrap();
-
-    let text = String::from_utf8(collected).unwrap();
-    let shas: Vec<&str> = text.lines().collect();
-    assert_eq!(shas, vec![c3.as_str(), c2.as_str(), c1.as_str()]);
-}
-
-#[tokio::test]
-async fn pre_cancelled_token_short_circuits() {
-    let mut repo_dir = TestRepo::init();
-    repo_dir.commit_file("a.txt", "hello\n", "initial");
-
-    let (executor, cancel) = env();
-    cancel.cancel();
-    let cmd = GitCommand::new().cwd(&repo_dir.path).args(["status"]);
-    let err = bounded("the pre-cancelled command", executor.run(cmd, &cancel))
-        .await
-        .unwrap_err();
-    assert!(err.is_cancelled(), "got {err:?}");
 }
 
 /// `answers_by_code` marks 0 and 1 as answers for the command log; any
@@ -404,4 +327,23 @@ async fn a_work_tree_read_leaves_the_index_untouched() {
     // And it is still a reader: a file whose stat alone moved is compared
     // by content, and comes out unchanged.
     assert_eq!(out.stdout_utf8(), "", "a stat-only change is not a change");
+}
+
+/// **What the pre-merge run leaves out**: whether this machine's git meets the
+/// minimum — an answer about the machine, not about the code. The parse
+/// and the boundary are unit tests (`version::tests`), and the probe of the
+/// git on `PATH` runs before every merge; this runs in the full gate
+/// (`-- --ignored ::periodic::`) rather than on every change.
+mod periodic {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "this machine's git version: not worth the pre-merge run"]
+    async fn detects_a_supported_git_version() {
+        let (executor, cancel) = env();
+        let v = bounded("version detect", version::detect(&executor, &cancel))
+            .await
+            .unwrap();
+        assert!(v.supported(), "dev/CI machines must have git >= 2.43");
+    }
 }

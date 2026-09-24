@@ -1,5 +1,6 @@
 //! Moving off a dirty tree: what the move carries across, and what the
-//! stash keeps hold of when it cannot.
+//! stash keeps hold of when it cannot. git's own refusal of a plain move
+//! while an operation stands is in [`periodic`].
 
 use crate::support::TestRepo;
 use crate::support::session::{opened, write_result};
@@ -474,31 +475,6 @@ async fn nothing_in_the_way_means_nothing_is_put_aside() {
     session.close();
 }
 
-/// The same move without that agreement is the refusal it always was:
-/// core does not abort anything nobody asked it to.
-#[tokio::test(flavor = "multi_thread")]
-async fn an_ordinary_move_still_refuses_while_a_pick_is_standing() {
-    let mut repo = colliding_branches();
-    repo.commit_file("both.txt", "ours\n", "main");
-    repo.git_expect_failure(&["cherry-pick", "other"]);
-
-    let (sink, session) = opened(&repo).await;
-    session.checkout(platitude_core::branch::CheckoutTarget::Branch {
-        name: "other".into(),
-    });
-    let error = write_result(&sink, OperationKind::Checkout).await;
-    assert!(
-        error.is_some_and(|e| e.contains("cherry-picking")),
-        "git's own refusal comes through"
-    );
-    assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
-    assert!(
-        repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
-        "the stopped pick is untouched"
-    );
-    session.close();
-}
-
 /// The agreement is spent after the question about the move: a move
 /// that has to ask leaves the operation standing, so walking away
 /// from `Move here?` costs the cherry-pick nothing.
@@ -586,4 +562,40 @@ async fn a_carry_whose_session_closes_half_way_still_puts_the_work_back() {
 fn reached_the_stash(event: &SessionEvent) -> bool {
     matches!(event, SessionEvent::CommandStarted { display, .. }
         if display.starts_with("git stash push"))
+}
+
+/// **What the pre-merge run leaves out**: git refusing a plain move while a
+/// cherry-pick stands. The move is `switch` passed straight through, and
+/// the refusal and the untouched pick are git's; the one reading of ours
+/// in it — that this wording is not work a stash gets past — is held by
+/// `branch::tests::every_other_failure_stays_an_error`. So the full gate
+/// runs it (`-- --ignored ::periodic::`) rather than every change.
+mod periodic {
+    use super::*;
+
+    /// The same move without that agreement is the refusal it always was:
+    /// core does not abort anything nobody asked it to.
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "git's own refusal of a move while a pick stands: not worth the pre-merge run"]
+    async fn an_ordinary_move_still_refuses_while_a_pick_is_standing() {
+        let mut repo = colliding_branches();
+        repo.commit_file("both.txt", "ours\n", "main");
+        repo.git_expect_failure(&["cherry-pick", "other"]);
+
+        let (sink, session) = opened(&repo).await;
+        session.checkout(platitude_core::branch::CheckoutTarget::Branch {
+            name: "other".into(),
+        });
+        let error = write_result(&sink, OperationKind::Checkout).await;
+        assert!(
+            error.is_some_and(|e| e.contains("cherry-picking")),
+            "git's own refusal comes through"
+        );
+        assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
+        assert!(
+            repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
+            "the stopped pick is untouched"
+        );
+        session.close();
+    }
 }

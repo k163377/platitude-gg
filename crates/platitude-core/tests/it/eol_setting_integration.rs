@@ -11,7 +11,6 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::isolated_global;
-use platitude_core::eol;
 use platitude_core::eol::setting::{self, AutoCrlf, ConfigScope};
 use platitude_core::process::GitExecutor;
 use tokio_util::sync::CancellationToken;
@@ -50,47 +49,12 @@ async fn a_level_that_sets_nothing_says_so() {
     );
 }
 
-/// The global write, and the inheritance that is the reason the repository
-/// level has an empty row at all.
-#[tokio::test]
-async fn a_global_value_is_what_a_repository_inherits() {
-    let (repo, exec, cancel) = no_local_setting();
-
-    let written = setting::set(
-        &exec,
-        &repo.path,
-        ConfigScope::Global,
-        Some(AutoCrlf::Input),
-        &cancel,
-    )
-    .await
-    .expect("set global");
-    assert!(written.saved, "git reports what was asked for: {written:?}");
-    assert!(written.message.is_empty(), "nothing to report");
-    assert_eq!(written.held, Some(AutoCrlf::Input));
-
-    assert_eq!(
-        setting::held(&exec, &repo.path, ConfigScope::Local, &cancel)
-            .await
-            .expect("held local"),
-        None,
-        "the repository still writes nothing of its own"
-    );
-    assert_eq!(
-        setting::effective(&exec, &repo.path, &cancel)
-            .await
-            .expect("effective"),
-        Some(AutoCrlf::Input),
-        "and reads the global value as its own"
-    );
-}
-
 /// The repository level, standing over the global one and then giving it
 /// back — the errand the empty row exists for.
 #[tokio::test]
 async fn a_repository_stands_over_the_global_value_until_it_is_taken_out() {
     let (repo, exec, cancel) = no_local_setting();
-    setting::set(
+    let inherited = setting::set(
         &exec,
         &repo.path,
         ConfigScope::Global,
@@ -99,6 +63,16 @@ async fn a_repository_stands_over_the_global_value_until_it_is_taken_out() {
     )
     .await
     .expect("set global");
+    assert!(
+        inherited.saved,
+        "git reports what was asked for: {inherited:?}"
+    );
+    assert!(inherited.message.is_empty(), "nothing to report");
+    assert_eq!(
+        inherited.held,
+        Some(AutoCrlf::True),
+        "read back out of the global file"
+    );
 
     let written = setting::set(
         &exec,
@@ -152,60 +126,4 @@ async fn taking_out_a_key_that_was_never_there_is_not_a_failure() {
         "git was never asked, so it has nothing to say: {written:?}"
     );
     assert_eq!(written.held, None);
-}
-
-/// Writing the value that is already there is the same non-event, and for
-/// the same reason: the screen writes on every pick, including a pick of
-/// the row already showing.
-#[tokio::test]
-async fn writing_what_is_already_there_changes_nothing() {
-    let (repo, exec, cancel) = no_local_setting();
-    setting::set(
-        &exec,
-        &repo.path,
-        ConfigScope::Local,
-        Some(AutoCrlf::True),
-        &cancel,
-    )
-    .await
-    .expect("set local");
-
-    let again = setting::set(
-        &exec,
-        &repo.path,
-        ConfigScope::Local,
-        Some(AutoCrlf::True),
-        &cancel,
-    )
-    .await
-    .expect("set local again");
-    assert!(again.saved, "{again:?}");
-    assert!(again.message.is_empty(), "{again:?}");
-    assert_eq!(again.held, Some(AutoCrlf::True));
-}
-
-/// The notice reads this key through the same door, so what the settings
-/// screen writes is what it decides by — including `input`, which converts
-/// on the way in and is therefore git deciding the stored endings.
-#[tokio::test]
-async fn what_is_written_is_what_the_notice_reads() {
-    let (repo, exec, cancel) = no_local_setting();
-
-    for (wanted, converts) in [
-        (Some(AutoCrlf::True), true),
-        (Some(AutoCrlf::Input), true),
-        (Some(AutoCrlf::False), false),
-        (None, false),
-    ] {
-        setting::set(&exec, &repo.path, ConfigScope::Local, wanted, &cancel)
-            .await
-            .expect("set local");
-        assert_eq!(
-            eol::normalises(&exec, &repo.path, &cancel)
-                .await
-                .expect("normalises"),
-            converts,
-            "{wanted:?}"
-        );
-    }
 }

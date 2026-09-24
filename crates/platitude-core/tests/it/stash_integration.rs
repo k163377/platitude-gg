@@ -1,4 +1,5 @@
-//! Stash operations against real repositories.
+//! Stash operations against real repositories. What git does with the two
+//! push options nothing here asks for is in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -108,38 +109,6 @@ async fn stash_includes_untracked_when_asked() {
 }
 
 #[tokio::test]
-async fn stash_keep_index_leaves_the_staged_part_alone() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.write_file("a.txt", "staged\n");
-    repo.git(&["add", "--", "a.txt"]);
-    repo.write_file("b.txt", "unstaged\n");
-    repo.git(&["add", "--", "b.txt"]);
-    repo.write_file("b.txt", "unstaged edited\n");
-    let (exec, cancel) = env();
-
-    stash::push(
-        &exec,
-        &repo.path,
-        "keep index",
-        PushOptions {
-            keep_index: true,
-            ..Default::default()
-        },
-        &[],
-        &cancel,
-    )
-    .await
-    .expect("stash --keep-index");
-
-    let s = status::load(&exec, &repo.path, &cancel)
-        .await
-        .expect("status");
-    assert_eq!(s.staged().count(), 2, "index survives");
-    assert_eq!(s.unstaged().count(), 0, "worktree matches the index");
-}
-
-#[tokio::test]
 async fn stash_limited_to_one_path_leaves_the_rest_behind() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
@@ -195,46 +164,91 @@ async fn stash_limited_to_one_path_leaves_the_rest_behind() {
     );
 }
 
-#[tokio::test]
-async fn staged_only_stash_needs_a_tree_split_git_can_separate() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.commit_file("b.txt", "one\n", "second");
-    repo.write_file("a.txt", "staged\n");
-    repo.git(&["add", "--", "a.txt"]);
-    repo.write_file("b.txt", "unstaged\n");
-    let (exec, cancel) = env();
+/// **What the pre-merge run leaves out**: git's `--keep-index` and `--staged`.
+/// `PushOptions` can ask for either, and nothing in the application does —
+/// every stash it makes sets both off — so these record what git does with
+/// them: the index kept, the index alone taken, and a file changed on both
+/// sides that `--staged` writes an entry for and then fails on. So the
+/// full gate runs them (`-- --ignored ::periodic::`) rather than every
+/// change.
+mod periodic {
+    use super::*;
 
-    let staged_only = PushOptions {
-        staged_only: true,
-        ..Default::default()
-    };
-    stash::push(&exec, &repo.path, "index only", staged_only, &[], &cancel)
-        .await
-        .expect("stash --staged");
-    let s = status::load(&exec, &repo.path, &cancel)
-        .await
-        .expect("status");
-    assert_eq!(s.staged().count(), 0, "the index went");
-    assert_eq!(s.unstaged().count(), 1, "the rest of the tree stayed");
+    #[tokio::test]
+    #[ignore = "git's --keep-index, which nothing here asks for: not worth the pre-merge run"]
+    async fn stash_keep_index_leaves_the_staged_part_alone() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        repo.write_file("a.txt", "staged\n");
+        repo.git(&["add", "--", "a.txt"]);
+        repo.write_file("b.txt", "unstaged\n");
+        repo.git(&["add", "--", "b.txt"]);
+        repo.write_file("b.txt", "unstaged edited\n");
+        let (exec, cancel) = env();
 
-    // Changed on both sides: git writes the entry and then fails to take
-    // the staged half out of the tree, leaving the entry behind with
-    // nothing else done. The UI refuses before reaching this (measured).
-    repo.git(&["add", "--", "b.txt"]);
-    repo.write_file("b.txt", "unstaged again\n");
-    let before = stash::load(&exec, &repo.path, &cancel).await.expect("list");
-    let err = stash::push(&exec, &repo.path, "doomed", staged_only, &[], &cancel)
+        stash::push(
+            &exec,
+            &repo.path,
+            "keep index",
+            PushOptions {
+                keep_index: true,
+                ..Default::default()
+            },
+            &[],
+            &cancel,
+        )
         .await
-        .expect_err("git cannot separate a file changed on both sides");
-    assert!(
-        err.to_string().contains("Cannot remove worktree changes"),
-        "git's own wording: {err}"
-    );
-    let after = stash::load(&exec, &repo.path, &cancel).await.expect("list");
-    assert_eq!(after.len(), before.len() + 1, "the entry is written anyway");
-    let s = status::load(&exec, &repo.path, &cancel)
-        .await
-        .expect("status");
-    assert_eq!(s.partially_staged().count(), 1, "and the tree is untouched");
+        .expect("stash --keep-index");
+
+        let s = status::load(&exec, &repo.path, &cancel)
+            .await
+            .expect("status");
+        assert_eq!(s.staged().count(), 2, "index survives");
+        assert_eq!(s.unstaged().count(), 0, "worktree matches the index");
+    }
+
+    #[tokio::test]
+    #[ignore = "git's --staged, which nothing here asks for: not worth the pre-merge run"]
+    async fn staged_only_stash_needs_a_tree_split_git_can_separate() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        repo.commit_file("b.txt", "one\n", "second");
+        repo.write_file("a.txt", "staged\n");
+        repo.git(&["add", "--", "a.txt"]);
+        repo.write_file("b.txt", "unstaged\n");
+        let (exec, cancel) = env();
+
+        let staged_only = PushOptions {
+            staged_only: true,
+            ..Default::default()
+        };
+        stash::push(&exec, &repo.path, "index only", staged_only, &[], &cancel)
+            .await
+            .expect("stash --staged");
+        let s = status::load(&exec, &repo.path, &cancel)
+            .await
+            .expect("status");
+        assert_eq!(s.staged().count(), 0, "the index went");
+        assert_eq!(s.unstaged().count(), 1, "the rest of the tree stayed");
+
+        // Changed on both sides: git writes the entry and then fails to take
+        // the staged half out of the tree, leaving the entry behind with
+        // nothing else done. The UI refuses before reaching this (measured).
+        repo.git(&["add", "--", "b.txt"]);
+        repo.write_file("b.txt", "unstaged again\n");
+        let before = stash::load(&exec, &repo.path, &cancel).await.expect("list");
+        let err = stash::push(&exec, &repo.path, "doomed", staged_only, &[], &cancel)
+            .await
+            .expect_err("git cannot separate a file changed on both sides");
+        assert!(
+            err.to_string().contains("Cannot remove worktree changes"),
+            "git's own wording: {err}"
+        );
+        let after = stash::load(&exec, &repo.path, &cancel).await.expect("list");
+        assert_eq!(after.len(), before.len() + 1, "the entry is written anyway");
+        let s = status::load(&exec, &repo.path, &cancel)
+            .await
+            .expect("status");
+        assert_eq!(s.partially_staged().count(), 1, "and the tree is untouched");
+    }
 }

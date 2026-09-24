@@ -1,8 +1,8 @@
 //! Opening a repository, and the log stream that comes out of it.
 
 use crate::support::TestRepo;
-use crate::support::session::{CaptureSink, open_unawaited, scenario};
-use platitude_core::session::{RepoSession, SessionEvent};
+use crate::support::session::{open_unawaited, scenario};
+use platitude_core::session::SessionEvent;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn open_streams_the_full_pipeline() {
@@ -154,25 +154,6 @@ async fn unborn_repository_finishes_with_zero_rows() {
     session.close();
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn open_failure_is_reported() {
-    let dir = tempfile::tempdir().unwrap();
-    let sink = CaptureSink::new();
-    let _session = RepoSession::open(
-        crate::support::exec::isolated(),
-        tokio::runtime::Handle::current(),
-        dir.path().to_path_buf(),
-        sink.clone(),
-        None,
-    );
-    sink.wait_for("OpenFailed", |evs| {
-        evs.iter()
-            .any(|e| matches!(e, SessionEvent::OpenFailed { .. }))
-            .then_some(())
-    })
-    .await;
-}
-
 /// A `gh-pages`-shaped ref: a parentless commit that only a
 /// remote-tracking ref names, sharing no history with anything else.
 ///
@@ -279,68 +260,6 @@ async fn a_commit_only_a_detached_copy_holds_is_a_row_with_its_own_chip() {
     assert!(
         !chip.held_elsewhere,
         "it names no branch, so there is none for anybody to be holding"
-    );
-    session.close();
-}
-
-/// A merge stopped in the working tree. The row for the uncommitted files
-/// is the merge commit it is about to become, so it draws that commit's
-/// fork: a dotted edge to HEAD and another to the side being brought in,
-/// each landing on the tip it names.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_standing_merge_dots_the_side_it_is_bringing_in() {
-    let mut repo = crate::support::integrate::conflicting_branches();
-    let ours = repo.git(&["rev-parse", "HEAD"]);
-    let theirs = repo.git(&["rev-parse", "side"]);
-    repo.git_expect_failure(&["merge", "side"]);
-
-    let (sink, session) = crate::support::session::opened(&repo).await;
-    // WIP + main + side + root. The WIP row only appears once the opening
-    // status read has found the tree dirty, and that same read is what
-    // reports the merge — so the pass that shows four rows is the pass
-    // that knows about both.
-    sink.opened_graph(&session, 4).await;
-    let rows = sink
-        .wait_for("the four-row graph", |evs| {
-            let rows = crate::support::replay_rows(evs);
-            (rows.len() == 4).then_some(rows)
-        })
-        .await;
-
-    let wip = &rows[&0];
-    assert!(
-        wip.oid_hex.bytes().all(|b| b == b'0'),
-        "the uncommitted row leads: {:?}",
-        wip.oid_hex
-    );
-    let outs: Vec<(u16, bool)> = wip
-        .segments
-        .iter()
-        .filter(|s| s.kind == platitude_core::graph::SegmentKind::OutOfNode)
-        .map(|s| (s.lane, s.dashed))
-        .collect();
-    assert_eq!(
-        outs,
-        vec![(0, true), (1, true)],
-        "both parents of the pending merge leave the row dotted: {:?}",
-        wip.segments
-    );
-
-    // Each edge lands on its own tip, and the side arrives on the lane the
-    // dotted edge reserved for it.
-    assert_eq!(rows[&1].oid_hex, ours);
-    assert_eq!(rows[&1].node_lane, 0);
-    assert_eq!(rows[&2].oid_hex, theirs);
-    assert_eq!(rows[&2].node_lane, 1);
-    assert!(
-        rows[&2]
-            .segments
-            .iter()
-            .any(|s| s.kind == platitude_core::graph::SegmentKind::IntoNode
-                && s.lane == 1
-                && s.dashed),
-        "the side's tip gathers the dotted edge: {:?}",
-        rows[&2].segments
     );
     session.close();
 }

@@ -51,16 +51,26 @@ async fn publish_state_distinguishes_pushed_commits() {
     assert!(parent.rewrites_published());
 }
 
-#[tokio::test]
-async fn a_repository_without_remotes_has_nothing_published() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.commit_file("b.txt", "two\n", "second");
-    let (exec, cancel) = env();
+/// **What the pre-merge run leaves out**: the same two counts over a
+/// repository with no remote at all. `state_of` asks both the same way
+/// either way, so what differs is git's answer to `--not --remotes` when
+/// there is nothing for it to name. Run by the full gate
+/// (`-- --ignored ::periodic::`) rather than by every change.
+mod periodic {
+    use super::*;
 
-    let state = publish::state_of(&exec, &repo.path, "HEAD~1..HEAD", &cancel)
-        .await
-        .expect("state");
-    assert_eq!((state.total, state.unpublished), (1, 1));
-    assert!(!state.rewrites_published());
+    #[tokio::test]
+    #[ignore = "duplicates publish_state_distinguishes_pushed_commits: not worth the pre-merge run"]
+    async fn a_repository_without_remotes_has_nothing_published() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        repo.commit_file("b.txt", "two\n", "second");
+        let (exec, cancel) = env();
+
+        let state = publish::state_of(&exec, &repo.path, "HEAD~1..HEAD", &cancel)
+            .await
+            .expect("state");
+        assert_eq!((state.total, state.unpublished), (1, 1));
+        assert!(!state.rewrites_published());
+    }
 }

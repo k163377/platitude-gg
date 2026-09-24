@@ -36,9 +36,11 @@ async fn a_b_a_submitted_before_workers_run_only_reads_the_last_attempt() {
     );
     assert_eq!(
         sink.count(
-            |e| matches!(e, SessionEvent::DetailsLoaded { generation: g, .. } if *g == generation)
+            |e| matches!(e, SessionEvent::DetailsLoaded { generation: g, details }
+            if *g == generation && details.oid == a && details.message == "A")
         ),
-        1
+        1,
+        "the details that land are the last ask's, read from the commit it named"
     );
     assert_eq!(
         sink.count(|e| matches!(

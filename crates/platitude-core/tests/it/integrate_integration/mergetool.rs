@@ -105,28 +105,6 @@ async fn user_defined_tools_come_from_their_keys() {
     assert_eq!(names, vec!["alpha".to_string(), "beta".to_string()]);
 }
 
-/// Closing the editor without saving comes back as a failed file, and
-/// the markers are put back.
-///
-/// git touches a backup before running an untrusted tool and compares
-/// mtimes afterwards; a file that did not move makes it ask on stdin
-/// whether the merge worked. stdin is closed here, so the question is
-/// answered by failing. The wording reaches the person, so it is pinned.
-#[tokio::test]
-async fn a_tool_that_saves_nothing_fails_and_leaves_the_markers() {
-    let mut repo = stopped_merge().await;
-    repo.git(&["config", "mergetool.pgnoop.cmd", "true"]);
-    repo.git(&["config", "merge.tool", "pgnoop"]);
-
-    let (exec, cancel) = env();
-    conflict::mergetool(&exec, &repo.path, &["f.txt".into()], &cancel)
-        .await
-        .expect_err("nothing was saved");
-
-    let f = std::fs::read_to_string(repo.path.join("f.txt")).unwrap();
-    assert!(f.contains("<<<<<<<"), "the conflict is still there: {f}");
-}
-
 /// What the settings card writes lands on `merge.guitool`, and an empty
 /// field takes the key back out.
 #[tokio::test]
@@ -177,21 +155,45 @@ async fn clearing_a_tool_that_was_never_set_answers_by_code() {
     assert_eq!(log.ends_of(&["--unset"]), vec![CommandEnd::Answered(5)]);
 }
 
-/// **What the daily run leaves out**: this machine's own answer, run by
-/// the full gate (`-- --ignored ::periodic::`) rather than by every
-/// change.
+/// **What the pre-merge run leaves out**: this machine's own answer, and git's
+/// own check on a tool that saved nothing — the launch it follows is the
+/// same command line the pre-merge launch test runs. Run by the full gate
+/// (`-- --ignored ::periodic::`) rather than by every change.
 mod periodic {
     use super::*;
+
+    /// Closing the editor without saving comes back as a failed file, and
+    /// the markers are put back.
+    ///
+    /// git touches a backup before running an untrusted tool and compares
+    /// mtimes afterwards; a file that did not move makes it ask on stdin
+    /// whether the merge worked. stdin is closed here, so the question is
+    /// answered by failing. The wording reaches the person, so it is pinned.
+    #[tokio::test]
+    #[ignore = "git's own mtime check on an untrusted tool: not worth the pre-merge run"]
+    async fn a_tool_that_saves_nothing_fails_and_leaves_the_markers() {
+        let mut repo = stopped_merge().await;
+        repo.git(&["config", "mergetool.pgnoop.cmd", "true"]);
+        repo.git(&["config", "merge.tool", "pgnoop"]);
+
+        let (exec, cancel) = env();
+        conflict::mergetool(&exec, &repo.path, &["f.txt".into()], &cancel)
+            .await
+            .expect_err("nothing was saved");
+
+        let f = std::fs::read_to_string(repo.path.join("f.txt")).unwrap();
+        assert!(f.contains("<<<<<<<"), "the conflict is still there: {f}");
+    }
 
     /// `--tool-help` sources every tool definition twice and probes the
     /// registry for each. The parsing it feeds is covered by unit tests
     /// against captured output; this only checks that the command still
     /// answers in the shape they assume.
     #[tokio::test]
-    #[ignore = "this machine's merge tools: seconds on Windows, not worth the daily run"]
+    #[ignore = "this machine's merge tools: seconds on Windows, not worth the pre-merge run"]
     #[mry::lock(conflict::available_tools)]
     async fn available_tools_never_offers_one_that_needs_a_terminal() {
-        // Held and told to call through, so no daily test's machine can
+        // Held and told to call through, so no pre-merge test's machine can
         // stand in for this one.
         conflict::mock_available_tools().calls_real_impl();
         let repo = TestRepo::init();

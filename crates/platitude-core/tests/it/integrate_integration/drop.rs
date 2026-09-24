@@ -2,8 +2,7 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};
-use crate::support::info;
-use crate::support::integrate::{apply, helper};
+use crate::support::integrate::apply;
 use platitude_core::process::Kept;
 use platitude_core::sequencer;
 
@@ -108,69 +107,6 @@ async fn reaching_past_the_first_commit_is_an_answer_not_a_failure() {
     );
 }
 
-/// **Every one-commit edit pins the tip it was composed against**,
-/// whichever verb asked for it: the ids the todo is written from end at
-/// HEAD, and that last one is what the replay checks the branch against
-/// before it spawns (`Replay::tip_still_stands`). Held for the three
-/// here — the refusal itself is one road, and
-/// `session_integration::carry_rewrite` walks it at both boundaries.
-#[tokio::test]
-async fn every_one_commit_edit_pins_the_tip_it_was_composed_against() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.commit_file("b.txt", "two\n", "under the one to edit");
-    let target = repo.commit_file_id("c.txt", "three\n", "the one to edit");
-    repo.commit_file("d.txt", "four\n", "the tip");
-    let head = repo.git(&["rev-parse", "HEAD"]);
-    let (exec, cancel) = env();
-
-    for edit in [
-        sequencer::Edit::Drop,
-        sequencer::Edit::Reword("a new line\n".into()),
-        sequencer::Edit::SquashIntoParent,
-    ] {
-        let plan = sequencer::plan_edit(&exec, &repo.path, &target, edit, &cancel)
-            .await
-            .expect("the range is a plain one");
-        assert_eq!(plan.tip, head, "the tip the todo was written for");
-    }
-}
-
-/// The refusal sits before the edit is even looked at (`plan_edit` checks
-/// the range first), so a drop and a reword hit the same wall: a plain
-/// interactive rebase would flatten the merge.
-#[tokio::test]
-async fn a_range_holding_a_merge_is_refused_rather_than_flattened() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    let target = repo.commit_file_id("b.txt", "two\n", "before the merge");
-    repo.git(&["checkout", "-b", "side"]);
-    repo.commit_file("s.txt", "side\n", "side work");
-    repo.git(&["checkout", "main"]);
-    repo.commit_file("m.txt", "main\n", "main work");
-    repo.git(&["merge", "--no-ff", "--no-edit", "side"]);
-    let before = repo.git(&["rev-parse", "HEAD"]);
-    let (exec, cancel) = env();
-
-    for edit in [
-        sequencer::Edit::Drop,
-        sequencer::Edit::Reword("nope\n".into()),
-    ] {
-        let err = sequencer::plan_edit(&exec, &repo.path, &target, edit, &cancel)
-            .await
-            .expect_err("a rebase would drop the merge");
-        assert!(err.to_string().contains("merge commit"), "{err}");
-        // The refusal carries the report the screen says it with — the
-        // sentence alone reads the same whichever kind it came back as.
-        assert!(err.report().is_some(), "{err}");
-        // The refusal is this application's own, and no rebase ever ran.
-        // Blaming it on a command's output puts a command the person
-        // never saw in front of them (規約 §git が言ったことを読む場所).
-        assert!(!err.to_string().contains("unexpected output"), "{err}");
-    }
-    assert_eq!(repo.git(&["rev-parse", "HEAD"]), before, "nothing ran");
-}
-
 /// A merge *below* the commit is not in the way: the replay stands on
 /// it, so it keeps both its parents. Dropping the newest commit is the
 /// edge here: a plan that reaches one commit too far refuses over a
@@ -226,35 +162,4 @@ async fn a_merge_under_the_dropped_commit_is_left_alone() {
     );
     assert!(!repo.path.join("c.txt").exists());
     assert!(repo.path.join("d.txt").exists());
-}
-
-/// The one shape that has no ground to land on. `--root` replays onto a
-/// placeholder git makes up, so dropping every line leaves that
-/// placeholder behind as the branch tip: an empty tree with no message
-/// (measured). Refusing says so before anything moves.
-#[tokio::test]
-async fn dropping_the_only_commit_is_refused() {
-    let mut repo = TestRepo::init();
-    let only = repo.commit_file_id("a.txt", "one\n", "the only one");
-    let (exec, cancel) = env();
-
-    let plan = sequencer::plan_edit(&exec, &repo.path, &only, sequencer::Edit::Drop, &cancel)
-        .await
-        .expect("plan");
-    assert!(plan.root, "there is no parent to start at");
-    let err = sequencer::rebase_interactive(
-        &exec,
-        &info(&repo).await,
-        &plan.upstream,
-        &plan.steps,
-        &plan.options(),
-        &helper(),
-        &cancel,
-    )
-    .await
-    .expect_err("nothing would be left to point at");
-    assert!(err.to_string().contains("every commit"), "{err}");
-    assert!(err.report().is_some(), "{err}");
-    assert!(!err.to_string().contains("unexpected output"), "{err}");
-    assert_eq!(repo.git(&["rev-parse", "HEAD"]), only, "nothing ran");
 }

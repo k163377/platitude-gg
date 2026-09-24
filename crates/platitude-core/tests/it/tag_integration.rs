@@ -3,8 +3,9 @@
 //! The refusal is half the point: `git tag` refuses a name that is taken,
 //! and `--force` stays off — a release mark that moves without anybody
 //! saying so is exactly what that refusal is there to stop (`tag::create`).
-//! Sending one to a remote is `remote_tags_integration`, where the
-//! readings it has to agree with are.
+//! What git does with a name that is taken, or that no ref can have, is
+//! git's own, and is in [`periodic`]. Sending one to a remote is
+//! `remote_tags_integration`, where the readings it has to agree with are.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -52,47 +53,6 @@ async fn no_commit_is_head() {
         .expect("create");
 
     assert_eq!(repo.git(&["rev-parse", "here"]), head);
-}
-
-/// **Made, or refused.** The refusal is git's, and it has to come back as
-/// a refusal — a create that quietly moved somebody's release mark would
-/// be indistinguishable from one that did nothing.
-#[tokio::test]
-async fn a_name_already_taken_is_refused_and_nothing_moves() {
-    let mut repo = TestRepo::init();
-    let root = repo.commit_file_id("a.txt", "a\n", "root");
-    repo.git(&["tag", "-a", "v1.0", "-m", "first release"]);
-    let head = repo.commit_file_id("b.txt", "b\n", "second");
-    let (exec, cancel) = env();
-
-    let refused = tag::create(&exec, &repo.path, "v1.0", &head, &cancel).await;
-
-    assert!(refused.is_err(), "git will not take a name twice");
-    assert_eq!(
-        repo.git(&["rev-list", "-n", "1", "v1.0"]),
-        root,
-        "the tag is where it was"
-    );
-    assert_eq!(
-        repo.git(&["cat-file", "-t", "v1.0"]),
-        "tag",
-        "and is still the annotated object it was"
-    );
-}
-
-/// A name git will not take as a ref comes back as a refusal.
-/// `tag::is_valid_name` is what keeps the box from getting this far; this
-/// is the backstop under it.
-#[tokio::test]
-async fn a_name_git_refuses_makes_no_tag() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "a\n", "root");
-    let (exec, cancel) = env();
-
-    let refused = tag::create(&exec, &repo.path, "has space", "", &cancel).await;
-
-    assert!(refused.is_err());
-    assert_eq!(repo.git(&["tag", "--list"]), "");
 }
 
 /// A name that starts with a dash reaches git as a name
@@ -148,4 +108,59 @@ async fn a_name_a_tag_cannot_take_is_reported_under_the_old_one() {
         repo.git(&["tag", "--list"]).contains("v1.0"),
         "nothing moved"
     );
+}
+
+/// **What the pre-merge run leaves out**: git refusing a tag name — one that
+/// is taken, and one no ref can have. `tag::create` hands the name over on
+/// a fixed command line with no `--force`, so the refusal and the tag left
+/// where it was are git's; what the box turns down before git is
+/// `tag::is_valid_name`, held to git before every merge by
+/// `rename_integration::the_name_rules_are_the_ones_git_applies`. So the
+/// full gate runs them (`-- --ignored ::periodic::`) rather than every
+/// change.
+mod periodic {
+    use super::*;
+
+    /// **Made, or refused.** The refusal is git's, and it has to come back as
+    /// a refusal — a create that quietly moved somebody's release mark would
+    /// be indistinguishable from one that did nothing.
+    #[tokio::test]
+    #[ignore = "git's refusal of a taken tag name: not worth the pre-merge run"]
+    async fn a_name_already_taken_is_refused_and_nothing_moves() {
+        let mut repo = TestRepo::init();
+        let root = repo.commit_file_id("a.txt", "a\n", "root");
+        repo.git(&["tag", "-a", "v1.0", "-m", "first release"]);
+        let head = repo.commit_file_id("b.txt", "b\n", "second");
+        let (exec, cancel) = env();
+
+        let refused = tag::create(&exec, &repo.path, "v1.0", &head, &cancel).await;
+
+        assert!(refused.is_err(), "git will not take a name twice");
+        assert_eq!(
+            repo.git(&["rev-list", "-n", "1", "v1.0"]),
+            root,
+            "the tag is where it was"
+        );
+        assert_eq!(
+            repo.git(&["cat-file", "-t", "v1.0"]),
+            "tag",
+            "and is still the annotated object it was"
+        );
+    }
+
+    /// A name git will not take as a ref comes back as a refusal.
+    /// `tag::is_valid_name` is what keeps the box from getting this far; this
+    /// is the backstop under it.
+    #[tokio::test]
+    #[ignore = "git's refusal of a name no ref can have: not worth the pre-merge run"]
+    async fn a_name_git_refuses_makes_no_tag() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "a\n", "root");
+        let (exec, cancel) = env();
+
+        let refused = tag::create(&exec, &repo.path, "has space", "", &cancel).await;
+
+        assert!(refused.is_err());
+        assert_eq!(repo.git(&["tag", "--list"]), "");
+    }
 }

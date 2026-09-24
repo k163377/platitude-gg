@@ -1,4 +1,6 @@
-//! Rebase: replaying onto an upstream, and each way the replay stops.
+//! Rebase: each way the replay stops, and the ways out of it. What git
+//! itself does with a plain rebase — the replay, its clean-tree refusal,
+//! the commits it drops or a `--skip` loses — is recorded in [`periodic`].
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
@@ -19,116 +21,6 @@ fn stopped(outcome: Result<integrate::RebaseOutcome, platitude_core::error::GitE
         integrate::RebaseOutcome::Stopped => {}
         other => panic!("the replay was expected to stop: {other:?}"),
     }
-}
-
-#[tokio::test]
-async fn rebase_replays_commits_onto_the_upstream() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.git(&["checkout", "-b", "topic"]);
-    repo.commit_file("b.txt", "two\n", "topic one");
-    repo.commit_file("c.txt", "three\n", "topic two");
-    repo.git(&["checkout", "main"]);
-    repo.commit_file("d.txt", "four\n", "main moved");
-    repo.git(&["checkout", "topic"]);
-    let (exec, cancel) = env();
-
-    integrate::rebase(
-        &exec,
-        &repo.path,
-        "main",
-        &RebaseOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect("rebase");
-
-    assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "4");
-    let subjects = repo.git(&["log", "--format=%s"]);
-    assert_eq!(
-        subjects.lines().collect::<Vec<_>>(),
-        vec!["topic two", "topic one", "main moved", "root"]
-    );
-}
-
-/// A branch holding a commit of its own while `main` has moved on — the
-/// shape someone asks a `rebase <current> onto it` for.
-fn behind_main() -> TestRepo {
-    let mut repo = TestRepo::init();
-    repo.commit_file("a.txt", "one\n", "root");
-    repo.git(&["checkout", "-b", "topic"]);
-    repo.commit_file("b.txt", "two\n", "topic one");
-    repo.git(&["checkout", "main"]);
-    repo.commit_file("d.txt", "four\n", "main moved");
-    repo.git(&["checkout", "topic"]);
-    repo
-}
-
-/// git's clean-tree refusal for a *plain* rebase, in git's own words.
-///
-/// A refusal is an answer: it arrives as `Blocked`, and the caller goes
-/// round through a stash. The interactive path words the same two
-/// refusals identically — that is what lets one carry serve both
-/// (規約 §未コミット変更がある状態で履歴を書き換える) — and both halves
-/// are exercised here because git words the staged one differently from
-/// the unstaged one.
-///
-/// The third case decides whether a stash is taken at all: untracked
-/// files are in nobody's way, and a rebase over a tree holding only those
-/// goes straight through.
-#[tokio::test]
-async fn a_dirty_tree_stops_a_plain_rebase_before_it_touches_anything() {
-    let (exec, cancel) = env();
-    let opts = RebaseOptions::default();
-    let refusal = |outcome| match outcome {
-        integrate::RebaseOutcome::Blocked(error) => error.to_string(),
-        integrate::RebaseOutcome::Done => panic!("git replayed over work it would lose"),
-        integrate::RebaseOutcome::Stopped => {
-            panic!("git began a rebase it should have refused")
-        }
-    };
-
-    let mut unstaged = behind_main();
-    unstaged.write_file("a.txt", "changed, never staged\n");
-    let before = unstaged.git(&["rev-parse", "topic"]);
-    let said = refusal(
-        integrate::rebase(&exec, &unstaged.path, "main", &opts, &cancel)
-            .await
-            .expect("a refusal is an answer"),
-    );
-    assert!(
-        said.contains("cannot rebase:") && said.contains("unstaged changes"),
-        "the unstaged half of git's check: {said}"
-    );
-    assert_eq!(
-        unstaged.git(&["rev-parse", "topic"]),
-        before,
-        "refused before touching anything"
-    );
-
-    let mut staged = behind_main();
-    staged.write_file("a.txt", "changed and staged\n");
-    staged.git(&["add", "--", "a.txt"]);
-    let said = refusal(
-        integrate::rebase(&exec, &staged.path, "main", &opts, &cancel)
-            .await
-            .expect("a refusal is an answer"),
-    );
-    assert!(
-        said.contains("cannot rebase:") && said.contains("uncommitted changes"),
-        "the staged half of git's check: {said}"
-    );
-
-    let mut untracked = behind_main();
-    untracked.write_file("brand-new.txt", "in nobody's way\n");
-    integrate::rebase(&exec, &untracked.path, "main", &opts, &cancel)
-        .await
-        .expect("untracked files do not stop a rebase");
-    assert_eq!(
-        untracked.git(&["status", "--porcelain"]),
-        "?? brand-new.txt",
-        "and they are still sitting there afterwards"
-    );
 }
 
 #[tokio::test]
@@ -237,89 +129,6 @@ async fn a_conflicting_rebase_can_be_skipped() {
     let subjects = repo.git(&["log", "--format=%s"]);
     assert!(!subjects.contains("doomed commit"), "got: {subjects}");
     assert!(subjects.contains("keeper"));
-}
-
-/// What reaches a person as "skip or not?" is always the hard one: a
-/// commit whose change is already upstream *to the letter* is dropped by
-/// git without stopping, so it never gets as far as the UI.
-#[tokio::test]
-async fn a_commit_already_upstream_verbatim_never_stops_the_rebase() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "base\n", "root");
-    repo.git(&["checkout", "-b", "topic"]);
-    repo.commit_file("f.txt", "same\n", "the very same change");
-    repo.commit_file("g.txt", "extra\n", "keeper");
-    repo.git(&["checkout", "main"]);
-    // Byte-for-byte what topic did, landed upstream by another route.
-    repo.commit_file("f.txt", "same\n", "someone else got there first");
-    repo.git(&["checkout", "topic"]);
-    let (exec, cancel) = env();
-
-    integrate::rebase(
-        &exec,
-        &repo.path,
-        "main",
-        &RebaseOptions::default(),
-        &cancel,
-    )
-    .await
-    .expect("an identical change replays without stopping");
-
-    assert_eq!(current_op(&repo).await, None, "nothing left to continue");
-    let subjects = repo.git(&["log", "--format=%s"]);
-    assert!(
-        !subjects.contains("the very same change"),
-        "git drops the emptied commit itself: {subjects}"
-    );
-    assert!(subjects.contains("keeper"));
-}
-
-/// And skipping has a price: the commit left out takes its own work with
-/// it, wherever else that work does or does not exist. Only the reflog
-/// holds it afterwards — the same standing a hard reset leaves behind,
-/// which is the one this app already asks to be held for.
-#[tokio::test]
-async fn skipping_drops_work_that_is_nowhere_else() {
-    let mut repo = TestRepo::init();
-    repo.commit_file("f.txt", "base\n", "root");
-    repo.git(&["checkout", "-b", "topic"]);
-    repo.write_file("f.txt", "topic\n");
-    repo.write_file("only-here.txt", "nowhere else\n");
-    repo.git(&["add", "-A"]);
-    repo.git(&["commit", "-m", "conflicts, and carries its own file"]);
-    repo.git(&["checkout", "main"]);
-    repo.commit_file("f.txt", "main\n", "main change");
-    repo.git(&["checkout", "topic"]);
-    let before = repo.git(&["rev-parse", "topic"]);
-    let (exec, cancel) = env();
-
-    stopped(
-        integrate::rebase(
-            &exec,
-            &repo.path,
-            "main",
-            &RebaseOptions::default(),
-            &cancel,
-        )
-        .await,
-    );
-    integrate::resolve_current(&exec, &repo.path, Continuation::Skip, &cancel)
-        .await
-        .expect("skip");
-
-    assert!(
-        !repo.path.join("only-here.txt").exists(),
-        "the skipped commit's own file goes with it"
-    );
-    // Reachable only by hash: no branch, no tag, nothing in the UI points
-    // at it any more.
-    let orphan = repo.git(&["log", "--format=%s", "-1", before.trim()]);
-    assert_eq!(orphan, "conflicts, and carries its own file");
-    let described = repo.git(&["log", "--format=%s", "--all"]);
-    assert!(
-        !described.contains("conflicts, and carries its own file"),
-        "no ref reaches it: {described}"
-    );
 }
 
 /// The free skip, and whether it reaches a person after all: resolving a
@@ -443,4 +252,213 @@ async fn an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip() {
         .await
         .expect("status");
     assert_eq!(state.conflicted().count(), 0);
+}
+
+/// **What the pre-merge run leaves out**: what git does with a plain rebase
+/// once it is asked — the replay itself, the wording of its clean-tree
+/// check, the verbatim-upstream commit it drops unasked, and the work a
+/// `--skip` takes with it. The reading of those answers is held before every merge:
+/// the refusal's classifier by `integrate::rebase`'s unit tests, the
+/// `Blocked` and `Done` landings by `session_integration::carry_rewrite`,
+/// and the skip road by the tests above. Run by the full gate
+/// (`-- --ignored ::periodic::`) rather than by every change.
+mod periodic {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "git's own replay behind a fixed command line: not worth the pre-merge run"]
+    async fn rebase_replays_commits_onto_the_upstream() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        repo.git(&["checkout", "-b", "topic"]);
+        repo.commit_file("b.txt", "two\n", "topic one");
+        repo.commit_file("c.txt", "three\n", "topic two");
+        repo.git(&["checkout", "main"]);
+        repo.commit_file("d.txt", "four\n", "main moved");
+        repo.git(&["checkout", "topic"]);
+        let (exec, cancel) = env();
+
+        integrate::rebase(
+            &exec,
+            &repo.path,
+            "main",
+            &RebaseOptions::default(),
+            &cancel,
+        )
+        .await
+        .expect("rebase");
+
+        assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "4");
+        let subjects = repo.git(&["log", "--format=%s"]);
+        assert_eq!(
+            subjects.lines().collect::<Vec<_>>(),
+            vec!["topic two", "topic one", "main moved", "root"]
+        );
+    }
+
+    /// A branch holding a commit of its own while `main` has moved on — the
+    /// shape someone asks a `rebase <current> onto it` for.
+    fn behind_main() -> TestRepo {
+        let mut repo = TestRepo::init();
+        repo.commit_file("a.txt", "one\n", "root");
+        repo.git(&["checkout", "-b", "topic"]);
+        repo.commit_file("b.txt", "two\n", "topic one");
+        repo.git(&["checkout", "main"]);
+        repo.commit_file("d.txt", "four\n", "main moved");
+        repo.git(&["checkout", "topic"]);
+        repo
+    }
+
+    /// git's clean-tree refusal for a *plain* rebase, in git's own words.
+    ///
+    /// A refusal is an answer: it arrives as `Blocked`, and the caller goes
+    /// round through a stash. The interactive path words the same two
+    /// refusals identically — that is what lets one carry serve both
+    /// (規約 §未コミット変更がある状態で履歴を書き換える) — and both halves
+    /// are exercised here because git words the staged one differently from
+    /// the unstaged one.
+    ///
+    /// The third case decides whether a stash is taken at all: untracked
+    /// files are in nobody's way, and a rebase over a tree holding only those
+    /// goes straight through.
+    #[tokio::test]
+    #[ignore = "git's own clean-tree wording: not worth the pre-merge run"]
+    async fn a_dirty_tree_stops_a_plain_rebase_before_it_touches_anything() {
+        let (exec, cancel) = env();
+        let opts = RebaseOptions::default();
+        let refusal = |outcome| match outcome {
+            integrate::RebaseOutcome::Blocked(error) => error.to_string(),
+            integrate::RebaseOutcome::Done => panic!("git replayed over work it would lose"),
+            integrate::RebaseOutcome::Stopped => {
+                panic!("git began a rebase it should have refused")
+            }
+        };
+
+        let mut unstaged = behind_main();
+        unstaged.write_file("a.txt", "changed, never staged\n");
+        let before = unstaged.git(&["rev-parse", "topic"]);
+        let said = refusal(
+            integrate::rebase(&exec, &unstaged.path, "main", &opts, &cancel)
+                .await
+                .expect("a refusal is an answer"),
+        );
+        assert!(
+            said.contains("cannot rebase:") && said.contains("unstaged changes"),
+            "the unstaged half of git's check: {said}"
+        );
+        assert_eq!(
+            unstaged.git(&["rev-parse", "topic"]),
+            before,
+            "refused before touching anything"
+        );
+
+        let mut staged = behind_main();
+        staged.write_file("a.txt", "changed and staged\n");
+        staged.git(&["add", "--", "a.txt"]);
+        let said = refusal(
+            integrate::rebase(&exec, &staged.path, "main", &opts, &cancel)
+                .await
+                .expect("a refusal is an answer"),
+        );
+        assert!(
+            said.contains("cannot rebase:") && said.contains("uncommitted changes"),
+            "the staged half of git's check: {said}"
+        );
+
+        let mut untracked = behind_main();
+        untracked.write_file("brand-new.txt", "in nobody's way\n");
+        integrate::rebase(&exec, &untracked.path, "main", &opts, &cancel)
+            .await
+            .expect("untracked files do not stop a rebase");
+        assert_eq!(
+            untracked.git(&["status", "--porcelain"]),
+            "?? brand-new.txt",
+            "and they are still sitting there afterwards"
+        );
+    }
+
+    /// What reaches a person as "skip or not?" is always the hard one: a
+    /// commit whose change is already upstream *to the letter* is dropped by
+    /// git without stopping, so it never gets as far as the UI.
+    #[tokio::test]
+    #[ignore = "git dropping a verbatim-upstream commit itself: not worth the pre-merge run"]
+    async fn a_commit_already_upstream_verbatim_never_stops_the_rebase() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("f.txt", "base\n", "root");
+        repo.git(&["checkout", "-b", "topic"]);
+        repo.commit_file("f.txt", "same\n", "the very same change");
+        repo.commit_file("g.txt", "extra\n", "keeper");
+        repo.git(&["checkout", "main"]);
+        // Byte-for-byte what topic did, landed upstream by another route.
+        repo.commit_file("f.txt", "same\n", "someone else got there first");
+        repo.git(&["checkout", "topic"]);
+        let (exec, cancel) = env();
+
+        integrate::rebase(
+            &exec,
+            &repo.path,
+            "main",
+            &RebaseOptions::default(),
+            &cancel,
+        )
+        .await
+        .expect("an identical change replays without stopping");
+
+        assert_eq!(current_op(&repo).await, None, "nothing left to continue");
+        let subjects = repo.git(&["log", "--format=%s"]);
+        assert!(
+            !subjects.contains("the very same change"),
+            "git drops the emptied commit itself: {subjects}"
+        );
+        assert!(subjects.contains("keeper"));
+    }
+
+    /// And skipping has a price: the commit left out takes its own work with
+    /// it, wherever else that work does or does not exist. Only the reflog
+    /// holds it afterwards — the same standing a hard reset leaves behind,
+    /// which is the one this app already asks to be held for.
+    #[tokio::test]
+    #[ignore = "what git's --skip loses: not worth the pre-merge run"]
+    async fn skipping_drops_work_that_is_nowhere_else() {
+        let mut repo = TestRepo::init();
+        repo.commit_file("f.txt", "base\n", "root");
+        repo.git(&["checkout", "-b", "topic"]);
+        repo.write_file("f.txt", "topic\n");
+        repo.write_file("only-here.txt", "nowhere else\n");
+        repo.git(&["add", "-A"]);
+        repo.git(&["commit", "-m", "conflicts, and carries its own file"]);
+        repo.git(&["checkout", "main"]);
+        repo.commit_file("f.txt", "main\n", "main change");
+        repo.git(&["checkout", "topic"]);
+        let before = repo.git(&["rev-parse", "topic"]);
+        let (exec, cancel) = env();
+
+        stopped(
+            integrate::rebase(
+                &exec,
+                &repo.path,
+                "main",
+                &RebaseOptions::default(),
+                &cancel,
+            )
+            .await,
+        );
+        integrate::resolve_current(&exec, &repo.path, Continuation::Skip, &cancel)
+            .await
+            .expect("skip");
+
+        assert!(
+            !repo.path.join("only-here.txt").exists(),
+            "the skipped commit's own file goes with it"
+        );
+        // Reachable only by hash: no branch, no tag, nothing in the UI points
+        // at it any more.
+        let orphan = repo.git(&["log", "--format=%s", "-1", before.trim()]);
+        assert_eq!(orphan, "conflicts, and carries its own file");
+        let described = repo.git(&["log", "--format=%s", "--all"]);
+        assert!(
+            !described.contains("conflicts, and carries its own file"),
+            "no ref reaches it: {described}"
+        );
+    }
 }
