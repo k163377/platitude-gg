@@ -85,13 +85,15 @@ Rectangle {
 
     /// A press on either name. **Each is a toggle**: the name is the way into its card and the way out of it, the way
     /// the ☰ is (`AppMenuButton`) — `open()` on a card already up does nothing, which reads as a name that can never
-    /// be pressed a second time. The branch's card is assembled as it opens (`OpsBranchMenu.offerFrom`). Each says
-    /// whether it opened a card.
+    /// be pressed a second time. Each card is assembled as it opens — the copies' from the section's whole listing
+    /// (`NavSectionModel.copyCard`), the branch's by its own (`OpsBranchMenu.offerFrom`). Each says whether it opened a
+    /// card.
     function pressRepoName() {
         if (standMenu.opened) {
             standMenu.close()
             return false
         }
+        copySub.rows = topBar.curPage === null ? [] : topBar.curPage.pageWorktrees.copyCard()
         return standMenu.offerHere()
     }
     function pressBranchName() {
@@ -833,6 +835,8 @@ Rectangle {
             // it carry none, the way that section's rows carry none.
             AppMenu {
                 id: copySub
+                /// The copies the card was built from as the stand card last opened (`pressRepoName`).
+                property var rows: []
                 title: qsTr("WORKTREE")
                 titleKind: "tree"
                 titleTint: Theme.success
@@ -840,18 +844,19 @@ Rectangle {
                 // names on one x, the way the section's rows do (`NameCell`).
                 keepsSeat: true
                 widthFloor: 0
-                // **The same listing the left menu's WORKTREES section draws**, less the copy this tab is already
-                // standing in, and down the same road a row of that section takes (`openRepositoryPathRequested`).
-                // The section has no folders in it, so every row here is a copy.
+                // **The copies the left menu's WORKTREES section lists — every one, whatever that section is
+                // filtering to** (`NavSectionModel.copyCard`): the card is a way to move, and a copy the reader put
+                // out of sight over there is still somewhere to go. Less the copy this tab is already standing in,
+                // and down the same road a row of that section takes (`openRepositoryPathRequested`).
                 Instantiator {
-                    model: topBar.curPage === null ? null : topBar.curPage.pageWorktrees
+                    model: copySub.rows
                     delegate: AppMenuItem {
                         id: copyRow
-                        required property string name
-                        required property string full
-                        required property string bucket
-                        required property string change
-                        required property bool folder
+                        required property var modelData
+                        /// Where the copy is, as git lists it — what the row is pressed for.
+                        readonly property string full: copyRow.modelData.full
+                        readonly property string branch: copyRow.modelData.branch
+                        readonly property string change: copyRow.modelData.change
                         /// Where this tab is standing. Compared the way the listing's own `current` is
                         /// (`nav::drain`): git prints one separator and Windows the other, and a path is not a name.
                         readonly property bool here:
@@ -862,7 +867,7 @@ Rectangle {
                         // out, every other by its folder — the folder of the main copy is the tab's name and the
                         // window's title already (`NavRowBody.name`). Its folder is what is left when it holds no
                         // branch.
-                        text: copyRow.homeCopy && copyRow.bucket !== "" ? copyRow.bucket : copyRow.name
+                        text: copyRow.homeCopy && copyRow.branch !== "" ? copyRow.branch : copyRow.modelData.name
                         // …wearing that row's own mark, in that row's own colours: the house on the repository's
                         // own copy, the padlock on one somebody locked, the warning on one git can no longer find
                         // (`NavRowBody.seatMark` / `seatTint`). A mark about the row is not a heading.
@@ -875,8 +880,8 @@ Rectangle {
                         // end, a step down and in the quieter ink (`NavRowBody.branchSeat`): a fact about the copy, where
                         // the copy's own name is what the row is read for. The main copy's row is named by it already,
                         // and saying it twice would be this row's one fact said twice.
-                        sideName: copyRow.homeCopy ? "" : copyRow.bucket
-                        offered: !copyRow.folder && !copyRow.here
+                        sideName: copyRow.homeCopy ? "" : copyRow.branch
+                        offered: !copyRow.here
                         onTriggered: topBar.curPage.openRepositoryPathRequested(copyRow.full)
                     }
                     onObjectAdded: (at, object) => copySub.insertItem(at, object)

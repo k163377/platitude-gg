@@ -235,9 +235,9 @@ Item {
         window.finishAutoAct()
     }
 
-    // PGG_AUTO_ACT=ops-stand / ops-stand-repos / ops-stand-copies / ops-branch / ops-branch-folder <path>: the
-    // panel's own two doors — the one the repository's name opens, either tier of it, and the one the branch's name
-    // opens, with a folder of it where the argument names one.
+    // PGG_AUTO_ACT=ops-stand / ops-stand-repos / ops-stand-copies [<filter>] / ops-branch / ops-branch-folder <path>:
+    // the panel's own two doors — the one the repository's name opens, either tier of it, and the one the branch's
+    // name opens, with a folder of it where the argument names one.
     //
     // **The rows are counted as well as photographed.** Each card is assembled from a listing that arrives after the
     // tab does, and a card holding nothing looks in a picture exactly like a card holding rows that were all left
@@ -265,6 +265,11 @@ Item {
                 return
             const branchDoor = Harness.autoAct === "ops-branch" || Harness.autoAct === "ops-branch-folder"
             if (opsDoorTimer.opened === 0) {
+                // `ops-stand-copies <filter>`: the left menu filtered first, written into its field the way a typist
+                // writes it (`NavProbe.typeFilter`) — what the reader filtered out of sight there is still a copy
+                // the card offers.
+                if (Harness.autoAct === "ops-stand-copies" && Harness.autoActArg !== "")
+                    window.curPage.pageSidebar.autoSections.filterText = Harness.autoActArg
                 opsDoorTimer.opened = 1
                 // **Asked for once, and reported however it went.** `offerHere` turns away a card with nothing in
                 // it, which is the right answer for a repository that has nowhere else to stand — and a run that
@@ -303,6 +308,8 @@ Item {
                 + " yield=" + chrome.captionYielded
                 + " folder=" + topBar.branchFolderOpen
                 + " repos=" + topBar.standRepoRows
+                // The copies the left menu is showing beside the card — the other half of `copies=` under a filter.
+                + " listed=" + window.curPage.pageWorktrees.shown()
                 + " copies=" + topBar.standCopyRows
                 + " branches=" + topBar.branchMenuRows)
             window.finishAutoAct()

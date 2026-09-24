@@ -363,9 +363,15 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "ops_door open=true tier=repos lit=true turned=true yield=true",
     },
+    // With a filter typed into the left menu first, **the tier still
+    // opens while the section lists nothing**: the card is a way to move,
+    // not the list being read (`NavSectionModel.copyCard`).
     Verb {
         name: "ops-stand-copies",
-        when: &[],
+        when: &[(
+            Arg::Is("zzz"),
+            "ops_door open=true tier=copies lit=true turned=true yield=true folder= repos=0 listed=0 copies=",
+        )],
         plain: "ops_door open=true tier=copies lit=true turned=true yield=true",
     },
     // The branch door, which offers every local branch this repository

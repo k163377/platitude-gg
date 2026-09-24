@@ -292,6 +292,15 @@ impl NavSectionModel {
         CardRows::new(self.level_rows(&path))
     }
 
+    /// The working copies as the operation panel's card offers them —
+    /// every one, whatever the section is filtering to (`copy_rows`). Read
+    /// as the card opens, the way a menu decides its rows (デザイン規約
+    /// §メニュー).
+    #[qslot]
+    fn copy_card(&self) -> CopyRows {
+        CopyRows::new(self.copy_rows())
+    }
+
     /// Which row on show this ref sits on; -1 when it is on none. What a
     /// list asks before scrolling to a row nobody clicked on.
     #[qslot]
