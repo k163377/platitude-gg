@@ -65,14 +65,11 @@ ColumnLayout {
     /// is the platform's window and not a `Popup`, so it has no `opened` of its own (`open-picker` reads the
     /// repository picker the same way), and it is in neither PNG.
     readonly property bool autoAvatarPickerOpen: avatarPicker.visible
-    /// Runs the row's hold to its end. False where the list has no such row yet, so the caller waits
-    /// for it.
+    /// Runs the row's hold to its end. False where the list has no such row yet, or its button takes no press yet,
+    /// so the caller waits for it.
     function autoAvatarHoldRemove(at) {
         const row = avatarRepeater.itemAt(at)
-        if (!row)
-            return false
-        row.holdRemove()
-        return true
+        return row !== null && row.holdRemove()
     }
 
     /// Assignments as the settings file holds them (`AppBackend.avatars` — `{email, name, url}`). A picture filed

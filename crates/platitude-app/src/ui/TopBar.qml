@@ -266,9 +266,14 @@ Rectangle {
         findButton.clicked()
         return true
     }
+    /// Automation: the push held to its end (`PGG_AUTO_ACT=force-push-hold`). Answers whether the press went in — none
+    /// does while git has the tab (`ActionButton.completeHold`).
     function completePushHold() {
-        pushButton.completeHold()
+        return pushButton.completeHold()
     }
+    /// Automation: the push button's gesture is still under way (`ActionButton.gesturing`) — false again once the
+    /// button blanked it, which is a press that sent nothing.
+    readonly property bool pushHolding: pushButton.gesturing
     /// A press landed somewhere in the window (`Main`, off `FocusRelease.pressedAnywhere`), for the strip
     /// (`TabStrip.pressLanded`).
     function pressLanded() { tabStrip.pressLanded() }

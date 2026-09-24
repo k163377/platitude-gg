@@ -217,9 +217,14 @@ HoverToolButton {
     /// A press lands only with git off the network for this button.
     readonly property bool live: actionBtn.enabled && !actionBtn.busy
 
-    /// Automation: run the hold to its end without a press behind it.
+    /// Automation: run the hold to its end without a press behind it — **gated the way a hand's press is**
+    /// (`onDownChanged`): a button waiting on git takes no press at all. Answers whether the press went in, so a run
+    /// that met the button busy presses again once it is back rather than filling a hold nothing can land.
     function completeHold() {
+        if (!actionBtn.live)
+            return false
         holdDrive.begin()
+        return true
     }
 
     // Tab reaches the buttons that need a second way in. The rest of the toolbar stays out of the tab order: a hold is

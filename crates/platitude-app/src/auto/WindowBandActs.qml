@@ -29,29 +29,43 @@ Item {
         target: acts.topBar.curPage ? acts.topBar.curPage.pageTab : null
         function onBusyOpChanged() {
             const op = acts.topBar.curPage.pageTab.busyOp
-            if (Harness.autoAct === "force-push-hold" && op === "push")
+            if (Harness.autoAct === "force-push-hold" && op === "push" && !acts.topBar.holdPushBusy) {
+                acts.pushModeAtBusy = acts.topBar.pushMode
                 acts.topBar.holdPushBusy = true
+            }
             if (Harness.autoAct === "fetch-busy" && op === "fetch")
                 acts.topBar.holdFetchBusy = true
         }
     }
+    /// The standing the push went out from, taken on the same edge. Read later it is the answer the push brought
+    /// back: a push that lands within a beat has the branch level with its remote before the sampler reports
+    /// (measured in the container: `mode=clean`).
+    property string pushModeAtBusy: ""
 
+    // The hold is pressed the way a hand presses it, and a press the button blanked is made again. **A hold can be
+    // lost under the hand**: the fetch the tab runs as it opens takes git, the button goes deaf, and the fill blanks
+    // with nothing sent (`ActionButton.onLiveChanged`), and a run that pressed only once would wait out its ceiling on
+    // an edge that cannot come. A press that ran out keeps its gesture standing until the push it sent raises the
+    // edge above, so nothing is pressed twice.
     SampleTimer {
         running: Harness.autoAct === "force-push-hold"
-        property bool requested: false
         onTriggered: {
-            if (topBar.curPage === null || topBar.pushMode !== "diverged")
-                return
-            if (!requested) {
-                requested = true
-                topBar.completePushHold()
+            const verb = "force_push_hold"
+            if (topBar.holdPushBusy) {
+                stop()
+                Harness.report("push_hold mode=" + acts.pushModeAtBusy + " busy=" + topBar.holdPushBusy)
+                window.finishAutoAct()
                 return
             }
-            if (!topBar.holdPushBusy)
+            if (topBar.curPage === null || topBar.pushMode !== "diverged") {
+                Awaited.at(verb, "diverged")
                 return
-            stop()
-            Harness.report("push_hold mode=" + topBar.pushMode + " busy=" + topBar.holdPushBusy)
-            window.finishAutoAct()
+            }
+            if (topBar.pushHolding) {
+                Awaited.at(verb, "held")
+                return
+            }
+            Awaited.at(verb, topBar.completePushHold() ? "pressed" : "live")
         }
     }
 

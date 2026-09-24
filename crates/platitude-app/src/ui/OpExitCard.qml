@@ -49,10 +49,8 @@ Rectangle {
 
     /// Automation: run one of the held rows to its end, named by its flag.
     function completeOpExit(code) {
-        if (code === "--abort" && abortButton.visible) {
-            abortButton.completeHold()
-            return true
-        }
+        if (code === "--abort" && abortButton.visible)
+            return abortButton.completeHold()
         for (let i = 0; i < opExitCol.children.length; i++) {
             const row = opExitCol.children[i]
             if (row && row.code === code) {

@@ -378,10 +378,10 @@ Item {
                 return
             }
             // No line-level discard exists — a hunk is the smallest piece that can be thrown away. The hold's end is
-            // the press the write barrier is armed on (`holdToEnd`), said by the pane on the hunk's own signal.
+            // the press the write barrier is armed on (`holdToEnd`), said by the pane on the hunk's own signal; the
+            // button takes it only once it is no longer waiting on git (`holdWhenLive`).
             if (act === "discard-hunk-go") {
-                driver.holdToEnd(diffPane)
-                stagedTimer.start()
+                driver.holdWhenLive(diffPane, () => stagedTimer.start())
             } else {
                 renderedBarrier.begin()
             }

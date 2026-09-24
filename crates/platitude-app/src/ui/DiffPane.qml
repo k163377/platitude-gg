@@ -215,10 +215,10 @@ Rectangle {
     signal discardHunkRequested(int hunk)
 
     /// Automation: hold the heading's discard button to its end, on the first hunk — the one every smoke run acts on.
+    /// Answers whether the press went in: not before the row is there, nor on a button waiting on git.
     function completeHold() {
         const row = diffList.itemAtIndex(0)
-        if (row && row.discardButton)
-            row.discardButton.completeHold()
+        return row !== null && row.discardButton !== null && row.discardButton.completeHold()
     }
 
     // ---- automation: the tools a line only shows under the pointer ----

@@ -36,7 +36,7 @@ RowLayout {
         return rowFace.pictureReady()
     }
     function holdRemove() {
-        unsetButton.completeHold()
+        return unsetButton.completeHold()
     }
     IdentIcon {
         id: rowFace

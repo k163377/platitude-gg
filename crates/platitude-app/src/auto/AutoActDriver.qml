@@ -420,10 +420,30 @@ Item {
     /// row of its list, `GraphPane.completeHold` the ask bar's pill) — so the ask it makes has gone in by the time
     /// the call returns, which is where the watch is read.
     function holdToEnd(held) {
-        return driver.pressWrite("hold", () => {
-            held.completeHold()
-            return true
-        })
+        // A button that is waiting on git takes no press (`ActionButton.completeHold` answers false), and a verb that
+        // read that as a press would wait out its ceiling on a write nothing asked for. A hold with no such gate
+        // answers nothing, which is a press that went in.
+        return driver.pressWrite("hold", () => held.completeHold() !== false)
+    }
+    /// A hold on a button that may be waiting on git as the run gets to it: pressed again on every tick until it
+    /// takes (`holdToEnd`), and `then` runs once it has. A press the button turned away sent nothing to wait for.
+    function holdWhenLive(held, then) {
+        holdRetry.held = held
+        holdRetry.then = then
+        holdRetry.start()
+    }
+    SampleTimer {
+        id: holdRetry
+        property var held: null
+        property var then: null
+        onTriggered: {
+            const went = driver.holdToEnd(holdRetry.held)
+            Awaited.at(Harness.autoAct, went ? "pressed" : "live")
+            if (!went)
+                return
+            holdRetry.stop()
+            holdRetry.then()
+        }
     }
     /// Past the end of any line these fixtures carry. Both models cut a selection's ends to the line they fell on
     /// before reading anything off it, so a drag that means "to the end of the row" can say so without measuring
