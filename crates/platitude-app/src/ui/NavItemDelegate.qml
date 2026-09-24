@@ -69,13 +69,10 @@ Item {
     /// the opposite of the row under it.
     readonly property bool holdsOrigin: navRow.isRemoteRow && navRow.fullName === navRow.originRemote
     property real listWidth: 200
-    /// Where this row's ink begins, and how far each fold of the names steps it in. Handed down because the left panel
-    /// sets its rows in from the pane's edge by the room its own bar takes at the other one, so a row stands between
-    /// two equal margins (`NavList` — デザイン規約 §余白); the working tree's file list keeps the pane's inner margin it
-    /// shares with a commit's own list (`FileRowDelegate`). **Two values**: a list is free to start its rows on one
-    /// step and fold them on another, and the file lists do (the pane's inner margin, then a group's step). The left
-    /// panel is the one that asks for the same value twice, so that a name at any depth stands on the grid its own
-    /// left margin sets.
+    /// Where this row's ink begins, and how far each fold of the names steps it in. Handed down because a list is free
+    /// to start its rows on one step and fold them on another, and both lists do: the working tree's file list takes
+    /// the pane's inner margin and then a group's step (`FileRowDelegate`), and the left panel starts its names in the
+    /// column its section bands set their marks in and folds them a `spaceSm` at a time (`NavList` — デザイン規約 §余白).
     property int rowInset: Theme.spaceXs
     property int nestStep: Theme.spaceMd
     /// Where an open name box is drawn, and where the list showing this row sits in it: where its rows begin, where

@@ -26,6 +26,10 @@ Rectangle {
     /// off the two.
     required property real contentY
     required property real viewHeight
+    /// The list's own margin and fold step (`NavList.rowInset` / `nestStep`), so the name begins in the column the
+    /// rows' names do.
+    required property int rowInset
+    required property int nestStep
 
     /// The pointer stand-in the rows carry, for the row this one stands
     /// for (PGG_AUTO_ACT=nav-tip head): hover cannot be injected, so what
@@ -99,12 +103,12 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         height: Theme.rowHeight
-        // The panel's own margin and the folds the row it stands for is nested by (`NavItemDelegate.rowInset` /
-        // `nestStep`, which the list sets to the one value — see there). **The fold count comes from that row**
+        // Where the list's rows begin and the folds the row it stands for is nested by (`rowInset` / `nestStep`).
+        // **The fold count comes from that row**
         // (`headDepth`): a branch carrying a `/` sits one step in and `main` sits at none, so a stand-in that always
         // took one step began its name in a column no row was in. While it is seated there is no row to follow and the
         // model answers 0, which is the column the list's own rows begin in.
-        anchors.leftMargin: Theme.spaceSm + headPin.branchesModel.headDepth * Theme.spaceSm
+        anchors.leftMargin: headPin.rowInset + headPin.branchesModel.headDepth * headPin.nestStep
         // The rows' own gutter, so the stand-in's ahead/behind and badge stand in the same column as theirs — the one
         // a pane's own bar takes (`NavItemDelegate` / `PaneScrollBar`).
         anchors.rightMargin: Theme.navBarGutter
@@ -297,7 +301,7 @@ Rectangle {
         anchors.top: parent.top
         anchors.topMargin: Theme.rowHeight + headPin.nameOverflow
         anchors.left: parent.left
-        anchors.leftMargin: Theme.spaceSm + headPin.branchesModel.headDepth * Theme.spaceSm
+        anchors.leftMargin: headPin.rowInset + headPin.branchesModel.headDepth * headPin.nestStep
         anchors.right: parent.right
         anchors.rightMargin: Theme.navBarGutter
         height: pinFacts.item ? pinFacts.item.implicitHeight : 0

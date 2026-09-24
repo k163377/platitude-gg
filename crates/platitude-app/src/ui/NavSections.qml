@@ -205,6 +205,8 @@ ColumnLayout {
             worktreesModel: sections.worktreesModel
             contentY: branchList.contentY
             viewHeight: branchList.height
+            rowInset: branchList.rowInset
+            nestStep: branchList.nestStep
             // The room a row that opened above the seat took, which the seat moved down by and this has to move with
             // (`HeadPinRow.roomAbove`). The open row is at most one, so the test is where that one is.
             roomAbove: branchList.openIndex >= 0 && branchList.openIndex <= headPin.underRow

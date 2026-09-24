@@ -63,6 +63,13 @@ AppListView {
     /// Where this list's rows begin in that layer: its own place in the column, and the column's in the layer.
     readonly property real boxRowsX: (navList.parent ? navList.parent.x : 0) + navList.x
     readonly property real boxRowsTop: (navList.parent ? navList.parent.y : 0) + navList.y
+    /// Where a row's ink begins, and how far each fold of the names steps it in (`NavItemDelegate.rowInset` /
+    /// `nestStep` — デザイン規約 §余白 の左メニューの行の項). **The names begin in the band's mark column**: the band
+    /// sets its section mark after its inner margin, the fold's `iconSm` seat and a step (`NavHeader`), and a row
+    /// sets its name after its own `iconXs` seat and the same step (`NameCell`), so the row starts that seat's
+    /// difference further in than the band. Read by the stand-in as well, which has no row of its own to ask.
+    readonly property int rowInset: Theme.spaceXs + Theme.iconSm - Theme.iconXs
+    readonly property int nestStep: Theme.spaceSm
 
     signal refActivated(string oidHex)
     signal fileActivated(string bucket, string path, string origPath)
@@ -373,11 +380,8 @@ AppListView {
         worktreesModel: navList.worktreesModel
         branchesModel: navList.branchesModel
         pushRemote: navList.pushRemote
-        // Both margins of the panel are the one the bar asks for at the right edge, so the rows sit between equal
-        // sides; the folds step in by that same value
-        // (`NavItemDelegate.rowInset` / デザイン規約 §余白 の左メニューの行の項).
-        rowInset: Theme.spaceSm
-        nestStep: Theme.spaceSm
+        rowInset: navList.rowInset
+        nestStep: navList.nestStep
         // The seat this row holds under itself for the stand-in, on the one row that holds one.
         // **`>= 0` first**: a delegate the view has put back in its reuse pool reports `index` -1, which is also
         // "no row is holding a seat" — without the guard every pooled row of every list here grows by one
