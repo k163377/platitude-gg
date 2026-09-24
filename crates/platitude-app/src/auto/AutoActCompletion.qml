@@ -289,7 +289,7 @@ QtObject {
                 "ops-panel", "ops-stand", "ops-stand-repos", "ops-stand-copies", "ops-branch",
                 "ops-branch-folder", "ops-branch-pick", "ops-copy-pick", "ops-repo-pick",
                 "tab-mark", "tab-name", "tab-drag", "tab-hold", "tab-edge", "tab-carry",
-                "tab-pin", "tab-pin-go", "tab-open-go",
+                "tab-pin", "tab-pin-go", "tab-open-go", "tab-open-moved-on",
                 "window-fill", "solo", "gate-sweep", "window-floor",
                 "badges", "badges-hover", "badges-hover-early", "graph-stale", "graph-stopped",
                 "wip-landing", "wip-commit-half",

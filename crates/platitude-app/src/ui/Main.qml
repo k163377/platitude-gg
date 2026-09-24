@@ -152,14 +152,17 @@ ApplicationWindow {
             if (root.curPage !== null)
                 root.curPage.releasePressedAway(scenePos)
         }
-        // And the press itself, whatever it was: the mark the right pane wears after a reader was sent to it stands
-        // until they do the next thing (デザイン規約 §hover のツールチップ), and so does a middle-click gesture
-        // running anywhere in the window.
-        onPressedAnywhere: {
-            MiddleHand.pressLanded()
-            if (root.curPage !== null)
-                root.curPage.notePress()
-        }
+        onPressedAnywhere: root.pressLandedAnywhere()
+    }
+    /// A press landed, whatever it was on (`FocusRelease.pressedAnywhere` — the handler is one line onto this, so a
+    /// run enters the same road). What the window put up for the reader stands until they do the next thing: the
+    /// mark the right pane wears after a reader was sent to it (デザイン規約 §hover のツールチップ), a middle-click
+    /// gesture running anywhere in the window, and the strip's ask for the tab it brought in (`TabStrip.pressLanded`).
+    function pressLandedAnywhere() {
+        MiddleHand.pressLanded()
+        body.topBar.pressLanded()
+        if (root.curPage !== null)
+            root.curPage.notePress()
     }
 
     /// Automation (`PGG_AUTO_ACT=replay-running`): the hand stood at `x, y`, and what the mark beside it makes of

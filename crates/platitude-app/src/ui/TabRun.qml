@@ -59,12 +59,13 @@ QtObject {
 
     /// The strip, travelled until `tab` is whole in the run. Quick (デザイン規約 §アニメーション の
     /// 200ms): a strip that jumps leaves the reader working out which way it went and how far, which is the question
-    /// the press was asking. Answers false when there is nowhere to go.
+    /// the press was asking. Answers false when there is nowhere to go — and when a travel is already on its way
+    /// there: asked again mid-flight, a restart would begin the 200ms over from wherever the strip had got to.
     function showTab(tab) {
         if (!tab)
             return false
         const to = tabRun.wholeAt(tab)
-        if (to === tabRun.view.contentX)
+        if (to === tabRun.view.contentX || (tabRun.travel.running && tabRun.travel.to === to))
             return false
         tabRun.travel.stop()
         tabRun.travel.from = tabRun.view.contentX

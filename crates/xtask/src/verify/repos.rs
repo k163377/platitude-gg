@@ -358,11 +358,11 @@ pub(super) fn folder_for(
             }
             Ok(dir.display().to_string())
         }
-        // The one repository this verb's strip has not got: the thirteenth
+        // The one repository these verbs' strip has not got: the thirteenth
         // off the same ladder, so the tab that arrives is named like the
         // twelve it arrives among. Built here, because [`for_run`]'s
         // list is what the run opens at startup.
-        "tab-open-go" => {
+        "tab-open-go" | "tab-open-moved-on" => {
             let repo = crate::demo::create_named("basic", None, TAB_NAMES[12])?;
             Ok(repo.display().to_string())
         }
@@ -506,11 +506,13 @@ fn route_of(verb: &str, arg: &str) -> Result<Route, String> {
         // there, and what `tab-pin` photographs is a stand-in with the
         // strip running underneath it — the stand-in stood either way,
         // `must_say` says so, but the picture was of a strip that had
-        // not moved. `tab-open-go` opens one more on top of these, and
-        // that one is built by [`folder_for`]: everything handed over
-        // here is opened at startup, and a tab already in the strip
-        // cannot arrive in it.
-        "tab-edge" | "tab-pin" | "tab-pin-go" | "tab-open-go" => Route::Strip(Some("12")),
+        // not moved. `tab-open-go` and `tab-open-moved-on` open one more
+        // on top of these, and that one is built by [`folder_for`]:
+        // everything handed over here is opened at startup, and a tab
+        // already in the strip cannot arrive in it.
+        "tab-edge" | "tab-pin" | "tab-pin-go" | "tab-open-go" | "tab-open-moved-on" => {
+            Route::Strip(Some("12"))
+        }
         // The one verb whose fixture is both at once: a strip of named
         // tabs *and* a page with a state on it. Which of the group's
         // three shapes the band lands in is what the two of them settle

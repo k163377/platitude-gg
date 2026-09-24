@@ -266,6 +266,9 @@ Rectangle {
     function completePushHold() {
         pushButton.completeHold()
     }
+    /// A press landed somewhere in the window (`Main`, off `FocusRelease.pressedAnywhere`), for the strip
+    /// (`TabStrip.pressLanded`).
+    function pressLanded() { tabStrip.pressLanded() }
 
     /// Automation: the strip's own hooks, handed on. What `Main` and `WindowAutoActDriver` hold is the band, so the way
     /// in stays here after the tabs themselves have gone (`TabStrip`).
@@ -274,6 +277,7 @@ Rectangle {
     function middleClickTab(index) { return tabStrip.middleClickTab(index) }
     function dragTabTo(from, to) { return tabStrip.dragTabTo(from, to) }
     function holdTabAt(index) { return tabStrip.holdTabAt(index) }
+    function frontAskAccount() { return tabStrip.frontAskAccount() }
     function heldTabShift() { return tabStrip.heldTabShift() }
     function carryTabPastEnd(index) { return tabStrip.carryTabPastEnd(index) }
     function heldTabIndex() { return tabStrip.heldIndex() }

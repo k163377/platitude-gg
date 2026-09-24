@@ -166,6 +166,10 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       goes to the seat it lands in. It builds that repository itself when
       no argument names one — the twelve handed to the run are opened at
       startup, and a tab already in the strip cannot arrive in it.
+      `tab-open-moved-on` is that arrival and then a press anywhere, the
+      window widened and given its width back: the ask is over with the
+      press, so the strip stays and the stand-in comes up for the tab the
+      narrower run cuts.
       `badges`, `badges-hover` and `badges-hover-early` take a window
       width — a number, or `floor` — and may take a strip off that same
       ladder after it, as `<width>:<tabs>`. The band's shortfall is

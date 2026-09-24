@@ -211,6 +211,8 @@ Item {
         property bool opened: false
         property int from: 0
         property int had: 0
+        /// The strip's account of the ask as last said (`TopBar.frontAskAccount`).
+        property string account: ""
         onTriggered: {
             if (!tabOpenGoTimer.opened) {
                 // The staging is the precondition of the opening and of nothing else (`tab-pin-go` above): read again
@@ -237,8 +239,16 @@ Item {
                     "open": page !== null && page.pageTab.state === "open",
                     "worktree": page !== null && page.pageWt.loaded,
                     "graph": page !== null && page.pageGraph.finishCount !== 0
-                }))
+                })) {
+                // And what the strip makes of the ask meanwhile, whenever that moves: a run that stands here until its
+                // ceiling says whether the ask was ever answered and where a travel would have been sent.
+                const account = acts.topBar.frontAskAccount()
+                if (account !== tabOpenGoTimer.account) {
+                    tabOpenGoTimer.account = account
+                    Harness.report("tab_open_go strip " + account)
+                }
                 return
+            }
             stop()
             Harness.report(
                 "tab_open_go arrived=" + acts.topBar.frontTabWhole
@@ -248,6 +258,87 @@ Item {
                 + " run=" + acts.topBar.runOffset()
                 + " tabs=" + acts.pageRepeater.count
                 + " active=" + acts.tabsModel.currentIndex)
+            acts.window.finishAutoAct()
+        }
+    }
+
+    // PGG_AUTO_ACT=tab-open-moved-on: the same arrival, and then the reader doing the next thing — a press anywhere
+    // (`Main.pressLandedAnywhere`, the handler's own body) — before the run the strip stands in narrows under the tab
+    // it brought in. The ask is over with that press: the strip stays where the reader left it and the stand-in comes
+    // up for the tab it cut, where an ask left open would move the strip on its own under a reader who has gone on to
+    // something else (デザイン規約 §タブの所作「帯自身の所作は頼みの外」).
+    //
+    // Narrowed by widening the floor-width window and giving the width back, so the run at the end is the staging's
+    // own and the tab at its far end is cut by what was given back. `travelled=` is the strip having moved after that,
+    // `stood=` the stand-in up for the tab left cut, `ask=` the strip's own word on the ask.
+    SampleTimer {
+        id: tabMovedOnTimer
+        running: Harness.autoAct === "tab-open-moved-on"
+        property string step: "stage"
+        property int had: 0
+        property real floorRun: 0
+        property int from: 0
+        /// The strip's account of the ask as last said (`TopBar.frontAskAccount`).
+        property string account: ""
+        onTriggered: {
+            if (tabMovedOnTimer.step === "stage") {
+                if (!acts.staged(0, "tab_open_moved_on") || Harness.autoActArg === "")
+                    return
+                tabMovedOnTimer.had = acts.pageRepeater.count
+                tabMovedOnTimer.step = "arrive"
+                acts.tabsModel.openRepositoryPath(Harness.autoActArg)
+                return
+            }
+            if (tabMovedOnTimer.step === "arrive") {
+                const page = acts.window.curPage
+                if (!Awaited.all("tab_open_moved_on", {
+                        "tab": acts.pageRepeater.count === tabMovedOnTimer.had + 1,
+                        "item": acts.tabProbe.tabItemCount() === acts.pageRepeater.count,
+                        "still": !acts.topBar.tabRunTravelling,
+                        "whole": acts.topBar.frontTabWhole,
+                        "pinGone": !acts.topBar.tabPinShown,
+                        "open": page !== null && page.pageTab.state === "open",
+                        "worktree": page !== null && page.pageWt.loaded,
+                        "graph": page !== null && page.pageGraph.finishCount !== 0
+                    })) {
+                    // What the strip makes of the ask meanwhile, as `tab-open-go` says it.
+                    const account = acts.topBar.frontAskAccount()
+                    if (account !== tabMovedOnTimer.account) {
+                        tabMovedOnTimer.account = account
+                        Harness.report("tab_open_moved_on strip " + account)
+                    }
+                    return
+                }
+                acts.window.pressLandedAnywhere()
+                tabMovedOnTimer.floorRun = acts.topBar.bandTabRun
+                acts.window.width = Math.ceil(acts.window.floorWidth) + 120
+                tabMovedOnTimer.step = "wide"
+                Awaited.at("tab_open_moved_on", "wide")
+                return
+            }
+            if (tabMovedOnTimer.step === "wide") {
+                if (acts.topBar.bandTabRun <= tabMovedOnTimer.floorRun || acts.topBar.tabRunTravelling)
+                    return
+                tabMovedOnTimer.from = acts.topBar.runOffset()
+                acts.window.width = Math.ceil(acts.window.floorWidth)
+                tabMovedOnTimer.step = "narrow"
+                Awaited.at("tab_open_moved_on", "narrow")
+                return
+            }
+            // Back at the staging's run, with the tab at the far end cut: settled either way — the strip standing
+            // where it was with the stand-in up, or travelled until the tab is whole.
+            if (acts.topBar.bandTabRun > tabMovedOnTimer.floorRun || acts.topBar.tabRunTravelling
+                    || !(acts.topBar.tabPinShown || acts.topBar.frontTabWhole))
+                return
+            stop()
+            const account = acts.topBar.frontAskAccount()
+            Harness.report(
+                "tab_open_moved_on travelled=" + (acts.topBar.runOffset() !== tabMovedOnTimer.from)
+                + " stood=" + acts.topBar.tabPinShown
+                + " ask=" + (account.indexOf("ask=true") === 0)
+                + " from=" + tabMovedOnTimer.from
+                + " run=" + acts.topBar.runOffset()
+                + " strip " + account)
             acts.window.finishAutoAct()
         }
     }

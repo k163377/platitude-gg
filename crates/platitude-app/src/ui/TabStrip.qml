@@ -31,6 +31,23 @@ Item {
     /// the moment of the ask is still the tab being left.
     property bool frontAsked: false
     property bool frontAskTravels: false
+    /// The tab the open ask is for — the model's own front at the moment it asked (`TabsModel::current_tab_id`).
+    /// **The ask stays open while that tab is in front**, and is answered again whenever what it was measured against
+    /// moves: the view settles its extent and the tabs their widths after an item has reported itself in front, and
+    /// an answer given once is left standing wherever that settling puts it — the tab off the run, the stand-in up,
+    /// nothing left to ask again (measured). It closes with the reader's hand on the strip (`takeRun`), a tab
+    /// closed, the front moving to another tab, and — once it has answered — the reader's next thing, a press
+    /// anywhere (`pressLanded`).
+    property int frontAskId: -1
+    /// The open ask has had its first answer: its tab is in, and the reader's next press ends it (`pressLanded`).
+    property bool frontAskAnswered: false
+    /// Whether the strip has stood on a tab in front since it last stood empty — which is what a travel is read
+    /// against (デザイン規約 §タブの所作「前に出ているタブを 1 枚も持っていなかった帯は、その席で始まる」). **Not
+    /// `frontTab` at the ask**: the tab being left gives up the front before the model asks, and the one arriving
+    /// reports itself in front a layout later, so at the ask the strip can hold nobody on either side of a move.
+    property bool stood: false
+    /// How many tabs the strip had when it last counted, so a drop reads as a tab closed (`tabs.onCountChanged`).
+    property int tabsCounted: 0
 
     /// Automation: the run the tabs were handed, and what they made of it. A picture cannot say which tabs gave way and
     /// which were left alone — every strip that fits looks like every other one — so the widths themselves are the
@@ -190,29 +207,47 @@ Item {
         return tabRun.showTab(tabStrip.frontTab)
     }
 
-    /// Asked (デザイン規約 §タブの所作). Travelled to when the strip already had a tab in front to travel from — a strip
-    /// that stood nowhere leaves the reader no distance to read, so that one starts at the seat instead.
+    /// Asked (デザイン規約 §タブの所作). Travelled to when the strip has stood on a tab before — a strip that stood
+    /// nowhere leaves the reader no distance to read, so that one starts at the seat instead (`stood`). The model has
+    /// already moved its front when it asks, so its front is the tab asked for.
     function askFrontTab() {
-        tabStrip.frontAskTravels = tabStrip.frontTab !== null
+        tabStrip.frontAskTravels = tabStrip.stood
+        tabStrip.frontAskId = tabStrip.tabsModel.currentTabId
+        tabStrip.frontAskAnswered = false
         tabStrip.frontAsked = true
         Qt.callLater(tabStrip.answerFrontAsk)
     }
 
-    /// The ask, answered once the strip's own front tab is the row the model says is in front — which is now when the
-    /// ask moved nobody, and the next layout when it did.
+    /// The ask, answered once the strip's own front tab is the one asked for — which is now when the ask moved
+    /// nobody, and the next layout when it did — and answered again for as long as it is open.
     ///
     /// Always a turn late (`Qt.callLater`, which folds repeat asks into one): a tab reports itself in front from its
     /// own `Component.onCompleted`, and a view lays its items out after it has built them — read there, the newest tab
-    /// is still standing at `x: 0` and the strip travels to the wrong end of the run (measured).
+    /// is still standing at `x: 0` and the strip travels to the wrong end of the run (measured). Asked again while a
+    /// travel is on its way to the same place, it leaves the travel be (`TabRun.showTab`).
     function answerFrontAsk() {
-        if (!tabStrip.frontAsked || !tabStrip.frontTab
-                || tabStrip.frontTab.index !== tabStrip.tabsModel.currentIndex)
+        if (!tabStrip.frontAsked)
             return
-        tabStrip.frontAsked = false
+        // The front has moved to another tab: this ask was for the one it left.
+        if (tabStrip.tabsModel.currentTabId !== tabStrip.frontAskId) {
+            tabStrip.closeFrontAsk()
+            return
+        }
+        // The tab asked for has no item of its own in front yet: the view builds it with a later layout.
+        const tab = tabStrip.frontTab
+        if (!tab || tab.tab_id !== tabStrip.frontAskId)
+            return
+        tabStrip.frontAskAnswered = true
         if (tabStrip.frontAskTravels)
-            tabRun.showTab(tabStrip.frontTab)
+            tabRun.showTab(tab)
         else
-            tabRun.landOn(tabStrip.frontTab)
+            tabRun.landOn(tab)
+    }
+
+    function closeFrontAsk() {
+        tabStrip.frontAsked = false
+        tabStrip.frontAskId = -1
+        tabStrip.frontAskAnswered = false
     }
 
     /// The reader's own hand on the strip — a press, the wheel, the carry that may follow a press. It outranks a
@@ -221,7 +256,20 @@ Item {
     /// stays there.
     function takeRun() {
         tabRun.halt()
-        tabStrip.frontAsked = false
+        tabStrip.closeFrontAsk()
+    }
+
+    /// A press landed somewhere in the window (`FocusRelease.pressedAnywhere`). The ask put a tab in front of the
+    /// reader, and what the window put up for them is over with the next thing they do — past it, a travel would be
+    /// the strip moving on its own under a reader who has gone on to something else. **An ask that has not answered
+    /// yet goes on**: it is still bringing its tab in.
+    ///
+    /// **A press, and not the pointer coming onto the strip**: Qt delivers hover again whenever the scene moves under
+    /// a pointer that stands still, so a hover crossing the strip's edge is no act of the reader's, and an ask closed
+    /// on one can be an ask the strip is still answering.
+    function pressLanded() {
+        if (tabStrip.frontAskAnswered)
+            tabStrip.closeFrontAsk()
     }
 
     /// Automation: where the strip stands in its run and whether it has reached the far end (`tab-edge`), and the run
@@ -229,7 +277,24 @@ Item {
     /// (`TabRun`); the band reaches them through the strip like everything else.
     function runAtEnd() { return tabRun.atEnd() }
     function runOffset() { return tabRun.offset() }
-    function sendRunAway() { return tabRun.sendAway(tabStrip.frontTab) }
+    /// A hand of the run's own on the strip, which outranks an ask the way a reader's does (`takeRun`).
+    function sendRunAway() {
+        tabStrip.closeFrontAsk()
+        return tabRun.sendAway(tabStrip.frontTab)
+    }
+
+    /// Automation: where the ask for the tab in front stands and what a travel to it is measured against, in one
+    /// line (`tab-open-go` reports it). `to=` is where the strip would be sent now; a strip at rest whose `to=` is not
+    /// its `cx=` has a tab it was not sent to.
+    function frontAskAccount() {
+        const tab = tabStrip.frontTab
+        return "ask=" + tabStrip.frontAsked + " answered=" + tabStrip.frontAskAnswered + " for=" + tabStrip.frontAskId
+            + " travels=" + tabStrip.frontAskTravels + " stood=" + tabStrip.stood
+            + " front=" + (tab ? tab.tab_id + ":" + tab.index + "@" + Math.round(tab.x) + "+" + Math.round(tab.width)
+                                : "none")
+            + " cx=" + Math.round(tabs.contentX) + " ox=" + Math.round(tabs.originX) + " cw=" + Math.round(tabs.contentWidth)
+            + " vw=" + Math.round(tabs.width) + " to=" + Math.round(tabRun.wholeAt(tab))
+    }
 
     /// Automation: the stand-in, pressed (`tab-pin-go`). Put in at its own signal — the press is a pointer's, which no
     /// headless run has, and everything past it is the road a hand takes.
@@ -296,8 +361,38 @@ Item {
 
     implicitWidth: tabStrip.tabsWantWidth
     // The layout an ask was waiting for: the tab it named has been built, and the view has put it in its row
-    // (`answerFrontAsk`).
-    onFrontTabChanged: Qt.callLater(tabStrip.answerFrontAsk)
+    // (`answerFrontAsk`). And a strip that has held a tab in front has stood somewhere (`stood`).
+    onFrontTabChanged: {
+        if (tabStrip.frontTab)
+            tabStrip.stood = true
+        Qt.callLater(tabStrip.answerFrontAsk)
+    }
+    // An open ask is answered again whenever what it was measured against moves: the strip's extent and the run it is
+    // shown in, the tab's own place and width, and the end of the travel it started.
+    Connections {
+        target: tabStrip.frontAsked ? tabs : null
+        function onContentWidthChanged() {
+            Qt.callLater(tabStrip.answerFrontAsk)
+        }
+        function onWidthChanged() {
+            Qt.callLater(tabStrip.answerFrontAsk)
+        }
+    }
+    Connections {
+        target: tabStrip.frontAsked ? tabStrip.frontTab : null
+        function onXChanged() {
+            Qt.callLater(tabStrip.answerFrontAsk)
+        }
+        function onWidthChanged() {
+            Qt.callLater(tabStrip.answerFrontAsk)
+        }
+    }
+    Connections {
+        target: tabStrip.frontAsked ? tabRun.travel : null
+        function onStopped() {
+            Qt.callLater(tabStrip.answerFrontAsk)
+        }
+    }
 
     /// Declared beside `tabs`: a Flickable adopts its children into contentItem, where they travel with the scroll.
     TabMetrics {
@@ -382,6 +477,16 @@ Item {
         // Every delegate stays alive however far the strip is scrolled: the automation walks the items (`tabPaths` /
         // `middleClickTab`), and a released delegate answers with null. Tabs are counted in ones, so this is free.
         cacheBuffer: 65536
+        // A tab closed ends the ask and the travel it started, whichever road closed it (the `✕`, the middle button,
+        // the model): the band stays where it stood (デザイン規約 §タブの所作「閉じた後の帯はその場に留まる」). And a
+        // strip left empty has stood nowhere again.
+        onCountChanged: {
+            if (tabs.count < tabStrip.tabsCounted)
+                tabStrip.takeRun()
+            if (tabs.count === 0)
+                tabStrip.stood = false
+            tabStrip.tabsCounted = tabs.count
+        }
         // A plain wheel only ever reports "vertical", so either axis moves the strip sideways.
         WheelHandler {
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad

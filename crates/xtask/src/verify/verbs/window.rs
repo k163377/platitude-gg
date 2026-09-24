@@ -280,6 +280,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "tab_open_go arrived=true gone=true travelled=true",
     },
+    // And the reader doing the next thing after that arrival: a press
+    // anywhere ends the ask, so the run narrowing under the tab it
+    // brought in leaves the strip where it was with the stand-in up. The
+    // picture of a strip that travelled after the press holds the tab
+    // whole — the one a reader never asked for — so the three judged are
+    // the strip not moving, the stand-in standing, and the ask gone.
+    Verb {
+        name: "tab-open-moved-on",
+        when: &[],
+        plain: "tab_open_moved_on travelled=false stood=true ask=false",
+    },
     // The ☰'s card, standing. `yield=true` is the half no picture holds:
     // the band's empty run is the platform's caption, and while the card
     // is up it has to stop being that or every press landing there is
