@@ -69,7 +69,8 @@ AppCard {
 
     /// The card's own size once the rows have been laid out, for an owner placing it against the chip. Read off the
     /// rows, since `width` / `height` are only settled by a `Popup` when it is shown.
-    readonly property real cardWidth: Math.max(refList.minRowWidth, rows.rowsWidth + 2 * refList.padding)
+    readonly property real cardWidth:
+        Math.max(refList.coverWidth + 2 * (Theme.spaceXs + refList.padding), rows.rowsWidth + 2 * refList.padding)
     readonly property real cardHeight:
         refList.measuring ? refList.listRoom
                           : Math.min(rows.rowsHeight + 2 * refList.padding, refList.listRoom)
@@ -90,12 +91,15 @@ AppCard {
     /// door.
     property var rowClicks: null
     property string rowOid: ""
-    /// The narrowest this card may come out — the chip it is covering, handed over by the owner.
+    /// How wide the chip this card is covering stands — its front card and the sheets fanned behind it, handed over by
+    /// the owner.
     ///
-    /// **The card is at least as wide as what it stands on.** Its rows are measured to their own names, and a card
-    /// sized only to those can come out narrower than the chip it is covering and leave a sliver of the frame it is
-    /// replacing showing past its edge (measured at two pixels).
-    property real minRowWidth: 0
+    /// **The card covers it, with the air a row keeps either side of its own chip.** Its rows are measured to their
+    /// own names, and the front card wears a `+N` and a fan that none of them does: a card sized only to its rows
+    /// leaves the end of the frame it is replacing showing past its edge. **Both sides**, because the card is placed
+    /// that air and a border to the left of the chip (`RowHoverHost.openRefList`) — a floor of the chip's own width
+    /// stops exactly that much short on the right.
+    property real coverWidth: 0
 
     // Sized here: a recycling list has no implicit height of its own to hand a popup.
     width: refList.cardWidth

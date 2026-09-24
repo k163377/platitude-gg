@@ -49,6 +49,24 @@ Item {
         return lit
     }
 
+    /// Whether the card a chip unfolds into covers the chip still drawn under it, read off the two boxes as the scene
+    /// has them — the card's face and `front`, the chip's front card. **Not off the numbers the card was sized by**:
+    /// the chip moves as its sheets go down under the card, and a check built from the sizing would agree with
+    /// itself. `over=` is how far the chip stands past the card's far edge — the side a card sized to its own rows
+    /// falls short on, since it is placed at the chip's near one. The other three sides follow it, each the same way
+    /// round: how far the chip stands outside the card, so a negative number is inside.
+    function coverOf(front) {
+        const face = refList.background
+        const card = face.mapToItem(null, 0, 0)
+        const chip = front.mapToItem(null, 0, 0)
+        const over = Math.round(chip.x + front.width - (card.x + face.width))
+        const left = Math.round(card.x - chip.x)
+        const top = Math.round(card.y - chip.y)
+        const foot = Math.round(chip.y + front.height - (card.y + face.height))
+        const covers = over <= 0 && left <= 0 && top <= 0 && foot <= 0
+        return "covers=" + covers + " over=" + over + " left=" + left + " top=" + top + " foot=" + foot
+    }
+
     /// Runs `act` if it is one of this family's, and says whether it was. The families are asked in turn
     /// and the first to know a verb runs it — each verb is named by one (`AutoActDriver`).
     function run(act, arg) {
@@ -75,8 +93,10 @@ Item {
         } else if (act === "ref-list" || act === "ref-list-card") {
             // Hover cannot be injected, so this enters where the hover timer would — from the sampler, so an early
             // `itemAtIndex` miss retries. `-card` walks row → card → chip → asked again from under the list: both
-            // card closes have to hold, and either failing leaves `open=true`.
-            refListOpenTimer.row = Number(arg)
+            // card closes have to hold, and either failing leaves `open=true`. **No row given is HEAD's row**, the
+            // one commit every repository has a chip on: row 0 is the uncommitted row on a dirty preset, and a card
+            // opened on a row with no chip is an empty one that says nothing about covering.
+            refListOpenTimer.row = arg === "" ? -1 : Number(arg)
             refListOpenTimer.cards = act === "ref-list-card"
             refListOpenTimer.start()
         } else if (act === "ref-list-lit") {
@@ -453,7 +473,10 @@ Item {
         /// Which row of the list `ref-list-choose` presses with Ctrl held; -1 for the verbs that press none.
         property int chooseRow: -1
         onTriggered: {
-            const stacked = graphPane.view.itemAtIndex(refListOpenTimer.row)
+            // -1 stands for HEAD's row, which is only known once the graph has loaded.
+            if (refListOpenTimer.row < 0)
+                refListOpenTimer.row = graphModel.loading || graphModel.rowTotal === 0 ? -1 : graphModel.headRow
+            const stacked = refListOpenTimer.row < 0 ? null : graphPane.view.itemAtIndex(refListOpenTimer.row)
             if (!stacked)
                 return
             refListOpenTimer.stop()
@@ -560,7 +583,11 @@ Item {
         onTriggered: {
             if (!refList.opened)
                 return
+            const stacked = graphPane.view.itemAtIndex(refListOpenTimer.row)
+            if (!stacked)
+                return
             refListShownTimer.stop()
+            Harness.report("ref_list " + acts.coverOf(stacked.chipItem.chipItem) + " row=" + refListOpenTimer.row)
             renderedBarrier.begin()
         }
     }

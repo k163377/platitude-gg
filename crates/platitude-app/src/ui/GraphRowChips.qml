@@ -41,8 +41,10 @@ Item {
     /// under its left edge.
     required property bool listOpen
 
-    /// The front card itself — what a stacked one is unstacked under.
-    readonly property alias chipItem: rowStack.chipItem
+    /// The chip as the card it unfolds into stands on it: the front card and the sheets behind it. **The stack, not the
+    /// front card** — the card is placed at the corner the two share and has to cover the fan as well
+    /// (`RefListPopup.coverWidth`).
+    readonly property alias chipItem: rowStack
     /// The mark as the chip is actually wearing it, for the run that photographs the wait (`RefChip.waiting`) — read
     /// off the chip, since what was asked of it would be green with the binding cut.
     readonly property alias chipWaiting: rowStack.chipWaiting

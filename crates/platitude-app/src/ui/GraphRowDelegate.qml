@@ -122,7 +122,7 @@ Item {
     readonly property var renameChip:
         rowItem.labelRecords.length > 0 && GitFacts.refKind(rowItem.labelRecords[0].kind) !== ""
             ? rowItem.labelRecords[0] : null
-    // The chip itself — what a stacked one is unstacked under.
+    // The chip, sheets and all — what the card it unfolds into stands on (`GraphRowChips.chipItem`).
     readonly property alias chipItem: chipColumn.chipItem
     // The mark the chip wears while a second click waits out its window, as drawn (PGG_AUTO_ACT=graph-reclick-mark).
     readonly property alias chipWaiting: chipColumn.chipWaiting

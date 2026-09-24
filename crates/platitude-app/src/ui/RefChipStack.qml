@@ -37,7 +37,8 @@ Item {
     /// place, and one left peeking out from under it is a stack the card did not stand in for.
     property bool unstacked: false
 
-    /// The front card itself. **What owners anchor the card by, and what the unfolded list is placed against.**
+    /// The front card itself. **The unfolded list is placed against the stack, not this** — the stack is what that
+    /// card stands in for, and its corner is this one's: the fan hangs off to the right and below.
     readonly property alias chipItem: frontChip
     /// The mark as the card is actually wearing it, for the run that photographs the wait (`RefChip.waiting`).
     readonly property alias chipWaiting: frontChip.waiting

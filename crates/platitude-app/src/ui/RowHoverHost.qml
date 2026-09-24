@@ -190,8 +190,10 @@ Item {
         host.closeRowCard()
         refList.records = records
         refList.mates = host.matesFor(records)
-        // At least as wide as the chip it is covering (see the property).
-        refList.minRowWidth = anchor.width
+        // What it has to cover (see the property). The anchor is the whole
+        // stack, so its width is the front card and the fan behind it —
+        // read before `refListAnchor` below takes the sheets down.
+        refList.coverWidth = anchor.width
         // What is left of the page from the chip's own left edge, less
         // what stands outside a row's names on the far side — the bar's
         // own gutter, which is the wider of the two a row can end with

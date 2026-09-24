@@ -122,6 +122,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "chip_delete branch=base row=-1 code=branch --delete menu=false card=false",
     },
+    // The card a chip unfolds into, standing over the chip: the card is
+    // placed at the chip's near edge and its rows are measured to their
+    // own names, so a chip wearing a `+N` and a fan is wider than any of
+    // them — and the end of its frame left showing past the card is a
+    // few pixels no reduced picture holds. `covers=` is read off the two
+    // boxes as the scene has them, the chip where it stands once its
+    // sheets are down.
+    Verb {
+        name: "ref-list",
+        when: &[],
+        plain: "covers=true",
+    },
     // The pointer resting on one of that card's rows. The wash is one
     // shade over the card's own ground, so a row that never took the
     // answer frames the same as one that did — and the row worth aiming
