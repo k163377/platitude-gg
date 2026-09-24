@@ -48,17 +48,22 @@ Item {
     function staged(front, verb) {
         // Every row standing in the strip: the stand-in is drawn off the item the view built for the
         // tab in front, and a row the model has only just gained has none until the next layout.
-        if (acts.pageRepeater.count < 2 || acts.tabProbe.tabItemCount() !== acts.pageRepeater.count)
+        if (acts.pageRepeater.count < 2 || acts.tabProbe.tabItemCount() !== acts.pageRepeater.count) {
+            Awaited.at(verb, "rows")
             return false
+        }
         // And the page under the strip settled, so what is photographed underneath is a settled repository
         // — the switch below builds a new page, and an unfinished one frames the same either way.
         const page = acts.window.curPage
         if (page === null || page.pageTab.state !== "open"
-                || !page.pageWt.loaded || page.pageGraph.finishCount === 0)
+                || !page.pageWt.loaded || page.pageGraph.finishCount === 0) {
+            Awaited.at(verb, "page")
             return false
+        }
         if (!acts.floorSet) {
             acts.window.width = Math.ceil(acts.window.floorWidth)
             acts.floorSet = true
+            Awaited.at(verb, "floor")
             return false
         }
         // A strip that fits has no edge for a stand-in to ride. The resize is what makes one, and what is
@@ -78,22 +83,31 @@ Item {
                                   + " floorW=" + Math.ceil(acts.window.floorWidth))
             }
             acts.settling = true
+            Awaited.at(verb, "crowded")
             return false
         }
         if (!acts.frontSet) {
             acts.frontSet = true
             acts.tabsModel.setCurrentIndex(front)
+            Awaited.at(verb, "front")
             return false
         }
-        if (acts.tabsModel.currentIndex !== front)
+        if (acts.tabsModel.currentIndex !== front) {
+            Awaited.at(verb, "front-arrives")
             return false
+        }
         if (!acts.runSent) {
             // Latched on the strip's answer, the way every other hook here is: a strip with nowhere to travel was
             // never sent anywhere, and reporting it as though it had been leaves the wait to the watchdog.
             acts.runSent = acts.topBar.sendTabRunAway()
+            Awaited.at(verb, "run")
             return false
         }
-        return acts.topBar.tabPinShown
+        if (!acts.topBar.tabPinShown) {
+            Awaited.at(verb, "pin")
+            return false
+        }
+        return true
     }
 
     // PGG_AUTO_ACT=tab-pin: the stand-in, standing at the edge the tab in front went out of. The argument names which
@@ -147,7 +161,7 @@ Item {
         onTriggered: {
             // The staging is a precondition of the press and of nothing else: read again afterwards it ends in "the
             // stand-in is up", which is the very thing this verb takes away — and a verb waiting on its own answer
-            // being undone waits for the watchdog (規約 §UI 自動化の因果性; measured before this branch was written).
+            // being undone waits for the watchdog (規約 §UI 自動化の因果性).
             if (!tabPinGoTimer.pressed) {
                 if (!acts.staged(tabPinGoTimer.front, "tab_pin_go"))
                     return
@@ -156,8 +170,13 @@ Item {
                 return
             }
             // The travel takes a moment (`TabStrip.showFrontTab`), so what is waited for is its end:
-            // a shot taken mid-flight holds a strip halfway to somewhere, which is neither answer.
-            if (acts.topBar.tabRunTravelling || !acts.topBar.frontTabWhole || acts.topBar.tabPinShown)
+            // a shot taken mid-flight holds a strip halfway to somewhere, which is neither answer. Named, as the
+            // staging's steps are, so a run that stands here until its ceiling says which of them it was.
+            if (!Awaited.all("tab_pin_go", {
+                    "still": !acts.topBar.tabRunTravelling,
+                    "whole": acts.topBar.frontTabWhole,
+                    "pinGone": !acts.topBar.tabPinShown
+                }))
                 return
             stop()
             // `crushed=` first, as `tab-pin` has it: this is the verb whose picture holds the tab in front at the
@@ -206,17 +225,19 @@ Item {
             }
             // The tab has to be standing in the strip before the travel it causes can be waited on: the item for a row
             // the model has only just gained arrives with the next layout, and until then the strip is answering for
-            // the twelve it already had.
-            if (acts.pageRepeater.count !== tabOpenGoTimer.had + 1
-                    || acts.tabProbe.tabItemCount() !== acts.pageRepeater.count
-                    || acts.topBar.tabRunTravelling
-                    || !acts.topBar.frontTabWhole
-                    || acts.topBar.tabPinShown)
-                return
-            // And the repository under it opened, so what is photographed is the page the tab was opened for.
+            // the twelve it already had. And the repository under it opened, so what is photographed is the page the
+            // tab was opened for. Each term named, so a run that stands here until its ceiling says which one it was.
             const page = acts.window.curPage
-            if (page === null || page.pageTab.state !== "open"
-                    || !page.pageWt.loaded || page.pageGraph.finishCount === 0)
+            if (!Awaited.all("tab_open_go", {
+                    "tab": acts.pageRepeater.count === tabOpenGoTimer.had + 1,
+                    "item": acts.tabProbe.tabItemCount() === acts.pageRepeater.count,
+                    "still": !acts.topBar.tabRunTravelling,
+                    "whole": acts.topBar.frontTabWhole,
+                    "pinGone": !acts.topBar.tabPinShown,
+                    "open": page !== null && page.pageTab.state === "open",
+                    "worktree": page !== null && page.pageWt.loaded,
+                    "graph": page !== null && page.pageGraph.finishCount !== 0
+                }))
                 return
             stop()
             Harness.report(

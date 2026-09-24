@@ -65,6 +65,12 @@ Item {
     /// press this run is waiting on, whether its input has gone in, what the tab made of it, and the id the tab is
     /// holding. "No id" on its own says none of them.
     property string writeState: "-"
+    /// **Whether the window went on drawing**, for the watchdog's line alone: how many frames it swapped, and when the
+    /// last one was on the run's own clock (-1 for none). A static scene swaps nothing and that is no stall, so what
+    /// this separates is a term that stayed false over a scene still drawing (a travel that ran and ended) from one
+    /// over a scene that stopped (`Awaited` names the term).
+    property int framesSwapped: 0
+    property real lastFrameAt: -1
 
     function claimPageAct() {
         if (driver.pageActClaimed)
@@ -103,6 +109,8 @@ Item {
     Connections {
         target: driver.window
         function onFrameSwapped() {
+            driver.framesSwapped++
+            driver.lastFrameAt = PerfProbe.clockMs()
             driver.scheduleShot()
         }
     }
@@ -140,6 +148,19 @@ Item {
             // nothing, and neither is the same as a verb that never armed. It says what was held, and the reading
             // is the reader's.
             console.warn("write state " + driver.writeState)
+            // **What the verb was still waiting on, and for how long** — the line that names the term a stall stood
+            // on, for a verb that says its terms (`Awaited`). `unsaid` is a verb that says none.
+            const now = PerfProbe.clockMs()
+            console.warn("awaited " + (Awaited.said === "" ? "unsaid"
+                                       : Awaited.said + " for " + Math.round(now - Awaited.since) + "ms"))
+            console.warn("frames swapped=" + driver.framesSwapped + " last="
+                         + (driver.lastFrameAt < 0 ? "never" : Math.round(now - driver.lastFrameAt) + "ms ago"))
+            // **Which of the page's reads never came**, whatever the verb: a stall behind a read the page is still
+            // owed reads the same from the verb's side as one behind a term of the verb's own (`PageSettled`).
+            const page = driver.window ? driver.window.curPage : null
+            const owed = PageSettled.missing(page)
+            console.warn("page " + (page === null ? "none"
+                                    : owed.length === 0 ? "settled" : "missing=" + owed.join(",")))
             Qt.quit()
         }
     }

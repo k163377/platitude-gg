@@ -32,18 +32,41 @@ import QtQuick
 /// so a run on either has the whole of what its verb shows. Answering no for those would hold the run open until the
 /// watchdog.
 QtObject {
+    id: pageSettled
+
     /// `page` is a `RepoPage`; null (a window with no page yet) is done too.
     function settled(page) {
+        return pageSettled.missing(page).length === 0
+    }
+
+    /// The reads `settled` is still waiting on, by name — empty when it is not waiting on anything. The one rule,
+    /// said term by term, so a run that stood here until its ceiling says which read never came (`AutoShotDriver`).
+    function missing(page) {
         if (!page)
-            return true
+            return []
         const state = page.pageTab.state
         if (state === "" || state === "error")
-            return true
-        // An accepted path is only the beginning: the rows arrive with the reads behind it.
+            return []
+        // An accepted path is only the beginning: the rows arrive with the reads behind it — and until it is open,
+        // the parts that carry them are not asked.
+        if (state !== "open")
+            return ["open"]
         const graph = page.pageGraph
-        return state === "open" && page.pageWt.loaded
-            && page.pageRefsLoaded && graph.finishCount > 0 && page.pageDetailsSettled
-            && (graph.failed || graph.stale
-                || (!page.pageLanding && graph.wipRow === page.pageWt.wipRowStands))
+        const owed = []
+        if (!page.pageWt.loaded)
+            owed.push("worktree")
+        if (!page.pageRefsLoaded)
+            owed.push("refs")
+        if (!(graph.finishCount > 0))
+            owed.push("graph")
+        if (!page.pageDetailsSettled)
+            owed.push("details")
+        if (!graph.failed && !graph.stale) {
+            if (page.pageLanding)
+                owed.push("landing")
+            else if (graph.wipRow !== page.pageWt.wipRowStands)
+                owed.push("wipRow")
+        }
+        return owed
     }
 }

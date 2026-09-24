@@ -510,6 +510,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoActTipVerbs.qml");
     qrc::embed!("auto/AutoActWipVerbs.qml");
     qrc::embed!("auto/AutoShotDriver.qml");
+    qrc::embed!("auto/Awaited.qml");
     qrc::embed!("auto/NavProbe.qml");
     qrc::embed!("auto/PageAutoStart.qml");
     qrc::embed!("auto/PageHarness.qml");
