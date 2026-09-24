@@ -161,7 +161,8 @@ Rectangle {
     function pickIn(menu, matches) {
         for (let i = 0; i < menu.count; i++) {
             const row = menu.itemAt(i)
-            if (!row || !row.offered)
+            // A blocked row takes a hand's press and drops it (`AppMenuItem.blocked`), so it is no row to press.
+            if (!row || !row.offered || row.blocked === true)
                 continue
             if (row.subMenu) {
                 if (topBar.pickIn(row.subMenu, matches))
@@ -848,6 +849,10 @@ Rectangle {
                 // filtering to** (`NavSectionModel.copyCard`): the card is a way to move, and a copy the reader put
                 // out of sight over there is still somewhere to go. Less the copy this tab is already standing in,
                 // and down the same road a row of that section takes (`openRepositoryPathRequested`).
+                //
+                // **Never left empty**: a card with nothing on offer takes its heading with it (`AppMenu.delegate`),
+                // and a WORKTREE that came and went with the count would read as a door this repository lacks. The
+                // repository's own copy, where it is the only one, stays on as the row a reader cannot choose.
                 Instantiator {
                     model: copySub.rows
                     delegate: AppMenuItem {
@@ -881,7 +886,8 @@ Rectangle {
                         // the copy's own name is what the row is read for. The main copy's row is named by it already,
                         // and saying it twice would be this row's one fact said twice.
                         sideName: copyRow.homeCopy ? "" : copyRow.branch
-                        offered: !copyRow.here
+                        offered: !copyRow.here || copySub.rows.length === 1
+                        blockedReason: copyRow.here ? qsTr("You are in this working copy") : ""
                         onTriggered: topBar.curPage.openRepositoryPathRequested(copyRow.full)
                     }
                     onObjectAdded: (at, object) => copySub.insertItem(at, object)
