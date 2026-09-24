@@ -21,8 +21,10 @@
 //! — as it already was across containers for the demo volume — and
 //! what stands in it is claimed by liveness (`verify::ownership`), so
 //! a leaf of one run is never handed to another. `HOME` is the image's
-//! and is not written: git reads `GIT_CONFIG_GLOBAL`, the app reads
-//! `PGG_CONFIG_DIR`, both under the verb's own `/out` leaf.
+//! and is not written: the app reads `PGG_CONFIG_DIR` under the verb's
+//! own `/out` leaf, and git reads `GIT_CONFIG_GLOBAL` from a leaf of the
+//! container's own `/tmp` — a file git rewrites cannot stand on the
+//! mount, where a rename is not atomic (`verify::run::gitconfig_home`).
 //!
 //! **A process is addressed by its mark, never by a pid.** Every
 //! process a verb starts inherits `PGG_STEP=<mark>` from the exec, so

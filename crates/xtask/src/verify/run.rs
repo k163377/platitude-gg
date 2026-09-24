@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 
 use super::options::parse;
-use super::ownership::{claim_resource, fresh_shot_dir};
+use super::ownership::{claim_dir, claim_resource, fresh_shot_dir};
 use super::repos::{body_for, folder_for, seed_merge_tool};
 use super::shim::stage_old_git;
 use super::{child, outcome, repos, seed};
@@ -203,7 +203,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // The identity verbs are the ones whose write lands in this
     // gitconfig; they bring their own seed and answer the screen it
     // raises, and go through the same door as everyone else.
-    let config = shot_dir.join("gitconfig");
+    let config = gitconfig_home(
+        std::env::var_os(crate::linux::IN_CONTAINER).is_some(),
+        &shot_dir,
+    )?
+    .join("gitconfig");
     std::fs::write(&config, super::shim::global_seed(&opts.verb)).map_err(|e| e.to_string())?;
     println!("git config for this run: {}", config.display());
 
@@ -308,5 +312,60 @@ fn tell_the_census(root: &std::path::Path, opts: &super::options::Options, ran: 
             shift.said_for(&line)
         ),
         Err(why) => println!("census: not recorded ({why})"),
+    }
+}
+
+/// Where a run's gitconfig stands: beside its pictures, except inside a
+/// container, where the pictures' directory is the host's.
+///
+/// **A rename on the mount is not a rename.** `/out` is a directory of
+/// the Windows host, and git replaces the configuration file it writes
+/// by renaming its lock over it. On a disk of the container's own that
+/// rename is atomic, and a reader that has just passed `access(2)` opens
+/// the file it was promised. On the mount there is a moment with no file
+/// at that name (measured: one read in every few dozen on `/out` opens
+/// nothing after `access` said yes, and none on `/tmp`), and git's reading
+/// side takes that `ENOENT` for a file that was never there — a `-1`
+/// from a read it had checked, which `repo_read_config` dies on with
+/// `unknown error occurred while reading the configuration files`. The
+/// identity verbs rewrite this file while the session's own `status` and
+/// `for-each-ref` read it (measured: a `verify-linux identity-tip` whose
+/// tab-open `status` and `refs` both died on it, and which then waited
+/// out its whole ceiling for a page that never came).
+///
+/// So inside a container the file stands on the container's `/tmp`, in a
+/// leaf of this run's own. The pictures and the settings stay under
+/// `/out`: the app is the one process writing those, and it reads back
+/// what it finished writing.
+fn gitconfig_home(
+    in_container: bool,
+    shot_dir: &std::path::Path,
+) -> Result<std::path::PathBuf, String> {
+    if !in_container {
+        return Ok(shot_dir.to_path_buf());
+    }
+    claim_dir(&std::env::temp_dir().join("pgg-verify"), "gitconfig")
+}
+
+#[cfg(test)]
+mod tests {
+    /// Outside a container the gitconfig stands beside the pictures;
+    /// inside one it stands on the container's own disk, never under the
+    /// mount the pictures go out through.
+    #[test]
+    fn the_gitconfig_leaves_the_mount_inside_a_container() {
+        let shot_dir = std::path::Path::new("/out/shots-1");
+        assert_eq!(
+            super::gitconfig_home(false, shot_dir).expect("beside the pictures"),
+            shot_dir
+        );
+        let own = super::gitconfig_home(true, shot_dir).expect("a leaf of its own");
+        assert!(
+            !own.starts_with(shot_dir),
+            "{} is under the mount",
+            own.display()
+        );
+        assert!(own.starts_with(std::env::temp_dir().join("pgg-verify")));
+        let _ = std::fs::remove_dir_all(&own);
     }
 }
