@@ -25,6 +25,7 @@
 | 場所 | 読み |
 |---|---|
 | `process::program`(Git for Windows の `cmd\git.exe` はランチャー) | `git --version` 22.7ms 対 本体直叩き 10.3ms / details の `git show` 19.0ms 対 10.7ms(ウォーム) |
+| `process::executor` の `CREATE_NO_WINDOW`(git 1 本ごとに `conhost.exe` を 1 本立てる) | `git rev-parse --show-toplevel` 200 本の直列で隠れ console 21ms/本 対 console 無し(`DETACHED_PROCESS`)12ms/本・親の console を継ぐ(フラグ無し)12ms/本 — 親が GUI(console 無し)でも console 付きでも同値。16 スレッドで 400 本は 1.72–1.85s 対 0.96–1.09s。verify-ui の run の中(16 本同時)では git の spawn の中央値 139ms 対 32ms・所要の中央値 236ms 対 85ms。**console 無しは採れない**(rules-refs/core.md の `CREATE_NO_WINDOW` の行 — MSYS の子が WT の窓を立てる) |
 | `details::commit_details` | git 自身の仕事は約 1ms、残りはプロセス |
 | `repo::is_bare`(`rev-parse` 1 本) | 33ms |
 | `models::tabs` の folder 検査(`rev-parse` 1 本) | 30–36ms(リポジトリでもそうでなくても) |
@@ -121,6 +122,7 @@
 | `perf` の warm 判定(`perf::warmth`) | invocation 1 本目の 1 run 目だけ突出(startup 1226ms)、2 本目以降の 1 run 目は採用 run(1096–1178ms)に混ざる(1081–1177ms)= 毎回 1 run 捨てるのは 14 秒の無駄 |
 | `xtask::gui` の起動見張り | Qt プラットフォームプラグインの失敗はほぼ即死(約 10ms)。`FIRST_MOMENT` の残りはコールドスタートの余白 |
 | `platitude-app` の `qrc::embed!`(QML のディスクキャッシュ) | 時刻 0 の qrc(置き場を渡されない起動 = 製品)は起動のたびに 268 ファイルをコンパイルし、そのログはプロセス時刻 0.07s → 0.77s に並ぶ(`app-menu` の run 全体 1.4s)。キャッシュが効くとアプリの CPU 時間は 1 run あたり 1.61–2.06s → 1.39–1.67s、私有メモリは約 220MB のまま動かない。時刻付きの木はヒープに組むので、キャッシュ置き場を渡された起動は両モジュールぶん(`ui/` 2.7MB + `auto/` 1.1MB のファイル)を私有メモリに持つ。渡されない起動の木は static(実行ファイルの読み取り専用領域)で、ヒープには組まない |
+| verify-ui の 32 run(動詞 8 種 × 4、`--no-build`)の置き場(`pgg-demo` の fixture のコピーと `pgg-verify` の shot dir)を `%TEMP%` から席の `target\` = Defender の除外の内へ(交互に 2 巡、全 run PASS) | 壁時計 幅 8: 28.5 / 18.8s → 30.8 / 24.2s・幅 16: 19.6 / 18.9s → 18.7 / 16.9s。1 run 平均の fixture のコピーは 279–488ms(最初の巡だけ 1,471ms)→ 386–493ms、アプリは 3.9–8.2s → 4.9–7.8s。**同じ置き場の 2 巡の差(最大 1.5 倍)の方が置き場の差より大きい = 置き場では速くならない**。run の代金の 9 割以上はアプリの側 |
 | demo の雛形(`demo::template`) | 雛形を組む run の fixture は `app-menu`(`basic`)で約 2.0–2.2s、雛形のコピーは約 0.1s。雛形は preset を組むソース・git の版・UTC の日を鍵にした 1 組で、組むのは 1 日 1 回とソースが変わった時。全 preset の雛形を組む gate は、雛形が立っている gate より host の動詞平均 9.1–12.4s 対 6.7–6.8s・fixture が 3s を超える run 74–78 本 対 4–6 本・壁時計 12m52s–13m39s 対 8m52s–8m57s(同じ席 a の `gate --fresh`) |
 
 ## build directory の世代(`xtask::sweep`)
