@@ -239,7 +239,12 @@ fn a_harness_change_without_qml_edges_owes_every_recorded_verb() {
     );
     sb.commit_all(&sb.seat, "fix(verify): harness behavior", &[]);
     let red = "verify window";
-    let (ok, text) = sb.gate(&sb.seat, &["--main", &base], &[("PGG_GATE_FAKE_FAIL", red)]);
+    // Past its red, so that what ran is what the change owed.
+    let (ok, text) = sb.gate(
+        &sb.seat,
+        &["--main", &base, "--keep-going"],
+        &[("PGG_GATE_FAKE_FAIL", red)],
+    );
     assert!(!ok && text.contains("nothing stamped"), "{text}");
     let ran = sb.ran();
     for verb in [
@@ -295,9 +300,9 @@ fn a_singleton_and_the_apps_rust_owe_every_verb_the_census_holds() {
 }
 
 /// The verbs of a side share nothing but the release the first one
-/// builds, so a red one stops none of the others: every verb the change
-/// owes runs, the greens are stamped, and the run after the fix owes the
-/// red alone.
+/// builds, so under `--keep-going` a red one stops none of the others:
+/// every verb the change owes runs, the greens are stamped, and the run
+/// after the fix owes the red alone.
 #[test]
 fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
     let sb = Sandbox::new("red-verb");
@@ -315,7 +320,11 @@ fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
     );
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
     let red = "verify stash-open --preset basic";
-    let (ok, text) = sb.gate(&sb.seat, &["--jobs", "2"], &[("PGG_GATE_FAKE_FAIL", red)]);
+    let (ok, text) = sb.gate(
+        &sb.seat,
+        &["--jobs", "2", "--keep-going"],
+        &[("PGG_GATE_FAKE_FAIL", red)],
+    );
     assert!(!ok && text.contains("nothing stamped"), "{text}");
     let ran = sb.ran();
     for verb in [

@@ -17,14 +17,16 @@
 //!
 //! `--host-only` is the daily tier (CLAUDE.md 確認は 3 段: no container);
 //! its stamps are reused by the full run, which then owes the container
-//! side alone. `--all` counts every file as changed — stage 2 in full,
-//! what `check` used to be — and `--verb <line>` adds verify-ui lines to
-//! run (and record) besides the census's.
+//! side alone. `--all` counts every file as changed — stage 2 in full —
+//! and `--verb <line>` adds verify-ui lines to run (and record) besides
+//! the census's. The first red stops the run ([`halt`]) unless
+//! `--keep-going` — which `--all` implies — says to run the rest.
 
 mod census;
 mod deps;
 mod evidence;
 mod graph;
+mod halt;
 mod hooks;
 mod inputs;
 mod plan;
@@ -36,10 +38,13 @@ mod stamp;
 use std::path::Path;
 use std::time::Duration;
 
+use halt::Halt;
 use plan::{Plan, Required, Side};
 use record::{Spent, Waited};
 pub(crate) use reuse::preserve_reader;
-use runner::{FAKE_LOG, FAKE_STAMP, app_did_not_build, execute_step, linux_runner, runner};
+use runner::{
+    FAKE_LOG, FAKE_STAMP, Finished, app_did_not_build, execute_step, linux_runner, runner,
+};
 use stamp::{CommitStamp, Store};
 
 use census::Shift;
@@ -148,6 +153,8 @@ struct Options {
     all: bool,
     fresh: bool,
     dry_run: bool,
+    /// Run the rest after a red ([`halt`]) — `--keep-going`, or `--all`.
+    keep_going: bool,
     verbs: Vec<String>,
     /// How many verify-ui verbs a side runs at once ([`verbs`]).
     jobs: usize,
@@ -161,6 +168,7 @@ fn options(args: &[String]) -> Result<Options, String> {
         all: false,
         fresh: false,
         dry_run: false,
+        keep_going: false,
         verbs: Vec::new(),
         jobs: default_jobs(),
     };
@@ -168,7 +176,13 @@ fn options(args: &[String]) -> Result<Options, String> {
     while let Some(arg) = args.get(at) {
         match arg.as_str() {
             "--host-only" => opts.host_only = true,
-            "--all" => opts.all = true,
+            // Stage 3 is asked for the whole picture, and a picture that
+            // stops at its first red is not that.
+            "--all" => {
+                opts.all = true;
+                opts.keep_going = true;
+            }
+            "--keep-going" => opts.keep_going = true,
             "--fresh" => opts.fresh = true,
             "--dry-run" => opts.dry_run = true,
             "--dir" => {
@@ -196,7 +210,8 @@ fn options(args: &[String]) -> Result<Options, String> {
             other => {
                 return Err(format!(
                     "unknown option {other:?} (gate takes --host-only, --all, --fresh, \
-                     --dry-run, --dir <tree>, --main <ref>, --verb <line>…, --jobs <n>)"
+                     --keep-going, --dry-run, --dir <tree>, --main <ref>, --verb <line>…, \
+                     --jobs <n>)"
                 ));
             }
         }
@@ -263,7 +278,14 @@ fn gate(args: &[String]) -> Result<(), String> {
         print!("{}", record::render(&run, &spent, &shift));
         return Ok(());
     }
-    let outcome = execute(&plan, opts.jobs, false, &mut spent, &mut shift);
+    let outcome = execute(
+        &plan,
+        opts.jobs,
+        false,
+        opts.keep_going,
+        &mut spent,
+        &mut shift,
+    );
     spent.total = whole_run.elapsed();
     report(
         &plan,
@@ -329,7 +351,9 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> 
     print!("{}", plan::describe(&plan));
     let jobs = default_jobs();
     let mut shift = Shift::default();
-    let outcome = execute(&plan, jobs, true, &mut spent, &mut shift);
+    // A landing's red leaves main where it was whatever else would pass,
+    // so the first one is the answer.
+    let outcome = execute(&plan, jobs, true, false, &mut spent, &mut shift);
     spent.total = whole_run.elapsed();
     report(&plan, "land's gate", jobs, true, &spent, &outcome, &shift);
     outcome
@@ -428,15 +452,17 @@ fn running_note(dir: &Path) -> std::path::PathBuf {
 
 /// Runs what is not cached, one thread per side and two groups within a
 /// side ([`side`]), and stamps the commit when both sides came back with
-/// nothing red. A group stops at its first red step — except among its
-/// verbs, which run to the end of their block `jobs` at a time
+/// nothing red. The first red stops the run on both sides ([`halt`]);
+/// under `keep_going` a group stops at its first red step — except among
+/// its verbs, which run to the end of their block `jobs` at a time
 /// ([`verbs`]) — and everything else finishes, so its green steps are
-/// stamped and need not run again. A `landing`'s verbs are handed the
-/// machine's lanes ahead of any other gate's (`lanes`).
+/// stamped and need not run again. A `landing`'s units are handed the
+/// machine ahead of any other gate's (`budget`).
 fn execute(
     plan: &Plan,
     jobs: usize,
     landing: bool,
+    keep_going: bool,
     spent: &mut Spent,
     shift: &mut Shift,
 ) -> Result<Gated, String> {
@@ -467,7 +493,17 @@ fn execute(
     spent.runner = at.elapsed();
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
-    let failures = run_sides(plan, &store, &logs, runner.as_deref(), jobs, landing, spent)?;
+    let halt = Halt::new(keep_going);
+    let failures = run_sides(
+        plan,
+        &store,
+        &logs,
+        runner.as_deref(),
+        jobs,
+        landing,
+        &halt,
+        spent,
+    )?;
     spent.sides = at.elapsed();
     let head = short(&plan.head);
     // A verb that passed rewrote its census line whether or not another
@@ -546,6 +582,17 @@ fn execute(
 /// Both sides at once, each on a thread of its own ([`side`]) and every
 /// unit of both out of the machine's one budget: what came back red,
 /// once the wall clock has been said.
+///
+/// **The always-steps go first, ahead of both sides.** They are the
+/// host's and seconds long, and a red among them is what a person fixes
+/// before anything else ([`halt`]) — a Linux side started beside them
+/// would spend its minutes on greens that fix takes away, the app being
+/// every verb's input. What that costs the Linux side is their seconds,
+/// and it is not the side a gate waits on.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the run's own pieces, each read by both sides"
+)]
 fn run_sides(
     plan: &Plan,
     store: &Store,
@@ -553,6 +600,7 @@ fn run_sides(
     runner: Option<&Path>,
     jobs: usize,
     landing: bool,
+    halt: &Halt,
     spent: &mut Spent,
 ) -> Result<Vec<String>, String> {
     let host: Vec<&Required> = plan
@@ -612,41 +660,29 @@ fn run_sides(
         seat: &seat,
         rank: rank(landing),
         fresh: plan.fresh,
+        halt,
     };
     let linux_ground = Ground {
         name: "linux",
         waited: &linux_waited,
         ..host_ground
     };
-    let mut failures: Vec<String> = std::thread::scope(|scope| {
-        let host = scope.spawn(|| side(&host_ground, &host, jobs));
+    // A red among them raises the halt whatever was asked, so the ones
+    // after it, and every step of both sides, are filed at their own
+    // door ([`run_one`]).
+    let always = host.iter().take_while(|r| r.step.always).count();
+    let mut failures: Vec<String> = Vec::new();
+    for (index, required) in host.iter().enumerate().take(always) {
+        if let Err(why) = run_one(&host_ground, index, required, false) {
+            failures.push(why);
+        }
+    }
+    failures.extend(std::thread::scope(|scope| {
+        let host = scope.spawn(|| side(&host_ground, &host, always, jobs));
         // On this side and not ahead of both, so the host side starts
         // now: what the preparation owes is only that it is in before
         // the first step of *this* side (`runner::linux_runner`).
-        let linux = scope.spawn(|| {
-            // Named before the preparation, so that it is taken down
-            // after the side however the preparation went
-            // (`runner::container_expected`).
-            let container = runner::container_expected(&linux_ground, &linux);
-            let failures = match linux_runner(&linux_ground, &linux) {
-                // The container is there for the verbs exactly when the
-                // preparation that starts it came back with the copy.
-                Ok(copy) => side(
-                    &Ground {
-                        copy: copy.as_deref(),
-                        container: copy.as_ref().and(container.as_deref()),
-                        ..linux_ground
-                    },
-                    &linux,
-                    jobs,
-                ),
-                Err(why) => vec![why],
-            };
-            if let Some(name) = &container {
-                runner::dismiss_container(&linux_ground, name);
-            }
-            failures
-        });
+        let linux = scope.spawn(|| linux_side(&linux_ground, &linux, jobs));
         let mut failures = Vec::new();
         for handle in [host, linux] {
             match handle.join() {
@@ -655,7 +691,10 @@ fn run_sides(
             }
         }
         failures
-    });
+    }));
+    if let Some(said) = halt.said(landing) {
+        println!("{said}");
+    }
     let secs = started.elapsed().as_secs();
     println!("gate: {}m{:02}s wall clock", secs / 60, secs % 60);
     spent.host_budget = host_waited.read();
@@ -678,6 +717,45 @@ fn run_sides(
         }
     }
     Ok(failures)
+}
+
+/// The Linux side: its container and the task runner copy in it made
+/// ready ([`runner::linux_runner`]), then its steps ([`side`]), then the
+/// container taken down.
+fn linux_side(ground: &Ground<'_>, steps: &[&Required], jobs: usize) -> Vec<String> {
+    // A run already stopped has nothing to bring a container up for.
+    if ground.halt.raised() {
+        return side(ground, steps, 0, jobs);
+    }
+    // Named before the preparation, so that it is taken down
+    // after the side however the preparation went
+    // (`runner::container_expected`).
+    let container = runner::container_expected(ground, steps);
+    let failures = match linux_runner(ground, steps) {
+        // The container is there for the verbs exactly when the
+        // preparation that starts it came back with the copy.
+        Ok(copy) => side(
+            &Ground {
+                copy: copy.as_deref(),
+                container: copy.as_ref().and(container.as_deref()),
+                ..*ground
+            },
+            steps,
+            0,
+            jobs,
+        ),
+        // A red of the side's own, ahead of all its steps: none of them
+        // was reached.
+        Err(why) => {
+            ground.halt.red("the container's task runner", false);
+            not_run(ground, steps.iter().map(|r| r.step.id.clone()));
+            vec![why]
+        }
+    };
+    if let Some(name) = &container {
+        runner::dismiss_container(ground, name);
+    }
+    failures
 }
 
 /// A tree with uncommitted changes (a stamp names a commit, and this is
@@ -763,6 +841,8 @@ struct Ground<'a> {
     /// `--fresh`: every step runs whether or not a stamp answers, so the
     /// one another tree wrote while this unit queued is not taken either.
     fresh: bool,
+    /// The run's stop, which both sides watch ([`halt`]).
+    halt: &'a Halt,
 }
 
 /// Which tree a unit belongs to, as the queue names it: the seat's
@@ -781,32 +861,20 @@ fn rank(landing: bool) -> crate::budget::Rank {
     }
 }
 
-/// One side's steps, as two groups that share no build directory and so
-/// run beside each other: the checks — clippy, the tests, shipped, deny,
-/// whatever else the plan owes — one at a time in the plan's order,
-/// stopping at the first red (a build that failed makes every later
-/// step of the group noise); and the built app — the verify-ui verbs as
-/// one block through [`verbs`], then `bare` — which alone read the
-/// release the first verb builds. Beside each other they slow each
-/// other — a verb costs half again as much at the median, and a cold
-/// checks chain can be the side's wall clock — and the side still ends
-/// a fifth sooner than the two would as a sum (the numbers are in
+/// One side's steps from `from` on (the host's always-steps before it
+/// have run ahead of both sides — [`run_sides`]), as two groups that
+/// share no build directory and so run beside each other: the checks —
+/// clippy, the tests, shipped, deny, whatever else the plan owes — one at
+/// a time in the plan's order, stopping at the first red (a build that
+/// failed makes every later step of the group noise); and the built app —
+/// the verify-ui verbs as one block through [`verbs`], then `bare` —
+/// which alone read the release the first verb builds. Beside each other
+/// they slow each other — every verb pays for the compile beside it, and
+/// a cold checks chain can be the side's wall clock — and the side still
+/// ends sooner than the two would as a sum (the numbers are in
 /// internal-docs/反映前テストの機械化.md §実測).
-///
-/// The always-steps go first and alone. They are seconds, and a red
-/// among them is what a person fixes before anything else — a verb block
-/// started beside them would run its minutes to greens that fix takes
-/// away, the app being every verb's input.
-fn side(ground: &Ground<'_>, steps: &[&Required], jobs: usize) -> Vec<String> {
-    let mut at = 0;
-    while at < steps.len() && steps[at].step.always {
-        if let Err(why) = run_one(ground, at, steps[at], false) {
-            not_run(ground, steps[at + 1..].iter().map(|r| r.step.id.clone()));
-            return vec![why];
-        }
-        at += 1;
-    }
-    let (built, checks): (Vec<_>, Vec<_>) = (at..steps.len())
+fn side(ground: &Ground<'_>, steps: &[&Required], from: usize, jobs: usize) -> Vec<String> {
+    let (built, checks): (Vec<_>, Vec<_>) = (from..steps.len())
         .map(|i| (i, steps[i]))
         .partition(|(_, r): &(usize, &Required)| r.step.release);
     std::thread::scope(|scope| {
@@ -898,8 +966,9 @@ fn against_the_build(
 
 /// One side's verbs: the first uncached one runs alone and builds the
 /// release, the rest reuse that build `jobs` at a time. A red verb stops
-/// none of the others — a verb breaks nothing the next one reads, and
-/// every green is stamped, so the run after the fix owes the reds alone.
+/// the run ([`halt`]) — and under `--keep-going` none of the others: a
+/// verb breaks nothing the next one reads, and every green is stamped, so
+/// the run after the fix owes the reds alone.
 /// Only a verb of this side that built in this very invocation earns the
 /// others their `--no-build`: a cached verb's build happened in whatever
 /// tree took the stamp, and the binary here may be older than the tree.
@@ -943,9 +1012,11 @@ fn verbs(ground: &Ground<'_>, block: &[(usize, &Required)], jobs: usize) -> Vec<
             // the others to reuse. One answered by a stamp another tree
             // wrote built nothing in this tree, and reading it as a
             // build is how the rest of the block would be handed
-            // `--no-build` against a binary older than the sources.
+            // `--no-build` against a binary older than the sources. A
+            // halted one built nothing either, and every one after it
+            // is filed as halted at its own door.
             Ok(Ran::Step) => built = true,
-            Ok(Ran::Stamped) => continue,
+            Ok(Ran::Stamped | Ran::Halted) => continue,
             Err(why) => {
                 failures.push(why);
                 if app_did_not_build(&log_of(ground, *index)) {
@@ -1003,16 +1074,18 @@ fn log_of(ground: &Ground<'_>, index: usize) -> std::path::PathBuf {
     ground.logs.join(format!("{}-{index:02}.log", ground.name))
 }
 
-/// What became of one step: it ran here, or a stamp answered for it.
+/// What became of one step short of red: it ran here, a stamp answered
+/// for it, or the run's halt stopped it ([`halt`]).
 ///
-/// The two are not the same to the caller. A verb that ran here built
-/// the release the rest of its block reuses; a verb a stamp answered for
-/// built nothing here, whatever it built in the tree that took the stamp
-/// ([`verbs`]).
+/// The first two are not the same to the caller. A verb that ran here
+/// built the release the rest of its block reuses; a verb a stamp
+/// answered for built nothing here, whatever it built in the tree that
+/// took the stamp ([`verbs`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Ran {
     Step,
     Stamped,
+    Halted,
 }
 
 /// One step against its log: the machine's room taken for it, then run,
@@ -1044,16 +1117,13 @@ fn run_one(
         return Ok(stamp_answered(ground, id, "cached", 0, Duration::ZERO));
     }
     let weight = crate::budget::weight_of(&required.step.command, no_build);
-    let room = ground
-        .pool
-        .admit_once_the_machine_is_free(&crate::budget::Ask {
-            weight,
-            rank: ground.rank,
-            seat: ground.seat,
-            what: id,
-        })
-        .map_err(|why| format!("{id}: {why}"))?;
-    ground.waited.add(room.waited);
+    // A unit that could not be given room is a red of the run like any
+    // other, and stops it like any other.
+    let Some(room) =
+        room_for(ground, id, weight).inspect_err(|_| ground.halt.red(id, required.step.always))?
+    else {
+        return Ok(Ran::Halted);
+    };
     // Looked at again now, after the plan was made: a unit that stood
     // in the queue may have been answered while it stood — another tree
     // gating the same commit writes the same key, and the stamps are the
@@ -1098,8 +1168,16 @@ fn run_one(
     // How long this unit held the machine, kept because it is how long a
     // landing arriving behind it would have waited: nothing is killed to
     // make room (`budget`), so the longest unit is the interruption's
-    // own ceiling.
+    // own ceiling. A unit the halt ended held it until then.
     ground.waited.ran(id, weight, ran);
+    let outcome = match outcome {
+        Ok(Finished::Halted) => {
+            println!("[{name}] halted {id} ({secs}s) — the run went red elsewhere");
+            return Ok(halted(ground, id, weight, room.waited, ran));
+        }
+        Ok(Finished::Green) => Ok(()),
+        Err(why) => Err(why),
+    };
     ground.waited.filed(record::Row {
         id: id.clone(),
         weight,
@@ -1117,40 +1195,88 @@ fn run_one(
         Ok(()) => {
             println!("[{name}] ok     {id} ({secs}s)");
             crate::check::print_shots(name, &log);
-            if !required.step.always {
-                ground
-                    .store
-                    .mark_step(
-                        &required.key,
-                        &format!("{id}\n{}\n", required.step.command.join(" ")),
-                    )
-                    .map_err(|why| format!("{id}: green but not stamped: {why}"))?;
+            if !required.step.always
+                && let Err(why) = ground.store.mark_step(
+                    &required.key,
+                    &format!("{id}\n{}\n", required.step.command.join(" ")),
+                )
+            {
+                // Green, and still a run that cannot say so for next time:
+                // red, and stopped as any red is.
+                ground.halt.red(id, required.step.always);
+                return Err(format!("{id}: green but not stamped: {why}"));
             }
             Ok(Ran::Step)
         }
         Err(why) => {
             println!("[{name}] FAIL   {id} ({secs}s): {why}");
-            // The log is kept before anything else looks at this tree:
-            // the re-run that follows a red gate writes over it in place
-            // (`evidence`), and a keeping that failed is said here and
-            // is never a second failure of the step.
-            match evidence::keep(
-                ground.logs,
-                ground.run,
-                ground.dir,
-                &log,
-                &required.step.command,
-            ) {
-                Ok(None) => Err(id.clone()),
-                Ok(Some(note)) => {
-                    println!("[{name}] {note}");
-                    Err(format!("{id} — {note}"))
-                }
-                Err(why) => {
-                    println!("[{name}] the red step's log was not kept: {why}");
-                    Err(id.clone())
-                }
-            }
+            ground.halt.red(id, required.step.always);
+            Err(kept_red(ground, required, &log))
+        }
+    }
+}
+
+/// The machine's room for one unit, or `None` for a unit the run's halt
+/// stopped first — its row already filed ([`halted`]). The halt is looked
+/// at before the unit queues, while it waits, and once it is admitted, so
+/// a run gone red starts nothing more and holds no place in the queue.
+fn room_for(
+    ground: &Ground<'_>,
+    id: &str,
+    weight: u32,
+) -> Result<Option<crate::budget::Admitted>, String> {
+    if ground.halt.raised() {
+        halted(ground, id, 0, Duration::ZERO, Duration::ZERO);
+        return Ok(None);
+    }
+    let asked = ground.since.elapsed();
+    let room = ground
+        .pool
+        .admit_unless(
+            &crate::budget::Ask {
+                weight,
+                rank: ground.rank,
+                seat: ground.seat,
+                what: id,
+            },
+            &|| ground.halt.raised(),
+        )
+        .map_err(|why| format!("{id}: {why}"))?;
+    let Some(room) = room else {
+        let waited = ground.since.elapsed() - asked;
+        ground.waited.add(waited);
+        halted(ground, id, 0, waited, Duration::ZERO);
+        return Ok(None);
+    };
+    ground.waited.add(room.waited);
+    if ground.halt.raised() {
+        halted(ground, id, 0, room.waited, Duration::ZERO);
+        return Ok(None);
+    }
+    Ok(Some(room))
+}
+
+/// A red step's line for the gate's failure, its log kept first: the
+/// re-run that follows a red gate writes over it in place (`evidence`),
+/// and a keeping that failed is said here and is never a second failure
+/// of the step.
+fn kept_red(ground: &Ground<'_>, required: &Required, log: &Path) -> String {
+    let (name, id) = (ground.name, &required.step.id);
+    match evidence::keep(
+        ground.logs,
+        ground.run,
+        ground.dir,
+        log,
+        &required.step.command,
+    ) {
+        Ok(None) => id.clone(),
+        Ok(Some(note)) => {
+            println!("[{name}] {note}");
+            format!("{id} — {note}")
+        }
+        Err(why) => {
+            println!("[{name}] the red step's log was not kept: {why}");
+            id.clone()
         }
     }
 }
@@ -1176,6 +1302,24 @@ fn stamp_answered(
         spent: String::new(),
     });
     Ran::Stamped
+}
+
+/// A unit the run's halt stopped ([`halt`]) — at its door, while it
+/// waited for room, or while it ran — filed as `halted`: not a red of its
+/// own, and not a green either, so nothing is stamped for it and the next
+/// run owes it. `weight` is the room it held (none short of running) and
+/// `ran` how long it had run when it was ended.
+fn halted(ground: &Ground<'_>, id: &str, weight: u32, waited: Duration, ran: Duration) -> Ran {
+    ground.waited.filed(record::Row {
+        id: id.to_string(),
+        weight,
+        outcome: "halted",
+        waited,
+        from_start: ground.since.elapsed(),
+        ran,
+        spent: String::new(),
+    });
+    Ran::Halted
 }
 
 /// What a step said it spent, off its own log, or empty where it said

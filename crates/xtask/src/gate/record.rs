@@ -78,10 +78,11 @@ pub(crate) struct Row {
     pub weight: u32,
     /// What became of it: `ran`, `cached` (a stamp the plan found),
     /// `cached-late` (one another tree wrote while this unit queued),
-    /// `FAIL`, or `not-run` — a step a red earlier in its group stopped
-    /// this run short of. **The last one is a row and not an absence**:
-    /// a step nothing says anything about is the bookkeeping having lost
-    /// one, which is a different fault ([`Waited::unaccounted`]).
+    /// `FAIL`, `halted` — kept from running or ended by the run's first
+    /// red (`gate::halt`) — or `not-run` — a step a red earlier in its
+    /// group stopped this run short of. **The last two are rows and not
+    /// absences**: a step nothing says anything about is the bookkeeping
+    /// having lost one, which is a different fault ([`Waited::unaccounted`]).
     pub outcome: &'static str,
     /// Room the machine made it wait for, before it started.
     pub waited: Duration,

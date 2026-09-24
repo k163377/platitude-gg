@@ -234,6 +234,8 @@ fn a_host_only_run_stamps_half_and_the_full_run_reuses_it() {
     sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
 }
 
+/// `--keep-going` is what leaves the other side's greens standing: the run
+/// goes on past the red, and what passed is stamped.
 #[test]
 fn a_red_step_leaves_main_where_it_was() {
     let sb = Sandbox::new("red");
@@ -241,7 +243,7 @@ fn a_red_step_leaves_main_where_it_was() {
     sb.commit_all(&sb.seat, "feat(core): seven", &[]);
     let (ok, text) = sb.gate(
         &sb.seat,
-        &[],
+        &["--keep-going"],
         &[("PGG_GATE_FAKE_FAIL", "test platitude-core 1")],
     );
     assert!(
@@ -661,7 +663,7 @@ fn a_red_leaves_the_steps_behind_it_named_rather_than_missing() {
     sb.commit_all(&sb.seat, "feat(core): forty-three", &[]);
     let (ok, text) = sb.gate(
         &sb.seat,
-        &[],
+        &["--keep-going"],
         &[("PGG_GATE_FAKE_FAIL", "test platitude-core 1")],
     );
     assert!(!ok, "{text}");

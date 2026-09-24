@@ -283,18 +283,20 @@ fn run_side(side: &str, ground: &Ground<'_>, steps: &[Vec<String>]) -> Vec<Strin
         println!("[{side}] {display} … (log: {})", log.display());
         // waits(measured): the step's wall clock, said on its line and judged by nothing
         let at = Instant::now();
-        let outcome = run_step(root, step, &log, &room);
+        let outcome = run_step(root, step, &log, &room, &|| false);
         drop(room);
         // Lossy: one localized byte in a linker or Qt line would
         // otherwise blank a failure's whole log.
         let text = String::from_utf8_lossy(&std::fs::read(&log).unwrap_or_default()).into_owned();
         let secs = at.elapsed().as_secs();
         match outcome {
-            Ok(true) => {
+            Ok(Stepped::Exited(true)) => {
                 println!("[{side}] ok   {display} ({secs}s)");
                 print_shots(side, &log);
             }
-            Ok(false) => {
+            // Nothing here asks a step to stop, so a stopped one is as
+            // unexplained as a red one, and said the same way.
+            Ok(Stepped::Exited(false) | Stepped::Stopped) => {
                 // The whole log: a failure with its tail cut off sends
                 // whoever reads it straight back here to re-run it.
                 println!("[{side}] FAIL {display} ({secs}s)");
@@ -341,16 +343,31 @@ pub(crate) fn tail_of(text: &str) -> String {
     lines[lines.len().saturating_sub(LINES)..].join("\n")
 }
 
+/// How a step ended under [`run_step`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Stepped {
+    /// It exited, and this is whether it passed.
+    Exited(bool),
+    /// `stop` said so while it ran, and it was ended from here with its
+    /// process tree — a gate that went red elsewhere (`gate::halt`).
+    Stopped,
+}
+
 /// One step against its log file: spawned with both streams on the file,
-/// watched. `Ok` is the step's own verdict; `Err` is a
-/// ceiling or a spawn failure — the reasons a check used to sit forever.
-/// The gate runs its steps through here too.
+/// watched. `Ok` is the step's own verdict, or the stop it was ended for;
+/// `Err` is a ceiling or a spawn failure — what would otherwise leave a
+/// check waiting forever. The gate runs its steps through here too, `stop`
+/// being its halt; everyone else hands `&|| false`. **A stop ends the
+/// step's process tree and nothing past it**: a container the step brought
+/// up goes on working, so a caller hands `stop` only to a step whose work
+/// ends with that tree or that it reaches by a mark (`gate::runner`).
 pub(crate) fn run_step(
     root: &Path,
     step: &[String],
     log: &Path,
     room: &crate::budget::Admitted,
-) -> Result<bool, String> {
+    stop: &dyn Fn() -> bool,
+) -> Result<Stepped, String> {
     let out = std::fs::File::create(log).map_err(|e| format!("{}: {e}", log.display()))?;
     let err = out
         .try_clone()
@@ -387,7 +404,21 @@ pub(crate) fn run_step(
     );
     loop {
         if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
-            return Ok(status.success());
+            return Ok(Stepped::Exited(status.success()));
+        }
+        if stop() {
+            let (reaped, _ended) = crate::reap::reap(&mut child);
+            // Into the step's own log, which is what a reader of the run
+            // opens: the step did not fail, it was ended.
+            let note = format!(
+                "\n[gate] ended here: the run went red elsewhere — {}\n",
+                reaped.line()
+            );
+            if let Ok(mut file) = std::fs::OpenOptions::new().append(true).open(log) {
+                use std::io::Write;
+                let _unsaid = file.write_all(note.as_bytes());
+            }
+            return Ok(Stepped::Stopped);
         }
         let len = std::fs::metadata(log).map(|m| m.len()).unwrap_or(0);
         wait.saw(format!("{len} bytes of log"));
@@ -399,5 +430,54 @@ pub(crate) fn run_step(
                 reaped.line()
             ));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Stepped, run_step};
+    use crate::budget::{Ask, Pool, Rank};
+    use crate::yard::Yard;
+
+    /// A step that says it is running, then outlives any test: what ends
+    /// it has to be the stop.
+    fn sleeper() -> Vec<String> {
+        let line: &[&str] = if cfg!(windows) {
+            &[
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Write-Output ready; Start-Sleep -Seconds 600",
+            ]
+        } else {
+            &["sh", "-c", "echo ready; sleep 600"]
+        };
+        line.iter().map(|word| (*word).to_string()).collect()
+    }
+
+    /// The stop is asked for once the step has said it is running, so what
+    /// comes back `Stopped` is a step ended mid-run and not one that never
+    /// started; the log says so for whoever opens it.
+    #[test]
+    fn a_step_told_to_stop_is_ended_where_it_stands() {
+        let dir = Yard::new("check-stop");
+        let room = Pool::at(&dir, 24)
+            .admit(&Ask {
+                weight: 1,
+                rank: Rank::Normal,
+                seat: "t",
+                what: "the sleeper",
+            })
+            .unwrap();
+        let log = dir.join("step.log");
+        let running = || std::fs::read_to_string(&log).is_ok_and(|text| text.contains("ready"));
+        let ended = run_step(&dir, &sleeper(), &log, &room, &running).unwrap();
+        assert_eq!(ended, Stepped::Stopped);
+        let text = std::fs::read_to_string(&log).unwrap();
+        assert!(
+            text.contains("ended here: the run went red elsewhere"),
+            "{text}"
+        );
     }
 }

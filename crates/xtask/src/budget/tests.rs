@@ -442,6 +442,44 @@ fn a_ticket_takes_its_own_files_with_it() {
     assert_eq!(files(), 0, "the ticket outlived its holder");
 }
 
+/// A wait for room given up (`admit_unless`, a gate gone red) comes back
+/// with no ticket and leaves none behind: the room it stood in line for
+/// is not held for a run that has nothing left to start.
+#[test]
+fn a_wait_given_up_leaves_no_ticket() {
+    let dir = common("given-up");
+    let pool = Pool::at(&dir, 4);
+    let holder = pool
+        .admit(&ask("clippy", 4, Rank::Normal, "a"))
+        .expect("a ticket");
+    // Asked between looks at a ledger that had no room: the first ask is
+    // the word that the unit is in line, and the answer is the test's.
+    let (said, asked) = std::sync::mpsc::channel();
+    let given_up = std::sync::atomic::AtomicBool::new(false);
+    let result = std::thread::scope(|scope| {
+        let waiter = scope.spawn(|| {
+            pool.admit_unless(&ask("verb", 1, Rank::Normal, "b"), &|| {
+                let _ = said.send(());
+                given_up.load(std::sync::atomic::Ordering::SeqCst)
+            })
+        });
+        crate::wait::heard("the test", "the unit in line", &asked);
+        given_up.store(true, std::sync::atomic::Ordering::SeqCst);
+        waiter.join().expect("the waiter's thread")
+    });
+    assert!(
+        result.expect("no error").is_none(),
+        "a wait that was given up came back admitted"
+    );
+    let tickets = std::fs::read_dir(dir.join(DIR))
+        .expect("the ledger")
+        .flatten()
+        .filter(|entry| entry.file_name().to_string_lossy().starts_with("t-"))
+        .count();
+    assert_eq!(tickets, 2, "only the holder's ticket and its lock stand");
+    drop(holder);
+}
+
 /// A gate whose ticket is refused by nothing still says what it is
 /// waiting behind: what `cargo xtask budget` prints, and what a wait
 /// that ran out has to name.

@@ -132,6 +132,28 @@ impl Pool {
         self.admit(ask)
     }
 
+    /// The same, given up the moment `stop` says so while the unit still
+    /// waits — for a measurement to let the machine go, or for room:
+    /// `Ok(None)` is a unit that was never admitted, and its ticket goes
+    /// with it. A gate that has gone red takes nothing more of the
+    /// machine (`gate::halt`) — least of all the room another seat is
+    /// waiting for.
+    pub(crate) fn admit_unless(
+        &self,
+        ask: &Ask<'_>,
+        stop: &dyn Fn() -> bool,
+    ) -> Result<Option<Admitted>, String> {
+        if let Some(common) = self.dir.parent()
+            && !crate::still::until_free_in_unless(common, ask.what, stop)?
+        {
+            return Ok(None);
+        }
+        if self.carried {
+            return Ok(Some(Admitted::carried()));
+        }
+        self.queued_unless(ask, false, &|| {}, &|| {}, stop)
+    }
+
     /// Takes this landing's turn, waiting for the landings that arrived
     /// before it. Outside the budget: a turn asks for none of the
     /// machine, and the landing's own units ask under [`Rank::Landing`].
@@ -208,6 +230,20 @@ impl Pool {
         arrived: &dyn Fn(),
         polled: &dyn Fn(),
     ) -> Result<Admitted, String> {
+        self.queued_unless(ask, turn, arrived, polled, &|| false)?
+            .ok_or_else(|| format!("{}: the wait for room was given up", ask.what))
+    }
+
+    /// [`Self::queued`], looking at `stop` between looks at the ledger: a
+    /// wait it ends comes back `None`, the ticket dropped with it.
+    fn queued_unless(
+        &self,
+        ask: &Ask<'_>,
+        turn: bool,
+        arrived: &dyn Fn(),
+        polled: &dyn Fn(),
+        stop: &dyn Fn() -> bool,
+    ) -> Result<Option<Admitted>, String> {
         std::fs::create_dir_all(&self.dir)
             .map_err(|e| format!("could not make {}: {e}", self.dir.display()))?;
         let (seq, held, paths) = self.register(ask, turn)?;
@@ -234,7 +270,10 @@ impl Pool {
                 } else {
                     Duration::ZERO
                 };
-                return Ok(mine);
+                return Ok(Some(mine));
+            }
+            if stop() {
+                return Ok(None);
             }
             // The queue moving is what renews the silence budget, so a
             // wait behind a hundred units is not read as a hang and a

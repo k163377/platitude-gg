@@ -39,8 +39,8 @@ commands:
       --verb the summary says the touched verbs still have to run — it
       never passes for the whole of stage 2 on its own.
 
-  gate [--host-only] [--all] [--fresh] [--dry-run] [--verb <line>]...
-       [--jobs <n>] [--dir <tree>] [--main <ref>]
+  gate [--host-only] [--all] [--fresh] [--keep-going] [--dry-run]
+       [--verb <line>]... [--jobs <n>] [--dir <tree>] [--main <ref>]
       The pre-merge tests, chosen by machine (CLAUDE.md 確認は 3 段;
       internal-docs/反映前テストの機械化.md). Reads the branch's diff
       against main, follows every file that reads a changed file — a
@@ -53,17 +53,20 @@ commands:
       the app's QML or entry point
       moved, the verify-ui verbs whose census names a reached component
       (crates/xtask/verb-census.txt, written by the
-      runs themselves), bare when the app moved. structure, waits, docs
-      and fmt run every time, and a build input that changed (Cargo.toml,
-      Cargo.lock, the toolchain, the Dockerfile) makes the reach the
-      whole tree. Host and container sides run in parallel;
+      runs themselves), bare when the app moved. The always-steps
+      (structure, waits, docs, verbs, fmt) run every time and first, and
+      a build input that changed (Cargo.toml, Cargo.lock, the toolchain,
+      the Dockerfile) makes the reach the whole tree. Then host and
+      container sides run in parallel;
       each step is stamped by the object ids of what it reads, so a
       second run of one commit runs nothing and a rebase reruns only
       what main's move touched. The verify-ui verbs of a side share
       nothing but the release the first of them builds, so they run
-      several at a time and a red one stops none of the others; every
-      other step of a side runs one at a time and the first red stops
-      the side. A commit whose every step is green is
+      several at a time; every other step of a side runs one at a time.
+      The first red stops the run on both sides: nothing more starts,
+      what is running is ended (a container step of its own is left to
+      finish), and each step kept from running or ended is filed as
+      halted, owed again by the next run. A commit whose every step is green is
       stamped, and the reference-transaction hook lets a session's git
       move main onto stamped commits only — a git the user runs carries
       no CLAUDECODE mark, and the hook does not answer for it. A
@@ -77,6 +80,10 @@ commands:
         --all         every file counts as changed — stage 2 in full, and the
                       `periodic` tests the daily tiers leave out
         --fresh       ignore the stamps and run everything owed
+        --keep-going  run the rest after a red (--all does): a red verb
+                      stops none of the others, the first red of a checks
+                      group stops that group, and what passed is stamped.
+                      A red always-step stops the run all the same
         --dry-run     print the reach and the steps, run nothing
         --verb <l>    a verify-ui line to run besides the census's
         --jobs <n>    this gate's verbs at a time per side (default: a

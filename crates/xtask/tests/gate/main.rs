@@ -25,6 +25,7 @@ mod wait;
 
 mod budget;
 mod chips;
+mod halt;
 mod hook;
 mod landing;
 mod permit;

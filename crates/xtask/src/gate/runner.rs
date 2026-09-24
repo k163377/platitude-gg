@@ -26,70 +26,40 @@ fn no_build_log(fake: &str) -> String {
     format!("{fake}.no-build")
 }
 
+/// The tests' switch for a step that is still running when the run goes
+/// red elsewhere: a faked step it names holds until the halt reaches it
+/// ([`faked`]), which is the one moment a test cannot otherwise put a
+/// step in — faked steps end the instant they start.
+pub(super) const FAKE_HOLD: &str = "PGG_GATE_FAKE_HOLD";
+
+/// And the order the two meet in: a step `PGG_GATE_FAKE_FAIL` names goes
+/// red only once the step this names has started ([`faked`]) — the run's
+/// sides are two threads, and without it the red can come first and end
+/// the held step at its door instead.
+pub(super) const FAKE_FAIL_AFTER: &str = "PGG_GATE_FAKE_FAIL_AFTER";
+
+/// How a step that was started came back, short of red.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Finished {
+    Green,
+    /// Ended by the run's halt before it could answer (`super::halt`).
+    Halted,
+}
+
 /// One step, through `check`'s watched runner, its xtask launcher
 /// swapped for the runner copy ([`launched`]). With `PGG_GATE_FAKE_LOG`
-/// set the step is not run at all: its id is appended to that file and
-/// it passes, unless `PGG_GATE_FAKE_FAIL` names it — which is how the
-/// tests watch selection and caching without a toolchain in the
-/// throwaway repository. `PGG_GATE_FAKE_REWRITE` names a step that
-/// rewrites the census the way a passing verb does: one line put in,
-/// once, so the run after the commit of it finds nothing to move.
+/// set the step is not run at all ([`faked`]) — which is how the tests
+/// watch selection and caching without a toolchain in the throwaway
+/// repository.
 pub(super) fn execute_step(
     ground: &Ground<'_>,
     id: &str,
     command: &[String],
     log: &Path,
     room: &crate::budget::Admitted,
-) -> Result<(), String> {
-    let dir = ground.dir;
+) -> Result<Finished, String> {
     if let Ok(fake) = std::env::var(FAKE_LOG) {
-        use std::io::Write;
-        // Both sides append from their own thread: one write per line,
-        // under one lock, or the ids interleave mid-word.
-        static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _turn = ONE_AT_A_TIME.lock().map_err(|e| e.to_string())?;
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&fake)
-            .map_err(|e| format!("{fake}: {e}"))?;
-        file.write_all(format!("{id}\n").as_bytes())
-            .map_err(|e| e.to_string())?;
-        if command.iter().any(|word| word == "--no-build") {
-            let mut told = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(no_build_log(&fake))
-                .map_err(|e| format!("{fake}: {e}"))?;
-            told.write_all(format!("{id}\n").as_bytes())
-                .map_err(|e| e.to_string())?;
-        }
-        let failing = std::env::var("PGG_GATE_FAKE_FAIL").unwrap_or_default();
-        if failing.split(',').any(|f| f == id) {
-            return Err("failed on purpose (PGG_GATE_FAKE_FAIL)".into());
-        }
-        if let Some(line) = id.strip_prefix("verify ")
-            && std::env::var("PGG_GATE_FAKE_REWRITE").is_ok_and(|step| step == id)
-        {
-            // The verb's own line with one more name on it — the shape
-            // of a run that met a component it had not before.
-            let path = dir.join(census::FILE);
-            let text = std::fs::read_to_string(&path).unwrap_or_default();
-            let rewritten: String = text
-                .lines()
-                .map(|held| {
-                    if held.starts_with(&format!("{line}\t")) && !held.ends_with(" Theme") {
-                        format!("{held} Theme\n")
-                    } else {
-                        format!("{held}\n")
-                    }
-                })
-                .collect();
-            if rewritten != text {
-                std::fs::write(&path, rewritten).map_err(|e| format!("{}: {e}", path.display()))?;
-            }
-        }
-        return Ok(());
+        return faked(ground, id, command, &fake);
     }
     // A verb of the Linux side that goes into the gate's container is
     // marked for it, by this run and this log's name: what a stop is
@@ -98,8 +68,15 @@ pub(super) fn execute_step(
         .container
         .filter(|_| into_the_container(command))
         .map(|_| step_mark(ground.run, log));
+    // **Ended by the halt only where everything it started ends with
+    // it**: out here the step's process tree, in the gate's container the
+    // processes that carry its mark. Any other `linux` line brings up a
+    // container of its own, which goes on working when its launcher is
+    // ended — so it is left to finish and filed as it ends, holding its
+    // room for as long as its container works (`budget`).
+    let stoppable = mark.is_some() || !starts_its_own_container(command);
     match crate::check::run_step(
-        dir,
+        ground.dir,
         &launched(
             command,
             ground.runner,
@@ -109,9 +86,20 @@ pub(super) fn execute_step(
         ),
         log,
         room,
+        &|| stoppable && ground.halt.raised(),
     ) {
-        Ok(true) => Ok(()),
-        Ok(false) => Err(format!(
+        Ok(crate::check::Stepped::Exited(true)) => Ok(Finished::Green),
+        // Ended out here for the run's halt: what it started inside the
+        // container is reached by its mark, as at a ceiling below.
+        Ok(crate::check::Stepped::Stopped) => {
+            if let (Some(container), Some(mark)) = (ground.container, &mark) {
+                let said = crate::linux::container::stop_step(container, mark, ground.logs)
+                    .unwrap_or_else(|line| line);
+                println!("[{}] {id}: inside the container, {said}", ground.name);
+            }
+            Ok(Finished::Halted)
+        }
+        Ok(crate::check::Stepped::Exited(false)) => Err(format!(
             "exited non-zero (log: {})\n{}",
             log.display(),
             crate::check::log_tail(log)
@@ -131,6 +119,103 @@ pub(super) fn execute_step(
             _ => Err(why),
         },
     }
+}
+
+/// A step of the tests' faked runs ([`FAKE_LOG`]): its id appended to
+/// that file, and then green — or red where `PGG_GATE_FAKE_FAIL` names
+/// it, held where [`FAKE_HOLD`] does. `PGG_GATE_FAKE_REWRITE` names a
+/// step that rewrites the census the way a passing verb does: one line
+/// put in, once, so the run after the commit of it finds nothing to move.
+fn faked(
+    ground: &Ground<'_>,
+    id: &str,
+    command: &[String],
+    fake: &str,
+) -> Result<Finished, String> {
+    use std::io::Write;
+    // Both sides append from their own thread: one write per line,
+    // under one lock, or the ids interleave mid-word. Let go before
+    // a held step waits, which is for the other side's red.
+    static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    {
+        let _turn = ONE_AT_A_TIME.lock().map_err(|e| e.to_string())?;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(fake)
+            .map_err(|e| format!("{fake}: {e}"))?;
+        file.write_all(format!("{id}\n").as_bytes())
+            .map_err(|e| e.to_string())?;
+        if command.iter().any(|word| word == "--no-build") {
+            let mut told = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(no_build_log(fake))
+                .map_err(|e| format!("{fake}: {e}"))?;
+            told.write_all(format!("{id}\n").as_bytes())
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    let failing = std::env::var("PGG_GATE_FAKE_FAIL").unwrap_or_default();
+    if failing.split(',').any(|f| f == id) {
+        if let Ok(after) = std::env::var(FAKE_FAIL_AFTER) {
+            let mut wait = crate::wait::Wait::new(
+                format!("{after} to start before {id} goes red"),
+                crate::wait::Budget::whole(crate::check::STEP_CEILING),
+                crate::wait::LOOK_AGAIN,
+            );
+            while !std::fs::read_to_string(fake)
+                .unwrap_or_default()
+                .lines()
+                .any(|started| started == after)
+            {
+                wait.look_again("the step to start")
+                    .map_err(|expired| expired.to_string())?;
+            }
+        }
+        return Err("failed on purpose (PGG_GATE_FAKE_FAIL)".into());
+    }
+    if std::env::var(FAKE_HOLD).is_ok_and(|held| held == id) {
+        let mut wait = crate::wait::Wait::new(
+            format!("the held step {id}"),
+            crate::wait::Budget::whole(crate::check::STEP_CEILING),
+            crate::wait::LOOK_AGAIN,
+        );
+        while !ground.halt.raised() {
+            wait.look_again("the run's halt")
+                .map_err(|expired| expired.to_string())?;
+        }
+        return Ok(Finished::Halted);
+    }
+    if let Some(line) = id.strip_prefix("verify ")
+        && std::env::var("PGG_GATE_FAKE_REWRITE").is_ok_and(|step| step == id)
+    {
+        // The verb's own line with one more name on it — the shape
+        // of a run that met a component it had not before.
+        let path = ground.dir.join(census::FILE);
+        let text = std::fs::read_to_string(&path).unwrap_or_default();
+        let rewritten: String = text
+            .lines()
+            .map(|held| {
+                if held.starts_with(&format!("{line}\t")) && !held.ends_with(" Theme") {
+                    format!("{held} Theme\n")
+                } else {
+                    format!("{held}\n")
+                }
+            })
+            .collect();
+        if rewritten != text {
+            std::fs::write(&path, rewritten).map_err(|e| format!("{}: {e}", path.display()))?;
+        }
+    }
+    Ok(Finished::Green)
+}
+
+/// Whether a plan's step is the `linux` task bringing up a container of
+/// its own (`docker run --rm`) — every `linux` line except the verbs that
+/// go into the gate's container by their mark ([`into_the_container`]).
+fn starts_its_own_container(command: &[String]) -> bool {
+    command.iter().any(|word| word == "linux")
 }
 
 /// The mark a step's processes carry inside the gate's container: this
@@ -223,9 +308,10 @@ pub(super) fn runner(
     // would be refused by a live pid saying nothing.
     let build_log = logs.join(format!("{RUNNER}build-{}.log", std::process::id()));
     let build = ["cargo", "build", "--locked", "-p", "xtask"].map(String::from);
-    match crate::check::run_step(dir, &build, &build_log, &room) {
-        Ok(true) => {}
-        Ok(false) => {
+    match crate::check::run_step(dir, &build, &build_log, &room, &|| false) {
+        Ok(crate::check::Stepped::Exited(true)) => {}
+        // Nothing asks this build to stop: it comes before either side.
+        Ok(crate::check::Stepped::Exited(false) | crate::check::Stepped::Stopped) => {
             return Err(format!(
                 "the task runner did not build in {}:\n{}",
                 dir.display(),
@@ -285,6 +371,11 @@ pub(super) fn runner(
 ///
 /// **A failure here is the side's failure**, reported with no step run.
 /// There is no road from here back to `cargo xtask` (`linux::runner`).
+/// A run that goes red while this waits for room gets `None` back as if
+/// no copy were wanted. **Once it builds it builds to its end**: the build
+/// is a container of its own, which its launcher's end would not stop
+/// ([`execute_step`]). Either way, every step of the side then meets the
+/// halt at its own door (`super::run_one`).
 pub(super) fn linux_runner(
     ground: &Ground<'_>,
     steps: &[&Required],
@@ -300,14 +391,18 @@ pub(super) fn linux_runner(
     let name = ground.run.to_string();
     // A compile like any other and out of the same budget as [`runner`]'s
     // own build: a container's cargo is this machine's cargo.
-    let room = ground
-        .pool
-        .admit_once_the_machine_is_free(&crate::budget::Ask {
+    let Some(room) = ground.pool.admit_unless(
+        &crate::budget::Ask {
             weight: crate::budget::COMPILE,
             rank: ground.rank,
             seat: ground.seat,
             what: "the container's task runner",
-        })?;
+        },
+        &|| ground.halt.raised(),
+    )?
+    else {
+        return Ok(None);
+    };
     ground.waited.add(room.waited);
     // One name, written over by the next gate here, as a step's log is
     // (`super::log_of`): a tree runs one gate at a time (`lanes::sole`),
@@ -331,9 +426,10 @@ pub(super) fn linux_runner(
         "--gate".to_string(),
         std::process::id().to_string(),
     ];
-    match crate::check::run_step(ground.dir, &line, &log, &room) {
-        Ok(true) => Ok(Some(name)),
-        Ok(false) => Err(format!(
+    match crate::check::run_step(ground.dir, &line, &log, &room, &|| false) {
+        Ok(crate::check::Stepped::Exited(true)) => Ok(Some(name)),
+        Ok(crate::check::Stepped::Stopped) => Ok(None),
+        Ok(crate::check::Stepped::Exited(false)) => Err(format!(
             "the container's task runner did not build (log: {})\n{}",
             log.display(),
             crate::check::log_tail(&log)

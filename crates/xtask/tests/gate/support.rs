@@ -113,6 +113,8 @@ impl Sandbox {
             .env("LC_ALL", "C")
             .env("PGG_GATE_FAKE_LOG", &self.fake_log)
             .env_remove("PGG_GATE_FAKE_FAIL")
+            .env_remove("PGG_GATE_FAKE_FAIL_AFTER")
+            .env_remove("PGG_GATE_FAKE_HOLD")
             .env_remove("PGG_GATE_SKIP")
             // This suite runs as a step of a gate, which marks every
             // child of a step as running under its ticket. That mark

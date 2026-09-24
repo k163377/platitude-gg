@@ -264,12 +264,23 @@ pub(crate) fn busy(tree: &Path, what: &str) -> Result<Busy, String> {
 /// directory its ledger stands in, and the hold stands beside it
 /// (`budget::Pool::admit_once_the_machine_is_free`).
 pub(crate) fn until_free_in(common: &Path, what: &str) -> Result<(), String> {
+    until_free_in_unless(common, what, &|| false).map(|_free| ())
+}
+
+/// The same, given up the moment `stop` says so: `Ok(false)` is a wait
+/// that ended with the machine still held — what a gate that has gone
+/// red asks for, since it has nothing left to run (`budget::Pool::admit_unless`).
+pub(crate) fn until_free_in_unless(
+    common: &Path,
+    what: &str,
+    stop: &dyn Fn() -> bool,
+) -> Result<bool, String> {
     if std::env::var_os(UNDER).is_some() {
-        return Ok(());
+        return Ok(true);
     }
     let mut wait = Wait::new(what, Budget::whole(HOLD_CEILING), LOOK_AGAIN);
     let mut said = false;
-    wait_for_hold(&common.join(HOLD), what, &mut wait, &mut said, &|| {})
+    wait_for_hold(&common.join(HOLD), what, &mut wait, &mut said, &|| {}, stop)
 }
 
 /// This workspace, and the build in it announced: the two lines a verb
@@ -467,7 +478,7 @@ fn announce(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Announced, S
     let mut wait = Wait::new(what, Budget::whole(HOLD_CEILING), LOOK_AGAIN);
     let mut said = false;
     loop {
-        wait_for_hold(&hold, what, &mut wait, &mut said, polled)?;
+        wait_for_hold(&hold, what, &mut wait, &mut said, polled, &|| false)?;
         std::fs::create_dir_all(&busy)
             .map_err(|e| format!("could not make {}: {e}", busy.display()))?;
         let note = busy.join(format!(
@@ -548,18 +559,23 @@ fn lock_beside_polled(note: &Path, polled: &dyn Fn()) -> Result<Locked, String> 
     }
 }
 
-/// Waits until no live hold stands at `hold`, clearing a dead one.
+/// Waits until no live hold stands at `hold`, clearing a dead one — or
+/// until `stop` says so, which answers `false`.
 fn wait_for_hold(
     hold: &Path,
     what: &str,
     wait: &mut Wait,
     said: &mut bool,
     polled: &dyn Fn(),
-) -> Result<(), String> {
+    stop: &dyn Fn() -> bool,
+) -> Result<bool, String> {
     loop {
         let Some(other) = held(hold, "a measurement")? else {
-            return Ok(());
+            return Ok(true);
         };
+        if stop() {
+            return Ok(false);
+        }
         if !*said {
             println!(
                 "  a measurement holds the machine still ({}) — {what} waits for it to end",
