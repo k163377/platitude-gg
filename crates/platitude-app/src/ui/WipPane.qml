@@ -472,7 +472,7 @@ ColumnLayout {
         /// all — assigned, it would open one card-height too low every time.
         ///
         /// **Flush on either side.** A gap is a band the pointer crosses while touching neither the card nor what it
-        /// came out of, and the words in here are read and copied now, so the hand has to be able to walk in
+        /// came out of, and the words in here are read and copied, so the hand has to be able to walk in
         /// (規約 §hover のツールチップ — the same rule the co-author card and the ref list already keep).
         y: eolCard.above ? eolCard.anchorY - eolCard.height : eolCard.anchorY
         // What put the card out is forgotten only when the card itself goes: the row's mark stays lit for as long as

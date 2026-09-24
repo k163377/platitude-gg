@@ -135,7 +135,7 @@ AppCard {
         // itself.
         //
         // A `Label`, because this is the card speaking: a note that joined the selection would be dragged out along
-        // with the message somebody came here to copy. It is a target now, so it stands on the card's sweep pad the
+        // with the message somebody came here to copy. It is a target, so it stands on the card's sweep pad the
         // way the band's badges do (規約 §右のペインの字は掴める).
         Item {
             id: noteLine

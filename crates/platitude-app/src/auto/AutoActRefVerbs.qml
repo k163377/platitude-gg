@@ -247,8 +247,8 @@ Item {
             }
         } else if (act === "tag-refused") {
             // The same row as `delete-remote-tag`, against a remote that keeps its tags (`--preset protected`).
-            // The far side turns a tag down the way it turns a branch down, and the two used to reach the screen
-            // differently — one as a report, one as an error over the log (デザイン規約 §答えの要らない報せ).
+            // The far side turns a tag down the way it turns a branch down, and the two reach the screen the same
+            // way — as a report, not as an error over the log (デザイン規約 §答えの要らない報せ).
             tagMenuTimer.begin(arg, "remote-refuse")
         } else if (act === "tag-menu" || act === "push-tag"
                    || act === "delete-remote-tag" || act === "delete-tag-both") {
@@ -398,8 +398,8 @@ Item {
             if (!refMenu.opened && !commitMenu.opened)
                 return
             chipMenuTimer.stop()
-            // `ref=` is the menu that stays down: the chip and the rest of the row are one target now, and a
-            // second menu on the chip's side is the very split this entrance was joined to end.
+            // `ref=` is the menu that stays down: the chip and the rest of the row are one target, and a
+            // second menu on the chip's side is the very split this entrance is joined to prevent.
             Harness.report("chip_menu ref=" + refMenu.opened
                                        + " commit=" + commitMenu.opened
                                        + " switch=" + switchCommitItem.offered

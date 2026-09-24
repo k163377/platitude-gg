@@ -105,7 +105,7 @@ Item {
 
     /// The window is up: the verbs may start, and the shot clock with them.
     ///
-    /// **Held until the strip holds every folder the run named.** Where a folder opens is git's answer now
+    /// **Held until the strip holds every folder the run named.** Where a folder opens is git's answer
     /// (デザイン規約 §タブの所作), so the tabs asked for above arrive over the frames after this call — and a verb
     /// that read the strip in between would be reading a strip still filling (measured: `tab-widths` reported one
     /// tab of sixteen). **One gate for every window verb**: the alternative is this precondition written into each

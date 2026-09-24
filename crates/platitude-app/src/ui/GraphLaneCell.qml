@@ -66,7 +66,7 @@ Item {
     /// **The lanes reach `fullWidth`, but only the column is ever on screen while the graph is not sent sideways**,
     /// and a canvas is an image the size of the item it is: at the reference repository the lanes are several times
     /// the width the column shows, on every row that is built, and the same ratio again on every repaint — two
-    /// full-width canvases a row put tens of megabytes on the working set once the graph had been scrolled through
+    /// full-width canvases a row would put tens of megabytes on the working set once the graph is scrolled through
     /// (ci/baseline/code-costs-windows-x64.md §メモリの形).
     ///
     /// **Full width while it is sent sideways**, because that is what needs the rest of it: the picture is slid by
@@ -93,7 +93,7 @@ Item {
     // One clipper for the row's whole ink, and it is the faces': `spaceSm` past the column, up to where the message
     // tick stands, so a narrowing column or a sideways pan slides the clip edge over the badge's gap
     // (規約 §グラフ列は最も広い所のレーンまで). The lanes stop at the column's own edge, which
-    // is a clip *inside* the paint now — one canvas holds both inks, and only the faces lean past.
+    // is a clip *inside* the paint — one canvas holds both inks, and only the faces lean past.
     //
     // One canvas, the lanes under and the faces over: a canvas is an image plus the texture it
     // uploads, and two would double both on every row that exists and again on every repaint, for two inks that are
@@ -158,7 +158,7 @@ Item {
                 ctx.clearRect(0, 0, width, height)
                 // ---- the lanes, and the marks that ride them, held to the column's edge ----
                 // In canvas coordinates that edge is `xOffset + laneCell.width`: the canvas is slid left by
-                // `xOffset`, and the cell is the column. This rect is the clip the lanes' own item used to be.
+                // `xOffset`, and the cell is the column. This rect is the lanes' clip; they have no item of their own.
                 ctx.save()
                 ctx.beginPath()
                 ctx.rect(0, 0, laneCell.xOffset + laneCell.width, height)

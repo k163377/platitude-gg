@@ -7,8 +7,8 @@ import platitude.ui
 //
 // **A condition table and a component, and nothing between them.** Which report arrived is the page's to decide and
 // the headless verbs prove it; what is left once the kind is in hand is a switch over that kind and a bar that wears
-// its answers — both of them here, where every arm can be asked for the price of one process. The verb that used to
-// walk the arms raised a whole window per kind and read the same three strings back off one hairline.
+// its answers — both of them here, where every arm can be asked for the price of one process. A verb walking the arms
+// would raise a whole window per kind to read the same three strings back off one hairline.
 Item {
     id: root
     width: 420

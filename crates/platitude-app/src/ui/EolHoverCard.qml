@@ -9,8 +9,8 @@ import platitude.ui
 // name down from, and the same sentence the diff pane puts above the hunks.
 //
 // A card, for the reason `CommitHoverCard` is one: a tooltip holds one string in one
-// colour, and this has two lines of which only the second is warning-coloured. The ground is no longer the reason —
-// tooltips stand on this same card now (`SharedToolTip`).
+// colour, and this has two lines of which only the second is warning-coloured. The ground is not the reason —
+// tooltips stand on this same card (`SharedToolTip`).
 //
 // It is a card to read. Whoever wants the lines themselves opens the diff, which is one click away on the row
 // the card came from.

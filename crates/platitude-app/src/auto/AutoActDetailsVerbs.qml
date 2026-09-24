@@ -88,9 +88,7 @@ Item {
             // branch (`Number("")` is 0): row 0 is the working tree's wherever the tree is dirty, and
             // both presets this verb is pointed at are (`basic`, `edges`). Landing there puts the WIP pane in
             // front and empties the selection, so the card below can never settle and the run says nothing at all
-            // until the watchdog — a whole ceiling of `cardSettled=false` with no report of any kind, on both OSes
-            // (The verb had only ever been run with its row, so this had been red since it was
-            // written).
+            // until the watchdog — a whole ceiling of `cardSettled=false` with no report of any kind, on both OSes.
             if (arg !== "")
                 page.activateRow(graphModel.oidAt(Number(arg)))
             detailsFitTimer.start()
@@ -98,8 +96,8 @@ Item {
             // Both sides of the corner's one rule: preset `basic` leaves the corner bare, `long` runs rows into it.
             // Read as a pair — one half alone frames like a label always on, or always off.
             //
-            // The pane is named, never defaulted: a bare run used to mean this same `wip`, which is one path entered
-            // twice by two lines (xtask refuses the empty argument now).
+            // The pane is named, never defaulted: a bare run meaning this same `wip` would be one path entered twice
+            // by two lines, so xtask refuses the empty argument.
             if (arg === "wip")
                 page.showWip()
             else

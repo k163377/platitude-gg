@@ -73,7 +73,7 @@ QtObject {
     readonly property int messageMinW: 160
     // The floor under each of the two boxes a question bar asks its `<remote>/<branch>` in. They fill the bar
     // — the room is there, and a name cut while the bar is half empty is a name cut
-    // for nothing — but neither goes under this, which is the width they used to be given outright
+    // for nothing — but neither goes under this, and past it the name scrolls inside its own box
     // (デザイン規約 §レイアウト初期値).
     readonly property int askFieldMinW: 160
     readonly property int hoverBodyRows: 4

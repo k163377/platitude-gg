@@ -156,7 +156,7 @@ QtObject {
     readonly property real graphColWMax: Math.max(graphColWMin,
         Math.min(graphFullW, paneW - labelW - Metrics.messageMinW))
     /// Whether the column is the only width it can be — nothing left between its ceiling and its floor but the tail
-    /// gap. Even a one-lane history keeps a real drag now: its full width holds the gap after the last lane, the floor
+    /// gap. Even a one-lane history keeps a real drag: its full width holds the gap after the last lane, the floor
     /// tucks the tick against the badge, and the stretch between the two does something. The divider draws no line and
     /// turns the cursor away only when the window has squeezed the ceiling down onto the floor and a drag would come to
     /// nothing (規約 §グラフ列は最も広い所のレーンまで).

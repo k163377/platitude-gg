@@ -179,8 +179,8 @@ Item {
     /// the **first** start that came away with nothing and what the sweep saw while it did: a line reporting only its
     /// last try is reporting the one that worked.
     ///
-    /// `extra` is whatever else that verb has to say, and it goes in ahead of the numbers so a `must_say` written
-    /// against the older shape still reads as one run of words (`card_sweep … hand=true open=true`).
+    /// `extra` is whatever else that verb has to say, and it goes in ahead of the numbers so a `must_say` naming it
+    /// reads as one run of words (`card_sweep … hand=true open=true`).
     function sweepAir(steps, extra) {
         const air = pad.airPoints(steps)
         let reach = 0

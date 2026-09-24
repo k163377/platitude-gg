@@ -166,9 +166,9 @@ Item {
         function test_the_blank_right_of_the_line_is_the_line_s_own_end_data() { return lines() }
 
         /// **The reported bug** (2026-09-08): a point past the last character of the row is the row's end and no
-        /// place inside it, however far past. The walk of columns it used to be read by went on counting characters
-        /// that were never drawn — four hundred combining pairs end at 3,200px and were still answering with places
-        /// in the middle of the line at 4,000.
+        /// place inside it, however far past. A walk of columns goes on counting characters that are never drawn —
+        /// read by one, four hundred combining pairs end at 3,200px and still answer with places in the middle of the
+        /// line at 4,000.
         function test_the_blank_right_of_the_line_is_the_line_s_own_end(data) {
             const spelled = shown(data.line)
             const markup = root.markupOf(data.line)

@@ -84,7 +84,7 @@ Item {
             // because after it this page is reading that copy and would answer the question with itself.
             //
             // Entered by the ref row's own road (`switchToRef`), the same one the two shapes above take: the whole
-            // claim is that this road no longer ends in a bar.
+            // claim is that this road does not end in a bar.
             switchHeldTimer.wanted = sidebarPane.worktreesModel.worktreeHolding(arg)
             page.switchToRef("branch", arg)
             switchHeldTimer.start()
@@ -164,7 +164,7 @@ Item {
             // mark in a full window is not something the picture answers (verify-ui §目視).
             const want = arg.split(":")
             switchMarkTimer.want = want.length > 1 ? want[1] : ""
-            // The sidebar's row, which is where this menu lives now — the graph's own `switch` row is a row of the
+            // The sidebar's row, which is where this menu lives — the graph's own `switch` row is a row of the
             // commit menu, and `chip-menu` says whether it was offered there.
             page.openRefMenu("branch", want[0], want[0], branchesModel.oidOfName(want[0]))
             switchMarkTimer.start()

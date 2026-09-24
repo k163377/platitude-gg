@@ -73,7 +73,7 @@ Item {
                               + " name=" + remoteDialog.wantedName)
         } else if (act === "publish-upstream") {
             // **What a push does with an upstream the far side does not have yet.** The branch is pointed at a name
-            // nothing here answers to — the answer the upstream question now takes (デザイン規約
+            // nothing here answers to — the answer the upstream question takes (デザイン規約
             // §ブランチが測られる相手を決める) — and then the toolbar's own press is made: the question it raises
             // has to open on that name, or the answer just given is asked for again and thrown away.
             //

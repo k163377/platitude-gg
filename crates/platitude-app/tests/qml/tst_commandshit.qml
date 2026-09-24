@@ -126,8 +126,8 @@ Item {
         function test_the_blank_right_of_the_column_is_its_own_end_data() { return columns() }
 
         /// **The reported bug**: a point past the last character of the column is the column's end and no place
-        /// inside it, however far past. The walk of columns it used to be read by went on counting characters that
-        /// were never drawn, so a drag out to the right of the panel selected a byte in the middle of the line.
+        /// inside it, however far past. A walk of columns goes on counting characters that are never drawn, so read by
+        /// one, a drag out to the right of the panel selects a byte in the middle of the line.
         function test_the_blank_right_of_the_column_is_its_own_end(data) {
             shown(data.text)
             const ink = drawn.implicitWidth

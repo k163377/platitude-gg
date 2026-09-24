@@ -9,11 +9,10 @@ import platitude.ui
 // proves it (`PGG_AUTO_ACT=badges`); what is left once the widths are in hand is a function of numbers, asked here
 // for the price of a function call instead of a window, a repository with a stopped merge in it, and a tab per name.
 //
-// The verb used to reach the shapes by naming window widths — 1440, 1200 with six tabs, 1000 with sixteen — and a
-// width does not name a shape: the same number lands in different ones on different fonts. Measured 2026-09-18, the
-// run meant for the folded shape folded on Windows (`cap=31` under a floor of 33) and kept its words on Linux
-// (`cap=37` over a floor of 35), so on Linux that shape was never photographed at all — and nothing said so, because
-// the shape was in no `must_say`.
+// A window width does not name a shape: the same number lands in different ones on different fonts. Measured
+// 2026-09-18, one width meant for the folded shape folded on Windows (`cap=31` under a floor of 33) and kept its words
+// on Linux (`cap=37` over a floor of 35) — a verb that reached the shapes by naming window widths would never
+// photograph that shape on Linux, and nothing would say so unless the shape is in a `must_say`.
 Item {
     id: root
     width: 400
@@ -21,7 +20,7 @@ Item {
 
     /// The costs the group works in, named here rather than measured: what a boundary case is about is the
     /// arithmetic on either side of it, and a cost read off the platform's UI font moves the boundary between
-    /// machines — which is what made these cases a window's to answer in the first place. They are the shape of the
+    /// machines — which is what would make these cases a window's to answer. They are the shape of the
     /// real ones (Windows offscreen: `badgeMin=33`, a three-badge group asking for 227), not a claim about any
     /// machine's.
     readonly property real gap: 4

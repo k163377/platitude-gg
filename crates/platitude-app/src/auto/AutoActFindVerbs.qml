@@ -424,7 +424,7 @@ Item {
         }
     }
     // PGG_AUTO_ACT=commands-sweep: the same text, started on the ground under the last row — the
-    // one place inside the panel's own frame where a press used to reach nothing
+    // one place inside the panel's own frame that no row is under
     // (規約 §git が言ったことを読む場所). The waits are `commands-select`'s, and the sweep is `details-sweep`'s:
     //
     // **Nine starts.** A reach that worked from a single place in the ground is exactly the fault the right

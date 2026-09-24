@@ -49,8 +49,8 @@ Rectangle {
     /// clicking one spot twice clicks the row and then the card, and those are one target.
     signal rowRenameRequested(string oidHex, var chip)
     /// How the graph's rows answer a click, for the card that stands on them (`RowHoverHost`). **The card's rows are
-    /// these rows**, so they go through this door — two surfaces that had to agree on what "the same target"
-    /// means is exactly what was wrong before.
+    /// these rows**, so they go through this door — two surfaces that have to agree on what "the same target"
+    /// means are two places for it to go wrong.
     function noteRowClick(oidHex, chip) {
         return graphList.noteClick(oidHex, chip)
     }

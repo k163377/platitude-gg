@@ -7,10 +7,10 @@ import platitude.ui
 /// What a row of the left panel opens under itself — **the three sections that open, as one table**
 /// (デザイン規約 §左メニューの所作).
 ///
-/// The parts were already shared: one list (`NavList`), one row (`NavItemDelegate`), one set of lines
-/// (`NavRowFacts` / `NavFactLine`). What each section *says* was not — it sat in the row as a run of tests on which
-/// section the row was in, and in the lines as a run of tests on which answer was filled. Both are here now, so a
-/// section's answer is one entry and the rest of the panel cannot tell the three apart.
+/// The parts are shared: one list (`NavList`), one row (`NavItemDelegate`), one set of lines
+/// (`NavRowFacts` / `NavFactLine`). What each section *says* is here and not in them — no test in the row on which
+/// section it is in, none in the lines on which answer was filled — so a section's answer is one entry and the rest of
+/// the panel cannot tell the three apart.
 ///
 /// **The relations are the same one read from different ends.** A branch names the copy holding it and the reading
 /// it is measured against; a remote-tracking ref names the branch that reads it and the copy holding *that*; a

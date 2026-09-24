@@ -23,12 +23,12 @@ Item {
     /// leaves — counted in characters, for the reason the state badges' floor is (規約 §ウィンドウの縁:
     /// the same count costs a different number of pixels in each platform's font).
     ///
-    /// **Drawn, as a wording is.** Two things went wrong the other way, and both were silent. Counted in the
-    /// family's *average* character — which is what the tab names and the state badges count in — the floor came out
-    /// **above the box** on Linux (58 against a box of 52) and the wordings were never drawn at all: an average that
-    /// counts a family's full-width glyphs is twice a mono advance, which is harmless where the box is a whole badge
-    /// word and fatal where it is one short command. Summed from the parts, it came out a hair under what the same
-    /// three glyphs are laid out at, and the cut that was meant to leave two characters left one (`p…`). Both measured.
+    /// **Drawn, as a wording is.** The two other ways go wrong, and both silently. Counted in the family's *average*
+    /// character — which is what the tab names and the state badges count in — the floor comes out **above the box**
+    /// on Linux (58 against a box of 52) and the wordings are never drawn at all: an average that counts a family's
+    /// full-width glyphs is twice a mono advance, which is harmless where the box is a whole badge word and fatal
+    /// where it is one short command. Summed from the parts, it comes out a hair under what the same three glyphs are
+    /// laid out at, and the cut meant to leave two characters leaves one (`p…`). Both measured.
     ///
     /// In the command family, whichever wording happens to be the widest: what this band says is commands, `Resume`
     /// being the one exception and the state a stopped timer leaves.

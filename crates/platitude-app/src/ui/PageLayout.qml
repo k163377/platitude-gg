@@ -134,9 +134,9 @@ QtObject {
             layout.rightPane.width,
             // The height it asks for, open or closed. A drag writes this same
             // property, so what a hand set is here; what a short window squeezed it to is not (the same rule the folded
-            // list keeps: only a chosen size is one to come back to. Measured before the window had a floor:
-            // opening the log in a 420px window wrote 168 over the 280 that had been asked for, and every launch after
-            // came back to the smaller one).
+            // list keeps: only a chosen size is one to come back to. Measured with no floor under the window:
+            // opening the log in a 420px window writes 168 over the 280 that was asked for, and every launch after
+            // comes back to the smaller one).
             layout.commandsSeat.SplitView.preferredHeight,
             // The dragged values: a column that nobody has moved reports -1 and goes on
             // following the default.

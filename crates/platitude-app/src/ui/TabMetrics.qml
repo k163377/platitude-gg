@@ -14,7 +14,7 @@ QtObject {
     /// closing marks take: a tab's `✕` is aimed at (§寸法「タブの `✕` だけは 1 段上」).
     readonly property int markSeat: Theme.iconMd
     /// The air that seat still holds around the ink, asked of the mark:
-    /// `close` is two diagonals set well inside their box, so the `spaceXs` it was once called was a pixel and a half
+    /// `close` is two diagonals set well inside their box, so calling it `spaceXs` would be a pixel and a half
     /// out. The per-kind knowledge is `NavIcon`'s and stays there — `inkRight` is arithmetic on
     /// the kind, the size and the stroke, so this answers with no scene around it.
     readonly property NavIcon closeMark: NavIcon {

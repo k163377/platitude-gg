@@ -376,7 +376,7 @@ Item {
             }
         }
     }
-    // What each list is left lighting with nothing being read — the two agree here now
+    // What each list is left lighting with nothing being read — the two agree here
     // (デザイン規約 §diff のファイル一覧). **`lit=` is the whole claim** and it is read off the rectangles
     // (`litPath`), so a run whose light was only ever in the model says `lit=false`.
     // `open=false` is what makes the answer that list's own.

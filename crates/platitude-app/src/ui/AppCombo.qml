@@ -115,7 +115,7 @@ ComboBox {
         leftPadding: Theme.spaceXs
         // **The arrow is what stops the word at this end.** The control reserves the indicator's own
         // width and no more, while the seat that indicator sits in is pushed a further `spaceSm` in from the frame
-        // (`seat.x`) — so a name longer than the box used to run on under the glyph, since a `TextInput` scrolls
+        // (`seat.x`) — so without this a name longer than the box runs on under the glyph, since a `TextInput` scrolls
         // its text. What is added here is that gap plus the same word inset the other end keeps.
         // Nothing to open, nothing to keep clear of: a field with no list keeps the plain inset, and the quarter
         // of its width an arrow would take (`tst_appcombo`, which measures the laid-out
@@ -186,9 +186,9 @@ ComboBox {
         // them a row apart would be one waiting said twice.
         readonly property bool waits: combo.loading && !combo.popup.opened
         // Two marks in one seat, because an animator **takes** the property it turns: the ring's first frame kills
-        // the binding that stands the arrow on end, and nothing puts it back when the ring stops — so the seat kept
-        // whatever angle the last frame left, and the arrow that came back pointed sideways at a list that comes
-        // **down** (observed — the merge editor's seat, after its `--tool-help` read landed). Invisible in headless,
+        // the binding that stands the arrow on end, and nothing puts it back when the ring stops — so one shared mark
+        // keeps whatever angle the last frame left, and the arrow that comes back points sideways at a list that comes
+        // **down** (observed — the merge editor's seat, after its `--tool-help` read lands). Invisible in headless,
         // where the ring is held still for the camera and the binding therefore survives. Split, the arrow keeps
         // the angle its binding gives it.
         SpinnerIcon {
@@ -275,7 +275,7 @@ ComboBox {
         y: combo.height
         width: combo.width
         padding: Theme.spaceXs
-        // Outside the *field*: the field's own press is what opens the list now, and under the
+        // Outside the *field*: the field's own press is what opens the list, and under the
         // default policy that same press closes it first — leaving a press that flickers the list,
         // and a chooser whose second press could never close it at all.
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent

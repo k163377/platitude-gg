@@ -298,7 +298,7 @@ Rectangle {
     // ---- how the three give way as the panel runs short ----------------
     // The names give first — they can be cut and still be read — and the actions keep their words for as long as
     // there is room for them beside the names at their own floor. **Not a stretch counted back from the window's
-    // floor**: the actions stand in the middle of the panel now, and a schedule read off the window's width shortens
+    // floor**: the actions stand in the middle of the panel, and a schedule read off the window's width shortens
     // the wordings while the panel still has room to the right of them — a thing nobody can see a reason for.
     /// The floor a wording is cut down to — two characters of the family this band says its wordings in
     /// (`BandWidest.wordFloor`).

@@ -307,7 +307,7 @@ Item {
                 return
             }
             // The same text, taken from the ground under the last row — the one
-            // place inside the code column where a press used to reach nothing (規約 §diff の中身をコピーする). The
+            // place inside the code column that no row is under (規約 §diff の中身をコピーする). The
             // rows have arrived by here; the view still has to lay them out, which is what the timer waits for.
             if (act === "diff-sweep") {
                 diffSweepTimer.start()
@@ -1232,7 +1232,7 @@ Item {
         }
     }
     // PGG_AUTO_ACT=diff-sweep: the diff's text taken from the ground under the last row of a short file — the one
-    // place inside the code column where a press used to reach nothing
+    // place inside the code column that no row is under
     // (規約 §diff の中身をコピーする). The shape is `details-sweep`'s, and so are its two claims:
     //
     // **Nine starts** (`reach=`). A reach that worked from a single place in the ground is exactly the fault

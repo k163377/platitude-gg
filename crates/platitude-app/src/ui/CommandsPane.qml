@@ -112,8 +112,8 @@ Rectangle {
         textPick.releaseText()
     }
     /// Automation: the same hand started on the ground under the last row — the one place inside this panel's own
-    /// frame where a press used to reach nothing (`PGG_AUTO_ACT=commands-sweep`). It goes in through the pixels,
-    /// because the pixels are the whole of what changed.
+    /// frame that no row is under (`PGG_AUTO_ACT=commands-sweep`). It goes in through the pixels, because the
+    /// pixels are the whole of the claim.
     function sweepGround(fx, fy) {
         return textPick.sweepFromGround(fx, fy)
     }
@@ -174,8 +174,8 @@ Rectangle {
             RowLayout {
                 anchors.fill: parent
                 anchors.rightMargin: Theme.spaceMd
-                // The sections' own step, now that this band opens with one of their rows: at `spaceSm` the count sat
-                // twice as far from the name here as `(2)` does from `BRANCHES`.
+                // The sections' own step, since this band opens with one of their rows: at `spaceSm` the count would
+                // sit twice as far from the name here as `(2)` does from `BRANCHES`.
                 spacing: Theme.spaceXs
 
                 // The row this band is: the mark, and the name it has been carrying all along.

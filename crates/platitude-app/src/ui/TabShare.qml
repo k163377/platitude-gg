@@ -7,9 +7,9 @@ import QtQuick
 // lays out by (デザイン規約 §ウィンドウの縁 の譲る順).
 //
 // **Split off from the measuring for what it lets be asked.** A strip that narrowed the wrong tabs has to be caught
-// at a count where the run makes it narrow them, so every case used to cost a window and a repository per tab; here
-// the run is a number, so the whole table — none, one, a mixture, the floor, the ceiling, either side of each
-// boundary — is asked in one process (`tests/qml/tst_tabwidths.qml`). What a window is still needed for is the
+// at a count where the run makes it narrow them, so through a window every case costs a window and a repository per
+// tab; here the run is a number, so the whole table — none, one, a mixture, the floor, the ceiling, either side of
+// each boundary — is asked in one process (`tests/qml/tst_tabwidths.qml`). What a window is still needed for is the
 // other half: that the widths going in are a real font's and the answers coming out reach the tabs
 // (`PGG_AUTO_ACT=tab-widths`).
 //

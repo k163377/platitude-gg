@@ -366,7 +366,7 @@ ColumnLayout {
                 onPicking: pane.openGitPicker()
             }
             // **The one button here is the way to put a git in force**, and it stands only while there is one to
-            // put — choosing is the box's own errand now, and a button that opened the same dialog beside it would
+            // put — choosing is the box's own errand, and a button that opened the same dialog beside it would
             // be a second door to one room. `warning`, and held, because the press costs the
             // window it is made in (規約 §設定の画面 / §長押し). The word carries the colour as well as the frame,
             // the way `push -f` does: what changes is what the press costs.

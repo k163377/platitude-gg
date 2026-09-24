@@ -62,7 +62,7 @@ AppDialog {
         cloneDialog.open()
     }
     /// The folder dialog answered. Its own function: the name follows the URL and
-    /// nothing else, and a caller reaching into the properties is how the two got out of step in the first place.
+    /// nothing else, and a caller reaching into the properties is how the two get out of step.
     function setFolder(url) {
         cloneDialog.parentUrl = url
     }

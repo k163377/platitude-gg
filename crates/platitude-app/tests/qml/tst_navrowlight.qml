@@ -23,8 +23,8 @@ Item {
     Column {
         id: rows
         width: 260
-        // What an open row does to the ones under it: the first grows, and the second is where the first one's line
-        // used to end.
+        // What an open row does to the ones under it: the first grows, and the second stands where the first one's
+        // line would end if it were shut.
         property bool firstOpen: false
 
         NavItemDelegate {

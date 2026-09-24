@@ -203,7 +203,7 @@ Item {
         // leave the reader looking at facts belonging to nothing.
         visible: navRow.pointed || navRow.tipPointedAt || navRow.factsOpen
     }
-    // Nothing asks a question about a row in this list any more. What one of these rows takes away is held down on
+    // Nothing asks a question about a row in this list. What one of these rows takes away is held down on
     // the menu row that names it, and that menu is standing over the row while it is held (デザイン規約 §長押し).
     // The ink of the row, one column after another (`NavRowBody`). Handed the row itself — a delegate is recycled,
     // and mirroring them here would double every binding it pays on reuse.

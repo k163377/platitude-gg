@@ -42,7 +42,7 @@ Item {
     property var standPage: null
     property int standFinished: -1
     property int standReset: -1
-    /// The command log's rows as the page was left, which is the other thing standing a tab elsewhere used to take
+    /// The command log's rows as the page was left, which is the other thing standing a tab elsewhere must not take
     /// away: the log is the record of what this window ran, and the window has not changed (`CommandMsg`).
     property int standLogged: -1
     function holdStand(page) {

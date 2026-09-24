@@ -234,13 +234,13 @@ Item {
     /// **The scene is still being built in that frame**, and the completion edge is often what builds it: a verb that
     /// finishes when the status arrives finishes in the very turn the working tree's buckets stand up, so their rows
     /// are laid out and their names drawn in the frame the grab is fulfilled in — and their marks are not, because a
-    /// `Canvas` cannot draw before the turn after the one that made it (`Ink`). The picture that came out was a list of
+    /// `Canvas` cannot draw before the turn after the one that made it (`Ink`). The picture that comes out is a list of
     /// names with an empty seat at the head of every row.
     ///
     /// So the frame is read for what it is worth and thrown away if the scene still owed ink: `Ink` says when the last
     /// mark has been drawn, and the grab is asked for again from there. A scene that was already drawn when the picture
     /// was called for — which is every verb that waits for something of its own after the edge — owes nothing and is
-    /// saved from the first grab, exactly as before.
+    /// saved from the first grab.
     function grabApp() {
         if (driver.appSaved || driver.appGrabbing)
             return

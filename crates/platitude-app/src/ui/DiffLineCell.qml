@@ -185,7 +185,7 @@ Item {
             height: Theme.iconSm
             stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
             tint: Theme.danger
-            // The words the note used to carry, kept where a mark can still hand them over. It takes no button:
+            // The words a note row would carry, kept where a mark can hand them over. It takes no button:
             // the press over the code belongs to the hand picking text out of the rows (`DiffTextSelect`).
             ToolTip.visible: noEolHover.containsMouse
             ToolTip.delay: Metrics.tipDelayMs

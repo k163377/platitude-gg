@@ -134,7 +134,7 @@ Rectangle {
     // that. **The sliver this keeps above itself at the top edge is inside it** (`topRoom`): a ground that began at the
     // row would let whatever is scrolling past show in the strip the list leaves empty when it is at rest.
     // **The ground is laid inside the list; everything else stands over it out here.** Two things have to hold at once
-    // and only this seat holds both. It has to cover the whole width — a row's message runs on under the bar now
+    // and only this seat holds both. It has to cover the whole width — a row's message runs on under the bar
     // (規約 §余白), so a band that stopped short of the bar would leave the tail of whatever is scrolling past showing
     // in that strip. And the bar stays in sight. A child of the view is drawn over the rows and
     // under the bar (`AutoScrollBar` takes `z: 1` for exactly this), which is both. The chip, the lanes and the words

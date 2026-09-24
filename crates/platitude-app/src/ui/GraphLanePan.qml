@@ -96,7 +96,7 @@ MouseArea {
         row.leftClick(modifiers)
         return true
     }
-    /// A press under the last row. The only thing down there is the window's own footer, and it takes presses now
+    /// A press under the last row. The only thing down there is the window's own footer, and it takes presses
     /// (`GraphTailFooter.loadMore`) — handed over, for the reason the rows' gestures are:
     /// what a press on the cut means is decided in one place.
     function tailPressed(at) {

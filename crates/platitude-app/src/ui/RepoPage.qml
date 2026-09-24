@@ -1965,7 +1965,7 @@ FocusScope {
         // The report that answers the landing may already be in hand (above).
         page.tryPendingHeadSelect()
         // The write moved what the two sides hold, so a diff left open on either is a picture of a file as it was —
-        // the same staleness the file list's own `+` used to leave behind.
+        // the same staleness a press on the file list's own `+` leaves, which `reloadDiff` answers.
         //
         // **Read here, where the answer is.** git has already moved the index by the time it answers, so the file's
         // diff is the new one — what has not caught up yet is the *file list*, and that is a different question
@@ -2182,9 +2182,9 @@ FocusScope {
         page.diffAwaits || repoTab.busyCount > 0 || diffModel.loading
     /// A write on the working tree has landed, so the open diff is a picture of what the file used to be.
     ///
-    /// **Whoever wrote it.** This was once asked for by the writes made inside the diff itself, and the file list's own
-    /// `+` and `−` moved the same file out from under the pane without a word: a line staged here and then unstaged
-    /// there left the line missing from both sides on screen. The caller already knows the write
+    /// **Whoever wrote it.** The file list's own `+` and `−` move the same file out from under the pane as the writes
+    /// made inside the diff do: asked for by the diff's writes alone, a line staged here and then unstaged there is
+    /// left missing from both sides on screen. The caller already knows the write
     /// was one that moves the tree (`absorbWriteResult`), so being open is the whole of the condition.
     function reloadDiff() {
         // Nothing this window writes moves another copy's file, so a copy's diff is never re-read from here — its own

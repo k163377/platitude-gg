@@ -92,8 +92,8 @@ Item {
             resetAuthorTimer.start()
         } else if (act === "stash" || act === "stash-lands") {
             // Through the band's button, which is the whole of it: nothing is asked before the write. The WIP pane is
-            // left where it is — the button stands on the window's band now, so a run that opened that pane first
-            // would be proving the reach of a pane the button no longer needs (デザイン規約 §変更を退避する).
+            // left where it is — the button stands on the window's band, so a run that opened that pane first
+            // would be proving the reach of a pane the button does not need (デザイン規約 §変更を退避する).
             //
             // **`stash-lands` is the one that opens it**, because where the reader is standing is its whole subject:
             // the press empties the tree the pane is describing, and the row it is standing on leaves the graph with

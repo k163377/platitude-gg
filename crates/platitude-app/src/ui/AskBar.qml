@@ -357,7 +357,7 @@ Rectangle {
                 holdDrive.focusLost()
             }
             // The pill draws itself, so it has to name itself. The gesture is said here
-            // because the words on it no longer carry it.
+            // because the words on it do not carry it.
             Accessible.role: Accessible.Button
             Accessible.name: bar.code !== "" ? bar.code : bar.accept
             Accessible.description: bar.hold ? Words.holdToActivate : ""

@@ -35,9 +35,8 @@ impl Hub {
     /// repository read for it anyway
     /// (ci/baseline/code-costs-windows-x64.md).
     ///
-    /// Answers `false` where there is no runtime to ask on, which is the
-    /// caller's cue to open the folder the old way and let the page say
-    /// what became of it.
+    /// Answers `false` where there is no runtime to ask on, which leaves
+    /// nothing that will ever answer the ask.
     pub fn place_repo(&self, path: PathBuf, feed: Arc<Feed<OpenMsg>>) -> bool {
         let Some(handle) = self.runtime_handle() else {
             return false;

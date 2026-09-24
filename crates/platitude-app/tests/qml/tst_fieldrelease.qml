@@ -12,8 +12,7 @@ import platitude.ui
 //
 // The shape is a dialog's: the watcher stands on the face, behind everything the screen draws, and the targets are
 // laid over it (`AppDialog`). Three of them take the focus themselves and two do not — and it is the two that this
-// file exists for, because they are the whole of what used to keep a selection lit through every press that
-// followed it.
+// file exists for, because they are the ones that would keep a selection lit through every press that follows it.
 Item {
     id: root
     width: 520

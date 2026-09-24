@@ -412,7 +412,7 @@ Item {
         // Under the group and flush with its right-hand edge: the group sits at the band's right-hand end, and a card
         // centred on it would open past the window.
         //
-        // **Flush under it as well**, with nothing between: the words in here are read and copied now, and a gap is a
+        // **Flush under it as well**, with nothing between: the words in here are read and copied, and a gap is a
         // band the pointer crosses while touching neither the card nor the mark that opened it (規約 §hover の
         // ツールチップ — the rule the co-author card and the ref list already keep).
         x: stateGroup.width - width

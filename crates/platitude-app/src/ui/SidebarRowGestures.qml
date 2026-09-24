@@ -110,7 +110,7 @@ QtObject {
             return
         // The box opens where the row is — folded, that is the section standing beside the rail, and the list stays
         // folded (デザイン規約 §左メニューを畳む: a click in a peek keeps the fold — undoing it would take the
-        // diff it was made for down). The hover that raised that section no longer decides how long it stands: the box
+        // diff it was made for down). The hover that raised that section does not decide how long it stands: the box
         // holds it open, the way a menu does (`pinned`).
         gestures.editKind = kind
         gestures.editMode = mode

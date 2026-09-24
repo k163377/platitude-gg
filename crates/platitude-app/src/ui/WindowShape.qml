@@ -131,8 +131,8 @@ Item {
     /// Everything the next launch should come back to (rules-refs/core.md — settings.toml / state.toml).
     function reportState() {
         // A minimised window says nothing. Measured on Windows: while down it reports neither its windowed nor its
-        // maximised numbers and its visibility is no longer Maximized — a report from here wrote a window wider than
-        // the screen and cleared the flag that would have restored the maximised one.
+        // maximised numbers and its visibility is no longer Maximized — a report from here would write a window wider
+        // than the screen and clear the flag that restores the maximised one.
         if (shape.window.visibility !== Window.Minimized)
             AppBackend.saveWindow(shape.window.x, shape.window.y,
                                   shape.window.width - shape.widthSlop,

@@ -48,7 +48,7 @@ Item {
         if (component.status !== Component.Ready) {
             // Unreachable, and said out loud: [`wanted`] and the module this loads from come
             // from the one Cargo feature, so a build that asks has one to load and a build that has none never
-            // asks. What used to get here was a shipped window with a stray `PGG_*` still in its environment.
+            // asks. A `wanted` read off the environment would bring a shipped window here on a stray `PGG_*`.
             console.warn("harness part " + seat.part + " did not load: " + component.errorString())
             return null
         }

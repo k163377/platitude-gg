@@ -667,7 +667,7 @@ Item {
                     detailsPane.submitMessage()
                     return true
                 })
-            // "edit-message-leave" walks away from the unsaved text. Nothing asks any more — the draft goes and the
+            // "edit-message-leave" walks away from the unsaved text. Nothing asks — the draft goes and the
             // next commit's own message arrives, which is what the shot is of.
             else if (Harness.autoAct === "edit-message-leave")
                 page.activateRow(graphModel.oidAt(graphModel.rowOf(page.selectedOid) + 1))

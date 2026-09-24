@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Window
 import platitude
 
-// What a title bar does, now that the band is one: maximise, minimise, where the grab-run is, and how the window is
+// What a title bar does, since the band is one: maximise, minimise, where the grab-run is, and how the window is
 // dressed. Pure functions over the window and the band. An invisible Item, so the first Timer or
 // Component someone adds has somewhere to stand (rules-refs/structure.md §切り出した非表示のホスト).
 Item {

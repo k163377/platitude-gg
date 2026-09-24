@@ -8,8 +8,8 @@ import platitude.ui
 // **The arithmetic and the tab, and nothing between them.** Which widths go in is the font's and the model's business
 // and the headless run proves it (`PGG_AUTO_ACT=tab-widths`); what is left once the widths are in hand is a function
 // of numbers and a delegate drawn under its answer — both of them here, where every case costs a function call
-// instead of a window and one repository per tab. The verb used to walk the counts 1, 6, 8, 9, 12 and 16 to reach the
-// states below, and each of those raised an app against real repositories to read six numbers off one report line.
+// instead of a window and one repository per tab. A verb reaching the states below by tab counts would raise an app
+// against real repositories for each of them, to read six numbers off one report line.
 Item {
     id: root
     width: 600
@@ -17,7 +17,7 @@ Item {
 
     /// The costs the strip works in, named here rather than measured: what a boundary case is about is the
     /// arithmetic on either side of it, and a cost read off the platform's UI font moves the boundary between
-    /// machines — which is what made these cases a window's to answer in the first place. They are the shape of the
+    /// machines — which is what would make these cases a window's to answer. They are the shape of the
     /// real ones (Windows offscreen, rules-refs/app-ui.md), not a claim about any machine's.
     readonly property real padL: 4
     readonly property real roomFull: 17

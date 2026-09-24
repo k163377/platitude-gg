@@ -250,7 +250,7 @@ AppCard {
         }
 
         /// What the rows came to, taken once by [`layOutRows`] and held: the widest of them, which is the width every
-        /// row is then laid out to (their highlights have to line up, and so do the chips now that they can stand
+        /// row is then laid out to (their highlights have to line up, and so do the chips, which can stand
         /// flush against either edge), and what they stack up to.
         ///
         /// **Held, because the rows a recycling list has are not the rows it holds.** Left as a binding these would

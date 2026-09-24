@@ -118,13 +118,12 @@ Rectangle {
     /// it — what a cell holds, measured. The five of this column all answer to it, because a reach that changes
     /// partway down a column of one kind of thing is a difference nobody can see and everybody feels.
     ///
-    /// **Not the ☰'s cell any more.** That one stands in the tab band, and the band is slimmer than this since the
-    /// operation panel came between them (`Theme.toolbarHeight` — TopBar): they are no longer one column, so they no
-    /// longer have to be one reach.
+    /// **Not the ☰'s cell.** That one stands in the tab band, which is slimmer than this, with the operation panel
+    /// between them (`Theme.toolbarHeight` — TopBar): they are not one column, so they do not have to be one reach.
     ///
     /// `railWidth` is the window's own outer edge, and what sets it is the mark at the head of this
-    /// column plus a step either side (§左メニューを畳む). Two questions, and once the edge came in they stopped
-    /// having one answer — a square cell would have the narrower of them decide the reach.
+    /// column plus a step either side (§左メニューを畳む). Two questions with two answers — a square cell would have
+    /// the narrower of them decide the reach.
     readonly property int cellHeight: Theme.toolbarHeight
 
     /// Where a section's cell sits, for anything that has to line up with it without the pointer having been there (the

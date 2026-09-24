@@ -19,8 +19,8 @@ Item {
 
     /// Whether this row was given the whole of the block it stands in. **The hash plate is right-aligned against this
     /// row's edge**, so a row that kept only its own width parks the plate against the end of the name and the pane's
-    /// right column stops being one (observed — the row became an Item, and a plain item in a layout
-    /// takes its implicit width and stops). A photograph shows a plate either way; it does not say which edge it was
+    /// right column stops being one (observed — a row that is a plain Item takes its implicit width in a layout
+    /// and stops). A photograph shows a plate either way; it does not say which edge it was
     /// meant to be on. **Judge it where the row is narrower than its block** (--preset authorship: 237 against 388)
     /// — where the content already overflows, a row that never filled is clamped to the same width and answers true.
     readonly property bool fillsBlock: !!authorRow.parent && authorRow.width + 0.5 >= authorRow.parent.width

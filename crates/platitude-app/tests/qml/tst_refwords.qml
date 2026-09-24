@@ -78,7 +78,7 @@ Item {
             compare(Words.nameInSentence("nothing to name here", "main", "#60A5FA"), "")
         }
 
-        /// The avatar refusals, whose words moved here off the Rust `#[error]` strings they used to be
+        /// The avatar refusals, whose words live in `Words` and not in the Rust `#[error]` strings
         /// (app-ui.md「Rust に文言を置かない」). The numbers come with the kind and have to land in the right seats —
         /// a wrong index reads as `undefined` in the card, which nothing else would catch.
         function test_an_avatar_refusal_takes_its_numbers_in_the_order_it_was_given_them() {

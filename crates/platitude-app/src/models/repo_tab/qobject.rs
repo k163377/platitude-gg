@@ -158,8 +158,8 @@ impl RepoTab {
         Notify = changed
     );
     // …and the same pair for the pushes a ref row sends, which answer
-    // under the same word and used to lose their refusal to whatever
-    // else came back in the drain (`ops::PushOut`).
+    // under the same word and would otherwise lose their refusal to
+    // whatever else came back in the drain (`ops::PushOut`).
     qproperty!("refPushAnswer", Member = ref_push_answer, Notify = changed);
     qproperty!("refPushTarget", Member = ref_push_target, Notify = changed);
     // What is left over, classified in drain::settle_write — the page

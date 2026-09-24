@@ -21,8 +21,8 @@ QtObject {
 
     /// **The length the press under way was given** (デザイン規約 §長押し「長押しか否かは押した瞬間に確定」). `holdMs` is
     /// worked out from state that moves on its own — a fetch answering, a check coming back, git refusing — so read
-    /// live it changes mid-press: a hold begun on a red button came back as a click and ran the plain command, and a
-    /// click begun on a plain one was dropped altogether when the button turned into a hold under the hand.
+    /// live it changes mid-press: a hold begun on a red button comes back as a click and runs the plain command, and a
+    /// click begun on a plain one is dropped altogether when the button turns into a hold under the hand.
     ///
     /// Declared with the live value so it reads right from the start; the `Binding` is what keeps it, dropped while a
     /// gesture is under way with nothing put back after (`RestoreNone`) — which is the freeze itself. **Owners whose

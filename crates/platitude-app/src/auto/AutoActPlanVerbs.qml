@@ -203,8 +203,8 @@ Item {
                 // rule waits on are under test.
                 //
                 // A move is answered inside the call, so the whole trip is one turn —
-                // and that is the point: the demotion used to land on the way through, at a moment no sampler
-                // could have caught either.
+                // and that is the point: a demotion that landed on the way through would land at a moment no
+                // sampler could catch either.
                 //
                 // The selection is put on the carried row first, so `selectedAction` *is* that row's verb for the
                 // whole trip (the reorder remaps the selection with it) — the model has no other way to be asked
@@ -507,7 +507,7 @@ Item {
     //
     // Three presses and a `Discard`: the parent hash of a commit the plan holds — a walk *down* the plan, which has to
     // take the model's own row with it; the base's hash — a walk *out* of it, which has no row on this screen to land
-    // on; and a file row, which used to read a diff into the pane the plan is standing on.
+    // on; and a file row, whose diff would be read into the pane the plan is standing on.
     //
     // **All four are in the report.** The row highlight reads `page.selectedOid`, so a model left behind
     // photographs exactly like one that followed; a diff opened under the plan is drawn nowhere at all; and where the

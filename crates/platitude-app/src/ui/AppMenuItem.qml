@@ -364,8 +364,8 @@ MenuItem {
         Item {
             id: codeChip
             visible: menuItem.code !== ""
-            // The row's own step, off the item now that the layout keeps none. An invisible item is out of the
-            // layout altogether, margin and all, which is what a shared spacing did for it before.
+            // The row's own step, off the item, since the layout keeps none. An invisible item is out of the
+            // layout altogether, margin and all, as it would be under a shared spacing.
             Layout.rightMargin: Theme.spaceSm
             implicitWidth: {
                 const own = codeLabel.implicitWidth

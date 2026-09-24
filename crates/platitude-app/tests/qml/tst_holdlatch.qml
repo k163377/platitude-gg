@@ -5,8 +5,8 @@ import platitude.ui
 // Whether a press keeps the meaning it was made with (デザイン規約 §長押し「長押しか否かは押した瞬間に確定」).
 //
 // **The condition moves on its own**: a fetch answering, a reachability walk coming back, git refusing the press
-// before it. Read live, a hold begun on a red button came back as a click and ran the plain command, and a click
-// begun on a plain one was dropped when the button turned into a hold under the hand. Neither is something a picture
+// before it. Read live, a hold begun on a red button comes back as a click and runs the plain command, and a click
+// begun on a plain one is dropped when the button turns into a hold under the hand. Neither is something a picture
 // or a headless run can be made to show — the flip has to happen *between* a press and its release, which is a
 // stretch nothing outside the control can stand in.
 Item {
@@ -125,7 +125,7 @@ Item {
             verify(!drive.stale, "which is the press")
         }
 
-        /// The other direction, which is the one that used to drop a press altogether: a plain press whose row turned
+        /// The other direction, which is the one that can drop a press altogether: a plain press whose row turns
         /// into a held one before the release.
         /// **The premise holds the target as well.** What a press is aimed at can be swapped out while the
         /// length stays exactly where it was, and a fill that ran out over the new target would answer a question
@@ -253,8 +253,7 @@ Item {
         }
 
         /// The button end of it, pressed and released the way a hand does. **A hold begun on it reports no click** —
-        /// before the latch, the release read the length again, found zero, and let the press fall through to the
-        /// plain command.
+        /// a release that read the length again would find zero and let the press fall through to the plain command.
         function test_a_button_held_when_the_answer_goes_reports_no_click() {
             mousePress(button, 10, 10)
             button.holdMs = 0
@@ -263,10 +262,10 @@ Item {
             compare(holds.count, 0, "and the hold it was is not fired either, its answer having gone")
         }
 
-        /// And the other way round. Before the latch this press was dropped **silently and for the wrong reason** —
-        /// the release read the new length, found a hold, and let the click go — and the button would have run the
-        /// plain command had the flip landed a frame later. It is still dropped, and now because the answer it was
-        /// made under has gone, which is the same thing the hold above is dropped for.
+        /// And the other way round. The press is dropped because the answer it was made under has gone, which is the
+        /// same thing the hold above is dropped for. A release that read the new length would drop it **silently and
+        /// for the wrong reason** — finding a hold and letting the click go — and the button would run the plain
+        /// command had the flip landed a frame later.
         function test_a_button_whose_answer_goes_mid_press_runs_nothing() {
             button.holdMs = 0
             mousePress(button, 10, 10)

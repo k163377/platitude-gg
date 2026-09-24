@@ -1010,7 +1010,7 @@ Item {
                               + " row=" + row
                               + " pane=" + Math.round(sidebarPane.width)
                               // What the row had for it, what it came out at, and what it would take to read whole:
-                              // the seat is where the box used to stop, so the three together say whether this box
+                              // the seat is the room the row holds for the box, so the three together say whether it
                               // needed the room outside the pane and whether it got it.
                               + " seat=" + Math.round(list.rowBoxSeat(row))
                               + " box=" + Math.round(drawn)

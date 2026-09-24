@@ -57,7 +57,7 @@ ApplicationWindow {
         windowShape.reportState()
     }
 
-    // What a title bar does, now that this band is one: maximise, minimise, the grab-run's whereabouts and the
+    // What a title bar does, since this band is one: maximise, minimise, the grab-run's whereabouts and the
     // window's dressing (`WindowChrome`). Only this file and the body it seats call them, so the names live on the
     // chrome.
     WindowChrome {

@@ -15,7 +15,7 @@ Item {
     height: 300
 
     property var log: []
-    /// Whether the row keeps the drag it was handed. False is what every row in this window used to be.
+    /// Whether the row keeps the drag it was handed.
     property bool rowHolds: false
 
     Flickable {
