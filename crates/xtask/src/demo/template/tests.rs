@@ -4,7 +4,7 @@
 
 use std::path::Path;
 
-use super::{Entry, holds, leaf, walk};
+use super::{BUILT_BY, Entry, holds, leaf, walk};
 
 /// git's answer in `dir`, or the reason it had none — a test that cannot
 /// ask has failed.
@@ -233,4 +233,108 @@ fn a_needle_is_found_where_it_is_and_nowhere_else() {
     // The false start that a byte-at-a-time search gets wrong: the first
     // byte matches twice and only the second run is the needle.
     assert!(holds(b"bbasic-ab", b"basic-ab"));
+}
+
+/// The modules of the crate a source names (`crate::<module>`), its
+/// comments aside — `use crate::{a, b}` counted as both.
+fn modules_named(text: &str) -> Vec<String> {
+    let mut named = Vec::new();
+    for line in text
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+    {
+        for (at, _) in line.match_indices("crate::") {
+            let rest = &line[at + "crate::".len()..];
+            let group = rest
+                .strip_prefix('{')
+                .and_then(|inside| inside.split_once('}'))
+                .map(|(inside, _)| inside);
+            let heads: Vec<&str> = match group {
+                Some(inside) => inside.split(',').collect(),
+                None => vec![rest],
+            };
+            for head in heads {
+                let module: String = head
+                    .trim_start()
+                    .chars()
+                    .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                    .collect();
+                if !module.is_empty() {
+                    named.push(module);
+                }
+            }
+        }
+    }
+    named
+}
+
+/// The fingerprint reads every source a preset is built by, and the bytes
+/// it read are the ones on disk. **Held to the code, not to a directory**:
+/// the demo module's own sources whole (its tests aside), and of what they
+/// name outside it, the PNG writer the pictures come out of. Every other
+/// module they name places or sweeps the runs, or declares the verb, and
+/// says nothing about what a template holds — a new one is a question this
+/// asks out loud, since a source that shapes a template and is left off
+/// the list goes on handing out the templates built without it.
+#[test]
+fn the_fingerprint_reads_every_source_a_preset_is_built_by() {
+    /// Named by the demo module, and shaping nothing a template holds:
+    /// `verify` claims and sweeps the runs' directories, `command`
+    /// declares the `demo-repo` verb.
+    const PLACES_OR_DECLARES: [&str; 2] = ["verify", "command"];
+    /// The PNG writer (`png::rgba`) and what it is built from.
+    const PNG_WRITER: [&str; 3] = ["png/checksum.rs", "png/mod.rs", "png/write.rs"];
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut built_by: Vec<String> = PNG_WRITER.iter().map(|name| (*name).to_string()).collect();
+    let mut outside = std::collections::BTreeSet::new();
+    walk(&src.join("demo"), &mut |path, kind| {
+        let name = path.strip_prefix(&src).expect("a file under src");
+        let name = name.to_string_lossy().replace('\\', "/");
+        if kind == Entry::File && name.ends_with(".rs") && !name.ends_with("/tests.rs") {
+            let text = std::fs::read_to_string(path).map_err(|e| format!("{name}: {e}"))?;
+            outside.extend(
+                modules_named(&text)
+                    .into_iter()
+                    .filter(|module| module != "demo"),
+            );
+            built_by.push(name);
+        }
+        Ok(())
+    })
+    .expect("the sources read");
+    for module in &outside {
+        assert!(
+            module == "png" || PLACES_OR_DECLARES.contains(&module.as_str()),
+            "the demo module names crate::{module}: list its sources in BUILT_BY if they \
+             shape a template, or say here why they do not"
+        );
+    }
+    built_by.sort();
+    let mut listed: Vec<String> = BUILT_BY
+        .iter()
+        .map(|(name, _)| (*name).to_string())
+        .collect();
+    listed.sort();
+    assert_eq!(
+        listed, built_by,
+        "BUILT_BY and the sources a preset is built by disagree"
+    );
+    for (name, bytes) in BUILT_BY {
+        let disk = std::fs::read(src.join(name)).expect("a listed source reads");
+        assert!(
+            disk == *bytes,
+            "{name} is listed with bytes it does not hold"
+        );
+    }
+}
+
+/// What a source names of the crate, read the way the fingerprint's test
+/// reads it: one path, a group, and a comment that is not read at all.
+#[test]
+fn a_source_names_the_modules_it_reaches() {
+    let text = "use crate::command::{self, Where};\n\
+                // crate::gate is mentioned, not used\n\
+                let out = crate::png::rgba(1, 1, f);\n\
+                use crate::{verify, tree};\n";
+    assert_eq!(modules_named(text), ["command", "png", "verify", "tree"]);
 }

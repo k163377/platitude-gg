@@ -141,29 +141,72 @@ fn leaf(preset: &str, name: &str) -> String {
     }
 }
 
-/// What a template is good for: the task runner that built it, and the
-/// git it ran to do so.
+/// What a template is good for: the sources that type its git commands,
+/// the git that ran them, and the day it was built on.
 ///
-/// The runner's own bytes — this is the build that types the git
-/// commands, and it is one file to read, in step with the directory by
-/// itself. The git version is in it because the repository is that
-/// git's output: the runs that stand a copy in for git (`--old-git`)
-/// build their repositories with the real one, so what changes this is
-/// an upgrade.
+/// **Not the executable's bytes.** The linker stamps every link (the PE
+/// header's time, the PDB's GUID), so a key on the exe names a new set of
+/// templates after every relink — a rebase is one — and every seat's exe
+/// is its own. Each new set is built by the runs that find it missing,
+/// all of them at once, in the middle of a gate. The sources are the same
+/// bytes on every seat that stands on the same presets, so one set serves
+/// all of them.
+///
+/// The git version is in it because the repository is that git's output:
+/// the runs that stand a copy in for git (`--old-git`) build their
+/// repositories with the real one, so what changes this is an upgrade.
+/// The day is in it because a preset dates its commits from the moment it
+/// is built (`DemoRepo::init`): a template stands for one UTC day, the age
+/// the sweep already allows a run's litter. The day turns at 09:00 in
+/// Japan, and the runs going at that moment build the new set between
+/// them, as after any change to a preset's source.
 fn fingerprint() -> &'static str {
     static FINGERPRINT: OnceLock<String> = OnceLock::new();
     FINGERPRINT.get_or_init(|| {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        match std::env::current_exe().and_then(std::fs::read) {
-            Ok(bytes) => bytes.hash(&mut hasher),
-            // A fingerprint standing for nothing would hand this run
-            // somebody else's template; standing for this process alone
-            // costs it a build and nobody else anything.
-            Err(_) => std::process::id().hash(&mut hasher),
+        for (name, bytes) in BUILT_BY {
+            name.hash(&mut hasher);
+            bytes.hash(&mut hasher);
         }
         git_version().hash(&mut hasher);
+        day().hash(&mut hasher);
         format!("{:016x}", hasher.finish())
     })
+}
+
+/// Every source a preset is built by: this module's own (its tests aside)
+/// and the PNG writer its pictures come out of. Its git runs under this
+/// module's own spawner (`repo::output_of`), so nothing else of the crate
+/// shapes a template. A test holds the list to the code
+/// (`the_fingerprint_reads_every_source_a_preset_is_built_by`).
+const BUILT_BY: &[(&str, &[u8])] = &[
+    ("demo/authorship.rs", include_bytes!("authorship.rs")),
+    ("demo/basic.rs", include_bytes!("basic.rs")),
+    ("demo/conflict.rs", include_bytes!("conflict.rs")),
+    ("demo/deep.rs", include_bytes!("deep.rs")),
+    ("demo/mod.rs", include_bytes!("mod.rs")),
+    ("demo/pictures.rs", include_bytes!("pictures.rs")),
+    ("demo/presets.rs", include_bytes!("presets.rs")),
+    ("demo/remote.rs", include_bytes!("remote.rs")),
+    ("demo/repo.rs", include_bytes!("repo.rs")),
+    ("demo/scale.rs", include_bytes!("scale.rs")),
+    ("demo/signing.rs", include_bytes!("signing.rs")),
+    ("demo/stack.rs", include_bytes!("stack.rs")),
+    ("demo/tags.rs", include_bytes!("tags.rs")),
+    ("demo/template.rs", include_bytes!("template.rs")),
+    ("demo/worktrees.rs", include_bytes!("worktrees.rs")),
+    ("png/checksum.rs", include_bytes!("../png/checksum.rs")),
+    ("png/mod.rs", include_bytes!("../png/mod.rs")),
+    ("png/write.rs", include_bytes!("../png/write.rs")),
+];
+
+/// The UTC day, counted from the epoch. A clock before 1970 reads day
+/// zero, which is still one day.
+fn day() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_secs() / 86_400)
+        .unwrap_or_default()
 }
 
 /// The git every preset is built by: the one on PATH, which is the one
@@ -172,7 +215,7 @@ fn fingerprint() -> &'static str {
 fn git_version() -> String {
     let mut command = std::process::Command::new("git");
     command.arg("--version");
-    crate::subprocess::run_captured(&mut command)
+    super::repo::output_of(&mut command)
         .ok()
         .filter(|out| out.status.success())
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())

@@ -19,6 +19,16 @@ pub(super) struct DemoRepo {
 const TICK_SECS: u64 = 30 * 60;
 const HISTORY_SECS: u64 = 40 * 60 * 60;
 
+/// Runs a command to its end, its output captured — the road every git a
+/// preset types goes down. **The demo module's own**: a template's key is
+/// the sources of this module (`super::template`), and a spawner shared
+/// with the rest of the crate would put every change to it in that key.
+pub(super) fn output_of(cmd: &mut Command) -> Result<std::process::Output, String> {
+    let display = format!("{cmd:?}");
+    cmd.output()
+        .map_err(|e| format!("failed to spawn {display}: {e}"))
+}
+
 impl DemoRepo {
     pub(super) fn init(root: &Path, name: &str) -> Result<Self, String> {
         std::fs::create_dir_all(root).map_err(|e| format!("creating {}: {e}", root.display()))?;
@@ -74,7 +84,7 @@ impl DemoRepo {
     }
 
     pub(super) fn git_at(&mut self, dir: &Path, args: &[&str]) -> Result<String, String> {
-        let out = crate::subprocess::run_captured(&mut self.command(dir, args))?;
+        let out = output_of(&mut self.command(dir, args))?;
         if !out.status.success() {
             return Err(format!(
                 "git {args:?} failed: {}",
@@ -99,7 +109,7 @@ impl DemoRepo {
     /// out here because xtask depends on std alone.
     pub(super) fn git_expecting_stop(&mut self, args: &[&str]) -> Result<(), String> {
         let dir = self.work.clone();
-        crate::subprocess::run_captured(&mut self.command(&dir, args)).map(drop)?;
+        output_of(&mut self.command(&dir, args)).map(drop)?;
         let git_dir = self.work.join(".git");
         let stopped = [
             "rebase-merge",

@@ -137,9 +137,10 @@ const OUT_MOUNT: &str = "/out";
 ///
 /// A container is one verb, so nothing built in it outlives it: without
 /// this, every run in here would build its template and then throw it
-/// away. One volume per checkout, as the build directory is, because a
-/// template is only good for the task runner that built it and two
-/// checkouts build their own.
+/// away. One volume per checkout, as the build directory is: what fills
+/// it is that checkout's runs, and a template is keyed by the preset
+/// sources it was built from (`demo::template`), which two checkouts need
+/// not share.
 pub(crate) const DEMO_MOUNT: &str = "/tmp/pgg-demo";
 /// Set for everything the container runs, and by nothing else: the mark a
 /// run reads to know it is not on the machine whose checkout it is

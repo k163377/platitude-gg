@@ -51,7 +51,7 @@ pub(super) fn signed(repo: &mut DemoRepo) -> Result<(), String> {
 /// returns the public key's one line.
 pub(super) fn keygen(repo: &DemoRepo, name: &str, comment: &str) -> Result<String, String> {
     let path = repo.root.join(name);
-    let out = crate::subprocess::run_captured(
+    let out = super::repo::output_of(
         Command::new("ssh-keygen")
             .args(["-t", "ed25519", "-N", "", "-C", comment, "-f"])
             .arg(&path),

@@ -121,6 +121,7 @@
 | `perf` の warm 判定(`perf::warmth`) | invocation 1 本目の 1 run 目だけ突出(startup 1226ms)、2 本目以降の 1 run 目は採用 run(1096–1178ms)に混ざる(1081–1177ms)= 毎回 1 run 捨てるのは 14 秒の無駄 |
 | `xtask::gui` の起動見張り | Qt プラットフォームプラグインの失敗はほぼ即死(約 10ms)。`FIRST_MOMENT` の残りはコールドスタートの余白 |
 | `platitude-app` の `qrc::embed!`(QML のディスクキャッシュ) | 時刻 0 の qrc(置き場を渡されない起動 = 製品)は起動のたびに 268 ファイルをコンパイルし、そのログはプロセス時刻 0.07s → 0.77s に並ぶ(`app-menu` の run 全体 1.4s)。キャッシュが効くとアプリの CPU 時間は 1 run あたり 1.61–2.06s → 1.39–1.67s、私有メモリは約 220MB のまま動かない。時刻付きの木はヒープに組むので、キャッシュ置き場を渡された起動は両モジュールぶん(`ui/` 2.7MB + `auto/` 1.1MB のファイル)を私有メモリに持つ。渡されない起動の木は static(実行ファイルの読み取り専用領域)で、ヒープには組まない |
+| demo の雛形(`demo::template`) | 雛形を組む run の fixture は `app-menu`(`basic`)で約 2.0–2.2s、雛形のコピーは約 0.1s。雛形は preset を組むソース・git の版・UTC の日を鍵にした 1 組で、組むのは 1 日 1 回とソースが変わった時。全 preset の雛形を組む gate は、雛形が立っている gate より host の動詞平均 9.1–12.4s 対 6.7–6.8s・fixture が 3s を超える run 74–78 本 対 4–6 本・壁時計 12m52s–13m39s 対 8m52s–8m57s(同じ席 a の `gate --fresh`) |
 
 ## build directory の世代(`xtask::sweep`)
 
