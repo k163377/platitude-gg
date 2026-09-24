@@ -599,15 +599,15 @@ fn a_file_the_product_opens_is_owed_though_no_scan_could_find_it() {
 }
 
 /// Every step the plan gave a side has a row in the ledger, **whatever
-/// the run did with it** — and the shape that had none was the one where
-/// a stamp answered for all of them.
+/// the run did with it** — including where a stamp answers for all of
+/// them.
 ///
 /// The second gate of one commit runs nothing, so the block of verbs is
-/// a block of stamps. That block printed its `cached` lines on a path of
-/// its own and filed nothing, so the table a reader adds up was short by
-/// exactly the verbs it never ran. The gate reads its own books against
-/// the plan now, so a return to that path is a red run rather than a
-/// quiet subtraction.
+/// a block of stamps. A block that printed its `cached` lines on a path
+/// of its own and filed nothing would leave the table a reader adds up
+/// short by exactly the verbs it never ran. The gate reads its own books
+/// against the plan, so such a path is a red run rather than a quiet
+/// subtraction.
 #[test]
 fn a_run_that_ran_nothing_still_files_a_row_for_every_step() {
     let sb = Sandbox::new("ledger-cached");

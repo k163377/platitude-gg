@@ -82,7 +82,7 @@ fn standing(template: &Path, preset: &str, name: &str) -> Result<bool, String> {
 /// that is already there fails on both operating systems. The losers drop
 /// what they built and read the winner's. Nothing is locked: a lock held
 /// across a build is a lock held for seconds, and the work being
-/// duplicated is the work every run used to do.
+/// duplicated is what every run would do without a template.
 fn make(template: &Path, preset: &str, name: &str) -> Result<bool, String> {
     let base = super::presets::base();
     let leaf = template

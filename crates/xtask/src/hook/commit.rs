@@ -11,7 +11,7 @@ use crate::subprocess::common_git_dir;
 /// implementation, documents, settings and the shared session rules
 /// alike — because parallel sessions keep reaching for the same files
 /// and direct commits to main collide with theirs (CLAUDE.md Git 運用).
-/// What the commit carries no longer narrows this: where it would land is
+/// What the commit carries does not narrow this: where it would land is
 /// the whole question.
 pub(super) fn primary_commit_denied(command: &str, cwd: &str) -> bool {
     let Some(dir) = commit_dir(command, cwd) else {
@@ -114,8 +114,8 @@ mod tests {
 
     #[test]
     fn holds_the_files_the_narrow_guard_used_to_wave_through() {
-        // Settings and plain documents rode past the old shared-rules
-        // reading; the primary checkout writes none of them now.
+        // Settings and plain documents are held as the shared rules are:
+        // the primary checkout writes none of them.
         for command in [
             "git commit .claude/settings.json -m \"x\"",
             "git add CLAUDE.md && git commit -m \"x\"",

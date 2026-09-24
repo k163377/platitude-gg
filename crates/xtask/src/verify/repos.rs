@@ -484,7 +484,7 @@ fn route_of(verb: &str, arg: &str) -> Result<Route, String> {
         "tab-widths" => Route::Strip(None),
         // Same ladder, eight of them; the argument here names the tab the
         // hand is on, so the count is written out rather than taken from
-        // the other verb's default — which is a state name now, and the
+        // the other verb's default — which is a state name, and the
         // strip this one photographs has no business moving with it.
         "tab-mark" => Route::Strip(Some("8")),
         // A different strip entirely: names that collide, which the

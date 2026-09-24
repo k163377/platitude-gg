@@ -5,12 +5,11 @@
 //! workspace's tests, it runs the verify-ui verbs several at a time, and
 //! it does all of that on both sides at once — and the seats gate
 //! together, so the machine sees as many of those as there are seats.
-//! The verbs alone used to be counted (the lanes this replaces): a lock
-//! per side, one per verb, so however many gates ran, the side's verbs
-//! were the machine's count between them. Everything else — the cargo
-//! that compiles, the tests, the container's half — was outside the
-//! count, and three seats put three chains of `cargo test` on the
-//! machine beside three gates' worth of apps.
+//! Counting the verbs alone — a lock per side, one per verb — makes the
+//! side's verbs the machine's count however many gates run, and leaves
+//! everything else outside it: the cargo that compiles, the tests, the
+//! container's half. Three seats then put three chains of `cargo test`
+//! on the machine beside three gates' worth of apps.
 //!
 //! So the count is over the whole of it. Every unit a gate runs takes a
 //! **ticket** out of one machine-wide budget before it starts, and gives

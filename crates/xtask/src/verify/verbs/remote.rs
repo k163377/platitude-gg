@@ -110,10 +110,9 @@ pub(super) const TABLE: &[Verb] = &[
     // `remoteTagDrift` did, which is the push row's second form and the
     // two greyed rows in one line.
     //
-    // The runs on a name held only here and on one held only over there
-    // went with the card's table (2026-09-20): they asserted rows off
-    // words core had already decided, through a card that now stands on
-    // plain values.
+    // No run is spent on a name held only here or only over there: it
+    // would assert rows off words core has already decided, through a
+    // card that stands on plain values.
     Verb {
         name: "tag-menu",
         when: &[
@@ -156,10 +155,10 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=origin would not delete main",
     },
-    // The same refusal over a tag, which used to be the one that did not
-    // come down in the bar at all: `push_tag` and `delete_remote_tag`
-    // returned a plain failure whatever the far side had said, so the log
-    // went up over news the branch beside it reported quietly. `said=`
+    // The same refusal over a tag, which has to come down in the bar the
+    // way the branch's does: a `push_tag` or `delete_remote_tag` that
+    // returned a plain failure whatever the far side had said would put
+    // the log up over news the branch beside it reports quietly. `said=`
     // naming the tag is the whole of the claim — a run that classified
     // nothing frames identically, with the panel up instead.
     Verb {
@@ -420,8 +419,8 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // **What the toolbar does with an upstream the far side has not got
     // yet.** The counts are silent there (`tracked=false`), which is the
-    // standing that used to send the press back to a question about a
-    // destination nobody had written down — so what is read is where
+    // standing that can send the press back to a question about a
+    // destination nobody has written down — so what is read is where
     // that question *opened*: the name the branch was just pointed at,
     // not the guess. A picture of the bar cannot say which of the two it
     // is holding, because both are a remote and a name in two boxes.

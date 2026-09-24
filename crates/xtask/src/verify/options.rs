@@ -346,9 +346,9 @@ fn name_the_verb(opts: &mut Options, positional: &[&str]) -> Result<(), String> 
     {
         return Err("publish-new-go needs <name>|<url> with a non-empty URL".into());
     }
-    // The corner is a question about one pane, and a bare run used to
-    // mean the working tree's — the same staging, the same press and the
-    // same expected line as naming it, so the two ran one path twice.
+    // The corner is a question about one pane, and a bare run meaning
+    // the working tree's would be the same staging, the same press and
+    // the same expected line as naming it — one path run twice.
     // Named, because a default that is one of the answers is the arm a
     // door can stop passing without a run going red
     // (rules-refs/app-ui.md).

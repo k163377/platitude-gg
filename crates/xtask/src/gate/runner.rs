@@ -607,8 +607,8 @@ mod tests {
             verb,
             "without a copy the plan's spelling stands"
         );
-        // An older spelling, without the lock, is not this runner's line
-        // any more: it is started as spelled, and cargo answers for it.
+        // A spelling without the lock is not this runner's line: it is
+        // started as spelled, and cargo answers for it.
         let unlocked = words(&["cargo", "run", "-p", "xtask", "--", "structure"]);
         assert_eq!(
             launched(&unlocked, Some(runner), None, None, None),

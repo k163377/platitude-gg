@@ -606,10 +606,10 @@ mod tests {
         }
     }
 
-    /// **A half-started watch leaves nothing behind.** The second
-    /// sampler failing used to return before the watch existed, and the
-    /// first one — an endless loop — went on sampling for as long as the
-    /// machine was up, belonging to nobody.
+    /// **A half-started watch leaves nothing behind.** A second sampler
+    /// failing before the watch exists would leave the first one — an
+    /// endless loop — sampling for as long as the machine is up,
+    /// belonging to nobody.
     #[test]
     fn a_sampler_that_started_is_reaped_when_the_next_one_fails() {
         let started = a_child_that_waits();

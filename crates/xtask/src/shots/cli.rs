@@ -211,10 +211,9 @@ fn add(args: &[String]) -> Result<(), String> {
         board::seat_here(),
         label
     );
-    // Where these pictures are read now — in place of the `--open` this
-    // line replaces. That flag was the second door onto the board, and
-    // between the two of them the windows piled up until nobody could
-    // say which one was the board as it stood.
+    // Where these pictures are read — said, not opened: a second door
+    // onto the board piles windows up until nobody can say which one is
+    // the board as it stands.
     if let Some(board) = page.parent() {
         println!("board: {}", window::how_to_see_it(board));
     }

@@ -64,8 +64,8 @@ fn parse_chip(line: &str) -> Option<Chip> {
         .filter(|target| !target.is_empty())
         .map(str::to_string)
         .collect();
-    // Written last, so a ledger from before the mark existed reads as a
-    // set of chips that recommend work — which is what they were.
+    // Written last, so a line that carries no mark reads as a chip that
+    // recommends work.
     let optional = fields.next() == Some("1");
     Some(Chip {
         id,

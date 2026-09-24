@@ -394,8 +394,8 @@ fn write_verdict(landing: &Landing, me: &Identity) -> Option<(&'static str, Stri
         // what stops every measurement until somebody cleans it up.
         Landing::Rig => Some(("deny", rig_reason())),
         // A seat somebody else is in: refused outright, because the cost
-        // of being wrong is the other session's afternoon. The post-write
-        // note used to say this only after the file had been written.
+        // of being wrong is the other session's afternoon, and a
+        // post-write note would say so only after the file is written.
         Landing::Seat(name, Standing::Foreign(reason) | Standing::Stale(reason), tree) => Some((
             "deny",
             format!(

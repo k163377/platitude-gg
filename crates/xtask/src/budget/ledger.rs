@@ -513,7 +513,7 @@ impl Pool {
     /// wrote down what it started ([`Ticket::child_name`]) at the same
     /// instant it wrote the number, which costs nothing, and the two are
     /// compared as one answer (`subprocess::image_still_at`). A ticket
-    /// from before that recorded no name is asked the older question.
+    /// that recorded no name is asked only about the number.
     ///
     /// **The probe is the whole of the decision.** A step that has
     /// run past the longest a step may run ([`LEFTOVER_CEILING`]) is
@@ -543,7 +543,7 @@ impl Pool {
     ///
     /// A unit that has started nothing yet (`child` zero — every waiting
     /// unit, and every one that takes no child at all) is let go of at
-    /// once, as before.
+    /// once.
     fn leftover(&self, path: &Path) -> Result<Option<Ticket>, String> {
         let Ok(text) = std::fs::read_to_string(path) else {
             return Ok(None);
@@ -718,10 +718,10 @@ pub(super) fn now() -> u64 {
 /// pid the system has handed out again is not read as the work
 /// ([`Pool::leftover`]).
 ///
-/// A ticket that recorded no name is asked the older question, which
-/// says only whether anything is there: a name is written at the same
-/// instant as the number, so this is the shape a ticket from before
-/// them, or one written by hand, comes in as.
+/// A ticket that recorded no name is asked only whether anything is
+/// there: a name is written at the same instant as the number, so a
+/// nameless ticket is one written by a build that writes no name, or
+/// by hand.
 fn still_at(child: u32, name: &str) -> bool {
     if name.is_empty() {
         return crate::subprocess::running_at(child);

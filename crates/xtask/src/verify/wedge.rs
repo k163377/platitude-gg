@@ -2,8 +2,8 @@
 //! Reports concern the current test run and its output directory; process cleanup
 //! remains owned by the runner that started the application.
 //!
-//! A run reaped at the parent's ceiling used to leave one word —
-//! `TIMED OUT` — and the next one to happen started from there again
+//! One word — `TIMED OUT` — from a run reaped at the parent's ceiling
+//! leaves the next one to happen starting from there again
 //! (internal-docs/P3-確認事項.md §check ハング調査で残った観察). The
 //! process's own account of where it stood is the app's
 //! (`harness::deadline` writes [`REPORT_FILE`] beside the pictures); this
@@ -153,7 +153,7 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
 /// **The half that does not need the process to still be answering.**
 /// Every mark here was on the disk before the step it names began, so a
 /// run stopped in a way that leaves no report of its own still says how
-/// far it got — which is the whole of what a `TIMED OUT` used to be
+/// far it got — which is the whole of what a bare `TIMED OUT` is
 /// missing.
 ///
 /// The seconds are the app's own clock, started in `main`, and the run's

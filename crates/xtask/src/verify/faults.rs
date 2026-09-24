@@ -48,14 +48,12 @@ const BACKSTOP_MS: &str = "60000";
 /// and the loop goes on turning after it — **the fault is what
 /// withholds the completion here** (`--fault-hold-act`).
 ///
-/// It used to be one millisecond, on the reading that no verb could
-/// complete inside a QML timer's own floor. A verb can: the ceiling is
-/// armed when the run begins and the act completed in the loop turn
-/// before that timer's first tick, so the case that forbids `complete=`
-/// went red on a product that was working (2026-09-12, one gate running
-/// eight jobs; the same tree answered in a second on its own). A
-/// judgement that is a race between a ceiling and a loop is one the
-/// machine decides.
+/// Not one millisecond, on the reading that no verb could complete
+/// inside a QML timer's own floor: a verb can. The ceiling is armed when
+/// the run begins and the act can complete in the loop turn before that
+/// timer's first tick, so the case that forbids `complete=` goes red on
+/// a product that is working. A judgement that is a race between a
+/// ceiling and a loop is one the machine decides.
 const TURNING_MS: &str = "2000";
 
 /// One run made to stop, and the words it has to come back with.
@@ -383,8 +381,7 @@ mod tests {
     }
 
     /// One case has to be the observed shape itself: held with no report
-    /// of its own, which is the run the parent used to have nothing to
-    /// say about.
+    /// of its own, which is the run the parent has to speak for alone.
     #[test]
     fn one_case_leaves_no_report_of_its_own() {
         assert!(

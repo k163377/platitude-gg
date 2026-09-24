@@ -33,7 +33,7 @@ use std::path::Path;
 const PRODUCT: &str = "crates/platitude-app/src/ui";
 const HARNESS_QMLDIR: &str = "crates/platitude-app/src/auto/qmldir";
 /// The QML-facing harness singleton, whose members say what the product
-/// may no longer ask `AppBackend` for.
+/// may not ask `AppBackend` for.
 const HARNESS_SINGLETON: &str = "crates/platitude-app/src/harness/singleton.rs";
 /// What the product calls it, and what it calls the object it may ask.
 const SINGLETON: &str = "Harness";

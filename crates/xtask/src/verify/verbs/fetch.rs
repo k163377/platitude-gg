@@ -67,8 +67,8 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "commands_shut wrong=true open=false",
     },
     // The same panel taken down by the key, which is the door
-    // cut for exactly this panel: nothing else on screen said what git
-    // said, so it raised itself, and until now only a press could put
+    // cut for exactly this panel: nothing else on screen says what git
+    // said, so it raised itself, and without the key only a press puts
     // it away (デザイン規約 §git が言ったことを読む場所). `took=true`
     // is the page claiming the key — an Escape that fell through to
     // nobody leaves the same shut window as one that never went out,

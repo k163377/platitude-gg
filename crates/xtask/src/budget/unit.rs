@@ -191,9 +191,9 @@ pub(crate) fn child_started(child: u32, program: &str) {
 ///
 /// Best effort on purpose: what this protects against is the owner
 /// dying, and a ticket that could not be written simply falls back
-/// to what the ledger did before — the room comes back with the
-/// lock. A failure here leaves the step to run, which is the thing
-/// the whole gate is actually for. A ticket already taken down is
+/// to the ticket's lock alone — the room comes back with the lock. A
+/// failure here leaves the step to run, which is the thing the whole
+/// gate is actually for. A ticket already taken down is
 /// read first, so a name with nothing at it stays that way rather
 /// than coming back as a unit nobody holds.
 fn write_child(ticket: &Path, child: u32, program: &str) {

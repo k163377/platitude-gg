@@ -100,8 +100,8 @@ impl Standing {
 }
 
 /// Where the pictures that were just put on the board are read — said at
-/// the moment somebody has taken one to show, which is the moment the
-/// second window used to get opened.
+/// the moment somebody has taken one to show, which is the moment a
+/// second window would otherwise get opened.
 pub(super) fn how_to_see_it(board: &Path) -> String {
     match standing(board) {
         Some(open) => format!(

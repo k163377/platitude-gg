@@ -279,10 +279,10 @@ fn the_command_runs_bracketed_by_a_look_at_what_a_resolve_reads() {
 
 /// **Nothing here names a container and nothing here reaps one.** A
 /// name would be for finding an interrupted container to take away, and
-/// that is a `docker rm` on this side with no ceiling over it. What it
-/// was for is gone: an interrupted container can no longer reach this
-/// checkout's copies (`linux::runner::SCRIPT`), and the cargo lock it
-/// still holds is waited out under the step's own ceiling. The one
+/// that is a `docker rm` on this side with no ceiling over it. Nothing
+/// needs one: an interrupted container cannot reach this checkout's
+/// copies (`linux::runner::SCRIPT`), and the cargo lock it still holds
+/// is waited out under the step's own ceiling. The one
 /// container that is named and removed is the gate's own, and both
 /// happen under a ceiling in `container` (`remove_container`).
 #[test]

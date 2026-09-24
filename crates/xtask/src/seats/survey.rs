@@ -444,8 +444,8 @@ mod tests {
         assert!(lines[3].contains('?'), "{table}");
         assert!(lines[4].contains("(not created)"), "{table}");
         // A letter that lost its tree says whose it still is, what its
-        // branch carries and how to get at it — the row that used to
-        // read "(not created)", which is how the work went unnoticed.
+        // branch carries and how to get at it — a row reading
+        // "(not created)" would let the work go unnoticed.
         assert!(
             lines[5].contains("worktree-e")
                 && lines[5].contains("17")

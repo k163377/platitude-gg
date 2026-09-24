@@ -23,8 +23,8 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "moved=true stopped=false lit=true focused=true",
     },
-    // The second click stopped at, in each list, where the two used to
-    // part and now do not: the light means the file being read in both,
+    // The second click stopped at, in each list, where the two must not
+    // part: the light means the file being read in both,
     // so both go out with the diff (デザイン規約 §diff のファイル一覧).
     // `lit=false` is the whole of it, and it has to be a pair — one of
     // these alone is a list with no diff up, which either answer frames
@@ -200,9 +200,9 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "preview_close was=image kind= shown=false pictures=0 url=empty",
     },
     // Both sides have to be named on some row, and on a file that has
-    // been typed over both of them are removals — the half that used
-    // to be dropped, which left the legend explaining a distinction
-    // no row was making. A count of zero on
+    // been typed over both of them are removals — dropping that half
+    // leaves the legend explaining a distinction no row is making. A
+    // count of zero on
     // either side photographs exactly like a file with nothing to
     // tell apart.
     Verb {

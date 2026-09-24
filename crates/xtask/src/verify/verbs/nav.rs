@@ -356,8 +356,8 @@ pub(super) const TABLE: &[Verb] = &[
     // working copies' listing, which answered the same pointer on the
     // way in, so an empty overlay in the picture is the row's own
     // answer, from a pointer that landed. **It answers by opening**:
-    // that section's rows open under themselves now, and it is still
-    // the one section every repository has a row in.
+    // that section's rows open under themselves, and it is the one
+    // section every repository has a row in.
     // `wants=` is the row's own words and `tip=` the shared instance
     // carrying them: every row that answers with a tooltip spells its
     // name in full, so both are judged.

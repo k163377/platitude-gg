@@ -94,7 +94,7 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The same landing reached through a carry, where the stash the
     // rewrite took out of its own way is still standing. Nothing
-    // raises git's words over it any more, so the count is the claim:
+    // raises git's words over it, so the count is the claim:
     // a screen that lost the work and one that is holding it in the
     // stash frame nearly alike (規約 §未コミット変更がある状態で
     // 履歴を書き換える).
@@ -108,7 +108,7 @@ pub(super) const TABLE: &[Verb] = &[
     // the press reaching core, core withholding the write, and a bar
     // coming down over the graph with the report in it
     // (デザイン規約 §答えの要らない報せ). Which of the five it was is
-    // no longer a window's to say: the conditions are read from real
+    // not a window's to say: the conditions are read from real
     // git by `integrate_integration`, the kind the page is handed by
     // `repo_tab::drain_report_tests`, and the sentence each kind is
     // owed by `tst_reportdress.qml`. So one fold stands for the four,
@@ -133,8 +133,8 @@ pub(super) const TABLE: &[Verb] = &[
     // plan opens, and the bar it raises is the whole answer. **One run
     // for the three shapes it turns down** — the press, the preview and
     // the bar are the same road for all of them, and the only thing the
-    // three ever said differently was the heading, which
-    // `tst_reportdress.qml` now reads for the price of no window at all.
+    // three say differently is the heading, which `tst_reportdress.qml`
+    // reads for the price of no window at all.
     // `plan=false` is the claim no picture can make on its own: a window
     // that opened a plan and put it away frames exactly like one that
     // never opened it. `tone=warning` is the other half of what parts

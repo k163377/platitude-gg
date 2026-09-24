@@ -206,10 +206,10 @@ pub(super) const TABLE: &[Verb] = &[
     // instance wrote its own `visible` over the corner's, and every
     // WIP pane carried the version across its commit button until a
     // picture was looked at.
-    // The pane is named and never defaulted: a bare run meant this same
-    // `wip` — the same staging, the same press, the same line — so the
-    // two were one path entered twice, and the one dropped is the
-    // default (`verify::options::name_the_verb` refuses it now).
+    // The pane is named and never defaulted: a bare run meaning this
+    // same `wip` — the same staging, the same press, the same line —
+    // would be one path entered twice, so the default is the one refused
+    // (`verify::options::name_the_verb`).
     //
     // **What is left is a pair, and the rows say which half each run
     // is.** `basic` leaves the corner bare and `long` runs the list into
@@ -361,9 +361,9 @@ pub(super) const TABLE: &[Verb] = &[
                 said=The commit was not made",
     },
     // The same refusal **with a file open in the middle**, which is the
-    // arrangement the bar was moved out of the graph pane for: a bar
-    // that lived in that pane says nothing at all here, and the two
-    // windows photograph the same. `clears=true` is the claim itself —
+    // arrangement that keeps the bar out of the graph pane: a bar that
+    // lived in that pane would say nothing at all here, and the two
+    // windows would photograph the same. `clears=true` is the claim itself —
     // the middle is standing under the bar.
     Verb {
         name: "notice-over-diff",
@@ -373,8 +373,8 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // A part of a file that is not that file any more. **This end is the
     // one that said no**, before git ran, so there is no row in the log to
-    // read and never was — which is why it used to raise an empty panel
-    // over the very diff it was about (P3-確認事項, observed).
+    // read — raising the panel for it would put an empty panel over the
+    // very diff it was about (P3-確認事項, observed).
     // `why=true` is this application's own second line arriving through
     // `Words.writeReportedWhy`, since nobody outside wrote one.
     Verb {

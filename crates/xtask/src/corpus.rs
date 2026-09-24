@@ -1,11 +1,11 @@
 //! `cargo xtask corpus` — the repository the performance record is
 //! measured against, built here.
 //!
-//! **Why it is generated.** The record used to be taken against a live
-//! clone of `JetBrains/kotlin`, which is somebody's working copy: an
-//! editor fetches it, and a fetch changes the rows the graph draws, the
-//! ref tables the memory is mostly made of, and the commit whose diff is
-//! timed — all while `HEAD` holds still. A record taken against it stops
+//! **Why it is generated.** A live clone of `JetBrains/kotlin` is
+//! somebody's working copy: an editor fetches it, and a fetch changes
+//! the rows the graph draws, the ref tables the memory is mostly made
+//! of, and the commit whose diff is timed — all while `HEAD` holds
+//! still. A record taken against it stops
 //! being comparable without anything visibly happening
 //! (ci/baseline/perf-windows-x64.md §この記録の読み方 2).
 //!

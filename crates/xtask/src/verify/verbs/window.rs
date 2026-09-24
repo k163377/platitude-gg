@@ -438,20 +438,18 @@ pub(super) const TABLE: &[Verb] = &[
     // **And so does the shape**, which a width does not name: the same
     // number lands in a different one on a different font, so a run that
     // says only which badges stood goes on passing in a shape nobody
-    // asked for (measured 2026-09-18: the run written for the folded
-    // mark folded on Windows and kept its words on Linux, where that
-    // shape was then photographed by nothing). The arithmetic behind the
+    // asked for (measured 2026-09-18: one width folded the mark on
+    // Windows and kept its words on Linux). The arithmetic behind the
     // shapes is `BandStateShare`'s and is asked in one process
-    // (`tst_bandshare.qml`); the two runs left are the two sides of what
-    // a window is still for — a group the band had the room for, and the
+    // (`tst_bandshare.qml`); the two runs here are the two sides of what
+    // a window is for — a group the band had the room for, and the
     // same group narrowed by a real crowd of tabs.
     //
     // **The width is the run's, and it is calibrated to the band.** The
-    // three actions moved off this row and into the panel, so the strip
-    // — which is at the front of the queue for what the band has
-    // (`TopBar`) — takes the room they held, and the group starts
-    // narrowing at a window width where it used to keep its words. What
-    // the run is for is the shape, so the number moves with the band.
+    // strip is at the front of the queue for what the band has
+    // (`TopBar`), so whatever else stands on the row moves the window
+    // width at which the group starts narrowing. What the run is for is
+    // the shape, so the number moves with the band.
     //
     // The claim stops before the fit: the widths that show the last
     // shape are below the floor a hand can drag the window to

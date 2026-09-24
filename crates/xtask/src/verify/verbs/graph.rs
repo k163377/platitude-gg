@@ -261,7 +261,7 @@ pub(super) const TABLE: &[Verb] = &[
     // over.
     // The chip's own entrance, which raises the row's menu aimed at
     // that name — there is no second menu on the chip's side of the
-    // column any more (デザイン規約 §グラフ行の右クリック). **`ref=`
+    // column (デザイン規約 §グラフ行の右クリック). **`ref=`
     // is the one that stays away**: a picture of the ref menu
     // and a picture of this one differ by rows nobody counts by eye.
     //
@@ -449,8 +449,8 @@ pub(super) const TABLE: &[Verb] = &[
     // Every way out of the name box, one route per run. `armed=` is
     // the half that catches the box coming back by itself: a wait left
     // running after the box has been walked away from reopens it a
-    // window later, which is what a row clicked while its own box was
-    // up used to do. The picture cannot tell a
+    // window later, as a row clicked while its own box is up would.
+    // The picture cannot tell a
     // box that closed for good from one that is about to return.
     Verb {
         name: "rename-box-out",

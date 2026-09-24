@@ -989,9 +989,9 @@ fn verbs(ground: &Ground<'_>, block: &[(usize, &Required)], jobs: usize) -> Vec<
     // **Through the same door as every other unit**, cached or not: the
     // line a stamped verb prints and the row it files are one path
     // ([`run_one`]), and a block that said `cached` here and filed
-    // nothing left the ledger with no answer for a step the plan had —
-    // which is a number read off a file with holes in it
-    // (`record::Waited::unaccounted` is what refuses that now).
+    // nothing would leave the ledger with no answer for a step the plan
+    // has — a number read off a file with holes in it, which
+    // `record::Waited::unaccounted` refuses.
     for (index, required) in block.iter().filter(|(_, r)| r.cached) {
         let _ = run_one(ground, *index, required, false);
     }

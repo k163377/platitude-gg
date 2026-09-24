@@ -11,7 +11,7 @@
 //!
 //! Which is why one picture opens at 1:1. Nearest-neighbour only
 //! *adds* pixels honestly; under 1 it drops them,
-//! so the fitted opening was reading every picture too big for the
+//! so a fitted opening would read every picture too big for the
 //! window through the one filter that deletes 1px rules and replaces a
 //! flat colour with whichever neighbour survived. Shrinking interpolates
 //! instead, and the ratio says `smoothed` where it does — the guess is
@@ -197,8 +197,8 @@ function place(){const s=FLAT[i];if(!s)return;
  x=s.w*z<=stage.clientWidth?(stage.clientWidth-s.w*z)/2:0;
  y=s.h*z<=stage.clientHeight?(stage.clientHeight-s.h*z)/2:0;draw()}
 // What a view of one picture opens at: one image pixel on one screen
-// pixel, whatever it costs in panning — the shrink it used to open at
-// is the one ratio a 1px call cannot be read off. Named `oneToOne`:
+// pixel, whatever it costs in panning — a shrink is the one ratio a
+// 1px call cannot be read off. Named `oneToOne`:
 // `show()` keeps a local `one` for the first picture in the view,
 // and a call from inside it reaches the local (measured: TypeError,
 // and no opening view at all).
@@ -453,9 +453,9 @@ mod tests {
     }
 
     /// A view of one picture opens at 1:1 whatever the
-    /// window holds. The board exists to be read, and the
-    /// fitted opening it used to have put every picture bigger
-    /// than the window through a shrink — which is the one
+    /// window holds. The board exists to be read, and a
+    /// fitted opening would put every picture bigger than
+    /// the window through a shrink — which is the one
     /// ratio at which the picture stops being the evidence.
     #[test]
     fn a_view_of_one_picture_opens_at_one_image_pixel_per_screen_pixel() {
@@ -467,9 +467,9 @@ mod tests {
         // would reach that local.
         assert!(page.contains("scrollIntoView({block:'nearest'});opening()}"));
         assert!(page.contains("addEventListener('resize',place)"));
-        // The ceiling that used to hold the fit at 100% is what kept a
-        // small picture from filling the window; the floor of 1 is gone
-        // with it, so `0` may magnify as well as shrink.
+        // No ceiling holds the fit at 100% — one would keep a small
+        // picture from filling the window — so `0` may magnify as well
+        // as shrink.
         assert!(!page.contains("stage.clientHeight/s.h,1)"));
     }
 

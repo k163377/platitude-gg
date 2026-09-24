@@ -296,10 +296,9 @@ fn image_matches(pid: u32, is_wanted: impl Fn(&str) -> bool) -> bool {
 
 /// The program behind `pid`, for the tests that stand this module's
 /// probes against a process they can name — this one. Nothing in the
-/// runner records a program name any more: the claims that did were the
-/// seats', and whose a seat is stopped being a question about processes
-/// (`seats::claim`). What remains asks after a name it already has
-/// ([`image_still_at`]) or after this very program
+/// runner records a program name: whose a seat is, is not a question
+/// about processes (`seats::claim`). The probes ask after a name they
+/// already have ([`image_still_at`]) or after this very program
 /// ([`task_runner_exists`]).
 #[cfg(test)]
 pub(crate) fn image_of(pid: u32) -> Option<String> {

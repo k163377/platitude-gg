@@ -648,7 +648,7 @@ fn stage_for(rest: &[String]) -> &'static str {
     // the app.
     let Some(verb) = subcommand_at(rest).map(|at| rest[at].as_str()) else {
         // A bare `--shell`, or a line that is all options. The small
-        // image opens now; --stage app asks for the other one.
+        // image opens; --stage app asks for the other one.
         return "core";
     };
     if XTASK_VERBS.contains(&verb) {
