@@ -187,6 +187,7 @@ QtObject {
                 // say the list stayed — one sampler owns the whole of it.
                 "list-menu",
                 "ref-list", "ref-list-card", "ref-list-lit", "ref-list-choose", "row-part", "graph-reclick",
+                "graph-head-list",
                 "graph-reclick-list",
                 "graph-reclick-scrolled", "graph-reclick-across", "graph-reclick-mark",
                 "graph-reclick-still", "graph-reclick-lanes", "rename-box-out",

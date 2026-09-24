@@ -45,10 +45,45 @@ Rectangle {
     /// The stand-in was pressed. `modifiers` rides along because this is the row: what Ctrl and Shift do to the
     /// choice is decided where every other press decides it (デザイン規約 §複数のコミットを選ぶ).
     signal activated(int row, int modifiers)
+    /// The pointer came onto the chip: unfold it, as a row's chip unfolds (`GraphRowDelegate.openPointed`). The row
+    /// comes with it — every name in the card is on that one commit, and the card's rows are that row's.
+    signal chipExpandRequested(string oidHex, int atRow, var records, var anchor)
+    /// And left it — put it back, unless it went into the card (only the owner can tell).
+    signal chipCollapseRequested()
 
     /// The pointer resting on this, for the headless run — hover cannot be injected, so what the pointer would light is
     /// written in the same one place the pointer's own arrival writes (verify-ui).
     property bool pointed: false
+    /// Where along the stand-in the pointer is, or -1 for "not on it" — the row's own `pointerRowX`, written by the
+    /// press area below and by a headless run the same way.
+    property real pointerX: -1
+    /// The card the chip unfolds into is standing on this stand-in's chip — the page's answer, read back through the
+    /// list the way a row reads it (`GraphRowDelegate.listOnThisChip`).
+    readonly property bool listOnThisChip: pin.view.chipListAnchor === pinStack
+    /// The pointer is on the chip's side of the stand-in. **The row's own division** (`GraphRowDelegate.partAt`): the
+    /// chip column's edge, which is a line on screen, and not the chip's frame.
+    readonly property bool chipPointed: pin.pointerX >= 0 && pin.pointerX < pin.labelWidth && pin.records.length > 0
+    onChipPointedChanged: pin.settleChip()
+    /// A second click is waiting out its window somewhere in this graph, and hover is held still while it runs — the
+    /// row's rule (`GraphRowDelegate.renameWaiting`). The card's rows take that click, and a card standing here is one.
+    readonly property bool renameWaiting: pin.view.renameWaiting
+    onRenameWaitingChanged: if (!pin.renameWaiting && pin.pointerX >= 0) pin.settleChip()
+    /// **Unfolded at once, as a row's chip is** (規約 §hover のツールチップ「展開は即時」) — a chip wearing a `+N` has
+    /// been pointed at on purpose.
+    function settleChip() {
+        if (pin.renameWaiting)
+            return
+        if (pin.chipPointed)
+            pin.chipExpandRequested(pin.graphModel.oidAt(pin.headRow), pin.headRow, pin.records, pinStack)
+        else
+            pin.chipCollapseRequested()
+    }
+    /// What the pointer skips while the card stands on the chip (see the area below) it takes back the moment the card
+    /// goes, or a hand coming back is taken for one that never left.
+    onListOnThisChipChanged: {
+        if (!pin.listOnThisChip && !pinMouse.containsMouse)
+            pin.pointerX = -1
+    }
 
     readonly property int headRow: pin.graphModel.headRow
     /// Where that row sits in the list's own content coordinates. Worked out: the row is
@@ -185,7 +220,9 @@ Rectangle {
             width: parent.width
             height: pinPicked.height
             color: Theme.bgHover
-            visible: (pinMouse.containsMouse || pin.pointed) && !pin.selected
+            // The card the chip unfolds into holds it up as well, the way it holds a row's: the card takes the
+            // pointer off this the moment it is drawn (`GraphRowDelegate.lit`).
+            visible: (pinMouse.containsMouse || pin.pointed || pin.listOnThisChip) && !pin.selected
         }
     }
 
@@ -195,6 +232,9 @@ Rectangle {
     readonly property alias picked: pinPicked.visible
     /// The message's strength as drawn, for the headless run: what tells a stand-in the search passed over from a lit one.
     readonly property alias wordsOpacity: subject.opacity
+    /// The chip, sheets and all — what the card it unfolds into stands on, for the headless run that points at it and
+    /// reads the card against it.
+    readonly property alias chipItem: pinStack
 
     // The chip column, laid out as a row's is (`GraphRowChips`): the chip against the column's right edge, its names
     // cut to the column, and level with the row.
@@ -205,6 +245,8 @@ Rectangle {
         opacity: pin.dimmed ? Metrics.dimFade : 1
         records: pin.records
         maxWidth: pin.labelWidth - Theme.spaceSm
+        // The card takes the fan's ground, as it does on a row (`GraphRowChips.listOpen`).
+        unstacked: pin.listOnThisChip
     }
     // This commit's lanes and its face, drawn by the very cell a row draws them with — same curves, same node, same
     // clipping, and nothing on it that this commit does not have. **Cut at the node's edge**: what the cell would draw
@@ -345,6 +387,18 @@ Rectangle {
         onPressed: mouse => {
             if (mouse.button === Qt.LeftButton)
                 pin.activated(pin.headRow, mouse.modifiers)
+        }
+        onPositionChanged: mouse => pin.pointerX = mouse.x
+        onContainsMouseChanged: {
+            if (pinMouse.containsMouse) {
+                pin.pointerX = pinMouse.mouseX
+                return
+            }
+            // The card opens *on* the chip, so this loses the pointer the instant it is drawn — and that leave says
+            // nothing about where the hand went (`GraphRowDelegate`, the same skip).
+            if (pin.listOnThisChip)
+                return
+            pin.pointerX = -1
         }
     }
 }

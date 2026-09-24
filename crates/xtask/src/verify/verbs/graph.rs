@@ -134,6 +134,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "covers=true",
     },
+    // The same card, opened from the stand-in for a HEAD scrolled off:
+    // the stand-in writes where the pointer is and asks for it itself,
+    // so `on=` is the card having landed on its chip rather than on a
+    // row's — the one thing that takes its sheets down and holds its
+    // ground lit.
+    Verb {
+        name: "graph-head-list",
+        when: &[],
+        plain: "shown=true list=true on=true covers=true",
+    },
     // The pointer resting on one of that card's rows. The wash is one
     // shade over the card's own ground, so a row that never took the
     // answer frames the same as one that did — and the row worth aiming

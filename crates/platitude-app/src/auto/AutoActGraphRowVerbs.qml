@@ -99,6 +99,12 @@ Item {
             refListOpenTimer.row = arg === "" ? -1 : Number(arg)
             refListOpenTimer.cards = act === "ref-list-card"
             refListOpenTimer.start()
+        } else if (act === "graph-head-list") {
+            // The stand-in's chip under a pointer. Hover cannot be injected, so this writes the one property the
+            // pointer writes on the stand-in (`GraphHeadPin.pointerX`) and leaves the rest to it — **whether the
+            // stand-in asks at all is the point**, so going to `chipExpandRequested` directly would prove nothing.
+            headListTimer.pointed = false
+            headListTimer.start()
         } else if (act === "ref-list-lit") {
             // The stacked list with the pointer resting on one of its rows. The hand that walked down off the chip is
             // the only way a reader ever reads these names, so the wash it brings is part of the card's own picture.
@@ -588,6 +594,40 @@ Item {
                 return
             refListShownTimer.stop()
             Harness.report("ref_list " + acts.coverOf(stacked.chipItem.chipItem) + " row=" + refListOpenTimer.row)
+            renderedBarrier.begin()
+        }
+    }
+    // The stand-in has to be up on the top edge before its chip can be pointed at, so the view is sent to its end until
+    // it is (the ask `graph-head` repeats, for the same reason); then the pointer goes onto the chip and the card is
+    // waited for — on that chip, since a card on a row's chip is up too.
+    SampleTimer {
+        id: headListTimer
+        property bool pointed: false
+        onTriggered: {
+            const pin = graphPane.headPin
+            if (graphModel.loading || graphModel.rowTotal === 0 || !pin.wanted)
+                return
+            if (!headListTimer.pointed) {
+                if (!pin.visible || !pin.rowAbove) {
+                    graphPane.view.positionViewAtEnd()
+                    return
+                }
+                headListTimer.pointed = true
+                // The middle of the front card, where a hand reaching for the name lands.
+                pin.pointerX = pin.chipItem.x + pin.chipItem.chipItem.width / 2
+                return
+            }
+            if (!refList.opened || rowHost.refListAnchor !== pin.chipItem)
+                return
+            headListTimer.stop()
+            // `on=` is the stand-in's own answer to "is the card on me" — what takes its sheets down and holds its
+            // ground lit — and `covers=` is read off the front card where it stands once they are down.
+            Harness.report("graph_head_list shown=" + pin.visible
+                              + " list=" + refList.opened
+                              + " on=" + pin.listOnThisChip
+                              + " " + acts.coverOf(pin.chipItem.chipItem)
+                              + " above=" + pin.rowAbove
+                              + " names=" + pin.records.length)
             renderedBarrier.begin()
         }
     }

@@ -521,6 +521,10 @@ Rectangle {
             graphArea.jumpToRow(row)
             graphArea.rowActivated(graphArea.graphModel.oidAt(row), row, modifiers)
         }
+        // Its chip unfolds through the rows' own door: the card is the one the page holds for every chip.
+        onChipExpandRequested: (oidHex, atRow, records, anchor) =>
+            graphArea.chipExpandRequested(oidHex, atRow, records, anchor)
+        onChipCollapseRequested: graphArea.chipCollapseRequested()
     }
     /// The stand-in itself — automation-only exposure, the same one `view` is (app-ui.md). A headless run reads what it
     /// drew (`visible` / `rowAbove` / `lit`), rests the pointer on it by writing the one property the pointer's own
