@@ -97,6 +97,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if cfg!(windows) {
         cmd.env("QT_QPA_FONTDIR", "C:\\Windows\\Fonts");
     }
+    // Its compiled QML beside the build, as its settings are kept apart:
+    // the cache the person's own windows use is theirs (`verify::child`).
+    cmd.env("QML_DISK_CACHE_PATH", exe.with_file_name("qmlcache"));
     println!("running the shipped build offscreen: {}", config.display());
 
     // waits(measured): how long the build stood, for the verdict's wording — `stood`

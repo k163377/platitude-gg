@@ -126,7 +126,7 @@ fn qml_notes(path: &str) -> Result<Vec<String>, String> {
         && let Ok(main_rs) = std::fs::read_to_string(src_dir.join("main.rs"))
         && !main_rs.contains(&file_name)
     {
-        missing.push("main.rs (include_bytes_qml!)".to_string());
+        missing.push("main.rs (qrc::embed!)".to_string());
     }
     if !missing.is_empty() {
         notes.push(format!(

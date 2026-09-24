@@ -276,6 +276,11 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         // this every glyph is a box (verify-ui skill).
         cmd.env("QT_QPA_FONTDIR", "C:\\Windows\\Fonts");
     }
+    // The compiled QML, beside the build it was compiled from: every run of
+    // one build loads what the first one compiled (`platitude-app` qrc.rs),
+    // and a person's own window and the other seats' builds, which name the
+    // same files, keep theirs where they are.
+    cmd.env("QML_DISK_CACHE_PATH", exe.with_file_name("qmlcache"));
     // Set only where they were asked for: `clear_automation` above has
     // already taken whatever the parent shell carried, so an unset knob
     // here is an app that is not being made to wedge (`super::faults`).
