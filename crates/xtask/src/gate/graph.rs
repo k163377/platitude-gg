@@ -23,7 +23,9 @@
 //! tests *in* that closure — read by module path, which is what `cargo
 //! test`'s filter takes. QML and Rust are two worlds: a QML change
 //! reaches other QML, never a Rust module's tests, except through a Rust
-//! test that reads QML files off the disk (a directory literal).
+//! test that reads QML files off the disk (a directory literal). And a
+//! product file read off the disk that way reaches no integration binary:
+//! those run the tooling against sandboxes of their own ([`Carried`]).
 //!
 //! Everything here over-approximates on purpose: a module is the unit (an
 //! item's file), a glob re-export lands on every file it
@@ -76,6 +78,45 @@ pub(crate) struct Graph {
     app_types: BTreeMap<String, String>,
 }
 
+/// How much of a change a file is handed.
+///
+/// **Nothing outside the product compiles it** — xtask depends on std
+/// alone — so the product reaches the tooling only as files a tool reads
+/// off the disk: a string literal naming them, a directory holding them.
+/// Such a read is of whichever tree the tool is pointed at, and an
+/// integration binary points what it runs at a sandbox it laid out itself
+/// (its own literals are fixtures, not reads — [`build`]). So a product
+/// change handed on that way stops at an integration binary's modules.
+/// Everything else is handed on whole: the tooling's own files reach the
+/// binary that runs them, and so does a file outside the product that a
+/// binary reads off the real tree itself (the hook script `tests/gate`
+/// copies into its sandbox).
+///
+/// The stop is what keeps a change to the app or the core from owing the
+/// gate's own sandbox tests on both sides: the census reads the app's
+/// sources off the tree under gate, and the gate is what those tests
+/// shoot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Carried {
+    /// A product file, as a tool that does not build it reads it.
+    AsProductFile,
+    /// The change itself, or code built from it.
+    Whole,
+}
+
+/// A file of the reach, with what it was handed.
+type Handed = (String, Carried);
+
+/// Whether a file is part of the product — the two crates the app is
+/// built from, tests and all.
+fn is_product(file: &str) -> bool {
+    // Spelled in pieces: a whole path here would be read as this file
+    // reading the product.
+    ["platitude-app", "platitude-core"]
+        .iter()
+        .any(|name| file.starts_with(&format!("crates/{name}/")))
+}
+
 fn rel(root: &Path, path: &Path) -> String {
     path.strip_prefix(root)
         .unwrap_or(path)
@@ -109,60 +150,80 @@ impl Graph {
 
     /// Everything that reads one of `changed`, transitively, plus
     /// `changed` itself. A QML node hands on only to QML readers and to
-    /// directory nodes (a Rust test reading the QML tree off the disk).
+    /// directory nodes (a Rust test reading the QML tree off the disk), and
+    /// a product file read off the disk stops at an integration binary
+    /// ([`Carried`]).
     pub(crate) fn reach(&self, changed: &[String]) -> BTreeSet<String> {
-        let mut seen: BTreeSet<String> = BTreeSet::new();
-        let mut queue: Vec<String> = changed.to_vec();
-        while let Some(file) = queue.pop() {
-            if !seen.insert(file.clone()) {
-                continue;
-            }
-            let Some(readers) = self.rdeps.get(&file) else {
-                continue;
-            };
-            let qml = file.ends_with(".qml");
-            for reader in readers {
-                if qml && !(reader.ends_with(".qml") || reader.ends_with('/')) {
-                    continue;
-                }
-                queue.push(reader.clone());
-            }
-        }
-        seen
+        self.walk(changed)
+            .into_keys()
+            .map(|(file, _)| file)
+            .collect()
     }
 
     /// How `target` got into the reach of `changed`: the chain of readers
     /// from a changed file to it, when there is one.
     pub(crate) fn why(&self, changed: &[String], target: &str) -> Option<Vec<String>> {
-        let mut parent: BTreeMap<String, String> = BTreeMap::new();
-        let mut queue: std::collections::VecDeque<String> = changed.iter().cloned().collect();
-        let mut seen: BTreeSet<String> = changed.iter().cloned().collect();
-        while let Some(file) = queue.pop_front() {
-            if file == target {
-                let mut chain = vec![file.clone()];
-                let mut at = file;
-                while let Some(from) = parent.get(&at) {
-                    chain.push(from.clone());
-                    at = from.clone();
-                }
-                chain.reverse();
-                return Some(chain);
+        let handed = self.walk(changed);
+        let mut at = handed
+            .keys()
+            .filter(|(file, _)| file == target)
+            .max_by_key(|(_, carried)| *carried)?
+            .clone();
+        let mut chain = vec![at.0.clone()];
+        while let Some(Some(from)) = handed.get(&at) {
+            chain.push(from.0.clone());
+            at = from.clone();
+        }
+        chain.reverse();
+        Some(chain)
+    }
+
+    /// The reach, breadth first: each file under the most it was handed,
+    /// against the file that handed it on (none for a changed file).
+    fn walk(&self, changed: &[String]) -> BTreeMap<Handed, Option<Handed>> {
+        let mut handed: BTreeMap<Handed, Option<Handed>> = BTreeMap::new();
+        let mut most: BTreeMap<String, Carried> = BTreeMap::new();
+        let mut queue: std::collections::VecDeque<Handed> = std::collections::VecDeque::new();
+        for file in changed {
+            if most.insert(file.clone(), Carried::Whole).is_none() {
+                handed.insert((file.clone(), Carried::Whole), None);
+                queue.push_back((file.clone(), Carried::Whole));
             }
+        }
+        while let Some((file, carried)) = queue.pop_front() {
             let Some(readers) = self.rdeps.get(&file) else {
                 continue;
             };
-            let qml = file.ends_with(".qml");
             for reader in readers {
-                if qml && !(reader.ends_with(".qml") || reader.ends_with('/')) {
+                let Some(next) = self.hands_on(&file, carried, reader) else {
+                    continue;
+                };
+                if most.get(reader).is_some_and(|had| *had >= next) {
                     continue;
                 }
-                if seen.insert(reader.clone()) {
-                    parent.insert(reader.clone(), file.clone());
-                    queue.push_back(reader.clone());
-                }
+                most.insert(reader.clone(), next);
+                handed.insert((reader.clone(), next), Some((file.clone(), carried)));
+                queue.push_back((reader.clone(), next));
             }
         }
-        None
+        handed
+    }
+
+    /// What `reader` is handed of a change `file` carries, if anything.
+    fn hands_on(&self, file: &str, carried: Carried, reader: &str) -> Option<Carried> {
+        if file.ends_with(".qml") && !(reader.ends_with(".qml") || reader.ends_with('/')) {
+            return None;
+        }
+        let carried = if carried == Carried::Whole && is_product(file) && !is_product(reader) {
+            Carried::AsProductFile
+        } else {
+            carried
+        };
+        let sandboxed = self
+            .modules
+            .get(reader)
+            .is_some_and(|module| module.test_binary.is_some());
+        (carried == Carried::Whole || !sandboxed).then_some(carried)
     }
 
     /// What `files` read, transitively — the inputs a cache key for tests
@@ -1606,6 +1667,113 @@ mod tests {
                 "{test} shoots {bin} and the graph does not know it"
             );
         }
+    }
+
+    /// The graph `edges` draw, read both ways, with the integration
+    /// binaries' modules named.
+    fn drawn(edges: &[(&str, &str)], sandboxed: &[&str]) -> super::Graph {
+        let mut g = super::Graph::default();
+        for (from, to) in edges {
+            g.edge(from, to);
+        }
+        for file in sandboxed {
+            g.modules.insert(
+                (*file).to_string(),
+                super::Module {
+                    krate: "probe".to_string(),
+                    path: Vec::new(),
+                    package: "probe".to_string(),
+                    test_binary: Some("probe".to_string()),
+                    has_tests: true,
+                },
+            );
+        }
+        for (from, to) in g.deps.clone() {
+            for target in to {
+                g.rdeps.entry(target).or_default().insert(from.clone());
+            }
+        }
+        g
+    }
+
+    /// A product file a tool reads off the disk stops at an integration
+    /// binary, which runs the tool against a sandbox of its own. What
+    /// still reaches the binary: the tool's own code, a file outside the
+    /// product, and a product change the binary's own crate compiles in.
+    #[test]
+    fn a_product_file_read_off_the_disk_stops_at_an_integration_binary() {
+        // Spelled in pieces and named after nothing on disk, so that this
+        // file reads none of them.
+        let qml = format!("crates/{}/src/ui/Probe.qml", "platitude-app");
+        let ui = format!("crates/{}/src/ui/", "platitude-app");
+        let core = format!("crates/{}/src/probe.rs", "platitude-core");
+        let core_it = format!("crates/{}/tests/probe/main.rs", "platitude-core");
+        let tool = format!("crates/{}/src/probe_reader.rs", "xtask");
+        let bin = format!("crates/{}/src/probe_main.rs", "xtask");
+        let shooter = format!("crates/{}/tests/probe/main.rs", "xtask");
+        let script = format!("{}/probe-hook", ".githooks");
+        let g = drawn(
+            &[
+                (&ui, &qml),
+                (&tool, &ui),
+                (&tool, &script),
+                (&bin, &tool),
+                (&shooter, &bin),
+                (&core_it, &core),
+            ],
+            &[&shooter, &core_it],
+        );
+        let reach = |changed: &[&String]| {
+            g.reach(&changed.iter().map(|f| (*f).clone()).collect::<Vec<_>>())
+        };
+        let from_the_product = reach(&[&qml]);
+        for owed in [&ui, &tool, &bin] {
+            assert!(
+                from_the_product.contains(owed),
+                "{owed}: {from_the_product:?}"
+            );
+        }
+        assert!(
+            !from_the_product.contains(&shooter),
+            "a sandboxed binary is no reader of the product's files: {from_the_product:?}"
+        );
+        for changed in [&script, &tool] {
+            assert!(
+                reach(&[changed]).contains(&shooter),
+                "{changed} is read or run by the binary itself"
+            );
+        }
+        assert!(reach(&[&core]).contains(&core_it), "compiled in");
+        // Handed on whole by one path, the binary is owed whatever else
+        // handed the same file less.
+        assert!(reach(&[&qml, &tool]).contains(&shooter));
+        assert_eq!(
+            g.why(&[qml.clone(), tool.clone()], &shooter),
+            Some(vec![tool.clone(), bin.clone(), shooter.clone()])
+        );
+        assert_eq!(g.why(&[qml], &shooter), None);
+    }
+
+    /// The same stop on the tree as it stands: the app's window reaches
+    /// the gate's census reader, whose unit tests are owed, and not the
+    /// gate's sandbox tests; the hook script those tests copy off the
+    /// real tree still reaches them.
+    #[test]
+    fn the_apps_window_owes_the_census_tests_and_not_the_gates_sandbox() {
+        let root = crate::tree::workspace_root();
+        let g = build(&root).expect("the graph of this tree");
+        let window = format!("crates/{}/src/ui/{}.qml", "platitude-app", "Main");
+        let reach = g.reach(&[window]);
+        assert!(
+            reach.contains("crates/xtask/src/gate/census.rs"),
+            "{reach:?}"
+        );
+        let sandbox = format!("crates/xtask/{}/", "tests");
+        let shot: Vec<&String> = reach.iter().filter(|f| f.starts_with(&sandbox)).collect();
+        assert!(shot.is_empty(), "{shot:?}");
+        let hook = format!("{}/{}", ".githooks", "reference-transaction");
+        let support = format!("crates/xtask/{}/gate/support.rs", "tests");
+        assert!(g.reach(&[hook]).contains(&support));
     }
 
     /// The whole tree, as it stands. The same reading every gate does
