@@ -231,20 +231,37 @@ pub fn run(args: &[String]) -> Result<(), String> {
         opts: &opts,
     })?;
     let verdict = outcome::judge(&opts, &ran, &config);
-    if verdict.passed() {
-        tell_the_census(&root, &opts, &ran);
-        // The scaffolding goes back where the run stood it up, and only
-        // on the road where nobody will want to look at it again
-        // (`ownership::give_back_claimed`). A failing run keeps its
-        // tree: in a container that volume is the only place the scene
-        // survives.
-        let gone = super::ownership::give_back_claimed(beside.as_deref());
-        if gone > 0 {
-            println!("demo repositories given back: {gone}");
-        }
-    }
+    let census = if verdict.passed() {
+        settle_a_pass(&root, &opts, &ran, beside.as_deref())
+    } else {
+        None
+    };
     say_what_it_spent(whole, fixture, build, ran.elapsed);
-    outcome::announce(&opts, &shot_dir, &ran, &verdict)
+    outcome::announce(&opts, &shot_dir, &ran, &verdict, census.as_deref())
+}
+
+/// What a run the verdict passed still owes: its census line, and then
+/// the scaffolding it stood up. Answers why the line was not written,
+/// which fails the run — the census would still say what the verbs
+/// showed before it, and a gate would stamp what it chose off that.
+fn settle_a_pass(
+    root: &std::path::Path,
+    opts: &super::options::Options,
+    ran: &child::Ran,
+    beside: Option<&[u32]>,
+) -> Option<String> {
+    if let Err(why) = tell_the_census(root, opts.census_line(), &ran.err_lines) {
+        return Some(why);
+    }
+    // The scaffolding goes back where the run stood it up, and only on
+    // the road where nobody will want to look at it again
+    // (`ownership::give_back_claimed`). A failing run keeps its tree: in
+    // a container that volume is the only place the scene survives.
+    let gone = super::ownership::give_back_claimed(beside);
+    if gone > 0 {
+        println!("demo repositories given back: {gone}");
+    }
+    None
 }
 
 /// The three parts of a run that are worth telling apart, and what is
@@ -289,37 +306,54 @@ fn say_what_it_spent(
 
 /// A passing run tells the census what it showed, so the gate can pick
 /// this line by itself the next time one of those components changes
-/// (`gate::census`). Only a run somebody can type again is recorded, and
-/// only one whose page had stopped arriving writes its line — the rest
-/// add to it, having seen whichever rows the reads had brought.
-fn tell_the_census(root: &std::path::Path, opts: &super::options::Options, ran: &child::Ran) {
-    let (Some(line), Some(names)) = (opts.census_line(), crate::gate::names_in(&ran.err_lines))
-    else {
-        return;
+/// (`gate::census`). Only a run somebody can type again is recorded
+/// (`line`, from `Options::census_line`), and only one whose page had
+/// stopped arriving writes its line — the rest add to it, having seen
+/// whichever rows the reads had brought.
+///
+/// **An error is a line the run owed and did not write**: the run never
+/// said what it showed, or the file could not be read, held or written.
+/// A run that owes no line — not one anybody can type again, or a twin —
+/// answers `Ok` whatever it said.
+fn tell_the_census(
+    root: &std::path::Path,
+    line: Option<String>,
+    said: &[String],
+) -> Result<(), String> {
+    let Some(line) = line else {
+        return Ok(());
     };
     // A twin is the same run as a line the census already holds, and no
     // gate owes it; recording it would bring it back for `verbs` to
     // refuse (`gate::tiers`).
     if let Some(of) = crate::gate::Tiers::load(root).twin_of(&line) {
         println!("census: {line} — not recorded, the tier table says it is the same run as {of}");
-        return;
+        return Ok(());
     }
-    let page_settled = crate::gate::page_settled_in(&ran.err_lines);
-    match crate::gate::record(root, &line, &names, page_settled) {
-        // The names the write moved, beside the count: the file's own
-        // diff is every line when a component came or went, and this is
-        // the run saying which name that was and whether the line it was
-        // about is the one that moved.
-        Ok((count, shift)) if page_settled => println!(
+    // Every run that ends on its picture walks the window first
+    // (`AutoShotDriver.waitsForCensus`), so a pass with no names is a
+    // harness that stopped saying them.
+    let names =
+        crate::gate::names_in(said).ok_or_else(|| format!("{line}: never said `census=`"))?;
+    let page_settled = crate::gate::page_settled_in(said);
+    let (count, shift) = crate::gate::record(root, &line, &names, page_settled)
+        .map_err(|why| format!("{line}: {why}"))?;
+    // The names the write moved, beside the count: the file's own diff is
+    // every line when a component came or went, and this is the run
+    // saying which name that was and whether the line it was about is the
+    // one that moved.
+    if page_settled {
+        println!(
             "census: {line} — {count} component(s) recorded{}",
             shift.said_for(&line)
-        ),
-        Ok((count, shift)) => println!(
+        );
+    } else {
+        println!(
             "census: {line} — {count} component(s), added to: the page was still arriving{}",
             shift.said_for(&line)
-        ),
-        Err(why) => println!("census: not recorded ({why})"),
+        );
     }
+    Ok(())
 }
 
 /// Where a run's gitconfig stands: beside its pictures, except inside a
@@ -374,5 +408,72 @@ mod tests {
         );
         assert!(own.starts_with(std::env::temp_dir().join("pgg-verify")));
         let _ = std::fs::remove_dir_all(&own);
+    }
+
+    /// A tree of one test's own, holding one component and no census yet.
+    fn tree() -> std::path::PathBuf {
+        let root = super::claim_dir(&std::env::temp_dir().join("pgg-census"), "told")
+            .expect("a root of this test's own");
+        let ui = root.join("crates/platitude-app/src/ui");
+        std::fs::create_dir_all(&ui).expect("ui dir");
+        std::fs::create_dir_all(root.join("crates/xtask")).expect("xtask dir");
+        std::fs::write(ui.join("WipPane.qml"), "Item {}\n").expect("component");
+        root
+    }
+
+    /// What a run that walked the window says at its end.
+    fn walked() -> Vec<String> {
+        [
+            "INFO bench: census page=settled",
+            "INFO bench: census=WipPane",
+        ]
+        .map(String::from)
+        .to_vec()
+    }
+
+    /// **A line the run owed and did not write is an error**, and the
+    /// census is as it was; a run that owes no line answers well whatever
+    /// it said.
+    #[test]
+    fn a_line_owed_and_not_written_is_an_error_and_a_run_that_owes_none_is_not() {
+        let root = tree();
+        let census = root.join(crate::gate::CENSUS_FILE);
+        let silent = ["INFO bench: auto_act complete=wip".to_string()];
+        let Err(why) = super::tell_the_census(&root, Some("wip".into()), &silent) else {
+            panic!("a run that never said what it showed owed its line nothing");
+        };
+        assert!(why.contains("census="), "{why}");
+        assert!(!census.exists(), "nothing was written");
+        // `--no-census`, the container, a `--repo`: no line anybody can
+        // type again.
+        super::tell_the_census(&root, None, &silent).expect("a run that owes no line");
+
+        let staging = root.join("target").join("verb-census.txt.part");
+        std::fs::create_dir_all(&staging).expect("a directory where the staging file goes");
+        let Err(why) = super::tell_the_census(&root, Some("wip".into()), &walked()) else {
+            panic!("a line with nowhere to stage it was written");
+        };
+        assert!(why.contains("verb-census.txt.part"), "{why}");
+        assert!(!census.exists(), "nothing was written");
+
+        std::fs::remove_dir(&staging).expect("the directory gone");
+        super::tell_the_census(&root, Some("wip".into()), &walked()).expect("the line written");
+        let text = std::fs::read_to_string(&census).expect("the census");
+        assert!(text.contains("\nwip\tWipPane\n"), "{text}");
+    }
+
+    /// A twin is the same run as another line, and owes none of its own:
+    /// it answers well whatever it said, and its line stays out.
+    #[test]
+    fn a_twin_owes_no_line() {
+        let root = tree();
+        std::fs::write(
+            root.join("crates/xtask/verb-tiers.txt"),
+            "twin\twip again\twip\tthe same run as wip\n",
+        )
+        .expect("the tier table");
+        super::tell_the_census(&root, Some("wip again".into()), &[]).expect("said nothing");
+        super::tell_the_census(&root, Some("wip again".into()), &walked()).expect("said it");
+        assert!(!root.join(crate::gate::CENSUS_FILE).exists());
     }
 }

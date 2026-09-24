@@ -180,12 +180,16 @@ fn filed_shots(opts: &super::options::Options, shot_dir: &std::path::Path) -> Ve
 
 /// Prints what the run said, files its pictures on the board, and gives
 /// the verdict — the whole of what a person reads off one run.
+/// `census_unwritten` is why a run that passed did not write the census
+/// line it owed (`run::tell_the_census`), which fails it.
 pub(super) fn announce(
     opts: &super::options::Options,
     shot_dir: &std::path::Path,
     ran: &super::child::Ran,
     outcome: &Outcome,
+    census_unwritten: Option<&str>,
 ) -> Result<(), String> {
+    let passed = outcome.passed() && census_unwritten.is_none();
     let (status, err_lines, out_lines, timed_out, elapsed) = (
         &ran.status,
         &ran.err_lines,
@@ -201,7 +205,7 @@ pub(super) fn announce(
 
     println!(
         "{}: {} in {:.1}s (exit {}, screenshot saved={}, write-failures {}{})",
-        if outcome.passed() { "PASS" } else { "FAIL" },
+        if passed { "PASS" } else { "FAIL" },
         opts.verb,
         elapsed.as_secs_f32(),
         status.map_or_else(
@@ -280,7 +284,14 @@ pub(super) fn announce(
              mounted at /out."
         );
     }
-    if outcome.passed() {
+    if let Some(why) = census_unwritten {
+        println!(
+            "  the run was judged well and the census line it owes was not written: {why}. \
+             Its repositories and pictures are kept, and {} is as it was before the run.",
+            crate::gate::CENSUS_FILE
+        );
+    }
+    if passed {
         Ok(())
     } else {
         Err(format!("verify-ui {} failed", opts.verb))
@@ -507,6 +518,29 @@ mod tests {
             },
             &ran(false, Some(0))
         ));
+    }
+
+    /// **A run judged well that did not write the census line it owed
+    /// fails**: the census would still say what the verbs showed before,
+    /// and a gate would stamp what it chose off that.
+    #[test]
+    fn a_run_judged_well_that_did_not_write_its_census_line_fails() {
+        let opts = super::super::options::parse(&["wip".to_string(), "--no-board".to_string()])
+            .expect("a line");
+        let shot_dir =
+            super::super::ownership::claim_dir(&std::env::temp_dir().join("pgg-verify"), "shots")
+                .expect("a shot dir of this test's own");
+        let well = super::announce(&opts, &shot_dir, &ran(false, Some(0)), &WELL, None);
+        let unwritten = super::announce(
+            &opts,
+            &shot_dir,
+            &ran(false, Some(0)),
+            &WELL,
+            Some("wip: never said `census=`"),
+        );
+        let _ = std::fs::remove_dir_all(&shot_dir);
+        assert!(well.is_ok(), "{well:?}");
+        assert!(unwritten.is_err());
     }
 
     #[test]
