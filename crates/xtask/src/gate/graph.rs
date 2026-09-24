@@ -1117,8 +1117,10 @@ fn literal_paths(root: &Path, file: &str, bodies: &[String]) -> Vec<String> {
             // their own). An edge here would put it in the cache key of
             // every test the file that names it reaches, so a landing's
             // commit of a census a verb rewrote would rerun them all to
-            // the same answer.
-            if name == super::census::FILE {
+            // the same answer. The tier table beside it is the same kind
+            // of input: it says which steps a gate owes, and no test
+            // opens the committed one.
+            if name == super::census::FILE || name == super::tiers::FILE {
                 continue;
             }
             if real.is_dir() {
@@ -1509,6 +1511,7 @@ mod tests {
         assert!(named(plan, "../").is_empty());
         assert!(named("crates/xtask/src/hook/seat.rs", "crates/xtask").is_empty());
         assert!(named(plan, crate::gate::census::FILE).is_empty());
+        assert!(named(plan, crate::gate::tiers::FILE).is_empty());
         // What the rule keeps: a directory the file is not
         // in, and a file of its own. Spelled in pieces, or naming them
         // here would be this very file reading them.

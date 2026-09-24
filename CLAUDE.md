@@ -26,9 +26,9 @@
 
 前提: Qt(qtbridge の要求以上)+ C++ ツールチェーン、Qt の `bin`(`qmake`)が PATH に(他 OS の環境は `ci/` が正)。開発は debug ビルド。**`--release` は性能計測と起動確認だけ**(release でないと QML = exe 埋め込みが反映されない)。以下 `cargo` / `cargo xtask` を省略。
 
-**確認は 3 段**: **1 日常** = <!--call:gate.daily-->`gate --host-only`(コンテナ無し)/ **2 反映前** = `gate`(差分の依存木で選んだテストを両 OS で回し、緑を commit にスタンプ = `land` と git hook が要求)/ **3 フル** = `gate --all`(日常の段に見合わない `periodic` のテストも回す。それ以外で回すのはユーザーがテストを指示した時だけ)+ <!--call:linux.bare-->`linux bare --discover` + 3OS CI + 性能実測(リリース前と依存・環境を触った時)。
+**確認は 3 段**: **1 日常** = <!--call:gate.daily-->`gate --host-only`(コンテナ無し)/ **2 反映前** = `gate`(差分の依存木と `verb-tiers.txt` の段で選んだテストを回し、緑を commit にスタンプ = `land` と git hook が要求)/ **3 フル** = `gate --all`(`periodic` のテストと全動詞を両 OS で回す。それ以外で回すのはユーザーがテストを指示した時だけ)+ <!--call:linux.bare-->`linux bare --discover` + 3OS CI + 性能実測(リリース前と依存・環境を触った時)。
 
-**変更作業の完了には、依頼範囲の作業完了(§Git 運用)と、現在の commit に対する `gate` の PASS の両方が必要**。UI 配線では **gate が選んだ動詞が両 OS で PASS し、両方の PNG を目視するまで**(verify-ui スキルを必ず呼ぶ)。
+**変更作業の完了には、依頼範囲の作業完了(§Git 運用)と、現在の commit に対する `gate` の PASS の両方が必要**。UI 配線では **触った動詞が両 OS で PASS し、両方の PNG を目視するまで**(verify-ui スキルを必ず呼ぶ)。
 
 - **起動だけの要求(「rebase して起動」等)は fast path** — シェル呼び出し 1 個で起動して即報告し、ターンを終える(verify-ui スキル §起動 fast path)。段 2 はユーザーが検証・反映を指示した時
 - **Linux での確認は `linux <コマンド>`**([ci/linux/Dockerfile](ci/linux/Dockerfile) のコンテナ = 最低 git バージョンを積んだ唯一の環境。**`bare` は宣言した依存だけの Ubuntu で動くかだけを見る**)

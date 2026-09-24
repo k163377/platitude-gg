@@ -9,6 +9,7 @@ use super::census::{self, Census};
 use super::graph::{self, Graph, stem_of};
 use super::record::Spent;
 use super::stamp::Store;
+use super::tiers::{Tier, Tiers};
 use crate::subprocess::{git_query, run_captured};
 
 /// Which side of stage 2 a step runs on: the host, or the Linux container
@@ -85,6 +86,9 @@ pub(crate) struct Plan {
     /// Candidate count from the final census, for comparison only.
     /// A component absent at the end may have been exercised earlier.
     pub verbs_in_shadow: usize,
+    /// Census lines the reach selected that this gate leaves to the full
+    /// one (`tiers`) — before a merge only; the full gate leaves none.
+    pub verbs_left: usize,
 }
 
 pub(crate) struct Ask<'a> {
@@ -260,15 +264,23 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     let census = Census::load(dir);
+    let tiers = Tiers::load(dir);
     let worn = census::worn_by(dir);
     spent.census = at.elapsed();
     let read = Reading {
         dir,
         census: &census,
+        tiers: &tiers,
         worn: &worn,
         whole: everything.is_some(),
     };
-    let (steps, verbs_in_shadow) = select(&g, &read, &reach, &executable_changes, ask);
+    let (
+        steps,
+        Counted {
+            shadow: verbs_in_shadow,
+            left: verbs_left,
+        },
+    ) = select(&g, &read, &reach, &executable_changes, ask);
     let store = Store::open(dir)?;
     let required = owed(&here, &head, &store, steps, ask, spent)?;
     let uncovered = uncovered(dir, &census, &touched, &worn);
@@ -300,6 +312,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         unclaimed,
         complaints: graph::complaints(&g),
         verbs_in_shadow,
+        verbs_left,
     })
 }
 
@@ -576,8 +589,18 @@ fn sort(
 struct Reading<'a> {
     dir: &'a Path,
     census: &'a Census,
+    /// Which of the census's lines each gate owes, and where (`tiers`).
+    tiers: &'a Tiers,
     worn: &'a BTreeMap<String, BTreeSet<String>>,
     whole: bool,
+}
+
+/// What the verb selection counted beside the steps it made.
+struct Counted {
+    /// The narrower candidate count ([`verbs_in_snapshot`]).
+    shadow: usize,
+    /// Selected lines left to the full gate.
+    left: usize,
 }
 
 fn select(
@@ -586,7 +609,7 @@ fn select(
     reach: &BTreeSet<String>,
     changed: &[String],
     ask: &Ask<'_>,
-) -> (Vec<Step>, usize) {
+) -> (Vec<Step>, Counted) {
     let sorted = sort(g, reach, read.whole, read.worn);
     let mut steps = always_steps();
     steps.extend(deny_steps(g, changed, read.whole));
@@ -598,9 +621,9 @@ fn select(
     if ask.all {
         steps.extend(periodic_steps(g, read.dir, &sorted));
     }
-    let (binary, would_have) = binary_steps(read, &sorted, reach, changed, ask);
+    let (binary, counted) = binary_steps(read, &sorted, reach, changed, ask);
     steps.extend(binary);
-    (steps, would_have)
+    (steps, counted)
 }
 
 fn always_steps() -> Vec<Step> {
@@ -842,13 +865,13 @@ fn it_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
     steps
 }
 
-/// The filter that picks out the tests the daily tiers leave out: every
+/// The filter that picks out the tests the pre-merge tiers leave out: every
 /// test under a `periodic` module, `#[ignore]`d so no plain run takes it.
 const PERIODIC: &str = "::periodic::";
 
 /// Stage 3's own steps: the `periodic` tests of every test target that
 /// holds some, on both sides where the package is. Seldom-changed
-/// promises whose check is slow on some OS — not worth the daily run,
+/// promises whose check is slow on some OS — not worth the pre-merge run,
 /// still owed a full one.
 fn periodic_steps(g: &Graph, dir: &Path, sorted: &Sorted) -> Vec<Step> {
     let unit = sorted.unit_files.iter().map(|(package, files)| {
@@ -940,7 +963,7 @@ fn binary_steps(
     reach: &BTreeSet<String>,
     changed: &[String],
     ask: &Ask<'_>,
-) -> (Vec<Step>, usize) {
+) -> (Vec<Step>, Counted) {
     let census = read.census;
     let mut steps = Vec::new();
     // Spelled in pieces: a whole path in a string here would be read as
@@ -965,13 +988,16 @@ fn binary_steps(
     let harness_moved = reach
         .iter()
         .any(|file| harness().iter().any(|dir| under(file, dir)));
-    let mut lines = if read.whole || harness_moved {
+    let lines = if read.whole || harness_moved {
         census.lines.keys().cloned().collect()
     } else {
         census.verbs_touching(&sorted.qml)
     };
     let shadow = verbs_in_snapshot(read, changed)
         .map_or(lines.len(), |shown| census.verbs_touching(&shown).len());
+    let selected = lines.len();
+    let mut lines = owed_lines(read, &sorted.qml, lines, ask.all);
+    let left = selected - lines.len();
     for extra in ask.extra_verbs {
         if !lines.contains(extra) {
             lines.push(extra.clone());
@@ -1001,6 +1027,10 @@ fn binary_steps(
         host_step.builds_app = true;
         host_step.release = true;
         steps.push(host_step);
+        // Asked for by name, the line runs where the asker can see it.
+        if !(read.tiers.on_linux(line, ask.all) || ask.extra_verbs.contains(line)) {
+            continue;
+        }
         let mut linux = xtask(&["linux", "verify-ui"]);
         linux.extend(crate::verify::suite_words(line));
         let mut linux_inputs = verb_inputs.clone();
@@ -1031,7 +1061,43 @@ fn binary_steps(
         bare.release = true;
         steps.push(bare);
     }
-    (steps, shadow)
+    (steps, Counted { shadow, left })
+}
+
+/// The selected census lines this gate owes (`tiers`): the full gate owes
+/// every line but a twin; a gate before a merge leaves the full lines out,
+/// **except a full line that is the only one showing a component the
+/// change reaches** — leaving it would leave that component without a run
+/// before the merge, which is what the census is there to rule out (the
+/// perf driver is shown by the perf lines alone).
+fn owed_lines(
+    read: &Reading<'_>,
+    reached: &BTreeSet<String>,
+    lines: Vec<String>,
+    full: bool,
+) -> Vec<String> {
+    let (owed, left): (Vec<String>, Vec<String>) = lines
+        .into_iter()
+        .filter(|line| read.tiers.tier(line) != Some(Tier::Twin))
+        .partition(|line| read.tiers.owed(line, full));
+    let shown: BTreeSet<&String> = owed
+        .iter()
+        .filter_map(|line| read.census.lines.get(line))
+        .flatten()
+        .collect();
+    let only_witnesses: Vec<String> = left
+        .into_iter()
+        .filter(|line| {
+            read.census.lines.get(line).is_some_and(|names| {
+                names
+                    .iter()
+                    .any(|name| reached.contains(name) && !shown.contains(name))
+            })
+        })
+        .collect();
+    let mut owed = owed;
+    owed.extend(only_witnesses);
+    owed
 }
 
 /// QML components in the reach that stand in the item tree and no verb's
@@ -1160,9 +1226,17 @@ pub(crate) fn describe(plan: &Plan) -> String {
         .iter()
         .filter(|r| r.step.id.starts_with("verify ") && r.step.side == Side::Host)
         .count();
+    let on_linux = plan
+        .required
+        .iter()
+        .filter(|r| r.step.id.starts_with("verify-linux "))
+        .count();
     if plan.verbs_in_shadow > 0 || chosen > 0 {
         out.push_str(&format!(
-            "verbs: {chosen} selected; shadow candidate: {} (final census only, not used to skip runs)\n",
+            "verbs: {chosen} selected, {on_linux} of them on the container too; {} left to the \
+             full gate ({}); shadow candidate: {} (final census only, not used to skip runs)\n",
+            plan.verbs_left,
+            super::tiers::FILE,
             plan.verbs_in_shadow
         ));
     }

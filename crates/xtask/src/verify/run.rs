@@ -297,6 +297,13 @@ fn tell_the_census(root: &std::path::Path, opts: &super::options::Options, ran: 
     else {
         return;
     };
+    // A twin is the same run as a line the census already holds, and no
+    // gate owes it; recording it would bring it back for `verbs` to
+    // refuse (`gate::tiers`).
+    if let Some(of) = crate::gate::Tiers::load(root).twin_of(&line) {
+        println!("census: {line} — not recorded, the tier table says it is the same run as {of}");
+        return;
+    }
     let page_settled = crate::gate::page_settled_in(&ran.err_lines);
     match crate::gate::record(root, &line, &names, page_settled) {
         // The names the write moved, beside the count: the file's own

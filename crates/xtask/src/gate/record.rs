@@ -258,8 +258,9 @@ pub(crate) struct Run<'a> {
     pub reach: usize,
     /// always, cached, to run.
     pub steps: (usize, usize, usize),
-    /// Verb steps selected, and those of them not already stamped.
-    pub verbs: (usize, usize),
+    /// Verb steps selected, those of them not already stamped, and the
+    /// census lines left to the full gate.
+    pub verbs: (usize, usize, usize),
     pub outcome: &'a str,
 }
 
@@ -276,7 +277,7 @@ fn moment(spent: Duration) -> String {
 /// The block both the terminal and the record hold.
 pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::Shift) -> String {
     let (always, cached, to_run) = run.steps;
-    let (verbs_selected, verbs_run) = run.verbs;
+    let (verbs_selected, verbs_run, verbs_left) = run.verbs;
     let mut out = format!(
         "gate: {} — {} ({}), HEAD {}, jobs {}{}\n",
         run.outcome,
@@ -288,7 +289,8 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::Shift) -> Stri
     );
     out.push_str(&format!(
         "  chose  changed {} / reach {} / steps {} (always {always}, cached {cached}, run \
-         {to_run}) / verbs {verbs_selected} selected, {verbs_run} to run\n",
+         {to_run}) / verbs {verbs_selected} selected, {verbs_run} to run, {verbs_left} left to \
+         the full gate\n",
         run.changed,
         run.reach,
         always + cached + to_run,
@@ -608,7 +610,7 @@ mod tests {
             changed: 1,
             reach: 46,
             steps: (4, 2, 714),
-            verbs: (353, 353),
+            verbs: (353, 353, 0),
             outcome: "PASS",
         };
         let text = render(&run, &spent, &crate::gate::Shift::default());

@@ -431,6 +431,13 @@ impl Sandbox {
                 "crates/xtask/verb-census.txt",
                 "# census\nstash --preset basic\tDriver Main StashPane\n",
             ),
+            // The census's one verb is one the container repeats before a
+            // merge, so every test sees both sides' verb blocks; a line
+            // the table does not name is the host's alone there.
+            (
+                "crates/xtask/verb-tiers.txt",
+                "linux\tstash --preset basic\t-\tthe sandbox's line on both sides\n",
+            ),
             ("internal-docs/notes.md", "# notes\n"),
         ] {
             self.write(&self.repo, path, text);

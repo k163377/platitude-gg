@@ -1,6 +1,8 @@
 //! Which steps a change owes: what the reach of its diff selects, and
 //! what it leaves alone.
 
+use std::collections::BTreeSet;
+
 use crate::support::{ALWAYS, Sandbox, set, without_always};
 
 #[test]
@@ -161,7 +163,8 @@ fn a_qml_leaf_keeps_reached_verbs_and_reports_the_shadow_selection() {
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
     let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
     assert!(
-        text.contains("verbs: 2 selected; shadow candidate: 1"),
+        text.contains("verbs: 2 selected, 1 of them on the container too; 0 left")
+            && text.contains("shadow candidate: 1"),
         "{text}"
     );
     sb.gate_ok(&sb.seat, &[]);
@@ -175,7 +178,6 @@ fn a_qml_leaf_keeps_reached_verbs_and_reports_the_shadow_selection() {
             "verify stash --preset basic",
             "verify-linux stash --preset basic",
             "verify window --preset basic",
-            "verify-linux window --preset basic",
             "bare"
         ]),
         "{ran:?}"
@@ -249,7 +251,6 @@ fn a_harness_change_without_qml_edges_owes_every_recorded_verb() {
     let ran = sb.ran();
     for verb in [
         red,
-        "verify-linux window",
         "verify stash --preset basic",
         "verify-linux stash --preset basic",
     ] {
@@ -270,7 +271,6 @@ fn a_singleton_and_the_apps_rust_owe_every_verb_the_census_holds() {
         "verify stash --preset basic",
         "verify window --preset basic",
         "verify-linux stash --preset basic",
-        "verify-linux window --preset basic",
     ];
     sb.write(&sb.seat, "crates/xtask/verb-census.txt", census);
     sb.write(
@@ -331,7 +331,7 @@ fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
         "verify stash --preset basic",
         "verify stash-menu --preset basic",
         red,
-        "verify-linux stash-open --preset basic",
+        "verify-linux stash --preset basic",
     ] {
         assert!(ran.contains(verb), "{verb} did not run; ran: {ran:?}");
     }
@@ -669,4 +669,105 @@ fn a_renamed_source_is_seen_to_have_gone() {
         text.contains("everything (crates/platitude-app/src/ui/StashPane.qml is gone"),
         "{text}"
     );
+}
+
+/// What the tier table moves (`verb-tiers.txt`): before a merge a full
+/// line waits, a twin never runs, and only a linux line goes to the
+/// container; the full gate owes every line but the twin on both sides.
+#[test]
+fn the_tier_table_says_which_lines_each_gate_owes_and_where() {
+    let sb = Sandbox::new("tiers");
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-census.txt",
+        "# census\nstash --preset basic\tDriver Main StashPane\n\
+         stash-menu --preset basic\tDriver Main StashPane\n\
+         stash-twin --preset basic\tDriver Main StashPane\n\
+         stash-open --preset basic\tDriver Main StashPane\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-tiers.txt",
+        "linux\tstash --preset basic\t-\tboth sides\n\
+         full\tstash-menu --preset basic\tstash --preset basic\tpicture: the menu standing\n\
+         twin\tstash-twin --preset basic\tstash --preset basic\tthe same run\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/StashPane.qml",
+        "Item {\n    width: 4\n    property var model: StashModel\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(
+        text.contains("verbs: 2 selected, 1 of them on the container too; 2 left"),
+        "{text}"
+    );
+    sb.gate_ok(&sb.seat, &[]);
+    let verbs: BTreeSet<String> = sb
+        .ran()
+        .into_iter()
+        .filter(|id| id.starts_with("verify"))
+        .collect();
+    assert_eq!(
+        verbs,
+        set(&[
+            "verify stash --preset basic",
+            "verify-linux stash --preset basic",
+            "verify stash-open --preset basic",
+        ]),
+        "{verbs:?}"
+    );
+    let full = sb.gate_ok(&sb.seat, &["--all", "--dry-run"]);
+    for owed in [
+        "[host ] verify stash-menu --preset basic",
+        "[linux] verify-linux stash-menu --preset basic",
+        "[linux] verify-linux stash-open --preset basic",
+    ] {
+        assert!(
+            full.contains(owed),
+            "{owed} not owed by the full gate: {full}"
+        );
+    }
+    assert!(
+        !full.contains("stash-twin"),
+        "a twin is owed by no gate: {full}"
+    );
+}
+
+/// A full line is still owed before a merge when it is the only line
+/// showing a component the change reaches: waiting for the full gate
+/// would leave that component with no run before the merge.
+#[test]
+fn a_full_line_that_alone_shows_a_reached_component_is_owed_before_the_merge() {
+    let sb = Sandbox::new("tiers-alone");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/auto/PerfDriver.qml",
+        "Item {}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-census.txt",
+        "# census\nstash --preset basic\tDriver Main StashPane\n\
+         perf none --preset perf\tDriver Main PerfDriver\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-tiers.txt",
+        "full\tperf none --preset perf\t-\tperf: the perf tool walks it\n",
+    );
+    let base = sb.commit_all(&sb.seat, "test: a perf driver", &[]);
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/auto/PerfDriver.qml",
+        "Item { width: 1 }\n",
+    );
+    sb.commit_all(&sb.seat, "fix(auto): the perf driver", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--main", &base, "--dry-run"]);
+    assert!(
+        text.contains("[host ] verify perf none --preset perf"),
+        "the perf driver's one witness waits for nobody: {text}"
+    );
+    assert!(!text.contains("verify-linux perf"), "{text}");
 }

@@ -43,8 +43,21 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let root = crate::tree::workspace_root();
     let harness = harness(&root)?;
     let recorded = recorded(&root);
+    // The tier table is read by every gate to choose what it owes, so a
+    // row that went stale is a choice made on a line that is not there —
+    // or a full line whose pre-merge lean moved, which leaves its claim with
+    // no witness before a merge (`gate::tiers`).
+    let census = crate::gate::Census::load(&root);
+    let tiers = crate::gate::Tiers::load(&root);
+    // A verb whose every row is a twin of another verb's line has no line
+    // on purpose: it is no backlog to record.
+    let twins_only = tiers.twinned_away();
 
-    let unrecorded: Vec<&String> = harness.answered.difference(&recorded).collect();
+    let unrecorded: Vec<&String> = harness
+        .answered
+        .difference(&recorded)
+        .filter(|verb| !twins_only.contains(*verb))
+        .collect();
     // Judged against every name the harness holds: a verb reached
     // through a list this does not read
     // is answered all the same, and a gate that failed on one would be
@@ -56,6 +69,27 @@ pub fn run(args: &[String]) -> Result<(), String> {
     println!("unrecorded in the census:  {}", unrecorded.len());
     for verb in &unrecorded {
         println!("  {verb}");
+    }
+    let (linux, full, twins) = tiers.counts();
+    println!(
+        "census lines before a merge: {} (host), {linux} of them on the container too; {full} \
+         for the full gate only; {twins} twin(s) no gate runs",
+        census
+            .lines
+            .keys()
+            .filter(|line| tiers.owed(line, false))
+            .count()
+    );
+    let complaints = tiers.complaints(&census);
+    if !complaints.is_empty() {
+        return Err(format!(
+            "the tier table does not agree with the census:\n{}",
+            complaints
+                .iter()
+                .map(|c| format!("  {c}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
     }
     if gone.is_empty() {
         return Ok(());

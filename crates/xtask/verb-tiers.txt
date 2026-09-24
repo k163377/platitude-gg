@@ -1,0 +1,263 @@
+# Which census lines each gate owes, and on which side — read by `cargo xtask gate`
+# and checked against the census by `cargo xtask verbs` (every gate's always-step).
+# The reasons are in crates/xtask/src/gate/tiers.rs and internal-docs/反映前テストの機械化.md.
+#
+# A census line this table does not name: the host before a merge, both sides in the full
+# gate (`gate --all`). One row per line it does name, tab-separated:
+#
+#   <tier>  <census line>  <leans on>  <why>
+#
+#   linux  also on the container before a merge — judged on a size, a cut or a fold the
+#          fonts decide. <leans on> is -.
+#   full   the full gate only, both sides. <leans on> is the line(s) run before a merge,
+#          ` ; `-separated, that already walk its path — they have to stay so. <why> starts
+#          with what tells it from them: git (an answer git gives on the same path), picture
+#          (judged by its picture, which no gate reads), held (a cheaper test holds the
+#          claim), perf (the perf tool walks it), other. Only held and perf lean on -: the
+#          test named in <why>, or the perf tool's own runs, is the witness.
+#   twin   no gate: <leans on> is the census line that runs the same path and judges as much.
+#          The census does not record a twin, so its line stays out.
+
+linux	author-card-open 0 --preset authorship	-	cut= reads whether the author's name fits the card
+linux	badges --preset conflict	-	narrowed= words= mark= read the band's measured floor
+linux	badges 1000:6 --preset conflict	-	narrowed= words= mark= read the band's measured floor
+linux	badges floor:16 --preset conflict	-	words= mark= fitted= read the band's measured floor
+linux	band-actions --preset longnames	-	fits= folded= read the band's measured widths
+linux	band-actions-alert --preset longnames --allow-write-failure	-	fits= folded= cut= read the band's measured widths
+linux	band-actions-none --preset longnames	-	fits= folded= cut= read the band's measured widths
+linux	carried-read an-extremely-long-working-copy-name-for-the-edge-case --preset carried	-	cut= reads whether a long copy name fits
+linux	code-grow late.txt --preset widelate	-	grew= past= read the code column against the widest line
+linux	code-shrink top.txt --preset widelate	-	narrower= reads the code column against the widest line
+linux	code-swap late.txt --preset widelate	-	room= narrower= read the code column against the widest line
+linux	corner 1	-	shown= reads the room the details pane leaves
+linux	corner 1 --preset long	-	room= reads the room the details pane leaves
+linux	corner wip	-	room= reads the room the working tree pane leaves
+linux	details-fit 7 --preset edges	-	fills= fits= read the details pane's measured text
+linux	details-grow 7 --preset edges	-	keeps= reads the description's laid-out height
+linux	details-grow-squeeze 7 --preset edges	-	keeps= reads the description's laid-out height
+linux	diff-band-sweep unstaged:crates/platitude-core/src/session/integration/support/fixtures/refs_join_snapshot.rs --preset longpaths	-	cut= reads whether a long path fits the band
+linux	graph-min --preset co-authors	-	w= min= read the graph column's measured floor
+linux	old-git-fold	-	fitted= mark= read the band's measured floor
+linux	tab-pin	-	crushed= reads the tabs' measured widths
+linux	tab-pin-go	-	crushed= reads the tabs' measured widths
+linux	tab-widths	-	cut= reads the tabs' measured widths
+linux	tab-widths short	-	cut= folded= read the tabs' measured widths
+linux	wip-grow-squeeze	-	keeps= reads the description's laid-out height
+
+full	author-card 0 --preset authorship	author-card-open 0 --preset authorship	other: Same name, same nameClipped read, same judgement on the same path; the -open run reaches a later point. Its value is the resting-name picture (verbs.md: 平常時).
+full	author-card-open 1 --preset authorship	author-card-open 0 --preset authorship	picture: Same path, branch and must_say as row 0; differs only by the bot author's long forge address = the card picture.
+full	author-card-open 2 --preset authorship	author-card-open 0 --preset authorship	picture: Same path and must_say as row 0; the committed-later stamps under one name (AuthorCard.qml) are the card picture.
+full	avatar-rest	avatar-tip	picture: Resting face picture; its flow runs before a merge via avatar-tip.
+full	avatar-row-lit	avatar-combo	picture: Bright half of a dim/bright picture pair; the hover is injected by the harness, so the extra is a binding worth a human look rather than a stage-2 claim.
+full	avatar-settings	avatar-combo	picture: List picture at the chapter foot; its wait is a subset of avatar-combo's.
+full	badges 1400:6 --preset conflict	badges --preset conflict ; badges 1000:6 --preset conflict	held: Same judged line as the plain run; its extra (six tabs still leaving the words) is the share-out boundary QtTested; real fonts reach the group before a merge via plain and 1000:6.
+full	band	band --system-title-bar	picture: No must_say row although the driver says 'numbers say it': the gate only sees the band lay out, which every other line also needs. Numbers and picture are for a human.
+full	band-actions-fold --preset longnames	band-actions-alert --preset longnames --allow-write-failure	picture: Its judged claim is asserted before a merge by band-actions-alert at the same width on the same preset; what remains is the picture of a clean fold with no !.
+full	carried-stand an-extremely-long-working-copy-name-for-the-edge-case --preset carried	carried-stand topic --preset carried ; carried-read an-extremely-long-working-copy-name-for-the-edge-case --preset carried	git: Every judged claim is asserted before a merge by carried-stand topic on the same path
+full	carried-stand here --preset carried	carried-stand topic --preset carried ; carried-read here --preset carried	git: folderPath= is empty by construction here (verbs/panes.rs says the claim is made on the other two); the rest is asserted before a merge by carried-stand topic and carried-read here.
+full	cherry-pick-stops feature/clash --preset clashing	cherry-pick origin/main --preset diverged ; drop-stops row:2 --preset drop-stops	git: The pick press is cherry-pick's and the stopped landing drop-stops'; what is left is git stopping a pick on a clash.
+full	clone-dialog	clone-refused ; clone-go	picture: Every judged field is implied before a merge: dialog/cloning/grew by clone-refused, folder=true by the canSubmit gate both others pass; said=false is the fresh box's default.
+full	co-authors 4 --preset co-authors	co-authors-open 4 --preset co-authors	picture: Prefix of co-authors-open's path on the same row; count/cut are reported but unjudged. Value is the resting credit-line picture.
+full	commands --preset dirty	commands-select ; commands-copy ; commands-sweep	picture: Panel picture on the dirty preset; the flow runs before a merge.
+full	commands-fail --allow-write-failure	commands-escape --allow-write-failure	picture: The raised-by-failure state is the precondition commands-escape and commands-clear (before a merge) and commands-fail-shut (full) wait on and judge past.
+full	commands-fail-shut --allow-write-failure	commands-escape --allow-write-failure	other: Judged fields equal commands-escape's; the only difference is the >_ door, the same toggleCommands the commands-* lines open the panel with before a merge.
+full	commit-menu	reset-menu	picture: That the commit menu comes up as a popup is asserted before a merge by reset-menu (and the two card runs). Value: picture of the plain commit menu.
+full	corner wip --preset long	corner wip	other: long's 60-change WIP list leaves room=0 even if the WIP pane wrongly lent its foot, so this cannot fail where corner wip passes.
+full	delete-branch base --preset plan	delete-branch-chip base --preset plan ; delete-branch-go feature/topic-a --allow-write-failure	picture: Judgement ⊆ delete-branch-chip base's. Its stated reason (left card folds on landing, verbs.md) is not judged (completion is the write barrier). Picture only
+full	delete-branch-refused feature/topic-a --allow-write-failure	delete-branch-go feature/topic-a --allow-write-failure	picture: Judgement ⊆ delete-branch-go's; its 'ref_menu delete= note=' line is unjudged. Value is the picture of the refused row and rows/chips back (verbs.md).
+full	delete-file-go untracked.txt --preset dirty	discard-many-go c.txt --preset dirty	git: Same bucket-agnostic app road (<bucket>:<path> keys) as the other discard -go runs; only the side git takes differs, which core tests per side. Keep one before the merge (discard-many-go).
+full	delete-force feature/topic-a	delete-branch-go feature/topic-a --allow-write-failure	git: Bypasses every UI entrance; beyond delete-branch-go it only adds 'git's -D succeeds' (no write failure), which core tests.
+full	delete-remote origin/feature/topic-a	delete-remote-go origin/feature/topic-a	picture: Stops with the remote row's card up; the same opening is driven to completion before a merge by delete-remote-go. Value is the picture of the push --delete row.
+full	delete-stash	delete-stash-go	picture: Menu left standing for the picture; the opening is driven further before a merge by delete-stash-go.
+full	delete-tag v0.3-local	delete-gone v0.3-local ; delete-stood-down v0.3-local	picture: Card of a local-only tag left up for the picture
+full	diff-copy notes.txt --preset manyhunks	diff-blank marks.txt --preset widechars ; diff-select notes.txt --preset manyhunks	held: the claim (plain copy takes the new side and leaves the removed line out) is selection_tests.rs a_drag_over_the_lot_takes_the_new_side_and_leaves_the_old_one; the drag is diff-select's, the copy wiring diff-blank's. Its must_say alone passes on an empty selection
+full	diff-file b.txt --preset dirty	diff-escape b.txt --preset dirty	picture: diff_row ready=true is printed after arrival and cannot fail (verbs.md); every other b.txt line implies it. Value is the baseline picture (line_endings line is unjudged).
+full	diff-file columns.txt --preset widechars	diff-escape b.txt --preset dirty ; diff-blank marks.txt --preset widechars	picture: Fixture for eyeballing intraline washes on full-width text (rules-refs/app-ui.md); offscreen sets every full-width glyph at one advance, so the gate cannot judge it anyway.
+full	discard-file-go b.txt --preset dirty	discard-many-go c.txt --preset dirty	git: Same app road as discard-many-go; the only difference is which side's git command core runs, covered per side by stage_integration/whole.rs.
+full	discard-many c.txt --preset dirty	discard-many-go c.txt --preset dirty	picture: Picture of the plural discard row standing; the flow is driven to completion before a merge by discard-many-go.
+full	discard-staged-go a.txt --preset dirty	discard-many-go c.txt --preset dirty	git: Same app road as discard-many-go; distinct only by the side git restores, which core covers.
+full	drop-commit	drop-stops row:2 --preset drop-stops	picture: Picture of the row menu with the drop row (click vs hold shape); flow driven before a merge by drop-stops.
+full	drop-commit-go	drop-stops row:2 --preset drop-stops ; rebase-plan-run --preset plan	git: Picture-only; distinct from drop-stops only by git replaying cleanly. Gate checks only that the write completes.
+full	drop-last-commit --preset one-commit --allow-write-failure	-	held: Same move as §履歴書き換えの拒否 (4->1): condition, kind->page and sentence live in the three cheaper layers; the connection is fold-first-commit's and the drop-row press is drop-stops'.
+full	edit-message edited	reword reworded	picture: The flow up to the typed box is driven before a merge by reword; this one stops there for the picture of the save row.
+full	edit-message-focus 0 --preset co-authors	wip-message-focus	other: focused= is read right after the driver forces focus (near-tautological); color=, the output verbs.md says is read, is not in must_say. Value is the caret-colour picture.
+full	edit-message-leave edited	reword reworded	picture: The draft dropped on leaving is unjudged; the gate only sees completion. Picture for human review.
+full	fetch	fetch-busy ; fetch-recover --allow-write-failure	picture: Plain write-barrier fetch whose flow the fetch-first pre-merge lines run to settle and past. verbs.md lists it only as a picture verb; stage 2 judges completion only.
+full	fetch-fail 3 --preset unreachable --allow-write-failure	fetch-hover 3 --preset unreachable --allow-write-failure ; fetch-resume --preset unreachable --allow-write-failure	picture: Its judged claim runs before a merge in fetch-hover 3 / fetch-resume; what is left is the picture of the stopped Resume button at rest.
+full	fetch-hover 0	fetch-hover 1 --preset unreachable --allow-write-failure	picture: Identical judged string on the same hover code as fetch-hover 1; differs only in the button's shape and tip words (picture).
+full	fetch-ref-list 0 --preset tags	nav-open-tag v1.5:drift --preset tagremotes ; ref-list-lit 0:1 --preset tags	picture: Picture-only by the prior ref-list decision; both steps are driven before a merge by other lines.
+full	file-menu b.txt --preset dirty	discard-many-go c.txt --preset dirty	picture: Picture of the unstaged row's menu; openFileMenu is driven to completion before a merge by discard-many-go / take-side-theirs.
+full	file-menu-conflict both.txt --preset conflict-kinds	take-side-theirs both.txt --preset conflict-kinds ; open-mergetool both.txt --preset conflict-kinds	picture: Picture of the conflict row's menu; the same entry is driven before a merge past the menu by take-side-theirs and open-mergetool.
+full	file-menu-staged a.txt --preset dirty	discard-many-go c.txt --preset dirty	picture: Picture of the staged row's menu; entry driven before a merge by discard-many-go.
+full	file-menu-untracked untracked.txt --preset dirty	discard-many-go c.txt --preset dirty	picture: Picture of the untracked row's menu (Delete wording); entry driven before a merge by discard-many-go.
+full	find feat	find 150 --preset deep	other: The judged string is the completion line itself; its distinct value (basic's WIP row 0, no retreat, clears=false) is unjudged and read by a person (verbs.md).
+full	find-prev 102 --preset deep	find-prev feat	picture: Named visual reason (the last row dissolving at the window's cut, verbs.md); stage 2 sees completion only.
+full	graph-head-back --preset deep	graph-head-go --preset deep-detached	other: Must_say is a prefix of graph-head-go's and is also its own completion wait (line 316). The set's 'absent' half is supplied before a merge by -go through the same binding
+full	hunk-tools notes.txt --preset manyhunks	split-tools notes.txt --preset manyhunks	picture: Lights the heading's words for the picture; the judged line is printed before the act and only says the rows came (non-discriminating).
+full	identity	badges --preset conflict ; quit-save-held	picture: state=missing and dialog=true are implied before a merge by those two; the three false fields are initial defaults. Value: picture of the identity question.
+full	identity-half	identity-tip	held: Which half landed is the core + model answer, both pinned; the dialog staying up over it is waited on before a merge by identity-tip.
+full	line-tools notes.txt --preset manyhunks	split-tools notes.txt --preset manyhunks	picture: Puts a line's pointer marks out for the picture; judged line is the pre-act ready (non-discriminating).
+full	menu-highlight	delete-blocked-tip :remote ; pull-menu	picture: Keyboard highlight set for the picture only; the gate proves just that the menu opens, which many pre-merge lines prove.
+full	merge-branch origin/main --preset diverged	merge-stops feature/clash --preset clashing	git: Slot exercised before a merge by merge-stops, landing by the other three tip lines, Merge-at-tip by the unit test; what is left is git merging cleanly.
+full	middle-hand carried --preset carried-many	middle-hand files --preset long	held: The hand is AppListView's own (AppListView.qml, ownsHand defaults true), asserted on a bare AppListView by tst_middlehand.qml (test_over_the_rows, test_the_drift_and_the_wheel); a PaneScrollBar host is walked before a merge by middle-hand files.
+full	middle-hand chosen --preset spread	middle-hand files --preset long	held: Same built-in AppListView hand as files (AppListView.qml), asserted by tst_middlehand.qml (test_over_the_rows, test_the_drift_and_the_wheel); distinct only by host list and the 30-commit choice that fills it.
+full	middle-hand peek --preset manytags	middle-hand files --preset long	held: Same built-in AppListView hand (AppListView.qml), asserted by tst_middlehand.qml (test_over_the_rows, test_the_drift_and_the_wheel); distinct only by host (the folded rail's peek).
+full	middle-hand plan --preset spread	middle-hand files --preset long	held: Same built-in AppListView hand on the default bar (AppListView.qml), asserted by tst_middlehand.qml (test_over_the_rows, test_the_drift_and_the_wheel); distinct only by host (a 40-row plan).
+full	middle-hand ref-list --preset manytags	middle-hand files --preset long	held: Same built-in AppListView hand (AppListView.qml), asserted by tst_middlehand.qml (test_over_the_rows, test_the_drift_and_the_wheel); distinct only by host (HEAD row's chip card).
+full	middle-hand tags --preset manytags	middle-hand files --preset long	held: Same built-in AppListView hand (AppListView.qml), asserted by tst_middlehand.qml (test_over_the_rows, test_the_drift_and_the_wheel); distinct only by host (sidebar TAGS).
+full	middle-hand wip-description --preset long	middle-hand description --preset edges	held: Distinct only by a writable box, where stepping aside for a paste is MiddleAutoScroll.claimedAt/middlePastes, asserted on the real DescriptionBox by QtTest
+full	middle-hand wip-files --preset long	middle-hand files --preset long	held: Same built-in AppListView hand (AppListView.qml) as files, held by tst_middlehand.qml test_over_the_rows / test_the_drift_and_the_wheel; distinct only by host (the unstaged bucket).
+full	middle-hand wip-summary --preset long	middle-hand summary --preset edges	held: Distinct only by writable words, where the claim is MiddleAutoScroll.claimedAt (QtTest); the summary seat is wired before a merge by middle-hand summary.
+full	name-box 1	name-box-drop 1:newname	picture: Prefix of name-box-drop's path on the same row; label_w/box_w (the box floor) are unjudged, so its value is the picture of the box overhanging the chip column.
+full	nav-filter feat	nav-open-then filter	picture: Completion non-causal (width>0), nav_filter counts unjudged. Filter entry is exercised before a merge by a judged line
+full	nav-fold no-tags	tags-eye v1.1-kept:back --preset tagonly ; nav-peek-into branch	picture: Picture of the folded rail without the tag flag; both inputs are driven before a merge by judged lines.
+full	nav-jump branch:2	nav-jump branch:1	picture: Click on the current branch: same/lit add nothing beyond branch:1 on the same path; the current-branch row after a click is the picture.
+full	nav-jump worktree:1 --preset worktree-detached	nav-jump worktree:1 --preset worktrees	held: Distinct claim (the graph has a row for a commit only the worktree list names) is asserted by the core stream test
+full	nav-jump worktree:5 --preset worktrees	nav-jump worktree:1 --preset worktrees	git: Same click->oid_hex->jumpToRef path and same judged string as worktree:1; differs only in what the copy's HEAD is.
+full	nav-open-tag v0.9-theirs:remote --preset tagremotes	-	held: Same lookup and wiring as v1.5:drift; the remote-only row and the empty apart are RemoteTagIndex/Snapshot decisions asserted in core unit tests.
+full	nav-open-tag v1.0:remote --preset tagremotes	nav-open-tag v1.5:drift --preset tagremotes	held: Agreement -> empty apart is carriers_against's decision (core unit test); the lookup wiring is judged before a merge by v1.5:drift.
+full	nav-open-tag v2.0-local --preset tagremotes	-	held: The empty carrier list is owned by core + QtTest; a lookup answering empty for everything is caught before a merge by v1.5:drift.
+full	nav-open-then away	nav-open-foot away --preset stack	held: open=false after the hand leaves is judged before a merge by nav-open-foot away; lit=false is held by QtTest; box=false is trivially true (nothing opens a box on this order).
+full	nav-peek worktree	nav-peek-into branch	picture: Unjudged picture of the WORKTREES section in the peek; the peek path runs before a merge via the judged nav-peek-* lines.
+full	nav-pin-seat 0 --preset unpublished	nav-pin-seat 1 --preset nested ; nav-pin-seat 2:0 --preset nested	held: One-level fold; model half asserted by the unit test, sat= geometry by 2:0 before a merge. Prior doc names it the seat holder for the dropped nav-open head::0, so full rather than delete.
+full	nav-pin-seat 2 --preset nested	nav-pin-seat 1 --preset nested ; nav-pin-seat 2:0 --preset nested	held: Model values asserted per level by the unit test; the same fold plus the seat geometry runs before a merge via 2:0.
+full	nav-pin-seat 3 --preset nested	nav-pin-seat 1 --preset nested ; nav-pin-seat 2:0 --preset nested	held: Model values asserted by the unit test; sat= runs before a merge via 2:0.
+full	nav-rename-box branch:main	nav-branch-box branch:main ; rename-tag-box v1.0	other: Its claims are split between two pre-merge lines: the BRANCHES row box drawn+focused and the rename mode drawn+focused. With no width arg it never runs the outside-the-pane case.
+full	nav-tip branch:0	nav-tip branch:2 --preset nested	picture: Judged subset of the twin on the same hoverText arm; verbs.md keeps it as the design picture, and 反映前テストの機械化.md already names it the candidate.
+full	nav-unfold --preset manytags	diff-fold-by-hand b.txt --preset dirty	picture: Completion non-causal and nothing judges the restored list; value is the picture over 2000 tags.
+full	old-git-card	old-git-fold ; badges-hover --preset conflict	other: Each judged half is asserted before a merge elsewhere; the old-git row of the card (rows=) is not judged. Value is the card picture.
+full	open-again	-	held: With one tab (default preset) it cannot tell 'went to the tab it had' from 'did nothing'; it only shows no new tab, which strip.rs asserts.
+full	open-bare	open-dialog-sweep	git: Same dialog path; distinct only by git's bare answer, pinned in core it. Picture-only.
+full	open-fail-tab	open-fail-sweep	picture: Flow driven before a merge by open-fail-sweep; tabs=/state=/kind= are only reported.
+full	open-fail-tab-bare	open-fail-sweep	git: Same page path; distinct only by git's bare answer.
+full	open-not-a-repo	open-dialog-sweep	picture: Flow driven before a merge by open-dialog-sweep; tabs= (no tab made) is only reported.
+full	open-not-a-repo-cancel	open-dialog-sweep	picture: The driver closes the dialog itself; tabs=/active= unchanged are only reported. The gate check is near-vacuous.
+full	open-picker	open-picker copy	git: In the repository's own copy home_copy equals the path, so any sane folder rule passes; the discriminating case is copy. The folder arithmetic is unit-tested.
+full	ops-branch --preset panel	ops-branch-pick rig --preset panel ; ops-branch-folder feature --preset panel	picture: Every judged field but the tier label is asserted before a merge by ops-branch-folder feature; tier=branch only says no folder stood by itself (TopBar.qml).
+full	ops-branch-folder topic --preset panel	ops-branch-folder feature --preset panel	picture: Same code path as the feature line; folder= only echoes which folder was asked. Picture differs (two plain rows vs the counts/cloud row).
+full	ops-panel 1050 --preset longnames	ops-panel --preset longnames	picture: At 1050 the longnames panel still stands whole (namesCut=false folded=false cut=false in the gate logs), so it walks and judges exactly what the default-width longnames run does; only the picture's width differs.
+full	ops-stand --preset stashes --preset panel	ops-stand --preset panel	picture: The stand card judged before a merge by ops-stand --preset panel; only the picture on the panel repo with both a repos and a copies row differs.
+full	ops-stand-copies --preset panel	ops-stand-copies zzz	picture: Judgement is a subset of ops-stand-copies zzz; distinct only in picture (locked and unlocked copies' heads aligned, verbs.md).
+full	ops-stand-copies --preset worktrees	ops-stand-copies zzz	picture: Judgement is a subset of ops-stand-copies zzz; picture of every copy state on the card.
+full	ops-stand-copies zzz --preset panel	ops-stand-copies zzz	picture: copies= is unvalued, so both filter runs judge the same; this one only pictures two linked copies surviving the filter.
+full	pane-bar --preset long	pane-bar-away --preset long	other: The judged ink is its own completion wait (line 409) and -away's run walks through this exact state on the same path. Only the lit picture is extra
+full	path-tip carried:topic-tree --preset carried	carried-stand topic --preset carried ; path-tip carried:topic --preset carried	other: Its judged text= is the folder row's pathText, already judged before a merge as carried-stand's folderPath=src; the tip rising in this pane is judged by the flat run.
+full	perf colour --preset perf-sequence	-	perf: Perf driver display contract on a perf preset; its consumer is cargo xtask perf, not a merge gate.
+full	perf details --preset perf	-	perf: Perf driver display contract.
+full	perf diff-scroll --preset perf-sequence	-	perf: Perf driver display contract.
+full	perf font-walk --preset perf	-	perf: Calibration-run contract of cargo xtask perf.
+full	perf none --preset perf	-	perf: Perf driver display contract.
+full	perf scroll --preset perf	-	perf: Perf driver display contract (resolves to the table's plain row; no Is("scroll") row).
+full	perf sequence --preset perf-sequence	-	perf: Perf driver display contract (two OIDs twice, next op after the final colouring).
+full	preview art/photo.png --preset pictures	preview-staged art/icon.png --preset pictures ; diff-step untracked.txt --preset dirty	git: Same generic cells and count as icon.png; only the bucket/git state differs, which core and encode units hold.
+full	preview-staged art/old.png --preset pictures	preview-staged art/icon.png --preset pictures	git: Same judgement on the same staged path; only the git state differs, which core tests.
+full	publish --preset unpublished	publish-go --preset unpublished	picture: The judged line is the dispatch report all publish verbs print; publish-go's judgement implies it on the same path. Unique only as the picture of the standing 'free' question.
+full	publish-add --preset unpublished	publish-go --preset unpublished ; publish-new-go origin|file:///C:/pgg-nowhere/gone.git --preset noremote --allow-write-failure	picture: Prefix of publish-new-go; value is the dialog picture over a repository that has remotes.
+full	publish-enter --preset unpublished	replace-remote-go origin/feature/topic-a:topic-renamed ; publish-go --preset unpublished	other: Enter reaching AskBar.confirmed is tst_askanswer's; confirmed -> GraphPane -> RepoPage's answer runs before a merge under replace-remote-go's hold, and the publish answer itself under publish-go (which answers directly).
+full	publish-remotes --preset unpublished	publish-remotes-marked --preset unpublished	picture: Unmarked half of a picture pair; the popup path runs before a merge via -marked.
+full	publish-taken carried --preset unpublished	publish-taken --preset unpublished	git: Same app path; which state arrives is git's ancestry answer (asserted in core it). The bar values are the false side of the bindings taken exercises.
+full	publish-tip --preset unpublished	publish-taken --preset unpublished	other: far/theirs are a subset of publish-taken; the pill-tip mechanism is judged before a merge by rename-tag-remote-tip and replace-remote-tip; the remainder is the refused tip sentence (picture).
+full	pull-ahead	pull-go --preset behind	git: refused=/moved= are git's answer for an ahead branch; log=true is the driver's own toggleCommands (440-442). The press path is pull-go's.
+full	push --preset unreachable --allow-write-failure	push ; band-actions-alert --preset longnames --allow-write-failure ; publish-new-go origin|file:///C:/pgg-nowhere/gone.git --preset noremote --allow-write-failure	git: Same path as push; only the git outcome differs. The yellow + ! it pictures is judged before a merge by band-actions-alert (alert=true).
+full	push-default origin --preset unpublished	-	held: local= is core's read (asserted in it) copied through drain.rs; the write -> snapshot wiring is driven before a merge by publish-remotes-marked.
+full	push-hover --preset diverged	push-hover	git: Same hover path; mode=diverged is judged before a merge by force-push-hold; the overwrite sentence is picture.
+full	push-outdated --preset outrun --allow-write-failure	remote-refused origin/main --preset protected --allow-write-failure	held: Classification, kind->page, heading/tone and the follow-up fetch each have a cheaper test; the notice wiring is judged before a merge by remote-refused, and a push's reported refusal reaches it before a merge through band-actions-alert.
+full	push-retry --preset diverged --allow-write-failure	band-actions-alert --preset longnames --allow-write-failure ; force-push --preset diverged	picture: Both halves run before a merge elsewhere, and with --allow-write-failure its verdict cannot fail on the force push; value is the picture of the cleared mark.
+full	push-tag v0.3-local	push-tag v1.5:drift --preset tags	git: Its row form is tst_tagcard's; an always-drift entrance is caught by tag-menu v1.0:remote (blocked=none).
+full	push-target	push-hover	held: Label and state are core decisions through GitFacts, unit-tested; the plain case cannot see the mark inputs (both empty).
+full	quit-waits --preset slowhook	quit-locked --preset slowhook	picture: Judgement subsumed by quit-locked; value is the picture of the busy wait dialog.
+full	rebase-onto origin/main --preset diverged	replay-running base --preset replay ; wip-landing-stopped --preset carried-clashing	git: Picture-only; the rebase press path is driven before a merge by replay-running/wip-landing-stopped; what remains is git replaying cleanly.
+full	rebase-stops main --preset rebase-clashes	drop-stops row:2 --preset drop-stops	git: As cherry-pick-stops: the non-merge stopped landing runs before a merge via drop-stops, the slot via replay-running/wip-landing-stopped.
+full	ref-list	ref-list 1 --preset worktrees	other: With no argument the verb opens HEAD's row's list; the same covers=true judgement on the same card code runs before a merge in ref-list 1 --preset worktrees.
+full	ref-list 1 --preset tags	ref-list 1 --preset worktrees	other: Same covers=true judgement on the same card code as the lean; only the stack's names differ.
+full	ref-list 3 --preset stack	ref-list 1 --preset worktrees	other: Same covers=true judgement on the same card code as the lean; only the stack's names differ.
+full	ref-list 4 --preset edges	ref-list 1 --preset worktrees	other: Same covers=true judgement on the same card code as the lean; only the stack's names differ.
+full	ref-list-card 0 --preset tags	row-card 7 --preset edges ; ref-list 1 --preset worktrees	picture: Completes when either the card or the list is open; its "both closes hold" is not judged. Picture only.
+full	rename-local-upstream-tip main-renamed	rename-tag-remote-tip v0.2:v0.2.1	other: Replace dressing (RenameCarryFlow.qml) and tip opening are kind-independent and judged by rename-tag-remote-tip; only the branch tip text differs and it is unjudged.
+full	rename-tag v0.3-renamed	rename-tag-remote-tip v0.2:v0.2.1	git: Distinct only by a git state (local-only tag) on a pre-merge path; the resulting no-question outcome is not judged.
+full	rename-tag-remote v0.2:v0.2.1	rename-local-upstream main-renamed ; rename-tag-remote-tip v0.2:v0.2.1	other: Tag arming is judged before a merge by -tip; the opening dressing (choice=keepsBoth, kind-independent, RenameCarryFlow.qml) is judged before a merge by rename-local-upstream's plain row.
+full	replace-remote origin/main:renamed	replace-remote-tip origin/feature/topic-a:topic-renamed	other: Judgement is a prefix of -tip's; the ref differs but askReplaceRemote has no ref-specific branch. What is left is the bar without the tip, i.e. a picture.
+full	replace-remote-box origin/main:renamed	replace-remote-tip origin/feature/topic-a:topic-renamed	picture: Box picture only; completion fires on the render barrier right after the ask, so stage 2 sees nothing of the box.
+full	report-tone half-rename	rename-taken feature/topic-a --allow-write-failure ; fold-first-commit --preset one-commit --allow-write-failure	other: The half-rename arms are held by tst_reportdress; the door (showReport) is judged before a merge by rename-taken feature/topic-a --allow-write-failure (warning tone) and fold-first-commit --preset one-commit --allow-write-failure (our own second line) — and tst_reportdress.qml still names this run as the door's carrier.
+full	revert-stops row:1 --preset revert-clashes	drop-stops row:2 --preset drop-stops ; revert-commit --preset diverged	git: The same stop road as cherry-pick-stops: a sequencer stopping on a clash is driven before a merge by drop-stops; what is left is git stopping a revert.
+full	set-upstream-enter feature/new-thing:carried --preset unpublished	replace-remote-go origin/feature/topic-a:topic-renamed ; set-upstream-go feature/new-thing:carried --preset unpublished	other: Enter reaching AskBar.confirmed is tst_askanswer's; confirmed -> GraphPane -> RepoPage's answer runs before a merge under replace-remote-go's hold, and the upstream answer itself under set-upstream-go (which answers directly).
+full	settings	avatar-enter	picture: Application category picture; completes on the render barrier. The arg-less run also sets auto-fetch to 0 as a side effect.
+full	settings-git	settings-switch	picture: Git category picture; the page's gitSettingsRequested door is entered only here, but completion is immediate, so stage 2 cannot see whether the dialog opened.
+full	signature 1 --preset signed	signature-tip 0 --preset errsig	picture: Picture of the mark for a signed commit; the verify-answer wait it relies on is driven before a merge by signature-tip. kind/code/signer are reported, unjudged.
+full	solo	gate-sweep	picture: gate-sweep waits on everything this run waits on and more (WindowDialogActs.qml); what is left is the unswept gate picture (verbs.md: the 2nd process's window).
+full	split-copy notes.txt --preset manyhunks	diff-copy-removed notes.txt --preset manyhunks	held: Every judged number is a DiffModel column-selection result the Rust tests assert on a split model
+full	squash	fold-first-commit --preset one-commit --allow-write-failure ; rebase-plan-run --preset plan	git: Entry driven before a merge by fold-first-commit; what remains is git folding and the carry, both in core it. Landing is picture-only.
+full	stage-hunk b.txt --preset dirty	-	held: Judged line is the pre-act ready; the gate asserts only that a hunk-stage write lands, which core holds, and the completion accepts a closed pane.
+full	stage-line b.txt --preset dirty	line-run notes.txt --preset manyhunks ; diff-follow b.txt --preset dirty	other: The mark's entry is judged before a merge by line-run/line-back/code-shrink; a partial write that empties b.txt and follows is walked before a merge by discard-hunk-go b.txt --preset dirty, and the follow is judged by diff-follow b.txt.
+full	stage-line untracked:vendor/loose.txt --preset embedded	diff-follow b.txt --preset dirty ; wip-embedded vendor/nest/ --preset embedded	other: The product offers no line staging on an untracked file (DiffPane.partial); the follow is judged before a merge by diff-follow b.txt, the no-rows pane by wip-embedded vendor/nest/, and the untracked partial stage by core stage_integration/partial.rs.
+full	stage-many c.txt --preset dirty	stage-many-go c.txt --preset dirty	picture: Picture of the + with the companion marks; the flow is driven to completion before a merge by stage-many-go.
+full	stash	stash named	other: named=false cannot fail: stashNamed() is false whenever stashWanted is empty (AutoActDriver.qml), so the pair rationale in verbs/stash.rs is void
+full	stash-menu	stash-pop-row --preset stashes	picture: Picture of the stash row's menu; the same entry is opened before a merge by stash-pop-row. Keep for human review in stage 3.
+full	state	diff-split notes.txt --preset manyhunks	picture: One run of a two-run check ('a single run can only ever agree with itself', WindowFrameActs.qml)
+full	switch-conflicted feature/clash --preset cherry-pick-quit	switch-stopped feature/clash:1 --preset cherry-pick-conflict	git: Same QML road and dressing as switch-stopped; the only judged difference is op= (the model's opCommand = a git state). Block and leave_code rules are core unit-tested
+full	switch-conflicted-go feature/clash:1 --preset cherry-pick-quit	switch-stopped-go feature/clash:1 --preset cherry-pick-conflict	git: Must_say identical to switch-stopped-go and the app road is the same; what differs is core's handling of an unmerged index with no operation, which carry_move.rs covers.
+full	switch-mark feature/topic-a:plain --preset worktrees	switch-mark feature/topic-a:plain	picture: Judged line identical to the plain run; what it adds is the picture of the row saying Open <copy> (verbs.md calls it the 3rd look; switch-held defers the row words to it).
+full	tab-open-go	tab-open-moved-on	picture: Judged claims are implied by tab-open-moved-on's completion: from the far-end staging the appended tab can only become whole by the run moving (travelled), and gone=pinGone.
+full	tab-pin 11	tab-pin ; tab-open-moved-on	picture: Right-edge twin of tab-pin; its must_say drops left=, so nothing judged is edge-specific. rideRight -> visible is witnessed before a merge by tab-open-moved-on
+full	tag-refused v1.0:remote --preset protected --allow-write-failure	remote-refused origin/main --preset protected --allow-write-failure ; delete-remote-tag v1.0:remote --preset tags	git: The regression it guards (tag deletes returning a classified report, not a plain failure) lives in core and is integration-tested
+full	tags-eye v1.1-kept --preset tagonly	tags-eye v1.1-kept:back --preset tagonly	other: :back cannot finish unless this state (tag-only commit gone after the press) is reached on the same path; only repoTab.tagsShown=false is not re-read there.
+full	text-bar 7 --preset edges	text-bar-away 7 --preset edges	other: ink=1 is its own completion wait (line 457) and -away's run passes through it on the same path; only the lit picture is extra.
+full	window-floor --preset rebase-conflict	badges floor:16 --preset conflict ; window-floor ; window-floor wip --preset rebase-conflict	git: Distinct only by repo state; fits= compares the window with its own floorWidth=max(bandW,pageW) (WindowBody.qml), so no band miscount can turn it red.
+full	wip --preset carried	wip-landing --preset carried	picture: Picture-only showWip with no completion predicate of its own; the WIP face on this preset is reached before a merge. Value is the listing picture.
+full	wip --preset dirty	wip-shut unstaged:b.txt --preset dirty	picture: Picture-only showWip; the same face on the same preset is driven to completion before a merge by wip-shut. Value is the listing picture.
+full	wip-commit-half during --preset dirty	wip-commit-half --preset dirty	other: The judged text is a literal (AutoActWipVerbs.qml), printed only when the latch caught busy>0 with HEAD unmoved; it proves the moment exists.
+full	wip-embedded vendor/fresh/ --preset embedded	wip-embedded vendor/nest/ --preset embedded	git: The pair differs only in sha8= (not judged) = which sentence the pane says; core holds both readings with real git. must_say cannot tell the two runs apart.
+full	wip-lanes --preset conflict	badges --preset conflict	held: core session_integration/stream.rs (a_merge_resolved_as_ours_keeps_the_row_a_clean_tree_would_not, aborting_the_merge_takes_the_second_dotted_edge_away) asserts the two dashed out-edges with real git; spell_lanes is unit-tested (encode/graph.rs); the UI reads it back through a smoke-only slot.
+full	wip-message	wip-message-focus	picture: Resting-colour half of the pair; the same showWip + setMessage flow completes before a merge in wip-message-focus.
+
+twin	ask-over-notice --preset diverged	ask-over-notice origin/main --preset diverged	Exact duplicate: an empty arg defaults to origin/main (AutoActSwitchVerbs.qml), same preset, same row (switch.rs). Not even the picture differs.
+twin	author-card-open --preset authorship	author-card-open 0 --preset authorship	Identical run: the driver does graphModel.oidAt(Number(arg)) and Number('') is 0, same preset, same must_say. Keep the explicit-row form.
+twin	avatar-hover	avatar-tip	Same flow to a later point; the badge it photographs is in avatar-tip's app.png as well (the tip goes to overlay.png). No reason beyond the badge picture (verbs.md/447).
+twin	colour-place	colour-place src/steps.rs --preset coloured	verbs.md says the bare run 'says no more than tagless rows did not move'
+full	commit-menu --preset tags	tag-card --preset tags ; branch-card --preset tags	picture: The plain commit menu on a tag row (popups=1); that the commit menu comes up as one popup is judged before a merge by reset-menu.
+twin	commit-refused --preset hooked --allow-write-failure	notice-over-diff src/app.txt --preset hooked --allow-write-failure	Same press, same hook, same judged line as notice-over-diff; the bar-over-graph case (clears=true, no diff) is asserted before a merge by fold-first-commit / push-outdated / tag-refused.
+twin	dbl-remote origin/feature/remote-only	switch-remote-twice origin/feature/remote-only	switch-remote-twice makes the same switchToRef(remote,arg) press on the same arg/preset, waits for the local branch to land (later than this write barrier), fails on a write fai...
+twin	delete-branch feature/topic-a --allow-write-failure	delete-branch-refused feature/topic-a --allow-write-failure	Exact duplicate: identical press, git answer, judgement and picture (row turned into -D, verbs.md) as delete-branch-refused feature/topic-a.
+twin	delete-branch-refused feature --allow-write-failure	delete-branch-refused feature/topic-a --allow-write-failure	Deletes a folder name no row offers as a branch (unreachable by a user); only git's refusal wording differs.
+twin	delete-file untracked.txt --preset dirty	file-menu-untracked untracked.txt --preset dirty	Identical run: same bucket, arg, preset, calls and report (discard_row), both non-write file-row acts ended by the rendered barrier; same standing menu in the picture.
+twin	delete-stash-row	stash-menu	Bare delete-stash-row only opens the first stash row's menu, exactly what stash-menu does (AutoActCompletion.qml drops it from writes unless the arg is go).
+twin	delete-tag-both v1.5:remote --preset tags	delete-tag-both v1.0:remote --preset tags	Unreachable by a user: the both-row is blocked for a drifted tag and fires only because AppMenuItem.completeHold (AppMenuItem.qml) skips the blocked check the mouse path has (:596); the drifted dressing it adds is judged before a merge by tag-menu v1.5:drift --preset tags
+twin	delete-tag-go v0.3-local	delete-stood-down v0.3-local	Path ⊆ delete-stood-down's, which presses the same row the same way and waits wroteAndSettled plus the stand-in release, with a judged line; this one is picture-only.
+twin	diff-fold b.txt --preset dirty	diff-file b.txt --preset dirty	Same entry, same end state (diff open, rail auto-folded) as diff-file b.txt, which is judged; this line judges nothing (nav_rail collapsed=/diff= have no must_say row).
+twin	diff-follow notes.txt --preset manyhunks	line-back notes.txt --preset manyhunks	The alone=true landing it exercises is judged more strictly by line-back (followed=staged:notes.txt, rows>0); this line judges only shown=true.
+twin	diff-unfold b.txt --preset dirty	diff-escape b.txt --preset dirty	'Closing the diff gives back the auto-fold' is asserted by diff-escape's folded=false on the same closeDiff path, same file and preset
+twin	discard-file b.txt --preset dirty	file-menu b.txt --preset dirty	Identical run to file-menu b.txt: same bucket, arg, preset, calls, report and rendered-barrier completion.
+twin	discard-hunk b.txt --preset dirty	discard-hunk-go b.txt --preset dirty	The driver only opens the diff and waits for the heading's Discard hunk, the same ready discard-hunk-go waits for before it holds it (DiffRowDelegate.qml).
+twin	discard-staged a.txt --preset dirty	file-menu-staged a.txt --preset dirty	Identical run to file-menu-staged a.txt: same bucket, arg, preset, calls, report and completion.
+twin	fetch-fail 1 --preset unreachable --allow-write-failure	fetch-hover 1 --preset unreachable --allow-write-failure	Judged claim is a subset of fetch-hover 1 on the identical fetch loop; its picture (warning shape at rest) is the one fetch-resume ends on.
+twin	graph-reclick --preset tags	graph-rename 0:topic-new --preset tags	Dominated twice on the identical path; verbs.md's own note says graph-rename was made to ask for the two claims the plain form asks for.
+twin	graph-step 3	graph-step-dirty	Judgement identical to graph-step-dirty on the same path: 3 steps over a clean tree here, 2 over a draft there.
+twin	nav-peek branch	nav-peek-into branch	Prefix of nav-peek-into on the same cell and section
+full	nav-peek-rename branch	diff-fold-by-rename b.txt --preset dirty ; nav-reclick branch:1	picture: A box on a peeked row over a list folded by hand; the box on a peeked row runs before a merge in diff-fold-by-rename and the hand fold in nav-reclick, and nothing on the box's path reads how the list was folded.
+twin	nav-rename	nav-rename-box branch:main	Exact duplicate: same call on the same row; the twin reaches a later point with a judgement.
+twin	old-git	old-git-card	Its whole judgement is the prefix of old-git-card's line on the same timer.
+twin	op-exit	wip-message-focus	No preset = basic, which has no stopped operation, so OpExitCard (visible: opText !== "") never stands: the run is a plain showWip on basic, a prefix of wip-message-focus, and does not photograph the verb's subject.
+twin	op-exit-go continue --preset rebase-staged	op-exit-lands continue --preset rebase-staged	Same press, same preset; op-exit-lands cannot reach op_exit_landed op= unless the row was found and continued, so its judgement covers this one at a later point.
+twin	ops-branch --preset worktrees	ops-branch --preset panel	Same verb, judgement and path; only the preset differs, and panel is the preset built to hold every row kind of the branch card (worktrees.rs). Pre-panel leftover.
+full	ops-stand --preset panel --preset stashes	ops-stand --preset panel	picture: The stand card judged before a merge by ops-stand --preset panel (tier=stand lit= turned= yield=); only the tab standing behind it differs.
+full	ops-stand --preset worktrees --preset stashes	ops-stand --preset panel	picture: The stand card judged before a merge by ops-stand --preset panel (tier=stand lit= turned= yield=); only the tabs it stands over differ.
+twin	ops-stand-copies	ops-stand-copies zzz	The own-copy-only case is reached identically by the zzz run, which also asserts the filter claims.
+twin	ops-stand-repos --preset worktrees --preset stashes	ops-stand-repos --preset panel --preset stashes	Duplicate: stashes in front in both, the back tab is named repo in both; judgement identical.
+twin	path-tip wip --preset longpaths	tip-copy --preset longpaths	Same path step for step (showWip, worktreeModel.setTreeView(false), wipPane.pointedTipRow=0, wait ToolTip visible); its own tree=false is the NavSectionModel.setTreeView readback that path-tip carried:topic already judges as tree=false.
+twin	ref-list-lit 1:1 --preset tags	ref-list-lit 0:1 --preset tags	Rests on v1.0 in a stack that also holds origin/main; judged the same way on the same row property. Only the neighbours in the picture differ.
+twin	rename-branch main-renamed	rename-local-upstream main-renamed	Same input and page path; this one only stops earlier (write barrier, with the carry bar still arriving) and judges nothing.
+twin	rename-taken --allow-write-failure	rename-taken feature/topic-a --allow-write-failure	Arg-less run submits an empty name the product never sends (NavNameBox.qml blocks Enter on a refused box; validRefName("") already refuses). Only git's words differ.
+twin	replace-remote origin/main:main-2	replace-remote origin/main:renamed	The two plain lines differ only in the new name and take the same askReplaceRemote branch (no ref-specific logic).
+twin	row-card	row-card 7 --preset edges	Arg "" is row 0 = basic's working-tree row. The product never opens a card there (GraphRowDelegate.qml partAt answers "" for isWip)
+twin	row-card 5 --preset carried --scroll-to top	row-card 7 --preset edges	A card the product never opens (another copy's row, P3-確認事項.md), and run-dependently a real commit's card instead; the judgement passes either way.
+twin	stage-all	stage-all --preset dirty	Same slot, completion and must_say as stage-all --preset dirty.
+twin	stash-pop-row	stash-pop-row --preset stashes	On basic the working-tree row already leads before the pop, so top=wip does not discriminate
+twin	switch feature/topic-a	dbl-local feature/topic-a	Same preset, arg, completion (write barrier) and judgement as dbl-local, which enters one step higher (activateChip->switchToRef->switchTo) and so covers this whole path.
+twin	switch-remote origin/feature/remote-only	switch-remote-twice origin/feature/remote-only	Same run as dbl-remote (activateChip only wraps switchToRef); switch-remote-twice makes the same first press on the same arg/preset and is judged at the later landing.
+twin	tab-edge	tab-edge 0	Exact duplicate of tab-edge 0: an empty arg is 0, same fixture, same row (window.rs). The same bare/0 pair exists for tab-pin in another slice.
+twin	tab-name 3	tab-name	Same fixture and must_say as tab-name; only which tab's tip is read differs — native= reads tab 3's path instead of the first's. No reason for 3 in verbs.md.
+twin	tab-pin 0	tab-pin	Byte-identical run: front=Number(arg||0) is 0 for "" and "0" (WindowTabPinActs.qml), one must_say row OneOf(["","0"]) (verbs/window.rs), xtask route ignores the arg ...
+full	window-floor fold --preset rebase-conflict	window-floor fold	git: Distinct from window-floor fold only by repo state; fits= compares the window with its own floor (WindowBody.qml), so the rebase band's marks cannot turn it red.
+full	window-floor log --preset rebase-conflict	window-floor log	git: Distinct from window-floor log only by repo state; fits= compares the window with its own floor (WindowBody.qml), so the rebase band's marks cannot turn it red.
+twin	wip-tally --preset dirty	wip --preset dirty	Same run as wip --preset dirty; its extra wip_tally line (kinds summing to rows) is judged nowhere, so nothing the gate reads or the PNG shows differs.
+twin	worktree-kept 8 --preset basic --preset worktrees	worktree-kept --preset basic --preset worktrees	Same must_say and road; the long copy name only changes the picture (wide= is reported, not judged) and the cut rule is QtTested.
