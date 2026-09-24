@@ -18,8 +18,8 @@
 //!
 //! The key is what git answered for the folder the tab was opened from
 //! (`RepoInfo::git_dir`), so **two tabs opened through paths git spells
-//! differently would be given two orders** and race as they did before
-//! this existed. A tab reopened over itself cannot: it opens from the
+//! differently would be given two orders** and race as they would with
+//! no order at all. A tab reopened over itself cannot: it opens from the
 //! path it already held, which git answers the same way twice.
 //!
 //! **What takes a place is what writes here**

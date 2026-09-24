@@ -57,11 +57,11 @@ impl OperationId {
 
 /// Which write it is.
 ///
-/// One type for the three things that used to read the write's label as
-/// a string — the queue's lane, the poll's gate under a replay, and the
-/// application's classification of the answer — so a kind added here has
-/// to be placed in each of them: the matches are exhaustive, and there is
-/// no default lane to fall into by omission.
+/// One type, and not a label read as a string, for the three things that
+/// ask which write it is — the queue's lane, the poll's gate under a
+/// replay, and the application's classification of the answer — so a kind
+/// added here has to be placed in each of them: the matches are
+/// exhaustive, and there is no default lane to fall into by omission.
 ///
 /// The kinds are as coarse as the application reads them ([`Self::label`]):
 /// every stash operation is `Stash`, every branch write `Branch`. Which

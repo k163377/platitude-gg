@@ -10,9 +10,9 @@ impl RepoSession {
     /// for: a fetch writes `refs/remotes/*` and `FETCH_HEAD` and gets no
     /// nearer the working tree than that ([`AfterWrite::Refs`]).
     ///
-    /// **What the press gives up**: with nothing brought down it no
-    /// longer doubles as a status poll, so a tree made dirty outside
-    /// this window lands on the following tick.
+    /// **What the press gives up**: with nothing brought down it does
+    /// not double as a status poll, so a tree made dirty outside this
+    /// window lands on the following tick.
     pub fn fetch(self: &Arc<Self>, remote: Option<String>) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);

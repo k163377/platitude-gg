@@ -6,8 +6,8 @@ fn scratch() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir")
 }
 
-/// A real picture on disk. The store decodes what it is handed now,
-/// so a few bytes standing in for one no longer reaches the far side.
+/// A real picture on disk. The store decodes what it is handed, so a
+/// few bytes standing in for one do not reach the far side.
 fn picture(dir: &Path, name: &str, tint: u8) -> PathBuf {
     let png = crate::picture::png_of(24, 16, |x, _| [tint, x as u8, 40, 255]);
     file_of(dir, name, &png)

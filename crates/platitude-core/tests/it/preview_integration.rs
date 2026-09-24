@@ -427,8 +427,8 @@ async fn svg_gets_an_image_preview_alongside_its_text_diff() {
 async fn a_large_image_is_handed_over_whole() {
     let mut repo = TestRepo::init();
     repo.commit_file("base.txt", "x\n", "base");
-    // Past the 16 MiB the data-URL preview used to stop at, in the tree
-    // only: no git object, and the file is the preview.
+    // Well past what a data URL would carry, in the tree only: no git
+    // object, and the file is the preview.
     let huge_len = 17 * 1024 * 1024 + 1;
     let big = vec![0u8; huge_len];
     write_bytes(&repo, "huge.png", &big);

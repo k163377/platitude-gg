@@ -130,7 +130,7 @@ async fn the_ways_in_to_a_status_read_never_run_two_at_once() {
     })
     .await;
 
-    // The two ways in that used to read straight past it.
+    // The two ways in that could read straight past it.
     session.refresh_poll();
     repo.write_file("f.txt", "dirty\n");
     session.stage_paths(vec!["f.txt".to_string()]);
@@ -409,7 +409,7 @@ async fn the_walk_reads_head_from_the_refs_read_that_already_landed() {
     session.close();
 }
 
-/// The remotes are read once per refs listing no more: a poll tick that
+/// The remotes are not read once per refs listing: a poll tick that
 /// finds nothing moved spawns no `git config` to re-read them. A write
 /// puts the question back, because a write is what can add one.
 #[tokio::test(flavor = "multi_thread")]

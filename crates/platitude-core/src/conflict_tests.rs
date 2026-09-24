@@ -2,7 +2,7 @@
 //! (structure.md §分割: テストだけ巨大なら同ディレクトリの専用ファイルへ).
 
 use crate::conflict::*;
-// The merge-tool half of `conflict` is a module of its own now; the
+// The merge-tool half of `conflict` is a module of its own; the
 // parser this pins is private to it (`conflict::tool`).
 use crate::conflict::tool::parse_tool_help;
 use crate::status::{StatusItem, WorkTreeStatus};

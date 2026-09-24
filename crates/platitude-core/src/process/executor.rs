@@ -61,7 +61,7 @@ const FIXED_ARGS: [&str; 9] = [
     // matched", and a file whose stat alone moved is compared by content
     // either way — the patch, `--name-only` and `--quiet` all say the
     // same with it off (measured). What it costs is that cache going
-    // unmaintained, since nothing this end refreshes the index any more:
+    // unmaintained, since nothing this end refreshes the index:
     // a work tree whose stats all moved without its contents changing is
     // re-hashed by every read — which on such a tree is most of what
     // a `status` costs

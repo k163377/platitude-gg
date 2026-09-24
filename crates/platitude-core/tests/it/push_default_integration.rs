@@ -199,7 +199,7 @@ async fn a_remote_renamed_in_a_terminal_leaves_the_checkout_key_behind() {
     assert_eq!(marks.checkout_default.as_deref(), Some("fork"));
 }
 
-/// The fork arrangement the label used to get wrong: the branch marks its
+/// The fork arrangement the label can get wrong: the branch marks its
 /// own destination, the repository marks none, and the counts on screen
 /// are about the remote the branch tracks while the push goes
 /// elsewhere.
@@ -311,7 +311,7 @@ async fn a_metacharacter_branch_reads_its_own_mark() {
     assert_eq!(plan.remote_branch, "wip.v2+x", "the branch's own name");
 }
 
-/// The scope the label used to go stale in: a mark written into the
+/// The scope the label can go stale in: a mark written into the
 /// user's global configuration. The read sees it with its level, the
 /// label spells the same destination the send resolves, and the marks
 /// git weighs above it still win.

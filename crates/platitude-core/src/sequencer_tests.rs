@@ -126,9 +126,8 @@ fn full(short: &str) -> String {
 
 /// **What decides which refs follow a rewrite is git's**, and the plan
 /// is merged into its todo: the `update-ref` lines it put there
-/// travel with the commit they came after. Written whole the way this
-/// used to be, the flag was passed and nothing followed
-/// (P3-確認事項 §A).
+/// travel with the commit they came after. Written whole instead, the
+/// flag is passed and nothing follows (P3-確認事項 §A).
 #[test]
 fn the_plan_carries_over_the_ref_lines_git_wrote() {
     let plan = format!(
@@ -277,9 +276,9 @@ fn apply_plan_writes_the_plan_over_the_todo_file() {
 /// **A plan the size of a history, reordered end to end.** The ids are
 /// matched by the nine characters git abbreviates to, the lines it wrote
 /// stay with their own commits wherever those went, and nothing is left
-/// over. Both halves of that were a scan before — one over git's lines per
-/// line of the plan, and one closing the gap each taken line left — so the
-/// cost went with the square of the range (ci/baseline の
+/// over. Either half done as a scan — one over git's lines per line of the
+/// plan, or one closing the gap each taken line leaves — makes the cost go
+/// with the square of the range (ci/baseline の
 /// code-costs-windows-x64.md §todo の突き合わせ).
 #[test]
 fn a_reordered_plan_the_size_of_a_history_keeps_every_ref_with_its_commit() {

@@ -653,8 +653,8 @@ async fn a_push_the_far_side_turns_down_is_not_one_a_fetch_would_answer() {
     );
 }
 
-/// The same refusal over a tag, which used to reach the screen as a plain
-/// failure while the branch beside it came down as a report
+/// The same refusal over a tag, which comes down as a report the way the
+/// branch beside it does, not as a plain failure
 /// (デザイン規約 §答えの要らない報せ). **Both halves of a tag's traffic are read
 /// the same way** — sending one and taking one off the far side are
 /// different commands here (`push` against `push --delete`), so one being
@@ -699,8 +699,8 @@ async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
 
 /// The same refusal, installed while a neighbour holds the hook open for
 /// writing — the window a `fork()` in another test opens over a file this
-/// one has just written, and the reason the test above used to lose the
-/// far side's words under a loaded run.
+/// one has just written, and the way the test above would lose the far
+/// side's words under a loaded run.
 ///
 /// **A hook git cannot execute is still a refusal, and a silent one.**
 /// `receive-pack` writes its own `cannot exec` to the stderr it
@@ -738,7 +738,7 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
     // scope, since that is what the install is waiting for. An install
     // that never looked finishes with the handle still held, and the push
     // below is then the one that meets the busy hook — which is where the
-    // words used to go missing.
+    // words go missing.
     let (busy, saw_busy) = std::sync::mpsc::channel();
     let mut held = Some(handle);
     let installing = &bare;

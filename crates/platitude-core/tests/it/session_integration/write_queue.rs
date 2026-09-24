@@ -321,12 +321,12 @@ async fn marking_the_conflicts_resolved_leaves_the_rest_of_the_tree_alone() {
 /// commit outlives it — the token handed to git is the write's own and no
 /// stock budget binds the local lane (`operation::Lane::Local`), so
 /// a tab going down, or the whole application, waits it out: killed
-/// mid-write, the commit is simply gone (measured with
-/// a short stock budget before the lane was split; a cancel lost it the
-/// same way). And the branch queued behind it still lands: the asked
-/// order is the queue's promise, and a close only stops intake — the
-/// same tail the quit gate holds the window for, so the pending count
-/// the gate reads drains to zero exactly when the loop ends.
+/// mid-write, the commit is simply gone (measured with a short stock
+/// budget over the local lane; a cancel loses it the same way). And the
+/// branch queued behind it still lands: the asked order is the queue's
+/// promise, and a close only stops intake — the same tail the quit gate
+/// holds the window for, so the pending count the gate reads drains to
+/// zero exactly when the loop ends.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_close_waits_out_the_running_write_and_the_queue() {
     let mut repo = TestRepo::init();

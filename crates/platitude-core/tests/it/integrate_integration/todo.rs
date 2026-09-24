@@ -245,8 +245,8 @@ async fn a_plan_runs_whole_with_rebase_merges_set_in_the_config() {
 /// inside the range stands on, and decides that set itself: no line for a
 /// tag, none for a branch outside the range, and **none for a branch
 /// another working copy has checked out** — that one it says so about in
-/// a comment. The helper used to write the plan over the whole file, so
-/// every one of those lines went and the flag moved nothing (measured,
+/// a comment. A helper that writes the plan over the whole file takes
+/// every one of those lines with it, and the flag moves nothing (measured,
 /// 2.55; P3-確認事項 §A). Working the set out here instead would be a
 /// second implementation of a rule git already applies, and the two would
 /// disagree exactly where it costs most.

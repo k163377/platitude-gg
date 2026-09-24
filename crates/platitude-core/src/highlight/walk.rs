@@ -353,7 +353,7 @@ diff --cc notes.qqq
     fn markers_outside_a_conflict_are_ordinary_text() {
         // The same shapes in a unified diff — a file that merely writes
         // about conflicts. Nothing here is structure. A fallback-lexer
-        // language on purpose: `.md` reads through its grammar now, and
+        // language on purpose: `.md` reads through its grammar, and
         // this test is about the road that shares `Walk`'s module.
         let patch = "\
 diff --git a/notes.groovy b/notes.groovy

@@ -54,10 +54,9 @@ diff --git a/src/new.rs b/src/new.rs
 
 #[test]
 fn a_deletion_does_not_bleed_into_the_added_lines() {
-    // The deleted line opens a comment. Fed through one shared walk —
-    // the old reading — everything after it came out painted as the
-    // inside of a comment that is not in the file; the fork keeps the
-    // sides apart.
+    // The deleted line opens a comment. Fed through one shared walk,
+    // everything after it comes out painted as the inside of a comment
+    // that is not in the file; the fork keeps the sides apart.
     let patch = "\
 diff --git a/src/a.rs b/src/a.rs
 --- a/src/a.rs

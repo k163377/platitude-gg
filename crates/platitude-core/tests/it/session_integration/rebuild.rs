@@ -493,9 +493,9 @@ async fn the_two_passes_of_one_ask_read_the_stashes_once() {
 ///
 /// **The opening is where this lands.** Its tag-inclusive pass waits out
 /// the tag-less one that paints (`restart_log`), so a write, a poll tick
-/// or a test closing its baseline in between used to leave a full history
+/// or a test closing its baseline in between would leave a full history
 /// walk running — and that walk's command turns up *after* the boundary
-/// that was meant to close the opening, which is what made
+/// that is meant to close the opening, which makes
 /// `remote_tags_integration::learning_what_the_remotes_carry_…` fail
 /// under load and nowhere else.
 ///
