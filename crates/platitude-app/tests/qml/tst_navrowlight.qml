@@ -92,6 +92,16 @@ Item {
         name: "NavRowLight"
         when: windowShown
 
+        /// Every row reads the hand a turn after the panel counts it (`NavItemDelegate.syncHover`, on `Qt.callLater`).
+        /// A call queued after those runs after them — the queue runs its calls in the order they were queued, and a
+        /// call queued again moves to the back of it (qtdeclarative `QQmlDelayedCallQueue`) — so this one landing is
+        /// the rows having read.
+        function rowsRead() {
+            let read = false
+            Qt.callLater(() => { read = true })
+            tryVerify(() => read, undefined, "the rows have read where the hand is")
+        }
+
         /// The hand walks onto the first row, and the row grows the way an open one does. The pointer has not moved,
         /// so the row it is standing in keeps the light — and the row that arrived under it takes none.
         function test_the_row_the_hand_walked_onto_keeps_the_light() {
@@ -151,11 +161,15 @@ Item {
             verify(top.factsItem !== null, "the row has its lines open")
             top.pointedTipRow = top.index
             tryVerify(() => top.factsTipOut, undefined, "and the supplement is standing on it")
+            // The row takes the light a turn after the box comes out (`NavItemDelegate.onFactsTipOutChanged`), so the
+            // box standing is not yet the row answering it.
+            tryVerify(() => top.pointed, undefined, "and the row wears the light its supplement holds")
 
             // The hand walks off the row and into the tip: nothing of the panel is under the pointer any more, and
-            // the panel says so.
+            // the panel says so. The claim is about what the row reads after that, a turn later again.
             mouseMove(below, 100, Theme.rowHeight / 2)
             root.handMoves++
+            rowsRead()
             verify(top.pointed, "the row stays the row the reader is on while its own supplement stands")
 
             // And it lets go when the supplement does.
