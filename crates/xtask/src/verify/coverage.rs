@@ -42,12 +42,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
     let root = crate::tree::workspace_root();
     let harness = harness(&root)?;
-    let recorded = recorded(&root);
+    let census = crate::gate::Census::load(&root)?;
+    let recorded = recorded(&census);
     // The tier table is read by every gate to choose what it owes, so a
     // row that went stale is a choice made on a line that is not there —
     // or a full line whose pre-merge lean moved, which leaves its claim with
     // no witness before a merge (`gate::tiers`).
-    let census = crate::gate::Census::load(&root);
     let tiers = crate::gate::Tiers::load(&root);
     // A verb whose every row is a twin of another verb's line has no line
     // on purpose: it is no backlog to record.
@@ -148,8 +148,8 @@ fn harness(root: &Path) -> Result<Harness, String> {
 
 /// The verb each census line ran — its first word, the rest being the
 /// argument and the flags that line was taken with.
-fn recorded(root: &Path) -> BTreeSet<String> {
-    crate::gate::Census::load(root)
+fn recorded(census: &crate::gate::Census) -> BTreeSet<String> {
+    census
         .lines
         .keys()
         .filter_map(|line| line.split_whitespace().next())

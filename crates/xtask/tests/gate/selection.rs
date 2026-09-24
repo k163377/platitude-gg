@@ -513,6 +513,33 @@ fn a_component_no_verb_shows_stops_the_gate_by_name() {
     sb.gate_ok(&sb.seat, &[]);
 }
 
+/// A census holding a row no run wrote chooses nothing: the gate names the
+/// row and runs no step, and the file is as it was.
+#[test]
+fn a_census_that_cannot_be_read_whole_stops_the_gate_by_its_row() {
+    let sb = Sandbox::new("census-rows");
+    let census = "# census\nstash --preset basic\tDriver Main StashPane\n\
+                  stash --preset basic\tMain\n";
+    sb.write(&sb.seat, "crates/xtask/verb-census.txt", census);
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/StashPane.qml",
+        "Item {\n    property var model: StashModel\n    property int x: 1\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app-ui): a census taken twice", &[]);
+    let (ok, text) = sb.gate(&sb.seat, &[], &[]);
+    assert!(!ok, "{text}");
+    assert!(
+        text.contains("crates/xtask/verb-census.txt:3: \"stash --preset basic\" again"),
+        "{text}"
+    );
+    assert!(sb.ran().is_empty());
+    assert_eq!(
+        std::fs::read_to_string(sb.seat.join("crates/xtask/verb-census.txt")).expect("census"),
+        census
+    );
+}
+
 #[test]
 fn an_xtask_change_leaves_the_app_alone_and_runs_on_both_sides() {
     let sb = Sandbox::new("xtask");

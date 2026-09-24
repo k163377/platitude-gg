@@ -57,25 +57,72 @@ pub(crate) struct Census {
 }
 
 impl Census {
-    pub(crate) fn load(root: &Path) -> Census {
-        Census::parse(&std::fs::read_to_string(root.join(FILE)).unwrap_or_default())
+    /// The census as the tree holds it.
+    ///
+    /// **Only a file that is not there reads as empty** — a tree before its
+    /// first run. Every writer rewrites the whole file from what it read
+    /// ([`record`]), so a file that is there and was read as empty or as
+    /// part of itself would be written back as that, and the gate would
+    /// choose its verbs off it.
+    pub(crate) fn load(root: &Path) -> Result<Census, String> {
+        Census::read(&bytes(root)?)
     }
 
-    pub(crate) fn parse(text: &str) -> Census {
+    /// The census the file's bytes say — refused where they are not text or
+    /// hold a row no run wrote ([`Census::parse`]).
+    pub(crate) fn read(bytes: &[u8]) -> Result<Census, String> {
+        let text = std::str::from_utf8(bytes).map_err(|e| {
+            let row = bytes[..e.valid_up_to()]
+                .iter()
+                .filter(|byte| **byte == b'\n')
+                .count()
+                + 1;
+            format!("{FILE}:{row}: not UTF-8 — {PUT_BACK}")
+        })?;
+        Census::parse(text)
+    }
+
+    /// `<verify-ui line> TAB <names, space-separated>` per row, `#` starting
+    /// a comment. A row of any other shape, and a line held twice, is named
+    /// by its row: dropped or taken last, it would go out of the file on
+    /// the next write.
+    fn parse(text: &str) -> Result<Census, String> {
         let mut census = Census::default();
-        for line in text.lines() {
-            if line.starts_with('#') || line.trim().is_empty() {
+        let mut first_at: BTreeMap<&str, usize> = BTreeMap::new();
+        let mut wrong = Vec::new();
+        for (at, row) in text.lines().enumerate() {
+            let at = at + 1;
+            if row.starts_with('#') || row.trim().is_empty() {
                 continue;
             }
-            let Some((key, names)) = line.split_once('\t') else {
+            let Some((key, names)) = row.split_once('\t').filter(|(key, _)| !key.is_empty()) else {
+                wrong.push(format!(
+                    "{FILE}:{at}: not `<verify-ui line> TAB <names>`: {row:?}"
+                ));
                 continue;
             };
+            if let Some(first) = first_at.get(key) {
+                wrong.push(format!("{FILE}:{at}: {key:?} again (first at row {first})"));
+                continue;
+            }
+            first_at.insert(key, at);
             census.lines.insert(
                 key.to_string(),
                 names.split_whitespace().map(str::to_string).collect(),
             );
         }
-        census
+        if wrong.is_empty() {
+            return Ok(census);
+        }
+        Err(format!(
+            "{FILE} holds rows no run wrote, so nothing may choose verbs off it or write it \
+             back — {PUT_BACK}:\n{}",
+            wrong
+                .iter()
+                .map(|row| format!("  {row}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ))
     }
 
     /// Every recorded line whose run met one of `stems`.
@@ -112,6 +159,20 @@ impl Census {
         }
         std::fs::write(&staging, text).map_err(|e| format!("{}: {e}", staging.display()))?;
         std::fs::rename(&staging, &path).map_err(|e| format!("{}: {e}", path.display()))
+    }
+}
+
+/// What to do about a census that cannot be read whole.
+const PUT_BACK: &str = "the file is generated: put a committed copy of it back and let the runs \
+                        write their lines again";
+
+/// The file's bytes as the tree holds them: none for a tree with no census
+/// yet, and an error for a file that is there and cannot be read.
+pub(crate) fn bytes(root: &Path) -> Result<Vec<u8>, String> {
+    match std::fs::read(root.join(FILE)) {
+        Ok(bytes) => Ok(bytes),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(format!("{FILE}: {e}")),
     }
 }
 
@@ -328,7 +389,9 @@ impl Shift {
 ///
 /// Answers with how many names the line holds and what the write moved
 /// ([`Shift`]), so the run can say which names it is that changed rather
-/// than leave a file for somebody to diff.
+/// than leave a file for somebody to diff — or with why nothing was
+/// written: a census that cannot be read whole ([`Census::load`]) is left
+/// as it is.
 pub(crate) fn record(
     root: &Path,
     line: &str,
@@ -337,7 +400,7 @@ pub(crate) fn record(
 ) -> Result<(usize, Shift), String> {
     let _turn = one_writer(root)?;
     let known = component_files(root)?;
-    let before = Census::load(root);
+    let before = Census::load(root)?;
     let mut census = Census {
         lines: before.lines.clone(),
     };
@@ -500,7 +563,7 @@ pub(crate) fn names_in(lines: &[String]) -> Option<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Census, Shift, names_in, page_settled_in, record};
+    use super::{Census, FILE, Shift, names_in, page_settled_in, record};
     use std::collections::BTreeSet;
     use std::path::PathBuf;
 
@@ -510,7 +573,7 @@ mod tests {
             .iter()
             .map(|(line, names)| format!("{line}\t{}\n", names.join(" ")))
             .collect();
-        Census::parse(&text)
+        Census::parse(&text).expect("a census as the file is written")
     }
 
     /// Eight verbs showing the same two components — enough lines that a
@@ -753,7 +816,7 @@ mod tests {
             " (+DiffPane -GraphPane)",
             "the run says which names moved"
         );
-        let census = Census::load(&root);
+        let census = Census::load(&root).expect("the census it wrote");
         assert_eq!(
             census.lines["wip --preset dirty"],
             ["DiffPane", "WipPane"].map(String::from).into()
@@ -786,7 +849,7 @@ mod tests {
             " (+WipPane)",
             "a run that only adds says what it added"
         );
-        let census = Census::load(&root);
+        let census = Census::load(&root).expect("the census it wrote");
         assert_eq!(
             census.lines["band --system-title-bar"],
             ["DiffPane", "GraphPane", "WipPane"]
@@ -814,12 +877,125 @@ mod tests {
             " (-WipPane on 2 lines)",
             "a name the pruning took off every line says so on the line that ran"
         );
-        let census = Census::load(&root);
+        let census = Census::load(&root).expect("the census it wrote");
         assert!(!census.covers("WipPane"));
         assert_eq!(
             census.lines["wip --preset dirty"],
             BTreeSet::new(),
             "the line the run did not touch is pruned too"
+        );
+    }
+
+    /// **A census that is there and cannot be read whole is refused, by
+    /// its row, and left as it was.** Every writer rewrites the whole file
+    /// from what it read, so a file read as empty, or as the rows that
+    /// parsed, or with a line taken twice, is written back as that.
+    #[test]
+    fn a_census_that_cannot_be_read_whole_is_named_by_its_row_and_never_written() {
+        let held = "wip --preset dirty\tWipPane\n";
+        let mut not_text = format!("# census\n{held}").into_bytes();
+        not_text.extend_from_slice(b"diff-file b.txt\tDiff\xffPane\n");
+        for (what, bytes, says) in [
+            ("not UTF-8", not_text, ":3: not UTF-8"),
+            (
+                "a row with no tab",
+                format!("# census\n{held}<<<<<<< HEAD\n").into_bytes(),
+                ":3: not `<verify-ui line> TAB <names>`",
+            ),
+            (
+                "a line held twice",
+                format!("{held}diff-file b.txt\tDiffPane\n{held}").into_bytes(),
+                ":3: \"wip --preset dirty\" again (first at row 1)",
+            ),
+        ] {
+            let root = root_with(&["DiffPane", "WipPane"]);
+            let path = root.join(FILE);
+            std::fs::write(&path, &bytes).expect("the census as found");
+            let Err(read) = Census::load(&root) else {
+                panic!("{what}: read as a census");
+            };
+            assert!(read.contains(&format!("{FILE}{says}")), "{what}: {read}");
+            let Err(wrote) = record(&root, "diff-file b.txt", &["DiffPane".into()], true) else {
+                panic!("{what}: a line was written over it");
+            };
+            assert!(wrote.contains(says), "{what}: {wrote}");
+            assert_eq!(
+                std::fs::read(&path).expect("the census after"),
+                bytes,
+                "{what}: the file is as it was found"
+            );
+        }
+    }
+
+    /// A tree before its first run holds no census, which is an empty one
+    /// its first run writes; a census that is there and cannot be opened
+    /// is no empty one.
+    #[test]
+    fn only_a_census_that_is_not_there_reads_as_empty() {
+        let root = root_with(&["WipPane"]);
+        assert!(
+            Census::load(&root)
+                .expect("no file is an empty census")
+                .lines
+                .is_empty()
+        );
+        let path = root.join(FILE);
+        std::fs::create_dir(&path).expect("a directory where the census stands");
+        let Err(read) = Census::load(&root) else {
+            panic!("a census that cannot be opened read as an empty one");
+        };
+        assert!(read.contains(FILE), "{read}");
+        std::fs::remove_dir(&path).expect("the directory gone");
+        record(&root, "wip --preset dirty", &["WipPane".into()], true).expect("the first line");
+        assert_eq!(Census::load(&root).expect("the first write").lines.len(), 1);
+    }
+
+    /// The two things a line can fail at once the census is read: the
+    /// lock, and the file put in place. Both answer an error, and neither
+    /// leaves the census any different.
+    #[test]
+    fn a_line_that_could_not_be_held_or_put_in_place_is_an_error_and_the_census_stands() {
+        let root = root_with(&["DiffPane", "WipPane"]);
+        record(&root, "wip --preset dirty", &["WipPane".into()], true).expect("a line before");
+        let path = root.join(FILE);
+        let before = std::fs::read(&path).expect("the census before");
+        let staging = root.join("target").join("verb-census.txt.part");
+        std::fs::create_dir(&staging).expect("a directory where the staging file goes");
+        let Err(why) = record(&root, "diff-file b.txt", &["DiffPane".into()], true) else {
+            panic!("a line was recorded with nowhere to stage it");
+        };
+        assert!(why.contains("verb-census.txt.part"), "{why}");
+        assert_eq!(std::fs::read(&path).expect("the census"), before);
+
+        std::fs::remove_dir_all(root.join("target")).expect("target gone");
+        std::fs::write(root.join("target"), "").expect("a file where target/ goes");
+        let Err(why) = record(&root, "diff-file b.txt", &["DiffPane".into()], true) else {
+            panic!("a line was recorded with no lock to hold");
+        };
+        assert!(why.contains("target"), "{why}");
+        assert_eq!(std::fs::read(&path).expect("the census"), before);
+    }
+
+    /// Runs recording at once each keep their line: each reads the file,
+    /// puts its line in and writes the whole back under one writer at a
+    /// time ([`super::one_writer`]).
+    #[test]
+    fn runs_recording_at_once_each_keep_their_line() {
+        let root = root_with(&["WipPane"]);
+        let lines: Vec<String> = (0..8).map(|n| format!("wip {n}")).collect();
+        std::thread::scope(|scope| {
+            for line in &lines {
+                let root = &root;
+                scope.spawn(move || record(root, line, &["WipPane".into()], true).expect("a line"));
+            }
+        });
+        assert_eq!(
+            Census::load(&root)
+                .expect("the census")
+                .lines
+                .into_keys()
+                .collect::<Vec<_>>(),
+            lines
         );
     }
 }

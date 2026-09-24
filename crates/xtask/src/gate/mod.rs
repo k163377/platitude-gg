@@ -479,7 +479,7 @@ fn execute(
     crate::verify::sweep_yesterdays_runs();
     // What the census said before the verbs ran, so that a line one of
     // them rewrote can be told from the file as it was committed.
-    let census_before = std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default();
+    let census_before = census::bytes(&plan.dir)?;
     let store = Store::open(&plan.dir)?;
     let logs = plan.dir.join("target").join("gate-logs");
     std::fs::create_dir_all(&logs).map_err(|e| format!("{}: {e}", logs.display()))?;
@@ -513,16 +513,13 @@ fn execute(
     // step went red, so this is said on both roads out.
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
-    let census_now = std::fs::read(plan.dir.join(census::FILE)).unwrap_or_default();
+    let census_now = census::bytes(&plan.dir)?;
     // The bytes answer whether the tree moved (a header the sources
     // changed moves it too, and the next gate would refuse to run over
     // that); the sets answer what moved, which is what a reader of a
     // whole-file diff cannot get at.
     let rewrote = census_now != census_before;
-    *shift = Shift::between(
-        &Census::parse(&String::from_utf8_lossy(&census_before)),
-        &Census::parse(&String::from_utf8_lossy(&census_now)),
-    );
+    *shift = Shift::between(&Census::read(&census_before)?, &Census::read(&census_now)?);
     spent.census_after = at.elapsed();
     if !failures.is_empty() {
         return Err(format!(
