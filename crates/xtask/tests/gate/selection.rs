@@ -497,6 +497,21 @@ fn a_component_no_verb_shows_stops_the_gate_by_name() {
         !text.contains("ui/Main.qml\n") || text.contains("Main"),
         "{text}"
     );
+    // The census is asked before anything runs, so a line asked of this
+    // gate is recorded too late to answer, and is no road out.
+    let (ok, text) = sb.gate(&sb.seat, &["--verb", "extra"], &[]);
+    assert!(!ok && text.contains("ui/Extra.qml"), "{text}");
+    let way_out = text
+        .lines()
+        .find(|line| line.starts_with("Run a verb"))
+        .unwrap_or_else(|| panic!("no way out said: {text}"));
+    assert!(
+        way_out.contains("cargo xtask verify-ui <verb>")
+            && way_out.contains("commit it")
+            && !way_out.contains("--verb"),
+        "{way_out}"
+    );
+    assert!(sb.ran().is_empty());
     // A singleton stands in no item tree, so it is never owed a census.
     sb.write(
         &sb.seat,

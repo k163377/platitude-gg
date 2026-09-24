@@ -785,12 +785,14 @@ fn refuse_what_no_stamp_could_answer_for(plan: &Plan) -> Result<(), String> {
                 .join("\n")
         ));
     }
+    // Asked of the census as committed, before anything runs: a
+    // `--verb` of this gate would record its line too late to answer.
     if !plan.uncovered.is_empty() {
         return Err(format!(
             "no verb shows these components, so the gate cannot pass them:\n{}\nRun a verb \
-             that brings each one up (`cargo xtask verify-ui <verb> …`, or `gate --verb \
-             <line>`) — a passing run records what it showed in {}, and from then on the gate \
-             picks that verb by itself.",
+             that brings each one up on its own (`cargo xtask verify-ui <verb> …`) — a passing \
+             run records what it showed in {} — then review that diff, commit it, and gate \
+             again: from then on the gate picks that verb by itself.",
             plan.uncovered
                 .iter()
                 .map(|f| format!("  {f}"))
