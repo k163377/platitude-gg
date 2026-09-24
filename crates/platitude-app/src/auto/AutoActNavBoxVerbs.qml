@@ -108,6 +108,12 @@ Item {
             navTipTimer.opens = true
             navTipTimer.then = arg
             navTipTimer.begin("branch:2")
+        } else if (act === "nav-follow" || act === "nav-follow-lit") {
+            // A line the open row put out, pressed where it goes somewhere of its own — the graph goes to that commit
+            // and the panel stays (デザイン規約 §左メニューの所作) — or, `-lit`, the pointer resting on it. The row is
+            // named the way `nav-open` names one: `<section>:<row>[:<filter>]`; the line is the first that goes
+            // somewhere.
+            followTimer.begin(arg, act === "nav-follow-lit")
         } else if (act === "nav-open-tag") {
             // A TAGS row opening on the remotes carrying its name. **The row is named, not numbered** — the tags are
             // sorted newest-first and a name only a remote has sorts last of all, so a number is the preset's
@@ -567,6 +573,117 @@ Item {
             driver.complete()
         }
     }
+    // PGG_AUTO_ACT=nav-follow / nav-follow-lit: a row opened under the stand-in pointer, and then the first of its
+    // lines whose words go somewhere — pressed, or rested on.
+    //
+    // **The landing is read off the graph**, not off the press: the page's selection is the click's bookkeeping, so
+    // what says the reader arrived is the graph's row for that commit lit and laid out (the witness `nav-jump`
+    // takes) — and the panel's own mark still on the row the lines are under, which is the panel having stayed.
+    SampleTimer {
+        id: followTimer
+        property string kind: "remote"
+        property int row: 0
+        property string filter: ""
+        property bool lit: false
+        /// 0 the filter, 1 the rest that opens the row, 2 the lines standing still, 3 the answer.
+        property int step: 0
+        property string stood: ""
+        property int line: -1
+        property var to: null
+        property string name: ""
+        function begin(arg, lit) {
+            const parts = ("" + arg).split(":")
+            followTimer.kind = parts[0] === "" ? "remote" : parts[0]
+            followTimer.row = parts.length > 1 ? Number(parts[1]) : 0
+            followTimer.filter = parts.length > 2 ? parts[2] : ""
+            followTimer.lit = lit
+            followTimer.step = followTimer.filter === "" ? 1 : 0
+            followTimer.stood = ""
+            followTimer.line = -1
+            followTimer.to = null
+            followTimer.start()
+        }
+        function said() {
+            return " section=" + followTimer.kind + " row=" + followTimer.row + " line=" + followTimer.line
+        }
+        onTriggered: {
+            // A filter, once: the way a leaf under a folded folder is brought into the list.
+            if (followTimer.step === 0) {
+                navProbe.typeFilter(followTimer.filter)
+                followTimer.step = 1
+                return
+            }
+            // The rest, put in every beat until the row is open: the delegate arrives on a later layout than the
+            // rows the model got (`NavList.clickRow`).
+            if (followTimer.step === 1) {
+                navProbe.pointTipAt(followTimer.kind, followTimer.row)
+                if (!navProbe.rowFactsOpen)
+                    return
+                followTimer.name = navProbe.tipNameAt(followTimer.kind, followTimer.row)
+                followTimer.step = 2
+                return
+            }
+            // **Nothing is aimed at until the lines have stopped moving**: they are laid out a pass after they are
+            // built, and a press worked out from a line still at its origin lands on the mark (the rest of the row).
+            if (followTimer.step === 2) {
+                const geom = sidebarPane.rowFactsGeom()
+                if (geom !== followTimer.stood) {
+                    followTimer.stood = geom
+                    return
+                }
+                followTimer.line = navProbe.factsFirstGoing()
+                followTimer.to = navProbe.factsGoesTo(followTimer.line)
+                if (followTimer.to === null) {
+                    // A row whose lines go nowhere is the answer for this row, and a run that waited on would spend
+                    // the ceiling to say it and take no picture of what it found.
+                    followTimer.stop()
+                    Harness.report((followTimer.lit ? "nav_follow_lit" : "nav_follow") + followTimer.said()
+                                      + " followed=false name=" + followTimer.name)
+                    driver.complete()
+                    return
+                }
+                if (followTimer.lit)
+                    navProbe.pointFactsWords(followTimer.line, true)
+                else
+                    navProbe.followFactsLine(followTimer.line)
+                followTimer.step = 3
+                return
+            }
+            if (followTimer.lit) {
+                followTimer.stop()
+                // `aimed=` is the band read off where it was drawn; `hand=` is the cursor the area took — two
+                // answers from two parts, so a band laid and a pointer never turned (or the other way) split.
+                Harness.report("nav_follow_lit" + followTimer.said()
+                                  + " aimed=" + navProbe.factsLineAimed(followTimer.line)
+                                  + " hand=" + navProbe.factsHand()
+                                  + " open=" + navProbe.rowFactsOpen
+                                  + " to=" + followTimer.to.key + " name=" + followTimer.name)
+                driver.complete()
+                return
+            }
+            const want = followTimer.to.oid
+            if (page.selectedOid !== want || !driver.cardSettled)
+                return
+            // A commit the walk never reached is an answer (the page had settled before the press); a row the model
+            // has and the view has not laid out yet is waited for — the reading `nav-jump` makes.
+            const at = graphModel.rowOf(want)
+            const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
+            if (at >= 0 && !item)
+                return
+            followTimer.stop()
+            Harness.report("nav_follow" + followTimer.said()
+                              + " followed=true"
+                              // The graph's row for that commit, carrying it and lit.
+                              + " landed=" + (!!item && item.oid_hex === want && item.selected)
+                              // **The panel stays**: the row wearing the click is the one the lines are under — the
+                              // open one — and not the row the line named (デザイン規約「行き先はグラフ」).
+                              + " marked=" + (sidebarPane.activeKey === sidebarPane.openKey)
+                              + " box=" + (sidebarPane.editKey !== "")
+                              + " open=" + navProbe.rowFactsOpen
+                              + " to=" + followTimer.to.key + " at=" + at + " name=" + followTimer.name)
+            driver.complete()
+        }
+    }
     // The sidebar's row tooltips, and the rows that answer with none. Every run lights a control row first — the
     // first row of the working copies' listing, the one section every repository has a row in — so a run that
     // photographs an empty overlay has said in the same line that the pointer arrived somewhere. Without that,
@@ -769,6 +886,10 @@ Item {
                     + " caret=" + navProbe.factsCaret()
                     + " copied=" + (navProbe.factsTook() !== "")
                     + " clicked=" + (sidebarPane.activeKey !== "")
+                    // Where the graph went: the row's own commit. **A press in a line's band leaves the row the
+                    // click mark as well** (`SidebarRowGestures.followLine`), so the key cannot tell the two apart —
+                    // the commit read can.
+                    + " own=" + (page.selectedOid === navProbe.listOf(navTipTimer.kind).rowOidAt(target))
                     // The two above said as words, which is the repository's business rather than the rule's.
                     + " took=" + navProbe.factsTook()
                     + " active=" + sidebarPane.activeKey)

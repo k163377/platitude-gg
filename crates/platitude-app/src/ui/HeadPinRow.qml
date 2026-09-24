@@ -215,6 +215,12 @@ Rectangle {
     /// The stand-in raises no menu, so there is never one of its own to keep its lines up for (`NavRowFacts`).
     function factsMenuAsked() {
     }
+    /// A line of its facts pressed — the same answer a row's gives (`NavItemDelegate.followFact`), the row being the
+    /// one it stands for.
+    function followFact(to) {
+        if (headPin.gestures !== null)
+            headPin.gestures.followLine(headPin.factsKey, to.oid)
+    }
     function gatherFacts() {
         const branch = headPin.branchesModel.headName
         // **The same table the rows read** (`NavFacts`): the stand-in stands for a BRANCHES row, so it says what
@@ -227,6 +233,7 @@ Rectangle {
             "name": branch,
             "fullName": branch,
             "bucket": headPin.branchesModel.headUpstreamGone,
+            "oid_hex": headPin.branchesModel.headOid,
             "change": "",
             "orig_path": "",
             "ahead": headPin.branchesModel.headAhead,
@@ -300,10 +307,11 @@ Rectangle {
         // (`NavItemDelegate`).
         anchors.top: parent.top
         anchors.topMargin: Theme.rowHeight + headPin.nameOverflow
+        // A gap wider either side, which the lines give back inside (`NavRowFacts.bandReach`, the row's own reading).
         anchors.left: parent.left
-        anchors.leftMargin: headPin.rowInset + headPin.branchesModel.headDepth * headPin.nestStep
+        anchors.leftMargin: headPin.rowInset + headPin.branchesModel.headDepth * headPin.nestStep - Theme.spaceXs
         anchors.right: parent.right
-        anchors.rightMargin: Theme.navBarGutter
+        anchors.rightMargin: Theme.navBarGutter - Theme.spaceXs
         height: pinFacts.item ? pinFacts.item.implicitHeight : 0
         sourceComponent: NavRowFacts {
             row: headPin

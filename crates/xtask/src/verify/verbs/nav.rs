@@ -667,9 +667,13 @@ pub(super) const TABLE: &[Verb] = &[
             // must not find it in one. A press that never moved is the
             // row's click, which is the other half: lines that answered
             // only one of the two would pass a claim written for the
-            // other.
+            // other. **The tap is the row's own click, and says so by
+            // where the graph went** (`own=` — the row's own commit): the
+            // lines' foot is what no band covers, and a tap that landed
+            // in one would take the graph where that line names while
+            // leaving the row the same click mark.
             (Arg::Is("sweep"), "caret=true copied=true clicked=false"),
-            (Arg::Is("tap"), "copied=false clicked=true"),
+            (Arg::Is("tap"), "copied=false clicked=true own=true"),
         ],
         plain: "open=",
     },
@@ -684,6 +688,28 @@ pub(super) const TABLE: &[Verb] = &[
         name: "nav-open-held",
         when: &[],
         plain: "box=true open=false lit=true",
+    },
+    // A line an open row put out, pressed where it goes somewhere of its
+    // own: the graph goes to that commit and the panel stays. **Three
+    // answers from three places**, none of them the press's own
+    // bookkeeping — the line had somewhere to go, the graph's row for
+    // that commit is lit, and the click the panel remembers is still the
+    // open row's (a press that took the panel to the named row would
+    // leave that row's key). `box=false` is beside them because a click
+    // that armed the name gesture would open a box a window later.
+    Verb {
+        name: "nav-follow",
+        when: &[],
+        plain: "followed=true landed=true marked=true box=false",
+    },
+    // The pointer resting on that line: the band is drawn where the line
+    // is (`aimed=`) and the block's area turns the pointer to the hand
+    // (`hand=`), two answers from two parts. `open=true` is the row
+    // still open under a hand that moved onto its lines.
+    Verb {
+        name: "nav-follow-lit",
+        when: &[],
+        plain: "aimed=true hand=true open=true",
     },
     // The same opening, on a row of the section the folded rail has
     // open. **`peek=true` is the point**: the row that grows is inside

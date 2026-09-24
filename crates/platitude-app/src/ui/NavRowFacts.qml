@@ -24,16 +24,22 @@ import platitude.ui
 // column and the words begin where its name does, which is what makes the marks look like they moved down here — and
 // the row takes its marks off its own line while this is out.
 //
-// **The press is taken here and split in two**: a drag takes the words away, and a press that never moved is the
-// row's own click. A `TextEdit` under a `MouseArea` declared after it never sees a press (measured), so one hand
-// answers for the whole of this and drives the sweep itself (`SweepPad`).
+// **The press is taken here and split in two**: a drag takes the words away, and a press that never moved is a click.
+// A `TextEdit` under a `MouseArea` declared after it never sees a press (measured), so one hand answers for the whole
+// of this and drives the sweep itself (`SweepPad`). **The click goes where it landed**: in the band of a line whose
+// name stands on a commit of its own, the graph goes to that commit (`NavFactLine.goes`, デザイン規約
+// §左メニューの所作); anywhere else — a line naming nothing, one standing where the row does, the foot — it is the
+// row's own.
 Item {
     id: facts
 
-    /// The row this belongs to — where a press that took no words goes (`NavItemDelegate.rowPressed`).
+    /// The row this belongs to — where a press that took no words goes (`NavItemDelegate.rowPressed`), and where a
+    /// press in a line's band is handed (`followFact`).
     property Item row: null
     /// The lines to draw, in reading order — **one table answers for every section** (`NavFacts.lines`), so
-    /// nothing here knows which of them the row is in. Each is `{mark, markTint, text, tone, ahead, behind, note}`.
+    /// nothing here knows which of them the row is in. Each is `{mark, markTint, text, tone, ahead, behind, note,
+    /// to, withAbove}` — `to` is where a press on it takes the graph, null where it goes nowhere of its own
+    /// (`NavFacts.place` / `joined`), and `withAbove` says it shares the band of the line above.
     property var lines: []
     /// WORKTREES only: where this working copy stands — the path git lists it under. **Not a line**: the row is
     /// named by the folder that path ends in, and a reader who has already opened the row is asking about the copy
@@ -110,12 +116,113 @@ Item {
         pad.dropValues()
     }
 
+    /// The band a line that goes somewhere is pressed in, in this item's own coordinates — **the target and the
+    /// wash are one rect** (デザイン規約 §当たり判定「端に接しないものは判定と塗りを一致させる」). The whole line,
+    /// mark to measure, across the whole of this item — which is a gap wider than the lines either side
+    /// (`bandReach`), so the mark at the head of the line is not flat against the edge of what it is lit in — and
+    /// half the step between lines above and below, so the bands of neighbouring lines meet and a hand moving down
+    /// them is always on one. **Never above this item's top**: over it is the row's own line, and a press there is
+    /// the row's.
+    ///
+    /// **Lines going to one commit share one band** (`NavFacts.joined`): it runs from the first of them to the last.
+    function bandOf(row) {
+        const first = facts.bandStart(row)
+        let last = row
+        while (last + 1 < facts.lines.length && facts.lines[last + 1].withAbove)
+            last++
+        const head = first >= 0 && first < lineSeats.count ? lineSeats.itemAt(first) : null
+        const foot = last >= 0 && last < lineSeats.count ? lineSeats.itemAt(last) : null
+        if (head === null || foot === null)
+            return Qt.rect(0, 0, 0, 0)
+        const top = Math.max(0, lines.y + head.y - Theme.spaceXs / 2)
+        return Qt.rect(0, top, facts.width, lines.y + foot.y + foot.height + Theme.spaceXs / 2 - top)
+    }
+    /// The first line of the band a line is in — itself, unless it goes where the line above it goes.
+    function bandStart(row) {
+        let first = row
+        while (first > 0 && first < facts.lines.length && facts.lines[first].withAbove)
+            first--
+        return first
+    }
+    /// How far this item reaches past its lines on either side — the room the band keeps around the mark and the
+    /// measure. **The seat hands this item that much more room than the lines take** (`NavItemDelegate` /
+    /// `HeadPinRow`), so the lines stay in the row's own columns and every part of a band is inside this item:
+    /// its hover, its press and its paint. A band that reached out past the item by a handler's margin took the
+    /// hover off the row's own line under it, and the row closed under a hand still on it (measured,
+    /// `tst_openrowholdshand`).
+    readonly property real bandReach: Theme.spaceXs
+    /// Which line going somewhere has its band under a point, or -1.
+    function goingAt(x, y) {
+        for (let i = 0; i < facts.lines.length; i++) {
+            if (!facts.lines[i].to)
+                continue
+            const band = facts.bandOf(i)
+            if (x >= band.x && x < band.x + band.width && y >= band.y && y < band.y + band.height)
+                return i
+        }
+        return -1
+    }
+    /// Stands in for the pointer on one line's band where headless cannot put one (PGG_AUTO_ACT=nav-follow-lit), -1
+    /// for none.
+    property int pointedRow: -1
+    /// The line the hand is on, of those that go somewhere, or -1 — the one wearing the band and the underline, and
+    /// what turns the pointer to the hand (`factsMouse`). **Read off the place the hand is**, by the reader on this
+    /// item (`factsHover`), which is the ancestor of every line and so hears the pointer over all of them.
+    readonly property int aimRow: {
+        if (facts.pointedRow >= 0)
+            return facts.pointedRow
+        if (!factsHover.hovered || lineSeats.count === 0)
+            return -1
+        const p = factsHover.point.position
+        return facts.goingAt(p.x, p.y)
+    }
+    /// Where the press that is ending went down, in this item's own coordinates — what decides where its click goes.
+    property point pressFrom: Qt.point(-1, -1)
+    /// Where a press at that point goes: the place the line whose band it is in names (`NavFacts.place`), or null
+    /// where it is in no such band.
+    function goesAt(p) {
+        const row = facts.goingAt(p.x, p.y)
+        return row < 0 ? null : facts.lines[row].to
+    }
+    /// The first line whose words go somewhere, or -1 — the one a run presses (PGG_AUTO_ACT=nav-follow), and where it
+    /// goes.
+    function firstGoing() {
+        for (let i = 0; i < facts.lines.length; i++)
+            if (facts.lines[i].to)
+                return i
+        return -1
+    }
+    function lineGoesTo(row) {
+        return row >= 0 && row < facts.lines.length && facts.lines[row].to ? facts.lines[row].to : null
+    }
+    /// The middle of that line's words, in this item's own coordinates — where a run puts its press.
+    function lineWordsMiddle(row) {
+        const line = lineSeats.itemAt(row)
+        return line === null ? Qt.point(-1, -1) : line.wordsMiddle(facts)
+    }
+    /// PGG_AUTO_ACT=nav-follow-lit: the pointer resting on that line's band, where it cannot be put. False where the
+    /// line has not been built.
+    function pointLineWords(row, on) {
+        if (lineSeats.itemAt(row) === null)
+            return false
+        facts.pointedRow = on ? row : -1
+        return true
+    }
+    /// Whether that line is wearing the band — **read off the band that is drawn**, and where it was drawn — and the
+    /// pointer the block has turned for it.
+    function lineAimed(row) {
+        const band = facts.bandOf(row)
+        return aimBand.visible && aimBand.y === band.y && aimBand.height === band.height
+    }
+    readonly property bool handShown: factsMouse.cursorShape === Qt.PointingHandCursor
+
     /// The hand, in this item's own coordinates: the press anchors a sweep at the nearest field whether it landed on
-    /// the words or in the air beside them, the move drags it, and the click is the row's — unless the drag took
-    /// words with it, in which case the reader was copying and the row hears nothing.
+    /// the words or in the air beside them, the move drags it, and the click goes where it landed — unless the drag
+    /// took words with it, in which case the reader was copying and nothing hears it.
     function handPressed(button, x, y) {
         if (button !== Qt.LeftButton)
             return
+        facts.pressFrom = Qt.point(x, y)
         pad.pressAt(x, y)
     }
     function handMoved(x, y) {
@@ -127,6 +234,12 @@ Item {
     function handClicked(button, modifiers) {
         if (facts.swept || facts.row === null)
             return
+        // In the band of a line going somewhere of its own: the graph goes there.
+        const to = button === Qt.LeftButton ? facts.goesAt(facts.pressFrom) : null
+        if (to !== null) {
+            facts.row.followFact(to)
+            return
+        }
         // **A menu asked for from here is about the row these lines belong to**, so it does not take them down: the
         // reader who right-clicked them is reading about that row, and lines that went out from under the menu would
         // take what it is about off the screen with them (デザイン規約 §左メニューの所作).
@@ -134,9 +247,12 @@ Item {
             facts.row.factsMenuAsked()
         facts.row.rowPressed(button, modifiers)
     }
+    /// **A double-click on a line's way somewhere is two presses of it**, and the first already went: it is not a
+    /// double-click on the row, which would move the working tree to a name the hand was not on.
     function handDoubled(button) {
-        if (!facts.swept && facts.row !== null)
-            facts.row.rowDoubled(button)
+        if (facts.swept || facts.row === null || facts.goesAt(facts.pressFrom) !== null)
+            return
+        facts.row.rowDoubled(button)
     }
 
     /// **Nothing at all where no line is drawn**: a row whose whole answer is its own name opens no height, so the
@@ -174,10 +290,30 @@ Item {
         anchors.fill: parent
         content: lines
     }
+    // The band the line under the hand wears (`bandOf`), under the words it lights. **Its own look, not the row's
+    // wash**: the whole row is already lit while it is open, and a line lit the same way reads as nothing having
+    // changed under the hand.
+    Rectangle {
+        id: aimBand
+        readonly property rect at: facts.bandOf(facts.aimRow)
+        visible: facts.aimRow >= 0
+        x: aimBand.at.x
+        y: aimBand.at.y
+        width: aimBand.at.width
+        height: aimBand.at.height
+        radius: Theme.radiusSm
+        color: NavFacts.aimFill
+        border.width: NavFacts.aimRim.a > 0 ? Theme.borderWidth : 0
+        border.color: NavFacts.aimRim
+    }
     ColumnLayout {
         id: lines
+        // In by the band's reach either side, which the seat added to this item (`bandReach`): the lines stand in
+        // the row's own columns.
         anchors.left: parent.left
+        anchors.leftMargin: facts.bandReach
         anchors.right: parent.right
+        anchors.rightMargin: facts.bandReach
         anchors.top: parent.top
         spacing: Theme.spaceXs
 
@@ -201,6 +337,10 @@ Item {
                 // (`tests/qml/tst_factstipsteal.qml`), so a line drawn without the field at all has no supplement
                 // either — and a handler armed on one would read the pointer for nothing.
                 noted: !!modelData.note
+                // The same truthiness for where the line goes: a line handed without the field goes nowhere.
+                goes: !!modelData.to
+                // Every line of the band the hand is on — a band may hold more than one (`bandOf`).
+                aimed: facts.aimRow >= 0 && facts.bandStart(facts.aimRow) === facts.bandStart(index)
                 // **Each handler is one line into the item's own**, so a run enters this wiring rather than a copy
                 // of it (verify-ui スキル §注入はハンドラ本体そのものへ入れる).
                 onHandRested: on => facts.noteHand(index, on)
@@ -222,7 +362,8 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         preventStealing: true
-        cursorShape: Qt.IBeamCursor
+        // The words are to be taken everywhere but on a way somewhere, where the press goes before it takes anything.
+        cursorShape: facts.aimRow >= 0 ? Qt.PointingHandCursor : Qt.IBeamCursor
         // **Each handler is one line into the item's own** — a run enters those, so what it drives is this wiring
         // rather than a copy of it (verify-ui スキル §注入はハンドラ本体そのものへ入れる).
         onPressed: mouse => facts.handPressed(mouse.button, mouse.x, mouse.y)

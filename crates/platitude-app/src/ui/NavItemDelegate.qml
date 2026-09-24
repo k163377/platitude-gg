@@ -593,6 +593,13 @@ Item {
     /// The menu about to be raised was asked for from those facts, so it is not one that takes them down
     /// (`NavRowFacts.handClicked`).
     signal factsMenuAsked()
+    /// A line of those facts going somewhere of its own was pressed: the graph goes to the commit it names
+    /// (`NavFacts.place`), and this row — the one the press was in — is the one last clicked
+    /// (`SidebarRowGestures.followLine`).
+    signal factsFollowed(string key, string oidHex)
+    function followFact(to) {
+        navRow.factsFollowed(navRow.rowKey, to.oid)
+    }
     /// Where this row's answers come off: its own section's model (`upstreamOf`) and the worktrees' section
     /// (`worktreeHolding`), which is the only one holding the list of working copies.
     property var sectionModel: null
@@ -799,10 +806,13 @@ Item {
         // hangs below that line, so these begin under the last line of it.
         anchors.top: parent.top
         anchors.topMargin: Theme.rowHeight + navRow.nameOverflow
+        // **A gap wider than the row's columns either side**, which the lines give back inside
+        // (`NavRowFacts.bandReach`): the band a line wears reaches that far, and has to be inside the item that is
+        // hovered and pressed.
         anchors.left: parent.left
-        anchors.leftMargin: navRow.rowInset + navRow.depth * navRow.nestStep
+        anchors.leftMargin: navRow.rowInset + navRow.depth * navRow.nestStep - Theme.spaceXs
         anchors.right: parent.right
-        anchors.rightMargin: Theme.navBarGutter
+        anchors.rightMargin: Theme.navBarGutter - Theme.spaceXs
         height: factsSeat.item ? factsSeat.item.implicitHeight : 0
         sourceComponent: NavRowFacts {
             row: navRow

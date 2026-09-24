@@ -33,7 +33,9 @@ AppListView {
     property bool offersFacts: false
     property var worktreesModel: null
     /// The branches' own section, for the rows that open on somebody else's branch: a working copy's row says of the
-    /// branch it holds what that branch's own row would (デザイン規約 §左メニューの所作). Null everywhere else.
+    /// branch it holds what that branch's own row would (デザイン規約 §左メニューの所作), and a remote-tracking row
+    /// asks it where the branch reading it stands, which is where a press on that name takes the graph. Null
+    /// everywhere else.
     property var branchesModel: null
     /// TAGS only: the remote this window's tag rows act on (`RepoTab.defaultRemote`) — **the reading the others
     /// are read against** in what a tag's row opens on, since sending a tag and taking one off a remote both go
@@ -438,6 +440,10 @@ AppListView {
         onFactsMenuAsked: {
             if (navList.gestures)
                 navList.gestures.noteMenuFromFacts()
+        }
+        onFactsFollowed: (key, oidHex) => {
+            if (navList.gestures)
+                navList.gestures.followLine(key, oidHex)
         }
         onActivateRequested: {
             if (navList.gestures)

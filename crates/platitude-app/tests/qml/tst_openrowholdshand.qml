@@ -18,24 +18,32 @@ Item {
     width: 320
     height: 240
 
+    /// Where the reading stands — empty leaves the line going nowhere, a commit makes it a way there
+    /// (`NavFacts.place`), which is what lays the band and the hand reader over the lines.
+    property string readingAt: ""
+
     // The row's section, answering with the one reading a branch row opens a line for. The table and the ink are
     // read in `tst_navfacts.qml`; here the stand-in only has to give the row a line to walk into.
     QtObject {
         id: sections
         function upstreamOf(name) { return "origin/feature/topic-a" }
+        function upstreamOidOf(name) { return root.readingAt }
         function trackedBy(full) { return "" }
         function tagRemotes(name, against) { return [] }
     }
     QtObject {
         id: branches
         function upstreamOf(name) { return "" }
+        function upstreamOidOf(name) { return "" }
         function upstreamGoneOf(name) { return "" }
         function aheadOf(name) { return 0 }
         function behindOf(name) { return 0 }
+        function oidOfName(name) { return "" }
     }
     QtObject {
         id: copies
         function worktreeHolding(name) { return "" }
+        function headOfCopy(path) { return "" }
     }
 
     /// The panel the row stands in, counting the hand by the place it was last seen in — the sidebar's own reading
@@ -107,6 +115,7 @@ Item {
         /// is what the next case's hand would land on.
         property Item row: null
         function init() {
+            root.readingAt = ""
             testCase.row = rowMaker.createObject(panel)
         }
         function cleanup() {
@@ -153,6 +162,30 @@ Item {
             // Out of the row altogether, and it lets go: what holds it is the hand, not the test.
             mouseMove(panel, panel.width / 2, row.height + Theme.rowHeight)
             tryCompare(row, "factsOpen", false, undefined, "the row closes once the hand is off it")
+        }
+
+        /// The same walk down onto a line that goes somewhere (`NavRowFacts.aimRow`): the band is the line's and
+        /// nobody else's — **not lit from the row's own line** above it — and the hand arriving on it is still on the
+        /// row.
+        function test_the_hand_walking_onto_a_line_that_goes_lights_that_line_alone() {
+            root.readingAt = "abc"
+            const row = testCase.row
+            mouseMove(panel, panel.width / 2, Theme.rowHeight / 2)
+            tryCompare(row, "factsOpen", true, undefined, "the row opens under the hand")
+            tryVerify(() => row.factsItem !== null && row.factsItem.height > 0, undefined, "and its lines stand")
+            compare(row.factsLines[0].to.oid, "abc", "the line goes somewhere")
+            // Every height on the row's own line, its foot included: the band is under the lines and not over it.
+            for (let y = 1; y < Theme.rowHeight; y += 2) {
+                mouseMove(panel, panel.width / 2, y)
+                testCase.turnPassed()
+                verify(row.factsItem !== null, "the row is still open with the hand on its own line (y " + y + ")")
+                verify(!row.factsItem.lineAimed(0), "the line is not lit from the row's own line (y " + y + ")")
+            }
+            mouseMove(panel, panel.width / 2, Theme.rowHeight + row.factsItem.height / 2)
+            testCase.turnPassed()
+            verify(row.factsItem.lineAimed(0), "on the line, the line is lit")
+            compare(row.pointed, true, "and the hand on it is the hand on the row")
+            compare(row.factsOpen, true, "so the lines stay out under it")
         }
     }
 }

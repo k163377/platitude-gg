@@ -44,6 +44,10 @@ Item {
     signal linkAsked(string href)
     property real pixelSize: Theme.fontMd
     property int weight: Font.Normal
+    /// The whole field underlined, in its own colour — what a line that is a way somewhere wears under the pointer
+    /// (`NavFactLine.goes`). **The font's own rule, not one drawn under the box**: the field wraps, and a line drawn
+    /// at the foot of the box would underline the last line alone and run on past its words.
+    property bool underline: false
     /// Spelled in git's own family — a path git printed, a hash (規約 §git 用語のコード表記).
     /// The pair `LineText` carries, and chosen by name for the same reason: a family handed in from a caller would
     /// skip the per-OS fallback Theme resolves (規約 §QML 実装ルール).
@@ -187,6 +191,7 @@ Item {
         font.family: cardText.mono ? Theme.monoFamily : Theme.uiFamily
         font.pixelSize: cardText.pixelSize
         font.weight: cardText.weight
+        font.underline: cardText.underline
         horizontalAlignment: cardText.horizontalAlignment
         wrapMode: Text.Wrap
         // Read only: the card is a view of a commit, a file or a person, and none of them is edited from here.

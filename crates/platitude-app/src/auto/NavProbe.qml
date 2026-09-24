@@ -128,9 +128,11 @@ QtObject {
             return
         }
         if (what === "sweep" || what === "tap") {
-            // Along the first line, from its head to the far side: a drag that starts mid-word comes away with half
-            // of one, which says nothing about whether a name can be taken.
-            const line = lines.height / 4
+            // The sweep runs along the first line, from its head to the far side: a drag that starts mid-word comes
+            // away with half of one, which says nothing about whether a name can be taken. **The tap goes in at the
+            // foot of the lines**, under the last line's band: a line going somewhere of its own is a way there from
+            // end to end (`NavRowFacts.bandOf`), and what is left for the row's own click is what no band covers.
+            const line = what === "tap" ? lines.height - 1 : lines.height / 4
             lines.handPressed(Qt.LeftButton, 0, line)
             if (what === "sweep")
                 lines.handMoved(lines.width, line)
@@ -192,6 +194,44 @@ QtObject {
     function pointFactsLine(row, on) {
         const lines = probe.sidebar.openFactsItem()
         return lines !== null && lines.pointLineTip(row, on)
+    }
+
+    /// PGG_AUTO_ACT=nav-follow: the first of the open lines whose words go somewhere (-1 for none), and where.
+    function factsFirstGoing() {
+        const lines = probe.sidebar.openFactsItem()
+        return lines === null ? -1 : lines.firstGoing()
+    }
+    function factsGoesTo(line) {
+        const lines = probe.sidebar.openFactsItem()
+        return lines === null ? null : lines.lineGoesTo(line)
+    }
+    /// A press on the middle of that line's words that never moved — in at the lines' own four handlers, the ones
+    /// a hand drives (`NavRowFacts.handPressed` …), so what decides where it goes is their wiring.
+    function followFactsLine(line) {
+        const lines = probe.sidebar.openFactsItem()
+        if (lines === null)
+            return false
+        const at = lines.lineWordsMiddle(line)
+        if (at.x < 0)
+            return false
+        lines.handPressed(Qt.LeftButton, at.x, at.y)
+        lines.handReleased()
+        lines.handClicked(Qt.LeftButton, Qt.NoModifier)
+        return true
+    }
+    /// PGG_AUTO_ACT=nav-follow-lit: the pointer resting on that line, at the block's own stand-in, and what the
+    /// block made of it — the band drawn where the line is, and the hand the pointer turns to.
+    function pointFactsWords(line, on) {
+        const lines = probe.sidebar.openFactsItem()
+        return lines !== null && lines.pointLineWords(line, on)
+    }
+    function factsLineAimed(line) {
+        const lines = probe.sidebar.openFactsItem()
+        return lines !== null && lines.lineAimed(line)
+    }
+    function factsHand() {
+        const lines = probe.sidebar.openFactsItem()
+        return lines !== null && lines.handShown
     }
 
     /// PGG_AUTO_ACT=nav-peek-open: the same rest, taken on a row of the section the folded rail has open — the case

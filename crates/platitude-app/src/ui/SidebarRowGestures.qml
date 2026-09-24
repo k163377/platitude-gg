@@ -259,6 +259,15 @@ QtObject {
         if (gestures.editKey !== "" && gestures.editKey !== key)
             gestures.stopEdit()
     }
+    /// A line an open row put out was pressed where it goes somewhere of its own (`NavRowFacts`): **the graph goes
+    /// to the commit it names, and the panel stays where it is** (デザイン規約 §左メニューの所作「行き先はグラフ」).
+    /// The row the lines are under — `key`, its own (`NavList.keyOf`) — is the one last clicked, the press having
+    /// been inside it; **it arms nothing**, since what was pressed was a line and not the row's name.
+    function followLine(key, oidHex) {
+        gestures.noteClick(key)
+        gestures.reclick.land(key)
+        gestures.host.refActivated(oidHex)
+    }
     /// The rows this gesture was made on have gone (the folded rail's peek closed): the memory and the wait go with
     /// them, or the next visit's first click comes up as a second one (app-ui.md).
     function forgetClicks() {

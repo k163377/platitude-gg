@@ -107,7 +107,7 @@ QtObject {
                 "nav-peek", "nav-unfold", "nav-peek-rename", "nav-peek-away",
                 "nav-peek-into", "nav-peek-out", "nav-peek-shut", "nav-close",
                 "nav-filter", "nav-tip", "nav-jump", "nav-open", "nav-open-foot", "nav-open-then", "nav-open-held",
-                "nav-drag-open", "nav-peek-open", "nav-open-tip", "nav-open-tag",
+                "nav-drag-open", "nav-peek-open", "nav-open-tip", "nav-open-tag", "nav-follow", "nav-follow-lit",
                 "nav-reclick", "nav-reclick-away", "nav-rename-far",
                 // The scroll it is about is taken in its own sampler, a layout pass after the dispatch: without
                 // this the render barrier owns the completion and photographs the list where it opened.

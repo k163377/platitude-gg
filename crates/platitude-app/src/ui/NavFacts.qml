@@ -19,6 +19,16 @@ import platitude.ui
 QtObject {
     id: navFacts
 
+    /// What a line that goes somewhere wears under the hand, over the wash of the row it is in — the fill and the
+    /// rim of the band (`NavRowFacts.aimBand`; デザイン規約 §左メニューの所作「段の名前は、その名前が立つコミットへの道」).
+    /// A rim with no alpha draws none.
+    ///
+    /// **The row's own wash once more over it**: the line is a step up from the row it is in by the same step the row
+    /// is from the list, in the same hue — lit the same as the row, it reads as nothing having changed under the
+    /// hand.
+    readonly property color aimFill: Theme.bgHover
+    readonly property color aimRim: "transparent"
+
     /// The answers one row opens with, read as it opens (the slots below freeze in a binding — app-ui.md). Every
     /// field is filled for every section; the ones that section does not answer stay empty, which is what decides
     /// the lines.
@@ -54,6 +64,14 @@ QtObject {
         const holds = kind === "branch" ? row.fullName : kind === "remote" ? local : ""
         const held = row.folder || holds === "" || row.worktreesModel === null ? ""
                    : row.worktreesModel.worktreeHolding(holds)
+        // **Where each name the lines say stands** — the commit, asked of the section holding it — which is where a
+        // press on its line takes the graph (デザイン規約 §左メニューの所作). A reading git cannot reach is not
+        // anywhere, and a name whose section this row was not handed has nowhere to go.
+        const reading = gone !== "" || upstream === "" ? ""
+                      : kind === "branch" && row.sectionModel !== null ? row.sectionModel.upstreamOidOf(row.fullName)
+                      : asked !== "" ? row.branchesModel.upstreamOidOf(asked) : ""
+        const named = local !== "" ? local : branch
+        const tip = named === "" || row.branchesModel === null ? "" : row.branchesModel.oidOfName(named)
         return {
             // **A working copy is named by its folder and lives at a path** — two answers, and the row goes on
             // showing the first. Every other row here is named by the whole of what git knows it by.
@@ -71,6 +89,13 @@ QtObject {
             "heldBy": held === "" ? "" : GitFacts.pathLeaf(held),
             "upstream": gone !== "" ? gone : upstream,
             "gone": gone !== "",
+            // The commit the row itself stands on — where its own click goes, and what a line going to the same
+            // place is part of (`lines`).
+            "at": row.oid_hex,
+            // Where a press on the line naming each of them goes (`place`).
+            "branchTo": navFacts.place("branch", named, tip),
+            "heldTo": held === "" ? null : navFacts.place("worktree", held, row.worktreesModel.headOfCopy(held)),
+            "upstreamTo": navFacts.place("remote", upstream, reading),
             // The one measure a branch draws, wherever its name is drawn. A row that names its own branch carries
             // it as a role, because a fetch moves it; a row that names somebody else's has to ask.
             "ahead": asked !== "" ? row.branchesModel.aheadOf(asked) : row.ahead,
@@ -85,44 +110,71 @@ QtObject {
     /// a row with nothing to add opens on its name alone.
     function lines(kind, a) {
         const drawn = kind === "branch" ? [navFacts.copyLine(a), navFacts.readingLine(a)]
-                    : kind === "remote" ? [navFacts.branchLine(a.local, a), navFacts.copyLine(a)]
+                    : kind === "remote" ? [navFacts.branchLine(a.local, a, a.branchTo), navFacts.copyLine(a)]
                     // **The repository's own copy names its branch on its own line**, so the line that would name
                     // it again is left out — the row is named by that branch rather than by its folder
                     // (`NavRowBody.homeCopy`), and a row whose one word is repeated directly under itself reads as
                     // a stutter (observed). The measure that line carries is on the BRANCHES row for the same
                     // branch, which draws it wherever that branch has an upstream (デザイン規約 §左メニューの所作).
-                    : kind === "worktree" ? [a.state === "MAIN" ? null : navFacts.branchLine(a.branch, a),
+                    : kind === "worktree" ? [a.state === "MAIN" ? null : navFacts.branchLine(a.branch, a, a.branchTo),
                                              navFacts.readingLine(a), navFacts.stateLine(a)]
                     // One line to a remote — the one section whose lines are a list rather than a fixed few, because
                     // what a tag's row folds is however many of them have the name.
                     : kind === "tag" ? a.remotes.map(carried => navFacts.carrierLine(carried, a.against))
                     : []
-        return drawn.filter(line => line !== null)
+        return navFacts.joined(drawn.filter(line => line !== null), a.at)
+    }
+    /// **Where two go to one place, they are one target** (デザイン規約 §左メニューの所作「行き先が同じなら判定は
+    /// 1 つ」): a press goes to the graph, and two targets that land it on the same commit are one question asked
+    /// twice. A line going where the row itself stands is the row's own (`to` dropped — its press is the row's
+    /// click), and a line going where the line above it goes shares that line's band (`withAbove`). **The order
+    /// the table draws in already puts every such pair side by side**: a copy stands where the branch it holds does,
+    /// and each section names the copy directly under that branch, or under the row that is it.
+    function joined(lines, at) {
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].to && lines[i].to.oid === at)
+                lines[i].to = null
+        }
+        for (let j = 0; j < lines.length; j++) {
+            const to = lines[j].to
+            const above = j > 0 ? lines[j - 1].to : null
+            lines[j].withAbove = !!to && !!above && above.oid === to.oid
+        }
+        return lines
+    }
+
+    /// Where a line goes when its name is pressed: **the commit it stands on**, and the row of this panel that is
+    /// that name (its key, `NavList.keyOf` — what a run reports it by). Null where there is no commit to go to,
+    /// which leaves the line the row's own to click like any other part of it.
+    function place(section, full, oid) {
+        return full === "" || oid === "" ? null : { "key": section + ":" + full, "oid": oid }
     }
 
     /// A branch of the BRANCHES section, named from somewhere else: that section's own mark in its own colour, and
-    /// the measure that branch's own row draws at the same right edge.
-    function branchLine(name, a) {
+    /// the measure that branch's own row draws at the same right edge. `to` is where a press on the name goes
+    /// (`place`).
+    function branchLine(name, a, to) {
         return name === "" ? null
              : { "mark": "branch", "markTint": Theme.accent, "text": name, "tone": Theme.textSecondary,
-                 "ahead": a.ahead, "behind": a.behind, "note": "" }
+                 "ahead": a.ahead, "behind": a.behind, "note": "", "to": to }
     }
     /// The working copy holding the branch this row is about — the WORKTREES section's own mark, in that section's
     /// own colour, the way the line above names a branch in the BRANCHES one (規約 §ref の種別).
     function copyLine(a) {
         return a.heldBy === "" ? null
              : { "mark": "tree", "markTint": Theme.success, "text": a.heldBy,
-                 "tone": Theme.textSecondary, "ahead": 0, "behind": 0, "note": "" }
+                 "tone": Theme.textSecondary, "ahead": 0, "behind": 0, "note": "", "to": a.heldTo }
     }
     /// What that branch is measured against. **A reading git cannot reach wears the state whole** — git's own word
-    /// for it is `gone`, and the name leads so every line begins in the same column.
+    /// for it is `gone`, and the name leads so every line begins in the same column. That one goes nowhere: there
+    /// is no ref of that name to be at.
     function readingLine(a) {
         if (a.upstream === "")
             return null
         const tint = a.gone ? Theme.warning : Theme.textSecondary
         return { "mark": "remote", "markTint": tint,
                  "text": a.gone ? qsTr("%1 is gone").arg(a.upstream) : a.upstream,
-                 "tone": tint, "ahead": 0, "behind": 0, "note": "" }
+                 "tone": tint, "ahead": 0, "behind": 0, "note": "", "to": a.gone ? null : a.upstreamTo }
     }
     /// One remote carrying this tag — the cloud the row wears, said by name. **The list is a list of names, so the
     /// name is all the line says**: whether that remote stands where the one this window acts on has the tag is a
@@ -133,11 +185,13 @@ QtObject {
     /// **The sentence names the reading it is apart from**, because that is the whole of what the colour means
     /// here — the reference is a remote and not the copy in this repository (`NavSectionModel.tagRemotes`), so a
     /// line saying only "another commit" would leave the reader to guess another commit than what.
+    ///
+    /// **It goes nowhere**: what it names is a remote, and a remote is not a row of this panel that the tag is on.
     function carrierLine(carried, against) {
         const tint = carried.apart ? Theme.warning : Theme.textSecondary
         return { "mark": "remote", "markTint": tint, "text": carried.remote,
                  "tone": tint, "ahead": 0, "behind": 0,
-                 "note": carried.apart ? qsTr("On another commit than %1").arg(against) : "" }
+                 "note": carried.apart ? qsTr("On another commit than %1").arg(against) : "", "to": null }
     }
     /// And the one state a mark cannot name. **The padlock says everything a lock has to say here** — what it was
     /// taken for is the words somebody gave `git worktree lock`, and those are theirs to keep rather than a line of
@@ -146,6 +200,6 @@ QtObject {
     function stateLine(a) {
         return a.state !== "PRUNABLE" ? null
              : { "mark": "", "markTint": Theme.warning, "text": qsTr("Folder is gone"),
-                 "tone": Theme.warning, "ahead": 0, "behind": 0, "note": "" }
+                 "tone": Theme.warning, "ahead": 0, "behind": 0, "note": "", "to": null }
     }
 }

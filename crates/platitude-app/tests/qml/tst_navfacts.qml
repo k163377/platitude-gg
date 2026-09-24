@@ -37,28 +37,37 @@ Item {
     property int branchAhead: 0
     property int branchBehind: 0
     property string copyHolding: ""
+    /// Where each of the names stands — one commit per stand-in, so a line pointed at the wrong model's answer
+    /// carries the wrong commit.
+    property string sectionReadingAt: "a1"
+    property string branchAt: "b2"
+    property string branchReadingAt: "c3"
 
     /// The row's own section — BRANCHES asks it for the reading, REMOTES for the branch that reads the row, TAGS for
     /// the remotes carrying the name.
     QtObject {
         id: sections
         function upstreamOf(name) { return root.sectionUpstream }
+        function upstreamOidOf(name) { return root.sectionReadingAt }
         function trackedBy(full) { return root.sectionTracked }
         function tagRemotes(name, against) { return root.sectionCarried }
     }
-    /// The branches' section, which a working copy's row asks about the branch it holds — and nobody else asks at
-    /// all.
+    /// The branches' section, which a working copy's row asks about the branch it holds, and a remote-tracking row
+    /// asks where the branch reading it stands.
     QtObject {
         id: branches
         function upstreamOf(name) { return root.branchUpstream }
+        function upstreamOidOf(name) { return root.branchReadingAt }
         function upstreamGoneOf(name) { return root.branchGone }
         function aheadOf(name) { return root.branchAhead }
         function behindOf(name) { return root.branchBehind }
+        function oidOfName(name) { return root.branchAt }
     }
     /// The working copies', the one section holding the list of them.
     QtObject {
         id: copies
         function worktreeHolding(name) { return root.copyHolding }
+        function headOfCopy(path) { return "" }
     }
 
     /// A row of whichever section a case is about. Built per case rather than reconfigured, because `gatherFacts`
@@ -149,6 +158,21 @@ Item {
             compare(row.factsLines[0].mark, "remote")
             compare(row.factsLines[0].text, "origin/feature/topic-a")
             compare(row.factsLines[0].tone, Theme.textSecondary)
+            // A press on the name goes to that reading's row of REMOTES, at the commit the section says it is on.
+            compare(row.factsLines[0].to.key, "remote:origin/feature/topic-a")
+            compare(row.factsLines[0].to.oid, "a1", "the row's own section's answer")
+            row.destroy()
+        }
+
+        /// A name the section cannot place goes nowhere — the line is the row's to click like the rest of it.
+        function test_a_reading_with_no_commit_goes_nowhere() {
+            root.sectionUpstream = "origin/feature/topic-a"
+            root.sectionReadingAt = ""
+            const row = root.rowOf({ "kindHint": "branch", "name": "feature/topic-a", "full": "feature/topic-a" })
+            verify(row.gatherFacts())
+            compare(row.factsLines.length, 1)
+            compare(row.factsLines[0].to, null)
+            root.sectionReadingAt = "a1"
             row.destroy()
         }
 
@@ -166,6 +190,7 @@ Item {
             compare(row.factsLines[0].text, "origin/release-1.2 is gone")
             compare(row.factsLines[0].tone, Theme.warning)
             compare(row.factsLines[0].markTint, Theme.warning)
+            compare(row.factsLines[0].to, null, "a reading git cannot reach is not anywhere to go")
             row.destroy()
         }
 
@@ -175,13 +200,18 @@ Item {
         /// the colour — the mark names a row of WORKTREES, so it wears that section's own colour the way the line
         /// naming a branch wears BRANCHES' (規約 §ref の種別), and no picture is judged on it.
         function test_the_copy_holding_a_branch_is_named_in_the_worktrees_colour() {
-            const lines = NavFacts.lines("branch", { "heldBy": "topic", "upstream": "", "gone": false,
-                                                     "ahead": 0, "behind": 0 })
+            const held = NavFacts.place("worktree", "C:/copies/topic", "d4")
+            const lines = NavFacts.lines("branch", { "heldBy": "topic", "heldTo": held, "upstream": "",
+                                                     "gone": false, "ahead": 0, "behind": 0 })
             compare(lines.length, 1, "the copy, and no reading to measure against")
             compare(lines[0].mark, "tree")
             compare(lines[0].markTint, Theme.success, "the WORKTREES section's own colour")
             compare(lines[0].text, "topic")
             compare(lines[0].tone, Theme.textSecondary, "the name is the quiet half of the line")
+            // Keyed by the path, which is what a WORKTREES row is remembered by (`NavList.keyOf`) — the folder it
+            // shows is the leaf of it, and two copies can share a leaf.
+            compare(lines[0].to.key, "worktree:C:/copies/topic")
+            compare(lines[0].to.oid, "d4")
         }
 
         /// A branch with nothing beside it opens on its name alone: a line nobody filled is left out rather than
@@ -211,6 +241,9 @@ Item {
             compare(row.factsLines[0].mark, "branch")
             compare(row.factsLines[0].text, "main")
             compare(row.factsLines[0].ahead, 1)
+            // The branch it names is a row of BRANCHES, and where it stands is that section's answer.
+            compare(row.factsLines[0].to.key, "branch:main")
+            compare(row.factsLines[0].to.oid, "b2", "asked of the branches' section")
             row.destroy()
         }
 
@@ -250,6 +283,12 @@ Item {
             compare(row.factsLines[0].text, "feature/topic-a")
             compare(row.factsLines[0].markTint, Theme.accent, "the BRANCHES section's own colour")
             compare(row.factsLines[1].text, "origin/feature/topic-a")
+            // Both go somewhere, and both answers come off the branches' section — the copy's own list places
+            // neither.
+            compare(row.factsLines[0].to.key, "branch:feature/topic-a")
+            compare(row.factsLines[0].to.oid, "b2")
+            compare(row.factsLines[1].to.key, "remote:origin/feature/topic-a")
+            compare(row.factsLines[1].to.oid, "c3", "the branches' answer, not the section's")
             row.destroy()
         }
 
@@ -333,6 +372,9 @@ Item {
             compare(row.factsLines[1].text, "fork")
             compare(row.factsLines[1].tone, Theme.warning)
             compare(row.factsLines[1].note, "On another commit than origin")
+            // A remote is not a row of this panel the tag is on, so neither line goes anywhere.
+            compare(row.factsLines[0].to, null)
+            compare(row.factsLines[1].to, null)
             row.destroy()
         }
 
@@ -346,6 +388,49 @@ Item {
             compare(row.factsRemotes, "")
             compare(row.factsLines.length, 0)
             row.destroy()
+        }
+
+        // ---- where a press goes -------------------------------------
+
+        /// **Two ways to one commit are one target** (`NavFacts.joined`): a line going where the row stands is the
+        /// row's own, and a line going where the line above it goes shares that line's band. Asked of the table
+        /// itself for the copy's line, which a row here cannot carry (the note at the top).
+        function test_lines_going_to_one_place_are_one_target() {
+            const own = NavFacts.joined([{ "to": { "key": "worktree:C:/c", "oid": "r0" } },
+                                         { "to": { "key": "remote:origin/x", "oid": "u1" } }], "r0")
+            compare(own[0].to, null, "the copy standing where the row does is the row's own")
+            compare(own[1].to.oid, "u1", "the reading elsewhere goes there")
+            compare(own[1].withAbove, false, "and has a band of its own")
+
+            const pair = NavFacts.joined([{ "to": { "key": "branch:x", "oid": "c2" } },
+                                          { "to": { "key": "worktree:C:/c", "oid": "c2" } }], "r1")
+            compare(pair[0].withAbove, false)
+            compare(pair[1].withAbove, true, "the copy holding that branch shares its band")
+
+            const apart = NavFacts.joined([{ "to": null }, { "to": { "key": "remote:origin/x", "oid": "u1" } }], "r1")
+            compare(apart[1].withAbove, false, "a line going nowhere joins nothing to it")
+        }
+
+        /// Through the rows: a working copy's branch stands where the copy does, so its line is the row's own; the
+        /// reading beside it goes elsewhere. A remote-tracking row level with the branch reading it is the same.
+        function test_a_line_standing_where_its_row_does_is_the_rows_own() {
+            root.branchUpstream = "origin/feature/topic-a"
+            root.branchGone = ""
+            const copy = root.rowOf({ "kindHint": "worktree", "name": "topic", "full": "C:/copies/topic",
+                                      "bucket": "feature/topic-a", "oid_hex": root.branchAt })
+            verify(copy.gatherFacts())
+            compare(copy.factsLines[0].text, "feature/topic-a")
+            compare(copy.factsLines[0].to, null, "the branch the copy holds is where the copy stands")
+            compare(copy.factsLines[1].to.oid, "c3", "the reading goes elsewhere")
+            copy.destroy()
+
+            root.sectionTracked = "main"
+            root.copyHolding = ""
+            const level = root.rowOf({ "kindHint": "remote", "name": "origin/main", "full": "origin/main",
+                                       "oid_hex": root.branchAt })
+            verify(level.gatherFacts())
+            compare(level.factsLines[0].to, null, "a branch level with its reading stands where the row does")
+            level.destroy()
         }
 
         // ---- what every section shares -------------------------------

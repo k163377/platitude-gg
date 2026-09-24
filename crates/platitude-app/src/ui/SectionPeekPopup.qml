@@ -278,6 +278,9 @@ AppCard {
             offersFacts: peek.kind === "branch" || peek.kind === "remote" || peek.kind === "worktree"
                          || peek.kind === "tag"
             worktreesModel: peek.rail !== null ? peek.rail.modelOf("worktree") : null
+            // The branches' own, for REMOTES: where the branch reading a remote-tracking row stands is that section's
+            // answer, and a press on its name goes there — the same one the sections hand theirs (`NavSections`).
+            branchesModel: peek.rail !== null && peek.kind === "remote" ? peek.rail.modelOf("branch") : null
             pushRemote: peek.repoTab.defaultRemote
             stretch: true
             remoteNames: peek.repoTab.remoteNames

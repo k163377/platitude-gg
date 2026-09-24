@@ -242,6 +242,9 @@ ColumnLayout {
         // (デザイン規約 §左メニューの所作).
         offersFacts: true
         worktreesModel: sections.worktreesModel
+        // …and where the branch they name stands is that section's answer, which is where a press on its name takes
+        // the graph.
+        branchesModel: sections.branchesModel
         remoteNames: sections.repoTab.remoteNames
         markedRemote: sections.repoTab.pushDefault
         originRemote: sections.repoTab.markedOrigin

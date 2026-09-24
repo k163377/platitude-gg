@@ -80,6 +80,15 @@ QtObject {
         }
         return true
     }
+    /// A press inside this target that was not its own click landed — a line the open row put out
+    /// (`SidebarRowGestures.followLine`). **It becomes the target last clicked and arms nothing**: what was pressed
+    /// was the line, and a second press there is not a second click on the row. A click on the row itself after this
+    /// is, which is what the row wearing the mark says.
+    function land(key) {
+        renameTimer.stop()
+        doubleGuard.stop()
+        gesture.activeKey = key
+    }
     /// The second click came inside the window after all: the gesture was the double-click, and the box it was about
     /// to open is not what was meant.
     function drop() {

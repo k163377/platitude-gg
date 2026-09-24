@@ -13,6 +13,11 @@ import platitude.ui
 // The words are a field, not a label — what the row opens is there to be taken away
 // (規約 §hover のツールチップ「出したものは持ち帰れる」), and the hand that sweeps them is the pad under the whole of
 // it (`SweepPad`).
+//
+// **Where the words name something standing on a commit of its own, the line is the way to it** (`goes`): a press
+// on it that never moved takes the graph there (デザイン規約 §左メニューの所作). **The whole line is the target** — mark,
+// name and measure — and what says so is the block's: it takes the press, reads the hand and lays the band the line
+// wears under the pointer (`NavRowFacts.aimRow`), so this part only draws what it is told.
 RowLayout {
     id: line
 
@@ -38,6 +43,19 @@ RowLayout {
     /// The hand arrived at this line, or left it.
     signal handRested(bool on)
     onPointedChanged: line.handRested(line.pointed)
+    /// Whether the line is a way to the commit its name stands on, and whether the hand is on it — the block's answer
+    /// (`NavRowFacts.aimRow`). **Said by the pointer, not at rest**: the lines are only out while a hand is resting
+    /// on the row, so the hand is already there to be answered — under it the words wear their own colour's
+    /// underline, over the band the block lays under the line.
+    property bool goes: false
+    property bool aimed: false
+    /// How far the words run across the field: the field fills the line, and a short name is a sliver of it.
+    readonly property real wordsWidth: Math.min(words.implicitWidth, words.width)
+    /// The middle of the words in another item's coordinates, where a run puts the press it cannot make with a hand
+    /// (PGG_AUTO_ACT=nav-follow).
+    function wordsMiddle(item) {
+        return line.mapToItem(item, words.x + line.wordsWidth / 2, words.y + words.height / 2)
+    }
 
     spacing: Theme.spaceXs
 
@@ -75,11 +93,13 @@ RowLayout {
         }
     }
     CardText {
+        id: words
         Layout.fillWidth: true
         text: line.text
         pixelSize: line.pixelSize
         color: line.tone
         weight: line.weight
+        underline: line.aimed
     }
     Loader {
         id: trackSeat
