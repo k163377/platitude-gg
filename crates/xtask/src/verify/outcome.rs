@@ -255,26 +255,7 @@ pub(super) fn announce(
         None => {}
     }
     if outcome.watchdog_expired {
-        println!(
-            "  the app's own watchdog ended this run — the act, screenshot, and census did \
-             not all finish; a run stalled between grabs can still leave app.png behind."
-        );
-        // The other half of the reading, and the half a red under load is
-        // told from a red that is wrong by. This watchdog is a QML
-        // `Timer`, so its firing proves the loop answered at that point.
-        // Earlier stalls and lost completion edges are still possible.
-        if loop_was_turning(outcome, ran) {
-            println!(
-                "  the loop answered its watchdog — this does not rule out earlier stalls. {}",
-                super::wedge::lanes_line()
-            );
-            // The trail also contains the teardown after the watchdog
-            // asked to quit. Reaching `exiting` does not explain which
-            // completion was missing while the loop was up.
-            for line in super::wedge::trail(shot_dir) {
-                println!("{line}");
-            }
-        }
+        say_the_watchdog(shot_dir, ran, outcome);
     }
     if outcome.write_sank_it() {
         println!(
@@ -303,6 +284,30 @@ pub(super) fn announce(
         Ok(())
     } else {
         Err(format!("verify-ui {} failed", opts.verb))
+    }
+}
+
+/// What a run the app's own watchdog ended is read by.
+fn say_the_watchdog(shot_dir: &std::path::Path, ran: &super::child::Ran, outcome: &Outcome) {
+    println!(
+        "  the app's own watchdog ended this run — the act, screenshot, and census did \
+         not all finish; a run stalled between grabs can still leave app.png behind."
+    );
+    // The other half of the reading, and the half a red under load is
+    // told from a red that is wrong by. This watchdog is a QML
+    // `Timer`, so its firing proves the loop answered at that point.
+    // Earlier stalls and lost completion edges are still possible.
+    if loop_was_turning(outcome, ran) {
+        println!(
+            "  the loop answered its watchdog — this does not rule out earlier stalls. {}",
+            super::wedge::lanes_line()
+        );
+        // The trail also contains the teardown after the watchdog
+        // asked to quit. Reaching `exiting` does not explain which
+        // completion was missing while the loop was up.
+        for line in super::wedge::trail(shot_dir) {
+            println!("{line}");
+        }
     }
 }
 
