@@ -109,7 +109,9 @@ Item {
             if (act === "card-sweep") {
                 cardSweepTimer.start()
             } else {
+                rowCardTimer.oidHex = hovered ? hovered.oid_hex : ""
                 rowCardTimer.row = at
+                rowCardTimer.byNumber = hovered ? hovered.isWip : false
                 rowCardTimer.start()
             }
         } else if (act === "row-card-return") {
@@ -461,7 +463,9 @@ Item {
                 stacked.oid_hex, stacked.index, stacked.chipItem.records, stacked.chipItem)
             if (refListOpenTimer.cards) {
                 graphPane.view.rowHoverRequested(stacked, true)
+                rowCardTimer.oidHex = stacked.oid_hex
                 rowCardTimer.row = refListOpenTimer.row
+                rowCardTimer.byNumber = false
                 rowCardTimer.start()
             } else if (refListOpenTimer.menuRow >= 0)
                 listMenuTimer.start()
@@ -600,14 +604,25 @@ Item {
     // The card is opened synchronously; this just lets the layout settle before it is measured and photographed.
     SampleTimer {
         id: rowCardTimer
-        /// The row the card was asked of, so the report can ask it back whether it is still lit. Read off the row
-        /// — the whole point is that the row got the answer.
+        /// The commit the card was asked of, so the report can ask its row back whether it is still lit. Read off the
+        /// row — the whole point is that the row got the answer. **By the commit, the way the row answers**
+        /// (`GraphRowDelegate.cardOnThisRow`): another copy's rows are read on a pass of their own and can land
+        /// between the hover and this read, and the number the hover was made at is then another commit's row.
+        property string oidHex: ""
+        /// And the number the hover was made at, which is what a row with no commit of its own is read back by
+        /// (`byNumber`): the working tree's row and every other copy's carry the one all-zero id, which names none
+        /// of them.
         property int row: 0
+        property bool byNumber: false
         onTriggered: {
             if (!rowCard.opened && !refList.opened)
                 return
+            // A pass that moved the row lays its delegates out again, so the row can be a beat from standing.
+            const row = rowCardTimer.byNumber ? rowCardTimer.row : graphModel.rowOf(rowCardTimer.oidHex)
+            const asked = row >= 0 ? graphPane.view.itemAtIndex(row) : null
+            if (row >= 0 && !asked)
+                return
             rowCardTimer.stop()
-            const asked = graphPane.view.itemAtIndex(rowCardTimer.row)
             Harness.report(
             // `lit=` sits next to `open=`: the pair is what the run is judged on, and the judge reads one unbroken
             // stretch of the line (`verify::verbs::must_say`).
