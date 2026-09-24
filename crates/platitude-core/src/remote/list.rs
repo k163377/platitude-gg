@@ -242,4 +242,26 @@ mod tests {
     fn empty_config_yields_no_remotes() {
         assert!(parse_remote_config(b"").is_empty());
     }
+
+    /// A name and a URL are handed over after `--end-of-options`, so a name
+    /// the reader typed with a leading `-` is judged by git as a name.
+    #[tokio::test]
+    async fn adding_and_correcting_a_remote_name_it_and_its_url_as_values() {
+        let (exec, asked) = crate::refusing::git();
+        let cancel = CancellationToken::new();
+        let workdir = crate::refusing::nowhere();
+        add(&exec, &workdir, "-o", "file:///far", &cancel)
+            .await
+            .expect_err("there is no git here to add with");
+        set_url(&exec, &workdir, "-o", "file:///near", &cancel)
+            .await
+            .expect_err("there is no git here to correct with");
+        assert_eq!(
+            asked.displays(),
+            [
+                "git remote add --end-of-options -o file:///far",
+                "git remote set-url --end-of-options -o file:///near",
+            ]
+        );
+    }
 }

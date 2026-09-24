@@ -400,8 +400,56 @@ mod tests {
             "fatal: invalid reference: nope",
             "error: you need to resolve your current index first\na.txt: needs merge",
             "fatal: cannot continue with staged changes in the following files:\na.txt",
+            "fatal: cannot switch branch while cherry-picking\nConsider \
+             \"git cherry-pick --quit\" or \"git worktree add\".",
         ] {
             assert!(!work_is_in_the_way(stderr), "{stderr}");
         }
+    }
+
+    /// A reset asks for its mode and its revision and nothing else: no
+    /// `--`, which would open the pathspec form, and no `--end-of-options`,
+    /// which the minimum git refuses here ([`reset`]).
+    #[tokio::test]
+    async fn a_reset_names_its_mode_and_the_revision_and_nothing_more() {
+        let (exec, asked) = crate::refusing::git();
+        let cancel = CancellationToken::new();
+        for mode in [ResetMode::Soft, ResetMode::Mixed, ResetMode::Hard] {
+            reset(
+                &exec,
+                &crate::refusing::nowhere(),
+                "0123abcd",
+                mode,
+                &cancel,
+            )
+            .await
+            .expect_err("there is no git here to reset with");
+        }
+        assert_eq!(
+            asked.displays(),
+            [
+                "git reset --quiet --soft 0123abcd",
+                "git reset --quiet --mixed 0123abcd",
+                "git reset --quiet --hard 0123abcd",
+            ]
+        );
+    }
+
+    /// A new branch is made where it stands or moved onto at once, and
+    /// the start point, when there is one, comes after the name.
+    #[tokio::test]
+    async fn a_new_branch_is_made_with_branch_or_moved_onto_with_switch_create() {
+        let (exec, asked) = crate::refusing::git();
+        let cancel = CancellationToken::new();
+        let workdir = crate::refusing::nowhere();
+        for (start, switch_to) in [(None, false), (Some("0123abcd"), true)] {
+            create(&exec, &workdir, "topic", start, switch_to, &cancel)
+                .await
+                .expect_err("there is no git here to branch with");
+        }
+        assert_eq!(
+            asked.displays(),
+            ["git branch -- topic", "git switch --create topic 0123abcd"]
+        );
     }
 }

@@ -208,69 +208,9 @@ pub async fn hunk_count(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
     use super::*;
     use crate::Oid;
-    use crate::operation::OperationId;
-    use crate::process::{CommandEnd, CommandObserver, Kept};
-    use crate::repo::ObjectFormat;
-
-    /// How many commands were asked for. The observer hears of a command
-    /// at the ask — before the queue in front of it and before any spawn
-    /// — so a zero here says no git was started, which is the whole of
-    /// what the refusals below claim.
-    #[derive(Default)]
-    struct Asked(AtomicUsize);
-
-    impl Asked {
-        fn count(&self) -> usize {
-            self.0.load(Ordering::Relaxed)
-        }
-    }
-
-    impl CommandObserver for Asked {
-        fn records(&self, _kept: Kept) -> bool {
-            true
-        }
-        fn started(
-            &self,
-            _display: &str,
-            _full: &str,
-            _kept: Kept,
-            _operation: Option<OperationId>,
-        ) -> u64 {
-            self.0.fetch_add(1, Ordering::Relaxed) as u64
-        }
-        fn finished(
-            &self,
-            _id: u64,
-            _end: CommandEnd,
-            _waited_ms: u64,
-            _elapsed_ms: u64,
-            _message: &str,
-        ) {
-        }
-    }
-
-    /// An executor that cannot run anything, over a repository that is
-    /// not there — **the second witness**, beside the count: a target
-    /// that slipped past the refusal would fail on the spawn rather than
-    /// pass against a working tree this test never made.
-    fn refusing_git() -> (GitExecutor, Arc<Asked>, RepoInfo, CancellationToken) {
-        let asked = Arc::new(Asked::default());
-        let exec = GitExecutor::with_program("no-such-git-for-this-test")
-            .observed(Arc::clone(&asked) as Arc<dyn CommandObserver>, Kept::Asked);
-        let nowhere = std::path::PathBuf::from("no-such-tree-for-this-test");
-        let repo = RepoInfo {
-            git_dir: nowhere.join(".git"),
-            config_path: nowhere.join(".git").join("config"),
-            workdir: nowhere,
-            object_format: ObjectFormat::Sha1,
-        };
-        (exec, asked, repo, CancellationToken::new())
-    }
+    use crate::refusing;
 
     fn an_oid() -> Oid {
         Oid::from_hex_str("0123456789abcdef0123456789abcdef01234567").expect("40 hex digits")
@@ -308,7 +248,8 @@ mod tests {
     #[tokio::test]
     async fn no_diff_of_history_can_be_staged_and_none_of_them_reaches_git() {
         for target in committed_targets() {
-            let (exec, asked, repo, cancel) = refusing_git();
+            let (exec, asked) = refusing::git();
+            let (repo, cancel) = (refusing::repo(), CancellationToken::new());
             let err = apply_partial(&exec, &repo, &target, &[HunkSelect::whole(0)], 0, &cancel)
                 .await
                 .expect_err("committed diffs are not stageable");
@@ -336,7 +277,8 @@ mod tests {
             },
         ];
         for target in committed_targets().into_iter().chain(others) {
-            let (exec, asked, repo, cancel) = refusing_git();
+            let (exec, asked) = refusing::git();
+            let (repo, cancel) = (refusing::repo(), CancellationToken::new());
             let err = discard_partial(&exec, &repo, &target, &[HunkSelect::whole(0)], 0, &cancel)
                 .await
                 .expect_err("only unstaged changes go piecemeal");

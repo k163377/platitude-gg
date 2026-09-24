@@ -650,6 +650,7 @@ async fn worktree_side(path: &Path, want_file: bool) -> Option<PreviewSide> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::refusing;
 
     #[test]
     fn image_mime_matches_extensions_case_insensitively() {
@@ -659,6 +660,31 @@ mod tests {
         assert_eq!(image_mime("readme.md"), None);
         assert_eq!(image_mime("no-extension"), None);
         assert_eq!(image_mime("tricky.png.txt"), None);
+    }
+
+    /// **Text that is no picture has no preview, and asks git nothing**:
+    /// its diff already tells the whole story. The executor cannot run
+    /// anything and the repository is not there, so a read that slipped
+    /// past is counted here and finds nothing real to read.
+    #[tokio::test]
+    async fn plain_text_has_no_preview_and_asks_git_nothing() {
+        let (exec, asked) = refusing::git();
+        let (_dir, files) = files();
+
+        let preview = file_preview(
+            &exec,
+            &refusing::nowhere(),
+            &DiffTarget::Unstaged {
+                path: "notes.txt".to_string(),
+            },
+            false,
+            files.read(1),
+            &CancellationToken::new(),
+        )
+        .await;
+
+        assert!(preview.is_none());
+        assert_eq!(asked.count(), 0, "nothing was asked of git");
     }
 
     /// A directory of this test's own, so what it sweeps is only what it

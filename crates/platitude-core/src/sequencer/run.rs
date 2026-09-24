@@ -202,3 +202,73 @@ fn normalized(message: &str) -> String {
     text.push('\n');
     text
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::refusing;
+    use crate::report::ReportKind;
+
+    fn no_helper() -> &'static Path {
+        Path::new("no-such-helper-for-this-test")
+    }
+
+    /// The one shape that has no ground to land on. `--root` replays onto
+    /// a placeholder git makes up, so dropping every line leaves that
+    /// placeholder behind as the branch tip: an empty tree with no message
+    /// (measured). Refusing says so before anything moves.
+    #[tokio::test]
+    async fn a_root_plan_of_nothing_but_drops_is_refused_before_git_runs() {
+        let (exec, asked) = refusing::git();
+        let (repo, cancel) = (refusing::repo(), CancellationToken::new());
+        let steps = [RebaseStep {
+            action: TodoAction::Drop,
+            ..RebaseStep::pick("aaa", "the only one")
+        }];
+        let options = RebaseOptions {
+            root: true,
+            ..Default::default()
+        };
+        let err = rebase_interactive(&exec, &repo, "", &steps, &options, no_helper(), &cancel)
+            .await
+            .expect_err("nothing would be left to point at");
+        assert_eq!(
+            err.report().map(|report| report.kind),
+            Some(ReportKind::DropAllCommits),
+            "{err}"
+        );
+        assert_eq!(asked.count(), 0, "nothing was asked of git");
+    }
+
+    /// A reword carries its message in the `exec` line, so a step with
+    /// none — or with nothing but whitespace — is refused before the todo
+    /// is written.
+    #[tokio::test]
+    async fn a_reword_without_a_message_is_refused_before_git_runs() {
+        let (exec, asked) = refusing::git();
+        let (repo, cancel) = (refusing::repo(), CancellationToken::new());
+        for given in [None, Some(" \n".to_string())] {
+            let steps = [RebaseStep {
+                action: TodoAction::Reword,
+                message: given,
+                ..RebaseStep::pick("aaa", "second")
+            }];
+            let err = rebase_interactive(
+                &exec,
+                &repo,
+                "HEAD~1",
+                &steps,
+                &RebaseOptions::default(),
+                no_helper(),
+                &cancel,
+            )
+            .await
+            .expect_err("a reword needs a message");
+            assert!(
+                matches!(&err, GitError::Rejected { message } if message.contains("no message")),
+                "{err}"
+            );
+        }
+        assert_eq!(asked.count(), 0, "nothing was asked of git");
+    }
+}

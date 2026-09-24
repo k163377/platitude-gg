@@ -255,3 +255,48 @@ pub async fn discard_chosen(
     remove_untracked(executor, workdir, &untracked, cancel).await?;
     discard_to_head(executor, workdir, &staged, cancel).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::refusing;
+
+    /// **An empty selection runs nothing**, down to the read of HEAD that
+    /// two of the commands need before they can choose one: every command
+    /// here reads a missing pathspec as the whole work tree, and
+    /// `git clean -f -d --` on its own would delete every untracked file.
+    #[tokio::test]
+    async fn an_empty_selection_runs_nothing() {
+        let (exec, asked) = refusing::git();
+        let (nowhere, cancel) = (refusing::nowhere(), CancellationToken::new());
+        let workdir = nowhere.as_path();
+        let none: [String; 0] = [];
+
+        stage_paths(&exec, workdir, &none, &cancel)
+            .await
+            .expect("stage");
+        unstage_paths(&exec, workdir, &none, &cancel)
+            .await
+            .expect("unstage");
+        discard_worktree(&exec, workdir, &none, &cancel)
+            .await
+            .expect("discard worktree");
+        discard_to_head(&exec, workdir, &none, &cancel)
+            .await
+            .expect("discard to head");
+        remove_untracked(&exec, workdir, &none, &cancel)
+            .await
+            .expect("remove untracked");
+        discard_chosen(&exec, workdir, &[], &cancel)
+            .await
+            .expect("discard chosen");
+        assert_eq!(asked.count(), 0, "git was asked anyway");
+
+        // The same observer hears a call that has something to do, so the
+        // silence above is the guard.
+        stage_paths(&exec, workdir, &["a.txt".to_string()], &cancel)
+            .await
+            .expect_err("there is no git here to stage with");
+        assert_eq!(asked.count(), 1);
+    }
+}

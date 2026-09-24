@@ -107,6 +107,24 @@ fn a_file_that_was_already_mixed_says_nothing_until_the_change_adds_to_it() {
 }
 
 #[test]
+fn a_crlf_file_says_nothing_until_an_lf_line_lands_in_it() {
+    // The untouched lines are CRLF, so CRLF is what the file uses and LF
+    // is the ending that disagrees with it.
+    let own = with_head(&["@@ -1,2 +1,3 @@", " keep\r", " these\r", "+more\r"]);
+    assert_eq!(read_one(&own), Reading::Quiet);
+
+    let other = with_head(&["@@ -1,2 +1,3 @@", " keep\r", " these\r", "+more"]);
+    assert_eq!(
+        read_one(&other),
+        Reading::Mixed {
+            lines: 1,
+            added: Eol::Lf,
+            file: Eol::Crlf
+        }
+    );
+}
+
+#[test]
 fn a_new_file_reports_the_ending_it_arrived_with() {
     // `--no-index` against /dev/null is how an untracked file is
     // rendered; `new file mode` is what a staged add prints.

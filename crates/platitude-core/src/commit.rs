@@ -319,6 +319,31 @@ fn normalized(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::refusing;
+
+    /// **A new commit with nothing to say is refused here, ahead of git.**
+    /// Only an amend reads an empty message, as "keep the one there". The
+    /// executor cannot run anything and the repository is not there, so a
+    /// commit that reached for git would fail on the spawn rather than
+    /// come back as this refusal.
+    #[tokio::test]
+    async fn an_empty_message_is_refused_for_a_new_commit_without_asking_git() {
+        let (exec, asked) = refusing::git();
+        let repo = refusing::repo();
+
+        let err = commit(
+            &exec,
+            &repo,
+            "   \n\n",
+            CommitOptions::default(),
+            &CancellationToken::new(),
+        )
+        .await
+        .expect_err("an empty message is refused");
+
+        assert!(err.to_string().contains("empty message"), "{err}");
+        assert_eq!(asked.count(), 0, "nothing was asked of git");
+    }
 
     #[test]
     fn the_two_editor_fields_join_with_a_blank_line() {

@@ -134,6 +134,7 @@ pub async fn resolve(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::refusing;
 
     #[test]
     fn a_merge_steps_through_nothing_so_it_cannot_skip() {
@@ -145,6 +146,29 @@ mod tests {
         );
         assert!(!InProgress::Merge.supports(Continuation::Skip));
         assert!(InProgress::CherryPick.supports(Continuation::Skip));
+    }
+
+    /// And the way out it lacks is refused before a command is built: no
+    /// repository is read and nothing is asked of git. The program and the
+    /// tree are not there either, so a road that reached a spawn would come
+    /// back as a failure to start rather than this refusal.
+    #[tokio::test]
+    async fn a_skip_asked_of_a_merge_is_refused_before_git_runs() {
+        let (exec, asked) = refusing::git();
+        let err = resolve(
+            &exec,
+            &refusing::nowhere(),
+            InProgress::Merge,
+            Continuation::Skip,
+            &CancellationToken::new(),
+        )
+        .await
+        .expect_err("merge cannot skip");
+        assert!(
+            matches!(&err, GitError::UnexpectedOutput { message, .. } if message.contains("does not support")),
+            "{err}"
+        );
+        assert_eq!(asked.count(), 0, "nothing was asked of git");
     }
 
     #[test]

@@ -126,3 +126,34 @@ async fn write_pair(
         message,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::refusing;
+
+    /// **A name that trims to nothing is refused before git is asked** —
+    /// git would store it and refuse it only at commit time, as "Author
+    /// identity unknown". The executor cannot run anything and the path is
+    /// no repository, so a write that got past the refusal fails too: the
+    /// message and the count are what tell the two apart.
+    #[tokio::test]
+    async fn an_empty_name_is_refused_before_git_is_asked() {
+        let (exec, asked) = refusing::git();
+        let cancel = CancellationToken::new();
+
+        let err = set_identity(
+            &exec,
+            &refusing::nowhere(),
+            "   ",
+            "e@example.com",
+            ConfigScope::Local,
+            &cancel,
+        )
+        .await
+        .expect_err("an empty name is refused");
+
+        assert!(err.to_string().contains("must not be empty"), "{err}");
+        assert_eq!(asked.count(), 0, "nothing was asked of git");
+    }
+}

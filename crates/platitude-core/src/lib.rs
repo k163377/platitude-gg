@@ -38,6 +38,8 @@ pub mod publish;
 pub mod reachable;
 pub mod rebase_plan;
 pub mod refs;
+#[cfg(test)]
+mod refusing;
 pub mod remote;
 pub mod repo;
 pub mod report;

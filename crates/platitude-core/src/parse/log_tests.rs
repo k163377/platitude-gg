@@ -163,6 +163,22 @@ fn parses_multiple_records() {
     assert_eq!(commits[0].author, commits[2].author, "author interned");
 }
 
+/// The author fields are asked for through `.mailmap` (`%aN` / `%aE`):
+/// `%an` / `%ae` would hand over each commit's own spelling, and one
+/// person with two addresses would read as two. What git's fold makes of
+/// a real `.mailmap` is recorded in `logparse::periodic`.
+#[test]
+fn the_author_fields_are_the_mailmap_spellings() {
+    let fields: Vec<&str> = LOG_FORMAT_ARG
+        .strip_prefix("--format=")
+        .unwrap()
+        .split("%x00")
+        .collect();
+    assert_eq!(fields.len(), LOG_FIELDS, "one token per field: {fields:?}");
+    assert_eq!(fields[2], "%aN", "the author's name");
+    assert_eq!(fields[3], "%aE", "the author's address");
+}
+
 #[test]
 fn the_address_is_lowercased_and_interned() {
     // The same person, shouting on one commit and not the other. The

@@ -151,6 +151,31 @@ pub fn is_valid_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::refusing;
+
+    /// **A rename that changes only letter case never reaches git**: the
+    /// create+delete pair would take both names off a case-insensitive
+    /// disk with every command exiting 0 ([`rename`]). The executor cannot
+    /// run anything and the repository is not there, so a rename that
+    /// reached for git would fail on the spawn rather than come back as
+    /// this refusal.
+    #[tokio::test]
+    async fn a_case_only_rename_is_refused_without_asking_git() {
+        let (exec, asked) = refusing::git();
+
+        let err = rename(
+            &exec,
+            &refusing::nowhere(),
+            "v1.0",
+            "V1.0",
+            &CancellationToken::new(),
+        )
+        .await
+        .expect_err("a case-only rename is refused");
+
+        assert!(err.to_string().contains("letter case"), "{err}");
+        assert_eq!(asked.count(), 0, "nothing was asked of git");
+    }
 
     /// Every shape an argv can carry is pinned against real git in
     /// `tests/it/rename_integration.rs`

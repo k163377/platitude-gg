@@ -155,3 +155,30 @@ async fn the_observer_hears_about_a_command_that_never_started() {
     assert_eq!(seen[0].2, CommandEnd::Failed);
     assert!(!seen[0].3.is_empty(), "the reason is reported");
 }
+
+/// **A token cancelled before the ask spawns nothing**: the wait for a
+/// slot is the token's to end, and the token is asked first, so even a
+/// free slot is not taken. The program is not there, so a spawn would have
+/// ended `Failed`, not `Cancelled`.
+#[tokio::test]
+async fn a_token_cancelled_before_the_ask_spawns_nothing() {
+    let recorder = Arc::new(Recorder::default());
+    let executor = GitExecutor::with_program("pgg-no-such-program").observed(
+        Arc::clone(&recorder) as Arc<dyn CommandObserver>,
+        Kept::Asked,
+    );
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+    let err = executor
+        .run(GitCommand::new().arg("status"), &cancel)
+        .await
+        .expect_err("a cancelled token runs nothing");
+    assert!(err.is_cancelled(), "{err:?}");
+    let seen = recorder.seen.lock().unwrap();
+    assert_eq!(seen.len(), 1, "the ask is still a row");
+    assert_eq!(
+        seen[0].2,
+        CommandEnd::Cancelled,
+        "it ended before any spawn"
+    );
+}

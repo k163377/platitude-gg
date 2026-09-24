@@ -591,6 +591,7 @@ pub async fn embedded(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::refusing;
 
     #[test]
     fn parse_details_extracts_all_fields() {
@@ -689,5 +690,22 @@ mod tests {
     #[test]
     fn split_record_rejects_output_with_too_few_fields() {
         assert!(split_record(b"one\0two\0").is_none());
+    }
+
+    /// **A choice of nothing reads nothing, and asks git nothing**: a
+    /// `log --no-walk` given no ids reads HEAD, which is no part of an
+    /// empty choice. The executor cannot run anything and the repository
+    /// is not there, so an ask that slipped through would fail on the
+    /// spawn instead.
+    #[tokio::test]
+    async fn a_choice_of_nothing_reads_nothing_and_asks_git_nothing() {
+        let (exec, asked) = refusing::git();
+
+        let files = union_files(&exec, &refusing::nowhere(), &[], &CancellationToken::new())
+            .await
+            .unwrap();
+
+        assert!(files.is_empty());
+        assert_eq!(asked.count(), 0, "nothing was asked of git");
     }
 }
