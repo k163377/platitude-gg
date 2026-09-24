@@ -57,6 +57,18 @@ Rectangle {
     function dropRowRename() {
         graphList.dropRename()
     }
+    /// A press on something standing over these rows sent the graph somewhere, and the hand did not move with it — a
+    /// card's line (`RowHoverHost.mateFollowed`). **The rest of that gesture is not these rows'**
+    /// (`ReclickGesture.hush`), **and neither is the row that slid under the still hand**: it opens nothing until the
+    /// hand moves (`GraphList.handHeld` — the left panel's rule, デザイン規約 §左メニューの所作「手が動いていない所へ来た
+    /// 行は開かない」). Opened there, it was a card nobody asked for, placed off the rows while they were still being
+    /// laid out (observed).
+    function settleUnderHand() {
+        graphList.hushClicks()
+        graphArea.heldAt = paneHand.hovered ? paneHand.point.position : Qt.point(-1, -1)
+        graphList.handHeld = true
+    }
+    readonly property alias rowClicksHushed: graphList.clicksHushed
     function rowRenameArmed(chip) {
         return graphList.renameArmed(chip)
     }
@@ -573,8 +585,31 @@ Rectangle {
     /// whole area (measured with qmltestrunner — rows that would not light, cards that would not close).
     property bool pointerInside: false
     HoverHandler {
-        onHoveredChanged: graphArea.pointerInside = hovered
+        id: paneHand
+        onHoveredChanged: {
+            graphArea.pointerInside = paneHand.hovered
+            if (!paneHand.hovered)
+                graphList.handHeld = false
+        }
+        // **The hold lasts until the hand itself moves** (`settleUnderHand`). The place it was held at is taken from
+        // the first point heard when there was none to take — the hand was inside a card when the press went in, and
+        // the card going is what brings it back over the rows — and the rows moving under it are told to this
+        // handler at that same place, which is what keeps them from counting as a move.
+        onPointChanged: {
+            if (!graphList.handHeld)
+                return
+            const at = paneHand.point.position
+            if (graphArea.heldAt.x < 0) {
+                graphArea.heldAt = at
+                return
+            }
+            if (at.x !== graphArea.heldAt.x || at.y !== graphArea.heldAt.y)
+                graphList.handHeld = false
+        }
     }
+    /// Where the hand was when a press sent the rows moving under it (`settleUnderHand`), in this pane's own
+    /// coordinates; (-1, -1) until it is heard.
+    property point heldAt: Qt.point(-1, -1)
     /// Automation: the pointer resting in the pane, which is what puts the lane bar on screen at all
     /// (`PGG_AUTO_ACT=graph-bar`).
     function restPointer(inside) { graphArea.pointerInside = inside }

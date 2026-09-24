@@ -421,7 +421,10 @@ Item {
     /// The row wears the hover band. **The pointer being on it is only one of the ways** — what the pointer opened on
     /// this row holds it up too, for as long as that stands: both popups are drawn over or off the row and take the
     /// pointer off it at once (`RowHoverHost`), and a row gone dark under its own card says nothing about which it is.
-    readonly property bool lit: rowMouse.containsMouse || rowItem.cardOnThisRow || rowItem.listOnThisChip
+    /// **Not for a row the graph brought under a still hand** (`handHeld`) — the light is the hand's, the same as what
+    /// opens.
+    readonly property bool lit: (rowMouse.containsMouse && !rowItem.handHeld) || rowItem.cardOnThisRow
+                                || rowItem.listOnThisChip
 
     // **The chip's list opens at once; the row's card opens on a rest** (規約 §hover のツールチップ: 展開は即時・補足は
     // 待つ). The chip wears the `+N` and the fan of the refs it is holding back, so the list is the chip's own inside
@@ -435,6 +438,11 @@ Item {
     /// change they did not ask for. What the pointer did meanwhile is settled the moment the wait ends.
     readonly property bool renameWaiting: rowItem.ListView.view ? rowItem.ListView.view.renameWaiting : false
     onRenameWaitingChanged: if (!rowItem.renameWaiting) rowItem.settlePointed()
+    /// The graph moved under a hand that stayed where it was (`GraphPane.settleUnderHand`): **this row came to the
+    /// hand, the hand did not come to it**, so it opens nothing until the hand moves — and then settles what it is
+    /// under by then.
+    readonly property bool handHeld: rowItem.ListView.view ? rowItem.ListView.view.handHeld : false
+    onHandHeldChanged: if (!rowItem.handHeld) rowItem.settlePointed()
     function settlePointed() {
         const view = rowItem.ListView.view
         if (!view || rowItem.renameWaiting)
@@ -444,6 +452,9 @@ Item {
             view.chipCollapseRequested()
         if (rowItem.pointedPart !== "row")
             view.rowHoverRequested(rowItem, false)
+        // What has to go goes all the same; what would open waits for the hand.
+        if (rowItem.handHeld)
+            return
         if (rowItem.pointedPart === "chip") {
             // Unfolding, so there is nothing to ask: the rest asks "did you mean to point at this", and a chip that
             // says it is holding refs back has been pointed at on purpose (規約「展開は即時」). This is also the door
@@ -463,8 +474,9 @@ Item {
     function openPointed() {
         const view = rowItem.ListView.view
         // The rest that was already running when the second click landed is part of the same beat: it opens what the
-        // reader did not ask for, half a second into a wait they are watching (see `renameWaiting`).
-        if (!view || rowItem.renameWaiting)
+        // reader did not ask for, half a second into a wait they are watching (see `renameWaiting`). The same for a
+        // row the graph brought under a still hand (`handHeld`).
+        if (!view || rowItem.renameWaiting || rowItem.handHeld)
             return
         // Another copy's row has nothing behind it: the card would come up empty, with a stamp of `1970-01-01`
         // (photographed). An empty card is worse than none (P3-確認事項 §別 worktree の未コミット行).
@@ -528,6 +540,10 @@ Item {
     /// write that lands ticks later, so nothing on screen says at the moment of the press whether the row took the
     /// gesture or turned it down.
     function doubleClick(modifiers) {
+        // The second half of a double-click begun on the card that stood here: it moves nothing
+        // (`ReclickGesture.hush`).
+        if (rowItem.ListView.view.clicksHushed)
+            return false
         // **Another copy's row opens that copy**, in a tab of its own — the same door the WORKTREES row is
         // (`SidebarRowGestures.activateRow`). The changes are read where they live: this window's panes read this
         // window's tree, and a copy's own tab is the only place its files can be staged and committed as well as

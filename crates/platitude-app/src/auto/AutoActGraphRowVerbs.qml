@@ -114,6 +114,16 @@ Item {
             refListOpenTimer.cards = false
             refListOpenTimer.litRow = lit.length > 1 ? Number(lit[1]) : 0
             refListOpenTimer.start()
+        } else if (act === "ref-list-follow" || act === "ref-list-follow-lit") {
+            // The name a row of that list opens under itself, pressed — the reader going to where that name is
+            // (デザイン規約 §グラフ行のダブルクリック) — or, `-lit`, the pointer resting on it. The argument is
+            // `<行>[:<カードの行>]`, the shape `ref-list-lit` takes; no row given is HEAD's.
+            const follow = arg.split(":")
+            refListOpenTimer.row = follow[0] === "" ? -1 : Number(follow[0])
+            refListOpenTimer.cards = false
+            refListOpenTimer.followRow = follow.length > 1 ? Number(follow[1]) : 0
+            listFollowTimer.lit = act === "ref-list-follow-lit"
+            refListOpenTimer.start()
         } else if (act === "ref-list-choose") {
             // A held click put in at a row of that list: the card's rows are the graph's row, so Ctrl there moves the
             // choice the way the row does and never reaches the name box or the switch (デザイン規約 §複数のコミットを
@@ -478,6 +488,8 @@ Item {
         property int litRow: -1
         /// Which row of the list `ref-list-choose` presses with Ctrl held; -1 for the verbs that press none.
         property int chooseRow: -1
+        /// Which row of the list `ref-list-follow` presses the name under; -1 for the verbs that press none.
+        property int followRow: -1
         onTriggered: {
             // -1 stands for HEAD's row, which is only known once the graph has loaded.
             if (refListOpenTimer.row < 0)
@@ -502,8 +514,74 @@ Item {
                 listLitTimer.start()
             else if (refListOpenTimer.chooseRow >= 0)
                 listChooseTimer.start()
+            else if (refListOpenTimer.followRow >= 0)
+                listFollowTimer.start()
             else
                 refListShownTimer.start()
+        }
+    }
+    // The name under a row of that list, pressed or rested on once the list is actually up, and — pressed — the graph
+    // having gone to the commit it names. **The landing is read off the graph**: the page's selection is the press's
+    // own bookkeeping, so what says the reader arrived is the graph's row for that commit lit and laid out (the
+    // witness `nav-jump` takes), with the card gone from over the row it was opened on.
+    SampleTimer {
+        id: listFollowTimer
+        property bool lit: false
+        property bool pressed: false
+        property var to: null
+        /// Whether the rows under the card were told the rest of the gesture is not theirs, read at the press — the
+        /// hush lasts one double-click window, and the landing is read later than that on a busy machine.
+        property bool hushed: false
+        onTriggered: {
+            const at = refListOpenTimer.followRow
+            if (!listFollowTimer.pressed) {
+                if (!refList.opened)
+                    return
+                // A row the list has not built is not a row with nothing under it.
+                if (!refList.rowAt(at))
+                    return
+                listFollowTimer.to = refList.mateTo(at)
+                const said = " row=" + refListOpenTimer.row + " card=" + at
+                if (listFollowTimer.to === null) {
+                    // Nothing under that name to press: the answer, with the picture of what was there.
+                    listFollowTimer.stop()
+                    Harness.report((listFollowTimer.lit ? "ref_list_follow_lit" : "ref_list_follow") + said
+                                      + " followed=false list=" + refList.opened)
+                    driver.complete()
+                    return
+                }
+                if (listFollowTimer.lit) {
+                    // The hand on the name is on the row it is in as well, and a real one lights both: the band is
+                    // judged against the wash it stands in.
+                    refList.pointRow(at)
+                    refList.pointMate(at)
+                    listFollowTimer.stop()
+                    Harness.report("ref_list_follow_lit" + said
+                                      + " list=" + refList.opened
+                                      + " aimed=" + refList.mateAimed(at)
+                                      + " to=" + listFollowTimer.to.key)
+                    renderedBarrier.begin()
+                    return
+                }
+                refList.followRow(at)
+                listFollowTimer.hushed = graphPane.rowClicksHushed
+                listFollowTimer.pressed = true
+                return
+            }
+            const want = listFollowTimer.to.oid
+            if (refList.opened || page.selectedOid !== want || !driver.cardSettled)
+                return
+            const landedAt = graphModel.rowOf(want)
+            const item = landedAt >= 0 ? graphPane.view.itemAtIndex(landedAt) : null
+            if (landedAt >= 0 && !item)
+                return
+            listFollowTimer.stop()
+            Harness.report("ref_list_follow row=" + refListOpenTimer.row + " card=" + at
+                              + " followed=true list=" + refList.opened
+                              + " landed=" + (!!item && item.oid_hex === want && item.selected)
+                              + " hushed=" + listFollowTimer.hushed
+                              + " to=" + listFollowTimer.to.key + " at=" + landedAt)
+            driver.complete()
         }
     }
     // The held click on a row of that list, put in once the list is actually up, and the choice read back once the

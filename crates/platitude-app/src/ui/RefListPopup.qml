@@ -49,6 +49,10 @@ AppCard {
     /// One was right-clicked: its menu is asked for, the same one the chip itself answers with. The rows that lead
     /// nowhere still have one — a tag goes nowhere but deletes fine — except the marker, which names no ref at all.
     signal menuAsked(var chip)
+    /// The name a row opens under itself was pressed (`RefChip.mateFollowed`): the reader is going to where that name
+    /// is — `to` is `NavFacts.place`'s, and its commit is on another row of the graph, which is why the card goes
+    /// with the press (it stands over the row it was opened from, and that is not where the reader is going).
+    signal followed(var to)
 
     /// What a row has to divide between the chip and the reading's remote. **Handed over by the owner, measured from
     /// where this opens** (規約 §hover のツールチップ「hover で開いたものの幅は、開く位置から測る」) — a card that starts partway
@@ -182,6 +186,33 @@ AppCard {
         const row = refList.rowAt(i)
         return row ? row.lit : false
     }
+    /// The name one row opens under itself, pressed — at the chip's own hand (`RefChip.followMate`), the automation's
+    /// way in (PGG_AUTO_ACT=ref-list-follow). False where the row has nowhere to go.
+    function followRow(i) {
+        const row = refList.rowAt(i)
+        if (!row || !row.chip.mateGoes)
+            return false
+        row.chip.followMate()
+        return true
+    }
+    /// And the pointer resting on it, written where the pointer writes (PGG_AUTO_ACT=ref-list-follow-lit), with the
+    /// underline it wears read back off the chip.
+    function pointMate(i) {
+        const row = refList.rowAt(i)
+        if (!row || !row.chip.mateGoes)
+            return false
+        row.chip.matePointedAt = true
+        return true
+    }
+    function mateAimed(i) {
+        const row = refList.rowAt(i)
+        return row ? row.chip.mateLit : false
+    }
+    /// Where that row's name goes (`NavFacts.place`), null for one going nowhere.
+    function mateTo(i) {
+        const row = refList.rowAt(i)
+        return row && row.chip.mateGoes ? row.chip.mate.to : null
+    }
     /// Which kind of row that was: a row with nowhere to go wears the same wash as one that leads somewhere, so a run
     /// that means to prove it has to say which it aimed at.
     function rowLeadsNowhere(i) {
@@ -290,7 +321,12 @@ AppCard {
                 // The row now holds a different ref: whatever was resting on the one before it is not resting on
                 // this. A recycled delegate is the same object with new data (`AppListView.reuseItems`), and the
                 // wash is written, so nothing else would take it off.
-                onModelDataChanged: refRow.pointedAt = false
+                onModelDataChanged: {
+                    refRow.pointedAt = false
+                    rowChip.matePointedAt = false
+                }
+                /// The chip this row draws, for the hooks above.
+                readonly property alias chip: rowChip
                 /// The pointer resting on this row, for the runs that photograph the wash — hover cannot be injected
                 /// (verify-ui §hover の絵の撮り方), and the same property a real pointer writes is the only place a run
                 /// may write. Named for the sidebar's own (`NavItemDelegate.tipPointedAt`).
@@ -379,6 +415,11 @@ AppCard {
                     maxWidth: refRow.chipRoom
                     // What this name reads, or what reads it, in the same frame under the name (`RefChip.mate`).
                     mate: refRow.mate
+                    onMateFollowed: to => refRow.follow(to)
+                }
+                function follow(to) {
+                    refList.close()
+                    refList.followed(to)
                 }
                 // Whose reading this is. A tag has no namespace to say it in the way `origin/main` does, and a
                 // drifted one puts the same bare name on two rows — this card is where the two meet, so it is where

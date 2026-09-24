@@ -93,6 +93,9 @@ Item {
     signal recordActivated(var chip)
     signal recordChosen(string oidHex, int atRow)
     signal recordMenuAsked(string oidHex, var chip)
+    /// The name a stacked row opens under itself was pressed: the reader is going to the commit it stands on
+    /// (`RefListPopup.followed`).
+    signal mateFollowed(string oidHex)
 
     /// The note under a cut message was pressed in the row's card: the
     /// reader is asking for the whole of it, and the whole of it is in
@@ -261,8 +264,10 @@ Item {
                         ? gone : host.branchesModel.upstreamOf(name)
             if (reads === "" || (gone === "" && here[reads] === 1))
                 return null
+            // Where a press on the name goes: the commit that reading stands on (`NavFacts.place`).
             const line = NavFacts.readingLine(
-                { "upstream": reads, "gone": gone !== "" })
+                { "upstream": reads, "gone": gone !== "",
+                  "upstreamTo": NavFacts.place("remote", reads, host.branchesModel.upstreamOidOf(name)) })
             // The measure is the branch's, and the branch here is the
             // name over this line — so the chip draws it there
             // (`RefChip.trackOnName`), the way the panel's own row does.
@@ -278,7 +283,8 @@ Item {
             return NavFacts.branchLine(
                 local,
                 { "ahead": host.branchesModel.aheadOf(local),
-                  "behind": host.branchesModel.behindOf(local) })
+                  "behind": host.branchesModel.behindOf(local) },
+                NavFacts.place("branch", local, host.branchesModel.oidOfName(local)))
         }
         return null
     }
@@ -313,6 +319,12 @@ Item {
         // The row this card stands on travels with the name: the menu it raises is that row's, aimed at the name that
         // was pressed (デザイン規約 §グラフ行の右クリック).
         onMenuAsked: chip => host.recordMenuAsked(host.refListOid, chip)
+        // The card went with the press and the graph goes somewhere under a hand that stayed: the rest of that
+        // gesture, and the row that comes under it, are not the rows' (`GraphPane.settleUnderHand`).
+        onFollowed: to => {
+            host.graphPane.settleUnderHand()
+            host.mateFollowed(to.oid)
+        }
         // The card is drawn over the chip that raised it, so the chip
         // stops being able to say the hand is still on it — the row
         // under a popup sees no hover at all. Until the card itself has

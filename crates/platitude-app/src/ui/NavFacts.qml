@@ -20,8 +20,9 @@ QtObject {
     id: navFacts
 
     /// What a line that goes somewhere wears under the hand, over the wash of the row it is in — the fill and the
-    /// rim of the band (`NavRowFacts.aimBand`; デザイン規約 §左メニューの所作「段の名前は、その名前が立つコミットへの道」).
-    /// A rim with no alpha draws none.
+    /// rim of the band (`NavRowFacts.aimBand`), and of the line a stacked card's name carries (`RefChip`), which is
+    /// the same line (デザイン規約 §左メニューの所作「段の名前は、その名前が立つコミットへの道」). A rim with no alpha
+    /// draws none.
     ///
     /// **The row's own wash once more over it**: the line is a step up from the row it is in by the same step the row
     /// is from the list, in the same hue — lit the same as the row, it reads as nothing having changed under the

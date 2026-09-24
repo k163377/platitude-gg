@@ -58,6 +58,9 @@ QtObject {
     /// The arming is decided here, before the caller has answered the press: what makes a second press a second is
     /// that the target was already the one pressed, and the caller's own answer is what makes it that.
     function click(key, names) {
+        // The rest of a gesture that began on something standing over this surface (`hush`).
+        if (hushTimer.running)
+            return false
         // The second click of a double-click, dropped — **but only on the target the first one landed on**. One of
         // these serves a whole surface, so a guard that answered for all of it would swallow the second of two quick
         // clicks on *different* rows, which is a hand reading down a list (the per-row timers this replaced could
@@ -89,6 +92,16 @@ QtObject {
         doubleGuard.stop()
         gesture.activeKey = key
     }
+    /// A click on something standing over this surface took that thing down (a card's line was followed —
+    /// `RefListPopup.followed`): **the second press of the same double-click falls on whatever is under the hand
+    /// now**, and a double-click here moves the working tree. For one double-click window every press here is the
+    /// rest of that gesture, and nothing (`hushed`, which the surface's double-click reads as well).
+    function hush() {
+        renameTimer.stop()
+        hushTimer.interval = Application.styleHints.mouseDoubleClickInterval
+        hushTimer.restart()
+    }
+    readonly property bool hushed: hushTimer.running
     /// The second click came inside the window after all: the gesture was the double-click, and the box it was about
     /// to open is not what was meant.
     function drop() {
@@ -104,6 +117,9 @@ QtObject {
     // Long enough that the second click of a double-click falls inside it; the system's own setting, since it is the
     // system that decides what counts as a double-click.
     property Timer doubleGuard: Timer {
+        interval: Application.styleHints.mouseDoubleClickInterval
+    }
+    property Timer hushTimer: Timer {
         interval: Application.styleHints.mouseDoubleClickInterval
     }
     // A second click on a target already clicked means the name, but only once a double-click can be ruled out — the

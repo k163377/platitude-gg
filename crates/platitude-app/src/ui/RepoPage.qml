@@ -1600,6 +1600,8 @@ FocusScope {
         }
         // A right-click on one of the card's rows raises the row's own menu, aimed at the name that was pressed.
         onRecordMenuAsked: (oidHex, chip) => page.openRowMenu(oidHex, chip)
+        // The name a card's row opens under itself: the jump a click on that name's row in the left panel makes.
+        onMateFollowed: oidHex => page.jumpToRef(oidHex)
     }
 
     // ---- rewriting one commit --------------------------------------

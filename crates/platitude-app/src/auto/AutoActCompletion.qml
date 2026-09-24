@@ -186,7 +186,9 @@ QtObject {
                 // The list has to be up before one of its rows can be pressed, and the menu up before the report can
                 // say the list stayed — one sampler owns the whole of it.
                 "list-menu",
-                "ref-list", "ref-list-card", "ref-list-lit", "ref-list-choose", "row-part", "graph-reclick",
+                "ref-list", "ref-list-card", "ref-list-lit", "ref-list-choose",
+                "ref-list-follow", "ref-list-follow-lit",
+                "row-part", "graph-reclick",
                 "graph-head-list",
                 "graph-reclick-list",
                 "graph-reclick-scrolled", "graph-reclick-across", "graph-reclick-mark",

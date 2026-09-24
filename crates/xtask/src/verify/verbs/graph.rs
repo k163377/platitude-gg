@@ -164,6 +164,23 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "chosen=2 lit=2 read=true list=true",
     },
+    // The name a row of that list opens under itself, pressed: the card
+    // goes with the press (it stands over the row it was opened from),
+    // the graph's row for the commit that name is on is lit, and the
+    // rows the card stood over were told the rest of that gesture is
+    // not theirs — the second press of a double-click lands on them.
+    Verb {
+        name: "ref-list-follow",
+        when: &[],
+        plain: "followed=true list=false landed=true hushed=true",
+    },
+    // And the pointer resting on it: the band is drawn under that line,
+    // read off the chip, with the card still up.
+    Verb {
+        name: "ref-list-follow-lit",
+        when: &[],
+        plain: "list=true aimed=true",
+    },
     // The pointer resting on the note a cut message puts out. `lit=`
     // alone is the rule that was always kept — the line under the words
     // is the words' own colour — so what pins this note's step down is

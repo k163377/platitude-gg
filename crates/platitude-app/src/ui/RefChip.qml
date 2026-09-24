@@ -36,6 +36,25 @@ Rectangle {
     /// room. **One frame** — what the line names is this ref's own reading, so it belongs in the box the name is in,
     /// the way a wrapped name does.
     property var mate: null
+    /// Whether the name on that line is a way to where that name is (`mate.to` — `NavFacts.place`): a press on it
+    /// goes to the commit the name stands on (デザイン規約 §グラフ行のダブルクリック). **Said by the pointer**, the way
+    /// the left panel's lines say theirs (`NavFactLine.goes`): under it the words wear their own colour's underline
+    /// and the pointer turns to the hand.
+    readonly property bool mateGoes: chip.mate !== null && !!chip.mate.to
+    /// Stands in for the pointer on those words where headless cannot put one (PGG_AUTO_ACT=ref-list-follow-lit).
+    property bool matePointedAt: false
+    /// The pointer is on the words — the hand's own answer, where one is built (`mateSeat`).
+    readonly property bool mateHandOn: mateSeat.item !== null && mateSeat.item.containsMouse
+    readonly property bool mateAimed: chip.mateGoes && (chip.mateHandOn || chip.matePointedAt)
+    /// Whether the band is drawn — what a run reads back, rather than the ask above (PGG_AUTO_ACT=ref-list-follow-lit).
+    readonly property bool mateLit: mateBand.visible
+    /// The name on that line was pressed: where it goes (`mate.to`).
+    signal mateFollowed(var to)
+    /// What the hand's handler calls, and the one way in for a run (verify-ui §壊れない動詞の実装).
+    function followMate() {
+        if (chip.mateGoes)
+            chip.mateFollowed(chip.mate.to)
+    }
     /// What that line takes off the frame's floor: **a line box of its own, the same one the name has**. The frame
     /// then holds two boxes of one height, so the room over the name is the room under the line — measured off the
     /// box rather than the words, whose own ink leaves less under a `fontSm` line than over a `fontChip` one
@@ -285,6 +304,20 @@ Rectangle {
         color: Theme.bgHover
         visible: chip.waiting
     }
+    // The band the line under the name wears while the hand is on it — **the look the left panel's lines wear**
+    // (`NavFacts.aimFill`), since it is the same line — on the same rect the hand answers on (`mateSeat`).
+    Rectangle {
+        id: mateBand
+        visible: chip.mateAimed
+        x: Theme.borderWidth
+        y: mateRow.y
+        width: chip.width - 2 * Theme.borderWidth
+        height: mateRow.height
+        radius: Theme.radiusSm
+        color: NavFacts.aimFill
+        border.width: NavFacts.aimRim.a > 0 ? Theme.borderWidth : 0
+        border.color: NavFacts.aimRim
+    }
     // **The mark, the name and the badge, and the count after them** (デザイン規約 §重ね表示). The first three are the
     // one ref this card is showing — where it is checked out, what it is called, and whether it is on a remote or has
     // a PR open — and the count is the only thing in the frame that is not about that ref at all: it is how many
@@ -440,6 +473,26 @@ Rectangle {
             text: chip.mate ? chip.mate.text : ""
             color: chip.mate ? chip.mate.tone : Theme.textSecondary
             font.pixelSize: Theme.fontSm
+            font.underline: chip.mateAimed
+        }
+    }
+    // The hand on that name: **the whole of the line's own box, across the frame** — mark, name and the measure at
+    // the far end — and the band it wears under the pointer is the same rect (デザイン規約 §当たり判定「端に接しない
+    // ものは判定と塗りを一致させる」). The line above it is the row's click (`RefListPopup`). Over the row's own
+    // handlers, so a press here is this one's and never the row's. **Built only where the line goes somewhere**: a
+    // chip stands on every row of the graph, and an area built and hidden on each of them is heap the rows are
+    // measured by (rules-refs/app-ui.md, the Loader rule).
+    Loader {
+        id: mateSeat
+        active: chip.mateGoes
+        x: Theme.borderWidth
+        y: mateRow.y
+        width: chip.width - 2 * Theme.borderWidth
+        height: mateRow.height
+        sourceComponent: MouseArea {
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: chip.followMate()
         }
     }
     // How far that branch stands from what it reads. **At the frame's right-hand end, on the line that names the

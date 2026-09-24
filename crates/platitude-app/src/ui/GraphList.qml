@@ -112,6 +112,15 @@ AppListView {
     function dropRename() {
         reclick.drop()
     }
+    /// The rest of a gesture made on something standing over these rows lands here — a card — see the gesture
+    /// (`ReclickGesture.hush`).
+    function hushClicks() {
+        reclick.hush()
+    }
+    readonly property alias clicksHushed: reclick.hushed
+    /// The rows moved under a hand that did not move, and nothing opens under it until it does
+    /// (`GraphPane.settleUnderHand`, which also lets it go). Held here, since a row can only see the view.
+    property bool handHeld: false
     /// The box this gesture opens has been taken down: the gesture is spent with it, so the click that took it down
     /// cannot come up as a second one (`GraphPane.stopNaming`).
     function forgetClicks() {
