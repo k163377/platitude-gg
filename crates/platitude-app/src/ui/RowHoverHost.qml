@@ -314,6 +314,10 @@ Item {
         // it is standing on (see the card's `rowClicks`).
         rowClicks: host.graphPane
         rowOid: host.refListOid
+        // The current branch's stand-in is the other thing a chip unfolds from, and a press on the card is then its
+        // press (`GraphPane.pinPressed`).
+        onStandIn: host.refListAnchor !== null && host.refListAnchor === host.graphPane.headPin.chipItem
+        onStandInPressed: modifiers => host.graphPane.pinPressed(host.refListRow, modifiers)
         onPicked: chip => host.recordActivated(chip)
         onChose: host.recordChosen(host.refListOid, host.refListRow)
         // The row this card stands on travels with the name: the menu it raises is that row's, aimed at the name that

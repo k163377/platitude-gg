@@ -53,6 +53,12 @@ AppCard {
     /// is — `to` is `NavFacts.place`'s, and its commit is on another row of the graph, which is why the card goes
     /// with the press (it stands over the row it was opened from, and that is not where the reader is going).
     signal followed(var to)
+    /// Whether this card stands on the current branch's stand-in rather than on a row of the list (`GraphHeadPin`).
+    /// **A press on its rows is then the stand-in's**: the row it names is off screen, and what the stand-in does
+    /// with a press is bring that row on (`standInPressed`). Answered by the rows' own door, the press picked a row
+    /// nobody could see and nothing moved.
+    property bool onStandIn: false
+    signal standInPressed(int modifiers)
 
     /// What a row has to divide between the chip and the reading's remote. **Handed over by the owner, measured from
     /// where this opens** (規約 §hover のツールチップ「hover で開いたものの幅は、開く位置から測る」) — a card that starts partway
@@ -456,6 +462,15 @@ AppCard {
                 /// still has is a name, and the gesture that changes it begins with a click of its own.
                 function leftClick(modifiers) {
                     const mods = modifiers === undefined ? Qt.NoModifier : modifiers
+                    // Standing on the stand-in, every row is the stand-in's press, held or plain, and the card goes:
+                    // the stand-in it stands on goes with the row coming on screen (`onStandIn`). **The press goes out
+                    // before the card goes** — what the card is closed with forgets the row it stood on
+                    // (`RowHoverHost.onClosed`), and that row is where the press is going.
+                    if (refList.onStandIn) {
+                        refList.standInPressed(mods)
+                        refList.close()
+                        return
+                    }
                     // **A held click is the graph row's own** (デザイン規約 §複数のコミットを選ぶ): this card's rows are
                     // that row, so the press goes in at the row's handler — what it does with the choice, the name
                     // box and the keyboard is decided there and nowhere else.

@@ -58,17 +58,29 @@ Rectangle {
         graphList.dropRename()
     }
     /// A press on something standing over these rows sent the graph somewhere, and the hand did not move with it — a
-    /// card's line (`RowHoverHost.mateFollowed`). **The rest of that gesture is not these rows'**
-    /// (`ReclickGesture.hush`), **and neither is the row that slid under the still hand**: it opens nothing until the
-    /// hand moves (`GraphList.handHeld` — the left panel's rule, デザイン規約 §左メニューの所作「手が動いていない所へ来た
-    /// 行は開かない」). Opened there, it was a card nobody asked for, placed off the rows while they were still being
-    /// laid out (observed).
+    /// card's line (`RowHoverHost.mateFollowed`), the stand-in or its card (`pinPressed`). **The rest of that gesture
+    /// is not these rows'** (`ReclickGesture.hush`), **and neither is the row that slid under the still hand**: it
+    /// opens nothing until the hand moves (`GraphList.handHeld` — the left panel's rule, デザイン規約
+    /// §左メニューの所作「手が動いていない所へ来た行は開かない」). Opened there, it was a card nobody asked for, placed
+    /// off the rows while they were still being laid out (observed).
     function settleUnderHand() {
         graphList.hushClicks()
         graphArea.heldAt = paneHand.hovered ? paneHand.point.position : Qt.point(-1, -1)
         graphList.handHeld = true
     }
+    /// A press on the current branch's stand-in (`GraphHeadPin`), or on the card its chip unfolds into
+    /// (`RefListPopup.standInPressed`) — **one door for both**: the row it stands for is off screen, so the press
+    /// brings it on before it picks it, with the modifiers the rows read (デザイン規約 §複数のコミットを選ぶ). The
+    /// stand-in goes the moment its row is on screen, so **whatever row is under the hand now is not what the hand
+    /// was on** (`settleUnderHand`) — and a double-click there moves the working tree.
+    function pinPressed(row, modifiers) {
+        graphArea.settleUnderHand()
+        graphList.takeKeyboard()
+        graphArea.jumpToRow(row)
+        graphArea.rowActivated(graphArea.graphModel.oidAt(row), row, modifiers)
+    }
     readonly property alias rowClicksHushed: graphList.clicksHushed
+    readonly property alias rowHandHeld: graphList.handHeld
     function rowRenameArmed(chip) {
         return graphList.renameArmed(chip)
     }
@@ -528,11 +540,7 @@ Rectangle {
         // **The modifiers come with it.** The stand-in is the row, so Ctrl and Shift mean on it what they mean on
         // the row it stands for (デザイン規約 §複数のコミットを選ぶ) — dropped here, a held press on the stand-in put the
         // whole choice back down to one commit.
-        onActivated: (row, modifiers) => {
-            graphList.takeKeyboard()
-            graphArea.jumpToRow(row)
-            graphArea.rowActivated(graphArea.graphModel.oidAt(row), row, modifiers)
-        }
+        onActivated: (row, modifiers) => graphArea.pinPressed(row, modifiers)
         // Its chip unfolds through the rows' own door: the card is the one the page holds for every chip.
         onChipExpandRequested: (oidHex, atRow, records, anchor) =>
             graphArea.chipExpandRequested(oidHex, atRow, records, anchor)

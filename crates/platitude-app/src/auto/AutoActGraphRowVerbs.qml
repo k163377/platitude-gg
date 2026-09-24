@@ -103,7 +103,12 @@ Item {
             // The stand-in's chip under a pointer. Hover cannot be injected, so this writes the one property the
             // pointer writes on the stand-in (`GraphHeadPin.pointerX`) and leaves the rest to it — **whether the
             // stand-in asks at all is the point**, so going to `chipExpandRequested` directly would prove nothing.
+            // `click` goes on to press the card's first row, which is the stand-in's press: the row it stands for comes
+            // on screen and is the one read.
             headListTimer.pointed = false
+            headListTimer.click = arg === "click"
+            headListTimer.pressed = false
+            headListTimer.movedOff = false
             headListTimer.start()
         } else if (act === "ref-list-lit") {
             // The stacked list with the pointer resting on one of its rows. The hand that walked down off the chip is
@@ -681,10 +686,64 @@ Item {
     SampleTimer {
         id: headListTimer
         property bool pointed: false
+        property bool click: false
+        property bool pressed: false
+        property bool movedOff: false
+        /// Whether the rows under the card were told the rest of the gesture is not theirs, read at the press.
+        property bool hushed: false
+        property string want: ""
         onTriggered: {
             const pin = graphPane.headPin
+            // Pressed: the landing is read off the graph — the stand-in's row on screen, laid out and lit, the card
+            // gone and the stand-in with it (it stands only while its row is off screen).
+            if (headListTimer.pressed) {
+                const at = graphModel.headRow
+                const item = at >= 0 ? graphPane.view.itemAtIndex(at) : null
+                if (refList.opened || page.selectedOid !== headListTimer.want || !driver.cardSettled || !item)
+                    return
+                headListTimer.stop()
+                const listAfter = refList.opened
+                // **The row that came under the hand the press left where it was**: the row now standing where the
+                // stand-in stood is told the pointer is on its chip — what a still pointer's hover tells it as the
+                // rows go by under it — and it must open nothing (`GraphPane.settleUnderHand`). The chip's own half
+                // of the row is where a card opens at once, so it is the half that can go wrong.
+                // The first row in view: at the head of the list `contentY` sits in the top margin, above row 0.
+                const underAt = graphPane.view.indexAt(1, Math.max(0, graphPane.view.contentY) + 1)
+                const under = underAt >= 0 ? graphPane.view.itemAtIndex(underAt) : null
+                if (under)
+                    under.pointerRowX = under.labelsW / 2
+                const part = under ? under.pointedPart : ""
+                const opened = refList.opened || rowHost.refListWanted
+                const held = part === "chip" && !opened
+                if (under)
+                    under.pointerRowX = -1
+                Harness.report("graph_head_list_click list=" + listAfter
+                                  // The row read, lit, and the one the keyboard walks from — all three are the press's.
+                                  + " landed=" + (item.oid_hex === headListTimer.want && item.selected
+                                                  && graphPane.view.currentIndex === at)
+                                  + " pin=" + pin.visible
+                                  + " hushed=" + headListTimer.hushed
+                                  + " held=" + held
+                                  + " at=" + at
+                                  // Which row came under the hand, which half of it was pointed at and what opened —
+                                  // the three `held=` is made of, for a reader of a red one.
+                                  + " under=" + underAt + " part=" + part + " opened=" + opened
+                                  + " holding=" + graphPane.rowHandHeld)
+                driver.complete()
+                return
+            }
             if (graphModel.loading || graphModel.rowTotal === 0 || !pin.wanted)
                 return
+            // **The reading moves off HEAD first**, once: a page opens on HEAD, and a press that picked nothing would
+            // leave the selection standing where the landing is read — green with the press gone astray.
+            if (headListTimer.click && !headListTimer.movedOff) {
+                const off = graphModel.headRow + 1
+                if (off >= graphModel.rowTotal)
+                    return
+                page.activateRow(graphModel.oidAt(off), off)
+                headListTimer.movedOff = true
+                return
+            }
             if (!headListTimer.pointed) {
                 if (!pin.visible || !pin.rowAbove) {
                     graphPane.view.positionViewAtEnd()
@@ -697,6 +756,15 @@ Item {
             }
             if (!refList.opened || rowHost.refListAnchor !== pin.chipItem)
                 return
+            if (headListTimer.click) {
+                // In at the card's own row, the way a hand presses it (`RefListPopup.clickRow`).
+                headListTimer.want = graphModel.oidAt(graphModel.headRow)
+                if (!refList.clickRow(0))
+                    return
+                headListTimer.hushed = graphPane.rowClicksHushed
+                headListTimer.pressed = true
+                return
+            }
             headListTimer.stop()
             // `on=` is the stand-in's own answer to "is the card on me" — what takes its sheets down and holds its
             // ground lit — and `covers=` is read off the front card where it stands once they are down.

@@ -112,8 +112,8 @@ AppListView {
     function dropRename() {
         reclick.drop()
     }
-    /// The rest of a gesture made on something standing over these rows lands here — a card — see the gesture
-    /// (`ReclickGesture.hush`).
+    /// The rest of a gesture made on something standing over these rows lands here — a card, the stand-in — see the
+    /// gesture (`ReclickGesture.hush`).
     function hushClicks() {
         reclick.hush()
     }

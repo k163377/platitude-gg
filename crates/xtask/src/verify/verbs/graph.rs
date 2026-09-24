@@ -141,7 +141,17 @@ pub(super) const TABLE: &[Verb] = &[
     // ground lit.
     Verb {
         name: "graph-head-list",
-        when: &[],
+        // `click` presses the card's first row: that is the stand-in's
+        // press, so the row it stands for comes on screen and is the one
+        // read — the card and the stand-in both gone, and the rows under
+        // the hand told the rest of the gesture is not theirs (a
+        // double-click's second press lands on whatever row is there).
+        // `held=` is the row that came under the still hand opening
+        // nothing on its chip: a card there was the picture reported.
+        when: &[(
+            Arg::Is("click"),
+            "list=false landed=true pin=false hushed=true held=true",
+        )],
         plain: "shown=true list=true on=true covers=true",
     },
     // The pointer resting on one of that card's rows. The wash is one
