@@ -126,6 +126,10 @@ Item {
     /// hold a key down, so the hold verb plays the opening press, waits here for the settle behind it to expire the
     /// way an OS's delay before the first repeat does, and only then sends the repeats.
     readonly property alias settling: stepTimer.running
+    /// A move of the view is still owed: a centering or a shift waiting out its beat (the two timers below). Read where
+    /// a sampler asks whether the page has stopped arriving (`PageSettled`) — a page that answers yes with one of these
+    /// pending moves its view a beat later, over whatever a run did to it in between.
+    readonly property bool placing: anchorTimer.running || shiftTimer.running
     Timer {
         id: stepTimer
         interval: Metrics.keyStepSettleMs

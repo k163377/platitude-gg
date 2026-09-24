@@ -27,6 +27,10 @@ import QtQuick
 /// which is why the term is needed at all (`AutoActCompletion.owesStatus` says what the two pages cost). The
 /// photograph is still the verb's own moment; what this holds is the walk, which says so (`WindowCensus.waited`).
 ///
+/// **A move the view is owed is the page still arriving** (`GraphRowWalk.placing`): the landing a page opens on
+/// centres its row a beat after it selects it, and the read behind that selection can answer inside the beat — so a
+/// page that answered yes there moves its view afterwards, over whatever a run did to it in the meantime.
+///
 /// **The question is whether rows are still on their way.** A tab still at the picker
 /// (`open-picker`) and one whose path was refused (`open-not-a-repo`) are both done: nothing is coming,
 /// so a run on either has the whole of what its verb shows. Answering no for those would hold the run open until the
@@ -67,6 +71,8 @@ QtObject {
             else if (graph.wipRow !== page.pageWt.wipRowStands)
                 owed.push("wipRow")
         }
+        if (page.pageGraphPane.placing)
+            owed.push("placing")
         return owed
     }
 }

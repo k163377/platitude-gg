@@ -304,6 +304,8 @@ Rectangle {
     function stepLanding(row, wasY) { return rowWalk.stepLanding(row, wasY) }
     /// Automation only, like `view` above: whether a step is still waiting to be read (`GraphRowWalk.settling`).
     readonly property alias stepSettling: rowWalk.settling
+    /// Automation only, the same way: whether the view still has a move owed to it (`GraphRowWalk.placing`).
+    readonly property alias placing: rowWalk.placing
     function jumpToRow(row) { rowWalk.jumpToRow(row) }
     function anchorSoon() { rowWalk.anchorSoon() }
     function shiftRows(rows) { rowWalk.shiftRows(rows) }
