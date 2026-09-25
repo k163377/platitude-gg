@@ -162,8 +162,8 @@ Flickable {
                 blockRoom: block.blockRoom
                 blockHeight: blockCol.implicitHeight
                 onWheelPastEnd: pixels => block.rollBlock(pixels)
-                // Escape drops the draft and puts the commit's own message back, unasked
-                // (デザイン規約 §コミットメッセージの 2 つの枠).
+                // Escape drops the draft and puts the resting text back (the commit's own message, or the reword a
+                // plan holds for it), unasked (デザイン規約 §コミットメッセージの 2 つの枠).
                 onEscaped: block.escaped()
             }
             // Only once something is actually changed (`MessageActionsRow`).

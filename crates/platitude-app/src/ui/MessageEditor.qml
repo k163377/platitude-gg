@@ -142,8 +142,8 @@ ColumnLayout {
         summaryArea.text = subject
         descBox.text = description
     }
-    /// Escape in one of the boxes: the draft goes, and nothing asks (デザイン規約 §コミットメッセージの 2 つの枠).
-    /// The caret goes too, so the row that saves comes down.
+    /// Escape in one of the boxes: the caret goes, so the row that saves comes down. The text is the owner's to keep
+    /// or drop — the details pane drops its draft, the commit editor keeps it (デザイン規約 §コミットメッセージの 2 つの枠).
     signal escaped()
     function leaveBoxes() {
         summaryArea.focus = false

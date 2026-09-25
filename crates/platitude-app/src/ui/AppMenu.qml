@@ -103,8 +103,8 @@ Menu {
         return sub.offer()
     }
 
-    // Hands every divider its menu (a MenuSeparator has no `menu`); no instance declares its own
-    // `Component.onCompleted` (rules-refs/app-ui.md「区切りは `AppMenuSeparator` が自分で決める」).
+    // Hands every divider its menu: a MenuSeparator has no `menu` of its own
+    // (rules-refs/app-ui.md「区切りは `AppMenuSeparator` が自分で決める」).
     Component.onCompleted: {
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)

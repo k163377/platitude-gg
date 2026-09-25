@@ -122,8 +122,11 @@ fn carried(name: &str, listing: &str) -> String {
             lines.push(format!("{oid} {refname}"));
         }
     }
-    // git reads packed-refs in order. No trait line: with no peel lines,
-    // git peels on demand.
+    // By name, as `pack-refs` writes it: git takes a file with no `sorted`
+    // trait, checks its order and sorts a copy when it is out of one, on
+    // every read — work a real remote spares the fetch under measurement.
+    // No trait line: `peeled` would read a tag with no `^` line as peeling
+    // to nothing; without it git peels on demand.
     lines.sort_by(|a, b| a[41..].cmp(&b[41..]));
     let mut packed = String::with_capacity(lines.len() * 64);
     for line in lines {

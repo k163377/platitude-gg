@@ -184,14 +184,11 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "delete_row asked=true",
     },
     // The delete table's greyed rows with their tooltip up. The sentences
-    // are not claimed — two of the three carry an em dash, and a non-ASCII
-    // `must_say` never matches on Windows
-    // (verify-ui §Windows での実行・デバッグの罠) — so
-    // `tests/qml/tst_branchcard.qml` reads them. A window adds the two
-    // lookups the rows are told apart by, one run each: `:remote` that
-    // `upstreamDrifted` arrived, `worktrees` that the copy holding the
-    // branch did. No run on the current branch: `current` is core's own
-    // word, so that row stands on no lookup.
+    // are read by `tests/qml/tst_branchcard.qml`; only `:remote` claims its
+    // own here. A window adds the two lookups the rows are told apart by,
+    // one run each: `:remote` that `upstreamDrifted` arrived, `worktrees`
+    // that the copy holding the branch did. No run on the current branch:
+    // `current` is core's own word, so that row stands on no lookup.
     Verb {
         name: "delete-blocked-tip",
         when: &[
@@ -201,7 +198,7 @@ pub(super) const TABLE: &[Verb] = &[
                  reason=The remote is on another commit",
             ),
             // `holder=` is the folder of the copy holding this branch —
-            // the one ASCII witness that the card looked the copy up.
+            // the witness that the card looked the copy up.
             (
                 Arg::Is("feature/topic-a"),
                 "delete_blocked code=branch --delete tip=true holder=topic",

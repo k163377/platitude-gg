@@ -6,7 +6,8 @@ import platitude.ui
 // A page's layout: the sizes a reader drags, the folded sections, what the next launch restores, and the floor the
 // window is held to.
 //
-// A `QtObject`: it draws nothing and hosts nothing that wants a size (rules-refs/structure.md「描かないホスト」).
+// A `QtObject`: no child, and nothing that wants a size
+// (rules-refs/structure.md「切り出した非表示のホストは `Item` にする」).
 QtObject {
     id: layout
 

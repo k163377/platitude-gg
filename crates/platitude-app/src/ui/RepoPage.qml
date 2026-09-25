@@ -1381,8 +1381,8 @@ FocusScope {
     readonly property bool selectedPublished: !page.planActive && page.selectedOid !== ""
                                               && page.selectedOid === workTree.headOid && workTree.headPublished
 
-    // Moving off a half-written message drops it and nothing asks (デザイン規約 §コミットメッセージの 2 つの枠,
-    // `DetailsPane.syncMessage`): the button keeps it, and Escape or reading another commit are on purpose.
+    // Moving off a half-written message in the details pane drops it and nothing asks (`DetailsPane.syncMessage`,
+    // デザイン規約 §コミットメッセージの 2 つの枠): the button keeps it, and Escape or reading another commit are on purpose.
 
     // An avatar assignment is not git's, so no refresh brings it: everything that shows a face re-reads the store.
     Connections {
@@ -2669,8 +2669,9 @@ FocusScope {
             page.listingDrawn()
         }
     }
-    /// The `WorkTreeModel.treeRevision` the open diff was last read against — the model bumps it when the four
-    /// buckets' counts move, which any stage or unstage does, whoever made it.
+    /// The `WorkTreeModel.treeRevision` the open diff was last read against — bumped when the four buckets' counts
+    /// move. Per file: a second hunk staged out of a file on both sides moves none, and is re-read at the write's
+    /// answer (this window) or by `pollDiff` (anyone else).
     property int seenTreeRev: -1
     // **The tree was read** — heard from the working-tree model, not the list, which says `changed` only when its rows
     // differ: a status that moved no row is exactly the one this has to hear about.

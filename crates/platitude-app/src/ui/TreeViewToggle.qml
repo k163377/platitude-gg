@@ -4,7 +4,8 @@ import QtQuick.Layouts
 import platitude.ui
 
 // The tree ⇄ paths toggle on both file lists' header band. No word stands beside the pair, so each mark is its
-// cell's content and takes the step the cell's height leaves (デザイン規約 §寸法「印がセルの中身そのものである時」).
+// cell's content and takes the step the cell's height leaves
+// (デザイン規約 §寸法「ファイル一覧の tree ⇄ paths の切り替えもセルの中身の側」).
 // The hit area runs the band's full depth; the wash keeps the mark's box (§当たり判定「広げるのは判定だけ」).
 RowLayout {
     id: toggle

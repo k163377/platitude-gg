@@ -34,9 +34,8 @@ AppMenu {
     /// out (current branch, held by another working copy, busy); frozen at open, so no answer comes later either.
     /// Only the automation reads it, as "did the input land".
     readonly property alias deleteAsked: state.deleteAsked
-    /// The folder the other working copy stands in, as the blocked row names it. The automation reads this, not the
-    /// sentence: that carries an em dash, and a non-ASCII `must_say` never matches on Windows
-    /// (verify-ui §Windows での実行・デバッグの罠).
+    /// The folder the other working copy stands in, as the blocked row names it. The automation reads this as the
+    /// witness that the copy was looked up.
     readonly property alias holderLeaf: state.holderLeaf
 
     /// The branch git has just refused to delete while this card stands, so the delete row turns into the held `-D`

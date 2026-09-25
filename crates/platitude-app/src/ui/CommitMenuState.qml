@@ -6,8 +6,8 @@ import platitude.ui
 // The row the menu was opened on and what it may offer there, decided once in `openRowMenu` and held still while the
 // menu stands (デザイン規約 §メニュー) — one place to look for why a row is not on offer.
 //
-// A `QtObject` because it draws nothing; the menu itself is declared on the page, which gives it an item to measure
-// the window through (rules-refs/structure.md「描かないホスト」).
+// A `QtObject`: it holds no child (rules-refs/structure.md「切り出した非表示のホストは `Item` にする」). The menu
+// itself is declared on the page, which gives it an item to measure the window through (「描かないホスト」).
 QtObject {
     id: menuState
 

@@ -103,8 +103,8 @@ pub async fn open(
 /// failed. `false` for no repository at all and for a question git could
 /// not answer — the screen then falls back to git's own wording.
 async fn is_bare(executor: &GitExecutor, path: &Path, cancel: &CancellationToken) -> bool {
-    // Answers on stdout, never by code: exit 0 with `true` / `false` in any
-    // repository, 128 outside one. 128 stays a failed row in the command
+    // Answers on stdout, never by code (measured on 2.55): exit 0 with
+    // `true` / `false` in any repository, 128 outside one. 128 stays a failed row in the command
     // log: it is also every other failure (rules-refs/core.md).
     let cmd = GitCommand::new()
         .cwd(path)

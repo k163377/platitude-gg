@@ -123,7 +123,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         return Err(format!(
             "the shipped build could not load its QML — {} line(s) above. A type in \
              `platitude.ui` that only exists in `platitude.auto` is the usual cause \
-             (.claude/rules/app-ui.md §QML モジュール)",
+             (.claude/rules/app-ui.md「QML モジュールは 2 つ」)",
             failed_to_load.len()
         ));
     }

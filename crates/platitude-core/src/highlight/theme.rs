@@ -38,8 +38,9 @@ pub(super) const CONSTANT: u32 = 0xF0ABFC;
 pub(super) const ANNOTATION: u32 = 0xFDA4AF;
 
 /// Scope → one of the colours above, in the app's palette. The
-/// mapping is what this array owns; デザイン規約's table
-/// owns the values (same rule as `Theme.qml`).
+/// mapping is what this array owns; the values are the consts above,
+/// which デザイン規約 §シンタックスハイライト's table quotes by hand
+/// (`cargo xtask docs` does not check that table).
 ///
 /// syntect takes the best-scoring selector, so `keyword` and
 /// `keyword.operator` sit side by side and the narrower one wins.

@@ -871,10 +871,10 @@ fn the_boundaries_reach_the_watch_and_nothing_else_opens_it() {
     assert!(tab.wrote_through());
 }
 
-/// Numbered first, queued second: the run's write carries the lower id and
-/// finishes last. `OperationId::next()` is taken before the queue's lock,
-/// so ids do not follow queue order; a `>=` boundary would open here on
-/// somebody else's answer.
+/// The run's write carries the lower id and finishes last. Ids come off one
+/// counter for every session and answer to equality alone (`OperationId`):
+/// nothing ties their order to the order writes finish, so a `>=` boundary
+/// would open here on somebody else's answer.
 #[test]
 fn a_write_numbered_after_this_one_and_finished_first_does_not_open_it() {
     let mut tab = watching(OURS);

@@ -122,7 +122,7 @@ mod tests {
     #[test]
     fn every_verb_is_one_the_drivers_dispatch() {
         // Every file of the harness module is a driver, so no name filter
-        // (.claude/rules/app-ui.md §QML モジュール).
+        // (.claude/rules/app-ui.md「QML モジュールは 2 つ」).
         let auto = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../crates/platitude-app/src/auto");
         let mut drivers = String::new();

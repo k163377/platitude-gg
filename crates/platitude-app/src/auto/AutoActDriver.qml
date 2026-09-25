@@ -137,12 +137,16 @@ Item {
             && PageSettled.settled(page)
     }
     /// The working-tree row this run's write takes out of its bucket, as `<bucket>:<path>` — or "" for the verbs the
-    /// write barrier alone answers for. Waited out on the row itself (verify-ui verbs.md「は着地まで待って撮る」): a
-    /// counter also moves for statuses nobody here asked for, while this row moves only for this write.
+    /// write barrier alone answers for. The write barrier already has the model re-read (each feed's drain is queued
+    /// ahead of the tab's settle), but a settle also comes for a write git refused and for one whose re-read failed
+    /// (`WriteSettled.failed` never reaches the tab): the row leaving is what says this write landed — a refusal
+    /// leaves it for the watchdog to diagnose, a failed re-read until the next read. Read off the row (verify-ui
+    /// verbs.md「は着地まで待って撮る」), not a counter: a counter also moves for statuses nobody here asked for.
     property string treeGoneRow: ""
     /// The graph row this run's write takes off the graph, or "" for the verbs the write barrier alone answers for.
     /// Until the row is gone from the model, rows can wear each other's marks (a popped stash's box on the
-    /// working-tree row); a pass counter would also move for passes nobody here asked for.
+    /// working-tree row); a pass counter would also move for passes nobody here asked for. The write barrier's settle
+    /// is no proof the row went: it also comes for a refused write and a failed re-read (see `treeGoneRow`).
     ///
     /// **Stash verbs only as it stands**: `graphBarrier` also holds for the stash total moving, so a non-stash write
     /// that set this would wait out the watchdog. Widen the barrier before pointing a new verb at it.

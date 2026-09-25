@@ -379,7 +379,8 @@ const TAIL: &str = "  shipped [--no-build]
                           putting the page up, which is otherwise
                           indistinguishable from the toolkit's own floor.
         --no-build        use the binary already built (target/release/,
-                          or target/shipped/ with --shipped). Runs with
+                          or target/shipped/ with --shipped; with --at,
+                          the rig's shelf or nothing). Runs with
                           and without --breakdown build to the same
                           path, so this measures whichever ran last — the
                           evidence names the feature set that was asked

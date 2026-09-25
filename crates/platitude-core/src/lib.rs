@@ -61,7 +61,7 @@ pub mod version;
 mod wait;
 pub mod worktrees;
 
-// Declarations and re-exports only (.claude/rules/structure.md §クレート root).
+// Declarations and re-exports only (.claude/rules/structure.md §分割「クレート root」).
 pub use error::GitError;
 pub use model::{CommitMeta, Name, StrPool};
 pub use oid::Oid;

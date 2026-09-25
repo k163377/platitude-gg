@@ -700,7 +700,7 @@ Item {
     }
     // code-send: half by the bar's own path, the rest by the hand that carries the rows too. Reads where the code and
     // rows ended up — a bar bound to nothing still takes a press, a hand wired to nothing still starts. Waits for
-    // `viewLaidOut`; nowhere sideways to go is said and stopped (app-ui.md §UI 自動化).
+    // `viewLaidOut`; nowhere sideways to go is said and stopped (rules-refs/app-ui.md「欠けた前提は言って止まる」).
     SampleTimer {
         id: codeSendTimer
         property bool sent: false
@@ -837,7 +837,8 @@ Item {
             if (codeGrowTimer.step === 0) {
                 if (!acts.viewLaidOut())
                     return
-                // A diff that fits its frame has no row to arrive from below: said and stopped (app-ui.md §UI 自動化).
+                // A diff that fits its frame has no row to arrive from below: said and stopped
+                // (rules-refs/app-ui.md「欠けた前提は言って止まる」).
                 if (diffPane.view.maxY <= 0) {
                     codeGrowTimer.finish()
                     return
@@ -1088,7 +1089,7 @@ Item {
     }
     // keep-place: read part way down a long diff, then write — the rebuild must come back to the same place. Waits for
     // `viewLaidOut` (before it the scroll goes nowhere); a laid-out diff with less than `readY` of room is said and
-    // stopped (app-ui.md §UI 自動化).
+    // stopped (rules-refs/app-ui.md「欠けた前提は言って止まる」).
     SampleTimer {
         id: keepPlaceTimer
         /// The first hunk's line whose staging rebuilds the diff under the reader.

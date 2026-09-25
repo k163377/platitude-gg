@@ -8,6 +8,13 @@ import platitude.ui
 
 // Right pane, working-tree (WIP) mode: the changed files, one list per bucket with stage/unstage affordances, over
 // the commit editor pinned to the pane's bottom.
+//
+// The parts are out (`WipBucketPane` per bucket, `WipCommitBlock` with the editor and the stopped operation's card,
+// `FileRowWalk`, `TreeViewToggle`, `EolHoverCard`); what is left is what they share: the choice keyed
+// `<bucket>:<path>` across the bucket lists, and the row lookups (`rowAt` / `rowFor`, walking each list's
+// `itemAtIndex`) that `RepoPage` (`readOne`) and the automation (`rowAt` / `rowFor` / `chooseOnly` / `pointEol`) call
+// directly. Moving it out only adds wiring to hand the lists and keys back. The EOL card and its keep (`eolAsked` /
+// `eolKeep`) stay with it: the card is placed from `rowFor(path)` and the pane's own coordinates.
 ColumnLayout {
     id: wipPane
 

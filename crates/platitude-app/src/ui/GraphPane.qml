@@ -5,6 +5,13 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // Center pane: the commit graph.
+//
+// Every part that could leave has (`GraphList`, `GraphFind`, `AskBar`, `GraphRowWalk`, `GraphColumnMetrics`,
+// `GraphColumnDividers`, `GraphLanePan`, `GraphLaneBar`, `GraphHeadPin`, `MiddleAutoScroll`, `GraphEmptyState`).
+// What is left is the seats and the page⇄part forwarding, and a further cut adds a level of forwarding and makes
+// the whole longer. The seats stay in one file: the list is laid from the question bar and steps down by the find
+// card, and the pane-wide `HoverHandler` sits on the pane itself
+// (rules-refs/app-ui.md「ペイン全体の hover を測る handler はペイン自身に置く」).
 Rectangle {
     id: graphArea
 

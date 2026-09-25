@@ -276,8 +276,8 @@ Item {
             Harness.report(
             "delete_blocked code=" + acts.blockedTipRow.code
             + " tip=" + acts.blockedTipRow.ToolTip.visible
-            // The holding copy's folder (`RefBranchMenu.holderLeaf`), empty on other rows — the sentence itself carries
-            // an em dash and cannot be claimed.
+            // The holding copy's folder (`RefBranchMenu.holderLeaf`), empty on other rows — the sentence itself is
+            // tst_branchcard's to judge.
             + " holder=" + refBranchCard.holderLeaf
             + " reason=" + acts.blockedTipRow.blockedReason)
             driver.complete()
@@ -338,7 +338,7 @@ Item {
         }
     }
     // Waits for the name in TAGS, not the write barrier, which photographs the sidebar from before
-    // (rules-refs/app-ui.md「書き込みの答えは、その書き込みが無効化した読み直しより先に来る」).
+    // (rules-refs/app-ui.md「その書き込みが無効化した読み直しより先に来る」).
     SampleTimer {
         id: createTagTimer
         onTriggered: {
@@ -491,8 +491,7 @@ Item {
                 if (refBranchCard.deleteAsked)
                     return
                 // Not landed (the name has no commit, or its delete is out), so nothing will come to latch on. Reported
-                // as facts, not the reason's sentence — `must_say` never matches a non-ASCII line on Windows
-                // (verify-ui §Windows での実行・デバッグの罠).
+                // as facts, not the reason's sentence.
                 earlyDeleteTimer.stop()
                 Harness.report("delete_early asked=false"
                                   + " oid=" + (branchesModel.oidOfName(arg) !== "")

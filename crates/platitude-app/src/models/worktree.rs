@@ -474,7 +474,10 @@ impl WorkTreeModel {
             self.seen_counts = Some(tally);
             self.tree_revision += 1;
         }
-        // The badge goes to whichever read looked last (`badge_looked`).
+        // The badge goes to whichever read looked last (`badge_looked`). Only
+        // the badge: `op_state` and the stop above stay this status's, so
+        // after a tick that looked later they can stand behind it until the
+        // next status. The tick runs only while a replaying write is out.
         if looked >= self.badge_looked {
             self.badge_looked = looked;
             self.settle_op(&op_state, &op_message);

@@ -356,7 +356,7 @@ Item {
             if (!graphPane.askCard.settled)
                 return
             // And the new name's row, which can land after the bar: the write's answer raises the question before the
-            // read that re-lists the tags (rules-refs/app-ui.md「書き込みの答えは、その書き込みが無効化した読み直しより先に来る」).
+            // read that re-lists the tags (rules-refs/app-ui.md「その書き込みが無効化した読み直しより先に来る」).
             if (tagsModel.rowOfName(tagRemoteRenameTimer.name) < 0)
                 return
             if (tagRemoteRenameTimer.choice !== "" && !tagRemoteRenameTimer.picked) {

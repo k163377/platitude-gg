@@ -89,8 +89,9 @@ Item {
         when: windowShown
 
         /// Rows read the hand a turn after the panel counts it (`NavItemDelegate.syncHover` on `Qt.callLater`). The
-        /// queue runs in order and a re-queued call moves to the back (qtdeclarative `QQmlDelayedCallQueue`), so this
-        /// call landing means the rows have read.
+        /// queue runs in order and a re-queued call moves to the back (qqmldelayedcallqueue.cpp
+        /// `addUniquelyAndExecuteLater` erases the entry and appends it), so this call landing means the rows have
+        /// read.
         function rowsRead() {
             let read = false
             Qt.callLater(() => { read = true })

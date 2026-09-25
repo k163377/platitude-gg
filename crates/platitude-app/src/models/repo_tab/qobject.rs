@@ -1,3 +1,18 @@
+//! The whole of what QML sees of `RepoTab`, and as short as this file
+//! gets without dropping slots.
+//!
+//! The `#[qobject]` block cannot be divided (structure.md §分割), so what
+//! is left is the face — `qproperty!`, slot and signal signatures, and
+//! their doc — over bodies that shape their arguments and forward once.
+//! Every body that could be delegated has been: the feed's answers to
+//! `drain`, staging and discard to `ops_stage`, conflicts to
+//! `ops_conflict`, remotes to `ops_remote`, config to `ops_config`,
+//! deletes to `ops_delete`, standing in another copy to `restand`, commit
+//! and reset to `state`, the awaited write to `write_watch`.
+//!
+//! The only way shorter is fewer slots: a pure rule that reads nothing
+//! but its arguments belongs in `GitFacts`, not here.
+
 use super::*;
 
 #[qobject(ConvertToCamelCase, NoQmlElement)]

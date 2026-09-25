@@ -7,8 +7,11 @@
 //! (ci/baseline/code-costs-windows-x64.md §git のプロセス代).
 //!
 //! The tables are the reference repository's own histograms, each walked
-//! by a stride coprime to its length — a permutation, so every band is
-//! drawn exactly as often as the table says.
+//! by a stride coprime to its length. The size walk goes the whole
+//! length, so its bands come out as often as the table says; the
+//! directory walks stop when every slot has a home, part way round, so
+//! theirs come out in proportion and the fan-out table's last band is
+//! never drawn.
 
 use super::shape::{self, mix};
 
@@ -24,15 +27,18 @@ pub(super) const SPARE: u64 = 4_096;
 /// Every path the tree can name, tracked or waiting.
 pub(super) const SLOTS: u64 = TRACKED + SPARE;
 
-/// Directories holding at least one file. The reference repository has
-/// 14,609 of them under 22,887 trees.
+/// The reference repository's directories (`ls-tree -r -d`), 14,609 of
+/// which hold a file: the length the depth and fan-out walks run over.
+/// [`DIR_DEPTHS`] sums to it; [`FANOUT`] covers its first 14,609, and a
+/// draw past them holds one file.
 ///
 /// It prices the build too: every commit rewrites one tree object per
 /// directory on each touched path, hashed on `fast-import`'s one thread.
 ///
-/// It is paired with [`FANOUT`]: the mean fan-out has to come to
-/// `SLOTS / DIRS`, or the walk runs past the table and keeps inventing
-/// directories.
+/// The walk ends when every slot has a directory — at [`FANOUT`]'s mean,
+/// about ten files, under half way round — and what those leaves' paths
+/// share comes to about 1.6 times this many directories
+/// (ci/baseline/perf-windows-x64.md §コーパスと kotlin の距離).
 const DIRS: u64 = 22_887;
 
 /// Files whose size is in `[lo, 2*lo)`, at the reference repository's
@@ -76,8 +82,10 @@ const DIR_DEPTHS: [u64; 20] = [
 ];
 
 /// Directories holding `[lo, 2*lo)` files. The shares are the reference
-/// repository's; the sizes are doubled, so the mean comes to
-/// `SLOTS / DIRS` and the walk ends where the table does.
+/// repository's, summing to its 14,609 directories that hold a file; the
+/// sizes are doubled. Together with [`DIRS`] it decides how many
+/// directories the tree has, which the record's distance table reads —
+/// changing it changes the corpus (`corpus::token`).
 const FANOUT: [(u64, u64); 11] = [
     (5_929, 2),
     (3_846, 4),

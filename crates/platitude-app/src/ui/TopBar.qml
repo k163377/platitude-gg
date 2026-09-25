@@ -246,7 +246,7 @@ Rectangle {
     }
     /// Automation: the panel's Find mark, pressed at the button (`PGG_AUTO_ACT=band-find`): the mark and the key meet
     /// inside the page, so calling that would pass a build where the mark reaches nothing. Answers whether the press
-    /// went in — it is down while a plan stands over the graph.
+    /// went in — it is down while a plan holds the graph's seat, loading included (`RepoPage.planShown`).
     function findNow() {
         if (!findButton.enabled)
             return false

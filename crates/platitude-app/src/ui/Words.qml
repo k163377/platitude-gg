@@ -47,8 +47,7 @@ QtObject {
     readonly property string remoteOnAnotherCommit: qsTr("The remote is on another commit")
 
     /// Why the `pull` row is greyed while both sides have moved, from both entrances (`RefRowMenu` / `CommitRowMenu`;
-    /// デザイン規約 §取り込んで合流させる). No dash in it: the run that reads it back matches ASCII only
-    /// (verify-ui windows.md「報告行の判定は ASCII だけ」).
+    /// デザイン規約 §取り込んで合流させる).
     readonly property string pullDiverged: qsTr(
         "The branches have diverged, so pick the remote branch and rebase onto it")
 

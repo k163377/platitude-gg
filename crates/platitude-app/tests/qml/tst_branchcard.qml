@@ -7,8 +7,7 @@ import platitude.ui
 // which rows it keeps, what each says, the gesture and colour each takes, and what a press asks for. Which rows a
 // state may offer is `offers::ref_menu`'s and tested there.
 //
-// The greyed rows' sentences are judged only here: a wrong reason frames like a right one, and the em dash they
-// carry can never match a `must_say` on Windows (verify-ui §Windows での実行・デバッグの罠).
+// The greyed rows' sentences are judged here: a wrong reason frames like a right one.
 Item {
     id: root
     width: 320
