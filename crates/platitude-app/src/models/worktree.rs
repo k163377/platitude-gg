@@ -169,10 +169,11 @@ pub struct WorkTreeModel {
     op_edit_oid: String,
     /// Bumped when a status moves any of the four bucket counts — what
     /// "somebody moved the tree" is read off, so this window's own poll
-    /// answer (no count moved) does not re-read an open diff. Counts, not
-    /// rows: a second line staged out of a file already on both sides
-    /// moves no row, and is exactly the change the reader of this has to
-    /// hear about.
+    /// answer (no count moved) does not re-read an open diff. The counts
+    /// are per file: a second hunk staged out of a file already on both
+    /// sides moves none of them. This window's own press is re-read at its
+    /// answer (`ops::DiffReread`); one made elsewhere, by the page's tick on
+    /// the open file (`RepoPage.pollDiff`).
     tree_revision: i32,
     /// Whether this status leaves the synthetic working-tree row at the
     /// head of the graph (`platitude_core::graph::wip_row_stands`). The
@@ -190,10 +191,13 @@ pub struct WorkTreeModel {
     op_state: platitude_core::opstate::OpState,
     feed: Option<Arc<Feed<StateMsg>>>,
     /// The badge's word and count, on a faster tick than the feed above
-    /// (`Feeds::op_progress`). Both wake the one `drain` slot, which reads
-    /// them in the order the screen wants: a status snapshot carries its
-    /// own count, the older of the two.
+    /// (`Feeds::op_progress`). Both carry the badge and neither arrives in
+    /// the order it looked — a status reads the count after its whole
+    /// `git status`, and a tick taken meanwhile lands first — so whichever
+    /// looked last holds it (`badge_looked`).
     progress_feed: Option<Arc<Feed<OpProgressMsg>>>,
+    /// The `looked` stamp of the read the badge's word and count came from.
+    badge_looked: u64,
     tab_id: i32,
 }
 
@@ -375,6 +379,8 @@ impl WorkTreeModel {
         self.seen_counts = None;
         self.counts = platitude_core::status::Counts::default();
         self.op_state = platitude_core::opstate::OpState::default();
+        // Each session counts its stamps from the start.
+        self.badge_looked = 0;
     }
 
     /// Folds in the feed's batch in the session's order, so a status never
@@ -414,6 +420,7 @@ impl WorkTreeModel {
         let StatusMsg {
             status,
             head_seq,
+            looked,
             op_state,
             progress,
             sides,
@@ -440,7 +447,6 @@ impl WorkTreeModel {
         self.status_behind = status.behind;
         self.push_remote = push_remote;
         self.has_conflicts = status.has_conflicts();
-        self.settle_op(&op_state, &op_message);
         let kinds = platitude_core::status::Kinds::of(&status);
         self.wip_added = kinds.added as i32;
         self.wip_modified = kinds.modified as i32;
@@ -468,10 +474,15 @@ impl WorkTreeModel {
             self.seen_counts = Some(tally);
             self.tree_revision += 1;
         }
-        (self.op_step, self.op_steps) = match progress {
-            Some(p) => (p.current as i32, p.total as i32),
-            None => (0, 0),
-        };
+        // The badge goes to whichever read looked last (`badge_looked`).
+        if looked >= self.badge_looked {
+            self.badge_looked = looked;
+            self.settle_op(&op_state, &op_message);
+            (self.op_step, self.op_steps) = match progress {
+                Some(p) => (p.current as i32, p.total as i32),
+                None => (0, 0),
+            };
+        }
     }
 
     /// The answers derived from HEAD and the last status together —
@@ -513,8 +524,8 @@ impl WorkTreeModel {
         }
     }
 
-    /// The badge, taken before the snapshot beside it. Answers whether it
-    /// moved.
+    /// The badge, dropped where a read that looked later is already on
+    /// screen. Answers whether it moved.
     ///
     /// Only the badge's word and count move here
     /// (`RepoSession::refresh_op_progress`), and "nothing standing" is
@@ -527,10 +538,15 @@ impl WorkTreeModel {
         let Some(OpProgressMsg {
             op_state,
             progress: Some(progress),
+            looked,
         }) = feed.drain().pop()
         else {
             return false;
         };
+        if looked < self.badge_looked {
+            return false;
+        }
+        self.badge_looked = looked;
         let (step, steps) = (
             i32::try_from(progress.current).unwrap_or(i32::MAX),
             i32::try_from(progress.total).unwrap_or(i32::MAX),
@@ -627,6 +643,7 @@ mod tests {
                 items,
             },
             head_seq,
+            looked: 0,
             op_state: platitude_core::opstate::OpState::default(),
             progress: None,
             sides: platitude_core::conflict::Sides::default(),
@@ -874,5 +891,77 @@ mod tests {
         // Nothing standing: no word, which keeps the badge off the band.
         model.settle_op(&OpState::default(), "");
         assert_eq!((model.op_text.as_str(), model.op_also.as_str()), ("", ""));
+    }
+
+    const REBASING: OpState = OpState {
+        rebasing: true,
+        merging: false,
+        cherry_picking: false,
+        reverting: false,
+        bisecting: false,
+    };
+
+    /// A model whose badge a tick stamped `looked` put at `step` of `steps`.
+    fn ticked(model: &mut WorkTreeModel, looked: u64, step: u32, steps: u32) {
+        let feed = Arc::new(Feed::default());
+        feed.push_replace(OpProgressMsg {
+            op_state: REBASING,
+            progress: Some(platitude_core::conflict::Progress {
+                current: step,
+                total: steps,
+            }),
+            looked,
+        });
+        model.progress_feed = Some(feed);
+        model.drain_progress();
+    }
+
+    fn status_looked(looked: u64, op_state: OpState, count: Option<(u32, u32)>) -> StateMsg {
+        let StateMsg::Status(mut msg) = status(Vec::new()) else {
+            unreachable!("status() builds a status")
+        };
+        msg.looked = looked;
+        msg.op_state = op_state;
+        msg.progress =
+            count.map(|(current, total)| platitude_core::conflict::Progress { current, total });
+        StateMsg::Status(msg)
+    }
+
+    /// A status reads the count after its whole `git status`; a tick that
+    /// looked later lands first, and the status must not take it back.
+    #[test]
+    fn a_status_that_looked_before_the_tick_does_not_take_the_count_back() {
+        let mut model = WorkTreeModel::default();
+        ticked(&mut model, 5, 7, 10);
+        model.absorb(vec![status_looked(3, REBASING, Some((6, 10)))]);
+        assert_eq!((model.op_step, model.op_steps), (7, 10));
+        assert_eq!(model.op_text, "REBASING");
+    }
+
+    #[test]
+    fn a_status_read_before_the_first_marker_does_not_take_the_badge_down() {
+        let mut model = WorkTreeModel::default();
+        ticked(&mut model, 5, 1, 100);
+        model.absorb(vec![status_looked(3, OpState::default(), None)]);
+        assert_eq!(model.op_text, "REBASING");
+        assert_eq!((model.op_step, model.op_steps), (1, 100));
+    }
+
+    #[test]
+    fn the_status_after_the_write_ends_the_badge() {
+        let mut model = WorkTreeModel::default();
+        ticked(&mut model, 5, 9, 10);
+        model.absorb(vec![status_looked(8, OpState::default(), None)]);
+        assert_eq!(model.op_text, "");
+        assert_eq!((model.op_step, model.op_steps), (0, 0));
+    }
+
+    #[test]
+    fn a_new_copy_counts_its_stamps_from_the_start() {
+        let mut model = WorkTreeModel::default();
+        ticked(&mut model, 50, 3, 10);
+        model.forget_the_copy();
+        ticked(&mut model, 1, 2, 4);
+        assert_eq!((model.op_step, model.op_steps), (2, 4));
     }
 }

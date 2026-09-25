@@ -35,9 +35,11 @@ impl RepoSession {
         let Some(git_dir) = self.git_dir() else {
             return;
         };
+        let looked = self.standing.stamp();
         self.sink.event(SessionEvent::OpProgress {
             op_state: opstate::detect_at(&git_dir),
             progress: integrate::rebase_progress(&git_dir),
+            looked,
         });
     }
 
@@ -212,6 +214,7 @@ impl RepoSession {
                 self.sink.event(SessionEvent::StatusLoaded {
                     status,
                     head_seq,
+                    looked,
                     op_state,
                     progress,
                     sides,

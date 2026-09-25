@@ -122,6 +122,13 @@ pub enum SessionEvent {
         /// the record. Tells a consumer the counts are about the HEAD it
         /// holds; a consumer waiting on a write's tree waits for it.
         head_seq: u64,
+        /// When the repository was looked at for this read, stamped before
+        /// `git status` is spawned (`Standing::stamp`). The count in
+        /// `progress` is read after the whole status, so an
+        /// [`SessionEvent::OpProgress`] that looked later can be newer
+        /// while it arrives first: the badge's count is whichever looked
+        /// last.
+        looked: u64,
         op_state: OpState,
         /// "commit N of M" while a rebase is stepping through commits.
         progress: Option<conflict::Progress>,
@@ -166,6 +173,9 @@ pub enum SessionEvent {
     OpProgress {
         op_state: OpState,
         progress: Option<conflict::Progress>,
+        /// When the git directory was read, on the same stamps as
+        /// `StatusLoaded::looked`.
+        looked: u64,
     },
     /// Answer to [`RepoSession::ask_merge_tools`]: names the settings field
     /// can offer, deliberate ones first. Empty is a valid answer.

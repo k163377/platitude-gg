@@ -208,6 +208,7 @@ impl SessionSink for BridgeSink {
             SessionEvent::StatusLoaded {
                 status,
                 head_seq,
+                looked,
                 op_state,
                 progress,
                 sides,
@@ -227,6 +228,7 @@ impl SessionSink for BridgeSink {
                     run.push_replace(StatusMsg {
                         status: status.clone(),
                         head_seq,
+                        looked,
                         op_state,
                         progress,
                         sides: sides.clone(),
@@ -242,6 +244,7 @@ impl SessionSink for BridgeSink {
                     .push_coalescing(StateMsg::Status(Box::new(StatusMsg {
                         status,
                         head_seq,
+                        looked,
                         op_state,
                         progress,
                         sides,
@@ -254,10 +257,15 @@ impl SessionSink for BridgeSink {
             }
             // `push_replace`: the badge shows where the replay is now, and
             // an undrained tick is stale.
-            SessionEvent::OpProgress { op_state, progress } => self
-                .feeds
-                .op_progress
-                .push_replace(OpProgressMsg { op_state, progress }),
+            SessionEvent::OpProgress {
+                op_state,
+                progress,
+                looked,
+            } => self.feeds.op_progress.push_replace(OpProgressMsg {
+                op_state,
+                progress,
+                looked,
+            }),
             SessionEvent::StashesLoaded { stashes, looked } => {
                 self.feeds.stash.push_replace(crate::hub::StashList {
                     entries: stashes,

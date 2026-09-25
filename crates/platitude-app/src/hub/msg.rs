@@ -339,6 +339,8 @@ pub enum CommandMsg {
 pub struct OpProgressMsg {
     pub op_state: OpState,
     pub progress: Option<platitude_core::conflict::Progress>,
+    /// When it was read (`SessionEvent::OpProgress::looked`).
+    pub looked: u64,
 }
 
 /// What another working copy is holding, for the read-only pane
@@ -361,6 +363,9 @@ pub struct StatusMsg {
     /// (`SessionEvent::StatusLoaded::head_seq`): the counts are about
     /// the HEAD the consumer holds only while the two numbers agree.
     pub head_seq: u64,
+    /// When the tree was looked at (`SessionEvent::StatusLoaded::looked`):
+    /// orders `op_state` and `progress` against [`OpProgressMsg`].
+    pub looked: u64,
     pub op_state: OpState,
     /// "commit N of M" while a rebase is stepping.
     pub progress: Option<platitude_core::conflict::Progress>,
