@@ -559,7 +559,7 @@
 - 窓の縁 1px はアプリがクライアントの内側に描く(規約 §ウィンドウの縁)。「縁を下辺だけ最大化中も出す」形は、床が 3OS 共通・縁は Windows だけなので条件が 2 つに割れる。DWM に頼む道は無い — frameless には `DWMWA_BORDER_COLOR` / `DWMWA_CAPTION_COLOR` の塗る場所が無い。実測の作法: 窓自身のビットか DWM 合成かは `PrintWindow` で分かれる。画面の画素を読む時は窓を `HWND_TOPMOST` に固定(コンソールが被ると全部 `#000000` に読める)
 - 不採用: `WM_NCCALCSIZE` の横取りで非クライアントを消す — Qt がそのメッセージを見ずフレーム余白を持ち続け、クライアントだけ広がり右と下が黒くなる。横取り不可は「Qt が答えから状態を組み立てるメッセージ」で、純粋な問い合わせ(`WM_NCHITTEST`)は可
 - merged chrome では `WM_NCHITTEST` をサブクラスが全点で答える(`winframe::hit_test`)。Qt 6.10 の `handleNonClientHitTest` は NCHITTEST のたび `GetAsyncKeyState` をポーリングして合成 press / release を配るため、片方を別の窓が受けると幽霊 press が残る(「タブの 1 回目が効かない」「hover が残る」の正体)。`PostMessage` は `GetAsyncKeyState` を動かさないのでヘッドレスでは一切再現しない — 実マウスだけが踏む
-- 右端は `spaceXs` 空ける — クライアントは可視ウィンドウより外へ出ており、密着させると窓ボタンの hover が切れて見える
+- 帯の右端は 0(✕ は ☰ と同じく窓の縁に密着)— frameless では窓 = クライアント = 描画領域なので、余白はそのまま ✕ の右の隙間になる。操作パネルの Search だけは `TopBar.findRightMargin`(`spaceXs`)で縁から離す — 枠が窓の描いた縁に重なる
 - 窓 = クライアント = 描画領域 — 正しい数は最初から 0(最大化で窓・クライアント・作業領域が一致)。QML からは出せない: `Screen.desktopAvailableWidth` は仮想デスクトップ全体・`Screen.width` は縦置きタスクバーで負に転ぶ・`root.width` はフレーム幅を名乗らない(`widthSlop`)。ヘッドレスは `window-fill`(`fills=true` が合格条件 — 絵では読めない)
 - 最大化の矩形はサブクラスが作業領域に固定(`winframe::clamp_maximized` = `WM_GETMINMAXINFO`。先に `DefSubclassProc` へ通す)— 放っておくと Windows は frameless をモニタ全体に最大化する。`IsZoomed` は使えない(Qt の frameless 最大化は zoomed にならない)— `fills_work_area` で決めないと最大化中の上端 8px = タブ行がリサイズ縁に化ける
 - 最小化中の窓は何も申告しない(`WindowShape.reportState`)— 下りている窓は窓でも最大化でもない数字を名乗り、タイマは下りていても回るので、書き込むと画面より広い形が windowed としてファイルに残り、次回起動が画面外へはみ出す。ヘッドレスは `state minimize`(verbs.md)

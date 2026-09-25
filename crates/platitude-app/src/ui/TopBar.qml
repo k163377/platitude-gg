@@ -434,9 +434,12 @@ Rectangle {
     /// …taken from the two in the order above. Each gives what it can and passes the rest on.
     readonly property real opsRepoCut: Math.min(topBar.opsOver, repoPick.slack)
     readonly property real opsBranchCut: Math.min(topBar.opsOver - topBar.opsRepoCut, branchPick.slack)
-    /// The air at the panel's right end: the band's step in from the window edge, and a step before the find, since the
+    /// The air at the panel's right end: the find's step in from the window edge, and a step before the find, since the
     /// three are a set and would otherwise read as four.
-    readonly property real opsRightAir: bandRow.anchors.rightMargin + Theme.spaceMd
+    readonly property real opsRightAir: topBar.findRightMargin + Theme.spaceMd
+    /// The find's step in from the window's edge. Its own, not the band's: the band runs the ✕ into the corner, and a
+    /// frame there would sit on the window's drawn edge.
+    readonly property real findRightMargin: topBar.captionMerged ? Theme.spaceXs : Theme.spaceMd
     /// …and with the find in it, at the width the four share.
     readonly property real opsRightMargin: topBar.actionCap + topBar.opsRightAir
     /// The panel gives up its words in 規約 §操作パネル の譲る順 — **the buttons' before any name's, because a button
@@ -456,9 +459,9 @@ Rectangle {
         anchors.right: parent.right
         anchors.top: parent.top
         height: Theme.toolbarHeight
-        // `spaceXs` in from the client area's edge, not flush: flush puts the close button's last pixels off screen
-        // (規約 §ウィンドウの縁).
-        anchors.rightMargin: topBar.captionMerged ? Theme.spaceXs : Theme.spaceMd
+        // Flush where the band is the title bar, as the ☰ is on the left: the frameless window's client area is what
+        // is drawn, so the ✕'s wash runs into the window's corner (規約 §ウィンドウの縁).
+        anchors.rightMargin: topBar.captionMerged ? 0 : Theme.spaceMd
         spacing: Theme.spaceXs
         TabStrip {
             id: tabStrip
@@ -872,13 +875,13 @@ Rectangle {
         }
 
         // ---- the find ----------------------------------------------------
-        // At the panel's right end, under the window's ✕ as the repository's name is under the ☰. Dressed like the
+        // At the panel's right end, under the window's buttons as the repository's name is under the ☰. Dressed as the
         // three: one button in a row of four wearing something else reads as another kind of control.
         ActionButton {
             id: findButton
             stacked: true
             anchors.right: parent.right
-            anchors.rightMargin: topBar.bandRightMargin
+            anchors.rightMargin: topBar.findRightMargin
             anchors.verticalCenter: parent.verticalCenter
             kind: "search"
             // **Plain, and a capital to start**: the chip the three wear is for a spelling git would take, and a search
