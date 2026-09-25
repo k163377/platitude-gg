@@ -152,7 +152,7 @@ Item {
 
     visible: stateGroup.stateShown
     implicitHeight: stateGroup.controlHeight
-    // The row shares out in proportion to what each item asks for, so ask for the words — and folded, for the mark
+    // The row shares out by what each item asks for above its floor, so ask for the words — and folded, for the mark
     // alone, or the words' width stands empty beside it (デザイン規約 §ウィンドウの縁「タブと群は同時に譲る」).
     implicitWidth: stateGroup.folded ? stateGroup.foldedWidth : stateGroup.naturalWidth
 

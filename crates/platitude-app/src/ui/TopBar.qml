@@ -479,10 +479,11 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.minimumWidth: tabStrip.tabStripFloorW
-            // The band's order when it runs short: the tab names narrow together, then the state group's words do,
-            // then the strip scrolls, then the group becomes a mark — a stretch this much larger than the group's puts
-            // the strip at the front of both queues.
-            Layout.horizontalStretchFactor: 100
+            // Asks for its names whole, as the group asks for its words: short of both, the row takes the shortfall
+            // from the two at once, each by its room above its floor — Qt reads no stretch below what the items ask
+            // for, so no order between them can be set here (規約 §ウィンドウの縁「タブと群は同時に譲る」). The group's
+            // fold is its own (`BandStateGroup.folded`); room past both is the strip's, since the group asks for its
+            // ceiling.
             onOpenRepositoryRequested: topBar.openRepositoryRequested()
             onCloneRepositoryRequested: topBar.cloneRepositoryRequested()
             onSettingsRequested: topBar.settingsRequested()
@@ -512,8 +513,6 @@ Rectangle {
             // **Folded, the mark's cell and not a pixel more** (規約 §ウィンドウの縁「畳んだ群が帯から取るのは印の箱だけ」).
             Layout.maximumWidth: stateGroup.folded ? stateGroup.foldedWidth : stateGroup.naturalWidth
             Layout.minimumWidth: stateGroup.foldedWidth
-            // Second in both queues (the strip's comment carries the order).
-            Layout.horizontalStretchFactor: 1
             onIdentityEditRequested: topBar.identityEditRequested()
         }
         // The window's own three, drawn here (規約 §ウィンドウの縁「窓ボタンはアプリが描く」).
@@ -558,7 +557,6 @@ Rectangle {
             implicitWidth: tabStrip.implicitWidth
             Layout.fillWidth: true
             Layout.minimumWidth: tabStrip.tabStripFloorW
-            Layout.horizontalStretchFactor: 100
         }
         Item {
             id: groupAsked
@@ -567,7 +565,6 @@ Rectangle {
             Layout.fillWidth: true
             Layout.maximumWidth: stateGroup.naturalWidth
             Layout.minimumWidth: stateGroup.foldedWidth
-            Layout.horizontalStretchFactor: 1
         }
         Item {
             visible: minimizeButton.visible
