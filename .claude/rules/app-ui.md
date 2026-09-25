@@ -13,7 +13,7 @@ UI の**値**の正本は `Theme.qml` / `Metrics.qml`(値の隣に、なぜそ�
 
 - 全 QObject は `Rc<RefCell<_>>`(メインスレッド専有)。**QML からの呼び出し中に再入 borrow すると panic** — 借用は短く保つ
 - バックグラウンド → UI は `QObjectHolder::get_qml_method_invoker()` の `QmlMethodInvoker` をスレッドへ移して `invoke_method*`(queued)。UI を触るのはこの経路だけ。invoker は Send・Clone 不可 — 渡す先の数だけ取る
-- **橋を渡る値は `encode::wire` の形だけ**: 欄を持つレコードの列は `Listed<T>`(欄は `Record` impl の 1 箇所で名指し、QML は名前で読む — 文字列に固めて位置で数える契約は作らない)、欄の無い列は `Vec<String>` / `Vec<i32>`、1 件は `One<T>`、無いかもしれない 1 件は `Optional<T>`(無しは `undefined`。`""` / `-1` の番兵を作らない)。**`Optional<T>` は `qproperty!` に置けない**(無効な `QVariant` はプロセスごと落ちる)— 無いかもしれない property は revision の property + それを返す slot。**Qt の値は読む時に組む — 行の隣に持たない**(持つ形は全行ぶんの Qt ヒープが常駐して予算を越える)
+- **橋を渡る値は `encode::wire` の形だけ**: レコードの列は `Listed<T>`(QML は欄を名前で読む)、欄の無い列は `Vec<String>` / `Vec<i32>`、1 件は `One<T>`、無いかもしれない 1 件は `Optional<T>`(無しは `undefined` — 番兵を作らない)。**`Optional<T>` は `qproperty!` に置けない**(プロセスごと落ちる。代わりは revision の property + slot)。**Qt の値は読む時に組む — 行の隣に持たない**(全行ぶんの Qt ヒープが常駐する)。各論は rules-refs の同項
 - **QML は表示とインタラクションだけ**(データ加工は Rust)— CXX-Qt へ差し替え可能に保つ条件。**QML が値で問う純ルールは `GitFacts` singleton の stateless slot**(引数だけを読む = 「スロットはバインディングで固まる」の例外条件)。状態から導く派生値は drain で計算する qproperty
 - **QML バインディングはプロパティにしか反応しない** — `#[qslot]` は呼び出し用。値の変化を追わせる物は `qproperty!`
 - QML は `ui/` 直下フラットに 1 ファイル 1 コンポーネント(`platitude.ui`)。**新規 QML は qmldir と main.rs の `qrc::embed!` の両方へ登録**(列挙された型しか見えない。`include_bytes_qml!` は使わない — rules-refs の `qrc::embed!` の行)

@@ -1,7 +1,7 @@
 # platitude-gg 開発規約
 
 **platitude-gg** — 軽量・マルチプラットフォーム(Windows / macOS arm64 / Ubuntu。**Intel Mac は対象外**)の git GUI。機能要件・スコープ外の正本は [実装計画.md](internal-docs/実装計画.md) — 機能実装の前に該当セクションを読む。
-本ファイルは全セッション共通の不変条件だけ。**規約本体は分割配置**: core → [.claude/rules/core.md](.claude/rules/core.md)、app → [.claude/rules/app-ui.md](.claude/rules/app-ui.md)、分割・共通化 → [.claude/rules/structure.md](.claude/rules/structure.md)(該当クレートに触れると自動ロード。**各論は `.claude/rules-refs/` の同名ファイル** — 触る項を Grep で引く)。動確・起動・`PGG_AUTO_ACT` 動詞表は **verify-ui スキル**、反映前テスト(gate / land / census)は [反映前テストの機械化.md](internal-docs/反映前テストの機械化.md)、依存の追加は [依存とライセンス.md](internal-docs/依存とライセンス.md)。
+本ファイルは全セッション共通の不変条件だけ。**規約本体は分割配置**: コード共通(Rust / QML)→ [.claude/rules/code.md](.claude/rules/code.md)、core → [.claude/rules/core.md](.claude/rules/core.md)、app → [.claude/rules/app-ui.md](.claude/rules/app-ui.md)、分割・共通化 → [.claude/rules/structure.md](.claude/rules/structure.md)(該当クレートに触れると自動ロード。**各論は `.claude/rules-refs/` の同名ファイル** — 触る項を Grep で引く)。動確・起動・`PGG_AUTO_ACT` 動詞表は **verify-ui スキル**、反映前テスト(gate / land / census)は [反映前テストの機械化.md](internal-docs/反映前テストの機械化.md)、依存の追加は [依存とライセンス.md](internal-docs/依存とライセンス.md)。
 
 ## 絶対制約(変更には人間の明示承認が必要)
 
@@ -36,24 +36,13 @@
 - **依頼範囲の作業はこのセッションで完了する**。チップは別セッションでしかできない作業だけ(触っているファイルを claim するチップは hook が deny)。継続して参照する制約・要判断は `internal-docs/P<n>-確認事項.md` へ記録する
 - **worktree からのアプリ起動は headless(`verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だけ <!--cmd:app.launch-->`PGG_ALLOW_GUI=1 cargo xtask launch`。自ツリーの残存プロセス・exe の使用中状態は `cargo xtask kill`。**窓のビルドがどのツリーのものかは右下が名乗る**
 
-## Rust 規約
-
-- `unwrap()` / `expect()` / `panic!` はテストだけ。production の `Result` は全部 `?` か分岐で受ける
-- エラーは core が `thiserror` で型付き、app は `anyhow` 可。lint の抑止は `#[expect(...)]` が既定。`unsafe` は最小限・`// SAFETY:` 付きで
-- 識別子・コメント・ログ・コミットメッセージは英語(docs は日本語可)。ログは `tracing` のみ
-- **コメントは現在形の制約と罠だけ**(`.rs` / `.qml` 共通)— 帰属・経緯・履歴は git log の側
-- **コメントの実測値は機械とロードに揺れない物だけ** — 時間・メモリ・機材構成は書かず、支配項と桁(「プロセスが代金」「予算の外」)を書く。数字が要るなら [code-costs](ci/baseline/code-costs-windows-x64.md) へ 1 行足してそこを指す。環境を名指した幾何・字送りの実測(フォント名・OS・窓幅付き)は残してよい
-- スナップショット(insta)は再生成して差分をレビューする
-- **テストは並行実行が既定** — 既定の `--test-threads` で通り、**他席の gate と重なっても同じ答え**(負荷でだけ出る赤は待ち方の違反として直し、負荷を減らして通さない): temp path / port / 設定名は専用、可変状態はテスト内に閉じる(待ち方は core.md §非同期・並行テスト)
-- パーサのテストは実 git の出力を fixture に。git 実行系は一時ディレクトリの実リポジトリで検証する。**git の挙動に確信が無ければ、実装前に使い捨てリポジトリで実測する**(`tests/it/support` の `TestRepo`)。観測をテストへ固定してから実装。動確で壊れたら、直す前に再現テストが赤になるのを確認する
-
 ## 性能予算
 
 `JetBrains/kotlin` 級(10万コミット超・refs 5 万本、うちタグ 4.5 万)で: 起動→グラフ初回表示 3 秒以内 / 操作応答 100ms / スクロール 60fps / メモリ 300MB 以下。UI 操作の経路の同期処理はコミット数・refs の本数から独立 — 遅延読み込みと差分更新が基本。ref 同士の突き合わせは索引を 1 本作ってから回す(`session::RefJoins` / `refs::RemoteBranches`)。未着手の候補は [非同期化の候補.md](internal-docs/非同期化の候補.md)。
 
 ## Git 運用
 
-- コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)。push は追加のみ
+- コミットは Conventional Commits(`feat:` / `fix:` / `refactor:` / `docs:` / `test:` / `chore:`)で、メッセージは英語。push は追加のみ
 - **rebase はその場でユーザーが指示した時だけ**(main への追従・squash を含む。その時だけ `PGG_ALLOW_REBASE=1` を先頭に付ける)。worktree ブランチが main より遅れたままは正常
 - **完了報告・反映の前に、依頼範囲の修正・レビュー対応・docs 更新を完了して commit する**(バックグラウンドのレビュー・検証も結果を受け取って対応まで)。外部確認・判断が得られなければ阻害要因を報告し、範囲を減らすならユーザーと合意する
 - **main を動かすのはその場でユーザーが指示した時だけ**: <!--cmd:land.branch-->`cargo xtask land <branch>`(席で rebase → gate → fast-forward)。指示がなければ席で `gate` を通し、branch/SHA と検証結果を添えて「マージ可」と報告する。**許可は発話 1 回につき main が動く land 1 回**で、main が動いて初めて消える(判定は [land の許可](internal-docs/反映前テストの機械化.md#land-の許可permit))
@@ -61,7 +50,7 @@
 ## 現在のフェーズ: **Phase 3 の操作まで配線済み(未配線の操作なし)**
 
 - **配線済み操作の一覧・意匠決定・実装対応は [.claude/rules-refs/app-ui.md](.claude/rules-refs/app-ui.md) が正**。残作業と要判断は [P3-確認事項.md](internal-docs/P3-確認事項.md) — **UI 配線の前に必ず読む**。配布準備期の検証項目は [P5-確認事項.md](internal-docs/P5-確認事項.md) へ積む
-- 性能 4 項目のうち**メモリが予算超過**(正体は絵文字 1 文字が呼ぶフォントのフォールバック探索。数値と読み方は [実測記録](ci/baseline/perf-windows-x64.md))。改善の残件は P3-確認事項 §app
+- 性能 4 項目は net で予算内。**メモリだけ gross が予算の縁を越える**(正体は絵文字 1 文字が呼ぶフォントのフォールバック探索。数値と読み方は [実測記録](ci/baseline/perf-windows-x64.md))。改善の残件は P3-確認事項 §性能
 - CI(3OS + 完全オフライン job)は記述済み・**未実行(push で走る)**。初回検証は P5-確認事項 §3.5。mac / Ubuntu は実機なし — 品質保証は 3OS CI のみ、実機検証は Phase 5 ゲート
 
 ## 規約の置き場所と本ファイルの運用
