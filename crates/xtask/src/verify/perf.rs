@@ -70,10 +70,9 @@ pub(super) fn configure(cmd: &mut Command, verb: &str, arg: &str) -> Result<(), 
         cmd.env("PGG_PERF_CASES", cases.join("\n"))
             .env("PGG_PERF_CYCLES", "2");
     }
-    // The calibration run's shape (`perf::fonts`): unselected, unscrolled,
-    // and the font walk paid before `perf_done`. Offscreen there is
-    // nothing to weigh — that platform's font database holds no fonts —
-    // so what this checks is the three lines, in order.
+    // The calibration run's shape (`perf::fonts`). Offscreen the font
+    // database is empty, so this checks only the walk's three lines, in
+    // order.
     if arg == "font-walk" {
         cmd.env("PGG_PERF_FONT_WALK", "1");
     }

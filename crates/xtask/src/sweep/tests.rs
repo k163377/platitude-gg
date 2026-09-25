@@ -1,8 +1,6 @@
-//! What the sweep reads and what it takes away, over a build directory
-//! written by hand: the file shapes cargo leaves are the whole of what
-//! this has to be right about, and they are written here the way a
-//! listing of a real `target/` shows them
-//! (ci/baseline/code-costs-windows-x64.md §sweep).
+//! The sweep over a build directory written by hand, in the file shapes a
+//! listing of a real `target/` shows
+//! (ci/baseline/code-costs-windows-x64.md §build directory の世代).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -14,11 +12,8 @@ use super::{
 };
 use crate::yard::Yard;
 
-/// What a sweep test writes into its tree, beside the tree itself
-/// ([`crate::yard`]): the file shapes are this suite's subject, and
-/// nothing else has asked for them.
+/// Writers only this suite needs, so they live here, not in [`crate::yard`].
 impl Yard {
-    /// A file of `bytes` bytes, its parents made on the way.
     fn file(&self, relative: &str, bytes: usize) -> PathBuf {
         let path = self.join(relative);
         if let Some(parent) = path.parent() {
@@ -28,9 +23,8 @@ impl Yard {
         path
     }
 
-    /// A file written at `at`, which is how a test places a compile: the
-    /// sweep dates a directory by its newest entry, so an entry is what
-    /// a date is put on (`super::written_at`).
+    /// A file dated `at`: the sweep dates a directory by its newest entry
+    /// (`super::written_at`).
     fn file_at(&self, relative: &str, bytes: usize, at: SystemTime) -> PathBuf {
         let path = self.file(relative, bytes);
         std::fs::OpenOptions::new()
@@ -61,10 +55,9 @@ fn names_under(dir: &Path) -> Vec<String> {
     names
 }
 
-/// One unit writes files under several spellings — the `lib` prefix goes
-/// on exactly the extensions rustc puts it on, and a Unix binary has no
-/// extension at all — and all of them have to answer to the one name, or
-/// a sweep keeping a unit takes half of it away.
+/// `lib` goes only on the extensions rustc puts it on, and a Unix binary
+/// has none: every spelling must map to one name, or keeping a unit takes
+/// half of it away.
 #[test]
 fn every_spelling_of_one_unit_answers_to_one_name() {
     for (file, key) in [
@@ -94,9 +87,7 @@ fn every_spelling_of_one_unit_answers_to_one_name() {
         ),
         ("xtask.exe", "xtask"),
         ("xtask.d", "xtask"),
-        // The crate is `libc`, and the prefix rustc put on its rlib is
-        // no part of its name: stripping one where rustc wrote none
-        // would file the crate under `c`.
+        // Stripping a `lib` rustc did not write would file `libc` under `c`.
         ("liblibc-7581adf255e9367e.rlib", "libc-7581adf255e9367e"),
         ("libc-7581adf255e9367e.d", "libc-7581adf255e9367e"),
     ] {
@@ -104,8 +95,7 @@ fn every_spelling_of_one_unit_answers_to_one_name() {
     }
 }
 
-/// The crate an incremental session is named after is the unit without
-/// the hash cargo hands it — and a bin cargo writes unhashed is its own
+/// What an incremental session is named after; an unhashed bin is its own
 /// crate.
 #[test]
 fn a_units_crate_is_its_name_without_the_hash() {
@@ -114,27 +104,20 @@ fn a_units_crate_is_its_name_without_the_hash() {
         "platitude_core"
     );
     assert_eq!(crate_of("xtask"), "xtask");
-    // Not sixteen hex digits, so not a hash: the name stands whole.
+    // Not sixteen hex digits, so not a hash.
     assert_eq!(crate_of("xtask-inflight-13720-2"), "xtask-inflight-13720-2");
 }
 
-/// The two message shapes a live set is read from, as cargo writes them
-/// on Windows: a binary cargo lifted to the profile's own directory, a
-/// dependency's pair under `deps/`, a build script's own compile, and
-/// the directory its run filled.
 #[test]
 fn the_live_set_is_read_off_the_two_message_shapes() {
     let text = [
         r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\debug\\xtask.exe","C:\\t\\c\\target\\debug\\xtask.pdb"],"executable":"C:\\t\\c\\target\\debug\\xtask.exe","fresh":true}"#,
-        // A bin target named with a dash: cargo lifts the executable
-        // under that name and the debug file under the crate name, and
-        // `deps/` holds both spellings.
+        // A dashed bin: `deps/` holds it under the crate's name too.
         r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\debug\\pgg-todo-editor.exe"],"executable":"C:\\t\\c\\target\\debug\\pgg-todo-editor.exe","fresh":true}"#,
         r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\debug\\deps\\liblibc-7581adf255e9367e.rlib","C:\\t\\c\\target\\debug\\deps\\liblibc-7581adf255e9367e.rmeta"],"fresh":false}"#,
         r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\debug\\build\\cc-1a10f7f7bb5602bf\\build-script-build.exe"],"fresh":true}"#,
         r#"{"reason":"build-script-executed","out_dir":"C:\\t\\c\\target\\debug\\build\\cc-7801b9b6db4fe7b8\\out"}"#,
         r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\release\\deps\\libplatitude_core-8ad8598591cbaf1c.rmeta"],"fresh":true}"#,
-        // The hook's own slot, which is not swept at all.
         r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\hooks\\deps\\xtask-0000000000000000.exe"],"fresh":true}"#,
         r#"{"reason":"build-finished","success":true}"#,
     ]
@@ -168,9 +151,8 @@ fn the_live_set_is_read_off_the_two_message_shapes() {
     );
 }
 
-/// A path under some other tree is not this tree's, however alike it
-/// looks: a live set built from one would keep names here that nothing
-/// here wrote.
+/// A live set read off another tree's paths would keep names nothing here
+/// wrote.
 #[test]
 fn another_trees_paths_are_not_read() {
     let mut live: BTreeMap<String, Alive> = BTreeMap::new();
@@ -179,8 +161,8 @@ fn another_trees_paths_are_not_read() {
     assert!(live.is_empty(), "{live:?}");
 }
 
-/// The whole of what a sweep is for: every generation of a unit but the
-/// live one goes, and every spelling of the live one stays.
+/// Every generation of a unit but the live one goes, and every spelling
+/// of the live one stays.
 #[test]
 fn only_what_the_live_set_names_stays() {
     let yard = Yard::new("generations");
@@ -203,8 +185,7 @@ fn only_what_the_live_set_names_stays() {
     }
     yard.file_at(&format!("{debug}/deps/xtask.exe"), 8, long_ago);
     yard.file_at(&format!("{debug}/deps/xtask.d"), 8, long_ago);
-    // What a landing left when it stepped out of the build slot
-    // (`land::INFLIGHT`): cargo never named it, so it goes.
+    // A landing's set-aside (`land::INFLIGHT`): cargo never named it.
     yard.file_at(
         &format!("{debug}/deps/xtask-inflight-13720-2.exe"),
         8,
@@ -225,8 +206,7 @@ fn only_what_the_live_set_names_stays() {
         8,
         long_ago,
     );
-    // Left alone whatever it holds, so that a unit cargo writes without
-    // a hash keeps its bookkeeping.
+    // Left alone whatever it holds: an unhashed unit keeps its bookkeeping.
     yard.file(
         &format!("{debug}/.fingerprint/platitude-core-7fed29d0757554ac/lib-platitude_core"),
         8,
@@ -258,14 +238,12 @@ fn only_what_the_live_set_names_stays() {
         names_under(&yard.join(format!("{debug}/.fingerprint"))),
         ["platitude-core-7fed29d0757554ac"]
     );
-    // Four dead files under deps and one dead build directory, eight
-    // bytes apiece.
+    // Four dead files under deps and one dead build directory.
     assert_eq!(freed, 5 * 8);
 }
 
-/// What somebody has used since the last sweep here stays, live set or
-/// not: a configuration in use is one that would otherwise be taken away
-/// and built again every week.
+/// Whatever the live set says, or a configuration in use would be rebuilt
+/// after every sweep.
 #[test]
 fn what_was_written_since_the_last_sweep_stays() {
     let yard = Yard::new("recency");
@@ -298,7 +276,6 @@ fn what_was_written_since_the_last_sweep_stays() {
     );
 }
 
-/// A dry run says the same thing and takes nothing.
 #[test]
 fn a_dry_run_leaves_the_tree_as_it_found_it() {
     let yard = Yard::new("dry");
@@ -316,10 +293,8 @@ fn a_dry_run_leaves_the_tree_as_it_found_it() {
     );
 }
 
-/// The incremental sessions, which no message names: one stands at the
-/// moment a live unit of its crate was compiled, another at a moment
-/// nothing live shares, and a third belongs to a crate with nothing live
-/// at all.
+/// No message names an incremental session, so it is judged by its date
+/// against its crate's live compile.
 #[test]
 fn an_incremental_session_stands_or_falls_by_its_compile() {
     let yard = Yard::new("incremental");
@@ -339,8 +314,7 @@ fn an_incremental_session_stands_or_falls_by_its_compile() {
         8,
         now,
     );
-    // rustc's own interrupted session — a compile that was killed, and
-    // dead whatever the directory's date.
+    // An interrupted session (`-working`): dead whatever its date.
     yard.file_at(
         &format!("{debug}/incremental/{live}/s-hmh5klwtki-0f301ir-working/x.o"),
         8,
@@ -372,8 +346,6 @@ fn an_incremental_session_stands_or_falls_by_its_compile() {
     );
 }
 
-/// A profile directory that was never built is not a profile whose every
-/// unit is dead.
 #[test]
 fn a_directory_that_is_not_there_is_not_swept() {
     let yard = Yard::new("absent");
@@ -393,12 +365,10 @@ fn a_directory_that_is_not_there_is_not_swept() {
     );
 }
 
-/// The one guard that stands between a sweep and a live build: cargo
-/// holds the profile's lock for the length of a link, and a unit being
-/// written right now is live whatever a reading taken before it said.
-/// The directory is left whole, **and the run does not count as walked**
-/// — a stamp over it would hold the generation closed until the next
-/// lock file moved.
+/// Cargo holds the profile's lock through a link, and a unit being
+/// written now is live whatever an earlier reading said. The run must not
+/// count as walked: a stamp over it would hold the generation closed until
+/// the lock file next moves.
 #[test]
 fn a_profile_cargo_is_building_in_is_left_whole() {
     let yard = Yard::new("locked");
@@ -420,8 +390,6 @@ fn a_profile_cargo_is_building_in_is_left_whole() {
     held.unlock().expect("letting go");
 }
 
-/// Sizes are what a reader holds against a disk, so they are said the
-/// way a disk is read.
 #[test]
 fn a_size_is_said_in_the_unit_it_fills() {
     assert_eq!(super::size(0), "0.0B");
@@ -431,8 +399,6 @@ fn a_size_is_said_in_the_unit_it_fills() {
     assert_eq!(super::size(1024 * 1024 * 1024 * 5), "5.0GB");
 }
 
-/// Both halves of the tally a removal leaves, from the one road every
-/// removal takes.
 #[test]
 fn what_went_is_counted_and_said() {
     let yard = Yard::new("tally");
@@ -443,9 +409,8 @@ fn what_went_is_counted_and_said() {
     assert!(!file.exists());
 }
 
-/// The key hangs on the profile settings, and on nothing else in the
-/// manifest: a dependency added moves the lock, which is hashed beside
-/// this, but a member or a comment moving must not rehash a tree.
+/// A dependency added already moves the lock, hashed beside this; a member
+/// or a comment moving must not rehash a tree.
 #[test]
 fn the_generation_reads_the_profile_sections_alone() {
     let manifest = "\
@@ -472,8 +437,6 @@ inherits = \"release\"
     assert_eq!(profiles_in(&moved), profiles_in(manifest));
 }
 
-/// The key is the tree's, and it moves when what every unit is compiled
-/// under moves.
 #[test]
 fn the_generation_moves_with_the_lock() {
     let yard = Yard::new("generation");
@@ -485,10 +448,8 @@ fn the_generation_moves_with_the_lock() {
     assert_ne!(generation(&yard).expect("a key"), first);
 }
 
-/// The canonical set is the whole of what a tree is kept buildable for,
-/// so a line that names a package has to have somewhere to put one, and
-/// a line has to name a profile this walks — a line for a fourth
-/// directory would be read for nothing.
+/// A line for a directory this does not walk would be read for nothing,
+/// and a `{package}` line must match a package of this workspace.
 #[test]
 fn every_canonical_line_is_one_this_can_run() {
     assert!(!CANONICAL.is_empty());
@@ -520,12 +481,10 @@ fn every_canonical_line_is_one_this_can_run() {
     }
 }
 
-/// A bin of a workspace member is uplifted, so cargo gives rustc no
-/// `extra-filename` for it and every configuration of it lands on one
-/// name under `deps/`. The line whose configuration this runner's own
-/// tools read therefore has to stand last of the lines that write it,
-/// or the tree is left holding somebody else's and the next tool
-/// relinks (`CANONICAL`).
+/// A workspace member's bin gets no `extra-filename`, so every
+/// configuration of it lands on one name under `deps/`: the line whose
+/// configuration this runner's tools read must be the last to write it,
+/// or the next tool relinks (`CANONICAL`).
 #[test]
 fn the_configuration_this_runners_tools_read_is_written_last() {
     let of = |profile: &str| -> Vec<&[&str]> {
@@ -546,9 +505,8 @@ fn the_configuration_this_runners_tools_read_is_written_last() {
         "the release verify-ui drives is the only line in that profile — one without the \
          harness writes the same bin under the same name, and the product comes from `shipped`"
     );
-    // Both stood for, and then compared: `None` sorts ahead of every
-    // `Some`, so a line this went looking for and did not find would
-    // read as "early enough" and the order would go unguarded.
+    // Panics on a missing line: compared as `Option`, `None` would sort
+    // first and pass.
     let at = |words: &[&str]| {
         CANONICAL
             .iter()
@@ -563,10 +521,8 @@ fn the_configuration_this_runners_tools_read_is_written_last() {
     );
 }
 
-/// The stamp stands inside the build directory it answers for, so a
-/// sweep out here writes nothing the container's volume reads: neither
-/// `gate --host-only` nor a hand-typed `cargo xtask sweep` can close the
-/// volume's generation behind its back (`sweep::asks`).
+/// A sweep out here writes nothing the container's volume reads, so no
+/// host-side sweep can close the volume's generation (`sweep::asks`).
 #[test]
 fn a_stamp_answers_for_the_directory_it_stands_in() {
     let here = Yard::new("stamp-here");
@@ -593,11 +549,9 @@ fn a_stamp_answers_for_the_directory_it_stands_in() {
     );
 }
 
-/// **A tail with a Linux side asks the volume whatever this tree's key
-/// says.** The volume has a rustc, a key and a stamp of its own, and the
-/// verb that runs in there is what compares them; a tail that let this
-/// tree's key answer for both skipped the container on every day
-/// something out here had already swept.
+/// The volume has its own rustc, key and stamp, and the verb in there
+/// compares them; a tail that let this tree's key answer for both would
+/// skip the container whenever the host had already swept.
 #[test]
 fn a_tail_with_a_linux_side_asks_the_volume_on_the_volumes_own_terms() {
     let tier = |whatever_the_key_says, the_volume_too| {

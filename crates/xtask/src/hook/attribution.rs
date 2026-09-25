@@ -1,6 +1,5 @@
-//! The comment guard: a comment carries the constraint or the trap that
-//! holds now, so a note saying who asked for the code and when is held at
-//! the commit that would add it (CLAUDE.md Rust 規約).
+//! The comment guard: a commit that would add a note saying who asked for
+//! the code and when is held (.claude/rules/code.md).
 
 use super::commit::commit_dir;
 use super::launch::resolve;
@@ -9,9 +8,8 @@ use crate::subprocess::common_git_dir;
 use crate::subprocess::git_query;
 
 /// The words a note reaches for to say who asked. Japanese in a .rs or
-/// .qml file is already against the language rule, so a bare match is
-/// evidence enough — nothing here has to tell a comment from code to be
-/// sure of what it found.
+/// .qml file is already against the language rule, so a bare match needs
+/// no telling of comment from code.
 const ATTRIBUTIONS: [&str; 6] = [
     "ユーザー判断",
     "ユーザー決定",
@@ -21,24 +19,18 @@ const ATTRIBUTIONS: [&str; 6] = [
     "ユーザー指定",
 ];
 
-/// The other half of the same habit: a proposal stamped with the day it
-/// was made. The year stays out of the needle — a date is a date in every
-/// one of them, and a needle carrying this year rots into silence at the
-/// turn of it.
+/// A proposal stamped with the day it was made. The year stays out of the
+/// needle: one carrying this year goes silent at the turn of it.
 const PROPOSAL: &str = "提案";
 
-/// The files the rule covers.
 const GUARDED: [&str; 2] = ["*.rs", "*.qml"];
 
 /// How many offending lines the refusal names before it counts the rest.
 const LISTED: usize = 5;
 
-/// PreToolUse(Bash|PowerShell): a commit that would add a dated
-/// attribution note is held. Only the lines the tree adds are read, so
-/// the notes already sitting in the tree are not this gate's business —
-/// they are removed by the work that owns them, and until then no commit
-/// is blocked by them. Answers whether it refused, so the guard after it
-/// stays quiet when it did.
+/// PreToolUse(Bash|PowerShell). Only the lines the tree adds are read, so
+/// notes already in the tree block no commit. Answers whether it refused,
+/// so the guard after it stays quiet when it did.
 pub(super) fn pre_comment(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(false);
@@ -47,8 +39,8 @@ pub(super) fn pre_comment(input: &str) -> Result<bool, String> {
     let Some(dir) = commit_dir(&command, &cwd) else {
         return Ok(false);
     };
-    // The same bounds as the guards beside it: a throwaway repository
-    // measuring git behaviour is nobody's style to police.
+    // Only this repository: a throwaway one measuring git is nobody's
+    // style to police.
     let (Some(session_repo), Some(target_repo)) = (common_git_dir(&cwd), common_git_dir(dir))
     else {
         return Ok(false);
@@ -80,7 +72,7 @@ pub(super) fn pre_comment(input: &str) -> Result<bool, String> {
          who asked, when they asked and what was decided \
          instead already live in the transcript and in git log, and the \
          note in the source goes stale the moment the code moves \
-         (CLAUDE.md Rust 規約). Delete the attribution, keep whatever rule \
+         (.claude/rules/code.md). Delete the attribution, keep whatever rule \
          it was hung on, and commit again. Only the lines this tree adds \
          are read here — notes already in the tree are not what stopped \
          this.\"}}}}"
@@ -88,15 +80,13 @@ pub(super) fn pre_comment(input: &str) -> Result<bool, String> {
     Ok(true)
 }
 
-/// Every line the tree at `root` would add to a guarded file, with the
-/// note found in it. Staging on the commit's own line has not run when
-/// this hook answers, so the index is not the truth yet: the tree against
-/// HEAD is, and the untracked files beside it are new down to their last
-/// line.
+/// Every note in a line the tree at `root` would add to a guarded file.
+/// A `git add` on the commit's own line has not run when this hook
+/// answers, so the tree is read against HEAD, not the index, and untracked
+/// files whole.
 fn pending(root: &str) -> Vec<String> {
-    // The prefixes are spelled out because the reading below keys on them,
-    // and diff.noprefix in somebody's config would otherwise leave every
-    // hit pathless — including the ones this module is exempt from.
+    // Spelled out: diff.noprefix in someone's config would leave every hit
+    // pathless, and the self-exemption with it.
     let mut arguments = vec![
         "diff",
         "--no-ext-diff",
@@ -121,10 +111,9 @@ fn pending(root: &str) -> Vec<String> {
     found
 }
 
-/// The untracked guarded files, listed one by one: an untracked directory
-/// is one line of `git status` and any number of files. This module drops
-/// out here as it does out of the diff — a gate that has not been
-/// committed yet is still not evidence against itself.
+/// The untracked guarded files, one by one (an untracked directory is
+/// otherwise one line). This module drops out here as it does from the
+/// diff.
 fn untracked(root: &str) -> Vec<String> {
     let mut arguments = vec!["status", "--porcelain", "--untracked-files=all", "--"];
     arguments.extend(GUARDED);
@@ -139,9 +128,8 @@ fn untracked(root: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// The notes in the added lines of a unified diff, read with the line
-/// numbers the hunk headers give them. Pure so the tests can hand it
-/// diffs git never produced.
+/// The notes in the added lines of a unified diff, numbered by its hunk
+/// headers.
 fn added_lines(diff: &str) -> Vec<String> {
     let mut found = Vec::new();
     let mut path = String::new();
@@ -152,8 +140,7 @@ fn added_lines(diff: &str) -> Vec<String> {
             continue;
         }
         if let Some(header) = line.strip_prefix("@@ ") {
-            // `@@ -12,0 +13,2 @@`: the half after the plus is where the
-            // added lines land in the file the commit would leave behind.
+            // `@@ -12,0 +13,2 @@`: `+13` is where the added lines land.
             number = header
                 .split_whitespace()
                 .find_map(|span| span.strip_prefix('+'))
@@ -175,10 +162,8 @@ fn added_lines(diff: &str) -> Vec<String> {
     found
 }
 
-/// Whether `path` is this module. It names every word it hunts, so its own
-/// lines are exempt — the gate would otherwise refuse the commit that
-/// adds it. `file!()` keeps the exemption on the module however the
-/// module is moved or renamed.
+/// Whether `path` is this module, exempt because it names every word it
+/// hunts. `file!()` keeps the exemption through a move or rename.
 fn hunts_itself(path: &str) -> bool {
     path.replace('\\', "/")
         .ends_with(&file!().replace('\\', "/"))
@@ -195,9 +180,7 @@ fn attribution_in(line: &str) -> Option<&'static str> {
         .then_some(PROPOSAL)
 }
 
-/// Whether the text opens with a date: four digits and the month behind a
-/// dash. What follows the proposal is what says it was stamped with a
-/// day.
+/// Whether the text opens with a date: four digits and a dash.
 fn starts_with_date(text: &str) -> bool {
     let mut characters = text.trim_start().chars();
     (0..4).all(|_| characters.next().is_some_and(|c| c.is_ascii_digit()))
@@ -222,8 +205,7 @@ mod tests {
             attribution_in("// **fontMd, not a step down** (2026-08-30 ユーザー指示)."),
             Some("ユーザー指示")
         );
-        // A proposal that is a sentence, and code that only
-        // looks like a date.
+        // A proposal that is a sentence, and code that only looks like a date.
         assert_eq!(attribution_in("// 提案 is a word, not a note"), None);
         assert_eq!(attribution_in("    let stamp = \"2026-08-30\";"), None);
         assert_eq!(

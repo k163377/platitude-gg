@@ -1,9 +1,6 @@
-//! The working copies that stand beside the corpus (`--copies`).
-//!
-//! They are a measurement's fixture rather than part of the corpus: the
-//! slots record is taken against a machine that is reading other
-//! working trees while the window is clicked
-//! (ci/baseline/git-slots-windows-x64.md), and these are those trees.
+//! The working copies beside the corpus (`--copies`): a fixture of the
+//! slots record, which is taken while other working trees are being read
+//! (ci/baseline/git-slots-windows-x64.md).
 
 use std::path::{Path, PathBuf};
 
@@ -19,43 +16,27 @@ pub(super) fn copy_path(at: &Path, nth: usize) -> PathBuf {
     at.with_file_name(format!("{name}-copy-{nth}"))
 }
 
-/// `--copies n`: exactly `n` working copies stand beside the corpus
-/// when this returns, whichever direction that is from where it
-/// started.
-///
-/// **One flag stands them and takes them down**, because they are a
-/// fixture the measurement holds and not part of the corpus: each is a
-/// hundred and ten thousand checked-out files and one more ref, so a
-/// set left standing keeps half a gigabyte apiece and holds the corpus
-/// token away from the one the judgement record is taken under
-/// (`stand_copies`). The measurement stands them at its entrance and
-/// `--copies 0` takes them down at its exit
+/// `--copies n`: exactly `n` working copies stand beside the corpus when
+/// this returns. Each is a full checkout and a ref that moves the corpus
+/// token, so the measurement stands them at its entrance and takes them
+/// down with `--copies 0` at its exit
 /// (ci/baseline/git-slots-windows-x64.md §再実行).
 pub(super) fn set_copies(at: &Path, count: usize) -> Result<(), String> {
     fold_copies(at, count)?;
     stand_copies(at, count)
 }
 
-/// The other working copies the slots measurement reads beside the
-/// corpus (ci/baseline/git-slots-windows-x64.md): `count` linked
-/// working trees of it, each holding one untracked file so the pass
-/// that reads them has a row to find, and named for their number beside
-/// the corpus (`<corpus>-copy-<n>`, ignored like the corpus itself).
+/// `count` linked working trees of the corpus (`<corpus>-copy-<n>`), each
+/// holding one untracked file so the read has a row to find.
 ///
-/// **Each on a branch of its own (`pgg-copy-<n>`).** A
-/// copy standing on no branch is a row only the walk can draw
-/// (`session::joins::WorktreeNews`), so the opening's listing asks for a
-/// rebuild that takes the opening stream over before its first chunk —
-/// and a run the harness cannot see the walk of is no reading at all.
-/// The branches are refs, so **the corpus token moves by one for every
-/// copy**: a run against a corpus with copies is compared with runs
-/// against the same, and the record says which token it was taken
-/// under. `--copies 0` puts the token back (`fold_copies`).
+/// Each on a branch of its own (`pgg-copy-<n>`): a detached copy is a row
+/// only the walk can draw (`session::joins::WorktreeNews`), so the
+/// opening's listing would ask for a rebuild that takes over the opening
+/// stream. The branches move the corpus token by one per copy, and runs
+/// compare only under the same token.
 ///
 /// A copy already standing is kept and only put on its branch where it
-/// is detached — a `checkout -b` at the same commit moves no file. One
-/// asked for beyond what stands is added; the ones past what was asked
-/// for are `fold_copies`'s, which `set_copies` has already run.
+/// is detached (a `checkout -b` at the same commit moves no file).
 pub(super) fn stand_copies(at: &Path, count: usize) -> Result<(), String> {
     for nth in 1..=count {
         let copy = copy_path(at, nth);
@@ -64,8 +45,6 @@ pub(super) fn stand_copies(at: &Path, count: usize) -> Result<(), String> {
         if !copy.join(".git").exists() {
             println!("standing copy {nth}: {copy_text}");
             git(at, &["worktree", "add", "-b", &branch, &copy_text, "HEAD"])?;
-            // One untracked file: the cheapest dirt there is, and enough
-            // for the read to count the copy as carrying something.
             std::fs::write(
                 copy.join(format!("carried-by-copy-{nth}.txt")),
                 format!("copy {nth}\n"),
@@ -82,18 +61,11 @@ pub(super) fn stand_copies(at: &Path, count: usize) -> Result<(), String> {
     Ok(())
 }
 
-/// Takes down every copy standing above `keep`.
-///
-/// **A copy is a tree and the branch it stands on**, so both go — and
-/// the branch is read out of the listing rather than spelled from the
-/// number, because a copy standing detached has none (`stand_copies`).
-/// `worktree remove` is given `--force`: every copy carries the
-/// untracked file it was stood with.
-///
-/// **The token is said on both sides of it.** The token is the
-/// fingerprint of the refs and the copies' branches are refs, so which
-/// record a later run may be compared against is exactly what this
-/// moves (ci/baseline/perf-windows-x64.md §計測条件).
+/// Takes down every copy standing above `keep`, tree and branch. The
+/// branch is read from the listing, since a detached copy has none;
+/// `--force` because every copy carries its untracked file. The token is
+/// printed before and after: it is what a later run is compared under
+/// (ci/baseline/perf-windows-x64.md §計測条件).
 fn fold_copies(at: &Path, keep: usize) -> Result<(), String> {
     let name = at
         .file_name()
@@ -115,10 +87,8 @@ fn fold_copies(at: &Path, keep: usize) -> Result<(), String> {
             git(at, &["branch", "-D", branch])?;
         }
     }
-    // The administrative directory under `.git/worktrees` is the other
-    // half of a copy, and a tree taken away by hand leaves that half
-    // behind — where the next `worktree add` under the same name
-    // refuses.
+    // A tree removed by hand leaves its `.git/worktrees` entry, and the
+    // next `worktree add` of that name refuses.
     git(at, &["worktree", "prune"])?;
     println!("token {before} -> {}", token(at, &git(at, &["show-ref"])?)?);
     Ok(())
@@ -129,21 +99,16 @@ fn fold_copies(at: &Path, keep: usize) -> Result<(), String> {
 #[derive(Debug, PartialEq, Eq)]
 struct Standing {
     nth: usize,
-    /// Spelled the way the listing spells it, which is the spelling
-    /// `worktree remove` is sure to take.
+    /// As the listing spells it, which `worktree remove` is sure to take.
     path: String,
-    /// `None` where the copy stands detached and so has no branch to go
-    /// with it.
+    /// `None` for a detached copy.
     branch: Option<String>,
 }
 
-/// The copies standing beside a corpus directory called `name`, read
-/// out of `git worktree list --porcelain`.
-///
-/// Every other tree in the listing is somebody else's — the corpus's
-/// own, a build left behind (`corpus::build::partial_path`) — and a `branch`
-/// line belongs to the tree whose record it sits in, so one under a
-/// tree that is not a copy names no copy's branch.
+/// The copies of a corpus directory called `name`, read out of
+/// `git worktree list --porcelain`. A `branch` line belongs to the record
+/// it sits in, so one under another tree (the corpus's own, a partial
+/// build) names no copy's branch.
 fn copies_standing(name: &str, listing: &str) -> Vec<Standing> {
     let prefix = format!("{name}-copy-");
     let mut found: Vec<Standing> = Vec::new();
@@ -181,9 +146,7 @@ fn copy_number(prefix: &str, path: &str) -> Option<usize> {
 mod tests {
     use super::{Standing, copies_standing};
 
-    /// What `--copies 0` takes down is what the listing calls a copy,
-    /// and a copy is a tree plus the branch of its own record: a
-    /// detached one has no branch to delete, and a `branch` line under
+    /// A detached copy has no branch to delete, and a `branch` line under
     /// a tree that is not a copy belongs to that tree.
     #[test]
     fn the_copies_are_read_out_of_the_worktree_listing() {

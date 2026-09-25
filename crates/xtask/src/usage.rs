@@ -1,17 +1,12 @@
 //! What `cargo xtask` prints when it is given no command it knows.
 //!
-//! One page, in four pieces. The two that grow are the ones that grow with
-//! the app: the demo presets, one line per
-//! shape a repository can be stopped in, and the verify-ui verbs, one
-//! paragraph per thing a headless run has to be told about itself. Both are
-//! written where they are added to, and neither can push the other over a
-//! ceiling.
+//! The two sections that grow with the app — demo presets and verify-ui
+//! verbs — have files of their own, so neither pushes the other over the
+//! length ceiling.
 
 mod demo_repo;
 mod verify_ui;
 
-/// Writes the page as one text: head, the two lists, then everything whose
-/// entry is a paragraph the runner itself owns.
 pub(crate) fn print() {
     print!("{HEAD}{}{}{TAIL}", demo_repo::PRESETS, verify_ui::VERBS);
 }
@@ -233,10 +228,11 @@ commands:
 
 // No `"\` continuation on the opening line (see `demo_repo`).
 const TAIL: &str = "  shipped [--no-build]
-      Starts the build nobody else here makes: `cargo build --release`
-      with no features, which is the one without the verification
-      harness. Offscreen, bounded, reaped — a shipped build has no
-      watchdog of its own, because that is a harness knob.
+      Starts the build nobody else here makes: `cargo build --profile
+      shipped` (target/shipped/) with no features, which is the one
+      without the verification harness. Offscreen, bounded, reaped — a
+      shipped build has no watchdog of its own, because that is a
+      harness knob.
       What it is for is the failure only this build has: a QML file in
       `platitude.ui` that reaches into `platitude.auto` resolves in every
       build this runner drives and loads nothing in the shipped one.
@@ -382,12 +378,13 @@ const TAIL: &str = "  shipped [--no-build]
                           opened an empty repository leaves the cost of
                           putting the page up, which is otherwise
                           indistinguishable from the toolkit's own floor.
-        --no-build        use the release binary already built. `perf` and
-                          `shipped` build to the same path, so this
-                          measures whichever of the two ran last — the
+        --no-build        use the binary already built (target/release/,
+                          or target/shipped/ with --shipped). Runs with
+                          and without --breakdown build to the same
+                          path, so this measures whichever ran last — the
                           evidence names the feature set that was asked
                           for, whatever is on disk
-        --shipped         measure `cargo build --release` with no features
+        --shipped         measure `cargo build --profile shipped` (no features)
                           — the build a person installs. It answers no
                           knob and reports no frame, so what it gives is
                           memory and the time to a finished graph; the
@@ -655,9 +652,10 @@ const TAIL: &str = "  shipped [--no-build]
       whatever the reader remembered.
 
       The board keeps itself to what is being looked at now, and the
-      three rules that do it are in shots/sweep.rs: a picture retaken
-      replaces the one before it, a seat's runs go when its branch
-      lands, and a session's runs go when it ends. `prune` is what
+      rules that do it are in shots/sweep.rs: a picture retaken replaces
+      the one before it, and a seat's runs go when its work does (its
+      branch lands, or the seat is handed to fresh work). A session
+      ending leaves the board standing. `prune` is what
       reaches the rest — an approach abandoned under a name nobody
       retakes (--label), or a seat whose session is long gone.
 

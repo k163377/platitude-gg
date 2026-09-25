@@ -1,17 +1,14 @@
-//! The command lines standing in this tree's documents and sentences,
-//! held to the catalogue the modules declare (`crate::command`).
-//!
-//! The rule this implements is .claude/rules-refs/structure.md
-//! §コマンドの正本, and none of it is restated here — a rule written twice
-//! is what this file exists to stop. What the comments below carry is
-//! what a reader of *this* file would otherwise break.
+//! The command lines in this tree's documents and sources, held to the
+//! catalogue the modules declare (`crate::command`). The rule is
+//! .claude/rules-refs/structure.md §コマンドの正本.
 
 use std::path::{Path, PathBuf};
 
 use crate::command::{Command, Permission};
 
-/// The markdown this reads (§検出の範囲と限界) — wider than the
-/// torn-block count above.
+/// The markdown this reads — wider than the torn-block count's
+/// (`super::ROOTS`). What is left out and why: rules-refs/structure.md
+/// 「どのファイルを読むか」.
 const ROOTS: [&str; 4] = [
     "internal-docs",
     ".claude/rules",
@@ -20,22 +17,19 @@ const ROOTS: [&str; 4] = [
 ];
 const LOOSE: [&str; 2] = ["CLAUDE.md", "AGENTS.md"];
 
-/// The pages that print the catalogue's verbs for a reader of `cargo
-/// xtask` with no argument.
+/// The pages `cargo xtask` with no argument prints.
 const USAGE: [&str; 3] = [
     "crates/xtask/src/usage.rs",
     "crates/xtask/src/usage/demo_repo.rs",
     "crates/xtask/src/usage/verify_ui.rs",
 ];
 
-/// Where the verbs are dispatched, which is the other list that has to
-/// agree with the catalogue.
+/// Where the verbs are dispatched, the other list that has to agree with
+/// the catalogue.
 ///
-/// Spelled in pieces, the way `gate::graph::complaints` spells the same
-/// four files: a whole path in a string here would be read as this file
-/// reading the crate root, and a root with readers is the hub that rule
-/// exists to stop. What is read here is the dispatch as text, which is
-/// not a module this depends on.
+/// Spelled in pieces, as `gate::graph::complaints` does: a whole path in a
+/// string reads to the gate's graph as this file reading the crate root,
+/// which that check refuses.
 const DISPATCH: (&str, &str, &str) = ("xtask", "src", "main.rs");
 
 fn dispatch_path() -> String {
@@ -43,12 +37,10 @@ fn dispatch_path() -> String {
     format!("crates/{package}/{dir}/{name}")
 }
 
-/// The roster of ids, so that one going missing is a line in a diff and
-/// a red check.
 pub(crate) const ROSTER: &str = "crates/xtask/command-ids.txt";
 
-/// Built at run time, because it names the command that
-/// writes it.
+/// Built at run time, because it names the commands that write and
+/// read it.
 fn roster_header() -> String {
     format!(
         "\
@@ -90,7 +82,6 @@ impl Shape {
     }
 }
 
-/// What one run found.
 pub(crate) struct Held {
     /// What a person has to answer.
     pub(crate) findings: Vec<String>,
@@ -98,7 +89,7 @@ pub(crate) struct Held {
     pub(crate) writable: Vec<String>,
     /// Files whose generated text differs from what stands on disk.
     pub(crate) rewritten: Vec<(PathBuf, String)>,
-    /// Read, so that a run matching nothing is not reported as a pass.
+    /// Counted for the pass line, where a run that matched nothing shows 0.
     pub(crate) spans: usize,
     pub(crate) mentions: usize,
 }
@@ -134,7 +125,6 @@ pub(crate) fn hold(root: &Path) -> Result<Held, String> {
     Ok(held)
 }
 
-/// The markdown this reads.
 fn documents(root: &Path) -> Result<Vec<PathBuf>, String> {
     let mut found = Vec::new();
     for dir in ROOTS {
@@ -204,8 +194,7 @@ fn fence_line(
             command.id
         ));
     }
-    // Word by word: a compound line reads as no
-    // command at all when taken whole.
+    // Word by word: taken whole, a compound line reads as no command.
     for verb in called_verbs(line) {
         unknown(verb, catalogue, named, number, held);
     }
@@ -365,7 +354,7 @@ fn escapes(line: &str, named: &str, number: usize, held: &mut Held) {
     }
 }
 
-/// What a piece of text says (§コマンドの正本 §文書側の記法).
+/// What a piece of text says (rules-refs/structure.md「文書側の記法」).
 enum Reading<'a> {
     None,
     /// Exactly `cargo xtask <verb>`: the verb named in prose.
@@ -405,7 +394,8 @@ fn reading<'a>(text: &'a str, catalogue: &[&'static Command]) -> Reading<'a> {
     Reading::Example(verb)
 }
 
-/// A span with no runner in front of it (§文書側の記法).
+/// A span with no runner in front of it (rules-refs/structure.md
+/// 「文書側の記法」).
 fn abbreviated<'a>(
     whole: &str,
     words: usize,
@@ -444,8 +434,6 @@ fn usage(root: &Path, catalogue: &[&'static Command], held: &mut Held) -> Result
     Ok(())
 }
 
-/// The page as a block per verb: the header line and everything under it
-/// until the next header.
 fn blocks(text: &str) -> Vec<(String, String)> {
     let mut printed: Vec<(String, String)> = Vec::new();
     let mut current: Option<(String, String)> = None;
@@ -559,8 +547,9 @@ fn dispatched(text: &str, catalogue: &[&'static Command], path: &str) -> Vec<Str
     out
 }
 
-/// The runner's own sources (§検出の範囲と限界). The cut for test code is
-/// the first `#[cfg(test)]`, which is where this tree puts them.
+/// The runner's own sources (why these: rules-refs/structure.md
+/// 「どのファイルを読むか」). The cut for test code is the first
+/// `#[cfg(test)]`, which is where this tree puts them.
 fn sources(root: &Path, catalogue: &[&'static Command], held: &mut Held) -> Result<(), String> {
     let mut files = Vec::new();
     super::under(&root.join("crates/xtask/src"), "rs", &mut files)?;
@@ -592,9 +581,8 @@ fn sources(root: &Path, catalogue: &[&'static Command], held: &mut Held) -> Resu
     Ok(())
 }
 
-/// The backquoted runs in one line of source. A sentence a hook hands
-/// back writes a command the way a document does, between backquotes,
-/// and that is what makes it findable.
+/// The backquoted runs in one line of source: a sentence writes a
+/// command between backquotes, which is what makes it findable.
 fn quoted(line: &str) -> Vec<&str> {
     let mut found = Vec::new();
     let mut rest = line;
@@ -609,7 +597,6 @@ fn quoted(line: &str) -> Vec<&str> {
     found
 }
 
-/// The roster of ids, written from the catalogue.
 fn roster(root: &Path, catalogue: &[&'static Command], held: &mut Held) -> Result<(), String> {
     let mut ids: Vec<&str> = catalogue.iter().map(|command| command.id).collect();
     ids.sort_unstable();
@@ -700,8 +687,7 @@ mod tests {
         assert_eq!(say("cargo xtask <command>"), "none");
     }
 
-    /// An escape in front makes it managed: the flag is the permission,
-    /// and it is the half held in step.
+    /// The flag is the permission, so it is the half held in step.
     #[test]
     fn an_escape_in_front_makes_even_a_bare_verb_managed() {
         assert_eq!(say("PGG_ALLOW_GUI=1 cargo xtask launch"), "managed");
@@ -709,7 +695,6 @@ mod tests {
         assert_eq!(say("PGG_ALLOW_GUI=0 cargo xtask launch"), "example");
     }
 
-    /// Whitespace is the writer's: a span is read by its words.
     #[test]
     fn extra_spacing_does_not_change_what_a_span_says() {
         assert_eq!(say("cargo  xtask   land <branch>"), "managed");
@@ -729,9 +714,6 @@ mod tests {
         assert_eq!(marker("no marker here"), None);
     }
 
-    /// A section that leaves `cargo xtask` off still refers by id, and
-    /// the span it gets is the call. What it cannot abbreviate is a
-    /// command the escape gates: dropping the flag drops the permission.
     #[test]
     fn the_abbreviated_form_writes_the_call_and_refuses_an_escaped_command() {
         assert_eq!(say("land <branch>"), "managed call");
@@ -756,8 +738,6 @@ mod tests {
         assert_eq!(rewritten(&escaped), "<!--call:sample.launch-->`launch`\n");
     }
 
-    /// The page's headers, including the one that opens the const that
-    /// holds the page.
     #[test]
     fn the_usage_headers_are_the_two_space_verbs() {
         assert_eq!(header("  land [<branch>]"), Some("land"));
@@ -789,8 +769,6 @@ mod tests {
             .unwrap_or_default()
     }
 
-    /// A marked span is the catalogue's to write: a stale one is said and
-    /// rewritten, and what comes back is what the declaration says.
     #[test]
     fn a_stale_span_is_written_from_the_declaration() {
         let held = held_over("run <!--cmd:sample.land-->`cargo xtask land --onto main` here\n");
@@ -806,8 +784,7 @@ mod tests {
         );
     }
 
-    /// And a span already quoting it is left byte for byte, which is what
-    /// makes the write idempotent.
+    /// Byte for byte, which is what makes the write idempotent.
     #[test]
     fn a_span_that_already_quotes_the_declaration_is_untouched() {
         let text = "run <!--cmd:sample.land-->`cargo xtask land <branch>` here\n";
@@ -818,8 +795,6 @@ mod tests {
         assert_eq!(held.spans, 1);
     }
 
-    /// A reference to an id nobody declares resolves to nothing, and no
-    /// write can answer it.
     #[test]
     fn a_marker_naming_no_command_is_a_finding_a_sync_cannot_answer() {
         let held = held_over("<!--cmd:sample.gone-->`cargo xtask land <branch>`\n");
@@ -832,8 +807,6 @@ mod tests {
         );
     }
 
-    /// The copy the whole thing exists to stop: a managed line written
-    /// out where a reference belongs.
     #[test]
     fn a_managed_line_written_by_hand_is_named_with_the_marker_to_use() {
         let held = held_over("just run `PGG_ALLOW_GUI=1 cargo xtask launch` when asked\n");
@@ -845,9 +818,8 @@ mod tests {
         );
     }
 
-    /// A verb that no longer exists is a reference the spelling moved
-    /// out from under — the mention shape has no body to rewrite, so
-    /// this is the whole of what holds it.
+    /// The mention shape has no body to rewrite, so this is all that
+    /// holds it.
     #[test]
     fn a_mention_of_a_verb_nobody_dispatches_is_a_finding() {
         let held = held_over("`cargo xtask land` is the one way; `cargo xtask sail` is not\n");
@@ -860,8 +832,6 @@ mod tests {
         assert_eq!(held.mentions, 2);
     }
 
-    /// An escape a document spells has to be one the hook reads: a flag
-    /// nothing answers to reads as a permission and is not one.
     #[test]
     fn an_escape_the_hook_does_not_read_is_a_finding() {
         let held = held_over("run it with PGG_ALLOW_EVERYTHING=1 in front\n");
@@ -878,9 +848,6 @@ mod tests {
         );
     }
 
-    /// A fence is read for its verbs and left as it is: a marker
-    /// cannot stand inside a compound shell line, and the verify-ui
-    /// skill's fast path is one.
     #[test]
     fn a_fenced_block_keeps_its_text_and_still_answers_for_its_verbs() {
         let text = "```sh\nPGG_ALLOW_REBASE=1 git rebase main && cargo xtask sail\n```\n";
@@ -890,8 +857,6 @@ mod tests {
         assert!(held.findings[0].contains("sail"), "{:?}", held.findings);
     }
 
-    /// The two lists that have to agree with the catalogue, each failing
-    /// in the direction it can fail in.
     #[test]
     fn a_verb_on_one_list_and_not_the_other_is_named_both_ways() {
         let both = "        Some(\"land\") => land::run(&args[1..]),\n\
@@ -909,8 +874,6 @@ mod tests {
         assert!(found[0].contains("nothing dispatches it"), "{found:?}");
     }
 
-    /// The page describes every verb, and names the options the
-    /// catalogue is run with.
     #[test]
     fn the_page_answers_for_every_verb_and_every_option() {
         let page = "  land [<branch>]\n      Put a branch on main.\n\n  launch [--no-build]\n      A real window.\n";
@@ -925,9 +888,6 @@ mod tests {
         );
     }
 
-    /// An id going missing is the change nothing else would catch: every
-    /// reference in the tree was written with it, and they do not move by
-    /// themselves.
     #[test]
     fn an_id_the_roster_carries_and_nobody_declares_is_said_loudly() {
         let standing = "# header\n\nsample.land\nsample.retired\n";

@@ -1,34 +1,21 @@
 //! Who closes a popup in the product, counted by machine
-//! (.claude/rules/app-ui.md §メニューを閉じるのは自分).
-//!
-//! A popup closes itself. A row that runs something takes its menu down
-//! with `dismiss()` on the menu it is in — Qt's own, which walks every
-//! level of a nested menu down — and a menu standing for an answer reads
-//! the answer as data and goes on its own. So nothing in the product ever
-//! has to close two things at once: not a card and the menu it hangs off,
-//! not one entrance and the other. A body that does is spelling a set out
-//! by hand, and the next entrance added is the one that set will be
-//! missing — a delete run from that entrance then leaves its menu standing
-//! over the very rows it changed.
+//! (.claude/rules-refs/app-ui.md「メニューを閉じるのは自分」): a body that
+//! closes two things is a set spelled by hand, and the next entrance added
+//! is the one it misses.
 //!
 //! Three shapes are counted, all in the product's own QML:
 //!
 //! * a function or handler body that closes more than one thing —
 //!   `close()` and `dismiss()` alike, however they are qualified;
-//! * a popup component declaring a `dismiss()` of its own. Qt's is the one
-//!   the rows lean on, and a QML function of the same name shadows it
-//!   silently — a card whose own `dismiss()` closes itself and then asks
-//!   its host to close is exactly that shape;
-//! * any component declaring a `close()` of its own. A popup already has
-//!   Qt's, and an item that wraps one exists, with that function, to be
-//!   named and closed from outside — the beginning of the hand-spelled set.
+//! * a popup component declaring its own `dismiss()`, which silently
+//!   shadows Qt's (the one a row calls to take every menu level down);
+//! * any component declaring its own `close()`: it exists to be closed
+//!   from outside, the start of a hand-spelled set.
 //!
 //! The bars (`AskBar`, `FindBar`, `NoticeBar`) keep their `dismiss()`: they
 //! are items with a verb of their own.
 //!
-//! Comments and string literals are taken out before anything is read:
-//! the product's comments say `close()` wherever they explain a close, and
-//! a name to read is not a call.
+//! Comments and string literals are taken out before anything is read.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -40,7 +27,7 @@ const POPUPS: &[&str] = &["Popup", "Menu", "Dialog", "Drawer", "AppMenu", "AppDi
 /// What closes a popup, whichever it is called on.
 const CLOSERS: &[&str] = &["close", "dismiss"];
 /// Where a failing line sends its reader.
-const RULE: &str = ".claude/rules/app-ui.md §メニューを閉じるのは自分";
+const RULE: &str = ".claude/rules-refs/app-ui.md「メニューを閉じるのは自分」";
 
 /// One failure per line that closes what is not its to close, and how many
 /// product files were read.

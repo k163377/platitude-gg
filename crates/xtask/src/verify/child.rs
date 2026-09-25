@@ -1,13 +1,11 @@
 //! The app itself: the environment one run hands it, the wait with a
 //! kill guard at the end of it, and what came back.
 //!
-//! **Every wait is bounded.** The app has a watchdog of its
-//! own ([`crate::verify::run`] passes it in); this side allows it
-//! [`GRACE_MS`] beyond that and then reaps, so a wedged GUI cannot hold
-//! the run open. The ceiling is the run's, the wait is `crate::wait`'s.
-//! The one run ended before its ceiling is the one ordered to hold at a
-//! station with no deadline thread to end it: the trail says when it is
-//! there, and it is reaped on that word ([`ordered_hold`]).
+//! The app has a watchdog of its own ([`crate::verify::run`] passes it
+//! in); this side allows [`GRACE_MS`] beyond it and then reaps, so a
+//! wedged GUI cannot hold the run open. It reaps sooner only a run ordered
+//! to hold with no deadline thread ([`ordered_hold`]) and one whose QML
+//! would not load ([`qml_refused`]).
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -33,9 +31,8 @@ pub(super) struct Start<'a> {
     pub(super) child_path: &'a OsString,
     pub(super) path: &'a OsString,
     pub(super) arg: &'a str,
-    /// The version the staged copy of this binary answers `--version`
-    /// with, whether it stands on PATH (`--old-git`) or beside the
-    /// pictures (`--other-git`); empty where neither was asked for.
+    /// What the staged git copy answers `--version` with (`--old-git` on
+    /// PATH, `--other-git` beside the pictures); empty when neither.
     pub(super) shim_version: &'a str,
     pub(super) other_git: Option<&'a std::path::Path>,
     pub(super) repos: &'a [PathBuf],
@@ -46,53 +43,43 @@ pub(super) struct Start<'a> {
 pub(super) struct Ran {
     pub(super) out_lines: Vec<String>,
     pub(super) err_lines: Vec<String>,
-    /// When each of the lines above arrived, at the same index as the
-    /// line it belongs to (`crate::app_out::Said::at`). What a run that
-    /// ended itself is read off: the account it wrote on the way out is
-    /// a line here like any other, so the silence that says where it
-    /// stood is the one before that line
-    /// ([`super::wedge`]).
+    /// When each line above arrived, index for index
+    /// (`crate::app_out::Said::at`): the silence before a run's exit
+    /// account says where it stood ([`super::wedge`]).
     pub(super) out_at: Vec<Duration>,
     pub(super) err_at: Vec<Duration>,
     pub(super) status: Option<std::process::ExitStatus>,
-    /// Whether this side reaped the app — at the ceiling, or at the
-    /// station it was ordered to hold at ([`Self::held_at`]). A run that
-    /// ended itself, its own deadline thread included, is `false` here.
+    /// Whether this side reaped the app at the ceiling or at the station
+    /// it was ordered to hold at ([`Self::held_at`]); `false` for a run
+    /// that ended itself or was given up on ([`Self::gave_up`]).
     pub(super) timed_out: bool,
-    /// The station the app was found held at, for the run ordered to
-    /// hold there with no deadline thread of its own ([`ordered_hold`]):
-    /// what the reaping was on the word of.
+    /// The station a run ordered to hold ([`ordered_hold`]) was reaped at;
     /// `None` for every other run.
     pub(super) held_at: Option<String>,
     pub(super) elapsed: Duration,
-    /// How long the app had said nothing when the run ended. `None` where
-    /// it never said anything at all — the whole run is the silence then.
-    /// What a run reaped at the ceiling is read off ([`super::wedge`]).
+    /// How long the app had said nothing when the run ended; `None` when
+    /// it never spoke. Read for a run reaped at the ceiling
+    /// ([`super::wedge`]).
     pub(super) quiet_for: Option<Duration>,
     /// What went with the app when the parent reaped it: the git it had
     /// running, counted (`reap::Reaped::line`). `None` for a run that
     /// ended itself.
     pub(super) reaped: Option<String>,
-    /// What a look at the app while it still stood could say — its
-    /// threads, and a dump of it where one could be taken — for a run
-    /// reaped at the ceiling; empty for one that ended itself
-    /// (`super::look::look_at`).
+    /// Its threads, and a dump where one could be taken, looked at before
+    /// this side reaped it at the ceiling or the held station
+    /// (`super::look::look_at`); empty otherwise.
     pub(super) looked: Vec<String>,
-    /// Why the parent stopped waiting before the ceiling, where it did.
-    /// `None` for every run that was let go to the end — which is every
-    /// run whose reason for stopping is not already known.
+    /// Why the parent gave up on a run already decided (QML that would
+    /// not load); `None` otherwise.
     pub(super) gave_up: Option<String>,
 }
 
-/// What Qt writes when its engine could not build the file it was handed
-/// (`qqmlapplicationengine.cpp`, v6.10.3: `qWarning() <<
-/// "QQmlApplicationEngine failed to load component"`, and the same with
-/// `create` where the file parsed but its root would not build). The
-/// errors themselves follow on the lines after it; `rootObjects()` is
-/// left empty either way, so nothing is coming.
+/// Qt's warning when its engine could not load, or (parsed) could not
+/// create, the root file (`qqmlapplicationengine.cpp`, v6.10.3);
+/// `rootObjects()` stays empty, so no window is coming.
 ///
-/// **ASCII only, and so readable on both sides**: a Windows Qt writes its
-/// log lines in the local code page (verify-ui skill).
+/// Matched on ASCII only: a Windows Qt writes its log in the local code
+/// page (verify-ui skill).
 fn qml_refused(line: &str) -> bool {
     line.contains("QQmlApplicationEngine failed to load component")
         || line.contains("QQmlApplicationEngine failed to create component")
@@ -107,7 +94,6 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     let _held = hold_the_store(start.config_dir, &start.opts.verb)?;
     super::wedge::clear_any_account(start.shot_dir);
 
-    // Bounded wait with a kill guard.
     let mut wait = Wait::new(
         format!("the app running {}", start.opts.verb),
         Budget::whole(Duration::from_millis(start.opts.watchdog_ms + GRACE_MS)),
@@ -117,19 +103,13 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to start the app: {e}"))?;
-    // What this unit is doing, where the run is a session's own: a
-    // verb killed at the wrong moment leaves the
-    // app standing, and the room is held while it does
-    // (`crate::budget::child_started`). Silent under a gate, whose steps
-    // say it through the ticket they were handed.
+    // A verb killed mid-run leaves the app standing, and its budget room
+    // stays held while it does (`crate::budget::child_started`).
     crate::budget::child_started(child.id(), &app);
-    // **The one failure the parent can end the wait on.** A QML file that
-    // will not load leaves an application with no window at all, sitting
-    // in its event loop until the ceiling — and `gate::sides::verbs` runs the
-    // verbs of such a tree one at a time until one comes back green, so
-    // every one of them pays the full watchdog (P3-確認事項). Qt says so
-    // itself the moment it happens, and the run is already decided by
-    // then: there is no window to photograph and no verb to run.
+    // QML that will not load leaves a windowless app in its event loop
+    // until the ceiling, and `gate::sides::verbs` would run such a tree's
+    // verbs one at a time, each paying the full watchdog. Qt says so the
+    // moment it happens, so the wait ends on that line.
     let unloadable = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     fn watch<R: std::io::Read + Send + 'static>(
         pipe: Option<R>,
@@ -150,19 +130,13 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
             break Some(status);
         }
-        // A run ordered to hold at a station, with no deadline thread of
-        // its own, is this side's to end — and the trail says when it is
-        // there. The hold never returns, so every second between that
-        // mark and the ceiling would be wall clock paid for no answer
-        // (`ordered_hold`).
+        // The ordered hold never returns, so it is reaped once the trail
+        // reaches its station (`ordered_hold`).
         let held = ordered.filter(|station| {
             super::wedge::last_station(start.shot_dir).as_deref() == Some(*station)
         });
-        // Nothing left to wait for: no window was built, so no verb will
-        // run and no picture will be taken. Ended here, and said in its
-        // own words — the diagnostics a wedge
-        // takes are about a run whose reason is unknown, and this one's
-        // is in the lines the app already wrote.
+        // No look is taken: a wedge's diagnostics are for an unknown
+        // reason, and this one's is in the lines the app already wrote.
         if unloadable.load(std::sync::atomic::Ordering::SeqCst) {
             gave_up = Some(QML_REFUSED_ACCOUNT.to_string());
             let (under, ended) = crate::reap::reap(&mut child);
@@ -172,25 +146,18 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         if held.is_none() && wait.look_again("its exit").is_ok() {
             continue;
         }
-        // Taken while the app still stands, since past `exiting` the
-        // trail has run out and these are the only witnesses left
-        // (`super::look::look_at`).
+        // Before the reaping: past `exiting` the trail has run out, and
+        // this is the only witness left (`super::look::look_at`).
         looked = super::look::look_at(
             child.id(),
             start.shot_dir,
             start.opts.fault_hang.is_empty(),
             start.opts.fault_stall_look,
         );
-        // The app takes the git it was waiting on with it — a hook
-        // that never returns, a fetch to nowhere — which `reap`
-        // reaches by walking from the app. The app is left in this
-        // runner's own group, so that a signal aimed at the runner
-        // from outside (a Ctrl-C, the step's group kill) ends it
-        // here, and this run's store lock goes with it before the
-        // app's own watchdog fires. What ran out is reported off
-        // the run itself (`super::wedge`: the ceiling, the
-        // silence, what went with it), which is the whole
-        // account.
+        // `reap` walks from the app to the git it was waiting on (a hook
+        // that never returns, a fetch to nowhere). The app stays in this
+        // runner's process group, so a Ctrl-C or the step's group kill
+        // ends it too, store lock and all, before its own watchdog fires.
         let (under, ended) = crate::reap::reap(&mut child);
         reaped = Some(under.line());
         timed_out = true;
@@ -202,8 +169,7 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
         |h: Option<std::thread::JoinHandle<crate::app_out::Said>>| h.and_then(|h| h.join().ok());
     let (out, err) = (join(stdout), join(stderr));
     let elapsed = wait.elapsed();
-    // The later of the two streams: either counts as the app still having
-    // been there.
+    // Either stream counts as the app still being there.
     let spoke_at = [
         out.as_ref().and_then(crate::app_out::Said::last),
         err.as_ref().and_then(crate::app_out::Said::last),
@@ -228,13 +194,10 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     })
 }
 
-/// The station a run was ordered to hold at where no deadline thread will
-/// end it there: the one run this side ends on the trail's word.
-/// **The ceiling stays, as the backstop** — a run
-/// that never reaches its station is still reaped at it. A hold with the
-/// deadline thread up is left to the thread: what that case reads is the
-/// account the thread writes, which a reaping from here would forestall
-/// (`super::faults`).
+/// The station a run was ordered to hold at with no deadline thread to
+/// end it there; the ceiling stays the backstop. A hold with the thread
+/// up is left to it: that case reads the account the thread writes, which
+/// a reaping from here would forestall (`super::faults`).
 fn ordered_hold(opts: &Options) -> Option<&str> {
     (opts.fault_no_deadline && !opts.fault_hang.is_empty()).then_some(opts.fault_hang.as_str())
 }
@@ -276,14 +239,11 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         // this every glyph is a box (verify-ui skill).
         cmd.env("QT_QPA_FONTDIR", "C:\\Windows\\Fonts");
     }
-    // The compiled QML, beside the build it was compiled from: every run of
-    // one build loads what the first one compiled (`platitude-app` qrc.rs),
-    // and a person's own window and the other seats' builds, which name the
-    // same files, keep theirs where they are.
+    // Per build, so its runs share one compiled cache while a person's own
+    // window and other seats' builds keep theirs (`platitude-app` qrc.rs).
     cmd.env("QML_DISK_CACHE_PATH", exe.with_file_name("qmlcache"));
-    // Set only where they were asked for: `clear_automation` above has
-    // already taken whatever the parent shell carried, so an unset knob
-    // here is an app that is not being made to wedge (`super::faults`).
+    // `clear_automation` already dropped what the parent shell carried, so
+    // an unset knob means no fault (`super::faults`).
     if !opts.fault_hang.is_empty() {
         cmd.env("PGG_FAULT_HANG", &opts.fault_hang);
     }
@@ -293,17 +253,13 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     if opts.fault_hold_act {
         cmd.env("PGG_FAULT_HOLD_ACT", "1");
     }
-    // Raised for the verbs whose subject it is, the way the held save is:
-    // what they are about is the page a pass that beat the first status
-    // leaves, and a run that had to be asked for it by hand would be one
-    // the census could not record (`super::verbs::graph_walk`).
+    // Raised by verb name: a run that needed a hand-typed flag is one the
+    // census could not record (`super::verbs::window`).
     if HELD_WIP_ROW_VERBS.contains(&opts.verb.as_str()) {
         cmd.env("PGG_FAULT_HOLD_WIP_ROW", "1");
     }
-    // The saves held until a station where a run asked for it — and,
-    // unasked, for the verb whose subject that is: its identity save is
-    // held until the shutdown joins it, which is what the run reads
-    // (`super::verbs::window`).
+    // The save hold: where a run asked for it, and unasked for
+    // `HELD_SAVE_VERB` (`super::verbs::window`).
     let hold_save = if opts.fault_hold_save.is_empty() && opts.verb == HELD_SAVE_VERB {
         HELD_SAVE_STATION
     } else {
@@ -312,11 +268,9 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     if !hold_save.is_empty() {
         cmd.env("PGG_FAULT_HOLD_SAVE", hold_save);
     }
-    // The two the staged copy reads to be a git: what to answer
-    // `--version` with, and who to hand the rest to. Both are set on the
-    // app, so every git it starts inherits them — which is how the copy
-    // works whether it stands on PATH (`--old-git`) or somewhere only the
-    // settings box points at (`--other-git`, whose place the app is told).
+    // Set on the app so every git it starts inherits them, wherever the
+    // staged copy stands (`--old-git` on PATH, `--other-git` where the
+    // settings point).
     if !shim_version.is_empty() {
         cmd.env(SHIM_VERSION, shim_version)
             .env(SHIM_REAL, real_git(path)?);
@@ -330,11 +284,8 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         cmd.env("PGG_LOG", "info");
     }
     if !opts.restore {
-        // Naming a repository is what turns tab restoring off (Main.qml):
-        // a run that is told what to open is not being asked what it
-        // remembers. More than one opens a tab each, in this order —
-        // joined, so a path git accepts but UTF-8
-        // does not still reaches the app whole.
+        // Naming repositories turns tab restoring off (Main.qml). Joined
+        // as `OsString`, so a path that is not UTF-8 still arrives whole.
         let mut open = std::ffi::OsString::new();
         for (position, repo) in repos.iter().enumerate() {
             if position > 0 {
@@ -354,8 +305,7 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         cmd.env("PGG_SYSTEM_TITLE_BAR", "1");
     }
     super::perf::configure(&mut cmd, &opts.verb, arg)?;
-    // The screen the identity verbs are about: the seed written above is
-    // theirs, and this is what the dialog standing on it is told to do.
+    // What the identity verbs' dialog is told to do over their seed.
     if identity_seed(&opts.verb).is_some() {
         cmd.env("PGG_AUTO_IDENTITY", identity_answer(&opts.verb, &opts.arg));
         if opts.verb == "identity-half"
@@ -369,36 +319,27 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
     Ok(cmd)
 }
 
-/// The verbs started into a graph that walks as if this window's first
-/// status had not arrived — the two landings on the working tree, read
-/// in the one arrangement a repository cannot be built into
+/// Verbs started with the graph walking as if the first status had not
+/// arrived — an arrangement no repository can be built into
 /// (`platitude_app::harness::faults`).
 const HELD_WIP_ROW_VERBS: &[&str] = &["wip-landing", "wip-landing-stopped"];
 
-/// The verb whose subject is the exit waiting for a configuration save
-/// the hub holds, and the station its save is held until: the one the
-/// shutdown reaches as it starts joining the writes still out
-/// (`Hub::shutdown`), so the join is what lets the save go.
+/// The verb whose subject is the exit waiting on a held configuration
+/// save, and the station the save is held until: where `Hub::shutdown`
+/// starts joining the writes still out, so the join lets it go.
 pub(super) const HELD_SAVE_VERB: &str = "quit-save-held";
 const HELD_SAVE_STATION: &str = "writes-joining";
 
 /// Whether this verb's subject is a second process finding the settings
-/// held. Every other run has a store nobody else can be in — its config
-/// directory is made for it and thrown away after — so one that reports
-/// the store taken is a broken run, and [`super::outcome`] reads this to
-/// tell the two apart.
+/// held. Every other run's config directory is its own, so a taken store
+/// there is a broken run ([`super::outcome`]).
 pub(super) fn stages_a_held_store(verb: &str) -> bool {
     verb == "solo" || verb == "gate-sweep"
 }
 
-/// Holds the settings lock for the two verbs whose subject is a *second*
-/// process finding it held.
-///
-/// Holding the real lock is what makes the picture proof of the
-/// mechanism. The name is
-/// `settings::LOCK_FILE`; xtask depends on std alone (CLAUDE.md), so it
-/// is spelled again here, and a drift shows up as the run reporting
-/// `blocked=false`.
+/// Holds the real settings lock for [`stages_a_held_store`] verbs. The
+/// name is `settings::LOCK_FILE` spelled again (xtask is std-only); a
+/// drift shows as the run reporting `blocked=false`.
 fn hold_the_store(config_dir: &Path, verb: &str) -> Result<Option<crate::locks::Locked>, String> {
     if !stages_a_held_store(verb) {
         return Ok(None);

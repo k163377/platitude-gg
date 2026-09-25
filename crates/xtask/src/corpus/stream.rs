@@ -1,63 +1,44 @@
-//! The `fast-import` stream the corpus is built from.
+//! The `fast-import` stream the corpus is built from: one stream for the
+//! whole history, refs included (`reset` inside the import), where a
+//! process per commit or an `update-ref` afterwards costs orders of
+//! magnitude more.
 //!
-//! One stream for the whole history: 200,000 processes
-//! would cost hours, and one stream costs minutes (the same reason
-//! `demo::deep` is written this way). Refs are written by the stream too
-//! — `reset` inside the import is what makes 50,000 of them free, where
-//! `update-ref --stdin` afterwards costs half a minute (measured).
-//!
-//! **Bodies are per revision.** A body shared by every commit that
-//! names a path would be a repository of a hundred distinct files
-//! however many commits it had, and the object database is an axis of
-//! its own: the reference repository's five million objects are what
-//! every git process the application spawns maps before it can resolve
-//! anything. So every placement has bytes of its own, and the bodies
-//! are tens of gigabytes — larger than the repository they produce by
-//! more than an order of magnitude.
-//!
-//! **And they are the parallel part.** One `fast-import` reads its
-//! stream on one thread, and the bodies are two thirds of what that
-//! thread does; they hash to the same ids whichever process reads them,
-//! so they go through several at once under marks ([`blobs`]) and the
-//! commit stream names the marks ([`Bodies`]). Same objects, same ids,
-//! same token (`corpus::token`) — only the packs are laid out
-//! differently.
+//! **Bodies are per revision**: every git process the application spawns
+//! maps the object database, and bodies shared across commits would
+//! leave it a hundredth of the reference repository's. So the bodies are
+//! tens of gigabytes, and they are the parallel part: they hash to the
+//! same ids whichever process reads them, so they go through several
+//! `fast-import`s at once under marks ([`blobs`]) that the commit stream
+//! names ([`Bodies`]). Only the pack layout differs from one stream's;
+//! the ids and the token (`corpus::token`) do not.
 
 use std::io::{self, Write};
 
 use super::{shape, tree};
 
-/// The first commit's mark. Commit marks count up from here to
-/// `COMMITS`; the blob marks start at [`BLOB_MARK_BASE`].
+/// The first commit's mark; commit marks count up from here.
 const BASE_MARK: u64 = 1;
 
-/// The first blob mark. One per placement, counted in stream order, and
-/// far enough above the last commit mark that the two ranges cannot
-/// meet — a mark minted twice is a stream fast-import refuses at the
-/// end, by number.
+/// The first blob mark, one per placement in stream order, above every
+/// commit mark: a mark minted twice is a stream fast-import refuses at
+/// the end, by number.
 const BLOB_MARK_BASE: u64 = 1_000_000;
 const _: () = assert!(BASE_MARK + shape::COMMITS < BLOB_MARK_BASE);
 
-/// One body placed at one path: whose bytes, at which revision, and
-/// under which slot's name.
-///
-/// The name is a slot of its own because a rename writes one slot's
-/// bytes under another's path — the same content under a new name is
-/// what `--find-renames` scores.
+/// One body placed at one path. `at` differs from `body` for a rename:
+/// one slot's bytes under another's path.
 #[derive(Clone, Copy)]
 pub(super) struct Placement {
     /// The slot whose bytes these are.
     body: u64,
-    /// Their revision.
     rev: u32,
     /// The slot whose path and mode the `M` line carries.
     at: u64,
 }
 
 impl Placement {
-    /// The bytes, into a buffer the caller keeps: four million
-    /// placements, so this is the difference between one allocation and
-    /// four million.
+    /// The bytes, into a buffer the caller keeps (four million
+    /// placements).
     fn bytes(self, tree: &tree::Tree, into: &mut Vec<u8>) {
         let want = tree.sizes[self.body as usize] as usize;
         shape::content_into(into, self.body, want, self.rev, tree.mode(self.body));
@@ -79,9 +60,8 @@ pub(super) trait Bodies {
     ) -> io::Result<()>;
 }
 
-/// Bytes spelled out in the commit that places them: the whole corpus
-/// as one stream, which is what the tests read and what the generator's
-/// own cost is timed over (`tests::time_the_generator_alone`).
+/// Bytes spelled out in the commit that places them: the single-stream
+/// form the tests read (`tests::time_the_generator_alone`).
 #[cfg(test)]
 #[derive(Default)]
 pub(super) struct Inline {
@@ -141,9 +121,8 @@ impl Bodies for Recorded {
     }
 }
 
-/// Every placement of the whole history, in stream order. The history
-/// is deterministic, so this is the same walk the commit stream makes
-/// — with the bodies left out, which is nearly all of its cost.
+/// Every placement of the whole history, in stream order: the same
+/// deterministic walk the commit stream makes, without the bodies.
 pub(super) fn placements(tree: &tree::Tree) -> io::Result<Vec<Placement>> {
     let mut recorded = Recorded::default();
     write(&mut io::sink(), tree, &mut recorded)?;
@@ -182,20 +161,11 @@ pub(super) fn blobs(
     Ok(())
 }
 
-/// Which blob pass a placement goes through.
-///
-/// **By what the bytes are.** Two placements
-/// with the same bytes are one object, and fast-import knows that only
-/// inside one process: a rename places a slot's bytes again under a new
-/// name, a file too small to carry its revision is the same bytes at
-/// every revision (`shape::carries_revision`), and a body too small to
-/// hold its slot's number is the same bytes as another slot's
-/// (`shape::TINY`). So the tiny go by their bytes, the small by slot,
-/// and everything else by slot and revision — which is also what
-/// spreads the eleven huge files' revisions evenly, where by slot alone
-/// one pass could draw half of them. Dealt out by index instead, the
-/// corpus carried 44,722 objects twice (measured); by slot and
-/// revision alone, 167.
+/// Which blob pass a placement goes through, by what its bytes are:
+/// fast-import deduplicates only inside one process. The tiny go by
+/// their bytes (`shape::TINY`), those that carry no revision by slot
+/// (`shape::carries_revision`), and the rest by slot and revision —
+/// which also spreads the huge files' revisions across the passes.
 fn shard_of(
     placement: Placement,
     tree: &tree::Tree,
@@ -221,24 +191,18 @@ fn shard_of(
 /// What the newest commit is, so the caller can say where the
 /// measurement will land without re-deriving it.
 pub(super) struct Newest {
-    /// The ordinary paths it changes, sorted. **One set of two** —
-    /// `huge` is the other one, and git diffs the two sets together, so
-    /// anything asking what the commit touches has to chain them.
+    /// The ordinary paths it changes, sorted. Anything asking what the
+    /// commit touches has to chain `huge` in.
     pub(super) paths: Vec<String>,
     /// The one large enough for its diff to be a measurement of the
     /// grammar path.
     pub(super) huge: String,
 }
 
-/// The whole history as one import stream, written as it is generated,
-/// with its bodies handled as `bodies` says, and what its newest commit
-/// holds.
-///
-/// **It is written as it goes.** With the bodies inline the
-/// stream is every revision of every file spelled out in full —
-/// fast-import has no delta input — so holding it would mean holding
-/// tens of gigabytes at once. What git needs is a pipe, and a pipe is
-/// what this fills.
+/// The whole history as one import stream, with its bodies handled as
+/// `bodies` says, and what its newest commit holds. Written as it is
+/// generated: inline, the stream is tens of gigabytes (fast-import takes
+/// no deltas).
 pub(super) fn write(
     out: &mut dyn Write,
     tree: &tree::Tree,
@@ -274,8 +238,7 @@ impl History {
     }
 }
 
-/// The commit that places the whole tree. Everything after it is a
-/// change to what this left.
+/// The commit that places the whole tree.
 fn base(out: &mut dyn Write, tree: &tree::Tree, bodies: &mut dyn Bodies) -> io::Result<()> {
     let message = shape::message(1);
     let (name, mail) = shape::author(1);
@@ -285,9 +248,7 @@ fn base(out: &mut dyn Write, tree: &tree::Tree, bodies: &mut dyn Bodies) -> io::
     writeln!(out, "author {name} <{mail}> {when} +0000")?;
     writeln!(out, "committer {name} <{mail}> {when} +0000")?;
     write!(out, "data {}\n{message}\n", message.len())?;
-    // Tracked, so `status` reads them and the per-directory exclude
-    // stack it pushes and pops as it walks is the one the reference
-    // repository's status pays for.
+    // Tracked, for `status` to read (`shape::NESTED_IGNORES`).
     writeln!(out, "M 100644 inline .gitignore")?;
     writeln!(out, "data {}", shape::GITIGNORE.len())?;
     write!(out, "{}", shape::GITIGNORE)?;
@@ -325,11 +286,9 @@ fn place(
     )
 }
 
-/// `M <mode> inline <path>` and the bytes behind it, for the few bodies
-/// that are not placements — the newest commit's edits. **`data` counts
-/// bytes**, and a count that disagrees with what follows is a stream
-/// fast-import rejects at the point it notices — which is after the
-/// whole of it has been written.
+/// `M <mode> inline <path>` and its bytes, for the bodies that are not
+/// placements — the newest commit's edits. `data` counts bytes; a count
+/// that disagrees is caught only after the whole stream is written.
 fn inline(out: &mut dyn Write, tree: &tree::Tree, slot: u64, body: &[u8]) -> io::Result<()> {
     writeln!(
         out,
@@ -342,13 +301,8 @@ fn inline(out: &mut dyn Write, tree: &tree::Tree, slot: u64, body: &[u8]) -> io:
     writeln!(out)
 }
 
-/// The long line of development every ref hangs off, and the changes
-/// that make it a history.
-///
-/// **Clustered, as a change to a repository is.** The reference
-/// repository's commits touch 16.90 files across 4.95 directories;
-/// files scattered over the whole tree would rewrite a different tree
-/// object for each one and cost the pack what a real commit does not.
+/// The long line of development every ref hangs off, its changes
+/// clustered (`shape::CHANGED_FILES`).
 fn churn(
     out: &mut dyn Write,
     tree: &tree::Tree,
@@ -366,8 +320,8 @@ fn churn(
         writeln!(out, "author {name} <{mail}> {when} +0000")?;
         writeln!(out, "committer {by} <{by_mail}> {when} +0000")?;
         write!(out, "data {}\n{message}\n", message.len())?;
-        // A second parent every so often. `from` is implicit for the
-        // first parent: the ref already points at the previous commit.
+        // `from` is implicit: the ref already points at the previous
+        // commit.
         if n > shape::MERGE_EVERY && n.is_multiple_of(shape::MERGE_EVERY) {
             writeln!(out, "merge :{}", BASE_MARK + n - 1 - shape::MERGE_EVERY / 2)?;
         }
@@ -385,13 +339,8 @@ fn changes(
     n: u64,
     bodies: &mut dyn Bodies,
 ) -> io::Result<()> {
-    // **The clusters sit near each other.** A
-    // commit rewrites one tree object per directory on the path of
-    // every file it touches, so clusters in distant subtrees rewrite
-    // that many deep paths whole; the reference repository rewrites
-    // 16.9 trees a commit for its 16.9 files, which is what changes
-    // sharing a subtree look like. Neighbouring slots are neighbouring
-    // directories, so their parents are written once.
+    // The clusters sit within `shape::CLUSTER_REACH` of each other, so
+    // they share parent trees.
     let near = shape::mix(n ^ 0x00C1_57E0) % tree::TRACKED;
     for cluster in 0..shape::CLUSTERS {
         let at = (near + shape::mix(n ^ (cluster << 40)) % shape::CLUSTER_REACH) % tree::TRACKED;
@@ -400,10 +349,6 @@ fn changes(
             touch(out, tree, live, n ^ (slot << 8), slot, bodies)?;
         }
     }
-    // **A megabyte file rewritten now and then.** The reference
-    // repository's pack is mostly historical revisions of large files;
-    // without them the corpus packs to three quarters of it however
-    // many small files it churns.
     if n.is_multiple_of(shape::HUGE_EVERY)
         && let Some(slot) = tree.huge.get((n as usize / 4) % tree.huge.len())
     {
@@ -413,8 +358,6 @@ fn changes(
             place(out, tree, bodies, *slot, live.revs[at])?;
         }
     }
-    // One rename now and then, so `--find-renames` has an add and a
-    // delete of like content to score.
     if n.is_multiple_of(shape::RENAME_EVERY) {
         let from = shape::mix(n ^ 0x0000_5E4A) % tree::TRACKED;
         if live.tracked[from as usize]
@@ -442,8 +385,7 @@ fn changes(
 }
 
 /// One path changed: rewritten where it is tracked, added back where it
-/// is not, and deleted on the share of touches the reference
-/// repository's history deletes.
+/// is not, and deleted on `shape::DELETED_SHARE` of touches.
 fn touch(
     out: &mut dyn Write,
     tree: &tree::Tree,
@@ -462,12 +404,8 @@ fn touch(
     if shape::mix(seed ^ 0x0000_DE1E) % 100 < shape::DELETED_SHARE {
         live.tracked[at] = false;
         writeln!(out, "D {}", tree.paths[at])?;
-        // **Paired with an add, in the same commit.** A delete on its
-        // own drains the tree — every touch that lands on a tracked
-        // path can delete it and only a touch that lands on an
-        // untracked one adds, so the count settles below the reference
-        // repository's and the index and the status settle with it
-        // (measured: 95,207 files where the tables describe 106,581).
+        // Paired with an add in the same commit: deletes alone drain the
+        // tree, since most touches land on tracked paths.
         let Some(back) = live.spare.pop() else {
             live.spare.push(slot);
             return Ok(());
@@ -481,13 +419,9 @@ fn touch(
     place(out, tree, bodies, slot, live.revs[at])
 }
 
-/// The chains the graph's window is mostly made of: short,
-/// unmerged, each ending in a remote-tracking ref, forked from
-/// near the trunk's tip and dated after it so they land in the
-/// window.
-///
-/// The commit command names the ref, so these need no `reset` of their
-/// own — the branch and its tip arrive together.
+/// The chains the graph's window is mostly made of, dated after the
+/// trunk's tip so they land in it. The commit command names the ref, so
+/// these need no `reset`.
 fn side_branches(
     out: &mut dyn Write,
     tree: &tree::Tree,
@@ -498,10 +432,8 @@ fn side_branches(
     let trunk_tip = shape::FIRST_COMMIT_AT + shape::TRUNK * shape::STEP_SECS;
     for branch in 0..shape::SIDE_BRANCHES {
         let name = shape::remote_branch(branch);
-        // Forked from a near neighbour, so the lane closes a few rows
-        // down and the window keeps the reference repository's width
-        // (`shape::FORK_BACK`). The oldest few have no neighbour behind
-        // them and take the trunk's tip.
+        // Forked from a near neighbour (`shape::FORK_BACK`); the oldest
+        // few have none behind them and take the trunk's tip.
         let back = shape::fork_back(branch);
         let from = if branch < back {
             tip
@@ -542,21 +474,12 @@ fn side_branches(
     Ok(())
 }
 
-/// Which file a commit off the trunk touches.
+/// Which file a commit off the trunk touches: the largest of
+/// [`shape::EDIT_DRAWS`] draws, because what people edit is larger than
+/// the median file.
 ///
-/// **What people edit is larger than the median file.** The
-/// reference repository's median tracked file is 565 bytes and the
-/// median file its window opens is 10,366 — the files under active
-/// work sit in the tree's tail. Drawn uniformly the window opens six
-/// hundred bytes a row, and every diff in it costs a sixteenth of what
-/// the same click costs against the real repository. The largest of
-/// [`shape::EDIT_DRAWS`] draws lands in the same decile without a
-/// second index over the tree.
-///
-/// **A slot a rename has carried away is not a file any more**, and
-/// naming it here would add one back on a branch the trunk does not
-/// have. The scan past it is bounded: nearly every slot is tracked,
-/// and a tree with none left has nothing to say.
+/// Tracked slots only: one a rename carried away would be added back on
+/// a branch the trunk does not have.
 fn edited_slot(tree: &tree::Tree, live: &History, seed: u64) -> Option<u64> {
     let mut edited: Option<u64> = None;
     for draw in 0..shape::EDIT_DRAWS {
@@ -571,14 +494,10 @@ fn edited_slot(tree: &tree::Tree, live: &History, seed: u64) -> Option<u64> {
     edited
 }
 
-/// The commit the interaction measurement opens: many files, so the
-/// details pane has a list to build, and among them one large enough
-/// that its diff is a measurement of the grammar path.
-///
-/// Its ordinary files come first by path so that the default scenario —
-/// which opens the first changed file — measures the common case, and
-/// the large one is opened by name when that is the question being
-/// asked.
+/// The commit the interaction measurement opens: many files for the
+/// details pane's list, and one large enough that its diff measures the
+/// grammar path. The default scenario opens the first changed file by
+/// path, so that one has to be ordinary; the large one is opened by name.
 fn newest_commit(out: &mut dyn Write, tree: &tree::Tree, live: &History) -> io::Result<Newest> {
     let n = shape::COMMITS;
     let mark = BASE_MARK + shape::TRUNK + shape::SIDE_BRANCHES * shape::SIDE_LENGTH;
@@ -592,25 +511,16 @@ fn newest_commit(out: &mut dyn Write, tree: &tree::Tree, live: &History) -> io::
     writeln!(out, "committer {by} <{by_mail}> {when} +0000")?;
     write!(out, "data {}\n{message}\n", message.len())?;
     writeln!(out, "from :{}", BASE_MARK + shape::TRUNK - 1)?;
-    // **The large file sorts last.** git diffs a commit's paths in
-    // order and the default scenario opens the first, so a large one
-    // at the head of the list would make every run a measurement of
-    // the grammar path where the record says it measures the common
-    // case. The ordinary files are drawn from across the whole tree
-    // and the large one is the last-sorting of the eleven, and then
-    // the pick is checked.
+    // The large file is the last-sorting huge one; the fallback below
+    // makes sure an ordinary file still sorts before it.
     let huge = tree
         .huge
         .iter()
         .copied()
         .max_by_key(|slot| &tree.paths[*slot as usize])
         .unwrap_or(0);
-    // **The file the default scenario opens is chosen.** It is the
-    // first by path, so drawing all of them uniformly opens the median
-    // file of the tree — six hundred bytes, where the reference
-    // repository's window opens ten thousand (`shape::OPENED_BYTES`).
-    // This is the lowest-sorting file large enough to be one somebody
-    // works in, and everything else in the commit is held above it.
+    // The file the default scenario opens: the lowest-sorting one of at
+    // least `shape::OPENED_BYTES`, with everything else held above it.
     let opened = (0..tree::TRACKED)
         .filter(|slot| live.tracked[*slot as usize] && *slot != huge)
         .filter(|slot| tree.sizes[*slot as usize] as usize >= shape::OPENED_BYTES)
@@ -629,11 +539,7 @@ fn newest_commit(out: &mut dyn Write, tree: &tree::Tree, live: &History) -> io::
         {
             continue;
         }
-        // Big enough to take the edit. **`shape::edited` leaves a file
-        // of fewer than four lines exactly as it found it**, and a path
-        // the commit names but does not change is a path the details
-        // pane will not list — the record would say 76 files and git
-        // would say fewer.
+        // Big enough to take the edit (`shape::EDITABLE_FLOOR`).
         if live.tracked[slot as usize]
             && slot != huge
             && tree.sizes[slot as usize] as usize >= shape::EDITABLE_FLOOR
@@ -672,29 +578,20 @@ fn newest_commit(out: &mut dyn Write, tree: &tree::Tree, live: &History) -> io::
     })
 }
 
-/// The refs. Tags and remote-tracking branches spread across the whole
-/// history: what the ref tables cost is their names, and what the graph
-/// draws is where they land.
+/// The tags, and the remote-tracking branches no side branch named.
 fn refs(out: &mut dyn Write) -> io::Result<()> {
     let tip = BASE_MARK + shape::TRUNK - 1;
     let last = tip + shape::SIDE_BRANCHES * shape::SIDE_LENGTH;
     for n in 0..shape::TAGS {
-        // Most of them spread over the whole history, where they cost
-        // the ref tables their names and the graph nothing. The last
-        // `TAGS_IN_WINDOW` land on commits the window holds, which is
-        // what the graph actually draws — and some of those share a
-        // commit, because the reference repository's busiest carries
-        // forty-two.
+        // Most spread over the whole history; the last `TAGS_IN_WINDOW`
+        // land in the window.
         let at = if n + shape::TAGS_IN_WINDOW < shape::TAGS {
             BASE_MARK + (n * (shape::TRUNK - 1) / shape::TAGS)
         } else {
-            // **Spread over rows.** A row that carries any chip lays
-            // chips out, so what costs the renderer is the number of
-            // rows carrying them as much as the count: the reference
-            // repository puts 705 chips on 531 of its 2,000 rows. One
-            // commit takes `REFS_ON_ONE` of them, because its busiest
-            // carries forty-two and that is one `LabelIndex` bucket and
-            // one row laying out forty-two.
+            // Spread over rows — the renderer pays per chip-carrying row
+            // as much as per chip (the reference repository: 705 chips
+            // on 531 of 2,000 rows) — but for `REFS_ON_ONE` on one
+            // commit.
             let into = n + shape::TAGS_IN_WINDOW - shape::TAGS;
             let span = last - tip;
             match into.checked_sub(shape::REFS_ON_ONE) {
@@ -704,8 +601,7 @@ fn refs(out: &mut dyn Write) -> io::Result<()> {
         };
         annotated_or_not(out, n, at)?;
     }
-    // The first `SIDE_BRANCHES` of them already exist: their commits
-    // named them, which is what put their tips in the graph's window.
+    // The first `SIDE_BRANCHES` were named by their own commits.
     for n in shape::SIDE_BRANCHES..shape::REMOTE_BRANCHES {
         let at = BASE_MARK + (n * (shape::TRUNK - 1) / shape::REMOTE_BRANCHES);
         writeln!(
@@ -717,21 +613,16 @@ fn refs(out: &mut dyn Write) -> io::Result<()> {
     Ok(())
 }
 
-/// One tag, as a tag object or as a ref pointing straight at a commit.
-///
-/// **Annotated is the expensive one, and it is what the reference
-/// repository has**: 99.3% of its tags carry an object, so reading one
-/// costs a peel where a lightweight tag resolves in a single read. A
-/// corpus of lightweight tags makes forty thousand of those free.
+/// One tag: annotated on `shape::ANNOTATED_SHARE` in a thousand,
+/// otherwise a ref pointing straight at the commit.
 fn annotated_or_not(out: &mut dyn Write, n: u64, at: u64) -> io::Result<()> {
     let name = shape::tag(n);
     if mix_share(n) >= shape::ANNOTATED_SHARE {
         return writeln!(out, "reset refs/tags/{name}\nfrom :{at}\n");
     }
     let (who, mail) = shape::author(n ^ 0x0000_7A69);
-    // A tagger date of its own, later than the commit's: the sidebar
-    // sorts tags by date, and a tag that took its commit's date would
-    // sort in an order the ref list already has.
+    // Later than the commit's: the sidebar sorts tags by date, and the
+    // commit's date would give an order the ref list already has.
     let when = shape::FIRST_COMMIT_AT + (shape::COMMITS + n) * shape::STEP_SECS;
     let message = shape::subject(n ^ 0x0000_7A69);
     writeln!(out, "tag {name}")?;

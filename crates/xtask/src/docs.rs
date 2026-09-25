@@ -1,32 +1,11 @@
-//! `cargo xtask docs` — the three ways an edit to this tree's markdown has
-//! torn a block off the list it belonged to without saying so.
+//! `cargo xtask docs` — the caps of the always-loaded documents, the
+//! quotations held in `tokens` and `commands`, and here the ways an edit
+//! tears a block off the list it belonged to ([`Kind`], each told in
+//! `Kind::say`) in the documents read as rules ([`ROOTS`] and [`LOOSE`]).
+//! A tear keeps every word in order, so review does not see it.
 //!
-//! All three survive review because nothing about them looks wrong in the
-//! source: the words are all still there, in the order they were written,
-//! and what changed is which block each line belongs to — which two of
-//! them show only once rendered, and the third only to a reader who knows
-//! how this tree writes a heading. What that costs is a sentence that no
-//! longer reads and a rule nobody applies, so the count is over the
-//! documents that are read as rules ([`ROOTS`] and [`LOOSE`]).
-//!
-//! Each is a shape this file's own history has actually taken:
-//!
-//! * [`Kind::OrphanIndent`] — an indented line under a block that closed
-//!   the list above it, so it hangs at a bullet's indent with no bullet.
-//!   One clause of デザイン規約 §チップ lived like this through three
-//!   rewrites: each edit glued its head onto the paragraph that ended the
-//!   block above and left its tail on a line of its own.
-//! * [`Kind::HeadNoBlank`] — a heading with no blank line over it. Every
-//!   heading here stands over one, so a heading that does not was made by
-//!   an edit that spliced two blocks together — here, the same rewrite
-//!   that left the clause above hanging.
-//! * [`Kind::TableInList`] — a table written at column 0 inside a list.
-//!   The table ends the list, so the list's own text after it goes on at
-//!   an indent that continues nothing.
-//!
-//! The count reads structure only: how wide a line runs and
-//! how a sentence is built are the writer's, and a machine that had an
-//! opinion on either would be answering a question nobody asked it.
+//! The count reads structure only: line width and sentence shape are the
+//! writer's.
 
 mod commands;
 mod tokens;
@@ -55,23 +34,16 @@ pub(crate) static SYNC: command::Command = command::Command {
 
 pub(crate) static COMMANDS: &[&command::Command] = &[&CHECK, &SYNC];
 
-/// The trees whose markdown is read, and the one file outside them.
 const ROOTS: [&str; 3] = ["internal-docs", ".claude/rules", ".claude/rules-refs"];
 const LOOSE: [&str; 1] = ["CLAUDE.md"];
 
-/// The bytes an always-loaded rule document may hold. CLAUDE.md is in
-/// the context of every call a session makes, and a file under
-/// .claude/rules in every call after its crate is first touched, so a
-/// byte in either is paid again on every call that follows — which is
-/// what makes a rule here dearer than the same rule anywhere else. What
-/// a name can find (a type, a part, a command, a function) belongs in
-/// .claude/rules-refs, which nothing loads unasked.
+/// The caps of the always-loaded documents (CLAUDE.md
+/// §規約の置き場所と本ファイルの運用).
 pub(crate) const CLAUDE_CAP: usize = 12 * 1024;
 pub(crate) const RULE_CAP: usize = 8 * 1024;
 
-/// The cap a document carries, when it carries one: CLAUDE.md and the
-/// files directly under .claude/rules. Answers for a hook payload's
-/// path (absolute, forward slashes) and for one relative to the root.
+/// The cap a document carries, if any. Takes a hook payload's path
+/// (absolute, forward slashes) or one relative to the root.
 pub(crate) fn cap_of(path: &str) -> Option<usize> {
     if path == "CLAUDE.md" || path.ends_with("/CLAUDE.md") {
         Some(CLAUDE_CAP)
@@ -84,7 +56,6 @@ pub(crate) fn cap_of(path: &str) -> Option<usize> {
     }
 }
 
-/// The finding for a capped document that has grown past its cap.
 pub(crate) fn oversize(path: &str, bytes: usize) -> Option<String> {
     let cap = cap_of(path)?;
     (bytes > cap).then(|| {
@@ -190,8 +161,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// Every document read once: its torn blocks, and its size against the
-/// cap it carries, each finding named by the path relative to the root.
 fn read_each(root: &Path, files: &[PathBuf]) -> Result<(Vec<String>, Vec<String>), String> {
     let mut torn: Vec<String> = Vec::new();
     let mut over: Vec<String> = Vec::new();
@@ -212,11 +181,8 @@ fn read_each(root: &Path, files: &[PathBuf]) -> Result<(Vec<String>, Vec<String>
     Ok((torn, over))
 }
 
-/// Write what the catalogue owns, when asked to.
-///
-/// The same order the value cells are held in: `--sync` writes, and the
-/// findings are still said, so that drift reaches the person who has to
-/// decide whether the declaration was the side that was wrong.
+/// With `--sync`, write what the catalogue owns. What the write answers
+/// is cleared; `findings`, which a person has to answer, are still said.
 fn written(root: &Path, held: commands::Held, sync: bool) -> Result<commands::Held, String> {
     if !sync || held.rewritten.is_empty() {
         return Ok(held);
@@ -238,14 +204,8 @@ fn written(root: &Path, held: commands::Held, sync: bool) -> Result<commands::He
     })
 }
 
-/// Hold the design document's value cells to the sources, writing them
-/// when asked to.
-///
-/// The write happens ahead of the findings, which are still said:
-/// `--sync` is how a value cell is corrected, and a run that
-/// corrects one still says which cell it was, so that the drift reaches
-/// the person who has to decide whether the source was the side that was
-/// wrong.
+/// With `--sync`, write the value cells. A run that writes clears every
+/// finding.
 fn quote(root: &Path, sync: bool) -> Result<tokens::Quoted, String> {
     let quoted = tokens::quote(root)?;
     if !sync {
@@ -268,10 +228,8 @@ fn quote(root: &Path, sync: bool) -> Result<tokens::Quoted, String> {
     })
 }
 
-/// The torn blocks of one document, as the sentences a reader is given.
-/// The Write hook says the same thing about the one file an edit just
-/// landed in, so a tear is answered in the turn that made it, ahead
-/// of the next gate.
+/// The torn blocks of one document as sentences — what the post-write
+/// hook says about the file an edit just landed in.
 pub(crate) fn findings(text: &str) -> Vec<String> {
     breaks(text)
         .into_iter()
@@ -287,8 +245,7 @@ pub(crate) fn covers(path: &str) -> bool {
             || LOOSE.iter().any(|name| path.ends_with(&format!("/{name}"))))
 }
 
-/// One place a block was torn off what it belonged to, at the line whose
-/// reader is meant to look — the break itself, where it and the
+/// One tear, at the line to fix — the break itself, where it and the
 /// symptom differ.
 struct Break {
     line: usize,
@@ -298,7 +255,7 @@ struct Break {
 enum Kind {
     OrphanIndent,
     HeadNoBlank,
-    /// The line the table left hanging, which is what shows the tear.
+    /// The line the table left hanging.
     TableInList {
         hanging: usize,
     },
@@ -327,23 +284,15 @@ impl Kind {
 
 /// The torn blocks of one document.
 ///
-/// The walk carries one question: may an indented line be here — is a
-/// list still open over it. A list opens on a bullet at any indent, and
-/// only a block at **column 0** closes it. That asymmetry is the whole
-/// of the accuracy: a table or a heading indented inside a list is part
-/// of the list and closes nothing, and a count that let one close the
-/// list would call every sound bullet under it an orphan.
+/// The walk carries one question: is a list still open over an indented
+/// line. A list opens on a bullet at any indent and only a column-0 block
+/// closes it — a table or heading indented inside a list is part of it,
+/// and letting one close the list would call every sound bullet under it
+/// an orphan. A column-0 line with no blank above is a lazy continuation
+/// and leaves the list open.
 ///
-/// What closes a list, then: a column-0 heading, a column-0 table row,
-/// and a column-0 paragraph that starts its own block (a blank line
-/// above it). A column-0 line with no blank above it is a lazy
-/// continuation of the item it follows and leaves the list open — the
-/// conservative reading, and the one that answers to what this tree
-/// writes.
-///
-/// Fenced code is skipped whole: what is inside a fence is a sample of
-/// something else's syntax, and its indents are its own. So is the YAML
-/// front matter of .claude/rules, whose keys carry indented values.
+/// Fenced code and the YAML front matter of .claude/rules are skipped:
+/// their indents are their own.
 fn breaks(text: &str) -> Vec<Break> {
     let mut found = Vec::new();
     let lines: Vec<&str> = text.lines().collect();
@@ -351,17 +300,15 @@ fn breaks(text: &str) -> Vec<Break> {
 
     let mut fenced = false;
     let mut list_open = false;
-    // The column-0 table that closed a list and has not been followed by
-    // anything else that closes one: the finding an orphan under it earns.
+    // The column-0 table that closed a list, while nothing else has closed
+    // one since: an orphan under it is a `TableInList`.
     let mut table_closer: Option<usize> = None;
     let mut in_table = false;
-    // The start of a document reads as a blank line: the first heading
-    // has nothing above it to have been spliced onto.
+    // The start reads as a blank line: the first heading was spliced onto
+    // nothing.
     let mut blank_above = true;
-    // One finding per closed region: everything hanging under one torn
-    // block is one tear, however many blank lines fall through it.
-    // Cleared at column 0, where the next block begins and the next
-    // tear would be a different one.
+    // One finding per torn block, however many blank lines fall through
+    // what hangs under it; cleared at column 0, where the next block begins.
     let mut orphaned = false;
 
     while at < lines.len() {
@@ -414,8 +361,8 @@ fn breaks(text: &str) -> Vec<Break> {
             table_closer = None;
             in_table = false;
         } else if bare.starts_with('|') {
-            // Only the row that opens the table answers for it; the rows
-            // under it are the same block and find the list already shut.
+            // Only the opening row answers for the table; the rows under it
+            // find the list already shut.
             if !in_table {
                 table_closer = list_open.then_some(number);
                 in_table = true;
@@ -437,8 +384,6 @@ fn breaks(text: &str) -> Vec<Break> {
     found
 }
 
-/// Where the document starts: past the YAML front matter when there is
-/// one, and at the top when there is not.
 fn front_matter_end(lines: &[&str]) -> usize {
     if lines.first().map(|line| line.trim_end()) != Some("---") {
         return 0;
@@ -457,8 +402,8 @@ fn is_heading(bare: &str) -> bool {
     (1..=6).contains(&hashes) && (rest.is_empty() || rest.starts_with(' '))
 }
 
-/// A list marker. The marker needs its space too, which is what keeps
-/// `---` and a `**bold**` lead out of the set.
+/// A list marker. It needs its space too, which keeps `---` and a
+/// `**bold**` lead out.
 fn is_bullet(bare: &str) -> bool {
     if let Some(rest) = bare.strip_prefix(['-', '*', '+']) {
         return rest.starts_with(' ');
@@ -467,9 +412,7 @@ fn is_bullet(bare: &str) -> bool {
     digits > 0 && bare[digits..].starts_with(['.', ')']) && bare[digits + 1..].starts_with(' ')
 }
 
-/// Every file under `dir` with that extension, however deep. Both halves
-/// of this check walk a tree for one kind of file, and the command half
-/// walks two.
+/// Every file under `dir` with that extension, however deep.
 pub(crate) fn under(dir: &Path, extension: &str, out: &mut Vec<PathBuf>) -> Result<(), String> {
     let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     for entry in entries {
@@ -501,8 +444,7 @@ mod tests {
             .collect()
     }
 
-    /// The shape デザイン規約 §チップ carried through three rewrites: a
-    /// sentence whose head was glued onto the paragraph that ended the
+    /// A sentence whose head was glued onto the paragraph that ended the
     /// block above it and whose tail kept a bullet's indent.
     #[test]
     fn a_line_left_at_a_bullets_indent_under_a_paragraph_is_named() {
@@ -517,17 +459,15 @@ mod tests {
         assert_eq!(kinds(text), vec![(5, "orphan")]);
     }
 
-    /// Only the first line of a run is named: a run of them is one tear,
-    /// and a finding per line would bury it.
+    /// A finding per line would bury the tear.
     #[test]
     fn a_run_of_orphaned_lines_is_one_finding() {
         let text = "段落。\n  ひとつ\n  ふたつ\n  みっつ\n";
         assert_eq!(kinds(text), vec![(2, "orphan")]);
     }
 
-    /// And a blank line inside what one torn block left hanging is still
-    /// that one block: a table named once and then again for its second
-    /// paragraph would read as two tables to move.
+    /// A table named again for its second paragraph would read as two
+    /// tables to move.
     #[test]
     fn a_blank_line_through_the_hanging_text_does_not_earn_a_second_finding() {
         let table = "\
@@ -545,8 +485,7 @@ mod tests {
         assert_eq!(kinds("段落。\n  ひとつ\n\n  ふたつ\n"), vec![(2, "orphan")]);
     }
 
-    /// A second tear is a second finding: what separates them is a block
-    /// at column 0 (blank lines inside one split nothing).
+    /// What separates two tears is a column-0 block, not a blank line.
     #[test]
     fn two_blocks_that_each_tore_something_are_two_findings() {
         let text = "段落ひとつ。\n  字下げ\n段落ふたつ。\n\n  字下げ\n";
@@ -567,17 +506,13 @@ mod tests {
         assert_eq!(kinds(text), vec![(5, "head")]);
     }
 
-    /// The first heading has nothing above it to be swallowed by, and a
-    /// `#` that opens a word is prose.
     #[test]
     fn the_first_line_and_a_hash_inside_a_word_are_left_alone() {
         assert!(kinds("# 見出し\n\n本文\n").is_empty());
         assert!(kinds("本文。\n#5 は番号であって見出しではない\n").is_empty());
     }
 
-    /// A table written at column 0 inside a list ends the list, so what
-    /// the list meant to go on saying hangs at an indent that continues
-    /// nothing. The finding is at the table, which is what to move.
+    /// The finding is at the table, which is what to move.
     #[test]
     fn a_column_zero_table_that_leaves_the_list_hanging_is_named() {
         let text = "\
@@ -596,8 +531,7 @@ mod tests {
         assert_eq!(hanging, 7);
     }
 
-    /// A bullet with a table under it and nothing indented after is how
-    /// this tree writes a table, and reads a dozen times over.
+    /// How this tree usually writes a table under a bullet.
     #[test]
     fn a_table_under_a_bullet_with_nothing_hanging_after_it_passes() {
         let text = "\
@@ -615,10 +549,7 @@ mod tests {
         assert!(kinds(text).is_empty(), "{:?}", kinds(text));
     }
 
-    /// The asymmetry the count rests on: a list is closed only by a block
-    /// at column 0. A table or a heading indented inside a list is part
-    /// of the list, and closing on one would call every bullet under it
-    /// an orphan.
+    /// The asymmetry `breaks` rests on.
     #[test]
     fn an_indented_table_or_heading_inside_a_list_closes_nothing() {
         let text = "\
@@ -636,8 +567,6 @@ mod tests {
         assert!(kinds(text).is_empty(), "{:?}", kinds(text));
     }
 
-    /// What is inside a fence is a sample of something else's syntax, and
-    /// its indents and hashes are its own.
     #[test]
     fn fenced_code_is_read_as_none_of_this() {
         let text = "\
@@ -654,8 +583,6 @@ paths:
         assert!(kinds(text).is_empty(), "{:?}", kinds(text));
     }
 
-    /// The front matter of .claude/rules carries indented values under a
-    /// key, which is a list to YAML and an orphan to markdown.
     #[test]
     fn yaml_front_matter_is_skipped_and_the_document_starts_after_it() {
         let text = "\
@@ -671,15 +598,12 @@ paths:
         assert!(kinds(text).is_empty(), "{:?}", kinds(text));
     }
 
-    /// A marker needs its space, which is what keeps a thematic break and
-    /// a bolded lead — how most paragraphs here open — out of the set.
     #[test]
     fn a_rule_and_a_bolded_lead_do_not_open_a_list() {
         let text = "---\n\n**強調で始まる段落**が続く。\n  字下げ\n";
         assert_eq!(kinds(text), vec![(4, "orphan")]);
     }
 
-    /// A numbered list opens one the same way a bullet does.
     #[test]
     fn a_numbered_item_opens_a_list() {
         assert!(kinds("1. まず書く\n   その続き\n2. 次\n").is_empty());
@@ -695,9 +619,7 @@ paths:
         assert!(!covers("/p/internal-docs/notes.txt"));
     }
 
-    /// The caps sit on the documents every call loads — CLAUDE.md and
-    /// the rules — and on nothing a session reads by choice, spelled as
-    /// a hook's absolute path and as the check's relative one alike.
+    /// In both spellings: a hook's absolute path and the check's relative one.
     #[test]
     fn the_caps_sit_on_the_always_loaded_documents() {
         use super::{CLAUDE_CAP, RULE_CAP, cap_of, oversize};

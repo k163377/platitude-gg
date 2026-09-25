@@ -8,51 +8,31 @@
 //! the QtTest files, and the app's own automation harness — and what it
 //! names is four shapes (.claude/rules/core.md §非同期・並行テスト):
 //!
-//! - `sleep`: a sleep or a `yield_now` spent in place of an answer. A
-//!   scheduler's turn proves no order and a stretch of quiet proves no
-//!   silence; both only pass for as long as the machine has spare time.
+//! - `sleep`: a sleep or a `yield_now` spent in place of an answer.
 //! - `deadline`: a clock read, or a `timeout` given a budget of its own.
-//!   A deadline is a diagnostic and belongs to the suite's one budget,
-//!   so that no test is handed a head start on noticing a hang.
-//! - `ignored`: a wait whose answer is thrown away. A rendering wait that
-//!   answered `false` is a paint that never happened.
+//! - `ignored`: a wait whose answer is thrown away.
 //! - `naked`: a tracked completion (`outcome()`), a session boundary
 //!   (`wait_for_graph_passes`, `wait_for_snapshot_reads`) or a
-//!   hand-stepped tick awaited with no backstop under it. These resolve
-//!   through channels no `Patience` watches, and a naked one hung a real
-//!   run until the CI kill with no failing test named.
+//!   hand-stepped tick awaited with no backstop under it.
 //!
-//! Of this runner's own crate it reads the tool bodies too — every
-//! statement outside the test blocks — and names there what
-//! `crate::wait` is the one place for (.claude/rules-refs/core.md: xtask
-//! の待ちは `crate::wait` 1 本から取る): a `sleep`, in the code or in a
-//! PowerShell script the code writes, and a `deadline` — a read of the
-//! monotonic clock, or a receive under a budget of its own. A wait that
-//! goes through that module (`Wait`, `receive`, `stood`, its paces)
-//! names none of these. The product crates' bodies are not read: the
-//! product's clocks are the product's business.
+//! Of this runner's own crate it reads the tool bodies too, and names a
+//! `sleep` (in the code or in a PowerShell script the code writes) or a
+//! `deadline` (a monotonic clock read, or a receive under any budget)
+//! that does not go through `crate::wait` (.claude/rules-refs/core.md「xtask
+//! の待ちは `crate::wait` 1 本から取る」). The product crates' bodies are
+//! not read.
 //!
-//! The one part of a product crate that is read is the app's harness,
-//! which is test code that happens to be compiled inside the window, and
-//! it has two halves. The QML driver `PGG_AUTO_ACT` runs the product
-//! through ([`HARNESS`]) runs on beats, so it is named by rules of its
-//! own ([`qml::Kind::Harness`]): every span of time it spells for
-//! itself, and every count of milliseconds it keeps.
-//! The Rust it is driven and read through ([`HARNESS_RUST`]) is named by
-//! the same rules as this runner's own body — the shapes are the same and
-//! so is the reason. Neither ships: both are behind the `automation`
-//! feature. The window beside them (`src/ui`) is the product and stays
-//! unread, the automation's own cadence (`ui/SampleTimer.qml`) included —
-//! it is a type of `platitude.ui` that the quit dialog waits on too.
+//! The exception is the app's harness, test code compiled inside the
+//! window, in two halves: the QML driver ([`HARNESS`]) is named by rules
+//! of its own ([`qml::Kind::Harness`]), and its Rust half
+//! ([`HARNESS_RUST`]) by this runner's body rules. The window beside them
+//! (`src/ui`) is the product and stays unread, `ui/SampleTimer.qml`
+//! included — the quit dialog waits on it too.
 //!
 //! What a test — or a verb — may still do it says on the line:
 //! `// waits(<purpose>): <reason>` above or beside the statement, with a
-//! purpose of `paced` (a sleep spacing a retry whose completion is
-//! causal), `ceiling` (a wall-clock ceiling that only names a failure),
-//! `measured` (a clock read handed to the code under test or printed,
-//! judged by nothing) or `timed` (a real-time property of the product,
-//! judged as a bound no load can break). A marker that covers nothing is
-//! a finding of its own, so a rewritten wait sheds its marker.
+//! purpose from [`Purpose`]. A marker that covers nothing is a finding of
+//! its own.
 
 mod qml;
 mod rust;
@@ -104,11 +84,9 @@ struct Candidate {
     rule: &'static str,
 }
 
-/// The code that implements the suites' common budgets: what every other
-/// clock read is measured against, and the one place a clock is read on
-/// purpose. Named by the tail of the path — a whole path in a string
-/// here would be an edge from this file to that one in the gate's graph,
-/// and this file reads neither.
+/// The suites' common budgets, where a clock is read on purpose. Named by
+/// the tail of the path: a whole path in a string here would be an edge to
+/// that file in the gate's graph.
 const BUDGETS: [&str; 2] = ["/tests/it/support/wait.rs", "/src/wait.rs"];
 
 /// This scanner's own directory, by the same tail: its tests are
@@ -119,12 +97,10 @@ const SELF: &str = "/src/waits/";
 /// harness, read as test code beside the window it drives.
 const HARNESS: &str = "auto";
 
-/// The Rust half of that same harness: the module a run is driven and
-/// read through — the `PGG_*` record, the ceiling thread that says where
-/// a wedged process stood, the clock the drivers date their reports by.
-/// It is behind the same feature as [`HARNESS`] and ships in no window,
-/// so its body is read the way this runner's own is: what a run is
-/// driven through is test equipment wherever it is compiled.
+/// The Rust half of that same harness (the `PGG_*` record, the deadline
+/// thread, the drivers' clock). It is behind the same feature as
+/// [`HARNESS`] and ships in no window, so its body is read the way this
+/// runner's own is.
 const HARNESS_RUST: &str = "harness";
 
 /// How much was read: said beside the verdict, so that a PASS names the
@@ -133,9 +109,8 @@ const HARNESS_RUST: &str = "harness";
 struct Read {
     rust_files: usize,
     qml_files: usize,
-    /// How many of the QML files were the app's harness: the harness
-    /// and QtTest files are read by different rules, and a count of
-    /// them together would hide either going to zero.
+    /// Counted apart from the QtTest files, so that neither going to zero
+    /// hides behind the other.
     harness_qml_files: usize,
     /// Rust statements read as test code.
     test_statements: usize,
@@ -143,9 +118,8 @@ struct Read {
     /// and the statements of those bodies.
     tool_files: usize,
     tool_statements: usize,
-    /// The same, for the harness's Rust half ([`HARNESS_RUST`]): read by
-    /// the tool rules and counted apart, so that neither group's guard
-    /// can stand in for the other's.
+    /// The same for the harness's Rust half ([`HARNESS_RUST`]), counted
+    /// apart so that neither group's guard stands in for the other's.
     harness_rust_files: usize,
     harness_rust_statements: usize,
 }
@@ -184,8 +158,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
                 read.rust_files += 1;
                 let scope = scope_of(relative, &declared, &runner);
                 let scanned = rust::scan(relative, text, scope);
-                // The body statements land in whichever group the file's
-                // scope names, so a guard below counts only its own.
                 if scope == rust::Scope::Tool {
                     read.tool_files += 1;
                     read.tool_statements += scanned.body_statements;
@@ -209,18 +181,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
             }
         }
     }
-    // A runner whose own files were not among those read has a rule
-    // that names nothing, and would say PASS over it.
+    // Otherwise the body rules name nothing and still say PASS.
     if read.tool_files == 0 {
         return Err(format!(
             "none of the files read is this runner's own ({runner}/src) — its tool bodies went \
              unread"
         ));
     }
-    // The same guard for each half of the harness: their rules are the
-    // only ones that read a beat and the only ones that read a clock
-    // outside this runner, so a directory that fell out of the scope
-    // above would leave those unnamed and still say PASS.
+    // The same guard for each half of the harness.
     for (what, dir, found) in [
         ("the beats it spells", HARNESS, read.harness_qml_files),
         ("the clocks it keeps", HARNESS_RUST, read.harness_rust_files),
@@ -296,8 +264,7 @@ fn report(findings: &[Finding], exceptions: &[Exception], read: &Read) -> Result
             finding.file, finding.line, finding.rule, finding.excerpt
         );
     }
-    // Named one by one: what stands on a marker is what a reviewer reads
-    // the reasons of, and a list that only grows is the thing to notice.
+    // Named one by one, so that a reviewer sees the list grow.
     for exception in exceptions {
         println!(
             "waits: {}:{}: stands as {}",
@@ -342,9 +309,7 @@ fn report(findings: &[Finding], exceptions: &[Exception], read: &Read) -> Result
     ))
 }
 
-/// Which scanner reads a file, or none: Rust under a crate's `src` or
-/// `tests`, QtTest files under `tests/qml`, the app's harness under a
-/// crate's `src/auto` ([`HARNESS`]). The budgets' own implementation
+/// Which scanner reads a file, or none. The budgets' own implementation
 /// and this scanner's fixtures are none.
 fn language_of(relative: &str) -> Option<source::Lang> {
     if BUDGETS.iter().any(|tail| relative.ends_with(tail)) || relative.contains(SELF) {
@@ -365,19 +330,14 @@ fn language_of(relative: &str) -> Option<source::Lang> {
     if kind == "tests" && name.starts_with("tst_") {
         return Some(source::Lang::Qml);
     }
-    // Every file of the harness directory: the driver is spread over
-    // a file per verb group, and a rule that read only some of them
-    // would say PASS over the rest.
+    // Every file of the harness directory: reading only some would say
+    // PASS over the rest.
     if kind == "src" && parts.next() == Some(HARNESS) {
         return Some(source::Lang::Qml);
     }
     None
 }
 
-/// Which QML rules a file is read by: the harness's where it stands in
-/// a crate's `src/auto`, and QtTest's everywhere else a QML file is
-/// read. Decided from the same two segments [`language_of`] admitted it
-/// on, so that a `tests/auto` of somebody's is still a QtTest file.
 fn qml_kind(relative: &str) -> qml::Kind {
     if in_src_dir(relative, HARNESS) {
         qml::Kind::Harness
@@ -386,10 +346,8 @@ fn qml_kind(relative: &str) -> qml::Kind {
     }
 }
 
-/// How much of a Rust file is read ([`rust::Scope`]): the whole of a
-/// test file, the test blocks of a product crate's source, and — of this
-/// runner's own source (under `runner`, [`runner_prefix`]) and of the
-/// harness's Rust half ([`HARNESS_RUST`]) — the body too.
+/// How much of a Rust file is read ([`rust::Scope`]); `runner` is
+/// [`runner_prefix`]'s.
 fn scope_of(relative: &str, declared: &BTreeSet<String>, runner: &str) -> rust::Scope {
     if whole_test_file(relative) || declared.contains(relative) {
         rust::Scope::Whole
@@ -402,17 +360,15 @@ fn scope_of(relative: &str, declared: &BTreeSet<String>, runner: &str) -> rust::
     }
 }
 
-/// Whether `relative` stands in `dir` of some crate's `src`, read off the
-/// same two segments [`language_of`] admits a file on — so that a
-/// `tests/harness` of somebody's is a test file and not this.
+/// Whether `relative` stands in `dir` of some crate's `src` — a
+/// `tests/<dir>` is a test file and not this.
 fn in_src_dir(relative: &str, dir: &str) -> bool {
     let mut parts = relative.split('/').skip(2);
     (parts.next(), parts.next()) == (Some("src"), Some(dir))
 }
 
-/// This runner's own crate, relative to `root` the way every file read
-/// here is — the crate this is compiled from, so that no path is spelled
-/// here.
+/// This runner's own crate relative to `root`, from the manifest it is
+/// compiled from, so that no path is spelled here.
 fn runner_prefix(root: &Path) -> Result<String, String> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let relative = manifest.strip_prefix(root).map_err(|_| {
@@ -426,10 +382,9 @@ fn runner_prefix(root: &Path) -> Result<String, String> {
 }
 
 /// Whether a Rust file is test code from top to bottom by where it stands
-/// or what it is called: anything under a crate's `tests`, and the files
-/// `src` names as tests (structure.md §分割: テストだけ巨大なら同ディレクトリの
-/// 専用ファイルへ). A test file under another name is known by the
-/// `#[cfg(test)] mod` that declares it ([`declared_test_files`]).
+/// or what it is called (structure.md §分割). A test file under another
+/// name is known by the `#[cfg(test)] mod` that declares it
+/// ([`declared_test_files`]).
 fn whole_test_file(relative: &str) -> bool {
     let name = relative.rsplit('/').next().unwrap_or_default();
     relative.split('/').nth(2) == Some("tests") || name == "tests.rs" || name.ends_with("_tests.rs")
@@ -471,9 +426,9 @@ mod tests {
         module_files(declaring, &Declared::Named(name.to_string()))
     }
 
-    // The paths below are fixtures under a crate that does not exist: a
-    // real path in a string here is read by the gate's graph as this file
-    // reading that one, and a crate root among them is refused outright.
+    // The paths below are under a crate that does not exist: the gate's
+    // graph reads a real path in a string as an edge to that file, and
+    // refuses a crate root outright.
 
     #[test]
     fn a_declared_module_resolves_beside_its_declaring_file() {

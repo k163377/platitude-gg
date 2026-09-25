@@ -40,12 +40,9 @@ fn a_picture_this_wrote_comes_back_pixel_for_pixel() {
     }
 }
 
-/// Every filter a scanline may name, and the neighbours each one reads:
-/// the byte to its left in the row being undone, the byte above it in
-/// the row already undone, and the corner between them. The bytes here
-/// and the pixels they come to are both worked out from the spec rather
-/// than from this file, so a filter that reads the wrong neighbour
-/// cannot agree with the answer.
+/// The bytes here and the pixels they come to are both worked out from
+/// the spec rather than from this file, so a filter that reads the wrong
+/// neighbour cannot agree with the answer.
 #[test]
 fn every_filter_a_scanline_may_name_comes_off() {
     #[rustfmt::skip]
@@ -87,10 +84,9 @@ fn paeth_picks_the_neighbour_the_prediction_lands_nearest() {
     assert_eq!(paeth(10, 200, 100), 100);
 }
 
-/// A real encoder's output: dynamic Huffman codes, which nothing in
-/// this crate writes, under filters it chose row by row. The file's own
-/// two sums are recomputed while it is read, so arriving at a picture
-/// at all is the inflating being right.
+/// A real encoder's output: dynamic Huffman codes and per-row filters,
+/// which nothing in this crate writes. Both sums are recomputed on read,
+/// so arriving at a picture at all is the inflating being right.
 #[test]
 fn a_picture_another_encoder_wrote_reads() {
     let icon =
@@ -136,8 +132,6 @@ fn a_shape_this_cannot_read_is_named_rather_than_half_read() {
     assert!(decode(&framed(0, 1, 2, &raw)).is_err_and(|why| why.contains("0x1")));
 }
 
-/// The sizes come out of the file, so the length they multiply out
-/// to has to be refused.
 #[test]
 fn a_header_naming_more_picture_than_there_is_memory_is_refused() {
     let huge = framed(u32::MAX, u32::MAX, 2, &[0u8; 7]);

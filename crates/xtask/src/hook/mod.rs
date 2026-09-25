@@ -1,19 +1,10 @@
-//! Claude Code hook handlers (`cargo xtask hook <event>`).
+//! Claude Code hook handlers (`cargo xtask hook <event>`), wired from
+//! .claude/settings.json: the git, launches, kills, seats and chips a
+//! session touches only when the user asks. Main moves on the permit the
+//! user's own message opens (`permit`), and on that alone.
 //!
-//! The git this repository holds until the user asks for it — a landing,
-//! a rebase, a commit in the primary checkout — and the launches, kills,
-//! seats and chips a session handles only when asked. Main moves on
-//! the permit the user's own message opens (`permit`), and on that
-//! alone.
-//!
-//! Two guards hold a line for what it costs rather than for what it
-//! touches: a wait asked again and again (`repeat`) and a file printed
-//! whole (`dump`) are both read back by every call that follows them,
-//! and the conversation is what every call is charged.
-//!
-//! Wired from .claude/settings.json. Each handler reads the hook's JSON
-//! payload from stdin and answers on stdout; printing nothing means "no
-//! objection".
+//! Each handler reads the hook's JSON payload from stdin and answers on
+//! stdout; printing nothing means "no objection".
 
 use std::io::Read;
 
@@ -35,10 +26,8 @@ mod shell;
 mod still;
 mod write;
 
-/// What a command carries to say the user asked, in so many words, for a
-/// commit in the primary checkout — the one exception the commit guard
-/// makes (`commit`). A landing carries nothing of the kind: the permit
-/// answers for it, read off the user's own message.
+/// The escape for a commit in the primary checkout the user asked for in
+/// so many words (`commit`). A landing does not read it — the permit does.
 const MAIN_APPROVAL_FLAG: &str = "PGG_ALLOW_MAIN";
 
 /// The same, for an instruction that asked for a rebase.
@@ -54,8 +43,7 @@ const PROCESS_STOP_APPROVAL_FLAG: &str = "PGG_ALLOW_KILL";
 /// from whoever holds it (`seats::takeover`).
 pub(crate) const TAKEOVER_APPROVAL_FLAG: &str = "PGG_ALLOW_TAKEOVER";
 
-/// Every escape this hook reads — the five above, which
-/// is what a flag spelled elsewhere is held to.
+/// Every escape this hook reads — what a flag spelled elsewhere is held to.
 pub(crate) const APPROVAL_FLAGS: [&str; 5] = [
     MAIN_APPROVAL_FLAG,
     REBASE_APPROVAL_FLAG,
@@ -97,9 +85,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// Stop: check chip numbering once, then report the permit and gate
-/// standing. Repository state cannot establish whether the request is
-/// complete; the session checks that against the user's instructions.
+/// Stop. Repository state cannot tell whether the request is complete;
+/// that is the session's to check against the user's instructions.
 fn stop(input: &str) -> Result<(), String> {
     if payload::bool_field(input, "stop_hook_active") != Some(true) && chips::numbering(input)? {
         return Ok(());
@@ -117,16 +104,11 @@ fn stop(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// SessionEnd: the chip ledger goes with the session that wrote it.
-///
-/// The seat stays. This event is handed to every open
-/// conversation when the machine sleeps, and each one goes on working at
-/// the next wake (shots/sweep.rs) — a claim released here comes off a
-/// seat its session is still sitting in, and the session meets its own
-/// tree as somebody else's on waking. The seat goes back where the work
-/// does: landing the branch hands the letter to the roster
-/// (`land::release_claim`), the session hands it back itself (`cargo
-/// xtask seat release`), or the user has it taken over (`seats::takeover`).
+/// SessionEnd: the session's ledgers and entry mark go with it; its seat
+/// claim stays. The machine's sleep hands this event to every open
+/// conversation, and each goes on working at the next wake, so a claim
+/// released here would come off a seat its session still sits in
+/// (`seats::how_claims_move`).
 fn session_end(input: &str) -> Result<(), String> {
     chips::session_end(input);
     repeat::session_end(input);
@@ -134,9 +116,8 @@ fn session_end(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// PreToolUse(Bash|PowerShell): every shell line passes through here. One
-/// decision per call — two JSON objects on stdout is not a payload — so the
-/// guards run in order and the first refusal is the answer.
+/// PreToolUse(Bash|PowerShell). One decision per call — two JSON objects
+/// on stdout is not a payload — so the first refusal is the answer.
 fn pre_shell(input: &str) -> Result<(), String> {
     let _refused = git::pre_git(input)?
         || seat::pre_takeover(input)?

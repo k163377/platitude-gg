@@ -21,16 +21,10 @@ pub(super) fn readings(at: &Path) -> Result<(), String> {
     diffs(at)
 }
 
-/// What the timed diff costs — over the whole window.
-///
-/// **The harness opens the first changed file of the first row**
-/// (`--selection first`, `perf::options`), so one file's size is the
-/// operation-response number. Read at the tip alone it says nothing
-/// about a repository whose tip moves: the reference repository's
-/// newest row changes two files with a 56KB first file, and the same
-/// question asked a week earlier answered seventy-five files and 25KB.
-/// The window's distribution is the part that holds still, and it is
-/// what a generated tip has to sit inside.
+/// What the timed diff costs, over the whole window. The harness opens the
+/// first changed file of the first row (`--selection first`,
+/// `perf::options`), but a tip moves; the window's distribution holds
+/// still, and a generated tip has to sit inside it.
 fn diffs(at: &Path) -> Result<(), String> {
     let raw = git(
         at,
@@ -52,9 +46,8 @@ fn diffs(at: &Path) -> Result<(), String> {
     let mut opened: Vec<&str> = Vec::new();
     let mut here = 0;
     let mut first = None;
-    // The two newest rows with a file to open, as `perf --cases` takes
-    // them: what a run that has to keep clicking while something else
-    // runs — the slots measurement — is driven with.
+    // The two newest rows with a file to open, for `perf --cases` (the
+    // slots measurement).
     let mut cases: Vec<(String, String)> = Vec::new();
     let mut commit = "";
     for line in raw.lines() {
@@ -118,9 +111,8 @@ fn diffs(at: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// How large each of those blobs is, asked in one go: two thousand
-/// `cat-file` processes cost more than the reading is worth, and
-/// `--batch-check` answers them all down one pipe.
+/// Each blob's size, through one `--batch-check` rather than a process
+/// each.
 fn sizes(at: &Path, oids: &[&str]) -> Result<Vec<u64>, String> {
     if oids.is_empty() {
         return Ok(Vec::new());
@@ -136,9 +128,8 @@ fn sizes(at: &Path, oids: &[&str]) -> Result<Vec<u64>, String> {
     let asking = child.stdin.take().ok_or("git cat-file took no input")?;
     let mut asking = std::io::BufWriter::new(asking);
     for oid in oids {
-        // **One `\n` a line.** git takes the whole line as the name of
-        // an object, so a carriage return makes every one of them
-        // `missing`.
+        // `\n` only: git takes the whole line as the name, so a carriage
+        // return makes every object `missing`.
         writeln!(asking, "{oid}").map_err(|e| format!("could not ask about {oid}: {e}"))?;
     }
     drop(asking);
@@ -151,14 +142,10 @@ fn sizes(at: &Path, oids: &[&str]) -> Result<Vec<u64>, String> {
         .collect())
 }
 
-/// What the tags are, and how many remotes there are to read them from.
-///
-/// **An annotated tag is a second object and a second advertisement.**
-/// `ls-remote` gives it a line of its own and a peeled one, which is the
-/// pairing `remote::parse_ls_remote_tags` exists to do and the size
-/// `session::RemoteTagIndex` is built at; a repository whose tags are
-/// lightweight reaches neither, and one with no remote configured never
-/// asks (`session::auto_fetch::known_to_have_no_remote`).
+/// What the tags are, and how many remotes there are to read them from:
+/// an annotated tag is a second `ls-remote` line (the peeled one
+/// `remote::parse_ls_remote_tags` pairs), and a repository with no remote
+/// never asks (`session::auto_fetch::known_to_have_no_remote`).
 fn tags(at: &Path) -> Result<(), String> {
     let kinds = git(at, &["for-each-ref", "--format=%(objecttype)", "refs/tags"])?;
     let total = kinds.lines().filter(|kind| !kind.is_empty()).count();
@@ -176,20 +163,13 @@ fn tags(at: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// What the working tree costs to read, which is most of what startup
-/// is.
+/// What the working tree costs to read, which is most of startup:
+/// `status::load` pays one `lstat` per tracked file.
 ///
-/// `status::read` runs `git status --porcelain=v2 -z --branch -uall` and
-/// pays one `lstat` per tracked file; the index carries one entry each.
-/// The reference repository is 106,581 files and a 17MB index, and a
-/// corpus that is a fraction of that is measuring a fraction of the
-/// startup it claims to.
-///
-/// **The time is a reading of the walk.** On the reference repository
-/// `core.fsmonitor` — which is how that clone is configured — makes
-/// the status slower
-/// (ci/baseline/code-costs-windows-x64.md §コーパス生成), so a corpus that
-/// copied the setting would be measuring a daemon's health on the day.
+/// The time is a reading of the walk: the corpus does not copy the
+/// reference clone's `core.fsmonitor`, which makes its status slower
+/// (ci/baseline/code-costs-windows-x64.md §コーパス生成) and would time a
+/// daemon's health on the day.
 fn worktree(at: &Path) -> Result<(), String> {
     let tracked = git(at, &["ls-files"])?.lines().count();
     let index = std::fs::metadata(at.join(".git").join("index"))
@@ -197,12 +177,8 @@ fn worktree(at: &Path) -> Result<(), String> {
         .unwrap_or_default();
     // waits(measured): the status's time, one of the readings the corpus is described by
     let began = std::time::Instant::now();
-    // **`--no-optional-locks`, because the application never runs a
-    // status without it** (`process::executor::FIXED_ARGS`), and
-    // because this same reading is taken of repositories that are only
-    // being read — a status without it rewrites their index. The time
-    // is the same either way, warm
-    // (ci/baseline/code-costs-windows-x64.md §コーパス生成).
+    // `--no-optional-locks`: this reading is also taken of repositories
+    // that are only read, and a status without it rewrites their index.
     git(
         at,
         &[
@@ -227,11 +203,8 @@ fn worktree(at: &Path) -> Result<(), String> {
     let dirs = git(at, &["ls-tree", "-r", "-d", "--name-only", "HEAD"])?
         .lines()
         .count();
-    // The size histogram, because "a hundred thousand files" covers
-    // many trees: one of that many stubs and one of that many sources
-    // cost different amounts to check out, to status and to open, and
-    // the record's claim is about the histogram, which is what this
-    // prints.
+    // The size histogram: a file count cannot tell stubs from sources,
+    // which cost differently to check out, status and open.
     let mut bytes: Vec<u64> = git(at, &["ls-tree", "-r", "--format=%(objectsize)", "HEAD"])?
         .lines()
         .filter_map(|line| line.trim().parse().ok())
@@ -281,12 +254,9 @@ fn worktree(at: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// How many rows the sidebar's remotes section would build.
-///
-/// `nav::tree::build_tree` makes one `NavItem` per distinct directory
-/// prefix — two heap strings each — and rebuilds all of them on every
-/// arrange, which is every refs snapshot. It does not compact
-/// single-child chains, so the count here is the count of rows.
+/// How many folder rows the sidebar's remotes section would build:
+/// `nav::tree::build_tree` makes a `NavItem` per distinct directory prefix
+/// on every arrange, without compacting single-child chains.
 fn branch_tree(at: &Path) -> Result<(), String> {
     let names = git(
         at,
@@ -319,12 +289,9 @@ fn branch_tree(at: &Path) -> Result<(), String> {
 }
 
 /// The shape of the graph the window draws: how many refs land on its
-/// rows, and how wide it gets.
-///
-/// **A lane is open from a row with a not-yet-emitted parent until that
-/// parent is emitted**, which is the walk `GraphBuilder` does. The width
-/// is what the row canvas is sized by and what the renderer has to cope
-/// with; a constant width demands nothing of it.
+/// rows, and how wide it gets. A lane is open from a row with a
+/// not-yet-emitted parent until that parent is emitted, as in
+/// `GraphBuilder`.
 fn graph(at: &Path) -> Result<(), String> {
     let rows = git(
         at,
@@ -348,9 +315,6 @@ fn graph(at: &Path) -> Result<(), String> {
         let parents = field.next().unwrap_or_default();
         let refs = field.next().unwrap_or_default();
         open.remove(oid);
-        // A merge is a second parent, and a second edge into the row —
-        // the reference repository's window has none, because its
-        // newest rows are unmerged review branches.
         if parents.split_whitespace().nth(1).is_some() {
             merges += 1;
         }
@@ -381,15 +345,10 @@ fn graph(at: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// How many rows the graph's window would draw, and what they carry.
-///
-/// **The window is the measurement.** Everything below rides on all
-/// 2,000 rows at once — the body and the credits `parse::log` asks for,
-/// the fallback font the first non-ASCII glyph loads, the second
-/// identity the details card shows — and every one of them is a
-/// dimension the corpus once had none of. Printed so a person can see
-/// what the corpus carries without opening the application, and so a
-/// generator that quietly stopped carrying one is visible here.
+/// How many rows the graph's window would draw, and what they carry: the
+/// body and credits `parse::log` asks for, the fallback font a non-ASCII
+/// glyph loads, the second identity the details card shows. Printed so a
+/// generator that stopped carrying one shows here.
 fn window(at: &Path) -> Result<(), String> {
     const ROWS: &str = "--max-count=2000";
     let log = git(
@@ -410,10 +369,7 @@ fn window(at: &Path) -> Result<(), String> {
     let mut credited = 0;
     let mut applied = 0;
     let mut body_bytes = 0;
-    // Distinct names, because a name is a string the rows hold once
-    // each and the details card looks up — a window written by a
-    // hundred people and one written by ten thousand are different
-    // amounts of text however many rows they have.
+    // Distinct names: the text held grows with authors, not rows.
     let mut authors = std::collections::BTreeSet::new();
     for row in log.split('\x1e').filter(|row| !row.trim().is_empty()) {
         let mut field = row.trim_start_matches('\n').split('\x1f');

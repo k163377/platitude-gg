@@ -1,15 +1,9 @@
-//! A PNG taken apart: the ones Qt saves a window as, and the ones
-//! `write` puts out.
+//! A PNG taken apart: eight bits a sample, no interlace, colour type 2
+//! (`QImage::save` of a screenshot) or 6 (`write`'s fixtures). Every other
+//! shape is refused by name.
 //!
-//! Eight bits a sample, no interlace, colour type 2
-//! or 6 — that is `QImage::save` for a screenshot
-//! (RGB) and `write` for a fixture (RGBA), and
-//! nothing here is ever pointed at anything else.
-//! Every other shape is refused by name.
-//!
-//! Both sums the file carries are worked out again. A
-//! crop is read to settle a question about single pixels,
-//! so a file that arrived damaged has to say so.
+//! Both sums the file carries are worked out again: a crop settles a
+//! question about single pixels, so a damaged file has to say so.
 
 use super::{checksum::crc32, inflate};
 
@@ -57,8 +51,8 @@ pub(crate) fn decode(file: &[u8]) -> Result<Image, String> {
         }
         match kind {
             b"IHDR" => header = Some(Header::read(body)?),
-            // One stream across as many chunks as the writer felt like:
-            // Qt's runs to a dozen, and a block may straddle any two.
+            // One stream across any number of chunks; a block may
+            // straddle two.
             b"IDAT" => compressed.extend_from_slice(body),
             b"IEND" => break,
             _ => {}
@@ -85,9 +79,8 @@ pub(crate) fn decode(file: &[u8]) -> Result<Image, String> {
 }
 
 /// What one scanline takes, and what all of them take with their filter
-/// bytes — or nothing at all, because both sizes come out of the file
-/// and a header naming billions square would otherwise wrap around into
-/// a length that looks reasonable.
+/// bytes — or nothing where that overflows: both sizes come out of the
+/// file, and a wrapped length would look reasonable.
 fn scanlines(width: usize, height: usize, channels: usize) -> Option<(usize, usize)> {
     let stride = width.checked_mul(channels)?;
     Some((stride, stride.checked_add(1)?.checked_mul(height)?))
@@ -220,8 +213,7 @@ fn paeth(left: u8, above: u8, corner: u8) -> u8 {
 }
 
 /// The rows with their filter bytes dropped, and an opaque alpha put on
-/// the pixels of a picture that carries none. Named apart from the
-/// `png::rgba` that writes a file: this one only widens what was read.
+/// the pixels of a picture that carries none.
 fn expanded(raw: &[u8], stride: usize, height: usize, channels: usize) -> Vec<u8> {
     let mut out = Vec::with_capacity(stride / channels * 4 * height);
     for y in 0..height {

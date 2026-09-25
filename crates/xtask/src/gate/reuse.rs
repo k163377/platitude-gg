@@ -1,27 +1,16 @@
 //! The built graph, kept so that the next run over the same tree need not
-//! read the sources again.
+//! read the sources again (internal-docs/反映前テストの機械化.md §実測).
 //!
-//! [`super::graph::build`] opens every Rust and QML file of the workspace.
-//! Reusing the graph avoids the source walk after a build has displaced
-//! the machine's file cache (internal-docs/反映前テストの機械化.md §実測).
-//!
-//! What the graph is a function of: the sources, the set of files, and
-//! the reader that walked them. The key is all three — the commit's root
-//! tree object, which moves when any tracked byte or name does, and the
-//! fingerprint of this executable's bytes. Copying the reader changes
-//! neither the graph nor its key; size and mtime cannot establish its
-//! contents. **Nothing is kept or reused for a tree with uncommitted or
-//! untracked files**: the graph is read off the working tree and the
-//! commit's tree would not be describing it. The gate itself refuses to
-//! run over such a tree anyway; a `--dry-run` there simply reads the
-//! sources.
+//! The key is the commit's root tree object and the fingerprint of this
+//! executable's bytes: size and mtime cannot establish a reader's
+//! contents. Nothing is kept or reused for a tree with uncommitted or
+//! untracked files: the graph is read off the working tree, which the
+//! commit's tree would not be describing.
 //!
 //! Only what outlives the build is kept — the edges, their reverse, the
-//! modules, and the paths that resolved nowhere. The rest of [`Graph`]
-//! (the index, the re-exports, the crate roots) is scaffolding that
-//! resolution uses and nothing reads afterwards; the round trip is tested
-//! against the real tree's graph so that a field which stops being
-//! scaffolding is caught here.
+//! modules, and the paths that resolved nowhere; the rest of [`Graph`] is
+//! scaffolding resolution uses. The round trip is tested against the real
+//! tree's graph, so a field that stops being scaffolding is caught.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -33,10 +22,9 @@ use crate::subprocess::{common_git_dir, git_query};
 /// number reads nothing.
 const VERSION: &str = "graph-cache 2";
 
-/// How many built graphs a repository keeps. One is a few hundred
-/// kilobytes, and what is ever reached for is the commit at hand and the
-/// one before it — the rest are here so that a seat rebasing onto a tree
-/// another seat has already read finds it read.
+/// How many built graphs a repository keeps: more than the commit at hand
+/// and its parent, so a seat rebasing onto a tree another seat has read
+/// finds it read.
 const KEEP: usize = 24;
 
 /// Land removes its running image from the build slot before rebuilding.
@@ -60,9 +48,7 @@ pub(crate) fn preserve_reader() -> Result<(), String> {
     reader().map(|_| ())
 }
 
-/// What a kept graph is a function of: the tree it was read from and the
-/// program that read it. Refuse a key when the working tree holds anything
-/// the commit does not, in which case the tree is not what the key names.
+/// Refused when the working tree holds anything the commit does not.
 fn key(dir: &Path) -> Result<Key, String> {
     let here = dir.display().to_string();
     let status = git_query(&here, &["status", "--porcelain", "--untracked-files=all"])
@@ -134,14 +120,12 @@ fn load(dir: &Path, key: &str) -> Result<Graph, String> {
 }
 
 /// Keeps `graph` under `key` and takes away all but the newest [`KEEP`].
-/// A graph nobody could write is not worth a red gate — the run has the
-/// graph in hand either way.
+/// A graph nobody could write is not worth a red gate.
 fn keep(dir: &Path, key: &str, graph: &Graph) -> Result<(), String> {
     let shelf = shelf(dir)?;
     std::fs::create_dir_all(&shelf).map_err(|e| format!("cache directory: {e}"))?;
-    // Written whole under another name and moved into place: a reader
-    // arriving mid-write would otherwise take half a graph for a whole
-    // one, and half a graph is a selection with edges missing.
+    // Written under another name and moved into place, so a reader never
+    // meets half a graph.
     let staging = shelf.join(format!("{key}.{}.part", std::process::id()));
     if let Err(e) = std::fs::write(&staging, write(graph)) {
         let _ = std::fs::remove_file(&staging);
@@ -213,8 +197,8 @@ fn write(graph: &Graph) -> String {
 /// The graph a [`write`] wrote, or `None` for anything else — a file from
 /// a version that spelled it differently, or one cut short.
 fn read(text: &str) -> Option<Graph> {
-    // A complete record boundary is still a truncated graph. Verify the
-    // entire payload before trusting any edges or absence of edges.
+    // A cut at a record boundary still parses; only the digest over the
+    // whole payload refuses it.
     let (payload, digest) = text.strip_suffix('\n')?.rsplit_once("END\t")?;
     if digest != format!("{:016x}", fnv(payload)) {
         return None;
@@ -271,9 +255,8 @@ fn read(text: &str) -> Option<Graph> {
     Some(graph)
 }
 
-/// The graph of `dir`, from the shelf when one answers for this tree and
-/// this reader, and read off the sources otherwise — kept on the way out.
-/// The cache verdict travels with it into the run's record.
+/// The graph of `dir`, from the shelf or read off the sources (and kept),
+/// with the cache verdict for the run's record.
 pub(crate) struct Loaded {
     pub graph: Graph,
     pub reused: bool,
@@ -355,12 +338,9 @@ fn same(one: &Graph, other: &Graph) -> Result<(), String> {
 mod tests {
     use super::{VERSION, read, same, write};
 
-    /// The tree's own graph, written and read back: every edge, every
-    /// reader, every module and every unresolved path as it was. Against
-    /// the real tree, because what this has
-    /// to survive is the shapes this workspace actually holds — a module
-    /// at a crate root with an empty path, an integration binary, a
-    /// directory node, a non-ASCII name.
+    /// Against the real tree: what the shelf must survive is the shapes
+    /// this workspace holds — a crate-root module with an empty path, an
+    /// integration binary, a directory node, a non-ASCII name.
     #[test]
     fn the_trees_graph_survives_the_shelf() {
         let root = crate::tree::workspace_root();

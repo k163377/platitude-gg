@@ -1,37 +1,25 @@
 //! Which census lines each gate owes, and on which side — the table
 //! `crates/xtask/verb-tiers.txt`, read by the gate and checked by
-//! `cargo xtask verbs`.
+//! `cargo xtask verbs` (反映前テストの機械化.md §段ごとに何を回すか).
 //!
-//! **A line of the census is a whole app run on each side, and the census
-//! grows with the features.** So each line is read for what only it
-//! catches before a merge: an app decision, a wiring, a timing that a
-//! change to the app or the core could break and no cheaper test holds.
-//! The table names the lines that catch nothing of that kind, and the
-//! lines the container owes before a merge as well:
+//! A census line is a whole app run on each side, and the census grows
+//! with the features, so a line runs before a merge only for what it alone
+//! catches there: an app decision, a wiring or a timing no cheaper test
+//! holds.
 //!
-//! | the table says | before a merge | the full gate (`--all`) |
-//! |---|---|---|
-//! | nothing | host | host and container |
-//! | [`Tier::Linux`] | host and container | host and container |
-//! | [`Tier::Full`] | — | host and container |
-//! | [`Tier::Twin`] | — | — |
+//! The container repeats a host line before a merge only where its fonts
+//! can answer differently: it runs the same QML over the same core, and
+//! every change still owes its clippy, tests, QtTest and `bare` there.
 //!
-//! **The container repeats a host line before a merge only where its
-//! fonts can answer differently.** It runs the same QML over the same
-//! core; what it has of its own is Qt's Linux build, fontconfig and the
-//! oldest git (internal-docs/git最低バージョン整合.md), and every change
-//! still owes its clippy, its tests, its QtTest and `bare`.
-//!
-//! **Nothing here is read off the tree by a test**, so, like the census,
-//! the file is no edge of the graph (`graph::literal_paths`): it decides
-//! which steps a gate owes, not what any step reads.
+//! No test reads the file, so like the census it is no edge of the graph
+//! (`graph::literal_paths`): it decides which steps a gate owes, not what
+//! any step reads.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use super::census::Census;
 
-/// Where the table lives, checked in beside the census it is about.
 pub(crate) const FILE: &str = "crates/xtask/verb-tiers.txt";
 
 /// What the table says of one census line.
@@ -40,12 +28,9 @@ pub(crate) enum Tier {
     /// Owed by the container before a merge too: the line is judged on a
     /// size, a cut or a fold that the fonts decide.
     Linux,
-    /// Owed by the full gate only. What tells it from a pre-merge line is
-    /// an answer git gives on a path a pre-merge line already walks, a
-    /// picture nobody reads in a gate, or a claim a cheaper test holds;
-    /// the pre-merge lines it leans on are named, and have to stay
-    /// pre-merge lines. Only a claim a cheaper test holds, or one the perf
-    /// tool walks, names none ([`STANDS_ALONE`]).
+    /// Owed by the full gate only. It names the pre-merge lines that walk
+    /// its path, and they have to stay pre-merge lines — unless its claim
+    /// is held elsewhere ([`STANDS_ALONE`]).
     Full,
     /// Owed by no gate: the census line it leans on runs the same path and
     /// judges as much. A passing run of it is not recorded, so it does not
@@ -58,8 +43,7 @@ pub(crate) enum Tier {
 const KINDS: [&str; 5] = ["git:", "picture:", "held:", "perf:", "other:"];
 
 /// The kinds whose witness is no census line: a cheaper test, or the perf
-/// tool's own runs. Every other full row walks a path some pre-merge line
-/// walks too, and names that line.
+/// tool's own runs.
 const STANDS_ALONE: [&str; 2] = ["held:", "perf:"];
 
 struct Entry {
@@ -67,11 +51,9 @@ struct Entry {
     /// The lines this one leans on: the pre-merge lines for [`Tier::Full`],
     /// the one line it is the same run as for [`Tier::Twin`].
     leans: Vec<String>,
-    /// The reason as the row gives it.
     why: String,
 }
 
-/// The table, read.
 #[derive(Default)]
 pub(crate) struct Tiers {
     entries: BTreeMap<String, Entry>,
@@ -163,9 +145,7 @@ impl Tiers {
     }
 
     /// The verbs a census holds no line of on purpose: every row the table
-    /// has of the verb is a twin of another verb's line. A verb with a row
-    /// of any other tier, or a twin of its own verb's line, still owes the
-    /// census a line.
+    /// has of the verb is a twin of another verb's line.
     pub(crate) fn twinned_away(&self) -> BTreeSet<String> {
         let verb = |line: &str| line.split_whitespace().next().unwrap_or("").to_string();
         let mut away = BTreeMap::new();
@@ -185,13 +165,10 @@ impl Tiers {
         (of(Tier::Linux), of(Tier::Full), of(Tier::Twin))
     }
 
-    /// What is wrong with the table against `census`: a row that names no
-    /// line, a twin that came back, a full row whose reason names no kind
-    /// or no lean it needs, a lean that is not there or not run before a
-    /// merge. **A lean that moved is the failure this is for** — a full
-    /// line stands on the pre-merge line it names, and moving that line to
-    /// the full gate too would leave the claim with no witness before a
-    /// merge, silently.
+    /// What is wrong with the table against `census`. The failure this is
+    /// for is a lean that moved: moving the pre-merge line a full line
+    /// names to the full gate too would silently leave its claim with no
+    /// witness before a merge.
     pub(crate) fn complaints(&self, census: &Census) -> Vec<String> {
         let recorded: BTreeSet<&str> = census.lines.keys().map(String::as_str).collect();
         let before_merge = |line: &str| {
@@ -302,9 +279,6 @@ mod tests {
         assert_eq!(tiers.complaints(&held), Vec::<String>::new());
     }
 
-    /// The failures the check is for: a row whose line is gone, a twin
-    /// back in the census, a full line whose lean no longer runs before a merge, a
-    /// twin of a twin, and a row that does not read.
     #[test]
     fn a_moved_lean_a_returned_twin_and_a_gone_line_are_each_named() {
         let said = |table: &str, lines: &[&str]| Tiers::parse(table).complaints(&census(lines));
@@ -347,8 +321,6 @@ mod tests {
         );
     }
 
-    /// A full row stands on a pre-merge line unless a cheaper test or the perf
-    /// tool holds its claim, and its reason says which kind it is.
     #[test]
     fn a_full_row_names_its_pre_merge_line_unless_something_cheaper_holds_it() {
         let said = |row: &str| {
@@ -377,8 +349,6 @@ mod tests {
         );
     }
 
-    /// Only a verb the table twins away onto other verbs' lines is excused
-    /// a census line; a twin of its own verb's line leaves that line owed.
     #[test]
     fn a_verb_is_twinned_away_only_onto_other_verbs() {
         let tiers = Tiers::parse(&format!(

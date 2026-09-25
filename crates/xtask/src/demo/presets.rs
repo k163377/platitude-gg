@@ -47,10 +47,8 @@ pub fn run(args: &[String]) -> Result<PathBuf, String> {
     let named = at.is_some();
     let root = root_for(preset, at)?;
     let work = build_or_copy_in(preset, &root, "repo", named)?;
-    // This door is the one a person types at, and what comes out of it is
-    // a tree to look at — so it is marked, and the sweep that takes the
-    // runs of a day ago leaves it standing
-    // (`verify::keep`).
+    // A tree a person asked for: marked so the sweep of old runs leaves
+    // it (`verify::keep`).
     crate::verify::keep(&root)?;
     Ok(work)
 }
@@ -59,18 +57,12 @@ pub fn create(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
     create_named(preset, at, "repo")
 }
 
-/// Where the repository gets built: what `--at` named, resolved against
-/// the directory the command was typed in, or one claimed under the
-/// system temp.
+/// Where the repository gets built: `--at` made absolute, or one claimed
+/// under the system temp.
 ///
-/// **A relative `--at` is written into the repository and read back by a
-/// git process of git's own choosing.** `origin`'s URL comes out of this
-/// path (`repo::file_url`), so `--at target/probe` makes
-/// `file:///target/probe/origin.git` — a POSIX absolute path, which
-/// git.exe rewrites into its own install directory
-/// (`C:/Program Files/Git/target/probe/origin.git`) and the first push
-/// fails against (measured). The default path is absolute already; this
-/// makes a given one the same.
+/// A relative `--at` would reach `origin`'s URL (`repo::file_url`) as
+/// `file:///target/probe/origin.git`, which git.exe resolves under its own
+/// install directory, and the first push fails.
 fn root_for(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
     match at {
         Some(dir) => std::path::absolute(&dir)
@@ -79,24 +71,18 @@ fn root_for(preset: &str, at: Option<PathBuf>) -> Result<PathBuf, String> {
     }
 }
 
-/// The roots this process claimed, in the order it claimed them.
+/// The roots this process claimed, in order.
 ///
-/// **Only what [`claim_root`] made can be in here**, which is what makes
-/// the list safe to delete from: a tree somebody named with `--at` is
-/// theirs and never comes through here, and a template is not a run's
-/// leavings and is built at a fixed name rather than claimed
-/// (`super::template`). So the list is this run's own and nobody
-/// else's — including the other runs working in the same directory at
-/// the same time.
+/// Only what [`claim_root`] made is in here — never an `--at` tree or a
+/// template (`super::template`) — which is what makes the list safe to
+/// delete from.
 static CLAIMED: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
 
 /// A directory of this run's own to build a demo repository in.
 ///
-/// **`pgg-demo` is one directory for the whole machine**, so the name
-/// under it is the whole of what keeps two runs apart, and a name read
-/// off a clock is not enough — the seats build their repositories
-/// concurrently, and two that share a root `git init` into each other.
-/// `claim_dir` makes `create_dir` say which run owns the answer.
+/// `pgg-demo` is shared by every seat on the machine, so a clock-read
+/// name can hand two concurrent runs one root; `claim_dir` makes
+/// `create_dir` decide which run owns it.
 pub(crate) fn claim_root(stem: &str) -> Result<PathBuf, String> {
     let root = crate::verify::claim_dir(&base(), stem)?;
     if let Ok(mut claimed) = CLAIMED.lock() {
@@ -111,11 +97,8 @@ pub(crate) fn claimed_roots() -> Vec<PathBuf> {
     CLAIMED.lock().map(|held| held.clone()).unwrap_or_default()
 }
 
-/// The one directory the runs and the templates they copy share.
-///
-/// Sharing it is what makes a copy a rewrite of one path segment
-/// (`template`), and it puts the templates where the sweep that takes
-/// yesterday's runs already looks.
+/// The one directory the runs and their templates share, so a copy is a
+/// rewrite of one path segment (`template`).
 pub(super) fn base() -> PathBuf {
     std::env::temp_dir().join("pgg-demo")
 }
@@ -123,10 +106,9 @@ pub(super) fn base() -> PathBuf {
 /// Builds `preset` with the work tree called `name` — a tab is titled
 /// after its work-tree folder (`models::tab_name`).
 ///
-/// A root of this run's own is a copy of the preset's template
-/// (`template`); a root somebody named is built in directly, because what
-/// a template holds are paths under the root the runs share and `--at`
-/// points anywhere on the machine.
+/// A claimed root is a copy of the preset's template (`template`); an
+/// `--at` root is built in directly, since a template's paths are under
+/// the shared root.
 pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<PathBuf, String> {
     let named = at.is_some();
     let root = root_for(preset, at)?;
@@ -134,9 +116,8 @@ pub fn create_named(preset: &str, at: Option<PathBuf>, name: &str) -> Result<Pat
 }
 
 /// Builds `preset` in a root already resolved, so the command entry can
-/// hold that root and mark it. Unmarked is what a run's root stays: the
-/// verify-ui runs come through here too, and theirs is the litter the
-/// sweep exists for.
+/// mark it; the verify-ui runs come through here too and stay unmarked
+/// for the sweep.
 fn build_or_copy_in(preset: &str, root: &Path, name: &str, named: bool) -> Result<PathBuf, String> {
     if named {
         return build(preset, root, name);
@@ -144,7 +125,6 @@ fn build_or_copy_in(preset: &str, root: &Path, name: &str, named: bool) -> Resul
     super::template::build_or_copy(root, preset, name)
 }
 
-/// The preset itself: git, as many times as the state takes.
 pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, String> {
     let mut repo = DemoRepo::init(root, name)?;
     match preset {
@@ -252,13 +232,9 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
 mod tests {
     use super::root_for;
 
-    /// `pgg-demo` is one directory for every seat on the machine, so the
-    /// root a preset is built in is the whole of what keeps two runs
-    /// apart — the repositories, the `origin.git` they push to and the
-    /// configuration they are isolated by all sit in it. The gate starts
-    /// a side's verbs together (`gate::sides::verbs`), and each of them builds
-    /// its own repository, which is where a clock that two of them read
-    /// inside one tick would have handed them one root to `git init` in.
+    /// The gate starts a side's verbs together (`gate::sides::verbs`),
+    /// each building its own repository (`claim_root` says why a clock is
+    /// not enough).
     #[test]
     fn preset_runs_started_together_are_handed_a_root_each() {
         let start = std::sync::Arc::new(std::sync::Barrier::new(16));
@@ -279,15 +255,11 @@ mod tests {
         let unique: std::collections::BTreeSet<_> = made.iter().collect();
         assert_eq!(unique.len(), made.len(), "two runs were handed one root");
         for root in made {
-            // Empty, and so nobody else's: the claim created it, which
-            // is what `create_dir_all` could not say.
+            // Empty, so nobody else's: the claim created it.
             std::fs::remove_dir(&root).expect("an empty directory this call created");
         }
     }
 
-    /// A relative `--at` reaches `origin`'s URL, which git resolves
-    /// against a directory of its own choosing — so it has to be made
-    /// absolute before anything is written from it.
     #[test]
     fn a_given_at_is_absolute_before_any_url_is_written_from_it() {
         let root = root_for("basic", Some(std::path::PathBuf::from("target/probe")))

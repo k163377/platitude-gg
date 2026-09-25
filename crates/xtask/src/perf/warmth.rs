@@ -1,24 +1,16 @@
 //! Whether the first run's discard is owed at all.
 //!
-//! The first run of an invocation is discarded because it pays for a
-//! cold cache — the exe, the Qt libraries, the corpus's packs — and the
-//! record is a warm number. But a record is taken as a run of
-//! invocations minutes apart on one exe and one corpus, and only the
-//! first of them starts cold: over one such session only the very first
-//! invocation's first run stood out, while every later invocation's first
-//! run sat among the kept ones (ci/baseline/code-costs-windows-x64.md
-//! §テストとハーネス), so each of those discards was a whole run spent on
-//! a number already known. An invocation that finished
-//! leaves a note of what it warmed; the next one keeps its first run
-//! when the note is minutes old, names the same exe, corpus, repository
-//! and scenario, and no build of another process has ended since — a
-//! build is what evicts the corpus's packs, and every build here is
+//! The first run of an invocation is discarded because it pays for a cold
+//! cache (the exe, the Qt libraries, the corpus's packs), but of a record's
+//! invocations minutes apart only the first starts cold
+//! (ci/baseline/code-costs-windows-x64.md §テストとハーネス). So a finished
+//! invocation leaves a note of what it warmed for the next to match; a
+//! build ended since evicts the corpus's packs, and every build here is
 //! announced (`still::build_ended_since`).
 //!
 //! The scenario is part of what was warmed: a stage that selected no row
 //! never read the trees and blobs a `git show` opens, so the next stage's
-//! first details number would be the cold one — the number that is over
-//! budget.
+//! first details number would be the cold, over-budget one.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -93,10 +85,8 @@ pub(super) fn warm(root: &Path, wanted: &Warmed) -> Option<Duration> {
     (!crate::still::build_ended_since(root, note.at)).then_some(age)
 }
 
-/// Leaves the note for the next invocation, stamped now — the
-/// runs are what warmed the cache, and they ended now. A note
-/// that could not be written costs the next invocation one
-/// discarded run, and says so.
+/// Leaves the note for the next invocation, stamped now: the runs that
+/// warmed the cache just ended.
 pub(super) fn note(root: &Path, warmed: &Warmed) {
     let path = note_path(root);
     let stamped = Warmed::now(&warmed.exe, &warmed.corpus, &warmed.repo, &warmed.scenario);
@@ -132,9 +122,6 @@ mod tests {
         }
     }
 
-    /// The same four names, minutes ago, is a warm cache; any other exe,
-    /// corpus, path or scenario is not, and neither is the same one too
-    /// long ago.
     #[test]
     fn only_the_same_exe_corpus_path_and_scenario_warmed_recently_counts() {
         let then = warmed("e1", "c1", "C:/x/corpus", "first/true/true", 1_000);

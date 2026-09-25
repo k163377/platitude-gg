@@ -8,17 +8,15 @@ use super::signing::{config_path, keygen};
 /// "is it signed", newest first: one co-author signed, three signed,
 /// three unsigned, one unsigned, and a commit crediting nobody.
 ///
-/// The spellings differ on purpose — `Co-Authored-By` is what the tooling
-/// writes, `Co-authored-by` is what the convention documents — because
-/// git's `key=` matches either, and so does the reader.
+/// Both spellings (`Co-Authored-By` / `Co-authored-by`) on purpose: git's
+/// `key=` matches either, and so must the reader.
 pub(super) fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
     const CROWD: &str = "feat: write this one with a crowd\n\n\
          The body sits above the trailers, the way it always does.\n\n\
          Co-authored-by: Claude Opus 5 <noreply@anthropic.com>\n\
          Co-authored-by: Claude Fable 5 <noreply@anthropic.com>\n\
          Co-authored-by: Claude Opus 4.8 <noreply@anthropic.com>";
-    // The last address is deliberately long: an address has no length
-    // worth trusting, and a card that sizes itself to one has to
+    // The last address is deliberately long: a card sized to it has to
     // elide.
     const CROWD_SIGNED: &str = "feat: write this one with a crowd, signed\n\n\
          Co-authored-by: Claude Opus 5 <noreply@anthropic.com>\n\
@@ -61,8 +59,8 @@ pub(super) fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
         CROWD_SIGNED,
     )?;
 
-    // A name long enough to crowd the mark it sits next to: the name is
-    // the side that gives way, so the tick stays on screen.
+    // A name long enough to crowd the mark beside it: the name gives way,
+    // the tick stays on screen.
     repo.write("src/long.txt", "written under a long name\n")?;
     repo.git(&["add", "--", "src/long.txt"])?;
     repo.git(&[
@@ -73,8 +71,7 @@ pub(super) fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
     ])?;
 
     // Signed with a key nobody vouched for: git reads the signature and
-    // cannot judge it. Every SSH signature falls into this state when no
-    // allowedSigners file is configured at all, so it is ordinary.
+    // cannot judge it (any SSH signature without an allowedSigners file).
     keygen(repo, "stranger", "stranger@example.com")?;
     let stranger_key = repo.root.join("stranger.pub");
     repo.git(&["config", "user.signingkey", &config_path(&stranger_key)])?;
@@ -107,20 +104,15 @@ pub(super) fn co_authors(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Every way the person who wrote a commit and the person who put it
-/// here can be two, newest first: a patch applied by somebody else days
-/// after it was written, one applied by somebody else the moment it
-/// arrived (a squash merge on a forge, so a bot wrote it and carries a
-/// forge noreply for an address), one the same hand committed
-/// later than it wrote it (an amend, a rebase), and two ordinary
-/// commits, where the two are one person at one moment.
+/// Every way author and committer can differ, newest first: a patch
+/// applied by somebody else days after it was written, a forge's squash
+/// merge authored by a bot, one the same hand committed later than it
+/// wrote it (an amend, a rebase), and two ordinary commits.
 pub(super) fn authorship(repo: &mut DemoRepo) -> Result<(), String> {
     const MAILED: &str = "Yuki Tanaka <yuki.tanaka@example.com>";
-    // What a forge puts here is usually a bot's work, and a bot's address
-    // is a forge noreply — the long kind. The length is deliberate, the
-    // way the co-authors' last address is: the card that reads an address
-    // in full is where a long one has to hold, and the pane it opens over
-    // is narrower than this.
+    // Deliberately long, like the co-authors' last address: the card that
+    // reads an address in full has to hold one wider than the pane it
+    // opens over.
     const BOT: &str = "deps-bot[bot] <49206153+deps-bot[bot]@users.noreply.forge.example.co.jp>";
     const DAY: u64 = 24 * 60 * 60;
 
@@ -155,10 +147,8 @@ pub(super) fn authorship(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Rewrites HEAD's commit object with a different tree, keeping
-/// every other header — including the signature, which is what
-/// makes the result read as broken (measured: `%G?` goes from `G`
-/// to `B`).
+/// Rewrites HEAD's commit object with a different tree, keeping every
+/// other header — including the signature, so `%G?` reads `B`.
 fn retree_head(repo: &mut DemoRepo, tree: &str) -> Result<String, String> {
     let dir = repo.work.clone();
     let out = super::repo::output_of(&mut repo.command(&dir, &["cat-file", "commit", "HEAD"]))?;

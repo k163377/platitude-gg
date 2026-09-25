@@ -7,19 +7,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use super::{Run, Shot, sweep};
 use crate::seats::{SEATS, worktree_root};
 
-/// Field separator inside a run file. Tabs and newlines are stripped
-/// from every value written, so the format has no escape rules to get
-/// wrong — xtask carries no JSON library (CLAUDE.md 技術スタック).
+/// Tabs and newlines are stripped from every value written (`one_line`),
+/// so the format has no escape rules — xtask has no JSON library.
 const SEP: char = '\t';
 
-/// The board directory: `.shots/` beside the primary checkout's `.git`.
-///
-/// `--git-common-dir` answers the *shared* git directory, so all six
-/// seats and the primary checkout resolve to one board — which is what
-/// puts a seat's pictures next to its neighbours'.
-/// `--path-format=absolute` keeps the answer from being relative to
-/// whichever directory asked (measured: the primary checkout answers a
-/// bare `.git` without it).
+/// `.shots/` beside the primary checkout's `.git`: `--git-common-dir`
+/// resolves every seat to one board. Without `--path-format=absolute`
+/// the primary checkout answers a bare `.git`.
 pub(super) fn board_dir() -> Result<PathBuf, String> {
     let cwd = std::env::current_dir().map_err(|e| format!("no working directory: {e}"))?;
     let cwd = cwd.to_string_lossy().replace('\\', "/");
@@ -35,21 +29,16 @@ pub(super) fn board_dir() -> Result<PathBuf, String> {
     Ok(root.join(".shots"))
 }
 
-/// A board path as it is written out. `git_query` answers with forward
-/// slashes and `Path::join` adds the platform's, so a path built from
-/// both reads half one way and half the other; one convention is the
-/// whole fix, and forward slashes are the one the rest of xtask already
-/// speaks.
+/// A board path as written out, in forward slashes: `git_query` answers
+/// with them and `Path::join` adds the platform's, so a built path would
+/// read half one way and half the other.
 pub(crate) fn shown(path: &Path) -> String {
     path.display().to_string().replace('\\', "/")
 }
 
 /// The tree this process is running in: a roster letter, or `main`.
-///
-/// Taken from the working directory, because the one thing the board
-/// has to get right is which seat a picture came from — and a caller
-/// that has to remember to say which seat it is will eventually forget
-/// (CLAUDE.md ビルド・テスト: seats are the unit of work).
+/// Read from the working directory rather than passed in: a caller that
+/// has to say which seat it is will eventually forget.
 pub(super) fn seat_here() -> String {
     let Ok(cwd) = std::env::current_dir() else {
         return "?".to_string();
@@ -58,23 +47,14 @@ pub(super) fn seat_here() -> String {
     let Some(root) = worktree_root(&cwd) else {
         return "main".to_string();
     };
-    // Whatever the directory is called, roster letter
-    // or not. A tree outside the roster is worth
-    // naming truthfully.
+    // A tree outside the roster is named truthfully too.
     root.rsplit('/').next().unwrap_or("?").to_string()
 }
 
-/// Why a picture taken here may not go on the board, in words for
-/// whoever tried — and None from a roster seat, which is everywhere it
-/// may.
-///
-/// A run leaves the board when its seat's work does: the branch lands,
-/// or the letter is handed to a fresh stretch of work (`sweep`). Both
-/// are things that happen to a *roster letter*, so a run taken anywhere
-/// else would stand for good with nothing left that could ever call it
-/// finished. The board takes a run from a roster letter alone:
-/// asking for a picture is asking for a seat (CLAUDE.md
-/// ビルド・テスト).
+/// Why a picture taken here may not go on the board; None from a roster
+/// seat. A run leaves the board when its seat's work does (`sweep`),
+/// which only happens to a roster letter — a run from anywhere else would
+/// stand for good.
 fn not_a_seat(seat: &str) -> Option<String> {
     if SEATS.contains(&seat) {
         return None;
@@ -96,18 +76,11 @@ fn not_a_seat(seat: &str) -> Option<String> {
 /// page is. An empty label is refused here, so the rule holds for
 /// `verify-ui`'s own calls too.
 pub(crate) fn record(label: &str, verb: &str, pngs: &[PathBuf]) -> Result<PathBuf, String> {
-    // No captions at all: a run read one picture at a time is named by
-    // its label, and a word over every shot would only repeat it.
     record_with(label, verb, pngs, &[], false)
 }
 
-/// Two pictures of the same thing under one name, read abreast: the one
-/// before the change on the left, the one after it on the right.
-///
-/// Shown one at a time they are not a comparison at all — the
-/// reader holds the first in their head while looking at the
-/// second. One view, one magnifier, and the difference is on
-/// the screen.
+/// Before on the left, after on the right, read abreast under one name
+/// (`Run::side_by_side`).
 pub(crate) fn record_pair(
     label: &str,
     verb: &str,
@@ -123,14 +96,8 @@ pub(crate) fn record_pair(
     )
 }
 
-/// Several pictures of one thing under one name, read abreast, each with
-/// the word that says which it is: the states of a part laid out in a
-/// row the way a reader would put them on a desk.
-///
-/// **The same rule as [`record_pair`], for more than two.** A set read
-/// one at a time is a set nobody can compare — what a row of states is
-/// for is the step between one and the next, and that is on the screen
-/// only while they are beside each other.
+/// [`record_pair`] for more than two: a part's states in a row, each
+/// under its caption.
 pub(crate) fn record_abreast(
     label: &str,
     verb: &str,
@@ -159,9 +126,7 @@ fn record_with(
     if let Some(refusal) = not_a_seat(&seat) {
         return Err(refusal);
     }
-    // A picture is work, and work holds the seat: a run from a letter
-    // its session no longer holds — landed, and going on — takes the
-    // claim back before the letter can be handed out from under it.
+    // A picture is work, and work holds the seat (`held_by_this_run`).
     if let Some(note) = crate::seats::held_by_this_run(&seat) {
         println!("{note}");
     }
@@ -203,19 +168,15 @@ fn record_with(
         });
     }
     write_run(&runs, &stem, &run)?;
-    // The new run first, then what it replaces: interrupted between the
-    // two the board holds one picture too many, where the other order
-    // could leave it holding none.
+    // The new run first, then what it replaces: interrupted between, the
+    // board holds one picture too many rather than none.
     sweep::supersede(&board, &run, &stem)?;
     sweep::rebuild(&board)
 }
 
-/// Every picture in a directory, onto the board under one name.
-///
-/// How a run that happened somewhere else reaches the
-/// board: a container leaves its pictures in a bridged
-/// host directory, and the seat they belong to is the
-/// one out here.
+/// Every picture in a directory, onto the board under one name — how a
+/// container's run reaches it: the pictures land in a bridged host
+/// directory, and the seat they belong to is the one out here.
 pub(crate) fn record_dir(dir: &Path, label: &str, verb: &str) -> Result<PathBuf, String> {
     let mut shots: Vec<PathBuf> = std::fs::read_dir(dir)
         .map_err(|e| format!("could not read {}: {e}", dir.display()))?
@@ -227,15 +188,11 @@ pub(crate) fn record_dir(dir: &Path, label: &str, verb: &str) -> Result<PathBuf,
     record(label, verb, &shots)
 }
 
-/// Every run on the board, in the order it was put up. A run file that
-/// cannot be read or parsed is skipped: one bad file leaves every
-/// other picture on the board standing.
-///
-/// Oldest first, because the order the runs went up *is* the order they
-/// are to be read in: the machine being worked on first, then the order
-/// they were explained in (verify-ui skill §board). The page is the only
-/// place that order survives, so reversing it here would hand the reader
-/// the last picture of an explanation before its first.
+/// Every run on the board, oldest first — the order they went up is the
+/// order they are read in
+/// (verify-ui SKILL.md「board は上から下へ、載せた順に読む」).
+/// A run file that cannot be read or parsed is skipped, leaving the rest
+/// standing.
 pub(super) fn load_runs(runs: &Path) -> Vec<Run> {
     let Ok(entries) = std::fs::read_dir(runs) else {
         return Vec::new();
@@ -251,12 +208,9 @@ pub(super) fn load_runs(runs: &Path) -> Vec<Run> {
     out
 }
 
-/// Writes the run beside its neighbours under a name of its own.
-///
-/// Seats add to the board concurrently, so there is no
-/// shared file to read-modify-write: each run is its own
-/// file, written to a temporary name and renamed into
-/// place, which hands a reader a whole one.
+/// Seats add to the board concurrently, so each run is its own file,
+/// written under a temporary name and renamed into place so a reader
+/// gets a whole one.
 fn write_run(runs: &Path, stem: &str, run: &Run) -> Result<(), String> {
     let mut text = String::new();
     for (key, value) in [
@@ -270,8 +224,7 @@ fn write_run(runs: &Path, stem: &str, run: &Run) -> Result<(), String> {
     if run.side_by_side {
         text.push_str(&format!("abreast{SEP}1\n"));
     }
-    // The caption goes last, so a run written before the board had one
-    // parses here with every field it does carry still in its place.
+    // The caption goes last, so a run file without one still parses.
     for shot in &run.shots {
         text.push_str(&format!(
             "shot{SEP}{}{SEP}{}{SEP}{}{SEP}{}{SEP}{}\n",
@@ -286,8 +239,7 @@ fn write_run(runs: &Path, stem: &str, run: &Run) -> Result<(), String> {
         .map_err(|e| format!("could not place {}: {e}", final_path.display()))
 }
 
-/// The inverse of `write_run`. None when the file is missing what a run
-/// is: a name, a time, and a picture.
+/// The inverse of `write_run`; None without a name, a time and a picture.
 pub(super) fn parse_run(text: &str) -> Option<Run> {
     let mut run = Run {
         label: String::new(),
@@ -310,8 +262,6 @@ pub(super) fn parse_run(text: &str) -> Option<Run> {
                 let from = parts.next()?.to_string();
                 let width = parts.next()?.parse().ok()?;
                 let height = parts.next()?.parse().ok()?;
-                // Absent in every run written before captions existed,
-                // and empty is exactly what those runs mean.
                 let caption = parts.next().unwrap_or_default().to_string();
                 run.shots.push(Shot {
                     file,
@@ -327,10 +277,8 @@ pub(super) fn parse_run(text: &str) -> Option<Run> {
     (!run.label.is_empty() && run.at > 0 && !run.shots.is_empty()).then_some(run)
 }
 
-/// A PNG's pixel dimensions, straight out of the IHDR that every PNG
-/// opens with. Reading 24 bytes is the whole job — the board only needs
-/// to know how big to say the picture is, and `png::decode` would
-/// inflate every pixel of every shot to find out.
+/// Out of the IHDR every PNG opens with — `png::decode` would inflate
+/// every pixel to find out.
 fn png_size(path: &Path) -> Result<(u32, u32), String> {
     use std::io::Read;
     let mut bytes = [0_u8; 24];
@@ -347,23 +295,12 @@ fn png_size(path: &Path) -> Result<(u32, u32), String> {
     Ok((word(16), word(20)))
 }
 
-/// What a run with no name is told. The placeholder carries both halves
-/// of what a name is: what to look at, in the language it is read in.
 const NEEDS_A_NAME: &str =
     "a run needs --label \"<what to look at in these pictures, written in Japanese>\"";
 
-/// A name somebody typed, for the board to show.
-///
-/// **A run's name is written in Japanese.** The board is read by the
-/// person the pictures were taken for, and the name is the first thing
-/// they read off it — so it is written in the language they read
-/// (verify-ui skill §board). One Japanese character is the whole of what
-/// is asked: identifiers, verbs and file names inside the name keep
-/// their own spelling.
-///
-/// Only a typed name comes through here. The name `verify-ui` falls back
-/// to when nobody gave one is its verb and argument — a machine's name
-/// for a picture nobody asked to be shown.
+/// A typed name, checked for the board: it holds one Japanese character
+/// at least (verify-ui SKILL.md「ラベルは日本語で書く」). `verify-ui`'s
+/// fallback name (its verb and argument) does not come through here.
 pub(crate) fn written_label(text: &str) -> Result<String, String> {
     if one_line(text).is_empty() {
         return Err(NEEDS_A_NAME.to_string());
@@ -372,22 +309,20 @@ pub(crate) fn written_label(text: &str) -> Result<String, String> {
         return Err(format!(
             "--label {text:?}: a run's name is written in Japanese — it is read off the \
              board by the person the pictures were taken for, and it is the first thing \
-             they read there (verify-ui skill §board). Identifiers inside the name keep \
-             their own spelling."
+             they read there (verify-ui SKILL.md「ラベルは日本語で書く」). Identifiers \
+             inside the name keep their own spelling."
         ));
     }
     Ok(text.to_string())
 }
 
-/// Hiragana, katakana, or a kanji — the three the name is recognised by.
+/// Hiragana, katakana, or a kanji.
 fn reads_as_japanese(ch: char) -> bool {
     matches!(ch, '\u{3040}'..='\u{30ff}' | '\u{4e00}'..='\u{9fff}')
 }
 
-/// A label reduced to something safe in a file name. Labels are written
-/// in Japanese, and non-ASCII in a name is a portability problem nobody
-/// needs — the timestamp and seat already make the name unique, so this
-/// only has to be a hint.
+/// ASCII only for a file name — the timestamp and seat already make the
+/// name unique, so this is only a hint.
 fn slug(text: &str) -> String {
     let mut out = String::new();
     for ch in text.chars() {
@@ -408,8 +343,6 @@ fn slug(text: &str) -> String {
     }
 }
 
-/// One line of text: the run format separates on tabs and newlines, so
-/// values may hold neither.
 fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }

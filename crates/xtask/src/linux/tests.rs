@@ -39,9 +39,8 @@ fn an_xtask_verb_is_run_through_the_task_runner() {
     );
 }
 
-/// The tree at /work is the host's own checkout, so a cargo in there
-/// that resolves is a cargo that can rewrite the host's `Cargo.lock`.
-/// Every one of them is spelled `--locked`, typed by hand or not.
+/// /work is the host's own checkout, so a cargo in there that resolves
+/// can rewrite the host's `Cargo.lock`.
 #[test]
 fn a_cargo_that_resolves_is_locked_wherever_it_was_typed() {
     assert_eq!(
@@ -69,9 +68,8 @@ fn a_cargo_that_resolves_is_locked_wherever_it_was_typed() {
     );
 }
 
-/// The default is locked, so a verb nobody thought of carries it too —
-/// `fetch` writes a lock file of its own where there is none, and was
-/// missed by a list of the verbs that resolve.
+/// The default is locked, so a verb nobody listed carries it too —
+/// `fetch` writes a lock file of its own where there is none.
 #[test]
 fn a_verb_nobody_listed_is_locked_all_the_same() {
     assert_eq!(
@@ -86,8 +84,7 @@ fn a_verb_nobody_listed_is_locked_all_the_same() {
         );
     }
     // A third-party subcommand is locked as well: one that will not take
-    // the flag says so where the person who typed it can read it, which
-    // is the loud half of being wrong.
+    // the flag says so, which is the loud half of being wrong.
     assert_eq!(
         command_line(&words("deny check"), None),
         words("cargo deny --locked check")
@@ -101,9 +98,8 @@ fn a_verb_nobody_listed_is_locked_all_the_same() {
     assert_eq!(command_line(&words("--list"), None), words("cargo --list"));
 }
 
-/// **Cargo takes its own options ahead of the subcommand**, so the first
-/// word is not the verb and a line that reads it as one hands the
-/// container an unlocked cargo.
+/// Cargo takes its own options ahead of the subcommand, so a line that
+/// reads the first word as the verb hands the container an unlocked cargo.
 #[test]
 fn cargos_own_options_come_before_the_subcommand() {
     assert_eq!(
@@ -202,9 +198,7 @@ fn a_locked_beyond_the_separator_is_not_this_lines_own() {
     );
 }
 
-/// A line that names this run's prepared copy starts from it and says
-/// nothing about cargo: no `cargo xtask`, no alias, no resolve
-/// (`linux::runner`).
+/// No `cargo xtask`, no alias, no resolve (`linux::runner`).
 #[test]
 fn a_prepared_copy_starts_the_verb_and_no_cargo_does() {
     let copy = "/work/target/gate-runner/xtask-1758-40".to_string();
@@ -225,10 +219,9 @@ fn a_prepared_copy_starts_the_verb_and_no_cargo_does() {
     assert!(!line.iter().any(|word| word == "cargo"), "{line:?}");
 }
 
-/// A copy that is not there is a preparation that did not happen. The
-/// script says so and stops — the one thing that must never follow is a
-/// quiet road back to cargo, and the script that guards a copy holds no
-/// cargo on any of its roads, the red one included.
+/// A copy that is not there is a preparation that did not happen: the
+/// script says so and stops, and holds no cargo on any road, the red one
+/// included.
 #[test]
 fn a_line_that_names_a_copy_stops_when_the_copy_is_not_there() {
     let copy = "/work/target/gate-runner/xtask-1758-40";
@@ -254,8 +247,7 @@ fn a_line_that_names_a_copy_stops_when_the_copy_is_not_there() {
 }
 
 /// The container is `--rm`: what it did not say while it ran is gone.
-/// The look is taken before the command and printed only if the command
-/// fails, so a green run's log is the log it always was.
+/// The look is taken before the command and printed only if it fails.
 #[test]
 fn the_command_runs_bracketed_by_a_look_at_what_a_resolve_reads() {
     let line = watched_from_inside(&words("cargo xtask verify-ui commit"), None);
@@ -277,14 +269,11 @@ fn the_command_runs_bracketed_by_a_look_at_what_a_resolve_reads() {
     assert!(script.contains("exit \"$code\""), "{script}");
 }
 
-/// **Nothing here names a container and nothing here reaps one.** A
-/// name would be for finding an interrupted container to take away, and
-/// that is a `docker rm` on this side with no ceiling over it. Nothing
+/// A reap would be a `docker rm` with no ceiling over it, and nothing
 /// needs one: an interrupted container cannot reach this checkout's
-/// copies (`linux::runner::SCRIPT`), and the cargo lock it still holds
-/// is waited out under the step's own ceiling. The one
-/// container that is named and removed is the gate's own, and both
-/// happen under a ceiling in `container` (`remove_container`).
+/// copies (`linux::runner::SCRIPT`), and its cargo lock is waited out
+/// under the step's ceiling. The gate's own container is named and
+/// removed under a ceiling in `container` (`remove_container`).
 #[test]
 fn no_container_started_here_is_named_or_reaped() {
     assert!(
@@ -350,11 +339,9 @@ fn volume_names_survive_a_windows_path() {
     );
 }
 
-/// A listing as `git worktree list --porcelain` gives it: the primary
-/// checkout, a roster seat, the measurement's rig (detached, and there
-/// only while a measurement runs) and the fresh worktree a task is
-/// standing in. Nothing here is a seat letter — what makes a name alive
-/// is that git named the tree, not where it stands.
+/// A `git worktree list --porcelain` listing: the primary checkout, a
+/// seat, the measurement's detached rig and a task's fresh worktree. What
+/// makes a name alive is that git names the tree, not where it stands.
 const LISTING: &str = "\
 worktree C:/Users/x/IdeaProjects/platitude-gg
 HEAD 1111111111111111111111111111111111111111
@@ -382,10 +369,8 @@ fn every_tree_git_names_is_a_live_name() {
     );
 }
 
-/// The volumes of a checkout that is gone are orphans; the ones of every
-/// tree git still names are not, whatever kind of tree it is. The
-/// registry volume belongs to the machine and is nobody's to remove, and
-/// so is anything that is not this project's.
+/// Whatever kind of tree git still names, its volumes stay. The registry
+/// volume is the machine's, and anything not this project's is left too.
 #[test]
 fn only_the_volumes_of_a_checkout_that_is_gone_are_orphans() {
     let listed = "\
@@ -409,11 +394,9 @@ some-other-project-target-a
     );
 }
 
-/// The two generations of 2026-09-21, from the day ci/linux/Dockerfile
-/// moved and one seat was still behind: the tree that is building names
-/// one tag and the seat behind it names the other, and a keep set of
-/// only the builder's would take 4.3 GB away from a checkout that is
-/// using it.
+/// Two generations at once: the tree that is building names one tag and
+/// a seat behind it names the other, and a keep set of only the
+/// builder's would take the image from a checkout still using it.
 #[test]
 fn a_tag_a_checkout_that_is_behind_still_names_is_kept() {
     let listed = "\
@@ -443,9 +426,8 @@ pgg-linux:bare-3306fab788288e20
     assert!(stale_images(listed, "bare", &keep).is_empty());
 }
 
-/// The accounting has to name every stage the Dockerfile builds, and the
-/// Dockerfile is the witness for that — a stage added there and forgotten
-/// here is one whose images no checkout is ever seen to need.
+/// A stage added to the Dockerfile and forgotten here is one whose images
+/// no checkout is ever seen to need.
 #[test]
 fn the_stages_are_the_ones_the_dockerfile_builds() {
     let path = crate::tree::workspace_root()
@@ -468,12 +450,11 @@ fn the_stages_are_the_ones_the_dockerfile_builds() {
     assert_eq!(built, STAGES);
 }
 
-/// The registry volume is shared by every container on the machine, so the
-/// locks cargo guards it with have to be as well: cargo takes them in
-/// CARGO_HOME itself, and the image links both into the registry the volume
-/// is mounted over. A registry mounted anywhere but CARGO_HOME's own, or a
-/// link dropped from the image, puts two containers back to unpacking the
-/// same new crate at once — the second failing on its `.cargo-ok`.
+/// The registry volume is shared by every container on the machine, so
+/// cargo's locks on it (taken in CARGO_HOME) must be too: the image links
+/// both into the registry the volume is mounted over. Otherwise two
+/// containers unpack the same new crate at once, the second failing on
+/// its `.cargo-ok`.
 #[test]
 fn the_package_cache_locks_live_in_the_shared_registry() {
     let path = crate::tree::workspace_root()
@@ -513,12 +494,8 @@ fn the_qt_version_comes_from_the_workflow() {
     );
 }
 
-/// Every container is under the launcher's announcement to a measurement
-/// and under the launcher's ticket, and takes neither of its own. Both
-/// marks or neither: with only the first, a `linux verify-ui` holds a
-/// compile's weight out here while the verb inside queues for weight of
-/// its own, and enough of those pairs fill the machine with halves that
-/// cannot move (`crate::budget`, `crate::still`).
+/// Every container is under the launcher's announcement and ticket, and
+/// takes neither of its own — why both, at `carried`.
 #[test]
 fn a_container_is_started_carrying_both_marks() {
     assert_eq!(

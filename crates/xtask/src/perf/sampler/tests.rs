@@ -86,7 +86,7 @@ fn the_peak_and_the_last_reading_come_off_one_series() {
 #[test]
 fn an_idle_machine_reads_as_no_foreign_load() {
     let mut series = Series::default();
-    // Every 100ns of capacity went to idle across all three ticks.
+    // Every 100ns of capacity went to idle.
     series.absorb(sample(100, true, 1, 0, 24_000_000), 0);
     series.absorb(sample(100, true, 2, 0, 48_000_000), 0);
     assert!(series.conditions.busy_percent.abs() < 0.001);
@@ -132,10 +132,8 @@ fn a_busy_machine_is_refused_and_names_the_share() {
     );
 }
 
-/// Losing the front is recorded and does not spoil the run: a window
-/// that is not in front is still composited, and this application
-/// does not reliably take the focus off the shell that started it
-/// (every tick of a healthy run can read `fg=0`).
+/// Losing the front is recorded, not refused (`Sample::foreground`):
+/// every tick of a healthy run can read `fg=0`.
 #[test]
 fn a_window_that_lost_the_front_is_still_a_reading() {
     let mut series = Series::default();
@@ -151,7 +149,6 @@ fn a_window_that_lost_the_front_is_still_a_reading() {
     assert_eq!(series.conditions.foreground_share(), Some(0.7));
 }
 
-/// A locked session is the one the window cannot be seen through.
 #[test]
 fn a_locked_session_is_refused() {
     let mut series = Series::default();
@@ -176,9 +173,6 @@ fn a_locked_session_is_refused() {
     );
 }
 
-/// The secure desktop flashing past — a consent prompt, a focus
-/// change — is not a lock, and refusing on it costs a retake plus
-/// the wait before it.
 #[test]
 fn a_blink_of_the_secure_desktop_is_not() {
     let mut series = Series::default();
@@ -196,8 +190,6 @@ fn a_blink_of_the_secure_desktop_is_not() {
     );
 }
 
-/// Two short blinks are not one long one: the gate reads the longest
-/// unbroken stretch.
 #[test]
 fn scattered_blinks_do_not_add_up_to_a_lock() {
     let mut series = Series::default();
@@ -216,11 +208,8 @@ fn scattered_blinks_do_not_add_up_to_a_lock() {
     );
 }
 
-/// A window is mapped where the platform puts it and only then moved
-/// onto the screen the run asked for, so where it was in the first
-/// second is not held against it — but a move after that is the
-/// window wandering off the screen whose refresh the frames are read
-/// against.
+/// Where the window was in its first second is not held against it
+/// (`SETTLED_TICKS`); a move after that is.
 #[test]
 fn a_window_that_changed_screens_after_settling_is_refused() {
     let mut settling = Conditions::default();
@@ -260,10 +249,6 @@ fn a_minimised_window_is_refused_before_anything_else() {
     );
 }
 
-/// The wake helper is the only thing holding the display timer off,
-/// and a dark screen shows up on its own in nothing but the scroll
-/// bench's frame count — so a run taken without one would publish
-/// the numbers of a screen nobody could see.
 #[test]
 fn a_wake_helper_that_stopped_is_refused() {
     let alive = |away_ms| {
@@ -289,9 +274,6 @@ fn a_wake_helper_that_stopped_is_refused() {
     assert!(stopped.complaint(&Limits::OPEN, None, false).is_none());
 }
 
-/// Pinning a window asks; it does not decide. The report divides the
-/// frame rate by the refresh of the screen that was asked for, which
-/// says nothing about the one the window actually came up on.
 #[test]
 fn a_window_that_came_up_on_another_screen_is_refused() {
     let mut conditions = Conditions::default();
@@ -315,11 +297,8 @@ fn a_window_that_came_up_on_another_screen_is_refused() {
     );
 }
 
-/// The job object counts the children: a process that does its work in
-/// a child shows more time in `app` than in `own`. The process is
-/// started suspended, as the app is, and does its work the moment the
-/// sampler resumes it — which is after the join, or the child's time
-/// would be its own.
+/// Started suspended, as the app is, so the child is spawned only after the
+/// join.
 #[cfg(windows)]
 #[test]
 fn the_children_of_the_watched_process_are_counted_as_its_own() {
@@ -364,12 +343,9 @@ fn the_children_of_the_watched_process_are_counted_as_its_own() {
     );
 }
 
-/// The screen is a condition of a D3D run alone. One dark tick refuses
-/// it: the display timer ran out under the run, and every frame after
-/// that went nowhere — said before the wake helper's own interval would
-/// say so. A software run's frames need no display, so the same ticks —
-/// lit, dark, flipping, or never answered — refuse nothing and stay
-/// evidence.
+/// One dark tick refuses a D3D run, sooner than the wake helper's interval
+/// would; a software run's ticks — lit, dark, flipping, or never answered —
+/// refuse nothing.
 #[test]
 fn the_screen_is_a_condition_of_a_d3d_run_alone() {
     let with = |dark: Option<bool>| {
@@ -445,9 +421,6 @@ fn the_screen_is_a_condition_of_a_d3d_run_alone() {
     );
 }
 
-/// A software run injects no input, so the interval since the last
-/// input is how long the person has been away — not a helper that
-/// died, which is what the same interval means to a D3D run.
 #[test]
 fn a_software_run_is_not_refused_for_the_wake_helper_it_never_had() {
     let away = |dark: bool| {

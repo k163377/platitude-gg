@@ -95,19 +95,15 @@ pub(super) enum Lang {
     Qml,
 }
 
-/// `text` with every comment and string literal replaced by spaces, line
-/// for line: what is left is the code, and a `;` or a brace inside a
-/// string no longer reads as one. Rust char literals and raw strings are
-/// blanked too; a lifetime's `'` is kept, since it opens nothing. A QML
-/// regular expression is a literal like any other ([`regex_len`]) — the
-/// `'` of a `/'/` opens no string.
+/// `text` with every comment and literal (strings, Rust chars and raw
+/// strings, QML regular expressions — [`regex_len`]) replaced by spaces,
+/// line for line; a lifetime's `'` is kept.
 pub(super) fn code_view(text: &str, lang: Lang) -> String {
     view(text, lang, false)
 }
 
 /// `text` with its comments blanked and its strings kept, character for
-/// character beside [`code_view`]: the code with what it says — where a
-/// script this runner writes stands, and where a comment names nothing.
+/// character beside [`code_view`].
 pub(super) fn strings_view(text: &str, lang: Lang) -> String {
     view(text, lang, true)
 }
@@ -245,8 +241,7 @@ const VALUE_WORDS: [&str; 8] = [
 
 /// A JavaScript regular expression literal at `at`; 0 where the `/`
 /// divides instead. One stands only where a value may begin, and closes
-/// with an unescaped `/` on its own line — a `[…]` class holds a `/`
-/// without one. Blanked like a string, since `/'/` opens none.
+/// with an unescaped `/` outside a `[…]` class, on its own line.
 fn regex_len(chars: &[char], at: usize) -> usize {
     if !opens_a_value(chars, at) {
         return 0;
@@ -267,11 +262,9 @@ fn regex_len(chars: &[char], at: usize) -> usize {
     0
 }
 
-/// Whether a value may begin at `at`: after a name, a number or a
-/// closing bracket what follows is an operator, and after anything else
-/// — a `(`, a `,`, a `:`, an operator, the start of a statement — it is
-/// a value. Read across a newline it says the other thing too: a line
-/// that ends where no value may begin is a statement QML has closed.
+/// Whether a value may begin at `at`: after a name (other than
+/// [`VALUE_WORDS`]), a number, a closing bracket or a quote what follows
+/// is an operator, and after anything else a value.
 pub(super) fn opens_a_value(chars: &[char], at: usize) -> bool {
     let Some(before) = chars[..at].iter().rposition(|c| !c.is_whitespace()) else {
         return true;
@@ -293,11 +286,8 @@ pub(super) fn opens_a_value(chars: &[char], at: usize) -> bool {
 
 /// The line ranges of a Rust file's `#[cfg(test)]` blocks — a `mod`, a
 /// `fn` or an `impl` — from the item's first attribute to its closing
-/// brace, read off its code view. A test-only item is test code whatever
-/// shape it takes, and a helper `fn` beside the production code of a
-/// file is the shape a suite's fixture takes there. A `#[cfg(test)] mod
-/// x;` declares a file that is read on its own ([`declared_test_modules`])
-/// and opens no region here.
+/// brace, read off its code view. A `#[cfg(test)] mod x;` opens none
+/// ([`declared_test_modules`]).
 pub(super) fn test_regions(code: &str) -> Vec<RangeInclusive<usize>> {
     let chars: Vec<char> = code.chars().collect();
     let mut regions = Vec::new();
@@ -320,13 +310,9 @@ pub(super) enum Declared {
     Path(String),
 }
 
-/// The modules a file declares as test code — `#[cfg(test)] mod x;` —
-/// whose files are test code from top to bottom wherever they stand and
-/// whatever they are called.
-///
-/// `text` is the raw source the code view was taken from, character for
-/// character: a `#[path]`'s string is blanked in the view, so it is read
-/// there.
+/// The modules a file declares as test code — `#[cfg(test)] mod x;`.
+/// `text` is the raw source `code` was viewed from: a `#[path]`'s string
+/// is blanked in the view, so it is read there.
 pub(super) fn declared_test_modules(code: &str, text: &str) -> Vec<Declared> {
     let chars: Vec<char> = code.chars().collect();
     let raw: Vec<char> = text.chars().collect();
@@ -388,11 +374,9 @@ fn test_items(code: &str, chars: &[char]) -> Vec<TestItem> {
     items
 }
 
-/// Whether the `#[cfg(…)]` whose `(` stands at `open` holds under
-/// `cfg(test)`: `test` itself, or a `test` among the terms of an `all`
-/// / `any`, however deep. A `not(test)` names the opposite, and a
-/// `"test"` written as a value is blanked in the code view this reads,
-/// so only the bare word is ever found.
+/// Whether the `#[cfg(…)]` whose `(` stands at `open` names `test`
+/// outside any `not(…)`, however deep in an `all` / `any`. A `"test"`
+/// value is blanked in the code view, so only the bare word is found.
 fn cfg_names_test(chars: &[char], open: usize) -> bool {
     let Some(close) = matching(chars, open, '(', ')') else {
         return false;
@@ -468,11 +452,8 @@ fn matching_back(chars: &[char], close: usize) -> Option<usize> {
 /// The modifiers an item wears between its visibility and its keyword.
 const MODIFIERS: [&str; 5] = ["async", "const", "default", "extern", "unsafe"];
 
-/// The item that follows a `#[cfg(test)]`'s `]` at `at`, past whatever
-/// other attributes and modifiers stand between them: its kind, its
-/// name, and the index of the `{` or `;` that follows its head. `pub`
-/// and `pub(…)` are stepped over — a test item is no less one for being
-/// reachable.
+/// The item that follows a `#[cfg(test)]`'s `]` at `at`, past other
+/// attributes, a `pub` / `pub(…)` and modifiers.
 fn test_item(chars: &[char], mut at: usize, attribute: usize) -> Option<TestItem> {
     loop {
         at = past_whitespace(chars, at);
@@ -543,8 +524,7 @@ fn head_end(chars: &[char], at: usize) -> usize {
 }
 
 /// The file a `#[path = "…"]` among the attributes in `raw[from..to]`
-/// names. Read off the raw text, which the code view stands in step
-/// with character for character — in the view the string is blanked.
+/// names, read off the raw text (the view blanks the string).
 fn module_path(raw: &[char], from: usize, to: usize) -> Option<String> {
     let head = raw.get(from..to)?;
     for at in 0..head.len() {
@@ -628,13 +608,10 @@ pub(super) fn line_of(chars: &[char], at: usize) -> usize {
     chars[..at].iter().filter(|c| **c == '\n').count() + 1
 }
 
-/// Whether `token` occurs in `haystack` on a word boundary at each end
-/// it has one: `timeout(` is its own token apart from `no_timeout(`,
-/// `bounded(` from `unbounded(`, `Instant::now` from
-/// `Instant::nowhere`. An end that is not a word byte (`.outcome()`,
-/// `sleep(`) guards nothing and matches anywhere — which is what lets a
-/// name be looked for however the call spells it, `Instant::now()` and
-/// the `Instant::now` a `get_or_init` is handed alike.
+/// Whether `token` occurs in `haystack` with a word boundary at each end
+/// that is a word byte: `timeout(` apart from `no_timeout(`,
+/// `Instant::now` apart from `Instant::nowhere`. An end that is not a
+/// word byte guards nothing.
 pub(super) fn has_token(haystack: &str, token: &str) -> bool {
     let word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
     let bytes = token.as_bytes();
@@ -654,10 +631,9 @@ pub(super) fn has_token(haystack: &str, token: &str) -> bool {
     false
 }
 
-/// Holds the candidates of one file against its markers. A candidate a
-/// marker covers — on one of its own lines, or in the comment block
-/// standing directly above it — is an exception under that marker's
-/// purpose; the rest are findings. A marker that covers nothing, or says
+/// Holds the candidates of one file against its markers: one a marker
+/// covers — on its own lines or in the comment block directly above — is
+/// an exception under that purpose. A marker that covers nothing, or says
 /// nothing readable, is a finding of its own, so a rewritten wait sheds
 /// its marker the way a fixed lint sheds its `#[expect]`.
 pub(super) fn judged(
@@ -727,9 +703,6 @@ mod tests {
         Declared, Lang, Purpose, code_view, declared_test_modules, has_token, markers, test_regions,
     };
 
-    /// A token is guarded at each end that has a word byte on it, and
-    /// nowhere else: what the far guard buys is a name found however the
-    /// call spells it, without `Instant::nowhere` answering to it.
     #[test]
     fn a_token_is_bounded_at_the_ends_it_has_words_on() {
         assert!(has_token("let t = Instant::now();", "Instant::now"));

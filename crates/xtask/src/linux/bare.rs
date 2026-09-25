@@ -6,24 +6,17 @@ use std::path::Path;
 use super::{OUT_MOUNT, ensure_image, in_container, mount_path, volume};
 use crate::keepsakes::keepsake_dir;
 
-/// `cargo xtask linux bare` — the built binary on an Ubuntu that carries
-/// only what a package would declare, with Qt staged beside it the way a
-/// distribution would ship it.
-///
-/// This is not the discovery run that found the list (that one added a
-/// package at a time and is written down in P5-確認事項); it is the check
-/// that the list is still true. The runtime image installs exactly what is
-/// claimed, so the claim either holds or the run stops with the name of
-/// the library that broke it. Cheap enough to put in front of a merge:
-/// nothing is downloaded, and the answer is a start or a missing symbol.
+/// The built binary on an Ubuntu that carries only what a package would
+/// declare, with Qt staged beside it the way a distribution would ship it.
+/// Without `discover`, the check that the list the `runtime` stage of
+/// ci/linux/Dockerfile installs still holds: the app starts, or the run
+/// stops with the library that broke it.
 pub(super) fn bare(root: &Path, discover: bool) -> Result<(), String> {
-    // Workspace-wide: pgg-todo-editor is a bin of platitude-core,
-    // and a release directory without it is one binary short of what
-    // interactive rebase needs.
+    // Workspace-wide: pgg-todo-editor (a platitude-core bin) has to stand
+    // beside the app for interactive rebase.
     let app = ensure_image(root, "app", false)?;
     println!("building the release, workspace-wide…");
-    // With the harness, like everything else this runner builds
-    // (`crate::tree::HARNESS_FEATURE`): the script below drives the app with
+    // With the harness: the script below drives the app with
     // `PGG_AUTO_ACT`, which a build without it does not answer.
     let build = [
         "cargo",
@@ -79,10 +72,9 @@ pub(super) fn bare(root: &Path, discover: bool) -> Result<(), String> {
 
 const BARE_WATCHDOG_MS: u32 = 30_000;
 
-/// Every library this has ever been stopped on, and the Ubuntu package
-/// that carries it. A name that is not in here stops the discovery and
-/// says so — guessing a package from a file name is how a list acquires
-/// something nobody needed.
+/// Every library this has been stopped on, and the Ubuntu package that
+/// carries it. A name not in here stops the discovery: guessing a package
+/// from a file name is how a list acquires something nobody needed.
 const SONAME_PACKAGES: [(&str, &str); 12] = [
     ("libglib-2.0.so.0", "libglib2.0-0t64"),
     ("libEGL.so.1", "libegl1"),
@@ -172,9 +164,8 @@ fn run_on_bare(
     out: &Path,
     script: &str,
 ) -> Result<std::process::ExitStatus, String> {
-    // Through the budget's runner, as every container command is: the
-    // container outlives a killed launcher, and the ledger has to know
-    // which number is still holding the machine (`crate::budget`).
+    // Through the budget's runner, as every container command is
+    // (`super::in_container`).
     let mut cmd = super::carried();
     crate::budget::watched(
         cmd.arg("--volume")

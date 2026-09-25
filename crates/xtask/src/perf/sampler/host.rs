@@ -9,16 +9,8 @@ use std::process::{Command, Stdio};
 use super::windows::{AWAKE, CONTINUOUS, SYSTEM_AWAKE};
 use super::{Limits, percent};
 
-/// Waits until the machine is quiet enough to measure on, or says why it
-/// gave up. Between runs: what it costs is a second PowerShell, and the
-/// point is to spend it while nothing is being timed.
-///
-/// This is the answer to a person walking away
-/// mid-measurement: a session somebody locked by hand, or a
-/// build somebody started, is waited out. The screen is held
-/// awake across this wait as across everything else —
-/// [`keep_awake`] is held for the whole invocation, which is
-/// what makes the gap between two runs no darker than a run.
+/// Waits between runs, while nothing is timed, until the machine is
+/// unlocked and quiet enough to measure on, or says why it gave up.
 pub(in crate::perf) fn wait_for_quiet(
     limits: &Limits,
     ceiling: std::time::Duration,
@@ -26,9 +18,9 @@ pub(in crate::perf) fn wait_for_quiet(
     if limits.quiet_percent.is_infinite() {
         return Ok(());
     }
-    // A look is a PowerShell of its own, and its own share of the load
-    // being read: spaced further apart than the runner's usual look, so
-    // the looking is not what keeps the machine busy.
+    // Each look is a PowerShell whose own load is part of what it reads:
+    // spaced wider than the usual look, so the looking does not keep the
+    // machine busy.
     const QUIET_LOOK: std::time::Duration = std::time::Duration::from_millis(500);
     let mut wait = crate::wait::Wait::new(
         "the measurement",
@@ -65,46 +57,21 @@ pub(in crate::perf) fn wait_for_quiet(
     }
 }
 
-/// Keeps the machine awake for as long as it is alive, and — for a run
-/// whose frames need a display — the display too.
+/// Keeps the machine awake for the whole invocation, and — for a D3D run —
+/// the display too: nothing is composited to a dark display, so the
+/// scroll bench's animation stands still as under a lock.
 ///
-/// **A dark screen is an unmeasurable machine, for a D3D run.** Nothing
-/// is composited to a display that is off, so no frames arrive, so the
-/// animation the scroll bench is driven by never advances — the same
-/// standstill a locked session produces. A measurement nobody is sitting
-/// at is idle by definition, so whatever the display timer is set to, it
-/// runs out.
+/// `ES_DISPLAY_REQUIRED` alone does not wake a screen already dark, so this
+/// injects a zero-pixel mouse move, which moves no cursor
+/// (rules-refs/app-ui.md「画面は invocation の間ずっと起こしておく」).
 ///
-/// **`ES_DISPLAY_REQUIRED` is not enough**, twice over: it holds only
-/// while it is held, so a request that lives for the length of a run
-/// holds nothing over the build and the waits *between* runs — and it
-/// does not wake a screen that is already dark, which is what every run
-/// after the first then starts against. What wakes a dark screen is
-/// input, so this sends some: a mouse move of zero pixels, which moves
-/// no cursor and interrupts nobody's typing.
+/// A software run needs no display, so its helper injects nothing and asks
+/// only `ES_SYSTEM_REQUIRED`, leaving the screen to whoever drives it.
 ///
-/// **For a software run it is the opposite request.** Its frames need
-/// no display, and a person at the machine may be turning the screen
-/// on and off as they please — so that helper injects nothing and asks
-/// only for `ES_SYSTEM_REQUIRED`, which keeps the machine from sleeping
-/// (a build with the screen off and nobody typing is otherwise idle,
-/// and the sleep timer runs out on it) while leaving the display to
-/// whoever and whatever is driving it. It is held for the invocation for
-/// the same reason the other is: the machine stays awake between the
-/// runs as during them.
-///
-/// **It has to die with its parent, past any `Drop`.** A killed
-/// xtask never unwinds — `taskkill`, a stopped task, an abort — and a
-/// loop that only `Drop` stops would then hold the machine awake (and,
-/// lit, inject input) for the rest of the machine's uptime, with nothing
-/// able to find it (`xtask kill` reaps `platitude-gg` images, and
-/// killing by image name is denied). So the loop asks whether its parent
-/// is still there on every pass: the leak is bounded by one interval.
-///
-/// **The parent is identified by when it started.**
-/// A pid is reused, and a wake loop that only asked whether *something*
-/// holds that number would outlive its parent for as long as whatever
-/// took the number lives.
+/// The helper checks on every pass that its parent is alive, by start time
+/// as well as pid (a pid is reused): a killed xtask never runs `Drop`, and
+/// nothing else would find the loop (`xtask kill` reaps only `platitude-gg`
+/// images).
 pub(in crate::perf) struct Awake(Option<std::process::Child>);
 
 impl Drop for Awake {
@@ -123,9 +90,6 @@ pub(super) const WAKE_SECS: u64 = 20;
 
 #[cfg(windows)]
 pub(in crate::perf) fn keep_awake(display: bool) -> Awake {
-    // Holding the display pokes the input timer too, so an already-dark
-    // screen comes back; a software run holds only the machine and
-    // injects nothing.
     let (flags, poke) = if display {
         (
             AWAKE,
@@ -164,11 +128,8 @@ public static class PerfWake {{\n\
         .stderr(Stdio::null())
         .spawn()
         .ok();
-    // Said out loud, because the failure it causes names something else
-    // entirely: for D3D, the screen goes dark mid-invocation and every
-    // run after it dies at `measure::SCROLL_CEILING` blaming a covered
-    // window; for a software run, the machine can sleep out from under
-    // a long build.
+    // Said out loud: the failure it causes names something else (a D3D
+    // run dies at `measure::SCROLL_CEILING` blaming a covered window).
     if child.is_none() {
         let consequence = if display {
             "a dark screen will spoil runs"
@@ -188,16 +149,13 @@ pub(in crate::perf) fn keep_awake(_display: bool) -> Awake {
 /// The machine with no process attached: whether anybody could be looking
 /// at it, and the whole-machine processor counters.
 ///
-/// Its own type: a `Sample` would have to carry a second spelling of
-/// the sampler's field list, and every key but two of those falls back
-/// to zero when it is missing — so a key renamed on one side and not
-/// the other would read as a perfectly idle machine.
+/// Not a `Sample`, whose keys mostly fall back to zero when missing: a key
+/// renamed on one side only would read as an idle machine.
 #[derive(Debug, Clone, Copy, Default)]
 struct Host {
-    /// False says nobody could be looking at this desktop. The same
-    /// reading as [`Sample::interactive`](super::Sample::interactive), taken the same way and
-    /// subject to the same caveats — do not restate them here, one copy
-    /// of this drifting is what there is to avoid.
+    /// The same reading as
+    /// [`Sample::interactive`](super::Sample::interactive), taken the same
+    /// way — its caveats are written there only.
     interactive: bool,
     kernel: u64,
     user: u64,
@@ -243,9 +201,8 @@ public static class PerfIdle {\n\
         .ok_or_else(|| "the host counters did not answer".to_string())
 }
 
-/// Nothing here has a desktop to lock, so the wait is only ever about the
-/// processor. USER_HZ ticks — the ratio is unit-free, so only the shape
-/// has to match.
+/// No desktop to lock here, so the wait is only about the processor, in
+/// USER_HZ ticks (the ratio is unit-free).
 #[cfg(target_os = "linux")]
 fn host_sample() -> Result<Host, String> {
     let stat = std::fs::read_to_string("/proc/stat").map_err(|e| e.to_string())?;
@@ -283,8 +240,8 @@ fn parse_host(line: &str) -> Option<Host> {
 mod tests {
     use super::parse_host;
 
-    /// The between-runs wait reads the machine alone. A locked session is
-    /// the one thing it can see that the counters cannot say.
+    /// A locked session is the one thing the between-runs wait sees that
+    /// the counters cannot say.
     #[test]
     fn a_host_line_parses_into_the_machine_alone() {
         let awake = parse_host("int=1 k=7 u=8 i=9").expect("a whole line parses");

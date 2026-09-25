@@ -1,38 +1,25 @@
 //! The remotes the corpus is configured with, as bare repositories
 //! inside it.
 //!
-//! **A remote opens the other half of the session.** The
-//! application fetches on its own — `fetch --prune --all` at open and on
-//! an interval — and skips it only where no remote is configured
-//! (`session::auto_fetch::known_to_have_no_remote`). A corpus with no
-//! remote therefore never reaches `remote::list_tags`, so
-//! `session::RemoteTagIndex` is built from nothing, no tag carries a
-//! remote reading, and no branch has an upstream. Against a repository
-//! this size that index is tens of thousands of entries carrying
-//! megabytes (ci/baseline/code-costs-windows-x64.md §メモリの形) — bytes
-//! the corpus could not show.
+//! **Without a remote, half the session never runs**: the application
+//! skips its fetch (`session::auto_fetch::known_to_have_no_remote`), so
+//! `session::RemoteTagIndex` — megabytes at this size
+//! (ci/baseline/code-costs-windows-x64.md §メモリの形) — is built from
+//! nothing and no branch has an upstream.
 //!
-//! **It all answers off the disk.** A remote is a directory: a bare
-//! repository holding refs and no objects of its own, which reads the
-//! corpus's through `objects/info/alternates`. `ls-remote` and `fetch`
-//! answer from the filesystem, offline, on a machine that has never had
-//! a network.
-//!
-//! **And it all holds still.** Each mirror holds exactly the refs the
-//! corpus already tracks for it, derived from those refs, so the
-//! `--prune` the application runs finds every one up to date and writes
-//! nothing — down to the `refs/remotes/<name>/HEAD` a first fetch would
-//! otherwise write for itself. A benchmark repository that drifts under
-//! its own measurement is the disease this whole corpus exists to cure,
-//! which is why `proven` asks.
+//! A remote is a bare repository holding refs only, reading the corpus's
+//! objects through `objects/info/alternates`, so `ls-remote` and `fetch`
+//! answer offline. Each mirror holds exactly the refs the corpus already
+//! tracks for it, so the application's `fetch --prune` writes nothing: a
+//! benchmark repository must not drift under its own measurement, which
+//! `proven` checks.
 
 use std::path::{Path, PathBuf};
 
 use super::{git, shape};
 
-/// Where the mirrors live: under the corpus's `.git`, so they are not in
-/// its working tree for `git status` to find, and so that clearing the
-/// corpus clears them with it.
+/// Under the corpus's `.git`: out of `git status`'s sight, and cleared
+/// with the corpus.
 const MIRRORS: &str = "pgg-remotes";
 
 /// Builds one bare mirror per remote, configures the corpus to use them,
@@ -49,13 +36,9 @@ pub(super) fn configure(at: &Path) -> Result<(), String> {
     proven(at)
 }
 
-/// The `refs/remotes/<name>/HEAD` a clone carries.
-///
-/// **Written here because otherwise a fetch writes it.** A mirror
-/// advertises a symbolic HEAD, and the first fetch against a remote that
-/// has one records the branch it names. A corpus built without these
-/// would therefore gain two refs the first time the application opened
-/// it — during the measurement itself.
+/// The `refs/remotes/<name>/HEAD` a clone carries. Written here because
+/// otherwise the first fetch against a remote with a symbolic HEAD
+/// writes it — during the measurement itself.
 fn default_heads(at: &Path) -> Result<(), String> {
     for name in shape::REMOTES {
         git(at, &["remote", "set-head", name, "--auto"])?;
@@ -72,16 +55,11 @@ fn mirror_path(at: &Path, name: &str) -> PathBuf {
     at.join(".git").join(MIRRORS).join(format!("{name}.git"))
 }
 
-/// One remote: a bare repository whose refs are the corpus's own
-/// readings of it, and whose objects are the corpus's.
 fn build_mirror(mirror: &Path, at: &Path, name: &str, listing: &str) -> Result<(), String> {
     std::fs::create_dir_all(mirror)
         .map_err(|e| format!("could not make {}: {e}", mirror.display()))?;
-    // `--initial-branch` as well as the hash: a bare repository takes
-    // `init.defaultBranch` from whatever the machine has configured,
-    // and its HEAD is a ref the application's fetch would bring across
-    // — so the corpus would gain a remote-tracking ref on some machines
-    // and not others, where it has to be one corpus on all.
+    // Pinned rather than taken from the machine's `init.*` config: it has
+    // to be one corpus on every machine.
     git(
         mirror,
         &[
@@ -92,9 +70,8 @@ fn build_mirror(mirror: &Path, at: &Path, name: &str, listing: &str) -> Result<(
             "--initial-branch=main",
         ],
     )?;
-    // The objects are the corpus's. Writing them twice would double the
-    // pack that is most of what the corpus weighs, and a mirror holding
-    // its own could answer for a commit the corpus does not have.
+    // Borrowed, not copied: a copy doubles the pack that is most of the
+    // corpus's weight.
     let alternates = mirror.join("objects").join("info").join("alternates");
     let objects = shown(&at.join(".git").join("objects"));
     std::fs::write(&alternates, format!("{objects}\n")).map_err(|e| {
@@ -107,12 +84,8 @@ fn build_mirror(mirror: &Path, at: &Path, name: &str, listing: &str) -> Result<(
     let packed = mirror.join("packed-refs");
     std::fs::write(&packed, &refs)
         .map_err(|e| format!("could not write {}: {e}", packed.display()))?;
-    // **HEAD has to name a branch the mirror holds.** `init` points it
-    // at `init.defaultBranch`, which for a mirror built out of somebody
-    // else's branch names is a ref that does not exist — and a remote
-    // whose HEAD dangles is one `remote set-head --auto` cannot answer
-    // for, so the corpus would carry a tracking HEAD for one remote and
-    // not the other.
+    // HEAD has to name a branch the mirror holds: `remote set-head
+    // --auto` cannot answer for a remote whose HEAD dangles.
     let first = refs
         .lines()
         .find_map(|line| line.split_once(" refs/heads/"))
@@ -126,18 +99,11 @@ fn build_mirror(mirror: &Path, at: &Path, name: &str, listing: &str) -> Result<(
 }
 
 /// What a mirror answers with, as a `packed-refs` file: every branch the
-/// corpus tracks for this remote, under the name the remote itself would
-/// use, and the tags.
+/// corpus tracks for this remote under the remote's own name for it, and
+/// — on the first remote only, as in the reference repository — the tags.
 ///
-/// **Written as one file.** `update-ref --stdin` over
-/// fifty thousand names makes fifty thousand loose refs and then
-/// `pack-refs` reads them all back — six minutes for the two mirrors,
-/// against a file whose content is already known. The format is one
-/// `<oid> <refname>` a line, sorted by name.
-///
-/// **The tags are the first remote's only.** `ls-remote --tags` is what
-/// fills `RemoteTagIndex`, and the reference repository's second remote
-/// carries a handful of branches.
+/// Written as one file: `update-ref --stdin` over fifty thousand names
+/// makes as many loose refs for `pack-refs` to read back.
 fn carried(name: &str, listing: &str) -> String {
     let tracked = format!("refs/remotes/{name}/");
     let mut lines: Vec<String> = Vec::new();
@@ -146,8 +112,7 @@ fn carried(name: &str, listing: &str) -> String {
             continue;
         };
         if let Some(branch) = refname.strip_prefix(&tracked) {
-            // `HEAD` is the reading of where the remote points;
-            // carrying it back would make the mirror advertise
+            // Carried back, the tracking `HEAD` would advertise as
             // `refs/heads/HEAD`.
             if branch == "HEAD" {
                 continue;
@@ -157,9 +122,8 @@ fn carried(name: &str, listing: &str) -> String {
             lines.push(format!("{oid} {refname}"));
         }
     }
-    // git reads a packed-refs file in order and will not have it out of
-    // one; the trait line is left off because this file carries no peel
-    // lines, so git peels on demand.
+    // git reads packed-refs in order. No trait line: with no peel lines,
+    // git peels on demand.
     lines.sort_by(|a, b| a[41..].cmp(&b[41..]));
     let mut packed = String::with_capacity(lines.len() * 64);
     for line in lines {
@@ -169,12 +133,8 @@ fn carried(name: &str, listing: &str) -> String {
     packed
 }
 
-/// `main` tracks the first remote, and sits ahead of it.
-///
-/// **Ahead, because the reference repository's is.** A branch level with
-/// its upstream draws no ahead-behind badge and answers the count with a
-/// walk that stops at once; one that is ahead is what the badge, the
-/// push button and the range all read.
+/// `main` tracks the first remote, and sits `shape::AHEAD_OF_UPSTREAM`
+/// ahead of it.
 fn upstream(at: &Path) -> Result<(), String> {
     let remote = shape::REMOTES[0];
     let behind = format!("main~{}", shape::AHEAD_OF_UPSTREAM);
@@ -184,27 +144,17 @@ fn upstream(at: &Path) -> Result<(), String> {
     git(at, &["update-ref", &tracking, oid])?;
     let mirror = mirror_path(at, remote);
     git(&mirror, &["update-ref", "refs/heads/main", oid])?;
-    // The mirror has `main` now, and a fork's HEAD names it — which is
-    // the reading `remote set-head --auto` takes.
+    // A fork's HEAD names `main`, and `remote set-head --auto` reads it.
     git(&mirror, &["symbolic-ref", "HEAD", "refs/heads/main"])?;
     git(at, &["config", "branch.main.remote", remote])?;
     git(at, &["config", "branch.main.merge", "refs/heads/main"])?;
     Ok(())
 }
 
-/// Proves both properties the corpus rests on, while it is being built.
-///
-/// **That the remotes answer.** A mirror that cannot be read leaves
-/// `RemoteTagIndex` built from nothing all over again, and it does so
-/// silently: `read_remote_tags` logs the failure and moves on with the
-/// readings it had, which is none.
-///
-/// **And that fetching changes nothing.** The application fetches on its
-/// own, so the corpus is asked this question whether or not anybody
-/// meant to ask it, and a benchmark repository that moves under its own
-/// measurement is the disease the generated one exists to cure. Asked
-/// here, because the answer is what everything measured against this
-/// corpus assumes.
+/// Proves at build time that the remotes answer — an unreadable mirror
+/// fails silently in the application (`read_remote_tags` logs and moves
+/// on with no readings) — and that the application's own fetch moves no
+/// ref.
 fn proven(at: &Path) -> Result<(), String> {
     // waits(measured): the phase times this proof says beside its verdict, judged by
     // nothing
@@ -220,10 +170,8 @@ fn proven(at: &Path) -> Result<(), String> {
     let listing = took("show-ref");
     let listed = git(at, &["ls-remote", "--tags", "--", shape::REMOTES[0]])?;
     let advertising = took("ls-remote");
-    // **An annotated tag is advertised twice**: once as the tag object
-    // and once peeled to the commit under it, which is the pairing
-    // `remote::parse_ls_remote_tags` exists to do. The count is of
-    // names.
+    // An annotated tag is advertised twice, as itself and peeled; the
+    // count is of names.
     let mut names = std::collections::BTreeSet::new();
     let mut peeled = 0;
     for line in listed.lines().filter(|line| !line.is_empty()) {
@@ -256,18 +204,12 @@ fn proven(at: &Path) -> Result<(), String> {
             shape::TAGS
         ));
     }
-    // Both of them, which is what the application runs. It is cheap
-    // once nothing repacks behind it (`gc.auto`), and the whole point
-    // is that the command the application uses moves nothing.
+    // `--all`, as the application runs it.
     git(at, &["fetch", "--prune", "--all"])?;
     let fetching = took("fetch");
     let after = git(at, &["show-ref"])?;
     if before != after {
-        // Named, because which ones is the whole diagnosis and the
-        // fact alone points nowhere: a first fetch against a remote
-        // with a symbolic HEAD writes a tracking `HEAD`, a mirror
-        // holding a ref the corpus does not writes that, and the two
-        // read identically from here.
+        // Named: which refs moved is the diagnosis.
         let was: std::collections::BTreeSet<&str> = before.lines().collect();
         let now: std::collections::BTreeSet<&str> = after.lines().collect();
         let moved: Vec<&str> = now

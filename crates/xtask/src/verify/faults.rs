@@ -2,58 +2,38 @@
 //! afterwards.
 //!
 //! The record a wedged run leaves ([`super::wedge`]) is only worth what
-//! it says when a run actually stops, and a run that actually stops is
-//! the one case nobody can arrange by waiting for it: the three reds it
-//! was built for happened once each, under a gate, and every one of them
-//! passed on the spot when it was run again by hand
-//! (internal-docs/P3-確認事項.md §check ハング調査で残った観察). So the
-//! stopping is asked for here — the app is held at a station it
-//! names (`PGG_FAULT_HANG`), or started with no deadline thread at all
-//! (`PGG_FAULT_NO_DEADLINE`) — and the check is that the words the next
-//! occurrence will be read from come back.
+//! it says when a run actually stops, and a real stop cannot be arranged
+//! by waiting for one (internal-docs/ハング調査.md). So the stopping is
+//! asked for — the app is held at a station it names (`PGG_FAULT_HANG`),
+//! or started with no deadline thread (`PGG_FAULT_NO_DEADLINE`) — and the
+//! check is that the words the next occurrence will be read from come
+//! back.
 //!
-//! **Both mouths, because they are two different failures.** A run that
-//! finished its act and would not end is stopped past the event loop and
-//! answers with a station; a run that never reached its verb's completion
-//! turned its loop the whole time and answers with the walk that proves
-//! it. The observed pair had no way to be told apart, which is what this
-//! is for.
-//!
-//! **And the parent's own look at a stopped run** (`super::look::look_at`),
-//! which is a process too and can stall like any other: the fourth case
-//! orders that stall (`--fault-stall-look`) and reads back that the look
-//! was ended at its ceiling, said so, and that the app was still reaped
-//! and the run still reported after it.
+//! Both mouths, because they are two different failures: a run that
+//! finished its act and would not end answers with a station; a run that
+//! never reached its verb's completion turned its loop the whole time and
+//! answers with the walk that proves it. The fourth case stalls the
+//! parent's own look (`super::look::look_at`), which is a process too, and
+//! reads back that it was ended at its ceiling and the app still reaped.
 
 use std::time::Instant;
 
-/// A verb cheap enough to be run three times. Every case below is about
-/// where the process stopped, and one whose act was swallowed reaches
-/// the same stations by its own watchdog — what the verb shows is
-/// beside the point.
+/// A cheap verb: every case is about where the process stopped, not what
+/// the verb shows.
 const VERB: &str = "band";
 
-/// The ceiling the three held runs are given. **A backstop**, and the
-/// same one whichever way the hold is read: the parent ends the two with
-/// no deadline thread on the trail's word, the moment the station they
-/// were ordered to hold at is on the disk (`super::child::ordered_hold`),
-/// and the thread of the third takes its first look the grace past that
-/// same moment (`harness::deadline::first_look`). So this is only what a
-/// run that never gets there pays — and wide enough that no loaded
-/// machine reaches it with the act still under way, which is the one
-/// thing a ceiling counted from the start of the run cannot promise.
+/// The ceiling the three held runs are given, and only a backstop: the
+/// parent ends the two with no deadline thread the moment their station
+/// is on the disk (`super::child::ordered_hold`), and the third's thread
+/// looks the grace past that moment (`harness::deadline::first_look`).
+/// Wide enough that no loaded machine reaches it with the act under way.
 const BACKSTOP_MS: &str = "60000";
 
-/// The ceiling the turning run is given. Long enough that the verb runs
-/// and the loop goes on turning after it — **the fault is what
-/// withholds the completion here** (`--fault-hold-act`).
-///
-/// Not one millisecond, on the reading that no verb could complete
-/// inside a QML timer's own floor: a verb can. The ceiling is armed when
-/// the run begins and the act can complete in the loop turn before that
-/// timer's first tick, so the case that forbids `complete=` goes red on
-/// a product that is working. A judgement that is a race between a
-/// ceiling and a loop is one the machine decides.
+/// The ceiling the turning run is given: long enough that the verb runs
+/// and the loop goes on turning after it. The fault withholds the
+/// completion (`--fault-hold-act`); a ceiling short enough to beat the
+/// act instead is a race the machine decides — the act can complete
+/// before a QML timer's first tick.
 const TURNING_MS: &str = "2000";
 
 /// One run made to stop, and the words it has to come back with.
@@ -62,16 +42,13 @@ struct Case {
     shape: &'static str,
     /// The words after `verify-ui`, less the ones every case carries.
     args: &'static [&'static str],
-    /// Every one of these must appear in what the run printed. Quoted
-    /// from [`super::wedge`] and [`super::outcome`]: what is being
-    /// checked is the sentence a person reads,
-    /// so a rewording that leaves the reading behind is a red here.
+    /// Must all appear in what the run printed: the sentences a person
+    /// reads, quoted from [`super::wedge`] and [`super::outcome`], so
+    /// rewording them there is a red here.
     wants: &'static [&'static str],
-    /// The same, held to on Windows alone: what the listing walks there
-    /// and nowhere else (`super::look::threads_of` — the walk of `/proc`
-    /// carries no stacks), so a host on another system is not held to a
-    /// line it cannot print. The gate's host side runs wherever the tree
-    /// is checked out.
+    /// The same, held to on Windows alone: only the listing there walks
+    /// stacks (`super::look::threads_of`), and the gate's host side runs
+    /// wherever the tree is checked out.
     wants_on_windows: &'static [&'static str],
     /// A watchdog abort also reaches `exiting`, so these words tell it
     /// from an act that completed before stopping.
@@ -100,9 +77,8 @@ impl Case {
     }
 }
 
-/// The two mouths, the one that is only half of a mouth — a hold with
-/// the deadline thread still up, which is what says the two records agree
-/// when both can be written — and the parent's own look, stalled.
+/// The two mouths, a hold with the deadline thread up (the two records
+/// agree when both can be written), and the parent's own look, stalled.
 const CASES: &[Case] = &[
     Case {
         shape: "finished its act, then held past the exit with no deadline thread — \
@@ -123,14 +99,11 @@ const CASES: &[Case] = &[
             "> exiting ",
             "it got as far as `exiting`",
             "left no wedge.txt",
-            // The listing's own lines answered, past its heading:
-            // this is the shape the next occurrence is read from.
+            // Past the heading: the listing answered.
             "threads at the ceiling:",
             " alive — ",
         ],
-        // And the stack the main thread stands in, which is the one line
-        // a stop inside the exit can be read off — walked on Windows
-        // only.
+        // The one line a stop inside the exit is read off.
         wants_on_windows: &["the main thread stands in:"],
         forbids: &["auto-act watchdog expired"],
     },
@@ -190,8 +163,7 @@ const CASES: &[Case] = &[
     },
 ];
 
-/// Runs every case and answers for the record: each one
-/// is *meant* to fail, and what is being judged is whether the lines that
+/// Each case is meant to fail; what is judged is whether the lines that
 /// say why came back.
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     if let Some(unknown) = args.first() {
@@ -203,8 +175,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
         println!("wedge-check: {}", case.shape);
         // waits(measured): what the case cost, for the line under it — the verdict is the words
         let began = Instant::now();
-        // The first case builds the app; the rest are handed what it
-        // built, the way a suite's verbs are (`gate::plan`).
+        // Only the first case builds the app.
         let said = drive(&me, case, nth == 0)?;
         let absent = case.missing(&said);
         println!(
@@ -217,8 +188,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
             began.elapsed().as_secs_f32()
         );
         if !absent.is_empty() {
-            // The whole run, once, under the case that failed: what the
-            // parent did say is the only way to see what it said instead.
+            // The whole run under the case that failed: what it said instead.
             for line in said.lines() {
                 println!("  > {line}");
             }
@@ -235,16 +205,13 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     ))
 }
 
-/// Runs one case and answers with everything it printed, both streams
-/// together.
-///
-/// Every case fails on purpose. Both the failure exit and the record
-/// must come back, so a runner that swallows the failure cannot pass.
+/// Runs one case and answers with both streams, together. Every case
+/// fails on purpose, so a runner that swallows the failure exit is a red.
 fn drive(me: &std::path::Path, case: &Case, build: bool) -> Result<String, String> {
     let mut command = std::process::Command::new(me);
     command.arg("verify-ui").arg(VERB).args(case.args);
-    // Off the board and out of the census: nobody asked to look at a run
-    // that was made to stop, and it shows nothing to record.
+    // Nobody asked to look at a run made to stop, and it shows nothing to
+    // record.
     command.arg("--no-board").arg("--no-census");
     if !build {
         command.arg("--no-build");
@@ -267,13 +234,10 @@ fn drive(me: &std::path::Path, case: &Case, build: bool) -> Result<String, Strin
 mod tests {
     use super::{BACKSTOP_MS, CASES, TURNING_MS, VERB};
 
-    /// The two runs with no deadline thread are ended on the trail's word
-    /// alone, so the ceiling they carry is the
-    /// backstop and the words they want are a hold's.
-    /// **The one whose thread is up carries the backstop as well**: its
-    /// thread looks from the hold, so no ceiling counted from the start of
-    /// the run stands between the act and the account — a race a loaded
-    /// machine loses (rules-refs/core.md「天井の起点を因果の駅に置く」).
+    /// Every held run carries only the backstop, and the two with no
+    /// deadline thread want a hold's words: a ceiling counted from the
+    /// start of the run is a race a loaded machine loses
+    /// (rules-refs/core.md「天井の起点を因果の駅に置く」).
     #[test]
     fn every_held_run_carries_only_a_backstop() {
         let mut seen = 0;
@@ -298,9 +262,8 @@ mod tests {
         assert!(!own.args.contains(&"--fault-no-deadline"));
     }
 
-    /// The listing that answers is asserted to have answered: the observed
-    /// shape is read from it, and a case that wanted only the heading
-    /// would pass on a listing that never came back.
+    /// A listing that never came back prints the heading too, so the
+    /// observed shape wants the listing's own lines.
     #[test]
     fn the_observed_shape_reads_a_listing_that_answered() {
         let observed = CASES
@@ -308,9 +271,6 @@ mod tests {
             .find(|case| case.wants.contains(&"left no wedge.txt"))
             .expect("the observed shape");
         assert!(observed.wants.contains(&" alive — "));
-        // The stack is walked on Windows alone, so it is wanted there
-        // alone: held to everywhere, the check would be red on every
-        // other host for a line the listing there cannot print.
         assert!(
             observed
                 .wants_on_windows
@@ -334,8 +294,7 @@ mod tests {
     #[test]
     fn an_aborted_act_is_not_a_completed_act_held_at_exit() {
         for case in &CASES[..2] {
-            // Everything the case wants here, the Windows-only words
-            // included: what a run that read back whole would have said.
+            // What a run that read back whole would have said.
             let said = case
                 .wants
                 .iter()
@@ -354,9 +313,7 @@ mod tests {
         }
     }
 
-    /// Every case is a run that stops in a way the parent has to be able
-    /// to read, so each has to ask for something. A case with nothing to
-    /// want passes without checking anything.
+    /// A case with nothing to want passes without checking anything.
     #[test]
     fn every_case_asks_for_words_back() {
         assert!(!CASES.is_empty());
@@ -366,9 +323,9 @@ mod tests {
         }
     }
 
-    /// The trail is what every case is really about: the record that does
-    /// not need the process to still be answering. A case that only read
-    /// the app's own report would pass on the half that was already there.
+    /// The trail is the record that does not need the process to still be
+    /// answering; a case that read only the app's own report would pass on
+    /// the half that was already there.
     #[test]
     fn every_case_reads_the_trail() {
         for case in CASES {
@@ -380,8 +337,7 @@ mod tests {
         }
     }
 
-    /// One case has to be the observed shape itself: held with no report
-    /// of its own, which is the run the parent has to speak for alone.
+    /// The observed shape itself: the run the parent has to speak for alone.
     #[test]
     fn one_case_leaves_no_report_of_its_own() {
         assert!(
@@ -393,12 +349,8 @@ mod tests {
         );
     }
 
-    /// And one has to be the other mouth: a loop that turned the whole
-    /// time. **What withholds the completion is the fault that swallows
-    /// it** (a ceiling short enough to outrun the act is a race, and
-    /// the machine decides it — `TURNING_MS`). A hold stops the very
-    /// loop the case is about, and a run with no deadline leaves
-    /// nothing to read.
+    /// The other mouth: the fault withholds the completion, not a short
+    /// ceiling (`TURNING_MS`).
     #[test]
     fn one_case_is_the_loop_that_kept_turning() {
         let turning = CASES
@@ -417,11 +369,9 @@ mod tests {
         );
     }
 
-    /// The parent's own diagnostics are bounded, and the bound has to be
-    /// seen working from outside: a look that stalls is ended at its
-    /// ceiling and said to have been, and the run still reaches the
-    /// reaping and the verdict. Ordered on the observed shape itself, so
-    /// that the look is the only thing that differs from it.
+    /// The bound on the parent's own look, seen working from outside.
+    /// Ordered on the observed shape itself, so that the look is the only
+    /// thing that differs from it.
     #[test]
     fn one_case_stalls_the_look_and_still_reaps_the_app() {
         let stalled = CASES
@@ -445,8 +395,6 @@ mod tests {
         assert!(stalled.forbids.contains(&" alive — "));
     }
 
-    /// The verb is beside the point and has to stay cheap: a case is
-    /// about where the process stopped.
     #[test]
     fn the_verb_carries_no_argument() {
         assert!(!VERB.contains(' '), "{VERB}");

@@ -1,13 +1,9 @@
-//! Turning the readings of a run into the lines the record is written
-//! from: megabytes, the middle and the spread over the kept runs, and the
-//! block printed at the end of `perf`.
+//! Turning the readings of a run into the block printed at the end of
+//! `perf`, each number as the middle and the spread over the kept runs.
 //!
-//! **The middle beside the spread.** A range over N runs can only grow
-//! with N — one unlucky run widens it forever — so a range on its own
-//! cannot say whether a change moved anything. The median is what holds
-//! still while the machine misbehaves, and both are printed because the
-//! budget is read against the worst run and a comparison is read against
-//! the middle one.
+//! The middle beside the spread: the budget is read against the worst run
+//! and a comparison against the middle one, because a range only grows
+//! with the number of runs — one unlucky run widens it for good.
 
 use super::corpus::Corpus;
 use super::display::Screen;
@@ -55,8 +51,7 @@ fn not_the_display(software: bool) -> &'static str {
 }
 
 /// What the settled process was holding, by kind, read from outside it
-/// (`perf::attribution`). Last, because it is the reading of the
-/// reading: which side of the process the working set above is on.
+/// (`perf::attribution`).
 fn attribution(kept: &[Reading]) {
     for line in attribution_lines(kept) {
         println!("{line}");
@@ -216,25 +211,18 @@ fn memory(opts: &Options, kept: &[Reading], context: &Context<'_>) {
 
 /// Whether the runs being reported walked the font database themselves.
 ///
-/// **The corpus asks during the scroll** ([`super::fonts`]): one subject
-/// in a thousand opens with an emoji, so the first screen carries none
-/// and the pass over the window's rows carries two. A run that never
-/// scrolled — the staged table's `--no-open`, `--no-select --no-scroll`,
-/// `--no-scroll` — never paid the charge the calibration weighed, and
-/// subtracting it there would take tens of MB off a number nobody spent.
-///
-/// Conservative on purpose, and in the direction that cannot mislead: a
-/// run named onto an emoji row with `--select-oid` does pay without
-/// scrolling, and is reported gross. Reading a gross number as gross is
-/// the reader's own arithmetic; reading a number as net when nothing was
-/// taken off is the report lying about the budget line.
+/// The corpus asks only during the scroll ([`super::fonts`]): the first
+/// screen carries no emoji subject. A run that never scrolled never paid
+/// the charge, and subtracting it would take tens of MB off a number
+/// nobody spent. Conservative on purpose: a `--select-oid` run onto an
+/// emoji row pays without scrolling and is reported gross, which
+/// misleads nobody; a net that took nothing off would.
 fn paid_the_walk(opts: &Options) -> bool {
     opts.open && opts.scroll
 }
 
 /// The flag that named this run's shape, for the line that says why
-/// there is no net — the reader asked for the shape and gets it named
-/// back.
+/// there is no net.
 fn shape_of(opts: &Options) -> &'static str {
     if !opts.open {
         "--no-open"
@@ -245,8 +233,7 @@ fn shape_of(opts: &Options) -> &'static str {
 
 /// The walk's weight, and the working set net of it — the line the
 /// budget is read against (ci/baseline/perf-windows-x64.md §判定). The
-/// working set above stays as sampled, walk included, so the two can be
-/// read against each other.
+/// working set above stays as sampled, walk included.
 fn font_walk_lines(kept: &[Reading], walk: &FontWalk, opts: &Options) -> Vec<String> {
     let settle_ms = opts.settle_ms;
     let (Some(working_set), Some(private)) = (walk.working_set(), walk.private()) else {
@@ -302,7 +289,7 @@ fn font_walk_lines(kept: &[Reading], walk: &FontWalk, opts: &Options) -> Vec<Str
 }
 
 /// How long a person waited: to a frame with the graph in it, and to the
-/// graph data being whole, which is the number both builds answer.
+/// graph data being whole.
 fn timings(kept: &[Reading], software: bool) {
     let startups: Vec<f64> = kept.iter().filter_map(|r| r.startup_ms).map(f).collect();
     if !startups.is_empty() {
@@ -329,9 +316,6 @@ fn timings(kept: &[Reading], software: bool) {
     }
 }
 
-/// The scroll bench, read three ways: the raw rate, that rate against
-/// what the screen could have delivered, and the frames a person would
-/// have seen as a stutter whatever the screen was.
 fn scroll(kept: &[Reading], context: &Context<'_>, software: bool) {
     let fps: Vec<f64> = kept.iter().filter_map(|r| r.fps).collect();
     if !fps.is_empty() {
@@ -340,11 +324,8 @@ fn scroll(kept: &[Reading], context: &Context<'_>, software: bool) {
             spread(&fps),
             not_the_display(software)
         );
-        // What the screen could have delivered is the only thing that
-        // makes two screens comparable: an application that keeps up with
-        // its screen reads as a different fps on each one. The software
-        // scene graph delivered nothing to the screen, so it has no
-        // share of one.
+        // Only the share of the screen's rate compares across screens; a
+        // software run delivered nothing to a screen, so it has no share.
         if let Some(hz) = context
             .screen
             .map(|s| s.hz)
@@ -439,8 +420,8 @@ fn interaction(kept: &[Reading], software: bool) {
     }
 }
 
-/// What the run was of, in the three ways a later reader will need to
-/// know it was the same run: the commit, the graphics device, the heap.
+/// What a later reader needs to tell it was the same run: the commit,
+/// the graphics device, the heap.
 fn tail(kept: &[Reading]) {
     if let Some(oid) = kept.iter().find_map(|r| r.selected_oid.clone()) {
         println!("  selected    : {oid}");
@@ -457,9 +438,8 @@ fn tail(kept: &[Reading]) {
     }
 }
 
-/// What the machine was doing under the kept runs. Printed even when
-/// every run passed, because "the machine was quiet" is a condition of
-/// the numbers above and belongs in the record beside them.
+/// What the machine was doing under the kept runs — printed even when
+/// every run passed: a quiet machine is a condition of the numbers above.
 fn host(kept: &[Reading]) {
     let busy: Vec<f64> = kept.iter().map(|r| r.conditions.busy_percent).collect();
     let foreign: Vec<f64> = kept.iter().map(|r| r.conditions.foreign_percent).collect();
@@ -495,10 +475,8 @@ fn host(kept: &[Reading]) {
             spread(&front)
         );
     }
-    // Said only where a tick found the screen off: under a D3D run that
-    // is a refusal already, and under --software it is the one thing the
-    // record wants to know about the screen, which the reading did not
-    // depend on.
+    // Said only where a tick found the screen off: a D3D run is refused
+    // for it already, so this is for --software runs.
     let dark: Vec<f64> = kept
         .iter()
         .filter(|r| r.conditions.dark > 0 && r.conditions.samples > 0)
@@ -543,7 +521,7 @@ fn g(v: usize) -> f64 {
 }
 
 /// `min–median–max` over the readings, or the single value when they
-/// agree. The middle one is printed because a range only ever widens.
+/// agree.
 fn spread(values: &[f64]) -> String {
     let mut sorted = values.to_vec();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -578,9 +556,8 @@ mod tests {
     use crate::perf::attribution::{Attribution, Heap};
     use crate::perf::fonts::{FontWalk, Tick};
 
-    /// The run as its flags shaped it, settled the way an invocation's
-    /// are — so a test names the measurement mode the reader names
-    /// (`--no-scroll`).
+    /// Options as an invocation's flags parse, so a test names the mode
+    /// the reader names (`--no-scroll`).
     fn shaped(words: &[&str]) -> Options {
         let mut args = vec!["--repo".to_string(), "x".to_string()];
         args.extend(words.iter().map(|w| (*w).to_string()));
@@ -589,10 +566,8 @@ mod tests {
         opts
     }
 
-    /// The walk's weight is said beside the working set, and the net
-    /// line is every kept run's peak less that weight — settled too,
-    /// where the runs settled. A walk that added nothing takes nothing
-    /// off, and says why.
+    /// Settled too, where the runs settled. A walk that added nothing
+    /// takes nothing off, and says why.
     #[test]
     fn the_budget_line_is_read_net_of_the_font_walk() {
         let kept = [
@@ -647,11 +622,9 @@ mod tests {
         assert!(!text.contains("net         :"), "{text}");
     }
 
-    /// **The runs that stage the table never scroll, so nothing in them
-    /// paid the walk** — and a net line under one would take tens of MB
-    /// off a number nobody spent (P3-確認事項 §性能). The weight is still
-    /// printed, because the calibration run did weigh it; what is
-    /// withheld is the subtraction and the word `net` in front of it.
+    /// The weight is still printed, because the calibration run did weigh
+    /// it; what is withheld is the subtraction and the word `net`
+    /// (`paid_the_walk`, P3-確認事項 §性能).
     #[test]
     fn a_run_that_never_scrolls_is_not_reported_net_of_a_walk_it_did_not_pay() {
         let kept = [Reading {
@@ -671,9 +644,8 @@ mod tests {
             before: Some(tick(0, 200, 150)),
             after: Some(tick(3, 255, 203)),
         };
-        // Every shape the staged table is taken in, and the one it is
-        // not: the three on the left hold the window still, and only the
-        // full run walks the rows the emoji are in.
+        // The three shapes the staged table is taken in hold the window
+        // still.
         for words in [
             vec!["--no-open"],
             vec!["--no-select", "--no-scroll"],
@@ -711,9 +683,7 @@ mod tests {
         assert_eq!(count_spread(&[]), "-");
     }
 
-    /// The block at the end is a spread over the kept runs that had an
-    /// attribution, counts printed as counts, and says so when one
-    /// run's heap walk was refused.
+    /// Counts print as counts, and a refused heap walk is said.
     #[test]
     fn the_attribution_is_summarised_over_the_runs_that_had_one() {
         let walked = Attribution {
@@ -765,8 +735,7 @@ mod tests {
         assert!(text.contains("in 11–12 files"), "{text}");
     }
 
-    /// Two runs have no middle worth printing; three do, and it is the
-    /// one number a fourth unlucky run cannot move far.
+    /// Two runs have no middle worth printing.
     #[test]
     fn the_middle_appears_once_there_are_three_runs() {
         assert_eq!(spread(&[3.0, 5.0]), "3.0–5.0");

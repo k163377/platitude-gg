@@ -1,25 +1,14 @@
-//! A gate that stops at its first red.
+//! A gate that stops at its first red (反映前テストの機械化.md §最初の赤で止まる).
 //!
-//! **A red decides the run**, and what the rest of it could still earn is
-//! stamps for the steps that pass. A stamp is keyed by what its step reads
-//! ([`super::stamp`]), and every verb reads the app and core trees whole —
-//! so a fix to the app, the core or the verbs' harness, which is what a
-//! red asks for nearly every time, takes every one of those stamps away
-//! again, and the run that earns them is minutes of the machine spent for
-//! nothing while the seat waits for a verdict it already has. So the
-//! first red stops the run: nothing more is started on either side, a step
-//! still waiting for room gives its place up, and a step already running is
-//! ended where what it started ends with it ([`crate::check::run_step`]) —
-//! a `linux` step that brought up a container of its own is left to finish
-//! ([`super::runner`]). Every step it kept from running or ended is filed
-//! as `halted`.
+//! A red decides the run, and the fix it asks for nearly always voids the
+//! stamps the rest could earn. So on either side nothing more starts, a step
+//! waiting for room gives its place up, and a running step is ended with what
+//! it started ([`crate::check::run_step`]) — except a `linux` step with a
+//! container of its own, which is left to finish ([`super::runner`]). Every
+//! step it kept from running or ended is filed as `halted`.
 //!
-//! **`--keep-going` runs the rest anyway** — the whole picture, and the
-//! stamps a red outside what the others read leaves standing. Stage 3
-//! (`--all`) always runs this way. **A red among the always-steps stops
-//! the run whichever way it was asked**: they are seconds and go first
-//! ([`super::sides::run_sides`]), and what they catch is fixed before anything
-//! else is worth running.
+//! `--keep-going` (implied by `--all`) runs the rest, but a red always-step
+//! stops the run either way ([`super::sides::run_sides`]).
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -27,8 +16,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub(super) struct Halt {
     raised: AtomicBool,
     keep_going: bool,
-    /// The step whose red raised it, for the rows it leaves behind, and
-    /// whether it was an always-step.
+    /// The step whose red raised it, and whether it was an always-step.
     by: Mutex<Option<(String, bool)>>,
 }
 
@@ -41,8 +29,8 @@ impl Halt {
         }
     }
 
-    /// Hears a red: `always` is whether the step was one of the
-    /// always-steps, which stop the run under `--keep-going` too.
+    /// `always`: the red step is an always-step, which stops the run under
+    /// `--keep-going` too.
     pub(super) fn red(&self, id: &str, always: bool) {
         if self.keep_going && !always {
             return;
@@ -61,10 +49,9 @@ impl Halt {
         self.raised.load(Ordering::SeqCst)
     }
 
-    /// The run's closing word on its halt, once one stopped it: the step
-    /// that did, and the way on where there is one — `--keep-going` stops
-    /// for an always-step as well, and a landing's gate is `land`'s, which
-    /// takes no such word.
+    /// The run's closing line once a halt stopped it. It offers
+    /// `--keep-going` only where that would run the rest: not after an
+    /// always-step, and not in a landing's gate (`land` takes no such flag).
     pub(super) fn said(&self, landing: bool) -> Option<String> {
         let (by, always) = self
             .by

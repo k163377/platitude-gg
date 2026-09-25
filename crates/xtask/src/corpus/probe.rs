@@ -1,23 +1,16 @@
 //! `cargo xtask corpus --probe`: what the reads behind a click cost as
-//! processes, and what git's own speed-ups would give back — measured
-//! against the corpus under the product's own conditions, so the record
-//! (ci/baseline/git-slots-windows-x64.md §プロセス再利用) is taken the
-//! way the application would spend it.
+//! processes, and what git's own speed-ups give back, under the product's
+//! conditions (ci/baseline/git-slots-windows-x64.md §プロセス再利用).
 //!
-//! Three questions, each a table:
+//! - `status` as the application runs it, then with the untracked cache,
+//!   fsmonitor, and both — in a working copy, since switching either on
+//!   writes the index and the corpus is read only.
+//! - `cat-file blob` a process each, against one resident `--batch`.
+//! - The existence probe (`preview::blob_is_there`), against a resident
+//!   `--batch-check`.
 //!
-//! - **`status`**: as the application runs it (`--no-optional-locks`,
-//!   `GIT_OPTIONAL_LOCKS=0`), then with the untracked cache, with
-//!   fsmonitor, and with both — in a working copy of the corpus, since
-//!   both write the index once to switch on, and the corpus itself is
-//!   read only.
-//! - **object reads**: `cat-file blob` a process at a time, against one
-//!   resident `cat-file --batch` answering the same reads on stdin.
-//! - **the existence probe** before a blob read (`rev-parse --verify`,
-//!   `preview::blob_is_there`), against a resident `--batch-check`.
-//!
-//! This is a probe: the product keeps stdin closed (`scratch`), and the
-//! resident process is a design the record decides on.
+//! The product keeps stdin closed (`scratch`); the resident process is a
+//! design the record decides on.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
@@ -99,11 +92,9 @@ fn status_table(copy: &Path) -> Result<(), String> {
     let base = rounds(|| timed(copy, &[], &STATUS));
     say("as the application runs it", &base);
 
-    // The untracked cache: switched on in the index once (a write the
-    // application never makes), then filled by one status that may write
-    // the index — which is the one the product's conditions forbid — so
-    // what is measured after is a cache the product would find already
-    // there and read as is.
+    // The untracked cache, switched on and filled by one status allowed to
+    // write the index: what is timed is a cache the product finds and only
+    // reads.
     git(copy, &[], &["update-index", "--untracked-cache"])?;
     git(
         copy,
@@ -117,11 +108,9 @@ fn status_table(copy: &Path) -> Result<(), String> {
     );
     git(copy, &[], &["update-index", "--no-untracked-cache"])?;
 
-    // fsmonitor: the daemon starts with the first status that names it
-    // and answers what changed since the token in the index. Under the
-    // product's conditions the token is never written back, so every
-    // later status asks "since the first look" — the accumulated answer,
-    // which is the steady state the application would be in.
+    // fsmonitor answers what changed since the index's token, which the
+    // product never writes back: every later status asks "since the first
+    // look", the application's steady state.
     let fsmonitor = [("-c", "core.fsmonitor=true")];
     let fsmonitor_args: Vec<&str> = fsmonitor.iter().flat_map(|(a, b)| [*a, *b]).collect();
     let mut starting = fsmonitor_args.clone();

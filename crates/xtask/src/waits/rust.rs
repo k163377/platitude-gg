@@ -1,16 +1,11 @@
-//! The Rust rules: every statement of test code that reads the clock,
-//! sleeps, throws a wait's answer away, or awaits a silent completion
-//! with nothing under it — and, of a body read whole (this runner's own
-//! and the app harness's Rust half, [`Scope::reads_the_body`]), every
-//! statement that sleeps, reads the monotonic clock or receives under a
-//! budget anywhere but `crate::wait` ([`tool_rule_of`]).
+//! The Rust rules: test code by [`rule_of`], and a body read whole
+//! ([`Scope::reads_the_body`]) by [`tool_rule_of`].
 
 use super::source::{self, Lang, has_token};
 use super::{Candidate, Exception, Finding};
 
-/// The completions that resolve through a channel nothing else is
-/// watching. A statement that holds one *and* an `.await` is a silent
-/// wait; without the await it is just a handle changing hands.
+/// The completions that resolve through a channel nothing else watches;
+/// with an `.await` in the same statement, a silent wait.
 const SILENT_WAITS: [&str; 4] = [
     ".outcome()",
     "wait_for_graph_passes()",
@@ -18,23 +13,19 @@ const SILENT_WAITS: [&str; 4] = [
     ".tick()",
 ];
 
-/// What discharges one, looked for in the same statement — the unit that
-/// survives however rustfmt wraps the call around its wrapper.
+/// What discharges one, looked for in the same statement ([`statements`]).
 const BACKSTOPS: [&str; 2] = ["bounded(", "timeout("];
 
 /// A stretch of clock, or a turn of the scheduler, spent in place of an
 /// answer.
 const SLEEPS: [&str; 3] = ["sleep(", "sleep_until(", "yield_now("];
 
-/// The monotonic clock: the start of a deadline of the seat's own, or a
-/// measurement a verdict gets hung on. The name without its `()`, so
-/// that the call and the function a `get_or_init` is handed are the one
-/// clock read they both are — which is the spelling the harness starts
-/// its clocks with ([`source::has_token`] guards the far end).
+/// The monotonic clock, without its `()`: the harness starts its clocks
+/// by handing `Instant::now` to a `get_or_init`, which is the same read
+/// ([`source::has_token`] guards the far end).
 const MONOTONIC: &str = "Instant::now";
 
-/// A clock read: [`MONOTONIC`], or the wall clock, which a test reads
-/// for the same two reasons.
+/// A clock read in a test: [`MONOTONIC`] or the wall clock.
 const CLOCKS: [&str; 2] = [MONOTONIC, "SystemTime::now"];
 
 /// The waits that take a budget. The suite's budget is a named constant;
@@ -48,9 +39,8 @@ const BUDGETED: [&str; 4] = [
 const OWN_BUDGETS: [&str; 2] = ["Duration::from_", "Duration::new("];
 
 /// PowerShell's sleep, in the scripts this runner writes for its
-/// samplers: the runner's own pace in another syntax, standing in a
-/// string the code view has blanked — so it is looked for in the strings
-/// view ([`source::strings_view`]), where a comment names nothing.
+/// samplers. It stands in a string, so it is looked for in the strings
+/// view ([`source::strings_view`]).
 const SCRIPT_SLEEP: &str = "Start-Sleep";
 
 /// How much of a Rust file is read, and by which rules.
@@ -60,17 +50,14 @@ pub(super) enum Scope {
     /// ([`rule_of`]).
     Whole,
     /// A product crate's source: its `#[cfg(test)]` blocks, by the tests'
-    /// rules. The product's own clocks are the product's business.
+    /// rules.
     Tests,
     /// This runner's own source: its test blocks by the tests' rules, and
     /// the rest — the tool's body — by the runner's ([`tool_rule_of`]).
     Tool,
-    /// The app harness's Rust half, read the same way — the rules are
-    /// the same shapes and the reason is the same one, so the only
-    /// thing this arm changes is that its files are counted apart. The
-    /// strings stay out: the scripts are this runner's habit, and a
-    /// `Start-Sleep` in the harness's text would be a string about
-    /// PowerShell.
+    /// The app harness's Rust half, read the same way but counted apart.
+    /// Its strings stay out: the scripts are this runner's habit, and a
+    /// `Start-Sleep` in the harness's text is a string about PowerShell.
     Harness,
 }
 
@@ -87,9 +74,7 @@ pub(super) struct Scanned {
     pub exceptions: Vec<Exception>,
     /// Statements read as test code.
     pub test_statements: usize,
-    /// Statements read as a body ([`Scope::reads_the_body`]): none of a
-    /// test file's, and none of a product crate's. Which body it was is
-    /// the caller's to know, from the scope it asked for.
+    /// Statements read as a body ([`Scope::reads_the_body`]).
     pub body_statements: usize,
 }
 
@@ -101,20 +86,15 @@ pub(super) struct Statement {
     pub last: usize,
 }
 
-/// The statements of `code`, a code view ([`source::code_view`]) — so a
-/// `;` inside a string is nobody's boundary. Coarse, but exact where it
-/// matters: rustfmt may wrap a call across any number of lines and never
-/// across a statement, so a wrapper and the wait it wraps always share
-/// one. What stays out of sight is a wait threaded through a closure
-/// or macro body (the `{` splits the statement) — this reads the shape
-/// the suites write in.
+/// The statements of `code`, a code view ([`source::code_view`]). Coarse,
+/// but a wrapper and the wait it wraps always share one, since rustfmt
+/// never wraps a call across a statement; a wait threaded through a
+/// closure or macro body (the `{` splits it) stays out of sight.
 ///
 /// `said` is the same text with its strings kept
-/// ([`source::strings_view`]), or `code` itself where the strings are
-/// nobody's business; it says where a statement begins, so that one that
-/// is nothing but a string — a script handed back whole — is a statement
-/// all the same. A boundary with nothing before it (a closing brace on a
-/// line of its own) is none.
+/// ([`source::strings_view`]), or `code` itself: it says where a statement
+/// begins, so that one that is nothing but a string (a script handed back
+/// whole) is a statement all the same.
 pub(super) fn statements(code: &str, said: &str) -> Vec<Statement> {
     let mut found = Vec::new();
     let mut text = String::new();
@@ -153,9 +133,8 @@ pub(super) fn statements(code: &str, said: &str) -> Vec<Statement> {
     found
 }
 
-/// The rule a statement of test code breaks, if any. The most specific
-/// reading wins: a wait whose answer is thrown away is named for that
-/// before it is named for anything it also does.
+/// The rule a statement of test code breaks, if any; `ignored` wins over
+/// anything else the statement also does.
 pub(super) fn rule_of(statement: &str) -> Option<&'static str> {
     let awaits = statement.contains(".await");
     let silent = SILENT_WAITS.iter().any(|t| has_token(statement, t));
@@ -177,18 +156,13 @@ pub(super) fn rule_of(statement: &str) -> Option<&'static str> {
     None
 }
 
-/// The rule a statement of this runner's body breaks, if any, and where
-/// it is shown — which of the statement's lines, as an offset from its
-/// first. A verb's waits come from `crate::wait` (.claude/rules-refs/core.md:
-/// xtask の待ちは `crate::wait` 1 本から取る), so what is named is what that
-/// module is the one place for: a sleep, in the code or in a script the
-/// code writes ([`SCRIPT_SLEEP`], found in `said`, the statement's lines
-/// with their strings kept and their comments blanked, and shown where it
-/// stands); a read of the monotonic clock; a receive under a budget —
-/// any budget, since a verb has no suite's to take. The wall clock is a
-/// timestamp in a verb; a `Duration` is a ceiling declared where its
-/// reason stands; and nothing here awaits, so the silent waits have no
-/// shape to take.
+/// The rule a statement of a body breaks, if any, and the offset from its
+/// first line of the line it is shown at (.claude/rules-refs/core.md「xtask
+/// の待ちは `crate::wait` 1 本から取る」). `said` is the statement's lines
+/// of [`source::strings_view`], where a script's [`SCRIPT_SLEEP`] stands.
+/// A receive is named under any budget, since a verb has no suite's to
+/// take; the wall clock (a timestamp) and a `Duration` (a ceiling declared
+/// beside its reason) pass.
 pub(super) fn tool_rule_of(statement: &str, said: &[&str]) -> Option<(&'static str, usize)> {
     if SLEEPS.iter().any(|t| has_token(statement, t)) {
         return Some(("sleep", 0));
@@ -210,8 +184,8 @@ pub(super) fn scan(file: &str, text: &str, scope: Scope) -> Scanned {
     } else {
         source::test_regions(&code)
     };
-    // What the strings say is read of a tool body alone, for the scripts
-    // this runner writes; a test's strings are nobody's business.
+    // Only this runner's body has its strings read, for the scripts it
+    // writes.
     let said = (scope == Scope::Tool).then(|| source::strings_view(text, Lang::Rust));
     let said_lines: Vec<&str> = said
         .as_deref()
@@ -470,8 +444,6 @@ mod tests {
         }
     }
 
-    /// The scripts are this runner's habit: a `Start-Sleep` in the
-    /// harness's text is a string about PowerShell.
     #[test]
     fn a_script_sleep_is_the_runners_alone_and_not_the_harnesss() {
         let text = "let wake = \"Start-Sleep -Seconds 20\";\n";

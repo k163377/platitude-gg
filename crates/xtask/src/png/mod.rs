@@ -1,4 +1,4 @@
-//! PNG by hand, std only (CLAUDE.md 技術スタック): the fixtures this
+//! PNG by hand, std only (CLAUDE.md §技術スタック): the fixtures this
 //! crate writes, and the screenshots it reads back to cut a crop out of.
 
 mod checksum;

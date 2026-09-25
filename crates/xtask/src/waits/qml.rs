@@ -1,20 +1,15 @@
-//! The QML rules. Two kinds of file are read, and a beat means a
-//! different thing in each.
+//! The QML rules, by [`Kind`].
 //!
-//! For the `tst_*.qml` files QtTest runs, where one runner holds one
-//! budget: a `wait(ms)` spent in place of an answer, a `tryCompare` /
-//! `tryVerify` given a deadline of its own in place of the runner's, and
-//! a rendering or polish wait whose verdict nobody reads.
+//! A `tst_*.qml` file, where the QtTest runner holds one budget: a
+//! `wait(ms)` spent in place of an answer, a `tryCompare` / `tryVerify`
+//! given a deadline of its own, and a rendering or polish wait whose
+//! verdict nobody reads.
 //!
-//! For the app's own harness — the driver `PGG_AUTO_ACT` runs the product
-//! through, which is test code that ships inside the window — there is
-//! no runner and no QtTest call at all. What it has instead is beats,
-//! and every one of them comes from the single type that names the
-//! cadence, so what is named here is a span of time a file spelled for
-//! itself ([`SPANS`]) and a count of milliseconds it keeps
-//! ([`keeps_a_count`]). A beat taken from the named cadence and a read
-//! of the run's own clock name nothing: those two are the harness's
-//! budgets, the way `crate::wait` is this runner's.
+//! The app's harness has no runner: its beats all come from the one type
+//! that names the cadence, and the run's own clock is its budget, the way
+//! `crate::wait` is this runner's. What is named is a span of time a file
+//! spelled for itself ([`SPANS`]) and a count of milliseconds it keeps
+//! ([`keeps_a_count`]).
 
 use super::source::{self, Lang, has_token, line_of};
 use super::{Candidate, Exception, Finding};
@@ -26,15 +21,11 @@ const ANSWERED_WAITS: [&str; 2] = ["waitForRendering(", "waitForItemPolished("];
 /// The QtTest calls that take a timeout, and which argument it is.
 const OWN_DEADLINES: [(&str, usize); 2] = [("tryCompare(", 4), ("tryVerify(", 2)];
 
-/// A span of time spelled in the file itself. A `Timer` is one whatever
-/// its `interval` says — the default it never spells included, which is
-/// a whole second of Qt's choosing — and so is the `duration` an
-/// animation runs for. `Date` is the clock that is not the run's own
-/// (`PerfProbe.clockMs`): a second origin, with nothing started at the
-/// beginning of the run behind it. The one type held out of all this is
-/// `SampleTimer`, which exists to carry the harness's single cadence;
-/// it ends in `Timer`, and the left word boundary is what tells an
-/// object of it from one of `Timer` ([`spelled`]).
+/// A span of time spelled in the file itself: a `Timer` whatever its
+/// `interval` says (unspelled, Qt's default second), an animation's
+/// `duration`, and `Date` — a second clock beside the run's own
+/// (`PerfProbe.clockMs`). `SampleTimer`, the harness's one cadence, is
+/// held out ([`spelled`]).
 const SPANS: [&str; 4] = ["Timer", "duration:", "Date.now(", "new Date("];
 
 /// Which rules a QML file is read by.
@@ -113,16 +104,11 @@ pub(super) fn scan(file: &str, text: &str, kind: Kind) -> (Vec<Finding>, Vec<Exc
     source::judged(file, text, &code, candidates)
 }
 
-/// Whether `line` spells `span` as a span of its own. A bare name is a
-/// type, and counts only where an object of it is being built (`Timer {`)
-/// — the cadence's own type ends in that name, and the word boundary is
-/// the whole of what tells `SampleTimer {` from `Timer {`. A name that
-/// carries its own punctuation (`duration:`, `Date.now(`) is spelled
-/// wherever it stands.
-///
-/// A type name the line then ends on counts as well: a brace put on the
-/// next line is the same object built, and nothing else in QML leaves a
-/// type standing alone at the end of a line.
+/// Whether `line` spells `span`. A bare name is a type, and counts only
+/// where an object of it is built — followed by `{`, or ending the line
+/// (the brace on the next) — and not after a word character, which is
+/// the whole of what tells `SampleTimer {` from `Timer {`. A name with its
+/// own punctuation (`duration:`, `Date.now(`) counts wherever it stands.
 fn spelled(line: &str, span: &str) -> bool {
     if !span.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return has_token(line, span);
@@ -141,21 +127,17 @@ fn spelled(line: &str, span: &str) -> bool {
 }
 
 /// Whether `line` keeps a count of milliseconds by adding a beat onto
-/// it. What the count is then used for is the marker's business — the
-/// two the harness has are a number printed in a report and a cut-off
-/// that turns a silent watchdog into a line — but keeping it at all is
-/// reading the clock, so both are named.
+/// it. Keeping one at all is reading the clock; what it is used for is
+/// the marker's to say.
 fn keeps_a_count(line: &str) -> bool {
     line.split_once("+=")
         .is_some_and(|(_, added)| has_token(added, "interval"))
 }
 
 /// One call of a name looked for, read off the whole code view rather
-/// than off one line: rustfmt and a hand alike wrap a call across as
-/// many lines as they please, and what reads its answer stands wherever
-/// the expression around it stands.
+/// than one line, since a call may wrap across lines.
 struct Call {
-    /// The index of the name's first character, and of its `(`.
+    /// The index of the name's first character.
     start: usize,
     /// The index of the `)`, absent for a call never closed.
     close: Option<usize>,
@@ -168,9 +150,7 @@ struct Call {
 
 /// Whether `call`'s answer reaches nobody: it stands as a statement of
 /// its own, with nothing but a receiver (`case.`) before it and nothing
-/// but a `;` or a closing brace after it. Under a `verify(`, an `=` or
-/// an `if (` — on its own line or the one it wrapped from — the answer
-/// is read.
+/// but a `;` or a closing brace after it.
 fn unread_call(chars: &[char], call: &Call) -> bool {
     let mut at = call.start;
     while at > 0 && (is_word(Some(chars[at - 1])) || chars[at - 1] == '.') {
@@ -196,9 +176,8 @@ fn unread_call(chars: &[char], call: &Call) -> bool {
     ends_the_line && !continued
 }
 
-/// Whether a statement begins at `at`: what stands before it ends one —
-/// a `;`, a brace, the start of the file, or a line that ended on a
-/// value, which QML closes for the author who left the `;` off.
+/// Whether a statement begins at `at`: after a `;`, a brace, the start of
+/// the file, or a line that ended on a value (QML supplies the `;`).
 fn opens_a_statement(chars: &[char], at: usize) -> bool {
     let Some(before) = chars[..at].iter().rposition(|c| !c.is_whitespace()) else {
         return true;

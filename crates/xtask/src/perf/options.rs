@@ -10,30 +10,23 @@ pub(super) struct Options {
     pub(super) label: String,
     pub(super) runs: u32,
     /// How many times a run refused for the state of the machine is taken
-    /// again. A person walking away, a parallel build and a locked
-    /// session are all transient; the answer to one is another run
-    /// (`sampler::Conditions`).
+    /// again (`sampler::Conditions`).
     pub(super) retries: u32,
     pub(super) watchdog_ms: u64,
     /// How long to hold the app after `perf_done` before reading the
-    /// memory one last time, or 0 to read it at once.
-    ///
-    /// What it is for: the peak says what the work cost while it ran, and
-    /// on its own it cannot tell a process that is still holding the
-    /// bytes from one that has already handed them back. The bench
-    /// finishes and the harness ends in the same breath, so without this
-    /// the two look identical.
+    /// memory one last time, or 0 to read it at once: the peak alone
+    /// cannot tell a process still holding the bytes from one that has
+    /// handed them back.
     pub(super) settle_ms: u64,
-    /// Read the settled process from outside it at the end of that wait:
-    /// private / mapped / image, what is resident by file, and the
-    /// process heaps block by block (`perf::attribution`). What it is
-    /// for: the Rust counter (`breakdown`) cannot see the C++ side, and
-    /// that is where the excess over the budget sits.
+    /// Read the settled process from outside at the end of that wait:
+    /// private / mapped / image, resident by file, and the heaps block by
+    /// block (`perf::attribution`). The Rust counter (`breakdown`) cannot
+    /// see the C++ side.
     pub(super) attribute: bool,
     /// Start the invocation with the calibration run, which weighs the
-    /// font database's population on its own so the budget line can be
-    /// read net of it (`perf::fonts`). Off, the working set is published
-    /// as sampled, walk included.
+    /// font database's population alone so the budget line can be read
+    /// net of it (`perf::fonts`). Off, the working set is published as
+    /// sampled, walk included.
     pub(super) calibrate: bool,
     /// Ask this run's app to pay the font walk before `perf_done`, idle
     /// either side, and say when (`PGG_PERF_FONT_WALK`). The calibration
@@ -56,20 +49,17 @@ pub(super) struct Options {
     pub(super) breakdown: bool,
     pub(super) trace_frames: bool,
     pub(super) build: bool,
-    /// Start with no repository at all — the window and nothing in it.
-    /// What it is for: subtracting this from a run that opened an empty
-    /// repository leaves the cost of putting the page up, which is
-    /// otherwise indistinguishable from the toolkit's own floor.
+    /// False (`--no-open`) starts with no repository — the window and
+    /// nothing in it: subtracted from a run on an empty repository, it
+    /// leaves the cost of putting the page up.
     pub(super) open: bool,
-    /// Measure the build that carries the verification harness, which is
-    /// every measurement that needs the app to say anything about itself.
-    /// False measures the shipped build — `cargo build --release` with no
-    /// features — which can be weighed and timed to its first graph but
-    /// cannot be driven or asked (`platitude-app` §features).
+    /// Measure the build that carries the verification harness. False
+    /// measures the shipped build (`cargo build --profile shipped`, no features),
+    /// which can be weighed and timed to its first graph but not driven
+    /// or asked (`platitude-app` §features).
     pub(super) harness: bool,
     /// The OS device name of the screen to put the window on, empty for
-    /// the primary. Everything about the frame rate is downstream of this
-    /// on a machine whose monitors run at different rates.
+    /// the primary.
     pub(super) screen: String,
     /// The corpus fingerprint this run must find, empty to take whatever
     /// is there. A benchmark repository that was fetched is a different
@@ -81,31 +71,24 @@ pub(super) struct Options {
     /// How quiet the machine has to be. Opened by `--allow-noisy`, which
     /// publishes the numbers a busy machine produced.
     pub(super) limits: Limits,
-    /// Draw with the software scene graph (`--software`), whose frames
-    /// go through the backing store: the reading does not depend on
-    /// the display being on, off or turned on and off while the runs
-    /// go, nothing holds the screen awake or pokes the input timer,
-    /// and the window is not raised over whatever a person has in
-    /// front. What that renderer's numbers are is the report's to say
-    /// (`perf::report`).
+    /// Draw with the software scene graph (`--software`): the reading does
+    /// not depend on the display, nothing holds the screen awake or pokes
+    /// the input timer, and the window is not raised over what a person
+    /// has in front. What its numbers mean is `perf::report`'s to say.
     pub(super) software: bool,
-    /// `[defaults]` keys written into the run's `settings.toml` as given
-    /// (`--setting key=value`, repeatable): what an A/B over a setting —
-    /// the git concurrency, the copies interval — is driven by. The value
-    /// is copied verbatim, so a number is a number and a string carries
-    /// its own quotes.
+    /// `[defaults]` keys written into the run's `settings.toml`
+    /// (`--setting key=value`, repeatable), for an A/B over a setting. The
+    /// value is copied verbatim: a string carries its own quotes.
     pub(super) settings: Vec<(String, String)>,
-    /// The app's log level (`PGG_LOG`), `info` unless `--log` says
-    /// otherwise: `debug` is what the per-command breakdown — the wait
-    /// for a slot, the spawn, the run — is printed at
-    /// (`process::executor`), and a run taken to read it is not a budget
-    /// run.
+    /// The app's log level (`PGG_LOG`): `debug` prints the per-command
+    /// breakdown (`process::executor`), and a run taken to read it is not
+    /// a budget run.
     pub(super) log: String,
 }
 
 impl Options {
-    /// The cargo features the measured binary is built with, named so the
-    /// evidence can say which of the two builds it was taken on.
+    /// The cargo features the measured binary is built with, so the
+    /// evidence says which build it was taken on.
     pub(super) fn features(&self) -> String {
         let mut features = Vec::new();
         if self.harness {
@@ -267,11 +250,8 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
     settle(opts)
 }
 
-/// What a build with no harness in it can and cannot be asked.
-///
-/// Nothing in a shipped build answers a knob, drives an action or reports
-/// a frame. What is left is a window that opens a tab: its weight, and
-/// how long it took to have a graph in it.
+/// Refuses what a build with no harness cannot answer, and turns off what
+/// it cannot drive.
 fn shipped(opts: &mut Options) -> Result<(), String> {
     if !opts.harness {
         for (asked, name) in [
@@ -301,16 +281,13 @@ fn shipped(opts: &mut Options) -> Result<(), String> {
         opts.selection = "none".into();
         opts.scroll = false;
         opts.diff = false;
-        // The calibration run is the harness paying the walk on cue,
-        // and a build with no harness takes no cue: its working set is
-        // published as sampled.
+        // The calibration run is the harness paying the walk on cue, and
+        // a build with no harness takes no cue.
         opts.calibrate = false;
     }
     Ok(())
 }
 
-/// Everything that has to hold whichever build is being measured, and the
-/// one name a run that gave none takes.
 fn cache(opts: &mut Options) -> Result<(), String> {
     if !["warm", "first", "cold"].contains(&opts.cache.as_str()) {
         return Err("--cache takes warm, first, or cold".into());
@@ -411,9 +388,8 @@ fn settle(mut opts: Options) -> Result<Options, String> {
     if opts.runs == 0 || opts.watchdog_ms == 0 {
         return Err("--runs and --watchdog-ms must be positive".into());
     }
-    // The attribution is of a process that has stopped working, and the
-    // settle wait is what makes it one; without it the walk would read a
-    // process still busy letting go of the bench.
+    // Without the settle wait the walk reads a process still busy letting
+    // go of the bench.
     if opts.attribute && opts.settle_ms == 0 {
         return Err(
             "--attribute reads the process once it has settled, so it needs --settle-ms".into(),
@@ -549,9 +525,8 @@ mod tests {
         assert_eq!(opts.selection, "none");
     }
 
-    /// Every invocation weighs the font walk unless told not to, with a
-    /// repository and without one alike; no run pays it on its own
-    /// account — that is the calibration run's shape (`fonts`).
+    /// With a repository and without one alike; no run pays the walk on
+    /// its own account — that is the calibration run's shape (`fonts`).
     #[test]
     fn the_font_walk_is_weighed_unless_declined() {
         let asked = options(&["--repo", "C:/r"]).expect("the plain options");
@@ -564,8 +539,6 @@ mod tests {
         assert!(options(&["--no-open"]).unwrap().calibrate);
     }
 
-    /// `--at` names a commit for the rig to build; without it the
-    /// measurement is of this tree, whatever it holds.
     #[test]
     fn a_commit_to_measure_is_named_by_at() {
         assert_eq!(options(&["--repo", "C:/r"]).unwrap().at, "");
@@ -580,9 +553,6 @@ mod tests {
         );
     }
 
-    /// The attribution is of a settled process, and only the settle wait
-    /// makes it one; it is also a Windows walk, refused where the
-    /// sampling is the only thing implemented.
     #[test]
     fn an_attribution_needs_a_settled_process() {
         let refused = options(&["--repo", "C:/r", "--attribute"]).unwrap_err();
@@ -610,8 +580,6 @@ mod tests {
         );
     }
 
-    /// The software scene graph is asked for by name; a plain run draws
-    /// with whatever Qt would, which on this machine is D3D.
     #[test]
     fn the_software_scene_graph_is_asked_for_by_name() {
         assert!(!options(&["--repo", "C:/r"]).unwrap().software);

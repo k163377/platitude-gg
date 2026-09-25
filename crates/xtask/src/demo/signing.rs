@@ -6,12 +6,10 @@ use std::process::Command;
 
 use super::repo::DemoRepo;
 
-/// Every outcome the details pane can show, and a working tree set up to
-/// make one more: a commit signed by a key this repository vouches for
-/// (`G`), one signed by a key it has never heard of (`U` — measured, not
-/// the `E` one might expect), and one not signed at all. SSH signing is
-/// what a throwaway repository can do on its own: a passphrase-less key
-/// needs no agent, so no pinentry can appear.
+/// A commit signed by a key this repository vouches for (`G`), one by a
+/// key it has never heard of (`U`, not `E`), one unsigned, and a staged
+/// change to make one more. SSH, because a passphrase-less key needs no
+/// agent, so no pinentry can appear.
 pub(super) fn signed(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("a.txt", "v1\n", "feat: land before signing was on")?;
 
@@ -19,8 +17,6 @@ pub(super) fn signed(repo: &mut DemoRepo) -> Result<(), String> {
     // Made, never vouched for: its public line goes nowhere.
     keygen(repo, "stranger", "stranger@example.com")?;
 
-    // Only the first key is vouched for; the other one is a signature
-    // git can read but cannot judge.
     let allowed = repo.root.join("allowed_signers");
     std::fs::write(&allowed, format!("demo@example.com {trusted}"))
         .map_err(|e| format!("writing allowed_signers: {e}"))?;
@@ -40,8 +36,8 @@ pub(super) fn signed(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["config", "user.signingkey", &config_path(&trusted_key)])?;
     repo.commit("c.txt", "v1\n", "feat: signed and verified")?;
 
-    // Something to commit, so the commit button — which is where the
-    // signing tick rides — is live and reachable.
+    // Something staged, so the commit button (where the signing tick
+    // rides) is live.
     repo.write("a.txt", "v1\nabout to be committed\n")?;
     repo.git(&["add", "--", "a.txt"])?;
     Ok(())
@@ -74,20 +70,15 @@ pub(super) fn config_path(path: &Path) -> String {
 }
 
 /// The one verdict `signed` cannot stage: `E`, a signature git cannot
-/// check. SSH signing never answers it — no allowedSignersFile is `N`,
-/// a missing or short allowedSignersFile is `U`, tampered bytes and a
-/// missing verifier are both `B` (all measured) — so the commit here is
-/// OpenPGP-signed, and `E` is what gpg says when the public key is in
-/// no keyring it can see. The key was made once, in a throwaway home
-/// that no longer exists, and the signed object is carried whole below:
-/// building needs no gpg and no key material, and no machine can hold
-/// the key, so the verdict cannot drift to `G`. Verifying does need a
-/// gpg binary — without one git calls the same commit unsigned
-/// (measured: `N`) — which Git for Windows bundles and ci/linux
-/// installs.
+/// check. SSH signing never yields it (only `N`, `U` or `B`), so this
+/// commit is OpenPGP-signed by a key that was thrown away: the signed
+/// object is carried whole below, so building needs no gpg or key, and no
+/// keyring can hold the key, so the verdict cannot drift to `G`.
+/// Verifying needs a gpg binary — without one git reads the commit as `N`
+/// — which Git for Windows bundles and ci/linux installs.
 pub(super) fn errsig(repo: &mut DemoRepo) -> Result<(), String> {
-    // The object names its tree, so the same tree is built first; the
-    // hash checks prove nothing drifted, byte for byte.
+    // The object names its tree, so that tree is built first; the hash
+    // checks catch any drift.
     repo.write("a.txt", "one\n")?;
     repo.git(&["add", "--", "a.txt"])?;
     let tree = repo.git(&["write-tree"])?;
@@ -110,8 +101,7 @@ const ERRSIG_TREE: &str = "20e50a07feffafe7699bf38ff4027a606f406eaa";
 const ERRSIG_COMMIT: &str = "bdc88d46075d5f43d0f8b23a8f48d280769ff273";
 /// `git cat-file commit` of the signed commit, escaped a line at a time
 /// so the checkout's line endings cannot reach the bytes. The armour's
-/// blank line really is `" "` — a space under the `gpgsig` header's
-/// continuation indent.
+/// blank line really is `" "`: the `gpgsig` continuation indent.
 const ERRSIG_OBJECT: &str = concat!(
     "tree 20e50a07feffafe7699bf38ff4027a606f406eaa\n",
     "author demo <demo@example.com> 1767323045 +0000\n",

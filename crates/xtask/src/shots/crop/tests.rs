@@ -4,8 +4,8 @@ fn words(args: &[&str]) -> Vec<String> {
     args.iter().map(|arg| (*arg).to_string()).collect()
 }
 
-/// A directory of this run's own, and the picture the crops are cut
-/// from: six by four, every pixel telling which one it is.
+/// A directory of its own, and a six-by-four picture whose every pixel
+/// tells which one it is.
 fn shot() -> Result<(PathBuf, PathBuf), String> {
     let dir = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-crop"), "crop")?;
     let source = dir.join("app.png");
@@ -33,8 +33,7 @@ fn a_crop_holds_the_region_asked_for_with_every_pixel_a_square_block() {
     assert_eq!((crop.width, crop.height), (12, 8));
     for y in 0..crop.height {
         for x in 0..crop.width {
-            // Nearest neighbour: the source pixel this
-            // one stands on.
+            // The source pixel this one stands on.
             let (from_x, from_y) = (2 + x / 4, 1 + y / 4);
             assert_eq!(
                 crop.pixel(x, y),
@@ -46,8 +45,7 @@ fn a_crop_holds_the_region_asked_for_with_every_pixel_a_square_block() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The default: three times, beside the picture, named for the region
-/// so a second region does not land on the first.
+/// The defaults: three times, beside the picture.
 #[test]
 fn a_crop_nobody_places_lands_beside_the_shot_under_the_region_it_cut() {
     let (dir, source) = shot().expect("a picture to cut from");
@@ -97,9 +95,8 @@ fn rect_is_err(text: &str) -> bool {
     rect(text).is_err()
 }
 
-/// The ceiling is on what comes out, so a small region at a large
-/// magnification is caught the same as a large one — including the
-/// magnification whose square is more than a u64 holds.
+/// The ceiling is on what comes out, including a magnification whose
+/// square overflows a u64.
 #[test]
 fn a_crop_too_big_to_be_looked_at_is_refused_before_it_is_written() {
     let (dir, source) = shot().expect("a picture to cut from");

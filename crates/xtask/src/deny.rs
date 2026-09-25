@@ -1,20 +1,12 @@
-//! `cargo xtask deny` — the dependency policy, read against the tree that
-//! stands here.
+//! `cargo xtask deny` — the dependency policy of `deny.toml`, checked
+//! against this tree. That file holds two of CLAUDE.md's 絶対制約 by
+//! machine (nothing in the closure opens a socket or implements git) plus
+//! the license allow list; only cargo-deny reads it, so a change to it or
+//! to any manifest is unchecked until this runs.
 //!
-//! `deny.toml` is where two of CLAUDE.md's 絶対制約 are held by machine:
-//! nothing in the closure may open a socket, and nothing in it may be a
-//! git implementation. The license allow list is
-//! the third. cargo-deny is the only thing that reads that file, so a
-//! change to it — or to any manifest, which is the only way the closure
-//! itself moves — is unchecked until something runs this.
-//!
-//! `advisories` is left to CI: it is the one that goes out to github.com
-//! for the RustSec database, and stage 2 asks for nothing the machine
-//! has not already got. The other three read the resolved graph and the
-//! policy, so what they cost is what `cargo metadata` costs — a fetch
-//! only where a build would have fetched too.
-//! CI keeps the full set, advisories included
-//! (`.github/workflows/ci.yml`, the `deny` job).
+//! `advisories` is left to CI (`.github/workflows/ci.yml`, the `deny`
+//! job): it fetches the RustSec database, and stage 2 fetches nothing a
+//! build would not.
 
 use std::process::Command;
 
@@ -58,11 +50,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Whether cargo-deny is here at all, asked first so its absence reads as
-/// the missing tool it is — the courtesy `linux` pays docker and `qt`
-/// pays qmake. An absent tool is red: a skipped policy check would still
-/// stamp the commit as gated, which is the hole this step exists to
-/// close.
+/// Asked first so an absent cargo-deny reads as a missing tool. Absent is
+/// red, not skipped: a skipped policy check would still stamp the commit
+/// as gated.
 fn installed() -> Result<(), String> {
     match Command::new("cargo").args(["deny", "--version"]).output() {
         Ok(out) if out.status.success() => Ok(()),

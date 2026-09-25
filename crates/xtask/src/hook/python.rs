@@ -1,8 +1,5 @@
-//! The python guard: on Windows the `python` in PATH is an App
-//! Execution Alias, a stub that prints an invitation to the Microsoft
-//! Store and exits 49. It answers every spelling the same way, so a
-//! session that types it spends the call, reads an advert, and guesses
-//! again. `uv` carries the real interpreter and needs no project.
+//! The python guard: on Windows the `python` in PATH is the Microsoft
+//! Store stub, which exits 49 whatever it is asked to run.
 
 use super::payload::{deny, string_field};
 use super::shell::{pipe_pieces, program_at, program_name};
@@ -13,8 +10,7 @@ const REAL: &str = "uv run --no-project python";
 /// The names the Store stub answers to.
 const STUBBED: [&str; 4] = ["python", "python3", "python.exe", "python3.exe"];
 
-/// What carries a real interpreter of its own: the container image, and
-/// uv.
+/// What reaches a real interpreter of its own.
 const CARRIES_ONE: [&str; 3] = ["xtask linux", "docker", "uv run"];
 
 /// PreToolUse(Bash|PowerShell). Answers whether it refused, like
@@ -73,8 +69,7 @@ mod tests {
             "docker exec pgg python3 -c 'print(1)'",
             // Named as data, not run.
             "grep -rn python crates/xtask/src",
-            // A pattern is one argument, and the pipes inside it are
-            // the expression's own.
+            // The pipes inside a quoted pattern are the pattern's.
             "cargo test -p xtask 2>&1 | grep -E \"result|python|shell\"",
         ] {
             assert!(!names_the_stub(line), "{line}");

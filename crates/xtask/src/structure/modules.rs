@@ -1,31 +1,21 @@
-//! The one boundary between the two QML modules, counted by machine.
+//! The one boundary between the two QML modules, counted by machine
+//! (.claude/rules/app-ui.md「QML モジュールは 2 つ」).
 //!
-//! `platitude.ui` is the product and `platitude.auto` is the verification
-//! harness, and a shipped build carries only the first (`platitude-app`
-//! §features). So the product may not *name* a harness type: a static
-//! type reference resolves at load time, and the build that has no
-//! harness would fail to load `Main.qml` — no window at all, from a line
-//! that reads perfectly well in the build everybody develops in.
+//! A shipped build carries no `platitude.auto`, and a static type
+//! reference resolves at load time, so a product line naming a harness
+//! type leaves the shipped build with no window. Every xtask builds the
+//! app with the feature (`crate::tree::HARNESS_FEATURE`), so nothing else
+//! here notices.
 //!
-//! Nothing else here notices. Every xtask that starts the app builds it
-//! with the feature (`crate::tree::HARNESS_FEATURE`), so the broken build is
-//! the one no command in this repository runs.
+//! Naming a type is what QML resolves: an object declaration
+//! (`WindowHarness {`) and a typed property (`property TabProbe probe`);
+//! a name in a comment is a reference.
 //!
-//! What counts as naming a type is what QML resolves: an object
-//! declaration (`WindowHarness {`) and a typed property
-//! (`property TabProbe probe`). A name inside a comment is a reference to
-//! read, and there are many — the harness is where a verb is implemented,
-//! and the product's comments say so.
-//!
-//! **The same boundary has a second half on the Rust side.** What a run
-//! was told to do reaches QML through a singleton the feature registers
-//! (`harness::singleton::Harness`), which is not a `platitude.auto` type
-//! and so is not in the qmldir above. The product may not name it — a
-//! singleton the engine cannot resolve fails the document that reads it,
-//! the same way a missing type does — and may not ask `AppBackend` for
-//! anything that lives on it either, which is what the move was for. Both
-//! names are read out of the singleton's own source, so a property added
-//! there is out of the product's reach on the run that adds it.
+//! The Rust side's half: the singleton the feature registers
+//! (`harness::singleton::Harness`) is not in the qmldir, and the product
+//! may neither name it (an unresolvable singleton fails the document too)
+//! nor ask `AppBackend` for its members. Both are read out of the
+//! singleton's source, so a property added there is out of reach at once.
 
 use std::path::Path;
 
@@ -39,7 +29,7 @@ const HARNESS_SINGLETON: &str = "crates/platitude-app/src/harness/singleton.rs";
 const SINGLETON: &str = "Harness";
 const BACKEND: &str = "AppBackend";
 
-/// One failure per product file that names a harness type, and how many
+/// One failure per product line that reaches for the harness, and how many
 /// names were looked for.
 pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
     let names = harness_types(root)?;
@@ -97,15 +87,8 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
 }
 
 /// Everything `Harness` puts in front of QML: the `qproperty!` names as
-/// written, and the slots' own names in the camel case
-/// `ConvertToCamelCase` gives them.
-///
-/// Read out of the source, so a knob added to the
-/// harness is out of the product's reach without anybody remembering to
-/// add it twice.
-///
-/// A function only counts behind `#[qslot]` — the file's own `Default` is
-/// a `fn` too, and QML has never heard of it.
+/// written, and the `#[qslot]` fns in camel case — only those, since the
+/// file's own `Default` is a `fn` QML never sees.
 fn singleton_members(root: &Path) -> Result<Vec<String>, String> {
     let path = root.join(HARNESS_SINGLETON);
     let text = std::fs::read_to_string(&path)
@@ -124,8 +107,7 @@ fn singleton_members(root: &Path) -> Result<Vec<String>, String> {
         {
             members.push(camel(name));
         }
-        // The attribute and the signature it belongs to are a line apart,
-        // and nothing else stands between them.
+        // Assumes `#[qslot]` stands on the line right above its `fn`.
         is_slot = code == "#[qslot]";
     }
     if members.is_empty() {
@@ -152,15 +134,10 @@ fn camel(snake: &str) -> String {
     out
 }
 
-/// Whether one line of QML reads `<object>.<member>` — or, with an empty
-/// member, reads anything at all off `object`.
-///
-/// Not on a comment line: the product's comments say where a verb is
-/// implemented and what writes a property, and both name these constantly.
-/// **Both ends of the name have to end**: `WindowHarness.qml` — the file a
-/// seat loads by URL — is not `Harness.`, and
-/// `AppBackend.autoFetchMinutes` — the application's own setting — is not
-/// `AppBackend.autoAct`.
+/// Whether one line of QML, not a comment, reads `<object>.<member>` — or,
+/// with an empty member, anything off `object`. Both ends of the name must
+/// end: `WindowHarness.qml` is not `Harness.`, and
+/// `AppBackend.autoFetchMinutes` is not `AppBackend.autoAct`.
 fn reads(line: &str, object: &str, member: &str) -> bool {
     let code = line.trim_start();
     if code.starts_with("//") {
@@ -271,8 +248,7 @@ mod tests {
             "Harness",
             ""
         ));
-        // The seat is the product's own type and shares the first word, and
-        // the file it loads by URL ends in the same eight characters.
+        // The product's own seat type, and the file it loads by URL.
         assert!(!reads("    HarnessSeat {", "Harness", ""));
         assert!(!reads("        part: \"WindowHarness.qml\"", "Harness", ""));
         assert!(reads(
@@ -280,8 +256,7 @@ mod tests {
             "AppBackend",
             "autoAct"
         ));
-        // The application's own auto-fetch setting, which merely starts the
-        // same way.
+        // The app's own auto-fetch setting.
         assert!(!reads(
             "        fetchField.text = AppBackend.autoFetchMinutes > 0",
             "AppBackend",
@@ -300,8 +275,6 @@ mod tests {
         assert_eq!(camel("report"), "report");
     }
 
-    /// What the singleton actually puts in front of QML, and what it only
-    /// looks like it does.
     #[test]
     fn only_the_slots_and_the_properties_are_read_off_the_singleton() {
         let members = singleton_members(&crate::tree::workspace_root()).expect("read the harness");

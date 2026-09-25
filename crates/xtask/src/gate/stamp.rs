@@ -1,10 +1,8 @@
 //! The stamps: one file per green (step, inputs) pair and one per gated
-//! commit, beside the repository's own `.git` so every worktree reads the
-//! same ones and a rebase in one seat reuses a run taken in another.
+//! commit, inside the common `.git` so every worktree reads the same ones
+//! and a rebase in one seat reuses a run taken in another.
 //!
-//! Plain files: a stamp is looked at by a git
-//! hook that has to answer in the time a ref update takes, and a file
-//! that exists is the cheapest true thing there is.
+//! Plain files, because a git hook reads them in the time a ref update takes.
 
 use std::path::{Path, PathBuf};
 
@@ -14,9 +12,8 @@ pub(crate) struct Store {
     root: PathBuf,
 }
 
-/// What a commit's stamp says: where main stood when the gate ran, the
-/// base the diff was read against, whether the two were one (the branch
-/// sat on main), whether both sides ran, and the steps that were green.
+/// A commit's stamp. `onto_main`: the diff's base was where main stood
+/// (the branch sat on main); `full`: both sides ran.
 pub(crate) struct CommitStamp {
     pub main: String,
     pub base: String,

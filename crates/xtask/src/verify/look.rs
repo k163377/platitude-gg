@@ -1,15 +1,8 @@
-//! The look at a process that is still standing when the parent's
-//! ceiling arrives: its threads, and on Windows a dump of it, each taken
-//! by a diagnostic process of its own under a ceiling of its own
-//! ([`bounded`]). What the record a stopped run leaves cannot say
-//! (`super::wedge`): past `exiting` nothing inside the process is left
-//! to say it.
-//!
-//! **A diagnostic is bounded, and its stdout is a file.** It is ended at
-//! its ceiling and waited for, so the app's reaping follows the dumper's
-//! end; and what it wrote is read off the disk once it has exited, so a
-//! child it left behind — holding what would have been the pipe's write
-//! end — holds nothing here.
+//! The look at a process still standing when the parent's ceiling
+//! arrives: its threads, and on Windows a dump of it — what the record a
+//! stopped run leaves (`super::wedge`) cannot say, since past `exiting`
+//! nothing inside the process is left to say it. Each is a diagnostic
+//! process under a ceiling of its own, its stdout a file ([`bounded`]).
 
 use std::path::Path;
 use std::process::Command;
@@ -19,49 +12,31 @@ use crate::subprocess::{Answer, bounded};
 
 #[cfg(windows)]
 const DUMP_FILE: &str = "app.dmp";
-/// The thread listing as the parent read it, whole, beside the pictures:
-/// the line under the verdict shows the first few threads and counts the
-/// rest ([`listed`]). Written by the listing itself, which is a process
-/// on Windows ([`threads_of`]) and the stand-in a stalled look is made
-/// of everywhere ([`look_at`]); the walk of `/proc` leaves none.
+/// The whole thread listing, beside the pictures — the line under the
+/// verdict shows only the first few ([`listed`]). Written by the listing
+/// process itself.
 const THREADS_FILE: &str = "threads.txt";
 
-/// How long a look at the app may take: the listing is one PowerShell
-/// start and one query, the dump writes the process's whole memory to
-/// disk. Both Windows-only — elsewhere the listing is a walk of `/proc`,
-/// which takes no process and so has nothing to bound. **Ceilings on the
-/// diagnostics**: what they bound is a diagnostic that
-/// stalls, and the answer to one is the line that says it did — the app
-/// is reaped and the run reported the same either way ([`bounded`]).
+/// How long a look at the app may take: the listing is one PowerShell,
+/// the dump writes the process's whole memory to disk. Windows only — the
+/// walk of `/proc` takes no process.
 #[cfg(windows)]
 const LISTING_CEILING: Duration = Duration::from_secs(15);
 #[cfg(windows)]
 const DUMP_CEILING: Duration = Duration::from_secs(60);
-/// The ceiling a look ordered to stall is ended at (`--fault-stall-look`).
-/// The stand-in never answers, so any height ends it, and what the case
-/// reads back is the ending and the words. Kept apart
-/// from [`LISTING_CEILING`], which is set for a listing that does answer,
-/// on a loaded machine; this one is only wall clock the check would pay
-/// for nothing.
+/// The ceiling a look ordered to stall is ended at (`--fault-stall-look`):
+/// the stand-in never answers, so any height ends it, and the listing's
+/// own ceiling would only be wall clock paid for nothing.
 const STALLED_LOOK_CEILING: Duration = Duration::from_secs(1);
 
-/// What only a look at the process can say once the trail has run out,
-/// taken while the app still stands. Past `exiting` the exit has ended
-/// every thread but the one it runs on before the loaded libraries are
-/// given their detach, so **one thread alive is a process inside its
-/// exit** and several is one that never got there. And on Windows a dump
-/// of it, for the frame that stands still — unless the stop was ordered
-/// (`--fault-hang`), whose cause needs no dump.
+/// The app's threads, taken while it still stands, and on Windows a dump
+/// of it unless the stop was ordered (`--fault-hang`, whose cause needs
+/// no dump). Past `exiting` the exit has ended every thread but its own,
+/// so one thread alive is a process inside its exit.
 ///
-/// **Every look is bounded and ended at its ceiling** ([`bounded`]): a
-/// diagnostic that stalls — a PowerShell that never gets past its start,
-/// a dumper waiting on the process it dumps — is ended, said to have
-/// been, and the run goes on to reap the app and report it. `stalled`
-/// orders that stall (`--fault-stall-look`): the listing is a process
-/// that never answers, ended at a ceiling of its own
-/// ([`STALLED_LOOK_CEILING`]), so what the parent says about a look that
-/// ran out of time can be checked
-/// (`super::faults`).
+/// Every look is ended at its ceiling ([`bounded`]) and the run goes on to
+/// reap the app. `stalled` makes the listing a process that never answers
+/// (`--fault-stall-look`), so that line can be checked (`super::faults`).
 pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool) -> Vec<String> {
     let threads = if stalled {
         listing(bounded(
@@ -80,10 +55,7 @@ pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool)
                 threads.lines.len(),
                 listed(&threads.lines)
             )];
-            // The one stack that names a stop inside the exit: past
-            // `exiting` every other thread is already ended, so the
-            // listing is one line whatever held the lock, and where that
-            // line stands is the whole of what can be read.
+            // The one stack that names a stop inside the exit.
             if let Some(stack) = threads.main_stack() {
                 lines.push(format!(
                     "  the main thread stands in: {stack} (every thread's stack: {THREADS_FILE})"
@@ -101,10 +73,9 @@ pub(super) fn look_at(pid: u32, shot_dir: &Path, unordered: bool, stalled: bool)
     lines
 }
 
-/// What a listing answered with: one line per thread, and the stack
-/// each stood in where the listing could walk it — Windows walks them
-/// ([`LISTING_SCRIPT`]: `stack <tid> <frames>` lines after the threads);
-/// the walk of `/proc` has none.
+/// What a listing answered with: one line per thread, and each one's
+/// stack where the listing walks them — Windows only, as
+/// `stack <tid> <frames>` lines after the threads.
 #[derive(Debug, PartialEq, Eq)]
 struct Threads {
     lines: Vec<String>,
@@ -143,9 +114,8 @@ impl Threads {
     }
 }
 
-/// The threads a listing answered with, or why it could not answer —
-/// worded for the line under the verdict, and the same words whichever
-/// system's listing it was.
+/// The threads a listing answered with, or why it could not — worded for
+/// the line under the verdict.
 fn listing(answer: Answer) -> Result<Threads, String> {
     match answer {
         Answer::Ended { status, stdout } if status.success() => {
@@ -193,10 +163,8 @@ fn listing(answer: Answer) -> Result<Threads, String> {
     }
 }
 
-/// A process that stands in for a diagnostic that stalls: one that does
-/// nothing for longer than any ceiling here, so that the ceiling is what
-/// ends it. What every system has on hand — on Windows `ping`, counting
-/// off seconds against the loopback, since there is no `sleep`.
+/// A stand-in for a diagnostic that stalls: it outlasts every ceiling
+/// here. On Windows `ping` against the loopback, since there is no `sleep`.
 #[cfg(windows)]
 fn stand_in() -> Command {
     let mut command = Command::new("ping");
@@ -227,31 +195,19 @@ fn listed(threads: &[String]) -> String {
     }
 }
 
-/// The listing, from a PowerShell of its own: every thread's number,
-/// its state, what it waits on, its description — what Rust and Qt name
-/// their threads by: `tokio-rt-worker`, `QSGRenderThread`,
-/// `pgg-deadline` — the module it started in, which names the system's
-/// own threads (`ntdll.dll` for the thread pool, `WINMM.dll` for a
-/// timer), and the processor time it has had. A survivor of the
-/// teardown is told from the system's idle threads by the two in the
-/// middle, which `Get-Process` does not carry: each is one Win32 call,
-/// made from C# the way the dump is ([`DUMP_SCRIPT`]). A thread that
-/// could not be opened is listed by its number alone, as `-@?`.
+/// The listing, from a PowerShell of its own: per thread its number,
+/// state, wait reason, description (what Rust and Qt name threads by),
+/// `@` the module it started in (which names the system's own threads),
+/// and CPU time. The two in the middle tell a teardown survivor from the
+/// system's idle threads and are Win32 calls `Get-Process` does not
+/// carry; a thread that could not be opened shows `-@?`.
 ///
-/// **Then the stack each thread stands in**, one `stack <tid> <frames>`
-/// line per thread, walked with `dbghelp` (`StackWalk64` over a context
-/// read from the suspended thread, resumed after) — the debugger's own
-/// library, on every Windows, so a stopped process names the DLL and
-/// the function it stands in with no debugger installed. Frames are
-/// `module!symbol+offset` off the **nearest export** where no symbols
-/// are on the machine (Qt's and the exe's are not), so the module is
-/// exact and the function is a neighbourhood; `module+offset` where
-/// even that is missing. A thread that could not be opened, suspended
-/// or read says so in place of its frames. **The symbol search path is
-/// empty and prompts are off**: a machine whose `_NT_SYMBOL_PATH` names
-/// a symbol server would otherwise send the listing to the network for
-/// every module, and the listing's ceiling would be spent there — a
-/// PDB beside a module is still found without any path.
+/// Then one `stack <tid> <frames>` line per thread, walked with `dbghelp`
+/// (on every Windows, no debugger needed). With no symbols on the machine
+/// a frame is off the nearest export: the module exact, the function a
+/// neighbourhood. The symbol search path is empty and prompts are off, or
+/// an `_NT_SYMBOL_PATH` naming a symbol server spends the listing's
+/// ceiling on the network.
 #[cfg(windows)]
 const LISTING_SCRIPT: &str = "Add-Type -TypeDefinition @'
 using System;
@@ -375,10 +331,8 @@ foreach ($thread in $process.Threads) {
 }
 [PggThreads]::End()";
 
-/// Every thread of the process ([`LISTING_SCRIPT`]). Windows answers
-/// this from PowerShell alone — the same one the reaper reads its
-/// process tree from (`crate::reap`). The listing is written whole
-/// beside the pictures ([`THREADS_FILE`]) and read back from there.
+/// Every thread of the process ([`LISTING_SCRIPT`]), written whole beside
+/// the pictures ([`THREADS_FILE`]) and read back from there.
 #[cfg(windows)]
 fn threads_of(pid: u32, shot_dir: &Path) -> Result<Threads, String> {
     let script = LISTING_SCRIPT.replace("PGG_PID", &pid.to_string());
@@ -392,9 +346,7 @@ fn threads_of(pid: u32, shot_dir: &Path) -> Result<Threads, String> {
     ))
 }
 
-/// The same off `/proc`: the thread's name is there as well, which says
-/// whose it is — a tokio worker, the deadline thread, a render thread.
-/// A walk: it leaves no file beside the pictures, and no
+/// The same off `/proc`, with each thread's name. It leaves no file and no
 /// stacks (`/proc/<pid>/task/<tid>/stack` is root's).
 #[cfg(unix)]
 fn threads_of(pid: u32, _shot_dir: &Path) -> Result<Threads, String> {
@@ -429,22 +381,13 @@ fn threads_of(pid: u32, _shot_dir: &Path) -> Result<Threads, String> {
 }
 
 /// The dump, written by `MiniDumpWriteDump` itself from a PowerShell of
-/// its own — a process, so the ceiling can end it ([`bounded`]). Full
-/// memory, the handles and the thread information ([`DUMP_KIND`]): what
-/// a stopped exit is read off is the one thread's stack, `~*k` in
-/// WinDbg, and what it holds is in the memory behind it.
+/// its own — a process, so the ceiling can end it ([`bounded`]). Not
+/// `rundll32 comsvcs.dll,MiniDump`: its file holds no memory and its own
+/// taker cannot open it (internal-docs/ハング調査.md §次の 1 回で何が読めるか).
 ///
-/// `rundll32 comsvcs.dll,MiniDump`, the dumper every Windows has on
-/// hand, writes a file whose header claims the whole memory and holds
-/// none of it, under an ACL that names SYSTEM and Administrators alone
-/// — a dump its own taker cannot open
-/// (internal-docs/P3-確認事項.md §次の 1 回で何が読めるか). A file
-/// PowerShell creates is the owner's, like any other.
-///
-/// `PGG_PID` and `PGG_PATH` are filled in by [`dump_of`]; the path is
-/// inside a single-quoted literal, which a temp path has no quote to
-/// break. The process exits with the Win32 error of the call, zero for
-/// a dump written.
+/// `PGG_PID`, `PGG_PATH` and `PGG_KIND` are filled in by [`dump_of`]; the
+/// path sits in a single-quoted literal, which a temp path has no quote to
+/// break. Exits with the call's Win32 error, zero for a dump written.
 #[cfg(windows)]
 const DUMP_SCRIPT: &str = "Add-Type -TypeDefinition @'
 using System;
@@ -497,8 +440,7 @@ fn dump_of(pid: u32, shot_dir: &Path) -> String {
         Answer::Ended { status, .. } => {
             format!("  no dump: MiniDumpWriteDump exited {status}")
         }
-        // What a dumper ended half way left is taken away: a file by
-        // that name would be opened as a dump.
+        // A half-written file by that name would be opened as a dump.
         Answer::OutOfTime { pid, after, ended } => format!(
             "  no dump: the dumper ran out of time after {:.1}s and {}; {}",
             after.as_secs_f32(),
@@ -520,7 +462,7 @@ fn dump_of(pid: u32, shot_dir: &Path) -> String {
 }
 
 /// Nothing on the other systems: a core needs a debugger the container
-/// does not carry, and the thread list above names what waits where.
+/// does not carry.
 #[cfg(not(windows))]
 fn dump_of(_pid: u32, _shot_dir: &Path) -> String {
     "  no dump on this system: the threads above are the whole of the look".to_string()
@@ -533,10 +475,8 @@ mod tests {
     use super::{Answer, Threads, bounded, listing, stand_in};
     use crate::yard::Yard;
 
-    /// The stacks come after the threads as `stack <tid> <frames>` lines,
-    /// and the main thread's is the one the verdict shows — by its name,
-    /// or the first listed where nothing is named — cut to a line's
-    /// worth of frames.
+    /// The main thread is found by name, else the first listed, and its
+    /// stack cut to a line's worth of frames.
     #[test]
     fn a_listing_carries_each_threads_stack_and_shows_the_mains() {
         let said = "7 Wait UserRequest main@app.exe cpu=1ms\n\
@@ -587,13 +527,9 @@ mod tests {
         std::process::ExitStatus::from_raw(code << 8)
     }
 
-    /// A diagnostic that stands past its ceiling is ended there and said
-    /// to have been. Whether it is gone is asked of the machine
-    /// itself.
+    /// Whether it is gone is asked of the machine itself.
     #[test]
     fn a_diagnostic_that_stalls_is_ended_at_its_ceiling() {
-        // The stand-in stalls on purpose and the ceiling is what ends it;
-        // the verdict is that it was ended.
         let ceiling = Duration::from_millis(300);
 
         let answer = bounded("a stalled listing", stand_in(), ceiling, None);
@@ -609,9 +545,8 @@ mod tests {
         );
     }
 
-    /// A diagnostic that ends on its own answers with its exit and what
-    /// it wrote, whole — the listing is read off exactly that, and the
-    /// file it was written to stays beside the pictures.
+    /// What it wrote is the answer and stays on the disk; the listing is
+    /// read off exactly that.
     #[test]
     fn a_diagnostic_that_answers_is_carried_whole() {
         let dir = lanes("answers");
@@ -639,9 +574,8 @@ mod tests {
         );
     }
 
-    /// The words a stalled listing is reported by, which `wedge-check`
-    /// reads back from the whole run (`super::super::faults`): a change
-    /// here is a change there.
+    /// `wedge-check` reads these words back (`super::super::faults`): a
+    /// change here is a change there.
     #[test]
     fn a_listing_out_of_time_says_so_and_whether_it_was_ended() {
         let ended = listing(Answer::OutOfTime {
@@ -670,10 +604,9 @@ mod tests {
         );
     }
 
-    /// The dump is one a person can open: written by the call itself, so
-    /// the memory is behind the header and the file is its owner's to
-    /// read — the two things this test is here for (`dump_of`).
-    /// Taken of the stand-in, which is small and stands still.
+    /// The dump is one a person can open: the memory is behind the header
+    /// and the file is its owner's. Taken of the stand-in, which is small
+    /// and stands still.
     #[cfg(windows)]
     #[test]
     fn a_dump_of_a_standing_process_is_written_and_readable() {
@@ -698,17 +631,14 @@ mod tests {
             .open(dir.join(super::DUMP_FILE))
             .expect("the dump opens for its owner");
         let len = dump.metadata().expect("the dump's size").len();
-        // Full memory is the images and the heap, which is orders past a
-        // header with the stacks alone.
+        // Full memory is orders past a header with the stacks alone.
         assert!(len > 1024 * 1024, "{len} bytes is a header alone");
         drop(dump);
         std::fs::remove_dir_all(&dir).expect("the dump is its owner's to remove");
     }
 
-    /// The listing names what the numbers alone could not — the thread's
-    /// description and the module it started in — which is how a
-    /// survivor of the teardown is told from the system's idle threads.
-    /// The stand-in's main thread starts in its own image.
+    /// Every thread carries its description and start module; the
+    /// stand-in's main thread starts in its own image.
     #[cfg(windows)]
     #[test]
     fn a_listing_names_the_threads_of_a_standing_process() {
@@ -733,9 +663,8 @@ mod tests {
             threads.lines.iter().any(|line| line.contains("@ping.exe")),
             "{threads:?}"
         );
-        // Every thread was walked, and the stand-in's main thread — ping
-        // counting off a second — stands in the system's sleep, which the
-        // walk names by module and export with no symbols on the machine.
+        // Every thread was walked, and ping's main thread stands in the
+        // system's sleep, named with no symbols on the machine.
         assert_eq!(threads.stacks.len(), threads.lines.len(), "{threads:?}");
         let main = threads
             .main_stack()
@@ -744,8 +673,7 @@ mod tests {
             main.contains("ntdll") || main.contains("KERNELBASE") || main.contains("kernel32"),
             "{main}"
         );
-        // The whole listing is on the disk beside the pictures, the same
-        // lines the answer was read off, stacks and all.
+        // The file holds the same lines the answer was read off.
         let written = std::fs::read_to_string(dir.join(super::THREADS_FILE))
             .expect("the listing, on the disk");
         assert_eq!(
@@ -757,7 +685,6 @@ mod tests {
         );
     }
 
-    /// A process that says `one` and ends.
     #[cfg(windows)]
     fn says_one() -> std::process::Command {
         let mut command = std::process::Command::new("cmd");
@@ -772,17 +699,12 @@ mod tests {
         command
     }
 
-    /// A diagnostic can leave a child of its own behind — one that
-    /// inherited its stdout and outlives it. The answer is the
-    /// diagnostic's own exit and what it had written by then; what it
-    /// left behind holds nothing here. The child left behind writes
-    /// `done.txt` as its last act, so whether the answer waited for it
-    /// is read off the disk.
+    /// A child that inherited the diagnostic's stdout and outlives it
+    /// does not hold the answer. It writes `done.txt` as its last act, so
+    /// whether the answer waited for it is read off the disk.
     ///
-    /// **This tree outlives the test**, alone among the suite's: the
-    /// child is holding `said.txt` inside it and has to be, so Windows
-    /// refuses the removal the yard makes on its way out
-    /// ([`crate::yard::Yard`]'s `Drop`, where the rest of that is).
+    /// This tree outlives the test: the child holds `said.txt` inside it,
+    /// so Windows refuses the yard's removal ([`crate::yard::Yard`]'s `Drop`).
     #[test]
     fn a_child_the_diagnostic_leaves_behind_does_not_hold_the_answer() {
         let dir = lanes("left-behind");
@@ -805,11 +727,9 @@ mod tests {
         );
     }
 
-    /// A process that ends at once and leaves a child behind, holding
-    /// the stdout it was given for twenty seconds and then writing
-    /// `done.txt` beside the script. The script is a file, so the shell
-    /// is handed one path, and is named by its whole path: a machine
-    /// with `NoDefaultCurrentDirectoryInExePath` set has a `cmd` that
+    /// A process that ends at once and leaves a child holding its stdout
+    /// for twenty seconds, then writing `done.txt`. The script is named by
+    /// its whole path: with `NoDefaultCurrentDirectoryInExePath` set, `cmd`
     /// does not look in the current directory.
     #[cfg(windows)]
     fn leaves_a_child_behind(dir: &std::path::Path) -> std::process::Command {

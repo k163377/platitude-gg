@@ -1,14 +1,9 @@
-//! Inflate (RFC 1951), all three block types.
+//! Inflate (RFC 1951), all three block types: `write` emits only stored
+//! blocks, but Qt saves a screenshot with dynamic Huffman codes.
 //!
-//! `write` emits stored blocks, but nothing else does: Qt saves a
-//! screenshot through zlib's dynamic Huffman codes, and every IDAT
-//! this is ever pointed at is one of those. Reading a shot back is
-//! therefore the whole of deflate.
-//!
-//! Symbols come out a bit at a time (Mark Adler's `puff` walk). What
-//! this reads is one screenshot, once, in a debug build of a dev tool;
-//! a decoding table is several times the code for time nobody is
-//! waiting on.
+//! Symbols come out a bit at a time (Mark Adler's `puff` walk): this reads
+//! one screenshot, once, and a decoding table is several times the code
+//! for time nobody is waiting on.
 
 use super::checksum::adler32;
 
@@ -67,8 +62,7 @@ fn deflate(stream: &[u8]) -> Result<(Vec<u8>, usize), String> {
     }
 }
 
-/// A block that compresses nothing: its length, that length inverted as
-/// a check, and then the bytes themselves.
+/// A block that compresses nothing.
 fn stored(bits: &mut Bits, out: &mut Vec<u8>) -> Result<(), String> {
     bits.align();
     let len = bits.u16le()?;
@@ -112,8 +106,8 @@ fn coded(
     }
 }
 
-/// One of the two tables above, read at `at`: the base, plus whatever
-/// the extra bits that follow the symbol add to it.
+/// `LENGTHS` or `DISTANCES`, read at `at`: the base, plus whatever the
+/// extra bits that follow the symbol add to it.
 fn span(bits: &mut Bits, table: &[(u16, u32)], at: usize, what: &str) -> Result<usize, String> {
     let (base, extra) = table
         .get(at)
@@ -127,9 +121,8 @@ fn described(bits: &mut Bits) -> Result<(Code, Code), String> {
     let literal_count = bits.take(5)? as usize + 257;
     let distance_count = bits.take(5)? as usize + 1;
     let described_count = bits.take(4)? as usize + 4;
-    // The lengths of the code that carries the other two are written in
-    // this order, so that a header which stops early stops on the ones
-    // least likely to be used.
+    // RFC 1951's order for the lengths of the code that carries the other
+    // two.
     const ORDER: [usize; 19] = [
         16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
     ];
@@ -170,7 +163,7 @@ fn described(bits: &mut Bits) -> Result<(Code, Code), String> {
 }
 
 /// The code deflate fixes for the blocks that describe none of their
-/// own: literal lengths by range, and every distance in five bits.
+/// own.
 fn fixed() -> Result<(Code, Code), String> {
     let mut literals = [8u8; 288];
     literals[144..256].fill(9);
@@ -225,7 +218,7 @@ impl Code {
 
     /// The next symbol, a bit at a time: the code read so far is
     /// measured against the codes of that length before another bit is
-    /// taken, which is what makes the code prefix-free readable.
+    /// taken.
     fn read(&self, bits: &mut Bits) -> Result<u16, String> {
         let (mut code, mut first, mut index) = (0u32, 0u32, 0u32);
         for length in 1..16 {
@@ -436,9 +429,8 @@ mod tests {
         assert_eq!(zlib(&zlib_stored(&raw)), Ok(raw));
     }
 
-    /// The block type no PNG uses and no test can reach through a real
-    /// file: deflate's built-in code, with a repeat that overlaps what
-    /// it is copying.
+    /// The block type no file in the tree reaches: deflate's built-in
+    /// code, with a repeat that overlaps what it is copying.
     #[test]
     fn a_fixed_block_reads_its_literals_and_its_repeats() {
         let mut pack = Pack::default();

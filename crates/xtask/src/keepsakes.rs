@@ -1,8 +1,5 @@
-//! What a container run leaves behind for a person to look at.
-//!
-//! A run inside the container writes where nobody can open it, so
-//! anything meant to be read afterwards goes to a host directory bridged
-//! in over /out (`linux`).
+//! What a container run leaves behind for a person to look at: a host
+//! directory mounted at /out, since nobody can open the container's own.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -11,10 +8,9 @@ use std::path::{Path, PathBuf};
 pub(crate) struct Keepsake {
     /// Where the container's mount lands out here.
     pub(crate) dir: PathBuf,
-    /// Held for the holding: it *is* the run's ownership of `dir`,
-    /// released however the process ends. `None` would mean this run
-    /// had already claimed the path, which it never has: the directory
-    /// was made a line earlier.
+    /// The run's ownership of `dir`, released however the process ends.
+    /// `None` only for a path this run had claimed already, which it never
+    /// has.
     _claim: Option<crate::verify::ResourceClaim>,
 }
 
@@ -30,22 +26,14 @@ pub(crate) enum Landing<'a> {
     Leaf(&'a str),
 }
 
-/// The arguments that send a run's pictures out to where `landing`
-/// says, and where they land on this side. None when the command leaves
-/// nothing.
+/// Adds the arguments that send a run's pictures out to where `landing`
+/// says, and answers where they land on this side. None when the command
+/// leaves nothing.
 ///
-/// `--no-board` rides along: the board is the host's. The run in there
-/// keeps its census and its board out of the tree by itself
-/// (`verify::options`, on `linux::IN_CONTAINER`), and the seat these
-/// pictures belong to is the one out here — which is what
-/// `onto_the_board` is for, once the run is done.
+/// `--no-board` rides along: the board is the host's (`onto_the_board`).
 ///
-/// **The claim is taken on this side.** The run inside makes
-/// one too (`verify::run` claims its `--shot-dir`), but it writes that
-/// lock into the container's own `/tmp`, which is empty in every
-/// container of a run's own — a claim that can never refuse anybody.
-/// What two runs can actually collide over is this directory, and it
-/// is only on this side that a second asker can be told so.
+/// The claim is taken on this side: the one the run inside makes lands in
+/// the container's own `/tmp`, where it can never refuse anybody.
 pub(crate) fn bridge(
     command: &mut Vec<String>,
     landing: Landing<'_>,
@@ -81,16 +69,13 @@ pub(crate) fn keepsake_base() -> Result<PathBuf, String> {
     Ok(base)
 }
 
-/// Whatever the run left behind, onto the host's board. Nothing left is
-/// nothing to do — the caller hands over what `bridge` answered and is
-/// not made to ask again.
+/// Whatever the run left behind (`out` = what `bridge` answered), onto
+/// the host's board.
 ///
-/// Marked `— linux` because Done is both OSes photographed for the same
-/// verb (CLAUDE.md ビルド・テスト): a board holding two pictures that do
-/// not say which side each came from cannot show that.
+/// Marked `— linux`: Done is both OSes photographed for the same verb
+/// (CLAUDE.md ビルド・テスト), so each picture has to say its side.
 ///
-/// **The command has to be the one that was typed** — see
-/// [`boarding`].
+/// The command has to be the one that was typed — see [`boarding`].
 pub(crate) fn onto_the_board(out: Option<&Path>, command: &[String]) {
     let Some(out) = out else {
         return;
@@ -107,18 +92,14 @@ pub(crate) fn onto_the_board(out: Option<&Path>, command: &[String]) {
 }
 
 /// Whether the run's pictures are filed on the board once it is over.
-///
-/// **Only the line as it was typed can answer**: [`bridge`] says
-/// `--no-board` into the line it hands the container regardless, the
-/// board being this side's to write. A suite's runs are typed with it
-/// (`verify::suite_words`) — their pictures still travel out to a
-/// directory a person can open, and nothing is filed.
+/// Only the line as typed can answer: [`bridge`] adds `--no-board` to
+/// every line it hands the container. A suite's runs are typed with it
+/// (`verify::suite_words`).
 fn boarding(command: &[String]) -> bool {
     !command.iter().any(|word| word == "--no-board")
 }
 
 /// What to call the run on the board, out of the command line it was.
-/// Pure so the tests can ask.
 fn naming(command: &[String]) -> (String, String) {
     let word_after = |flag: &str| {
         command
@@ -132,17 +113,12 @@ fn naming(command: &[String]) -> (String, String) {
     (format!("{label} — linux"), verb)
 }
 
-/// A host directory for what a run means to be looked at afterwards, or
-/// None when the command leaves nothing. verify-ui writes its screenshot
-/// and the settings it ran with into --shot-dir; inside a container that is
-/// a place nobody can open, and the whole verdict is a PNG.
+/// A host directory for what verify-ui writes to --shot-dir (screenshot
+/// and settings), or None when the command leaves nothing.
 ///
-/// **One per run, or two containers share a settings store.** `/out` is
-/// the same path in every container, so what keeps two of them apart is
-/// this directory alone: hand the same one twice and the second app to
-/// start finds the first still holding `/out/config`
-/// (`settings::Store::claim`), opens the window that says so, and
-/// waits out its watchdog.
+/// One per run: `/out` is the same path in every container, so a second
+/// run handed the same directory finds `/out/config` held
+/// (`settings::Store::claim`) and waits out its watchdog.
 fn keepsakes(command: &[String]) -> Result<Option<PathBuf>, String> {
     if !command.iter().any(|word| word == "verify-ui") {
         return Ok(None);
@@ -166,8 +142,6 @@ mod tests {
         line.split_whitespace().map(String::from).collect()
     }
 
-    /// The verb names the run when nobody named it, and either way the
-    /// board says which side of Done this picture is.
     #[test]
     fn a_container_run_is_named_after_its_verb_and_its_side() {
         assert_eq!(
@@ -189,9 +163,8 @@ mod tests {
         );
     }
 
-    /// The board is answered by the line as typed. `bridge` writes
-    /// `--no-board` into every line it sends in, so a caller that asked
-    /// the mutated line would file nothing at all.
+    /// `bridge` writes `--no-board` into every line it sends in, so a
+    /// caller that asked the mutated line would file nothing at all.
     #[test]
     fn what_the_container_was_told_cannot_answer_for_the_board() {
         let typed = words("cargo xtask verify-ui commit");
@@ -208,9 +181,7 @@ mod tests {
         std::fs::remove_dir_all(&out.dir).expect("the directory bridge just made");
 
         // In the gate's container the mount is the whole base, and the
-        // run's directory is named as a leaf of it — the leaf being the
-        // directory this side claimed, so the settings store in there is
-        // this run's alone.
+        // run names the directory this side claimed as a leaf of it.
         let mut leafed = typed.clone();
         let out = bridge(&mut leafed, Landing::Leaf("/out"))
             .expect("a bridged run")
@@ -249,12 +220,9 @@ mod tests {
         );
     }
 
-    /// `/out` is the same path in every container, so the directory it is
-    /// mounted from is the whole of what keeps two runs of a side apart —
-    /// their settings stores, their screenshots and the git configuration
-    /// they read an identity from all sit in it. The gate starts a side's
-    /// verbs together (`gate::sides::verbs`), which is where a clock that two of
-    /// them read inside one tick would have handed them one directory.
+    /// The gate starts a side's verbs together (`gate::sides::verbs`),
+    /// where a name from a clock read inside one tick would hand two of
+    /// them one `/out`.
     #[test]
     fn container_runs_started_together_are_handed_a_directory_each() {
         let start = std::sync::Arc::new(std::sync::Barrier::new(16));

@@ -1,40 +1,20 @@
 //! `cargo xtask sweep` — one generation of build products in `target/`,
-//! and nothing else.
+//! and nothing else (internal-docs/反映前テストの機械化.md §世代の掃除;
+//! the cost in ci/baseline/code-costs-windows-x64.md §build directory の世代).
 //!
-//! cargo never takes away what it has replaced. A lock file, a toolchain
-//! or a profile setting that moves gives every unit a new hash, and the
-//! old artifact, its build-script directory and its incremental session
-//! all stay where they are, named by nothing, for as long as the tree
-//! lives (measured: ci/baseline/code-costs-windows-x64.md §sweep).
-//!
-//! **What is alive is asked of cargo, not of the clock.** A fresh build
+//! **What is alive is asked of cargo, not of the clock**: a fresh build
 //! does not touch `.fingerprint/*/invoked.timestamp`, so an age is no
-//! evidence at all: a dependency nothing has moved in a month is as live
-//! as one compiled this minute. So the live set is read off
-//! `--message-format=json` from a written-down list of cargo lines
-//! ([`CANONICAL`]) — every line a session or the gate is known to run
-//! here — which name every artifact and build-script directory they
-//! stand on, fresh units and compiled ones alike. A line off that list
-//! is not kept for: what it built is built again next time it is typed.
+//! evidence. The live set is read off `--message-format=json` from
+//! [`CANONICAL`], which names fresh units and compiled ones alike.
 //!
-//! **Run when the generation moves**, which is what actually leaves one
-//! behind: `rustc -vV`, `Cargo.lock`, the manifest's profile settings and
-//! the toolchain pin are hashed into one key ([`generation`]), each tree
-//! keeps the key its last sweep ran under, and the tail of a gate or a
-//! landing sweeps only when the two differ. A full gate sweeps whatever
-//! the key says, because stage 3 is where the tree is asked for
-//! everything anyway (CLAUDE.md 確認は 3 段).
+//! **Run when the generation moves** ([`generation`]): the tail of a gate
+//! or a landing sweeps only when the key differs from the one its tree's
+//! last sweep stamped. **What was written since the last sweep stays**,
+//! live set or not: taking away a configuration somebody used this week
+//! would be a rebuild every time.
 //!
-//! **What was written since the last sweep stays**, live set or not: a
-//! configuration somebody used this week is one they are using, and
-//! taking it away every time would be a rebuild every time.
-//!
-//! `target/hooks` is left alone — the pre-shell hook's own slot, in use
-//! at unpredictable moments (internal-docs/反映前テストの機械化.md
-//! §hook) — and so is everything under `target/` that is not cargo's:
-//! `perf`, `gate-runs`, `land-runs`, `window`, `qmltest`, `shots`,
-//! `footprint`, `gate-logs` and `doc` are kept on purpose or swept by
-//! whoever writes them.
+//! `target/hooks` ([`PROFILES`]) and everything under `target/` that is
+//! not cargo's are left alone.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::TryLockError;
@@ -68,9 +48,8 @@ pub(crate) static DRY: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
-/// What the tail of a gate or a landing runs **in the container**, where
-/// the volume it is looking at is a build directory with a rustc, a
-/// generation key and a stamp of its own ([`asks`]).
+/// What the tail of a gate or a landing runs in the container, against
+/// the volume's own rustc, generation key and stamp ([`asks`]).
 pub(crate) static IF_MOVED: command::Command = command::Command {
     id: "sweep.if-the-generation-moved",
     call: "sweep --if-the-generation-moved",
@@ -87,41 +66,33 @@ const ONLY_IF_MOVED: &str = "--if-the-generation-moved";
 
 pub(crate) static COMMANDS: &[&command::Command] = &[&SWEEP, &DRY, &IF_MOVED];
 
-/// The profile directories under `target/` this walks, in the order a
-/// reader meets them.
+/// The profile directories under `target/` this walks.
 ///
-/// `hooks` is not here on purpose: it is the pre-shell hook's slot, it
-/// is small, and `cargo test -p xtask --profile hooks` lands there too,
-/// so a sweep of it would be taking something out from under a hook that
-/// may run at any moment.
+/// `hooks` is not here on purpose: a hook may be building or running
+/// there at any moment (internal-docs/反映前テストの機械化.md
+/// §hook は自前の build directory で動く).
 const PROFILES: [&str; 3] = ["debug", "release", "shipped"];
 
-/// The feature set every build of the app this runner starts asks for
-/// (`crate::tree::HARNESS_FEATURE`), and the profile the shipped build
-/// lands in (Cargo.toml). Spelled here as the replay of those lines
-/// rather than read off them: what this reproduces is the command.
+/// The harness feature (`crate::tree::HARNESS_FEATURE`) and the shipped
+/// profile (Cargo.toml), spelled here rather than read off them: what
+/// this replays is the command line.
 const HARNESS: &str = "automation";
 const SHIPPED: &str = "shipped";
 
-/// Extensions rustc puts a `lib` in front of. A unit's files share one
-/// name but not one spelling — `libplatitude_core-<hash>.rlib` beside
-/// `platitude_core-<hash>.d` — so the prefix comes off exactly where
-/// rustc put it on, and nowhere else: `libc-<hash>.d` belongs to the
-/// crate `libc`, and stripping a prefix there would answer for a crate
-/// called `c`.
+/// Extensions rustc puts a `lib` in front of. The prefix comes off only
+/// there: `libc-<hash>.d` belongs to the crate `libc`, and stripping it
+/// would answer for a crate called `c`.
 const LIB_PREFIXED: [&str; 5] = ["rlib", "rmeta", "so", "dylib", "a"];
 
 /// How far an incremental session's directory may stand from the compile
-/// that wrote it ([`kept_incremental`]). Measured on this tree: rustc
-/// finalises the session within five seconds of the artifact, either
-/// way. Wider than the measurement on purpose — keeping a dead session
-/// costs disk, and taking a live one costs a compile that can reuse
-/// nothing.
+/// that wrote it ([`kept_incremental`]). Far wider than the measured gap
+/// (ci/baseline/code-costs-windows-x64.md §build directory の世代) on
+/// purpose: keeping a dead session costs disk, and taking a live one
+/// costs a compile that reuses nothing.
 const SAME_COMPILE: Duration = Duration::from_secs(60);
 
-/// How long one replayed cargo line may take: the same ceiling every
-/// other step of this runner gets, because a line this tree has not
-/// built is a compile like any other.
+/// A line this tree has not built is a compile like any other, so it
+/// gets every step's ceiling.
 const REPLAY_CEILING: Duration = crate::check::STEP_CEILING;
 
 /// Where a tree keeps the key its last sweep ran under, and when that
@@ -129,38 +100,25 @@ const REPLAY_CEILING: Duration = crate::check::STEP_CEILING;
 /// volume carries its own (its rustc is not this machine's).
 const STAMP: [&str; 2] = ["sweep", "generation.txt"];
 
-/// What a line's own answer is kept under, beside the stamp: the
-/// evidence for a reading that failed, and the one file a reader is sent
-/// to when it does.
+/// What a line's own answer is kept under, beside the stamp — the file a
+/// failed reading sends its reader to.
 const REPLAY: &str = "replay-";
 
-/// **The canonical set: every cargo line this tree is kept buildable
-/// for.** One list, in one place, and the sweep prints it as it reads —
-/// what is not here is not kept for, and is built again the next time
-/// somebody types it.
+/// One line of the canonical set: every cargo line this tree is kept
+/// buildable for. Besides the gate's own (`gate::plan`), it holds the
+/// shapes a session types by hand between gates — they resolve features
+/// differently from the gate's per-package lines, so they are units of
+/// their own, not a subset — and the runner's two builds of its own.
 ///
-/// Three kinds of line are in it. The gate's own, which is most of it
-/// (`gate::plan`). The shapes a session types by hand between gates —
-/// `cargo check` per crate while writing, the workspace-wide clippy and
-/// test, the app built without the harness — which resolve features
-/// differently from the gate's per-package lines and so are units of
-/// their own, not a subset. And the two builds the runner makes for
-/// itself: the task runner the gate's steps start from, and the release
-/// every verify-ui run drives.
-///
-/// `Line::host_only` keeps the container's volume out of the lines
-/// nothing in there ever runs. On a Windows or macOS host the container
-/// builds in a volume of its own, so a tree here is the host's alone and
-/// a run inside the container is that volume's alone; a Linux host
-/// builds both sides in the one directory and every line is its.
+/// On a Windows or macOS host the container builds in a volume of its
+/// own; a Linux host builds both sides in the one directory, and every
+/// line is its.
 struct Line {
     /// Not read inside the gate's container: a line in there that this
     /// tree has never built is a compile of the whole of it, for a
     /// shape nobody types there (`linux`).
     host_only: bool,
-    /// The profile directory it fills, which is also the answer to
-    /// whether it may be replayed at all: one that is not there yet
-    /// would be built by the asking.
+    /// The profile directory it fills ([`lines`]).
     profile: &'static str,
     /// The words after `cargo`, with `{package}` standing for each
     /// package in turn.
@@ -174,7 +132,7 @@ fn every_package(_: &str) -> bool {
     true
 }
 
-/// For a line with no `{package}` in it — it names whatever it names.
+/// For a line with no `{package}` in it.
 fn no_package(_: &str) -> bool {
     false
 }
@@ -186,22 +144,16 @@ fn the_runner(package: &str) -> bool {
 }
 
 /// **A bin cargo writes without a hash is one file, however many lines
-/// build it.** The bin of a workspace member is uplifted, so cargo gives
-/// rustc no `extra-filename` for it and every configuration of it lands
-/// on `deps/platitude_gg.exe`, `deps/pgg_todo_editor.exe`,
-/// `deps/xtask.exe` — one name each. Two lines here that resolve
-/// features differently therefore relink that one file past each other,
-/// once per listing apiece, and the tree is left holding whichever ran
-/// last. So **the line whose configuration this runner's own tools read
-/// stands last of the lines that write the bin**: the per-package test
-/// lines, which is how the gate runs them (`gate::plan`), after the
-/// workspace one; `build -p xtask` last of all in `debug`; and the
-/// harness release, which is what verify-ui and every window drive
-/// (`tree::app_exe`), alone in `release`.
+/// build it**: a workspace member's bin is uplifted, so every
+/// configuration of it lands on one name under `deps/`, and lines that
+/// resolve features differently relink it past each other, leaving
+/// whichever ran last. So the line whose configuration this runner's own
+/// tools read stands last of the lines that write the bin: the
+/// per-package test lines after the workspace one, `build -p xtask` last
+/// in `debug`, and the harness release alone in `release`.
 const CANONICAL: &[Line] = &[
-    // What a session runs while writing, crate by crate. Out here only:
-    // nothing types a bare `check` into the container, and a line in
-    // there that has never been built is a compile of the whole of it.
+    // What a session runs while writing, crate by crate. Nothing types a
+    // bare `check` into the container.
     Line {
         host_only: true,
         profile: "debug",
@@ -237,10 +189,9 @@ const CANONICAL: &[Line] = &[
         ],
         packages: every_package,
     },
-    // `cargo xtask linux clippy -p xtask`, which a session runs in the
-    // container ahead of the gate (internal-docs/反映前テストの機械化.md):
-    // neither `--all-targets` nor `--all-features`, so its units are not
-    // the line above's.
+    // `cargo xtask linux clippy -p xtask`, which a session runs ahead of
+    // the gate: without `--all-targets` / `--all-features`, so its units
+    // are not the line above's.
     Line {
         host_only: false,
         profile: "debug",
@@ -267,22 +218,18 @@ const CANONICAL: &[Line] = &[
         words: &["test", "--locked", "--workspace", "--no-run"],
         packages: no_package,
     },
-    // The gate's unit and integration tests. `--no-run` is the whole
-    // difference from the gate's line: which tests run is a filter, and
-    // filters never decide which units are built. Behind the workspace
-    // line, because the bin a package's integration tests are handed is
-    // these lines' to leave behind (`pgg-todo-editor`).
+    // The gate's tests, `--no-run`: which tests run is a filter, and
+    // filters decide no units. After the workspace line, so the bin a
+    // package's integration tests are handed is these lines'
+    // (`pgg-todo-editor`).
     Line {
         host_only: false,
         profile: "debug",
         words: &["test", "--locked", "-p", "{package}", "--no-run"],
         packages: tested_here,
     },
-    // The task runner the gate's steps start from (`gate::runner`), and
-    // the one a session builds to run any verb at all. No `cargo test`
-    // line covers it: a bin built for tests is a unit of its own, and
-    // the plain one a test line builds alongside it is this line's to
-    // leave behind.
+    // The task runner the gate's steps start from (`gate::runner`). No
+    // test line covers it: a bin built for tests is a unit of its own.
     Line {
         host_only: false,
         profile: "debug",
@@ -290,11 +237,8 @@ const CANONICAL: &[Line] = &[
         packages: no_package,
     },
     // The release every verify-ui run and every window drives
-    // (`tree::app_exe`), which `bare` then reads out of the volume. The
-    // only line in this profile: `cargo build --release` without the
-    // harness writes the same bin under the same name, and what a
-    // session builds the product with is `shipped` (CLAUDE.md
-    // ビルド・テスト).
+    // (`tree::app_exe`). Alone in this profile: a release without the
+    // harness would write the same bin, and the product is `shipped`.
     Line {
         host_only: false,
         profile: "release",
@@ -311,10 +255,8 @@ const CANONICAL: &[Line] = &[
     },
 ];
 
-/// Whether this side's tests are built for `package`. The container
-/// builds the two packages that hold code behind `cfg(not(windows))`,
-/// and not the app, which the gate does not test there either
-/// (`gate::tested_on_linux`).
+/// Whether this side's tests are built for `package` — in the container,
+/// only what the gate tests there (`gate::tested_on_linux`).
 fn tested_here(package: &str) -> bool {
     on_the_host() || crate::gate::tested_on_linux(package)
 }
@@ -349,11 +291,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     match told {
         Told::Now => sweep(&root, false),
         Told::DryRun => sweep(&root, true),
-        // The tail's half, run against the build directory this process
-        // is in — which out here is a seat's `target/` and in the
-        // container is the mounted volume. Never a verdict: it is
-        // called by a gate or a landing that has already answered
-        // ([`at_a_tail`]).
+        // The tail's half, against the build directory this process is
+        // in. Never a verdict ([`at_a_tail`]).
         Told::IfTheGenerationMoved => {
             here(&root, false);
             Ok(())
@@ -361,7 +300,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// What the verb was told to do.
 enum Told {
     Now,
     DryRun,
@@ -370,22 +308,20 @@ enum Told {
 
 /// What the tail of a gate or a landing hands the sweep.
 pub(crate) struct Tail {
-    /// Sweep whatever the generation key says — on both sides, each
-    /// against its own. Stage 3 has asked the tree for everything
-    /// already, so the reading costs it nothing it was not going to pay.
+    /// Sweep whatever the generation key says — on both sides. Stage 3
+    /// has asked the tree for everything already, so the reading costs it
+    /// nothing it was not going to pay.
     pub whatever_the_key_says: bool,
-    /// The container's build volume is this run's to ask as well.
-    /// **False for a tier that started no container**: the daily one
-    /// promises not to, and a sweep is no reason to break that
-    /// (CLAUDE.md 確認は 3 段). The volume then waits for the next run
-    /// that has a Linux side.
+    /// The container's build volume is this run's to ask as well. False
+    /// for a tier that started no container: the daily one promises not
+    /// to (CLAUDE.md「確認は 3 段」), and the volume waits for the next
+    /// run that has a Linux side.
     pub the_volume_too: bool,
 }
 
 impl Tail {
-    /// A landing's: it rebased onto whatever main brought and gated both
-    /// sides, so the volume is its to sweep — and the key decides, as it
-    /// does for every tier but the full one.
+    /// A landing's: it gated both sides, so the volume is its to sweep,
+    /// and the key decides.
     pub(crate) fn after_a_landing() -> Self {
         Self {
             whatever_the_key_says: false,
@@ -394,19 +330,14 @@ impl Tail {
     }
 }
 
-/// The sweep a passing gate or landing ends with — **two build
-/// directories, and each one's own key answers for it** ([`asks`]).
+/// The sweep a passing gate or landing ends with — two build directories,
+/// each answered by its own key ([`asks`]). The key, not stage 3 alone,
+/// is what sets it off: a generation is left behind by every `Cargo.lock`
+/// that lands, far more often than the full tier runs.
 ///
-/// **The key is what makes it happen at all.** A seat runs the full tier
-/// a handful of times a month while a generation is left behind by every
-/// `Cargo.lock` that lands — five of them in three weeks, measured — so
-/// a sweep hung on stage 3 alone would run long after the disk was gone.
-///
-/// Never a failure of the gate or the landing that calls it: the tests
-/// have answered, and a sweep that could not read the tree is a sweep,
-/// not a verdict. That holds per side as well — a tree out here that
-/// could not be read says nothing about the volume, so the volume is
-/// asked either way.
+/// Never a failure of its caller — the tests have answered — and per side
+/// as well: a tree out here that could not be read says nothing about the
+/// volume, so the volume is asked either way.
 pub(crate) fn at_a_tail(dir: &Path, tail: &Tail) {
     here(dir, tail.whatever_the_key_says);
     let Some(whatever_the_key_says) = asks(tail) else {
@@ -420,19 +351,10 @@ pub(crate) fn at_a_tail(dir: &Path, tail: &Tail) {
 /// On what terms a tail asks the container's build volume, or `None`
 /// for a tier that started no container.
 ///
-/// **Never on this tree's key.** The volume is a build directory of its
-/// own — its own rustc, its own generation key, its own stamp inside it
-/// — and the verb that runs in there is what reads them ([`IF_MOVED`]).
-/// A tail that let this tree's key answer for both would skip the
-/// container every time something out here had already swept, which is
-/// most days: `gate --host-only` and a hand-typed `cargo xtask sweep`
-/// both write this tree's stamp and start nothing. Measured while that
-/// was the rule: a volume of 10.9GB with no stamp in it at all, beside a
-/// tree out here swept twice
-/// (internal-docs/反映前テストの機械化.md §世代の掃除).
-///
-/// The start costs seconds against an image already built, so it is one
-/// per tail whatever the answer turns out to be in there.
+/// **Never on this tree's key**: the volume has its own rustc, key and
+/// stamp, read in there by [`IF_MOVED`]. Let this tree's key answer for
+/// both and the container is skipped whenever `gate --host-only` or a
+/// hand-typed sweep stamped this tree first — most days.
 fn asks(tail: &Tail) -> Option<bool> {
     tail.the_volume_too.then_some(tail.whatever_the_key_says)
 }
@@ -446,9 +368,8 @@ fn here(dir: &Path, whatever_the_key_says: bool) {
             println!("sweep: generation unchanged ({key}) — nothing to take away");
             return;
         }
-        // Said before the reading, because the reading is where the
-        // minutes are: a line this tree has never built is compiled
-        // here, once.
+        // Said before the reading, which compiles whatever this tree has
+        // never built.
         Ok(key) => println!(
             "sweep: generation {} — reading the canonical lines",
             match &was {
@@ -490,10 +411,8 @@ fn sweep(root: &Path, dry_run: bool) -> Result<(), String> {
         let Some(alive) = live.get(profile) else {
             continue;
         };
-        // A profile whose lines named nothing is a profile whose lines
-        // did not run, and an empty live set reads as "all of it is
-        // dead". Every road here is guarded by this: the sweep is the
-        // one command whose failure mode is deleting a whole build.
+        // An empty live set reads as "all of it is dead" — the one
+        // failure that deletes a whole build.
         if alive.deps.is_empty() && alive.build.is_empty() {
             println!(
                 "  {profile}: left alone — the canonical lines named nothing there, so nothing \
@@ -517,10 +436,9 @@ fn sweep(root: &Path, dry_run: bool) -> Result<(), String> {
         size(freed),
         if dry_run { "would go" } else { "freed" }
     );
-    // **The stamp says every profile was read**, so a run that skipped
-    // one — cargo was building in it, or its lines named nothing — is
-    // one the next tail does again. A stamp written over a partial sweep
-    // would hold the generation closed until the next lock file moved.
+    // The stamp says every profile was read: written over a partial
+    // sweep, it would hold the generation closed until the next lock file
+    // moved.
     if !dry_run && all_walked {
         stamp(root)?;
     }
@@ -544,8 +462,7 @@ fn live(root: &Path) -> Result<(BTreeMap<String, Alive>, usize), String> {
     let said = root.join("target").join(STAMP[0]);
     std::fs::create_dir_all(&said).map_err(|e| format!("{}: {e}", said.display()))?;
     // The logs are named by the line's place in the list, so a list that
-    // has since grown shorter would leave the last run's answers beside
-    // this one's under names this run never wrote.
+    // has since grown shorter would leave the last run's beside this one's.
     for stale in read_dir(&said)? {
         if stale.file_name().to_string_lossy().starts_with(REPLAY) {
             let _ = std::fs::remove_file(stale.path());
@@ -591,9 +508,8 @@ fn live(root: &Path) -> Result<(BTreeMap<String, Alive>, usize), String> {
 
 /// [`CANONICAL`] as this side's lines over this tree's packages.
 ///
-/// A profile directory that is not there is skipped: its line would
-/// build the whole of it, and a sweep that builds something in order to
-/// find out what to keep has kept the wrong thing.
+/// A profile directory that is not there is skipped: its line would build
+/// the whole of it, only to find out what to keep.
 fn lines(root: &Path) -> Result<Vec<Vec<String>>, String> {
     let packages = packages(root)?;
     let mut lines: Vec<Vec<String>> = Vec::new();
@@ -624,9 +540,8 @@ fn lines(root: &Path) -> Result<Vec<Vec<String>>, String> {
 }
 
 /// The workspace's packages, by the directory each stands in — the same
-/// reading the gate's graph does (`gate::graph::build`), and the same
-/// answer, because this workspace names every package after its
-/// directory.
+/// reading as `gate::graph::build`, which holds because this workspace
+/// names every package after its directory.
 fn packages(root: &Path) -> Result<Vec<String>, String> {
     let crates = root.join("crates");
     let mut packages: Vec<String> = std::fs::read_dir(&crates)
@@ -642,11 +557,9 @@ fn packages(root: &Path) -> Result<Vec<String>, String> {
 /// Folds one line's messages into the live set, and answers how many of
 /// its units cargo had to compile.
 ///
-/// Two message kinds carry a path: `compiler-artifact`, whose
-/// `filenames` name what rustc wrote, and `build-script-executed`, whose
-/// `out_dir` names the directory a build script's run filled. Both are
-/// emitted for units cargo found fresh, which is what makes reading a
-/// built tree cost nothing.
+/// Two message kinds carry a path: `compiler-artifact` (`filenames`) and
+/// `build-script-executed` (`out_dir`). Both are emitted for units cargo
+/// found fresh, which is what makes reading a built tree cost nothing.
 fn read_artifacts(root: &Path, text: &str, live: &mut BTreeMap<String, Alive>) -> usize {
     let mut compiled = 0;
     for line in text.lines() {
@@ -689,14 +602,11 @@ fn note(root: &Path, path: &str, live: &mut BTreeMap<String, Alive>) {
         ("deps", Some(name)) => {
             alive.deps.insert(unit_key(name));
         }
-        // A lib or a bin cargo lifted to the profile's own directory.
-        // Its twin under `deps/` carries the same key and no hash at
-        // all, so the uplifted name answers for it — **under both
-        // spellings**: a bin target named with a dash stands in `deps/`
-        // as the dashed name and as the crate name rustc built it under
-        // (`pgg-todo-editor.exe` beside `pgg_todo_editor.exe`), and on a
-        // system with no separate debug file only one of the two is ever
-        // reported.
+        // A lib or a bin cargo lifted to the profile's own directory,
+        // which answers for its unhashed twin under `deps/` — under both
+        // spellings: a dashed bin stands there dashed and as its crate
+        // name (`pgg-todo-editor.exe` beside `pgg_todo_editor.exe`), and
+        // with no separate debug file only one of the two is reported.
         (name, None) => {
             let key = unit_key(name);
             alive.deps.insert(key.replace('-', "_"));
@@ -710,11 +620,9 @@ fn note(root: &Path, path: &str, live: &mut BTreeMap<String, Alive>) {
 /// extension off and, where rustc put one on, its `lib` prefix
 /// ([`LIB_PREFIXED`]).
 ///
-/// The last extension only, so a linker's byproduct beside a
-/// proc-macro's library — `cxxbridge_macro-<hash>.dll.lib` — keys under
-/// `…dll` rather than under the unit. That is not a hole: cargo names
-/// those files itself in the unit's `filenames`, so the key they make is
-/// one the live set holds.
+/// The last extension only, so `cxxbridge_macro-<hash>.dll.lib` keys
+/// under `…dll`. Not a hole: cargo names such files in the unit's
+/// `filenames`, so the live set holds that key too.
 fn unit_key(file_name: &str) -> String {
     match file_name.rsplit_once('.') {
         Some((stem, extension)) if LIB_PREFIXED.contains(&extension) => {
@@ -744,11 +652,9 @@ fn is_hash(text: &str) -> bool {
 /// Walks one profile directory, taking away what neither the live set
 /// nor `floor` speaks for, and answers the bytes that went.
 ///
-/// `.fingerprint/` is left alone whatever it holds: an entry there is
-/// kilobytes, and the one road to reading it would be to name its
-/// directories off the live set — which a bin cargo writes unhashed
-/// cannot be, so the sweep would take away the bookkeeping of a unit
-/// that is standing.
+/// `.fingerprint/` is left alone: an entry there is kilobytes, and its
+/// directories cannot be named off the live set for an unhashed bin, so
+/// a standing unit would lose its bookkeeping.
 fn sweep_profile(
     dir: &Path,
     profile: &str,
@@ -804,18 +710,13 @@ struct Swept {
 
 /// The incremental sessions, which no cargo message names.
 ///
-/// **They are dated by the compile that wrote them.** rustc finalises a
+/// **They are dated by the compile that wrote them**: rustc finalises a
 /// unit's session in the same run that writes the unit's artifact, so a
 /// session belongs to a live unit exactly when a live file of the same
-/// crate carries the same moment ([`SAME_COMPILE`]). A session whose
-/// crate has moved on — a feature set, a lock file, a toolchain — stands
-/// alone at a moment nothing live shares, which is what makes it
-/// readable at all. Taking a live one costs one compile that starts from
-/// nothing; leaving a dead one costs the disk it is on, so the reading
-/// is deliberately generous.
+/// crate carries the same moment ([`SAME_COMPILE`]).
 ///
-/// A `-working` session is rustc's own interrupted one — a compile that
-/// was killed — and is dead whatever its date.
+/// A `-working` session is a killed compile's, and dead whatever its
+/// date.
 fn sweep_incremental(
     dir: &Path,
     alive: &Alive,
@@ -848,16 +749,14 @@ fn sweep_incremental(
 /// crate's live compiles does.
 fn kept_incremental(name: &str, path: &Path, compiles: &BTreeMap<String, Vec<SystemTime>>) -> bool {
     let Some((krate, _)) = name.rsplit_once('-') else {
-        // Not a name rustc wrote. Left alone: what this reads is the
-        // shape rustc puts there, and anything else is somebody's.
+        // Not a name rustc wrote: somebody's, left alone.
         return true;
     };
     let Some(times) = compiles.get(krate) else {
         return false;
     };
     let Some(written) = written_at(path) else {
-        // A date nobody can read is no grounds for deleting
-        // (`verify::ownership::sweep_older_than` says the same).
+        // A date nobody can read is no grounds for deleting.
         return true;
     };
     times.iter().any(|at| apart(*at, written) <= SAME_COMPILE)
@@ -888,9 +787,8 @@ fn compiles_of(dir: &Path, alive: &Alive) -> BTreeMap<String, Vec<SystemTime>> {
         {
             continue;
         }
-        // The compiled build script, which is the only half of a build
-        // directory rustc wrote — a run's `out/` is the script's own
-        // output and carries no incremental session of its own.
+        // The compiled build script is the only half of a build directory
+        // rustc wrote; a run's `out/` carries no incremental session.
         for file in read_dir(&entry.path()).unwrap_or_default() {
             let stem = unit_key(&file.file_name().to_string_lossy()).replace('-', "_");
             if let Some(at) = written_at(&file.path())
@@ -914,17 +812,10 @@ fn since(path: &Path, floor: Option<SystemTime>) -> bool {
     }
 }
 
-/// When `path` was written.
-///
-/// **For a directory that is the newest file inside it, not the
-/// directory's own date.** A directory's date moves when an entry is
-/// added or taken away — including by this very sweep, which takes
-/// rustc's interrupted sessions out of the ones it keeps, and which
-/// would then read every directory it had ever touched as live. The
-/// files inside carry the compile that wrote them and nothing else.
-/// Measured on this tree: over forty incremental directories, the newest
-/// file two levels in is the directory's own date to the second, one
-/// directory excepted and that one by a second.
+/// When `path` was written — **for a directory, the newest file inside
+/// it**: a directory's own date moves when this very sweep takes a
+/// `-working` session out of it, and every directory it had touched would
+/// read as live.
 fn written_at(path: &Path) -> Option<SystemTime> {
     let own = std::fs::metadata(path).ok()?;
     if !own.is_dir() {
@@ -973,12 +864,9 @@ fn read_dir(dir: &Path) -> Result<Vec<std::fs::DirEntry>, String> {
     Ok(entries)
 }
 
-/// What went, said as it goes.
-///
-/// **Every removal is printed.** A command that quietly frees gigabytes
-/// is one nobody can audit, which is the rule `linux::forget_older_images`
-/// already stands on; and what will not go is printed too, because on
-/// Windows that means something is standing on it.
+/// What went, said as it goes: every removal is printed so the sweep can
+/// be audited, and so is what will not go — on Windows, something is
+/// standing on it.
 struct Gone {
     profile: String,
     dry_run: bool,
@@ -1075,14 +963,10 @@ fn size(bytes: u64) -> String {
     format!("{left:.1}{unit}")
 }
 
-/// The cargo build lock of `dir`, held for as long as the sweep walks
-/// it — or why it could not be taken.
-///
-/// cargo holds these for the length of a build, so this is the one
-/// question that has to be asked before anything is removed: a unit
-/// being linked right now is live, whatever a reading taken before it
-/// said. Every lock file cargo keeps there is taken, because which of
-/// them a build holds is cargo's business and not this file's.
+/// The cargo build locks of `dir`, held for as long as the sweep walks
+/// it — or why they could not be taken: a unit being linked right now is
+/// live, whatever the reading said. Every lock file cargo keeps there is
+/// taken, because which of them a build holds is cargo's business.
 fn cargo_is_out_of(dir: &Path) -> Result<Vec<crate::locks::Locked>, String> {
     let mut held = Vec::new();
     for entry in read_dir(dir)? {
@@ -1108,13 +992,10 @@ fn cargo_is_out_of(dir: &Path) -> Result<Vec<crate::locks::Locked>, String> {
 // ---- the generation ---------------------------------------------------
 
 /// The key a build directory's whole contents hang on: the compiler, the
-/// resolved dependency graph, the profile settings every unit is
-/// compiled under, and the toolchain the tree pins. Move any of them and
-/// cargo gives every unit a new hash, which is exactly the event that
-/// leaves a generation behind.
+/// resolved dependency graph, the profile settings and the toolchain pin.
+/// Move any of them and cargo gives every unit a new hash.
 ///
-/// FNV-1a, as `linux::image_tag` fingerprints an image: a name, not a
-/// digest to defend anything with.
+/// FNV-1a: a name, not a digest to defend anything with.
 fn generation(root: &Path) -> Result<String, String> {
     let rustc = crate::subprocess::run_captured(std::process::Command::new("rustc").arg("-vV"))?;
     if !rustc.status.success() {
@@ -1140,9 +1021,8 @@ fn generation(root: &Path) -> Result<String, String> {
 }
 
 /// Every `[profile…]` section of a manifest, in the order it stands. The
-/// rest of the file moves with the lock — a dependency added is a
-/// dependency resolved — but a profile setting moves nothing else and
-/// rehashes everything (Cargo.toml: `[profile.dev.package.xtask]`).
+/// rest of the file moves with the lock, but a profile setting moves
+/// nothing else and rehashes everything.
 fn profiles_in(manifest: &str) -> String {
     let mut kept = String::new();
     let mut inside = false;
@@ -1200,11 +1080,8 @@ fn ago(at: SystemTime) -> String {
 
 // ---- the small JSON reading this needs -------------------------------
 //
-// cargo's messages are one object a line, and what is wanted of them is
-// two fields' worth of paths. A reader for those two is a dozen lines
-// and carries no dependency (CLAUDE.md 技術スタック: xtask is std
-// alone); a parser for the whole of JSON would be a page of code for
-// fields nothing here reads.
+// Two fields' worth of paths out of one object a line; xtask is std
+// alone (CLAUDE.md §技術スタック).
 
 /// The strings of the array that follows `key` in `line`.
 fn strings_after(line: &str, key: &str) -> Vec<String> {
@@ -1234,9 +1111,8 @@ fn string_after(line: &str, key: &str) -> Option<String> {
 }
 
 /// The string literal `text` opens (past its quote), and what follows
-/// it. Only the escapes cargo writes into a path are read back —
-/// anything else is a byte of the path, which is what a name carrying a
-/// backslash wants anyway.
+/// it. Only the escapes cargo writes into a path are read back; anything
+/// else is a character of the path.
 fn json_string(text: &str) -> (String, &str) {
     let mut out = String::new();
     let mut chars = text.char_indices();

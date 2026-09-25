@@ -1,25 +1,15 @@
 //! `cargo xtask footprint <command…>` — what the machine is holding
 //! while something runs, on one time axis.
 //!
-//! **Why a verb and not a script.** The question it exists for is "does
-//! repeating a gate make the VM grow", and that question cannot be
-//! answered from one side: `vmmemWSL`'s working set is what Windows has
-//! lost, `/proc/meminfo` inside the distro is what Linux thinks it is
-//! using, and neither is the other. Memory is not namespaced, so the
-//! distro's own `/proc/meminfo` is the whole VM, containers included —
-//! which is why a sum over `docker stats` is not a substitute.
+//! Both sides are read, because neither answers for the other:
+//! `vmmemWSL`'s working set is what Windows has lost, the distro's
+//! `/proc/meminfo` what Linux thinks the whole VM uses — memory is not
+//! namespaced, so a sum over `docker stats` is no substitute.
 //!
-//! **It owns what it starts.** Two long-lived children do the sampling,
-//! one per side, and both are killed when the command ends; a sample
-//! taken by starting a process per tick would cost more than it reads.
-//! What they write is kept under `target/footprint/<run>/` and swept by
-//! nothing — the raw rows are the evidence, and a summary that replaced
-//! them could not be checked.
-//!
-//! **`MemFree` is not the reading to judge by.** It is free pages only;
-//! a VM whose cache has grown looks alarming in it and is not. The
-//! column that says whether memory is actually gone is `MemAvailable`,
-//! and `Cached` / `SReclaimable` / `AnonPages` say which kind grew.
+//! Long-lived children sample and are killed when the command ends; a
+//! process per tick would cost more than it reads. Their rows are kept
+//! under `target/footprint/<run>/` and swept by nothing — they are the
+//! evidence the summary is checked against.
 
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -38,22 +28,17 @@ pub(crate) static FOOTPRINT: command::Command = command::Command {
 
 pub(crate) static COMMANDS: &[&command::Command] = &[&FOOTPRINT];
 
-/// How often each side reports. Two seconds is short against a gate's
-/// minutes and long against the cost of a line.
+/// Short against a gate's minutes, long against the cost of a line.
 const EVERY: Duration = Duration::from_secs(2);
 
-/// The distro the containers run in. Its `/proc/meminfo` is the VM's.
+/// The distro the containers run in.
 const DISTRO: &str = "docker-desktop";
 
-/// How long the samplers stay up after the command ends. Long enough
-/// for a VM that means to hand memory back to have started
-/// (`autoMemoryReclaim` moves in tens of seconds), short enough that
-/// three runs back to back still read as three runs.
+/// How long the samplers stay up after the command ends: long enough for
+/// `autoMemoryReclaim` (tens of seconds) to have started handing memory
+/// back, short enough that runs back to back still read apart.
 const SETTLE: Duration = Duration::from_secs(60);
 
-/// How long the samplers stay up after the command, and what is left to
-/// run. `--settle <seconds>` buys a longer window when the question is
-/// about what happens *after* the work rather than during it.
 fn settle_for(args: &[String]) -> Result<(Duration, Vec<String>), String> {
     let Some(at) = args.iter().position(|a| a == "--settle") else {
         return Ok((SETTLE, args.to_vec()));
@@ -87,20 +72,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     docker_listing(&kept, "docker-before.txt");
     let mut watching = Watching::start(&kept)?;
-    // When the command ran and when the window closed, in the seconds
-    // the docker events carry, so a reader can cut every file at the
-    // command's end and read the run apart from the window after it.
+    // In the seconds the docker events carry, so every file can be cut at
+    // the command's end.
     let mut timeline = format!("started {}\n", crate::note::now_secs());
-    // The command as the person typed it, through this runner so the
-    // line reads the same as it would alone.
+    // Through this runner, so the line reads as it would alone.
     let exe = std::env::current_exe().map_err(|e| format!("this runner's own path: {e}"))?;
     let outcome = Command::new(exe).args(args).status();
     timeline.push_str(&format!("ended {}\n", crate::note::now_secs()));
-    // The reading the question needs is what is *still* held once the
-    // work is over, and that is not the last tick of the run: a VM
-    // hands pages back to Windows on its own schedule. So the samplers
-    // stay up for a window after the command, and `after` in the
-    // summary is the end of that window.
+    // The summary's last reading is the end of this window: what is still
+    // held after the work ([`SETTLE`]).
     //
     // waits(measured): the length of the window. Nothing is waiting on
     // it — it is part of what is being recorded — and the rows it
@@ -119,12 +99,12 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// The two samplers, held for as long as the command runs.
+/// The samplers, held for as long as the command runs.
 struct Watching {
     children: Vec<Child>,
 }
 
-/// One sampler, not yet started. What [`Watching::gather`] is handed.
+/// One sampler, not yet started.
 type Starter = Box<dyn FnOnce() -> Result<Child, String>>;
 
 impl Watching {
@@ -139,28 +119,22 @@ impl Watching {
         ])
     }
 
-    /// **A child joins the watch the moment it exists.** Both loops are
-    /// endless, and the only thing that ends them is this watch being
-    /// dropped — so a start that fails half way has to fail with the
-    /// earlier children already inside it. Building the list first and
-    /// the watch afterwards leaves them running with nothing on the
-    /// machine knowing whose they are, which is the shape of every
-    /// sampler that outlived its measurement.
+    /// A child joins the watch the moment it exists: the samplers are
+    /// endless and only dropping the watch ends them, so a start that
+    /// fails half way must fail with the earlier children already inside.
+    /// Building the list first leaves them running, owned by nobody.
     fn gather(starts: Vec<Starter>) -> Result<Self, String> {
         let mut watching = Self {
             children: Vec::new(),
         };
         for start in starts {
-            // The `?` leaves a function that owns the watch, so what it
-            // has collected so far is dropped — and killed — on the way
-            // out.
             watching.children.push(start()?);
         }
         Ok(watching)
     }
 
-    /// **Killed, not waited for**: both loops are endless by
-    /// construction, so the only way they end is this one.
+    /// Killed, not waited for: the samplers are endless, so this is the
+    /// only way they end.
     fn stop(&mut self) {
         for child in &mut self.children {
             let _ = child.kill();
@@ -177,13 +151,9 @@ impl Drop for Watching {
 
 /// The Win32 the host sampler reads its numbers from.
 ///
-/// **WMI is not on this road.** A loop around
-/// `Get-CimInstance Win32_OperatingSystem` wedged at its fifth reading
-/// of a gate and wrote nothing for the remaining six minutes, while the
-/// process itself stayed alive (measured 2026-09-19, seat a) — a
-/// sampler that stops sampling under exactly the load it exists to
-/// watch. `GlobalMemoryStatusEx` answers the same two numbers from the
-/// kernel with no service in between.
+/// Not WMI: a `Get-CimInstance Win32_OperatingSystem` loop wedges under a
+/// gate's load while its process stays alive. `GlobalMemoryStatusEx`
+/// answers the same numbers from the kernel with no service in between.
 const MEM_CLASS: &str = "using System;\n\
      using System.Runtime.InteropServices;\n\
      public static class FootMem {\n\
@@ -208,14 +178,11 @@ const MEM_CLASS: &str = "using System;\n\
 /// run's own processes or the VM behind them.
 const OURS: &str = "platitude-gg,cargo,rustc,xtask,git,link,docker";
 
-/// What Windows has lost: the physical memory it can still hand out,
-/// what is committed, the working set of the VM itself, and the run's
-/// own processes beside them.
+/// What Windows has lost, one CSV row a tick.
 ///
-/// **Nothing in the loop may block.** Every reading is a kernel call or
-/// a refresh of a handle taken once, each tick stands in its own
-/// `try`, and a tick that throws is skipped rather than ending the
-/// watch — the sampler outlives what it is sampling or it is worthless.
+/// Nothing in the loop may block: every reading is a kernel call or a
+/// refresh of a handle taken once, and a tick that throws is skipped
+/// rather than ending the watch.
 fn host_side(to: &Path) -> Result<Child, String> {
     // waits(measured): the gap between two readings. It is the sampling
     // rate, nothing waits on it, and what ends the loop is the command
@@ -255,29 +222,17 @@ fn host_side(to: &Path) -> Result<Child, String> {
         .map_err(|e| format!("could not start the host sampler: {e}"))
 }
 
-/// What the VM thinks it is using, one block per tick: `/proc/meminfo`,
-/// what is running, whether anything stalled on memory or was killed
-/// for it, and what each container's cgroup holds.
+/// What the VM thinks it is using, one block per tick.
 ///
-/// **One line, and nothing in it to quote.** `wsl.exe` re-splits the
-/// command it is handed, so a script with newlines in it arrives cut
-/// off at the first one (measured: the sampler wrote nothing at all),
-/// and one with nested quotes arrives in pieces. So the shell does no
-/// picking: the whole file goes down raw, and [`summarise`] takes the
-/// keys out on this side, where the parsing can be read.
+/// One line, and nothing in it to quote: `wsl.exe` re-splits the command,
+/// so a newline cuts the script off and nested quotes arrive in pieces.
+/// So the shell picks nothing; [`summarise`] takes the keys out here.
 fn vm_side(to: &Path) -> Result<Child, String> {
     let pause = format!("sleep {}", EVERY.as_secs());
-    // `memory.peak` is each container's own high-water mark, which a
-    // sample every two seconds would otherwise miss, and `pids.current`
-    // says how many processes stood behind it.
+    // `memory.peak` catches the high-water mark between ticks.
     let cgroups = "/sys/fs/cgroup/docker/*/memory.current \
                    /sys/fs/cgroup/docker/*/memory.peak \
                    /sys/fs/cgroup/docker/*/pids.current";
-    // **Who is reading, by name, every tick.** "the VM grew" does not
-    // say whose bytes those were, and a sum over `docker stats` cannot
-    // answer it either — the reader that mattered turned out to have no
-    // container at all. `read_bytes` is per process and monotonic, so
-    // two ticks give a rate and the whole file gives a start and an end.
     let readers = "grep -H . /proc/[0-9]*/comm 2>/dev/null; \
                    grep -H read_bytes /proc/[0-9]*/io 2>/dev/null";
     let script = format!(
@@ -298,12 +253,10 @@ fn vm_side(to: &Path) -> Result<Child, String> {
         .map_err(|e| format!("could not start the VM sampler: {e}"))
 }
 
-/// What docker did while this ran, one line an event: the time in
-/// seconds, the kind, the action and the container's name. **The count
-/// of containers made and torn down is read off this**, not off the
-/// cgroup samples: a container that lived for less than a tick is in
-/// here and in no sample, and `docker events --since` cannot be asked
-/// afterwards for more than the daemon's short memory of them.
+/// What docker did while this ran, one line an event. Containers made
+/// and torn down are counted off this, not the cgroup samples: one that
+/// lived less than a tick is in no sample, and `docker events --since`
+/// remembers too little to ask afterwards.
 fn docker_side(to: &Path) -> Result<Child, String> {
     let out = std::fs::File::create(to).map_err(|e| format!("{}: {e}", to.display()))?;
     Command::new("docker")
@@ -337,12 +290,10 @@ fn docker_listing(kept: &Path, name: &str) {
     let _ = std::fs::write(kept.join(name), out.stdout);
 }
 
-/// What the VM's columns are worth reading. `MemAvailable` is the one
-/// that says whether memory is gone; the others say which kind grew,
-/// and `MemFree` is here only so that a reading that looks alarming in
-/// it can be seen not to be. `Percpu` and `SUnreclaim` are the two that
-/// move with cgroups made and torn down — a container's own cost to the
-/// kernel, apart from any cache it filled.
+/// The VM's columns worth reading. Judge by `MemAvailable`; `MemFree`
+/// (free pages only, alarming whenever the cache grew) is here only to
+/// show it is not; the rest say which kind grew. `Percpu` and `SUnreclaim`
+/// move with cgroups made and torn down — a container's own kernel cost.
 const VM_KEYS: [&str; 10] = [
     "MemAvailable",
     "MemFree",
@@ -356,9 +307,7 @@ const VM_KEYS: [&str; 10] = [
     "SwapFree",
 ];
 
-/// First, extreme, and last for every column, out of both files. The
-/// rows stay where they are: this is a reading of them, not a
-/// replacement for them.
+/// First, extremes and last for every column, out of both files.
 fn summarise(kept: &Path) {
     let host = std::fs::read_to_string(kept.join("host.csv")).unwrap_or_default();
     let mut columns: Vec<(String, Vec<i64>)> = Vec::new();
@@ -375,8 +324,6 @@ fn summarise(kept: &Path) {
             }
         }
     }
-    // The VM's file is `/proc/meminfo` as it stands, one block a tick:
-    // the keys are picked out here rather than in there ([`vm_side`]).
     let vm = std::fs::read_to_string(kept.join("vm.txt")).unwrap_or_default();
     for key in VM_KEYS {
         let taken: Vec<i64> = vm
@@ -387,8 +334,7 @@ fn summarise(kept: &Path) {
                     .then(|| rest.split_whitespace().next()?.parse::<i64>().ok())
                     .flatten()
             })
-            // kB in the file, MB in the reading, so the two sides are
-            // the same unit.
+            // kB in the file; MB, the host side's unit, in the reading.
             .map(|kb| kb / 1024)
             .collect();
         columns.push((format!("vm_{key}_mb"), taken));
@@ -412,9 +358,6 @@ fn summarise(kept: &Path) {
     readers(&vm);
 }
 
-/// How many containers docker made and tore down while this ran, and
-/// the most that were up at once — off the events, which see every
-/// one of them ([`docker_side`]).
 fn events(events: &str) {
     let (mut created, mut destroyed, mut up, mut most) = (0usize, 0usize, 0i64, 0i64);
     for line in events.lines() {
@@ -443,19 +386,12 @@ fn events(events: &str) {
     );
 }
 
-/// Who read the disk while this ran, by name and by how much.
+/// Who read the disk while this ran. The reader need not have a
+/// container, so neither the VM's growth nor `docker stats` names it.
 ///
-/// **The question this answers is whose bytes those were.** A VM that
-/// grew says nothing about the reader, the reader need not have a
-/// container, and `read_bytes` is the only per-process number that
-/// survives the process itself being gone by the time anyone asks.
-/// First and last reading of each pid, largest three.
-///
-/// **A pid is not an identity here.** A run that starts hundreds of
-/// containers cycles through pids, and one reused between two ticks
-/// reads as a single process that grew. The long-lived readers — the
-/// ones this exists to name — do not move, and the raw rows carry the
-/// `comm` beside every reading for anything that looks wrong.
+/// A pid is not an identity here: one reused between two ticks reads as
+/// a single process that grew. The long-lived readers this exists to
+/// name do not move, and the raw rows carry `comm` beside every reading.
 fn readers(vm: &str) {
     let mut names: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
     let mut read: std::collections::HashMap<&str, (i64, i64)> = std::collections::HashMap::new();
@@ -494,12 +430,9 @@ fn readers(vm: &str) {
     println!("footprint: the VM read           {}", said.join(", "));
 }
 
-/// What the containers held, out of their own cgroups: how many the run
-/// put up and the largest high-water mark any one of them reached.
-///
-/// **This is not the VM's total and cannot be made into one.** Memory is
-/// not namespaced; the page cache the containers filled is charged to
-/// the VM, not to them, and a sum over these would leave it out.
+/// What the containers held, out of their own cgroups. Not the VM's total
+/// and cannot be made one — the page cache they filled is charged to the
+/// VM, not to them.
 fn containers(vm: &str) {
     let mut seen = std::collections::BTreeSet::new();
     let mut peak = 0i64;
@@ -526,7 +459,7 @@ fn containers(vm: &str) {
 
 /// Whether the VM ever actually ran out: the pressure counter only
 /// moves while something waits on memory, and `oom_kill` only moves
-/// when something was killed for it. **A cache that grew is neither.**
+/// when something was killed for it. A cache that grew is neither.
 fn stalls(vm: &str) {
     let some: Vec<&str> = vm
         .lines()
@@ -546,7 +479,7 @@ fn stalls(vm: &str) {
     );
 }
 
-/// Where a run's rows went, for a caller that means to read them.
+/// Where the rows go (`run` builds the same path).
 #[cfg(test)]
 pub(crate) fn kept_under(root: &Path) -> std::path::PathBuf {
     root.join("target").join("footprint")
@@ -558,22 +491,18 @@ mod tests {
     use std::path::Path;
     use std::process::{Command, Stdio};
 
-    /// The rows are kept under the tree, not in a temp directory a
-    /// reader cannot find.
+    /// Not in a temp directory a reader cannot find.
     #[test]
     fn the_rows_are_kept_under_the_tree() {
         assert!(kept_under(Path::new("/w")).ends_with("target/footprint"));
     }
 
-    /// Short against a gate's minutes, long against the cost of a line.
     #[test]
     fn the_sampler_reports_often_enough_to_see_a_step() {
         assert!(EVERY.as_secs() >= 1 && EVERY.as_secs() <= 5);
     }
 
-    /// A child that will outlive the test if nobody kills it. Long
-    /// enough that its own exit cannot be mistaken for the reaping this
-    /// is looking for.
+    /// Lives long enough that its own exit cannot pass for the reaping.
     fn a_child_that_waits() -> std::process::Child {
         let mut command = if cfg!(windows) {
             let mut c = Command::new("ping");
@@ -591,9 +520,7 @@ mod tests {
             .expect("a child to watch")
     }
 
-    /// Whether the machine still has that process. **Absence is what
-    /// this is read for** — a pid that has been waited on is gone, and a
-    /// reused one would only make this answer yes.
+    /// Read for absence: a reused pid could only make this answer yes.
     fn still_running(pid: u32) -> bool {
         if cfg!(windows) {
             let out = Command::new("tasklist")
@@ -606,10 +533,6 @@ mod tests {
         }
     }
 
-    /// **A half-started watch leaves nothing behind.** A second sampler
-    /// failing before the watch exists would leave the first one — an
-    /// endless loop — sampling for as long as the machine is up,
-    /// belonging to nobody.
     #[test]
     fn a_sampler_that_started_is_reaped_when_the_next_one_fails() {
         let started = a_child_that_waits();

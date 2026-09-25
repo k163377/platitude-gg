@@ -38,8 +38,7 @@ fn a_copied_reader_reuses_the_graph_despite_its_new_timestamp() {
         "same bytes in another tree: {reused}"
     );
 
-    // PE and ELF leave trailing bytes outside the loaded image. Change
-    // those bytes while preserving the timestamp to exercise the key.
+    // Bytes past the loaded image leave a PE / ELF runnable.
     {
         use std::io::Write;
         let mut file = std::fs::OpenOptions::new()
@@ -103,8 +102,8 @@ fn a_changed_tree_invalidates_the_graph_and_cache_io_failures_are_reported() {
     assert!(!text.contains(" (kept)"), "{text}");
 }
 
-/// A run's output with runs of spaces taken out, so a test says what a
-/// row holds and not how wide the column beside it was.
+/// Whitespace runs collapsed, so a test asserts a row's content and not
+/// its column width.
 fn squeezed(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -168,11 +167,9 @@ fn a_step_is_asked_again_only_when_what_it_reads_changed() {
         "a second run of one commit runs nothing twice"
     );
 
-    // A refs commit on top: the branch's diff now holds both modules, so
-    // the core step is a new one (two filters) and runs; the app's unit
-    // tests read stash and its readers, none of which moved, so that
-    // step stays green. The verbs and the shipped build read the whole
-    // app and core — the core moved, so they run again.
+    // The diff now holds both modules: the core step (two filters) is new;
+    // the app's unit tests read stash, which did not move; the verbs and
+    // the shipped build read the whole core, which did.
     sb.write_refs(&sb.seat, 4);
     sb.commit_all(&sb.seat, "feat(core): four", &[]);
     sb.gate_ok(&sb.seat, &[]);
@@ -234,8 +231,8 @@ fn a_host_only_run_stamps_half_and_the_full_run_reuses_it() {
     sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
 }
 
-/// `--keep-going` is what leaves the other side's greens standing: the run
-/// goes on past the red, and what passed is stamped.
+/// `--keep-going` runs past the red, so the other side's passed steps
+/// keep their stamps.
 #[test]
 fn a_red_step_leaves_main_where_it_was() {
     let sb = Sandbox::new("red");
@@ -291,7 +288,6 @@ fn a_pseudo_run_off_main_is_reused_after_the_rebase() {
 #[test]
 fn a_rebase_that_touches_a_step_s_inputs_reruns_that_step_only() {
     let sb = Sandbox::new("rebase-inputs");
-    // Main's move touches the stash module.
     sb.write(&sb.repo, "crates/platitude-core/src/stash.rs", "pub fn stash() { let _ = 10; }\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn t() { stash() }\n}\n");
     sb.commit_all(
         &sb.repo,
@@ -305,10 +301,8 @@ fn a_rebase_that_touches_a_step_s_inputs_reruns_that_step_only() {
     let (ok, text) = sb.land("worktree-a");
     assert!(ok, "{text}");
     let again = without_always(&sb.ran());
-    // The refs tests read refs.rs only: same objects, still green. The it
-    // binary's inputs include support and both modules' readers — its
-    // refs filter reads refs_integration, which reads support: unchanged
-    // too. clippy reads the whole crate: main's move changed that.
+    // The refs step reads refs.rs and, in the it binary, refs_integration
+    // and support: none moved. clippy reads the whole crate, which did.
     assert!(
         !again.contains("test platitude-core 1"),
         "refs' inputs did not move: {again:?}"
@@ -319,10 +313,6 @@ fn a_rebase_that_touches_a_step_s_inputs_reruns_that_step_only() {
     );
 }
 
-/// One gate per tree: while one holds the tree a second is refused with
-/// the first's pid and runs nothing, a dry run is not held (it runs
-/// nothing either), and the tree is free again the moment the first is
-/// done — or gone.
 #[test]
 fn a_second_gate_in_the_same_tree_is_refused_while_the_first_holds_it() {
     let sb = Sandbox::new("one-gate");
@@ -367,19 +357,10 @@ fn a_second_gate_in_the_same_tree_is_refused_while_the_first_holds_it() {
     );
 }
 
-/// Why every lock here is let go of by unlocking it, told as the
-/// difference from closing the file. `flock`
-/// goes with the open file description, and a fork hands a neighbour's
-/// child a copy of every one until that child's `execve`; a child handed
-/// the description outright stands in for that window. Closed, the lock
-/// is the child's until the child is gone, and the gate spawned next is
-/// refused a tree nobody means to hold — seen twice in the container,
-/// where this suite forks with a thread per core. Unlocked, the same
-/// child holding the same description, the tree is free at once.
-///
-/// Linux, as the busy-image net is (`landing`): the description's
-/// inheritance is what `flock(2)` promises there, and the container is
-/// where it was seen.
+/// Why every lock here is released by unlocking and not by closing
+/// (rules-refs/core.md「lock は unlock で離す」): a closed lock stays with
+/// any child holding the description, and the next gate is refused.
+/// Linux only: that inheritance is what `flock(2)` promises there.
 #[test]
 #[cfg(target_os = "linux")]
 fn a_lock_frees_the_tree_when_unlocked_and_not_when_merely_closed() {
@@ -405,8 +386,8 @@ fn a_lock_frees_the_tree_when_unlocked_and_not_when_merely_closed() {
         held.try_lock().expect("held from here");
         held
     };
-    // Handed the description as its stdin, a child holds a copy of it
-    // for as long as it lives — past the release that follows.
+    // Holding the description as stdin, the child stands in for a
+    // neighbour's forked child before its `execve`.
     let carry = |held: &std::fs::File| {
         Command::new("sleep")
             .arg("60")
@@ -420,12 +401,8 @@ fn a_lock_frees_the_tree_when_unlocked_and_not_when_merely_closed() {
             .expect("a child handed the lock's description")
     };
 
-    // **The unlocked half goes first, and the closed half last.** Both take the same lock file, and this suite
-    // forks with a thread per core: a neighbour forking between this thread's `open` and its release hands its own
-    // pre-`execve` child a copy of the description, which holds the lock until that child execs. Released by
-    // *unlocking*, the description is free whoever holds a copy of it, so the acquisition after it is answered by
-    // the file and nothing else. Released by *closing*, it is not — which is the whole of what the second half is
-    // here to show, and why nothing in this test takes the lock after it.
+    // The closed half goes last: after it a neighbour's forked child may
+    // still hold the lock, so nothing here may take it again.
     let held = first_gate();
     let mut unlocking = carry(&held);
     held.unlock().expect("let the first gate's lock go");
@@ -454,9 +431,8 @@ fn a_lock_frees_the_tree_when_unlocked_and_not_when_merely_closed() {
     closing.wait().expect("the child that carried it");
 }
 
-/// A verb that passed rewrote its census line, so the tree that passed
-/// is not the commit: nothing is stamped until the generated file is
-/// committed, and the gate over that commit finds every step cached.
+/// A verb that rewrote its census line leaves a tree that is not the
+/// commit, so there is nothing to stamp.
 #[test]
 fn a_gate_whose_verbs_rewrote_the_census_stamps_nothing_until_it_is_committed() {
     let sb = Sandbox::new("rewrote");
@@ -476,9 +452,8 @@ fn a_gate_whose_verbs_rewrote_the_census_stamps_nothing_until_it_is_committed() 
         text.contains("the tree moved with them") && text.contains("review the diff"),
         "{text}"
     );
-    // The rewrite said by name and by verb: a diff of the census is the
-    // whole file when a component comes or goes, and the one line a verb
-    // moved cannot be read out of it.
+    // Named by verb: when a component comes or goes the census diff is the
+    // whole file, and the moved line is lost in it.
     assert!(
         squeezed(&text).contains("+Theme stash --preset basic"),
         "the record names the verb whose line moved: {text}"
@@ -509,9 +484,8 @@ fn a_gate_whose_verbs_rewrote_the_census_stamps_nothing_until_it_is_committed() 
     sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
 }
 
-/// A daily run over a commit the full gate already stamped keeps that
-/// stamp: writing a host-only one over it would send the landing back
-/// through a container side that had already answered.
+/// A host-only stamp over a full one would send the landing back through
+/// a container side that already passed.
 #[test]
 fn a_daily_run_keeps_a_full_stamp_it_finds() {
     let sb = Sandbox::new("keep-full");
@@ -523,32 +497,21 @@ fn a_daily_run_keeps_a_full_stamp_it_finds() {
     sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
 }
 
-/// **The steps that build the app and run it read their crates whole.**
-/// Their keys are the two product directories entire — the test targets
-/// under them included — and that is what answers for a file the product
-/// opens by a path no reader of the source can follow. Here the path is
-/// spelled across two files, a segment to each, which is enough to lose
-/// any scan of them: the directory is read whole, so the key moves
-/// anyway and every one of those steps is owed.
-///
-/// **What this pins is the absence of a narrower rule.** A rule that
-/// dropped the test targets from these keys would have to answer for
-/// this shape, and a scan of the sources cannot: not finding a reference
-/// is not the same as there being none.
+/// The steps that build and run the app key on the two product
+/// directories whole, test targets included — which is what catches a
+/// file the product opens by a path no source scan can follow (here
+/// spelled across two files). Pins the absence of a narrower key
+/// (反映前テストの機械化.md「テスト専用の配下を指紋から落とす案は採らない」).
 #[test]
 fn a_file_the_product_opens_is_owed_though_no_scan_could_find_it() {
     let sb = Sandbox::new("path-across-two-files");
-    // The file and the source that opens it are spelled out of the same
-    // pieces, so the two cannot drift: the reader sits in this package,
-    // which is what its `CARGO_MANIFEST_DIR` stands for, and the second
-    // commit moves that file and nothing else. Nothing in the run reads
-    // it — the steps are faked — so the agreement has to be structural.
+    // The steps are faked, so nothing checks that the reader opens this
+    // file: both are built from the same pieces so they cannot drift.
     let package = "crates/platitude-app";
     let [root, under, name] = ["tests", "qml", "Probe.qml"];
     let read = format!("{package}/{root}/{under}/{name}");
-    // A product change, so that the steps below are selected at all: what
-    // is under test is the key they are answered by, not the reach that
-    // picks them.
+    // A product change, so the steps below are selected at all; their key
+    // is what is under test.
     sb.write(
         &sb.seat,
         &format!("{package}/src/ui/StashPane.qml"),
@@ -577,15 +540,13 @@ fn a_file_the_product_opens_is_owed_though_no_scan_could_find_it() {
     sb.write(&sb.seat, &read, "Item {}\n");
     sb.commit_all(&sb.seat, "feat(app): a reader of a file under tests", &[]);
     sb.gate_ok(&sb.seat, &[]);
-    // Green first, or the second run below would be their first and say
-    // nothing about a stamp.
+    // Green first, so the second run is about a stamp.
     let built = ["shipped", "bare", "verify stash --preset basic"];
     let first = without_always(&sb.ran());
     for id in built {
         assert!(first.contains(id), "{id} did not run: {first:?}");
     }
 
-    // The file it opens, and nothing else.
     sb.write(&sb.seat, &read, "Item {\n    property int x: 1\n}\n");
     sb.commit_all(&sb.seat, "test(app-ui): the file it opens", &[]);
     sb.gate_ok(&sb.seat, &[]);
@@ -598,21 +559,14 @@ fn a_file_the_product_opens_is_owed_though_no_scan_could_find_it() {
     }
 }
 
-/// Every step the plan gave a side has a row in the ledger, **whatever
-/// the run did with it** — including where a stamp answers for all of
-/// them.
-///
-/// The second gate of one commit runs nothing, so the block of verbs is
-/// a block of stamps. A block that printed its `cached` lines on a path
-/// of its own and filed nothing would leave the table a reader adds up
-/// short by exactly the verbs it never ran. The gate reads its own books
-/// against the plan, so such a path is a red run rather than a quiet
-/// subtraction.
+/// Stamps included: a cached path that filed nothing would leave the
+/// table short by exactly the verbs it never ran. The gate checks its
+/// books against the plan, so such a path is a red run.
 #[test]
 fn a_run_that_ran_nothing_still_files_a_row_for_every_step() {
     let sb = Sandbox::new("ledger-cached");
-    // A change the census's verb answers for, so the block of verbs is
-    // in the plan at all (`selection::a_core_change_owes_what_reads_it`).
+    // A change the census's verb answers for, so the verbs are in the plan
+    // (`selection::a_core_change_owes_what_reads_it_and_nothing_beside_it`).
     sb.write(
         &sb.seat,
         "crates/platitude-core/src/stash.rs",
@@ -642,8 +596,7 @@ fn a_run_that_ran_nothing_still_files_a_row_for_every_step() {
     for row in &verbs {
         assert_eq!(row.2, "cached", "{row:?}");
     }
-    // Nothing else ran either, the always-steps apart: they carry no
-    // stamp of their own, being seconds each.
+    // The always-steps carry no stamp of their own.
     assert!(
         ledger
             .iter()
@@ -652,10 +605,8 @@ fn a_run_that_ran_nothing_still_files_a_row_for_every_step() {
     );
 }
 
-/// A red stops the group it is in, and the steps behind it are answered
-/// for by a row saying they were not reached — so the books are still
-/// whole, and `not-run` is the word that keeps a skipped step apart from
-/// a lost one.
+/// A red stops its group; the steps behind it get a `not-run` row, so the
+/// books stay whole and a skipped step is told apart from a lost one.
 #[test]
 fn a_red_leaves_the_steps_behind_it_named_rather_than_missing() {
     let sb = Sandbox::new("ledger-red");

@@ -1,56 +1,34 @@
 //! What a gate run cost, kept where the next run cannot take it away.
 //!
-//! The wall clock alone says only that a gate was slow. A gate is
-//! four things in a row: the tree's one gate lock, the plan (a
-//! dependency graph read off the sources, one listing of the tree for the
-//! cache keys, the census and who wears whom), the task runner built and
-//! copied, and the two sides — inside which a verb can be waiting for a
-//! lane another seat's gate is holding. Each is timed on its own and said
-//! in one block at the end.
+//! Each phase (the gate lock, the plan, the runner, the two sides) is
+//! timed on its own and said in one block at the end, also written under
+//! `target/gate-runs/` so a before-and-after has both halves.
 //!
-//! The same block is written under `target/gate-runs/`, one file per run.
-//! A number printed to a terminal is gone by the next tool call, and a
-//! before-and-after wants both halves; these files are what the second
-//! half is compared against. They are under a kilobyte, and the newest
-//! [`KEEP`] stay.
-//!
-//! **Beside the block is the ledger** ([`ledger`]): one row per unit of
-//! either side, with the room it waited for, when in the run it stood,
-//! how long it held the machine, and the step's own account of what the
-//! time went to. The block's `longest` is five rows chosen by this run's
-//! selection and ordering — enough to see whether one unit is the
-//! ceiling, and not a bill. What a group of verbs costs is arithmetic
-//! over the table.
+//! Beside the block is the ledger ([`ledger`]), one row per unit of
+//! either side. The block's `longest` is not a bill: which five it names
+//! depends on this run's selection and order. What a group of verbs costs
+//! is arithmetic over the ledger.
 
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 
-/// Where a run's record goes: under `target/`, which the tree's git does
-/// not read, so a record is not an uncommitted change the next gate
-/// refuses to run over.
+/// Under `target/`: anywhere git reads, a record would be an uncommitted
+/// change the next gate refuses to run over.
 const DIR: &str = "gate-runs";
 
-/// How many records a tree keeps. What a comparison ever reaches back
-/// for is the last handful, and a day of gating is a few dozen.
+/// How many records a tree keeps; a day of gating is a few dozen.
 const KEEP: usize = 200;
 
 /// How long one side's units waited for room another gate was holding,
 /// how many did, and how long the units themselves ran. Filled by the
 /// threads running them, read once at the end ([`super::step::run_one`]).
-///
-/// The two halves answer different questions. The wait says another gate
-/// was on the machine beside this one. The run lengths say what a
-/// landing arriving at any moment would have had to wait out: nothing is
-/// killed or suspended to make room (`crate::budget`), so the longest
-/// unit is the ceiling on how fast a landing can be let in, and it is
-/// the one worth splitting when it is worth splitting anything.
 #[derive(Default)]
 pub(crate) struct Waited {
     verbs: AtomicUsize,
     nanos: AtomicU64,
-    /// Every unit that ran, longest first, kept to [`LONGEST`].
+    /// The units that ran longest, longest first, kept to [`LONGEST`].
     longest: std::sync::Mutex<Vec<Unit>>,
     /// Every unit of this side, in the order they ended ([`Row`]).
     rows: std::sync::Mutex<Vec<Row>>,
@@ -63,16 +41,7 @@ pub(crate) struct Unit {
     pub ran: Duration,
 }
 
-/// One unit as the ledger names it: every unit of the run, not the five
-/// the record has room for.
-///
-/// **The five longest are not the bill.** Which of them a run prints
-/// depends on what that run selected, what a stamp answered for, and
-/// where in the block a verb happened to fall — so the same verb is in
-/// one run's list and out of the next one's, and a reader who ranks by
-/// that is ranking by the ordering. The ledger is every unit, with what
-/// it waited for, when it ran, and — where the step's own log says so —
-/// what inside it the time went to.
+/// One unit as the ledger names it.
 pub(crate) struct Row {
     pub id: String,
     pub weight: u32,
@@ -80,9 +49,9 @@ pub(crate) struct Row {
     /// `cached-late` (one another tree wrote while this unit queued),
     /// `FAIL`, `halted` — kept from running or ended by the run's first
     /// red (`gate::halt`) — or `not-run` — a step a red earlier in its
-    /// group stopped this run short of. **The last two are rows and not
-    /// absences**: a step nothing says anything about is the bookkeeping
-    /// having lost one, which is a different fault ([`Waited::unaccounted`]).
+    /// group stopped this run short of. The last two are rows, not
+    /// absences: a missing row is the bookkeeping's fault
+    /// ([`Waited::unaccounted`]).
     pub outcome: &'static str,
     /// Room the machine made it wait for, before it started.
     pub waited: Duration,
@@ -90,15 +59,12 @@ pub(crate) struct Row {
     /// say whether they overlapped.
     pub from_start: Duration,
     pub ran: Duration,
-    /// The step's own `spent` line, where the step writes one
-    /// (`verify::run::say_what_it_spent`) — empty for every step that
-    /// does not, because a split nobody measured is not one to write
-    /// down.
+    /// The step's own `spent` line where it writes one
+    /// (`verify::run::say_what_it_spent`), else empty.
     pub spent: String,
 }
 
-/// How many of the longest units a record names. Enough to see whether
-/// one step is the ceiling or a dozen share it, and short enough to read.
+/// How many of the longest units a record names.
 const LONGEST: usize = 5;
 
 impl Waited {
@@ -133,7 +99,7 @@ impl Waited {
     }
 
     /// Notes what one unit came to, whether it ran or a stamp answered
-    /// for it. Every unit of the side, which is what the ledger is.
+    /// for it. Every unit of the side files one.
     pub(crate) fn filed(&self, row: Row) {
         self.rows
             .lock()
@@ -144,13 +110,9 @@ impl Waited {
     /// Where the plan and the ledger disagree: a step the plan gave this
     /// side that no row answers for, or one two rows answer for.
     ///
-    /// **The ledger checking itself, not the run.** A step a red stopped
-    /// the group short of has a row of its own (`super::sides::not_run`), and a
-    /// cached one has a row saying it was cached, so every step of the
-    /// plan is answered for however the run went. What is left over is a
-    /// path through the runner that files nothing — and the cost of that
-    /// is a count read off a file with holes in it, which is a wrong
-    /// number nobody can see is wrong.
+    /// It checks the bookkeeping, not the run: stopped and cached steps
+    /// have rows of their own (`super::sides::not_run`), so what is left
+    /// is a path through the runner that files nothing.
     pub(crate) fn unaccounted(&self, planned: &[String]) -> Vec<String> {
         let rows = self
             .rows
@@ -195,9 +157,8 @@ impl Waited {
             .collect()
     }
 
-    /// The two sides' lists as one, longest first: the machine is one,
-    /// and what a landing waits out is whichever unit of either side is
-    /// running.
+    /// The two sides' lists as one, longest first: a landing waits out
+    /// whichever unit of either side is running.
     pub(crate) fn longest_of(sides: [&Waited; 2]) -> Vec<Unit> {
         let mut units: Vec<Unit> = sides.iter().flat_map(|side| side.longest()).collect();
         units.sort_by_key(|unit| std::cmp::Reverse(unit.ran));
@@ -239,8 +200,8 @@ pub(crate) struct Spent {
     pub host_budget: (usize, Duration),
     /// The same for the container side.
     pub linux_budget: (usize, Duration),
-    /// The longest units of the run, longest first: what a landing
-    /// arriving mid-run has to wait out.
+    /// The longest units of the run, longest first: nothing is preempted,
+    /// so a landing arriving mid-run waits one out.
     pub longest: Vec<Unit>,
     /// Every unit of both sides, as the table [`ledger`] writes
     /// ([`Row`]). Kept beside the record; empty for a run that started
@@ -264,8 +225,7 @@ pub(crate) struct Run<'a> {
     pub outcome: &'a str,
 }
 
-/// `12.3s`, `1m02s` — a phase of a gate is seconds to minutes, and a
-/// tenth is the smallest difference worth reading.
+/// `12.3s`, `1m02s`.
 fn moment(spent: Duration) -> String {
     let secs = spent.as_secs();
     if secs < 60 {
@@ -319,8 +279,6 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::census::Shift)
         spent.linux_budget.0,
         moment(spent.linux_budget.1),
     ));
-    // The ceiling on how fast a landing can be let in: nothing is
-    // preempted, so a landing waits out whichever of these is running.
     if !spent.longest.is_empty() {
         let units: Vec<String> = spent
             .longest
@@ -329,28 +287,19 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::census::Shift)
             .collect();
         out.push_str(&format!("  longest {}\n", units.join(" / ")));
     }
-    // And where the whole of it is. The five above are the landing's
-    // wait; ranking by them is ranking by what this run happened to
-    // select and in what order, which is what the table beside this
-    // block is for ([`ledger`]).
     if !spent.ledger.is_empty() {
         out.push_str(&format!(
             "  ledger  {} unit(s) beside this block, in <this file>.units.tsv\n",
             spent.ledger.lines().count().saturating_sub(1),
         ));
     }
-    // What the run's verbs did to the census, by name: one name every
-    // line gained is the whole file's diff, and the row that says so is
-    // what keeps the one line that moved on its own readable beside it
-    // (`super::census::Shift`).
+    // What the run's verbs did to the census, by name (`super::census::Shift`).
     out.push_str(&shift.block());
     out
 }
 
-/// Writes the block under `target/gate-runs/`, named by the second it
-/// ended and the process that ran it, and takes away all but the newest
-/// [`KEEP`]. A record nobody could write is not worth a red gate: the run
-/// itself has already answered, and this is the note beside it.
+/// Writes the block under `target/gate-runs/` and takes away all but the
+/// newest [`KEEP`]. A record nobody could write is not worth a red gate.
 pub(crate) fn keep(dir: &Path, run: &Run<'_>, spent: &Spent, shift: &super::census::Shift) {
     let records = dir.join("target").join(DIR);
     if std::fs::create_dir_all(&records).is_err() {
@@ -373,12 +322,6 @@ pub(crate) fn keep(dir: &Path, run: &Run<'_>, spent: &Spent, shift: &super::cens
 const COLUMNS: &str = "side\tid\toutcome\tweight\twaited_ms\tfrom_start_ms\tran_ms\tspent\n";
 
 /// Every unit of both sides as one table.
-///
-/// **A table and not prose**, because what it is for is arithmetic
-/// somebody else does: how much of a side's wall clock one group of
-/// verbs is, what a step waited for, which units overlapped. `spent` is
-/// the step's own words where it said any, and empty where it did not —
-/// the parts of a unit nobody measured stay unmeasured here.
 pub(crate) fn ledger(sides: [(&str, &Waited); 2]) -> String {
     let mut out = String::from(COLUMNS);
     for (name, waited) in sides {
@@ -403,11 +346,8 @@ pub(crate) fn ledger(sides: [(&str, &Waited); 2]) -> String {
 }
 
 /// All but the newest [`KEEP`] records, by the name they carry — the
-/// epoch second sorts as it counts, so the oldest names come first.
-///
-/// Swept by run and not by file: a run leaves a block and, where it ran
-/// anything, the ledger beside it, and the two go together — a ledger
-/// whose block has been taken away names a run nothing else remembers.
+/// epoch second sorts as it counts. Swept by run, not by file: a ledger
+/// goes with its block.
 fn sweep(records: &Path) {
     let Ok(entries) = std::fs::read_dir(records) else {
         return;
@@ -433,9 +373,6 @@ mod tests {
     use super::{Row, Run, Spent, Unit, Waited, ledger, moment, render};
     use std::time::Duration;
 
-    /// Every unit of both sides, and the words that tell a stamp from a
-    /// run — the five longest say neither, and a reader who took them
-    /// for the bill would be reading this run's ordering.
     #[test]
     fn the_ledger_holds_every_unit_of_both_sides_with_what_each_one_came_to() {
         let host = Waited::default();
@@ -476,8 +413,7 @@ mod tests {
             "host\tverify amend\tran\t4\t1200\t300\t66000\tfixture=1673ms build=20874ms \
              app=1812ms rest=402ms whole=24761ms"
         );
-        // A stamp's row is still a row: what a plan did not run is as
-        // much of what a gate came to as what it did.
+        // A stamp's row is still a row.
         assert_eq!(rows[2], "host\tfmt\tcached\t0\t0\t10\t0\t");
         assert_eq!(
             rows[3],
@@ -485,7 +421,6 @@ mod tests {
         );
     }
 
-    /// One row per unit with nothing said twice, filed for this test.
     fn filed(side: &Waited, id: &str, outcome: &'static str) {
         side.filed(Row {
             id: id.to_string(),
@@ -498,10 +433,8 @@ mod tests {
         });
     }
 
-    /// The plan against the ledger. What this is for is a path through
-    /// the runner that files nothing, and the two it has to keep apart
-    /// are a step the run did not reach — which has a row of its own —
-    /// and a step nobody wrote anything about.
+    /// Keeps apart a step the run did not reach, which has a row of its
+    /// own, and a step nobody filed.
     #[test]
     fn the_ledger_says_which_of_the_plans_steps_it_does_not_answer_for() {
         let side = Waited::default();
@@ -532,9 +465,6 @@ mod tests {
         );
     }
 
-    /// A side every step of which a stamp answered for is the shape the
-    /// hole was in: it ran nothing, and it owes a row for each of them
-    /// all the same.
     #[test]
     fn a_side_that_ran_nothing_still_answers_for_every_step() {
         let side = Waited::default();
@@ -566,9 +496,6 @@ mod tests {
         assert_eq!(waited.read(), (2, Duration::from_secs(5)));
     }
 
-    /// What a landing arriving mid-run waits out is the longest unit,
-    /// so that is what the tally keeps — of both sides together, since
-    /// the machine is one.
     #[test]
     fn the_tally_keeps_the_longest_units_of_both_sides() {
         let host = Waited::default();

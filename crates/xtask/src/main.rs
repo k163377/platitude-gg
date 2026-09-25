@@ -1,8 +1,4 @@
 //! Development task runner (`cargo xtask <command>`).
-//!
-//! Cross-platform by construction (CLAUDE.md: one runner on all 3 OSes):
-//! plain Rust + std, with OS differences expressed as code inside the
-//! one source.
 
 mod app_env;
 mod app_out;
@@ -95,6 +91,4 @@ fn main() -> ExitCode {
     }
 }
 
-// No helpers here on purpose: the crate root dispatches to every module,
-// and a helper on it would tie every module to every other in the gate's
-// dependency graph (`tree`, `subprocess`).
+// No helpers here (.claude/rules/structure.md §分割「クレート root」).

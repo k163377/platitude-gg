@@ -9,16 +9,13 @@ use super::repo::DemoRepo;
 /// card counts `+41`.
 const PILED_TAGS: u32 = 41;
 
-/// Every colour a chip column can put on a row, every way two of them can
-/// meet, every depth the fan is drawn at, and the row deep enough that
-/// only the card's own count can say so — **three rows to a
-/// shape**, so the fan is read against its own repeat: what a
-/// stack costs the row above and below it is the whole question
-/// the picture answers, and a shape shown once cannot answer
-/// it.
+/// Every colour a chip column can put on a row, every way two can meet,
+/// every depth of the fan, and a row deep enough that only the count says
+/// so — three rows to a shape, because what a stack costs the rows above
+/// and below it is the question, and a shape shown once cannot answer it.
 ///
-/// Newest first, which is how the graph draws them. Each line is three
-/// commits carrying the same names under the same subject:
+/// Newest first, as the graph draws them. Each line is three commits
+/// carrying the same names under the same subject:
 ///
 /// | rows | what each row carries | cards |
 /// |------|-----------------------|-------|
@@ -32,31 +29,24 @@ const PILED_TAGS: u32 = 41;
 /// | `only` `lone` `solo` | one local branch | 1 |
 /// | `v0.1` `v0.2` `v0.3` | one tag | 1 |
 ///
-/// **The current branch stands on the newest row only** — a checkout has
-/// one, so the two rows under it wear the same shape with a plain local
-/// in front of it.
+/// The current branch stands on the newest row only; the two rows under
+/// it wear a plain local in its place.
 ///
-/// **`v9.1`, `v9.2` and `v9.3` are drifts.**
-/// A tag whose commit this repository holds comes down with the next
-/// fetch (auto-following takes the tags of objects it already has), and a
-/// tag on a commit that is not here has no row to stand on — so a reading
-/// that is only on the remote is the far half of a tag that moved: pushed
-/// where it was made, then forced down onto a row that already carries
-/// tags, which leaves origin naming the old commit and no fetch willing
-/// to overwrite the name (デザイン規約 §ref の種別「タグの枠だけは明度でも
-/// 語る」). Both halves show once the window has fetched, which it does as
-/// it opens.
+/// `v9.1`, `v9.2` and `v9.3` are drifts, the only way a remote-only tag
+/// reading stands on a row: a tag on a commit held here comes down with
+/// the next fetch (auto-follow), and one on a commit not here has no row.
+/// Each is pushed, then forced onto a row that already carries tags, which
+/// no fetch undoes (デザイン規約 §ref の種別「タグの枠だけは明度でも語る」);
+/// both halves show once the window has fetched, as it does on opening.
 ///
-/// The detached HEAD marker is [`stack_max`]'s — it would take the
-/// checkout off `main` here, and every row would lose the current
-/// branch.
+/// The detached HEAD marker is [`stack_max`]'s: detaching here would take
+/// the current branch off every row.
 pub(super) fn stack(repo: &mut DemoRepo) -> Result<(), String> {
     stack_rows(repo)?;
     stack_published(repo)
 }
 
-/// The commits and the names this repository holds of its own, built from
-/// the bottom of the graph up: `main` is carried along by them, so the
+/// Built from the bottom of the graph up: `main` is carried along, so the
 /// last shape written is the one the current branch stands on.
 fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
     for tag in ["v0.1", "v0.2", "v0.3"] {
@@ -85,11 +75,7 @@ fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
         }
     }
 
-    // Nothing of this repository's own stands on these rows: the branch
-    // is only on the remote, and so is the reading of the tag. The tag
-    // made here is pushed and then moved away, which is what leaves the
-    // remote naming this commit (see above); it also names the commit
-    // for the push that publishes the branch.
+    // Only the remote has anything on these rows: the drifts above.
     for drift in ["v9.3", "v9.2", "v9.1"] {
         let body = format!("theirs {drift}\n");
         repo.commit(
@@ -108,10 +94,8 @@ fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
             "feat: a local branch and one another copy holds",
         )?;
         repo.git(&["branch", name])?;
-        // Checked out over in another working copy, which is what puts
-        // the green frame on it: a copy is standing here, and git refuses
-        // a move onto a branch someone else holds. Added where the commit
-        // is, so the branch starts on this row.
+        // Checked out in another working copy, which puts the green frame
+        // on it. Added here, so the branch starts on this row.
         let held = format!("{name}-held");
         let at = format!("../{held}");
         repo.git(&["worktree", "add", "-b", &held, &at])?;
@@ -137,24 +121,15 @@ fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
         let second = format!("{name}-2");
         repo.git(&["branch", &second])?;
         repo.git(&["tag", tag])?;
-        // **Named to sort after the two beside it**: the chips come out
-        // in the order core sorted the refs, so a held branch whose name
-        // sorts first would take the front card and the row would read
-        // as a working copy's rather than as a local branch's.
+        // Named to sort after the two beside it: chips follow core's ref
+        // order, and a held branch sorting first would take the front card.
         let held = format!("{name}-held");
         let at = format!("../{held}");
         repo.git(&["worktree", "add", "-b", &held, &at])?;
     }
 
-    // The deepest row a real repository puts on screen, three rows
-    // running: one branch, and forty-one tags standing on the same
-    // commit. **The fan cannot say this and the count cannot say the
-    // fan** — every one of those tags is the single repeated sheet, so
-    // this draws exactly what a commit wearing two tags draws and only
-    // `+41` tells the two apart (デザイン規約 §重ね表示).
-    //
-    // Measured on `JetBrains/kotlin`: 20 of the 48,058 commits that carry
-    // a ref at all carry ten or more, and the deepest wears 42.
+    // The fan draws exactly what two tags draw (same-colour sheets are
+    // one), so only `+41` tells them apart (デザイン規約 §重ね表示).
     for (name, series) in [("bank", 10), ("heap", 11), ("pile", 12)] {
         let body = format!("pile {name}\n");
         repo.commit(
@@ -163,10 +138,7 @@ fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
             "feat: a branch under forty-one tags on one commit",
         )?;
         repo.git(&["branch", name])?;
-        // **One transaction.** The names
-        // are all this row wants of them, and each `tag` run is a
-        // process of its own; written through `update-ref` they cost
-        // one.
+        // One `update-ref` process rather than a `tag` process per name.
         let oid = repo.git(&["rev-parse", "HEAD"])?;
         let mut writes = String::new();
         for i in 0..PILED_TAGS {
@@ -175,9 +147,7 @@ fn stack_rows(repo: &mut DemoRepo) -> Result<(), String> {
         repo.git_stdin(&["update-ref", "--stdin"], &writes)?;
     }
 
-    // The everyday row, three deep: the branch this checkout is on, a
-    // second local beside it, a remote of its own and a tag. `main` is
-    // written last because it is the branch the commits are landing on.
+    // `main` comes last: it is the branch the commits land on.
     for (name, tag) in [("side", "v6.3"), ("next", "v6.2"), ("main", "v6.1")] {
         let body = format!("guide {name}\n");
         repo.commit(
@@ -224,9 +194,8 @@ fn stack_published(repo: &mut DemoRepo) -> Result<(), String> {
         repo.git(&["push", "origin", &spec])?;
     }
     repo.git(&["push", "origin", "--tags"])?;
-    // Moved after they were published, which no fetch undoes: origin goes
-    // on naming the commits they were made on. They land on rows that
-    // already carry a tag, so the drift costs no card where it arrives.
+    // Moved after publishing (see `stack`), onto rows that already carry
+    // a tag, so the drift costs no card where it lands.
     for (drift, onto) in [("v9.1", "v1.1"), ("v9.2", "v2.1"), ("v9.3", "v3.1")] {
         repo.git(&["tag", "--force", drift, onto])?;
     }
@@ -234,24 +203,15 @@ fn stack_published(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// The deepest row there is, three rows of it: every colour at once, and
-/// the detached HEAD standing on the newest of them.
+/// The deepest row there is, three rows of it, with the detached HEAD on
+/// the newest.
 ///
 /// Six cards on the top row — the marker, a local branch, one another
 /// working copy holds, a remote with no counterpart here, a tag, and the
-/// far half of a tag that moved. **The marker cannot repeat**, so this is
-/// also the ceiling: no commit can carry more than one card per colour
-/// once the front card's own is the only one allowed twice
-/// (`RefChipStack.sheets`). The two rows under it carry the same five
-/// without it, which is what a shape shown three times means where one of
-/// the three is HEAD's.
-///
-/// Detached on purpose, and in its own repository for that reason: with
-/// HEAD off `main` there is no current branch anywhere in the graph,
-/// which is the one thing [`stack`] is for.
+/// far half of a tag that moved. That is the ceiling: only the front
+/// card's colour may repeat (`RefChipStack.sheets`), and the marker
+/// cannot. The two rows under it carry the same five without the marker.
 pub(super) fn stack_max(repo: &mut DemoRepo) -> Result<(), String> {
-    // `main` is the newest row's own local — it is the branch the commits
-    // land on, and the two rows under it are named as they are made.
     for (name, tag, drift) in [
         ("base", "v1.0", "v9.3"),
         ("mid", "v2.0", "v9.2"),
@@ -278,10 +238,9 @@ pub(super) fn stack_max(repo: &mut DemoRepo) -> Result<(), String> {
         repo.git(&["push", "origin", &far])?;
     }
     repo.git(&["push", "origin", "--tags"])?;
-    // Published where they were made and then moved one row down, so
-    // origin goes on naming the commit each was pushed from and no fetch
-    // will overwrite the name here — the far half of the drift is every
-    // row's dim tag, and the near half lands where a tag already stands.
+    // Published, then moved one row down: origin keeps the old commit and
+    // no fetch overwrites the name, so every row wears a dim far half and
+    // the near half lands where a tag already stands.
     for (drift, onto) in [("v9.1", "v2.0"), ("v9.2", "v1.0"), ("v9.3", "v3.0")] {
         repo.git(&["tag", "--force", drift, onto])?;
     }

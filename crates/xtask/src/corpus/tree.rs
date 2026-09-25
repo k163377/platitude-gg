@@ -1,34 +1,24 @@
 //! The working tree the corpus checks out: which files exist, where they
 //! sit, and how large each one is.
 //!
-//! **This is the axis the startup number hangs off.** `status::read`
-//! runs `git status --porcelain=v2 -z --branch -uall`, whose cost is one
-//! `lstat` per tracked file and whose output the session holds. The
-//! reference repository has 106,581 tracked files and an index to match;
-//! a corpus of 512 carries an index two orders of magnitude smaller and
-//! answers in a fraction of the time, and that difference is most of what
-//! the record calls startup (ci/baseline/code-costs-windows-x64.md
-//! §git のプロセス代, ci/baseline/perf-windows-x64.md §判定).
+//! **This is the axis the startup number hangs off**: `status::load` pays
+//! one `lstat` per tracked file, so a corpus with a fraction of the
+//! reference repository's files has a fraction of its startup
+//! (ci/baseline/code-costs-windows-x64.md §git のプロセス代).
 //!
-//! **The tables are the reference repository's own histograms**, so the
-//! shape is readable here without running anything: how deep its
-//! directories go, how many files each holds, and how large those files
-//! are. Each is walked by a stride coprime to its length, which makes
-//! the walk a permutation — every band is drawn exactly as often as the
-//! table says.
+//! The tables are the reference repository's own histograms, each walked
+//! by a stride coprime to its length — a permutation, so every band is
+//! drawn exactly as often as the table says.
 
 use super::shape::{self, mix};
 
-/// Tracked files at HEAD, which is what [`SIZES`] sums to.
+/// Tracked files at HEAD.
 pub(super) const TRACKED: u64 = 106_581;
 
-/// Paths the history has room to move between. The tree holds more than
-/// it tracks so that a commit can delete one path and add another and
-/// leave the count where it was — which is what the reference
-/// repository's history does, 36% adds against 36% deletes, and what a
-/// corpus whose every commit is a modification never shows:
-/// `--find-renames` with no add-delete pair to score, `orig_path` never
-/// set, and the whole added-file side of the diff pane unreachable.
+/// Untracked slots the history moves between, so a commit can delete one
+/// path and add another at a steady count. Without them every commit is a
+/// modification: `--find-renames` has no pair to score, `orig_path` is
+/// never set, and the added-file side of the diff pane is unreachable.
 pub(super) const SPARE: u64 = 4_096;
 
 /// Every path the tree can name, tracked or waiting.
@@ -37,26 +27,20 @@ pub(super) const SLOTS: u64 = TRACKED + SPARE;
 /// Directories holding at least one file. The reference repository has
 /// 14,609 of them under 22,887 trees.
 ///
-/// **This multiplies the build as well as the tree.** Every
-/// commit rewrites one tree object per directory on the path of every
-/// file it touches, and `fast-import` hashes and deflates each of them
-/// on a single thread — so the directory count decides both what the
-/// walk costs the application and what the corpus costs to build.
+/// It prices the build too: every commit rewrites one tree object per
+/// directory on each touched path, hashed on `fast-import`'s one thread.
 ///
-/// **It is one half of a pair.** The walk makes directories until
-/// every file has a home, so what decides how many there are is this
-/// against [`FANOUT`]: the mean fan-out has to come to `SLOTS / DIRS`,
-/// or the walk runs past the table and keeps inventing directories
-/// whatever this says.
+/// It is paired with [`FANOUT`]: the mean fan-out has to come to
+/// `SLOTS / DIRS`, or the walk runs past the table and keeps inventing
+/// directories.
 const DIRS: u64 = 22_887;
 
-/// Files whose size is in `[lo, 2*lo)`, at the counts the reference
-/// repository holds them. Sums to [`TRACKED`], so the walk over it draws
-/// every band exactly.
+/// Files whose size is in `[lo, 2*lo)`, at the reference repository's
+/// counts. Sums to [`TRACKED`].
 ///
-/// **The tail is the point.** `preview::SOURCE_BYTE_CAP` is 4MB, and the
-/// reference repository's largest file sits just under it — an edge a
-/// corpus whose largest file is a tenth of that never approaches.
+/// The tail is the point: the reference repository's largest file sits
+/// just under `preview::SOURCE_BYTE_CAP`, an edge a corpus of smaller
+/// files never approaches.
 const SIZES: [(u64, u64); 24] = [
     (310, 0),
     (40, 1),
@@ -91,11 +75,9 @@ const DIR_DEPTHS: [u64; 20] = [
     118, 16, 8, 2,
 ];
 
-/// Directories holding `[lo, 2*lo)` files, at the counts the reference
-/// repository holds them.
-/// The shares are the reference repository's; the sizes are doubled, so
-/// the mean comes to `SLOTS / DIRS` and the walk ends where the table
-/// does.
+/// Directories holding `[lo, 2*lo)` files. The shares are the reference
+/// repository's; the sizes are doubled, so the mean comes to
+/// `SLOTS / DIRS` and the walk ends where the table does.
 const FANOUT: [(u64, u64); 11] = [
     (5_929, 2),
     (3_846, 4),
@@ -110,9 +92,9 @@ const FANOUT: [(u64, u64); 11] = [
     (1, 2_048),
 ];
 
-/// Extensions per ten thousand files. The reference repository is mostly
-/// Kotlin and test data, and the mix decides which files take the
-/// grammar path in the diff pane and which take the lexer fallback.
+/// Extensions per ten thousand files, at the reference repository's mix —
+/// which decides what takes the diff pane's grammar path and what the
+/// lexer fallback.
 const EXTS: [(u64, &str); 12] = [
     (6_006, "kt"),
     (2_393, "txt"),
@@ -128,7 +110,7 @@ const EXTS: [(u64, &str); 12] = [
     (13, "png"),
 ];
 
-/// Everything else, in the order a walk reaches it.
+/// Everything else.
 const EXT_TAIL: [&str; 12] = [
     "md",
     "swift",
@@ -144,19 +126,18 @@ const EXT_TAIL: [&str; 12] = [
     "yaml",
 ];
 
-/// Strides for the three walks. Each is coprime to the length it walks,
-/// which is what makes the walk a permutation. The two over directories
-/// differ so that depth and fan-out are drawn apart (identity pairing
-/// put the median file fourteen deep where the reference repository's
-/// is eight); the size walk is over slots, a different table, so
-/// sharing a value with the depth walk pairs nothing. **Changing any of
-/// them changes the corpus** (`corpus::token`).
+/// Strides for the three walks, each coprime to the length it walks. The
+/// two over directories differ so depth and fan-out are drawn apart (equal
+/// strides put the median file fourteen deep against the reference's
+/// eight); the size walk is over slots, so sharing the depth walk's value
+/// pairs nothing. Changing any of them changes the corpus
+/// (`corpus::token`).
 const SIZE_STEP: u64 = 40_009;
 const DEPTH_STEP: u64 = 40_009;
 const FANOUT_STEP: u64 = 30_011;
 
-/// Files carrying the executable bit, and the one symlink. The reference
-/// repository has 144 and 1 against 106,436 ordinary files.
+/// Files carrying the executable bit, and the one symlink, at the
+/// reference repository's counts.
 const EXEC_EVERY: u64 = TRACKED / 144;
 const SYMLINK_SLOT: u64 = TRACKED / 2;
 
@@ -165,8 +146,8 @@ const SYMLINK_SLOT: u64 = TRACKED / 2;
 pub(super) struct Tree {
     pub(super) paths: Vec<String>,
     pub(super) sizes: Vec<u32>,
-    /// Slots whose file is a megabyte or more — the ones the record can
-    /// open deliberately to say what the grammar path costs.
+    /// Slots whose file is a megabyte or more — what the record opens to
+    /// price the grammar path.
     pub(super) huge: Vec<u64>,
 }
 
@@ -186,8 +167,7 @@ pub(super) fn build() -> Tree {
     let sizes: Vec<u32> = (0..SLOTS)
         .map(|slot| u32::try_from(size_of(slot)).unwrap_or(u32::MAX))
         .collect();
-    // The tail has to be tracked at HEAD to be openable, so it is
-    // looked for among the slots the base commit places.
+    // Only a slot tracked at HEAD is openable.
     let huge = (0..TRACKED)
         .filter(|slot| sizes[*slot as usize] >= 1_048_576)
         .collect();
@@ -195,10 +175,9 @@ pub(super) fn build() -> Tree {
 }
 
 impl Tree {
-    /// The file mode git is told for a slot. Modes are an axis of their
-    /// own: a checkout on Windows turns the symlink into a plain file
-    /// holding its target, which is a diff nothing else in the corpus
-    /// produces.
+    /// The file mode git is told for a slot. A checkout on Windows turns
+    /// the symlink into a plain file holding its target — a diff nothing
+    /// else in the corpus produces.
     pub(super) fn mode(&self, slot: u64) -> &'static str {
         if slot == SYMLINK_SLOT {
             "120000"
@@ -210,16 +189,11 @@ impl Tree {
     }
 }
 
-/// One directory, sharing a prefix with the one before it.
-///
-/// The shared prefix is what makes the interior trees: a forest of
-/// 14,609 leaf directories that each spelled their whole path afresh
-/// would be 14,609 disjoint chains, where the reference repository's
-/// 22,887 trees are mostly shared.
+/// One directory, sharing a prefix with the one before it — without it
+/// every leaf would be its own chain of interior trees, where the
+/// reference repository's are mostly shared.
 fn directory(d: u64, segments: &mut Vec<String>) -> String {
     let want = depth_of(d).max(1) as usize;
-    // Keep a little of what the last one had, so siblings and cousins
-    // exist.
     let keep = segments.len().min(want.saturating_sub(1));
     let keep = keep.saturating_sub((mix(d ^ 0x00D1_2E00) % 3) as usize);
     segments.truncate(keep);
@@ -278,9 +252,8 @@ fn fanout(d: u64) -> u64 {
 }
 
 fn size_of(slot: u64) -> u64 {
-    // Over `TRACKED`, because that is what the table sums to: the spare
-    // slots take a second lap of it, every one landing in a band the
-    // table has.
+    // Over `TRACKED`, what the table sums to: the spare slots take a
+    // second lap.
     let k = slot.wrapping_mul(SIZE_STEP) % TRACKED;
     let mut seen = 0;
     for (count, lo) in SIZES {
@@ -296,9 +269,6 @@ fn size_of(slot: u64) -> u64 {
     0
 }
 
-/// The extension a slot's file carries, which is what decides whether
-/// the diff pane reads it through a grammar, through the lexer
-/// fallback, or as a picture.
 pub(super) fn extension(slot: u64) -> &'static str {
     ext_of(slot)
 }
@@ -319,18 +289,14 @@ fn ext_of(slot: u64) -> &'static str {
 mod tests {
     use super::{DIR_DEPTHS, DIRS, SIZES, SLOTS, TRACKED, build};
 
-    /// The tables have to describe what they say they describe, which is
-    /// what makes the walks over them permutations.
+    /// The sums are what make the walks over the tables permutations.
     #[test]
     fn the_tables_sum_to_what_they_are_walked_against() {
         assert_eq!(SIZES.iter().map(|(count, _)| count).sum::<u64>(), TRACKED);
         assert_eq!(DIR_DEPTHS.iter().sum::<u64>(), DIRS);
     }
 
-    /// **The tracked file count is the startup number.** `status::read`
-    /// pays one `lstat` per file and the index carries one entry, so a
-    /// corpus with a fraction of the reference repository's files has a
-    /// fraction of its `git status`.
+    /// The tracked count is the startup number (module doc).
     #[test]
     fn the_tree_is_the_size_the_reference_repository_is() {
         let tree = build();
@@ -341,8 +307,7 @@ mod tests {
         assert_eq!(unique.len() as u64, SLOTS, "every path is its own");
     }
 
-    /// Eleven files of a megabyte or more, one of them within a
-    /// whisker of `preview::SOURCE_BYTE_CAP`.
+    /// `4_194_304` is `preview::SOURCE_BYTE_CAP`.
     #[test]
     fn the_tail_reaches_the_cap_the_application_carries() {
         let tree = build();
@@ -356,8 +321,7 @@ mod tests {
         assert!(largest >= 4_194_304, "the largest was {largest}");
     }
 
-    /// Every segment is a name Windows takes: git refuses the stream on
-    /// a device name, a hundred seconds after writing.
+    /// The trap `segment`'s doc names.
     #[test]
     fn no_path_carries_a_reserved_name() {
         const RESERVED: [&str; 6] = ["con", "aux", "nul", "prn", "com1", "lpt1"];
@@ -370,9 +334,8 @@ mod tests {
         }
     }
 
-    /// Paths at least as long as the reference repository's, because
-    /// they are what the index, the status output and the details
-    /// pane's tree are mostly made of.
+    /// Paths are most of what the index, the status output and the
+    /// details pane's tree are made of.
     #[test]
     fn paths_are_no_shorter_than_the_reference_repositorys() {
         let tree = build();

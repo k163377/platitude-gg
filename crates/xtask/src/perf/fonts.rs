@@ -1,21 +1,9 @@
-//! The font database's population, weighed on its own.
-//!
-//! The first glyph the UI family lacks makes Qt build a fallback list,
-//! and building one populates every family the database knows — on
-//! Windows a DirectWrite face over each file, kept for the life of the
-//! process. Tens of MB once, whichever glyph asked (an emoji, a
-//! simplified-Chinese ideograph), and nothing the product can decline:
-//! the fallback-family and emoji-family APIs only order that list, the
-//! QML `font` type has no `families`, and the fonts are the machine's.
-//! The record reads the budget line net of it
-//! (ci/baseline/perf-windows-x64.md §判定), so it is weighed, and
-//! weighed where the sampler can see it. The corpus asks during
-//! the scroll, where the walk's bytes and the bench's arrive in the
-//! same ticks; the calibration run asks before
-//! `perf_done` instead, idle either side, and says when ([`mark`] —
-//! `WindowPerfDriver` under `PGG_PERF_FONT_WALK=1`). Offscreen there is
-//! no walk to weigh: that platform's FreeType database holds no fonts,
-//! which is why `verify-ui` cannot see any of this.
+//! The font database's population, weighed on its own: once per process,
+//! nothing the product can decline, and what the budget line is read net
+//! of (rules-refs/app-ui.md「perf の判定行は net で読む」). The corpus asks
+//! during the scroll, where the walk's bytes and the bench's arrive in the
+//! same ticks, so the calibration run asks before `perf_done` instead,
+//! idle either side, and says when ([`mark`]).
 
 use super::Options;
 
@@ -48,7 +36,6 @@ pub(super) enum Mark {
     Settled,
 }
 
-/// Which of the three lines `line` is, if any.
 pub(super) fn mark(line: &str) -> Option<Mark> {
     if line.contains("perf_font_walk_begin") {
         Some(Mark::Begin)
@@ -62,9 +49,8 @@ pub(super) fn mark(line: &str) -> Option<Mark> {
 }
 
 impl FontWalk {
-    /// The first time each line arrived: a run says each once, and a
-    /// second saying would be a run that walked twice, which the first
-    /// mark is the honest end of.
+    /// Keeps the first time each line arrived: a second saying would be a
+    /// run that walked twice.
     pub(super) fn note(&mut self, mark: Mark, at_us: u64) {
         let slot = match mark {
             Mark::Begin => &mut self.begin_us,
@@ -82,18 +68,15 @@ impl FontWalk {
         )
     }
 
-    /// The walk read against the sampler's series: the last tick before
-    /// the app said it was about to ask, and the last before it said it
-    /// had settled — both taken of a process that had been idle for the
-    /// app's own settle, which is what makes their difference the walk.
+    /// Reads `before` / `after` off the sampler's series. Both are ticks
+    /// of a process idle for the app's own settle, which is what makes
+    /// their difference the walk.
     pub(super) fn weigh(mut self, history: &[Tick]) -> Self {
         self.before = self.begin_us.and_then(|at| last_before(history, at));
         self.after = self.settled_us.and_then(|at| last_before(history, at));
         self
     }
 
-    /// Whether there is a number here: said in order, and sampled on
-    /// both sides.
     pub(super) fn weighed(&self) -> bool {
         self.said() && self.before.is_some() && self.after.is_some()
     }
@@ -109,16 +92,14 @@ impl FontWalk {
     }
 
     /// What the budget line is read net of: the working set the walk
-    /// added, or nothing where it added nothing — a walk paid before
-    /// the app asked is in every reading already and cannot be taken off
-    /// what was never measured.
+    /// added, never negative — a walk paid before the app asked is in
+    /// every reading already.
     pub(super) fn charge(&self) -> u64 {
         self.working_set()
             .and_then(|added| u64::try_from(added).ok())
             .unwrap_or(0)
     }
 
-    /// The walk as one run's line says it.
     pub(super) fn line(&self) -> String {
         match (self.working_set(), self.private(), self.before, self.after) {
             (Some(ws), Some(private), Some(before), Some(after)) => format!(
@@ -137,8 +118,7 @@ fn delta(after: u64, before: u64) -> i64 {
     i64::try_from(after).unwrap_or(i64::MAX) - i64::try_from(before).unwrap_or(i64::MAX)
 }
 
-/// `+12.3MB` / `-0.4MB`: a difference of working sets, which unlike a
-/// working set has a sign worth printing.
+/// `+12.3MB` / `-0.4MB`: a difference of working sets, sign included.
 pub(super) fn signed_mb(bytes: i64) -> String {
     format!("{:+.1}MB", bytes as f64 / (1024.0 * 1024.0))
 }
@@ -151,11 +131,10 @@ fn last_before(history: &[Tick], at_us: u64) -> Option<Tick> {
         .copied()
 }
 
-/// The calibration run's options: the same build, window, screen and
-/// repository as the runs it is read beside, driven no further than a
-/// graph, asked to walk, and asked nothing else — no settle, no
-/// attribution, no breakdown, no frame trace — because its one number
-/// is the difference between two idle ticks of its own.
+/// The calibration run's options: what places the window and names the
+/// repository kept, driven no further than a graph, and everything else
+/// off — its one number is the difference between two idle ticks of its
+/// own.
 pub(super) fn calibration(opts: &Options) -> Options {
     Options {
         cases: Vec::new(),
@@ -228,8 +207,6 @@ mod tests {
         assert_eq!(mark("INFO bench: perf_done open=true"), None);
     }
 
-    /// The walk is the difference of the last idle tick on either side
-    /// of the app's own lines, and its charge is that difference.
     #[test]
     fn the_walk_is_read_between_the_last_ticks_before_its_first_and_last_line() {
         let walk = said().weigh(&series());
@@ -245,8 +222,6 @@ mod tests {
         );
     }
 
-    /// Three lines out of order, or a line missing, is no walk; and a
-    /// line said twice keeps its first time — the run walked once.
     #[test]
     fn a_walk_is_said_once_and_in_order() {
         let mut walk = FontWalk::default();
@@ -271,9 +246,6 @@ mod tests {
         assert!(!backwards.said());
     }
 
-    /// No tick before the first line is no reading — the sampler was
-    /// not watching — and a walk that added nothing charges nothing:
-    /// it was paid before the app asked, and is in every reading already.
     #[test]
     fn a_walk_nobody_sampled_or_that_added_nothing_charges_nothing() {
         let late: Vec<Tick> = series()
@@ -299,9 +271,6 @@ mod tests {
         assert_eq!(said().weigh(&noisy).charge(), 0);
     }
 
-    /// The calibration run keeps everything that places the window and
-    /// names the repository, and drops everything that would make it a
-    /// measurement of anything but the walk.
     #[test]
     fn the_calibration_run_drives_no_further_than_a_graph() {
         let asked = crate::perf::options::parse(

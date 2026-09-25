@@ -5,9 +5,8 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
-    // The caret is the whole of these two, and a hook that never
-    // reached the box leaves a picture of the resting colour --
-    // which is a real state, and the other half of each pair.
+    // The caret is the whole of these two: a hook that never reached the
+    // box leaves the resting colour, which is a real state.
     Verb {
         name: "edit-message-focus",
         when: &[],
@@ -19,8 +18,7 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "message_focus pane=wip focused=true",
     },
     // A dialog that stayed open because the write did not take looks
-    // exactly like one nobody has answered yet, and "which half
-    // landed" is not something a picture holds at all.
+    // like one nobody answered; the `*Saved=` flags say which half landed.
     Verb {
         name: "identity",
         when: &[],
@@ -31,10 +29,8 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "state=ready dialog=true nameSaved=true emailSaved=false unsaved=true",
     },
-    // The three forced tooltips: a hook that never reached its
-    // target photographs the resting state, which is a real state.
-    // `tip=` is the attached ToolTip's own visible — the output
-    // side, as everywhere.
+    // Forced tooltips: a hook that never reached its target photographs
+    // the resting state. `tip=` is the attached ToolTip's own visible.
     Verb {
         name: "identity-tip",
         when: &[],
@@ -45,11 +41,9 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "signature_tip code=E tip=true",
     },
-    // The same popup has a real loading and a causally settled form;
-    // neither is selected by a millisecond window. Both are opened by
-    // the field's own press, and `typing=` is the half of that press a
-    // photograph cannot answer: the list must come down with the caret
-    // left in the box it came from.
+    // The merge editor list's loading and settled forms, each reached
+    // causally, not by a millisecond window. `typing=`: the field's own
+    // press brings the list down with the caret left in the box.
     Verb {
         name: "settings-tools-loading",
         when: &[],
@@ -60,54 +54,33 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "settled=true loading=false open=true typing=true",
     },
-    // **Enter on each side of that list, in the one run** (デザイン規約
-    // §立っている質問は 1 か所で聞く). `stood=` is the press made with
-    // the list down, which is the list's key and not the screen's —
-    // hung on the field's plain `accepted`, that press shut the screen
-    // on a reader who had just arrowed to a tool. `left=` is the press
-    // after it, with the list taken down, which is the answer. **Nothing
-    // here is a picture**: the run ends with the screen gone, and a
-    // screen that went at the wrong press is the same window as one
-    // that went at the right one.
+    // Enter on each side of that list, in one run (デザイン規約
+    // §選ぶ欄と打つ欄). `stood=`: with the list down, Enter is the list's
+    // and the screen stays; `left=`: the next press, list gone, leaves.
     Verb {
         name: "settings-tools-enter",
         when: &[],
         plain: "merge_editor_enter stood=true left=true",
     },
-    // Which git the app runs, and what that binary answered. **Nothing
-    // here is a picture**: a path is drawn the same whether or not there
-    // is anything at the end of it, and the sentence under the box takes
-    // a subprocess to arrive — so a run photographed at the moment it
-    // typed frames "Asking for the version…" and reads as green.
+    // Which git the app runs, and what that binary answered. The sentence
+    // under the box takes a subprocess to arrive, so a run shot as it
+    // typed frames "Asking for the version…".
     //
-    // The three rows are the three states the chapter has. With no
-    // argument the box is empty and the store is empty — the resting
-    // state a fresh settings directory comes up in — and the git on
-    // `PATH` answered it. **Which** of the two answers is not claimed:
-    // the container runs the supported minimum, a desk runs the newest,
-    // and the run that photographs an old one is handed its git by
-    // `--old-git`.
+    // No argument: box and store empty (a fresh settings directory), and
+    // the git on `PATH` answered. Which version is never claimed — the
+    // container runs the minimum, a desk the newest, and `--old-git` hands
+    // a run an old one (the `in-use` run included, for the offered shape
+    // over a git below the minimum); every row claims its run of flags.
     //
-    // `in-use` types the path this run is already spawning: **a box holding
-    // the git already running offers nothing**, whatever it is spelled
-    // like, and that is the row that says so. `other` types the second git
-    // the run was staged with (`--other-git`) and gets the button. **The
-    // flags are one claim each and a picture answers none**: `offers=` is
-    // the rule the press is guarded by, and `held=` is the frozen copy the
-    // button was drawn from — a button whose word says `Restart to apply`
-    // over a `holdMs` of zero photographs exactly like one that holds, and
-    // would fall through under a hand.
+    // `in-use` types the git already running: that box offers nothing,
+    // however spelled. `other` types the second git (`--other-git`) and
+    // gets the button. `offers=` is the rule the press is guarded by;
+    // `held=` the frozen copy the button was drawn from — `Restart to
+    // apply` over a `holdMs` of zero would fall through under a hand.
     //
-    // With a path that has nothing at the end of it, the refusal has to
-    // be the *missing* one: a run that fell back to "it ran and said
-    // something else" would be photographing the wrong sentence, and
-    // `offers=false` is what says the loud button stayed away.
-    // **Which version is not claimed anywhere here.** The container runs
-    // the supported minimum, a desk runs the newest, and the run that
-    // photographs an old one is handed its git by `--old-git` — including
-    // the `in-use` run, which is how the offered shape is seen over a git
-    // below the minimum. What every row claims instead is the run of
-    // flags, which is why they stand together in the line.
+    // A path with nothing at its end must be refused as *missing*, not as
+    // "it ran and said something else"; `offers=false` keeps the loud
+    // button away.
     Verb {
         name: "settings-git-path",
         when: &[
@@ -123,92 +96,65 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "answered=false offers=false held=false restart=false state=missing",
     },
-    // The process chapter's two boxes, typed and read back out of the
-    // store. **Nothing here is a picture**: a box holding a number and a
-    // box whose edit never landed frame the same, and the interval the
-    // page's tick reads is in a unit no box shows — so the store's answer
-    // is the line. With no argument both boxes are emptied: the default
-    // count — which is the machine's own, a third of its threads, so the
-    // line says `default=true`, a word every machine answers the
-    // same — and the copies never read (`copies_ms=0` is what stops
-    // the tick).
+    // The process chapter's two boxes, typed and read back off the store
+    // (the tick reads the interval in a unit no box shows). With no
+    // argument both are emptied: the default count is the machine's own
+    // (a third of its threads), so the line says `default=true`, and
+    // `copies_ms=0` is what stops the tick.
     Verb {
         name: "settings-processes",
-        // Three, which no machine defaults to: the floor is
-        // two and the ceiling eight, and the line has to be able to say
-        // `default=false` on every machine the run is taken on.
+        // Three, which no machine defaults to (floor four, ceiling eight),
+        // so `default=false` holds on every machine.
         when: &[(
             Arg::Is("3:10"),
             "git_processes concurrency=3 default=false copies_secs=10 copies_ms=10000",
         )],
         plain: "default=true copies_secs=0 copies_ms=0",
     },
-    // The way out taken over a git waiting to be applied. **Nothing here
-    // is a picture**: a screen that stayed is drawn exactly like one
-    // nobody asked to close, and the four halves of the claim are the way
-    // out having been taken, the screen still standing, the mark turned,
-    // and *what* is holding it — an unsaved identity would hold the same
-    // screen the same way, and this must be the offer.
+    // The way out taken over a git waiting to be applied: the screen
+    // still stands with its mark turned, and what holds it must be the
+    // offer — an unsaved identity holds the screen the same way.
     Verb {
         name: "settings-git-leave",
         when: &[],
         plain: "settings_git_leave offers=true armed=true unsaved=0 open=true",
     },
-    // The rail is the one way between the two categories that no other
-    // verb travels: the rest name a category before the screen is up. A
-    // picture of the git chapters cannot say which of the two put them
-    // there, so both halves are said in the line.
+    // The rail between the two categories, which no other verb travels
+    // (the rest name a category before the screen is up); both halves of
+    // the move are in the line.
     Verb {
         name: "settings-switch",
         when: &[],
         plain: "settings_switch was_app=true app=false git=true",
     },
-    // The way out the screen owns, which the `✕` and Escape are both one
-    // line onto. **Nothing here is a picture**: a window with no settings
-    // screen over it is drawn exactly like one where the screen never
-    // opened, so both halves have to be said — that it was up, and that
-    // it went.
-    //
-    // `unsaved=0` is the third: the way out stops for an identity nobody
-    // has saved, so a run where it did not stop has to say that nothing
-    // was holding it. Boxes drift from git's answer on their own — git
-    // answers late, and answers again — and a screen that called any of
-    // that an edit would warn about work nobody did. The argument names
-    // the category, because the git one is where both such chapters are.
-    // `save=false` is the fourth: boxes nobody typed in say what git
-    // holds, and a Save lit over them offers to hand git its own answer.
+    // The screen's own way out, which `✕` and Escape both call: it was up,
+    // and it went. `unsaved=0`: the way out stops for an unsaved identity,
+    // and boxes drift from git's late, repeated answers on their own — a
+    // screen that called that an edit would warn about work nobody did.
+    // The argument names the category (the git one holds both such
+    // chapters). `save=false`: a Save lit over untouched boxes offers to
+    // hand git its own answer.
     Verb {
         name: "settings-escape",
         when: &[],
         plain: "settings_escape unsaved=0 global=false repo=false save=false was_open=true now_open=false",
     },
-    // The screen's own words, taken from the air around them. **The
-    // picture cannot answer it**: a column of settings with one line
-    // washed blue is drawn the same whichever gesture put the wash
-    // there, and what is being claimed is that every place in the air
-    // reaches a value — which is one press per place.
+    // The screen's words taken from the air around them: every place in
+    // the air must reach a value, one press per place.
     //
-    // `all=` is the claim and `reach=` the diagnosis: how much air a
-    // surface has depends on the words in it and the machine that drew
-    // them. `hand=` rides along because the run enters the pad's own
-    // functions, so a sweep would stay green with the `MouseArea` taken
-    // out. `shown=` is the setup's side — the category that is not on
-    // screen has its fields hidden, and `SweepPad` steps over a hidden
-    // one, so a sweep of the wrong one would walk an empty column. It is
-    // keyed on the argument because the argument is the category, and a
-    // row that claimed one of them for both would go on passing after the
-    // two stopped telling each other apart.
+    // `all=` / `reach=` / `hand=` as in verbs.md §面の掃き. `shown=`: the
+    // category off screen has its fields hidden and `SweepPad` steps over
+    // them, so the wrong one sweeps an empty column — hence keyed on the
+    // argument, which is the category.
     //
-    // `release=` is the second hand on that screen: the one that hands
-    // the keyboard back when a press lands where nothing takes it.
-    // Neither a picture nor a run can say it *works* — a field that kept
-    // its blue is drawn like one just swept, and the run has no pointer —
-    // so what rides here is that the hand is standing, and
-    // `tests/qml/tst_fieldrelease.qml` asks the rest with a real one.
+    // `release=` is the hand that gives the keyboard back when a press
+    // lands where nothing takes it. The run (no pointer) can only say it
+    // stands; `tests/qml/tst_fieldrelease.qml` asks the rest with a real
+    // one.
     //
-    // **One row per argument, each carrying the whole line.** A row wins
+    // One row per argument, each carrying the whole line: a row wins
     // outright over `plain`, so a row holding only the half that differs
-    // would quietly stop asking for `all=`.
+    // would stop asking for `all=`.
     Verb {
         name: "settings-sweep",
         when: &[
@@ -216,10 +162,9 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::OneOf(&["", "app"]),
                 "settings_sweep all=true caret=true hand=true cat=app shown=true release=true version=true",
             ),
-            // The git category stops before `version=`: the chip belongs
-            // to the other one, and its word is the answer to a probe
-            // this run does not wait for — asked here it would be a claim
-            // about how fast a `git --version` came back.
+            // The git category stops before `version=`: the chip belongs to
+            // the app one, and here it would claim how fast `git --version`
+            // came back.
             (
                 Arg::Is("git"),
                 "settings_sweep all=true caret=true hand=true cat=git shown=true release=true",
@@ -227,65 +172,41 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "settings_sweep all=true caret=true hand=true",
     },
-    // The same way out, taken over an identity that has not been saved.
-    // **Neither half is a picture**: a screen that stayed is drawn like
-    // one nobody asked to close, and the question in its foot is drawn
-    // like any other foot until it is read. `save=true` is the pair of
-    // the line above: the one typing that stops the way out is the one
-    // that lights the button the reader is sent to.
+    // The same way out over an unsaved identity: the screen stays and
+    // asks in its foot. `save=true`: the typing that stops the way out is
+    // the one that lights the button the reader is sent to.
     Verb {
         name: "settings-leave",
         when: &[],
         plain: "settings_leave unsaved=1 save=true asked=true open=true",
     },
-    // The git category's two groups, which is the tallest this screen
-    // gets. **The pair splits the claim**, because a row is one
-    // substring and there are two things a picture cannot say.
-    //
-    // This one takes the reach: a column cut off at the window's edge is
-    // drawn exactly like one that ends there, and the way it silently
-    // breaks is a content height read off implicit sizes that a wrapping
-    // label under-reports — which leaves the chapters clipped *and* the
-    // bar down.
-    // With an argument it is a *switch*: the screen has already landed on
-    // the repository the reader is in, and the run picks another. What
-    // must hold then is that the boxes followed — a screen still showing
-    // the repository it was on, or showing nothing, is one offering to
-    // write the wrong thing into the one now named above it, and both
-    // photograph as an ordinary form.
+    // The git category's two groups, the tallest this screen gets. The
+    // pair (with `settings-repo-pick`) splits the claim, since a row is
+    // one substring. With no argument this one takes the reach
+    // (rules-refs/app-ui.md「`contentHeight` は `implicitHeight` を読む」).
+    // With an argument it switches to another repository, and the boxes
+    // must follow — else the screen offers to write the wrong thing into
+    // the one now named above it.
     Verb {
         name: "settings-repo",
         when: &[(Arg::Is(""), "settings_fit reach=true")],
         plain: "repo_config rows=2 state=ready matches=true save=false",
     },
-    // And this one takes the read and the list. `state=ready` is what
-    // empty boxes cannot say for themselves — "this repository sets
-    // nothing of its own" and "the read never landed" look alike —
-    // while `rows=2` says both open repositories reached the chooser,
-    // since a chooser offering only the one it landed on is a chooser
-    // nobody can use.
-    //
-    // `save=false` is this chapter's own button, and it is a second
-    // claim rather than a spelling of `matches=`: this Save asks for no
-    // filled boxes — an emptied one is how an override is taken out —
-    // so what keeps it dark over a screen nobody has typed in is the
-    // touch alone.
+    // This one takes the read and the list. `state=ready`: empty boxes
+    // cannot tell "sets nothing of its own" from "the read never landed".
+    // `rows=2`: both open repositories reached the chooser. `save=false`
+    // is its own claim, not a spelling of `matches=` — this Save asks for
+    // no filled boxes (emptying one takes an override out), so only the
+    // touch keeps it dark.
     Verb {
         name: "settings-repo-pick",
         when: &[],
         plain: "repo_config rows=2 state=ready matches=true save=false open=true",
     },
-    // The same group's line-ending chapter, picked. **The picture is a
-    // chooser holding one of four sentences of the same shape**, so it
-    // cannot say whether the pick moved anything: `were=` is what the
-    // repository held before it, and it is `false` because that is what
-    // every demo repository is built with (`demo::repo`).
-    //
-    // The repository is the only level there is: the screen writes
-    // `core.autocrlf` into the one somebody picked and nowhere else
-    // (規約 §設定の画面), so there is no second scope for a run to reach
-    // — and the one it would have reached is the machine's own file,
-    // which no run owns.
+    // The same group's line-ending chapter, picked. `were=` is what the
+    // repository held before — `false`, as every demo repository is built
+    // (`demo::repo`). `scope=local` is the only level: the screen writes
+    // `core.autocrlf` into the picked repository alone (規約 §設定の画面).
     Verb {
         name: "settings-eol",
         when: &[
@@ -293,10 +214,9 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Is("input"),
                 "line_endings scope=local state=ready were=false held=input",
             ),
-            // The row that writes nothing. What it falls back to is the
-            // machine's, so the line stops before `effective=` — the
-            // trailing space is what keeps `held=` from matching a held
-            // value that merely starts where this one ends.
+            // The row that writes nothing falls back to the machine's value,
+            // so the line stops before `effective=`; the trailing space keeps
+            // `held=` from matching a longer held value.
             (
                 Arg::Is("inherited"),
                 "line_endings scope=local state=ready were=false held= ",
@@ -304,38 +224,26 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "line_endings scope=local state=ready were=false",
     },
-    // The same card's avatar half. Only this one of its four wants a
-    // line: the other three cannot reach the camera with the wrong
-    // state, because each waits on the state itself — a filed picture
-    // in the list, a lit row, a row gone from the store — and a run
-    // where any of that never came photographs nothing at all. What
-    // no predicate covers is the second grab: the list is a popup, it
-    // lives in overlay.png, and a mirror refreshed over an empty
-    // overlay passes (the blind spot `commit-menu` is here for). Three
-    // popups because the card is modal — its dimmer, itself, and the
-    // list that came down inside it.
+    // The card's avatar list, the one of its four verbs that wants a line:
+    // the other three wait on the state itself. The list is a popup in
+    // overlay.png, judged as `commit-menu` is. Three popups: the modal
+    // card's dimmer, the card, and the list inside it.
     Verb {
         name: "avatar-combo",
         when: &[],
         plain: "overlay saved=true popups=3",
     },
-    // Enter in that box finds the file, which is the one errand the
-    // name it holds is for (デザイン規約 §アバターを与える). **Nothing
-    // here is a picture either**: the picker is the platform's own
-    // window, so it is in neither PNG and the screen behind it is drawn
-    // exactly as it was (the reading `open-picker` takes). `who=` is
-    // the guard the button beside the box wears — a picker opened over
-    // nobody would file its answer against an empty address.
+    // Enter in that box opens the file picker (デザイン規約 §アバターを与える),
+    // the platform's own window and in neither PNG (as `open-picker`).
+    // `who=` is the guard the button beside the box wears: a picker opened
+    // over nobody files its answer against an empty address.
     Verb {
         name: "avatar-enter",
         when: &[],
         plain: "avatar_enter who=true picker=true",
     },
-    // The badge's sentence names the address it is about, and the
-    // address is handed to it late (`%1`). A picture cannot answer
-    // that: an empty name leaves a box the same size with the same
-    // words up to the gap, so `named=` is the run's own reading of the
-    // tip against the author it was opened over.
+    // The badge's sentence names its address, handed in late (`%1`):
+    // `named=` reads the tip against the author it was opened over.
     Verb {
         name: "avatar-tip",
         when: &[],

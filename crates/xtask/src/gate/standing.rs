@@ -4,9 +4,8 @@ use std::path::Path;
 
 use super::stamp::Store;
 
-/// Stop hook: where the seat's gate stands, for the user's eyes. A seat
-/// ahead of main whose tip carries no full stamp is work reported before
-/// it was gated — said as a system message, so a turn that ends
+/// A seat ahead of main whose tip carries no full stamp is work reported
+/// before it was gated — said as a system message, so a turn that ends
 /// mid-work is not held to a gate it was never claiming.
 pub(crate) fn standing(cwd: &str) -> Option<String> {
     let root = crate::seats::worktree_root(cwd)?;

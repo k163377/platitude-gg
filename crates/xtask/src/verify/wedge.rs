@@ -1,40 +1,30 @@
-//! Diagnostics for an unresponsive application started by this verification runner.
-//! Reports concern the current test run and its output directory; process cleanup
-//! remains owned by the runner that started the application.
+//! Diagnostics for an unresponsive app this runner started; process
+//! cleanup stays with that runner. A bare `TIMED OUT` leaves the next
+//! occurrence to start from nothing (internal-docs/ハング調査.md). The
+//! app's own account of where it stood is `harness::deadline`'s
+//! ([`REPORT_FILE`], beside the pictures); this adds what only the parent
+//! sees: how long the app had been silent and what it last said, which
+//! pictures reached the disk, and how full the machine was.
 //!
-//! One word — `TIMED OUT` — from a run reaped at the parent's ceiling
-//! leaves the next one to happen starting from there again
-//! (internal-docs/P3-確認事項.md §check ハング調査で残った観察). The
-//! process's own account of where it stood is the app's
-//! (`harness::deadline` writes [`REPORT_FILE`] beside the pictures); this
-//! is the rest of it, which only the parent can see: how long the app had
-//! been silent and what it last said, what pictures reached the disk, and
-//! how full the machine was.
+//! [`TRAIL_FILE`] does not need the app to still answer: the report is
+//! written once, at the end, by a thread inside the process; the trail as
+//! each step begins. A kill from outside, or a stop past `exiting` (the
+//! exit has already ended every other thread), leaves the trail and not
+//! the report — so a missing report says only that the write was never
+//! reached, never where the process stood.
 //!
-//! **[`TRAIL_FILE`] is the one of these that does not need the app to
-//! still be able to answer.** The report is written once, at the end, by
-//! a thread inside the process; the trail is written as each step begins.
-//! A run killed from outside, or stopped past its own `exiting` where the
-//! exit has already ended every other thread, leaves the second and not
-//! the first — which is why a missing report says only that the write was
-//! never reached, and never where the process stood.
-//!
-//! **Read only at a red that may be a process that stopped** — the
-//! ceiling, and the one red that is not a ceiling at all
-//! ([`trail`], [`lanes_line`]). Every line below costs a directory
-//! listing and a probe of a handful of lock files, and a run that answers
-//! never reaches any of it.
+//! Read only at a red that may be a stopped process — the ceiling, and
+//! the app's own watchdog ([`trail`], [`lanes_line`]): each line costs a
+//! directory listing and a handful of lock probes.
 
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// What a process its own deadline thread ended exits with, and the file
-/// it leaves beside the pictures. Spelled again here: xtask depends on
-/// std alone (CLAUDE.md 技術スタック), so the app's
-/// `harness::deadline::WEDGED` and `REPORT_FILE` are the originals. A
-/// drift shows up as a run reporting a bare `exit 97` with no account
-/// beside it.
+/// The exit code of a process its own deadline thread ended, and the file
+/// it leaves beside the pictures — copies of the app's
+/// `harness::deadline::WEDGED` / `REPORT_FILE` (xtask is std-only). A
+/// drift reads as a bare `exit 97` with no account beside it.
 const WEDGED_EXIT: i32 = 97;
 const REPORT_FILE: &str = "wedge.txt";
 const TRAIL_FILE: &str = "stations.txt";
@@ -43,15 +33,11 @@ const TRAIL_FILE: &str = "stations.txt";
 /// `.git` (`crate::budget`).
 const LEDGER: &str = "pgg-budget";
 
-/// Clears any account left in `shot_dir` by whoever had it last — the
-/// report and the trail both.
-///
-/// **Before the app starts, every run.** A named `--shot-dir` is allowed
-/// to outlive the run that made it (`verify::run`), so without this a
-/// run reaped at the ceiling would be handed the *previous* run's
-/// account — a different pid and a different station, read as its own.
-/// The app empties the trail again as it comes up, which covers a run
-/// this could not clear; this covers the run that never comes up at all.
+/// Clears the report and the trail left in `shot_dir` by whoever had it
+/// last. Call before the app starts, every run: a named `--shot-dir`
+/// outlives its run (`verify::run`), and a reaped run would read the
+/// previous run's pid and station as its own. The app empties the trail
+/// again as it comes up; this covers the run that never comes up.
 pub(super) fn clear_any_account(shot_dir: &Path) {
     for file in [REPORT_FILE, TRAIL_FILE] {
         if let Err(error) = std::fs::remove_file(shot_dir.join(file))
@@ -66,20 +52,16 @@ pub(super) fn clear_any_account(shot_dir: &Path) {
     }
 }
 
-/// Whether the run ended at a ceiling: reaped by the parent, or ended
-/// by the deadline thread the app carries for the case the parent's
-/// kill cannot explain.
-///
-/// The app's own watchdog is a red of its own. It fires from the event
-/// loop, so a run it ended has said what it was doing and left a report
-/// of its own (`super::outcome`).
+/// Whether the run ended at a ceiling: reaped by the parent, or ended by
+/// the app's deadline thread. The app's own watchdog is not one — it fires
+/// from the event loop, so its run has already said what it was doing
+/// (`super::outcome`).
 pub(super) fn at_a_ceiling(ran: &super::child::Ran) -> bool {
     ran.timed_out || ran.status.and_then(|s| s.code()) == Some(WEDGED_EXIT)
 }
 
-/// Whether the parent stopped waiting on something the app said — a
-/// run whose reason is already known, and whose account is that
-/// reason.
+/// Why the parent stopped waiting on something the app said, if it did —
+/// then that reason is the whole account.
 pub(super) fn gave_up_early(ran: &super::child::Ran) -> Option<&str> {
     ran.gave_up.as_deref()
 }
@@ -108,25 +90,15 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
     let own = self_account(shot_dir);
     lines.push(match &own {
         Some(said) => format!("  the app's own account: {said}"),
-        // **Only that the write was never reached.** The thread logs
-        // before it saves, and there are ways to stop a process that
-        // never reach either: a kill from outside, and a wedge past
-        // `exiting`, where the exit has already ended every other thread.
-        // Where it stood is the trail's to say, above.
         None => format!(
             "  the app left no {REPORT_FILE}: it did not reach the write at the end of its own \
              deadline, which says nothing more than that — the trail above is where it stood"
         ),
     });
-    // For both ceilings. A process that ended itself named the station it
-    // stood in, but only a wedge's account is finished by that: a station
-    // reached late is `out of time` without saying whether it was a slow
-    // step or a wedge that began too late to stand the grace, and the
-    // seconds of silence before it are the only side that can tell them
-    // apart.
+    // For both ceilings: an `out of time` account does not say whether the
+    // station was a slow step or a wedge begun too late to stand the grace,
+    // and the silence before it is what tells them apart.
     lines.push(silence(ran, own.as_deref()));
-    // What the reaping took with the app — the git it was waiting on,
-    // counted — or what could not be looked up and may still be running.
     if let Some(under) = &ran.reaped {
         lines.push(format!("  under the app: {under}"));
     }
@@ -150,16 +122,9 @@ pub(super) fn account(shot_dir: &Path, ran: &super::child::Ran, shots: &[PathBuf
 /// The stations the run reached, as the one line to print under any red
 /// where a process may have stopped.
 ///
-/// **The half that does not need the process to still be answering.**
-/// Every mark here was on the disk before the step it names began, so a
-/// run stopped in a way that leaves no report of its own still says how
-/// far it got — which is the whole of what a bare `TIMED OUT` is
-/// missing.
-///
-/// The seconds are the app's own clock, started in `main`, and the run's
-/// are the parent's, started at the spawn; the two differ by however long
-/// the process took to get going. Each number stands on the clock it
-/// was read from.
+/// The seconds are the app's clock (started in `main`), not the parent's
+/// (started at the spawn); they differ by the process's startup, so each
+/// number stands on its own clock.
 pub(super) fn trail(shot_dir: &Path) -> Vec<String> {
     let marks = match read_trail(shot_dir) {
         Ok(marks) => marks,
@@ -189,8 +154,8 @@ pub(super) fn trail(shot_dir: &Path) -> Vec<String> {
     )]
 }
 
-/// The last recorded step at a ceiling. A failed append can hide later
-/// progress, so this is a location in the record.
+/// The last recorded step at a ceiling — a place in the record, since a
+/// failed append can hide later progress.
 fn stopped_in(shot_dir: &Path) -> Option<String> {
     let (last_at, last) = read_trail(shot_dir).ok()?.pop()?;
     Some(format!(
@@ -199,21 +164,18 @@ fn stopped_in(shot_dir: &Path) -> Option<String> {
     ))
 }
 
-/// The last station the trail records, read while the run still stands:
-/// what the run ordered to hold at a station is ended on the word of
-/// (`super::child::ordered_hold`). Nothing where there is no trail yet,
-/// or nothing in it parses.
+/// The last station the trail records, read while the run still stands —
+/// a run ordered to hold at a station is ended on its word
+/// (`super::child::ordered_hold`). `None` with no trail yet, or nothing in
+/// it that parses.
 pub(super) fn last_station(shot_dir: &Path) -> Option<String> {
     read_trail(shot_dir).ok()?.pop().map(|(_, station)| station)
 }
 
-/// The trail as pairs of seconds and station, in the order they were
-/// reached. Read errors are kept apart from an empty file.
-///
-/// **A line that does not parse is dropped.** The file is appended to a
-/// line at a time by a process that can be stopped between the write and
-/// the newline, so the tail of it is the one place a torn record can
-/// appear.
+/// The trail as (seconds, station) in the order reached; a read error is
+/// kept apart from an empty file. A line that does not parse is dropped:
+/// the writer can be stopped between the write and the newline, so the
+/// tail may be torn.
 fn read_trail(shot_dir: &Path) -> std::io::Result<Vec<(f32, String)>> {
     let text = std::fs::read_to_string(shot_dir.join(TRAIL_FILE))?;
     Ok(text
@@ -234,15 +196,13 @@ fn self_account(shot_dir: &Path) -> Option<String> {
     (!said.is_empty()).then(|| said.replace('\n', " / "))
 }
 
-/// How long the app had been silent, and what it last said. **The last
-/// line**: what a run says on its way past a wedge is as often a Qt
-/// warning as a report of its own.
+/// How long the app had been silent, and its last line (on the way past a
+/// wedge, as often a Qt warning as its own).
 ///
-/// **Counted to the account, wherever there is one to count to.** The
-/// app's account goes to stderr as well as to [`REPORT_FILE`], and Qt's
-/// teardown writes after it, so the seconds at the end of a run that
-/// ended itself are the pause between two dying words: a tenth of a
-/// second for a process that had by then said nothing for eleven.
+/// Counted to the account where there is one: the account goes to stderr
+/// as well as [`REPORT_FILE`] and Qt's teardown writes after it, so the
+/// silence at the end of a self-ended run is only the pause between two
+/// dying words.
 fn silence(ran: &super::child::Ran, own: Option<&str>) -> String {
     let Some(quiet) = ran.quiet_for else {
         return "  it never said anything at all: the silence is the whole run".to_string();
@@ -267,23 +227,18 @@ fn silence(ran: &super::child::Ran, own: Option<&str>) -> String {
 /// The silence that ran up to the account, and what the app had said
 /// last before it.
 ///
-/// `None` where the account is not among the lines this run left — a
-/// report that never reached stderr, a run whose stderr the parent could
-/// not read, or a ceiling the app never reached at all — and the silence
-/// is counted to the end of the run.
+/// `None` where the account is not among this run's lines (it never
+/// reached stderr, stderr was unreadable, or the app never wrote one); the
+/// silence is then counted to the end of the run.
 fn quiet_before_the_account(ran: &super::child::Ran, said: &str) -> Option<(Duration, String)> {
-    // The report is one line. A longer one is joined with ` / ` by
-    // [`self_account`], which no line of the app's carries, so the piece
-    // before the first join is what a line can be found by.
+    // [`self_account`] joins a multi-line report with ` / `, which no app
+    // line carries, so its first piece is what the stderr line is found by.
     let written = said.split(" / ").next()?;
     let wrote = ran
         .err_lines
         .iter()
         .rposition(|line| line.contains(written))?;
     let wrote_at = *ran.err_at.get(wrote)?;
-    // Whichever stream spoke last before it. The app talks on stderr —
-    // tracing and Qt both — and the other half is read for a line of
-    // its own.
     let before = ran
         .err_at
         .iter()
@@ -302,16 +257,14 @@ fn quiet_before_the_account(ran: &super::child::Ran, said: &str) -> Option<(Dura
     })
 }
 
-/// How much of a line the account quotes. The app clips its own quote to
-/// the same width (`harness::deadline`), and for the same reason: a run
-/// whose last word was the census names two hundred components, and four
-/// lines that answer the run are worth more than the whole of one of
-/// them.
+/// How much of a line the account quotes — the width the app clips its own
+/// quote to (`harness::deadline`): a last line that was the census names
+/// two hundred components and would bury the rest of the account.
 const KEEP: usize = 160;
 
-/// Cuts a line to [`KEEP`], on a character boundary. The mark is ASCII:
-/// a stream this could not spell reaches here as replacement characters
-/// already ([`crate::app_out`]), and this one reads as the cut.
+/// Cuts a line to [`KEEP`] characters. The mark is ASCII: undecodable
+/// bytes already arrive as replacement characters ([`crate::app_out`]), so
+/// `...` reads as the cut.
 fn clipped(line: &str) -> String {
     match line.char_indices().nth(KEEP) {
         Some((at, _)) => format!("{}...", &line[..at]),
@@ -319,15 +272,10 @@ fn clipped(line: &str) -> String {
     }
 }
 
-/// How full the machine was, in the budget every gate on it draws on. A
-/// run that stopped answering while the machine was full reads
-/// differently from one that stopped answering alone (`crate::budget`).
-///
-/// Read by the ceiling above and by the one red that is not a ceiling at
-/// all: a run the app's own watchdog ended turned its loop the whole
-/// time and simply never reached the verb's completion, and how much of
-/// the machine was running beside it is the difference between a verb
-/// that is wrong and a verb that was starved (`super::outcome`).
+/// How full the machine was, in the budget every gate on it draws on
+/// (`crate::budget`). Also read under the app's own watchdog
+/// (`super::outcome`), where it tells a verb that is wrong from one that
+/// was starved.
 pub(super) fn lanes_line() -> String {
     let Some(ledger) = ledger_dir() else {
         return "lanes: not read (no repository here to find them beside)".to_string();
@@ -344,9 +292,7 @@ fn ledger_dir() -> Option<PathBuf> {
         .map(|common| Path::new(&common).join(LEDGER))
 }
 
-/// What the probe made of the ledger: how much of the machine somebody
-/// is holding and on how many units, how many units are queued behind
-/// them, how many landings are in line, and how many tickets it could
+/// What the probe made of the ledger; `unprobed` is the tickets it could
 /// not answer for at all.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(super) struct Counted {
@@ -372,12 +318,9 @@ impl Counted {
         if self.landings > 0 {
             said.push(format!("{} landing(s) in line", self.landings));
         }
-        // Said on its own. A container's runner may have no road to
-        // the ledger at all — a seat's `.git` is a file naming a
-        // directory outside the mount, so the ticket files are not
-        // there to open — and a silent "nothing held" would read as
-        // an idle machine, which is the one answer this line has to
-        // get right.
+        // Said on its own: a container's runner may not reach the ticket
+        // files (a seat's `.git` names a directory outside the mount), and
+        // silence would read as an idle machine.
         if self.unprobed > 0 {
             said.push(format!("{} could not be probed from here", self.unprobed));
         }
@@ -388,13 +331,11 @@ impl Counted {
     }
 }
 
-/// Counts the tickets somebody is holding, and what they say.
-///
-/// **Leaves the ledger as it stands.** A ticket that probes free here
-/// belongs to a process that is gone, and clearing it is the waiting
-/// side's business (`crate::budget`): doing it from a report would let a
-/// dead run's paperwork move a live one's queue. A ticket nobody holds
-/// counts for nothing.
+/// Counts the tickets somebody is holding, and what they say. Leaves the
+/// ledger as it stands: a ticket that probes free belongs to a gone
+/// process, and clearing it is the waiting side's business
+/// (`crate::budget`) — from a report it would let a dead run's paperwork
+/// move a live queue.
 fn held_in(ledger: &Path) -> Result<Counted, String> {
     let entries = match std::fs::read_dir(ledger) {
         Ok(entries) => entries,
@@ -416,9 +357,8 @@ fn held_in(ledger: &Path) -> Result<Counted, String> {
         if !held {
             continue;
         }
-        // The ticket beside the lock says what its holder is doing. One
-        // that cannot be read is a unit on the machine all the same —
-        // said as unprobed.
+        // A held ticket that cannot be read is still a unit on the
+        // machine — counted as unprobed.
         let Some((weight, running, turn)) =
             crate::budget::probe(&ledger.join(stem)).or_else(|| {
                 counted.unprobed += 1;
@@ -439,10 +379,9 @@ fn held_in(ledger: &Path) -> Result<Counted, String> {
     Ok(counted)
 }
 
-/// Whether somebody holds the lock at `path`, and `None` where the probe
-/// could not answer. **Two different answers**: a file this cannot open
-/// says nothing about its holder, and counting it as free would
-/// report a busy machine idle.
+/// Whether somebody holds the lock at `path`; `None` where the probe could
+/// not answer — counting an unopenable file as free would report a busy
+/// machine idle.
 fn is_held(path: &Path) -> Option<bool> {
     let file = File::options().read(true).write(true).open(path).ok()?;
     match file.try_lock() {
@@ -473,11 +412,9 @@ mod tests {
     }
 
     /// A lock this test holds until it drops it — through [`Locked`], so
-    /// that letting go is an unlock: a close leaves the lock standing on
-    /// every open file description a neighbouring test's fork carried
-    /// away, and a ticket nobody holds would then probe as held
-    /// (`crate::locks`). Seen on Linux, where `flock` follows the
-    /// description.
+    /// letting go is an unlock: on Linux a close leaves `flock` standing on
+    /// every open file description a neighbouring test's fork carried away,
+    /// and the ticket would then probe as held (`crate::locks`).
     fn lock(dir: &std::path::Path, name: &str) -> crate::locks::Locked {
         let file = std::fs::File::options()
             .read(true)
@@ -529,9 +466,7 @@ mod tests {
         assert!(!at_a_ceiling(&ran(false, Some(1))));
     }
 
-    /// A ticket somebody holds is on the machine; one nobody holds
-    /// belongs to a process that is gone, and is neither counted nor
-    /// cleared from here.
+    /// A ticket nobody holds is neither counted nor cleared from here.
     #[test]
     fn the_machine_is_counted_off_the_tickets_somebody_holds() {
         let dir = lanes("counted");
@@ -565,8 +500,6 @@ mod tests {
         assert!(dir.join("t-3").exists(), "a report cleared the ledger");
     }
 
-    /// A machine no gate has run on yet has no directory, and that is an
-    /// answer.
     #[test]
     fn a_ledger_nobody_has_written_is_not_an_error() {
         let yard = lanes("untaken");
@@ -575,11 +508,6 @@ mod tests {
         assert_eq!(Counted::default().line(), "nothing is running on it");
     }
 
-    /// A container's runner may have no road to the ledger — a seat's
-    /// `.git` is a file naming a directory outside the mount — so its
-    /// ticket files cannot be opened at all. **Silence there would read
-    /// as an idle machine** — the one answer this line has to get
-    /// right.
     #[test]
     fn tickets_that_could_not_be_probed_are_said_rather_than_called_free() {
         let counted = Counted {
@@ -594,10 +522,8 @@ mod tests {
         );
     }
 
-    /// The account is what the next occurrence is read from, so a run
-    /// that left no report of its own still says which of the two
-    /// ceilings ended it, how long it had been quiet, and what reached
-    /// the disk.
+    /// Without the app's report the account still says which ceiling
+    /// ended the run, how long it had been quiet, and what reached the disk.
     #[test]
     fn a_run_that_left_no_report_still_accounts_for_itself() {
         let dir = lanes("no-report");
@@ -611,9 +537,7 @@ mod tests {
         assert!(said.contains("app.png overlay.png"), "{said}");
     }
 
-    /// A run reaped where it was ordered to hold says so, apart from one
-    /// reaped at the ceiling: the words are what `wedge-check` reads back
-    /// (`super::super::faults`).
+    /// The words are what `wedge-check` reads back (`super::super::faults`).
     #[test]
     fn a_run_reaped_where_it_was_held_names_the_station() {
         let dir = lanes("held-at");
@@ -629,9 +553,6 @@ mod tests {
         assert!(!said.contains("reaped at the ceiling"), "{said}");
     }
 
-    /// The station a held run is ended on the word of is read off the
-    /// trail as it grows: nothing before there is one, the last that
-    /// parsed once there is, a torn tail dropped.
     #[test]
     fn the_last_station_is_read_off_the_trail_as_it_grows() {
         let dir = lanes("last-station");
@@ -644,9 +565,8 @@ mod tests {
         assert_eq!(last_station(&dir).as_deref(), Some("starting"));
     }
 
-    /// What the app wrote down about itself is the first thing to read:
-    /// it is the only half that knows which side of the event loop the
-    /// process was on.
+    /// The app's report is the only half that knows which side of the
+    /// event loop the process was on.
     #[test]
     fn the_apps_own_account_is_carried_through() {
         let dir = lanes("own-account");
@@ -663,14 +583,8 @@ mod tests {
         assert!(said.contains("pictures on disk: none"), "{said}");
     }
 
-    /// A run that ended itself out of time leaves an account that does
-    /// not say whether the station was a slow step or a wedge that began
-    /// late, so the silence the parent watched is carried through for
-    /// that ceiling too — **counted to the account**. The account is a
-    /// line on stderr as much as a file, and Qt writes more on the way
-    /// down, so the end of such a run is the pause between two dying
-    /// words, and the silence worth reading is the one before the
-    /// account.
+    /// The silence before the account, not the pause after it while Qt
+    /// tears down (`super::silence`).
     #[test]
     fn the_silence_of_a_run_that_ended_itself_is_counted_to_its_account() {
         let dir = lanes("own-silence");
@@ -697,9 +611,6 @@ mod tests {
         assert!(!said.contains("0.1s"), "{said}");
     }
 
-    /// The line is quoted at a width. A run whose last word was the
-    /// census names two hundred components, and the four lines that
-    /// answer the run have to stay readable under it.
     #[test]
     fn the_line_the_account_is_counted_to_is_quoted_at_a_width() {
         let dir = lanes("own-silence-long");
@@ -723,11 +634,9 @@ mod tests {
         assert!(quoted.ends_with("...`"), "{quoted}");
     }
 
-    /// The account reaches the file and the stream by two roads, and a
-    /// run can leave one without the other — a window whose stderr
-    /// nobody was holding open takes that road to `OutputDebugStringW`
-    /// (`platitude_gg::logsink`). The end of the run is what the silence
-    /// is counted to then, which is all there is to count to.
+    /// A report in the file but not on stderr: a window whose stderr
+    /// nobody held open sends it to `OutputDebugStringW`
+    /// (`platitude_gg::logsink`).
     #[test]
     fn an_account_that_never_reached_the_stream_is_counted_to_the_end() {
         let dir = lanes("own-account-unheard");
@@ -742,9 +651,6 @@ mod tests {
         assert!(said.contains("silent for the last 138.0s"), "{said}");
     }
 
-    /// The trail is the record that does not need the process: a run
-    /// stopped where nothing inside it can report still says which step
-    /// it was in, and how much of the run was spent there.
     #[test]
     fn a_run_that_left_no_report_is_still_placed_by_its_trail() {
         let dir = lanes("trail");
@@ -760,8 +666,7 @@ mod tests {
         assert!(said.contains("exiting 2.1s"), "{said}");
         assert!(said.contains("it got as far as `exiting` 2.1s"), "{said}");
         assert!(!said.contains("137.9s"), "different clock origins: {said}");
-        // And the missing report is read for what it is: the write was
-        // never reached, which on this shape it never can be.
+        // The missing report says only that the write was never reached.
         assert!(said.contains("did not reach the write"), "{said}");
         assert!(
             !said.contains("never reached its own deadline"),
@@ -769,9 +674,6 @@ mod tests {
         );
     }
 
-    /// A trail is appended to a line at a time, so the one place a torn
-    /// record can appear is its tail — dropped, since reading it as a
-    /// station is what would name the wrong step.
     #[test]
     fn a_half_written_last_line_is_dropped_rather_than_guessed_at() {
         let dir = lanes("trail-torn");
@@ -787,8 +689,6 @@ mod tests {
         assert!(!said.contains("0.9"), "{said}");
     }
 
-    /// Missing and empty records are different observations, neither of
-    /// which establishes whether the process reached a station.
     #[test]
     fn a_trail_nobody_left_and_an_empty_one_read_differently() {
         let dir = lanes("trail-absent");
@@ -797,10 +697,6 @@ mod tests {
         assert!(trail(&dir).join("\n").contains("is empty"));
     }
 
-    /// A named `--shot-dir` outlives the run that made it, so an account
-    /// left in one belongs to whoever had it last until this run starts.
-    /// Reading a previous run's pid and station as this run's is worse
-    /// than having no account at all.
     #[test]
     fn an_account_left_by_the_last_run_is_gone_before_this_one_starts() {
         let dir = lanes("stale");

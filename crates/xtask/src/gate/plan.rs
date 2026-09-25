@@ -28,17 +28,15 @@ pub(crate) enum Side {
 pub(crate) struct Step {
     pub id: String,
     pub side: Side,
-    /// Runs on every gate regardless of the diff, and is never cached:
-    /// the seconds these take are not worth a stamp.
+    /// Runs on every gate regardless of the diff, never cached: its
+    /// seconds are not worth a stamp.
     pub always: bool,
-    /// A verify-ui run, which builds the release unless told not to. The
-    /// runner tells it not to once an earlier verb of the same side has
-    /// built in this very invocation (a cached step's build may have
-    /// happened in another tree).
+    /// A verify-ui run, which builds the release unless the runner says an
+    /// earlier verb of the side built it in this invocation (a cached
+    /// step's build may have been another tree's).
     pub builds_app: bool,
-    /// Reads the release the side's verbs build — a verb, or `bare` — and
-    /// so runs in the side's built-app group, beside the checks that
-    /// build elsewhere (`gate::sides::side`).
+    /// Reads the release the side's verbs build (a verb, or `bare`), so
+    /// runs in the side's built-app group (`gate::sides::side`).
     pub release: bool,
     pub command: Vec<String>,
     /// What the step reads, as workspace paths (a directory covers
@@ -46,11 +44,10 @@ pub(crate) struct Step {
     pub inputs: BTreeSet<String>,
 }
 
-/// One step the branch owes, with its key in this tree and whether a
-/// stamp already answers for it.
+/// One step the branch owes.
 pub(crate) struct Required {
     pub step: Step,
-    /// Empty for an always-step, which is never cached.
+    /// Empty for an always-step.
     pub key: String,
     pub cached: bool,
 }
@@ -64,10 +61,9 @@ pub(crate) struct Plan {
     /// landing would add.
     pub onto_main: bool,
     pub host_only: bool,
-    /// Every step asked for again whether or not a stamp answers for it.
-    /// Kept past the selection because the run has one more chance to
-    /// find a step already green — another tree's, stamped while this
-    /// one queued — and a fresh run runs it anyway (`gate::step::run_one`).
+    /// Every step runs whether or not a stamp answers for it, even one
+    /// another tree stamps while this run queues (`gate::step::run_one`
+    /// looks again).
     pub fresh: bool,
     /// Every file in the tree counted as reached, and why: `--all`, or the
     /// build input that changed.
@@ -78,14 +74,11 @@ pub(crate) struct Plan {
     /// QML components the change reaches that no verb's census names —
     /// nothing headless shows them, so the gate cannot pass them.
     pub uncovered: Vec<String>,
-    /// Changed files nothing reads and no step covers — said out loud,
-    /// so a kind of file nothing tests is visible in the gate's
-    /// report.
+    /// Changed files no step reads, listed so that a kind of file nothing
+    /// tests shows in the report.
     pub unclaimed: Vec<String>,
     /// What the graph says is wrong with the tree itself
-    /// (`graph::complaints`): a path resolving nowhere leaves every
-    /// selection short by whatever that edge carried, so no run over this
-    /// tree can be stamped.
+    /// (`graph::complaints`); no run over such a tree can be stamped.
     pub complaints: Vec<String>,
     /// Candidate count from the final census, for comparison only.
     /// A component absent at the end may have been exercised earlier.
@@ -105,12 +98,10 @@ pub(crate) struct Ask<'a> {
 }
 
 /// The two crates the built app is made of, and the harness directories
-/// its runs read. Spelled in pieces for the reason [`qml_dirs`] gives: a
-/// whole path in a string here would be an edge from this file to
-/// everything under it, and this file reads none of them — it names them
-/// as what a step's cache key has to cover, which is a different thing
-/// from reading them. Left whole, a change to any source of the core made
-/// this file its reader, and through it every test of the task runner.
+/// its runs read. Spelled in pieces: a whole path in a string here would
+/// make this file a reader of everything under it, and through it owe
+/// every test of the task runner to any core change (反映前テストの機械化.md
+/// §依存木).
 fn core() -> String {
     format!("crates/{}", "platitude-core")
 }
@@ -156,13 +147,10 @@ struct Standing {
     changed: Vec<String>,
 }
 
-/// The two commits, the base between them, and the diff.
-///
-/// quotepath off: a non-ASCII name would otherwise come back
-/// octal-escaped in quotes and match no file. Renames off: with them on,
-/// a file moved is listed under its new name alone, and the old one —
-/// the path every reader still names — is never seen to have gone
-/// ([`gone_source`]).
+/// quotepath off, or a non-ASCII name comes back octal-escaped in quotes
+/// and matches no file. Renames off, or a moved file is listed under its
+/// new name alone and the old one, which every reader still names, is
+/// never seen to go ([`gone_source`]).
 fn standing(here: &str, main_ref: &str) -> Result<Standing, String> {
     let rev = |what: &str| {
         git_query(
@@ -206,9 +194,7 @@ fn standing(here: &str, main_ref: &str) -> Result<Standing, String> {
     })
 }
 
-/// The plan, with every phase of the making of it timed into `spent`:
-/// the graph off the sources, the one listing of the tree the cache keys
-/// are made of, the census, and the rest.
+/// The plan, with each phase of making it timed into `spent`.
 pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan, String> {
     // waits(measured): the plan's cost, for the record
     let started = std::time::Instant::now();
@@ -227,8 +213,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     spent.graph_reused = loaded.reused;
     spent.graph_cache = loaded.note;
     let g = loaded.graph;
-    // Keep documents in the reported diff, but only executable inputs
-    // select tests, including under asset and harness directories.
+    // Documents stay in the reported diff but select no tests.
     let executable_changes: Vec<String> = changed
         .iter()
         .filter(|file| !graph::is_markdown(file))
@@ -248,10 +233,8 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     // input widens only what runs.
     let touched = g.reach(&executable_changes);
     let reach = if everything.is_some() {
-        // Every node of the graph, and every QML file whether or not it
-        // is one: a component that names nothing — or names only what
-        // is gone — has no edge, and so no key here, and the verbs whose
-        // census names it alone would be the ones "everything" missed.
+        // Every node, and every QML file: a component with no edge is no
+        // node, and the verbs only its census line names would be missed.
         let mut every: BTreeSet<String> = g
             .deps
             .keys()
@@ -320,15 +303,9 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     })
 }
 
-/// Each step with the stamp that already answers for it, the other side's
-/// dropped when only this one was asked for. An always-step carries no key:
-/// the seconds it takes are not worth one.
-///
-/// The object ids the keys are made of come from one listing of the
-/// tree: a whole plan is
-/// hundreds of steps with dozens of inputs each, and a process for every
-/// pair is minutes of every gate spent starting git before the first
-/// step runs — more under the load of other seats gating beside it.
+/// Each step with its key and whether a stamp already answers for it, the
+/// Linux side's dropped under `--host-only`. The keys' object ids come from
+/// one listing of the tree: a git per step and input is minutes of planning.
 fn owed(
     here: &str,
     head: &str,
@@ -357,8 +334,9 @@ fn owed(
         .collect())
 }
 
-/// The object id of every path in the tree at `rev`, directories
-/// included (a directory's is its tree's), from one `git ls-tree`.
+/// The object id of every path in the tree at `rev` from one `git ls-tree`;
+/// a directory's is a fingerprint of its entries besides Markdown
+/// (`inputs::from_listing`).
 fn tree_ids(here: &str, rev: &str) -> Result<BTreeMap<String, String>, String> {
     let mut command = std::process::Command::new("git");
     command
@@ -375,15 +353,14 @@ fn tree_ids(here: &str, rev: &str) -> Result<BTreeMap<String, String>, String> {
     Ok(parse_ls_tree(&output.stdout))
 }
 
-/// `ls-tree -z`: `<mode> <type> <id>\t<path>` per entry, NUL after each.
-/// `-z` so that a path is spelled as it is (a non-ASCII name otherwise
-/// comes back octal-escaped in quotes).
+/// `ls-tree -z`: `<mode> <type> <id>\t<path>` per entry, NUL after each
+/// (`-z`, or a non-ASCII name comes back octal-escaped in quotes).
 fn parse_ls_tree(listing: &[u8]) -> BTreeMap<String, String> {
     super::inputs::from_listing(listing)
 }
 
-/// A file every build reads: a change to it is a change to everything,
-/// and no graph of the sources can say otherwise.
+/// A file every build reads and no graph of the sources sees: a change to
+/// it is a change to everything.
 fn moves_everything(file: &str) -> bool {
     matches!(
         file,
@@ -395,26 +372,21 @@ fn moves_everything(file: &str) -> bool {
         || file.starts_with("crates/platitude-app/assets/")
 }
 
-/// A source the tree no longer holds, whose readers the graph cannot
-/// name: the graph is read off the tree, and a `use` or a QML type name
-/// still pointing at the file resolves to nothing.
-/// Its reach would be the file alone — no crate entered, so no clippy,
-/// no test, no verb — and a module deleted with another crate still
-/// naming it would be stamped green. Everything is the one reach that
-/// cannot miss the reader.
+/// A source the tree no longer holds: the graph, read off the tree, has no
+/// edge to it, so its reach would be the file alone and a deletion still
+/// named elsewhere would be stamped green. Everything is the one reach
+/// that cannot miss the reader.
 fn gone_source(dir: &Path, file: &str) -> bool {
     (file.ends_with(".rs") || file.ends_with(".qml") || file.ends_with("/qmldir"))
         && !gone_test(file)
         && !dir.join(file).exists()
 }
 
-/// A test taken out has no reader the graph could miss. A module under
-/// `tests/` is named by nothing outside its binary, and the root or
-/// `mod.rs` declaring it moves with it — a declaration left behind is
-/// one `fmt` refuses to resolve — which reaches that binary whole. A
-/// QtTest file is named by nothing at all, and `qmltest_steps` reads it
-/// off the reach by path, where the changed file stands whether or not
-/// the tree holds it.
+/// A test taken out has no reader the graph could miss: a module under
+/// `tests/` is named by nothing outside its binary, and its declaring root
+/// or `mod.rs` changes with it (`fmt` refuses a declaration left behind),
+/// which reaches the binary whole; a QtTest file is named by nothing, and
+/// `qmltest_steps` reads the reach by path.
 fn gone_test(file: &str) -> bool {
     file.contains("/tests/") && (file.ends_with(".rs") || stem_of(file).starts_with("tst_"))
 }
@@ -423,11 +395,7 @@ fn under(file: &str, input: &str) -> bool {
     file == input || file.starts_with(&format!("{}/", input.trim_end_matches('/')))
 }
 
-/// The steps the reach selects, host first: the always-steps, clippy per
-/// crate entered, the tests in the reach, and the app as a built thing.
-/// What a selection reads off the tree besides the reach: the tree
-/// itself, the census of what each verb shows, who wears whom
-/// (`census::worn_by`), and whether the reach is everything.
+/// What a selection reads off the tree besides the reach.
 struct Reading<'a> {
     dir: &'a Path,
     census: &'a Census,
@@ -439,7 +407,7 @@ struct Reading<'a> {
 
 /// What the verb selection counted beside the steps it made.
 struct Counted {
-    /// The narrower candidate count ([`verbs_in_snapshot`]).
+    /// The narrower candidate count (`steps::verbs_in_snapshot`).
     shadow: usize,
     /// Selected lines left to the full gate.
     left: usize,
@@ -457,8 +425,7 @@ fn uncovered(
     reach
         .iter()
         .filter(|f| f.ends_with(".qml"))
-        // A QtTest file stands in a runner of its own
-        // (`qmltest_steps` is what shows it).
+        // A QtTest file is shown by its own runner (`qmltest_steps`).
         .filter(|f| !under(f, &qml_tests))
         .filter(|f| census::instantiable(dir, f))
         .filter(|f| !shown_as(&stem_of(f), worn).iter().any(|s| census.covers(s)))
@@ -477,7 +444,7 @@ fn shown_as(stem: &str, worn: &BTreeMap<String, BTreeSet<String>>) -> BTreeSet<S
 /// The cache key: the step's identity and command, and the object id of
 /// each input in the tree under test (`ids`, from [`tree_ids`]; a path
 /// the tree does not hold is `absent`). FNV-1a, a fingerprint and not a
-/// security claim (the same hash `linux::image_tag` uses).
+/// security claim.
 fn cache_key(ids: &BTreeMap<String, String>, step: &Step) -> String {
     let mut text = step.id.clone();
     text.push('\0');
@@ -499,8 +466,6 @@ fn cache_key(ids: &BTreeMap<String, String>, step: &Step) -> String {
     format!("{hash:016x}")
 }
 
-/// The plan as text: what changed, what that reaches, what it owes, and
-/// what is already green.
 pub(crate) fn describe(plan: &Plan) -> String {
     let short = |sha: &str| sha.chars().take(10).collect::<String>();
     let mut out = format!(
@@ -607,9 +572,8 @@ pub(crate) fn describe(plan: &Plan) -> String {
 mod tests {
     use super::parse_ls_tree;
 
-    /// The listing is read the way `-z` writes it: trees and blobs alike,
-    /// a path spelled whole however it is named, nothing for a line that
-    /// is not an entry.
+    /// A directory answers with a fingerprint, a file with its blob, and
+    /// Markdown not at all.
     #[test]
     fn a_tree_listing_answers_for_files_and_directories_alike() {
         let listing = "040000 tree 1111111111111111111111111111111111111111\tcrates\0\

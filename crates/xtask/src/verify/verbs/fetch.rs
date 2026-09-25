@@ -4,127 +4,90 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
-    // A window whose panel the press took down and a window that
-    // never raised one frame the same, and the mark the press also
-    // quiets is 12 pixels of it in a corner. `was=` is judged with
-    // both — a refusal that never landed leaves a mark that was
-    // never red and a panel that was never up, and clearing nothing
+    // `was=true` is judged beside the other two: a refusal that never
+    // landed leaves no red mark and no panel, and clearing nothing
     // would pass.
     Verb {
         name: "commands-clear",
         when: &[],
         plain: "commands_clear was=true wrong=false open=false",
     },
-    // The drag, left standing for the picture: the wash over the rows is
-    // the deliverable, and a run whose drag reached nothing frames the
-    // same way — an unwashed log and one nobody dragged over are one
-    // photograph. **Two halves, each answering for itself**:
-    // `holds=` is the selection the model kept, `worn=` is the rectangle
-    // every row drew of it. A wash placed off the row's own layout can
-    // come out empty with the runs perfectly right, and `holds=` alone
-    // went green over exactly that (measured).
+    // The drag, left standing for the picture. `holds=` is the selection
+    // the model kept, `worn=` the wash every row drew of it: a wash placed
+    // off the row's own layout comes out empty with `holds=` still true.
     Verb {
         name: "commands-select",
         when: &[],
         plain: "commands_pick holds=true worn=true",
     },
-    // And the key that takes it, which leaves nothing in the picture at
-    // all: the window frames the same whether Ctrl+C took the log, one
-    // row of it, or nothing. `perRow=` is the whole judgement — one line
-    // on the clipboard for every row in the panel, read back off the pad
-    // the copy goes through. Lines that begin with a tab are not counted:
-    // a row that failed brings git's own words down indented under it,
-    // and no run owns which of its commands fail.
+    // Ctrl+C on it. `perRow=` is one line on the pad the copy goes
+    // through for every row in the panel. Tab-led lines are not counted:
+    // a failed row brings git's words indented under it, and no run owns
+    // which of its commands fail.
     Verb {
         name: "commands-copy",
         when: &[],
         plain: "commands_copy perRow=true",
     },
-    // The same drag started on the ground under the last row — every
-    // place in the panel that nobody else takes is a start
-    // (規約 §git が言ったことを読む場所). `reach=9/9` is from every
-    // corner of that ground: a verb that pressed the middle alone
-    // goes green over a hand that only answers there, which is the
-    // fault the right pane's values shipped with (`details-sweep`).
-    // `ground=true` is the fixture's half — a log that fills its
-    // panel leaves no ground, and `reach=0/9` off one says nothing
-    // about the hand.
+    // The same drag started on the ground under the last row
+    // (規約 §git が言ったことを読む場所). `reach=9/9`: from every corner —
+    // pressing one point passes a hand that answers only there (as
+    // `details-sweep`). `ground=true`: a log that fills its panel
+    // leaves no ground, and `reach=0/9` off it says nothing.
     Verb {
         name: "commands-sweep",
         when: &[],
         plain: "commands_sweep reach=9/9 ground=true",
     },
-    // The panel taken down without being emptied, which is the only
-    // way the mark's red is on screen with nothing standing over it.
-    // The picture does hold the red — the row goes red with the mark —
-    // but only a reader can see that, and this is the judgement: a run
-    // whose refusal never landed ends on the same resting row, and one
-    // that landed it and never pressed ends with the panel still up.
-    // The two halves are named so each answers for itself.
+    // The panel taken down without being emptied — the only way the
+    // mark's red is on screen with nothing over it. `wrong=true` fails a
+    // refusal that never landed, `open=false` a press that never came.
     Verb {
         name: "commands-fail-shut",
         when: &[],
         plain: "commands_shut wrong=true open=false",
     },
-    // The same panel taken down by the key, which is the door
-    // cut for exactly this panel: nothing else on screen says what git
-    // said, so it raised itself, and without the key only a press puts
-    // it away (デザイン規約 §git が言ったことを読む場所). `took=true`
-    // is the page claiming the key — an Escape that fell through to
-    // nobody leaves the same shut window as one that never went out,
-    // and `open=false` alone cannot tell them apart. `wrong=true` is
-    // the refusal still on the mark afterwards: the panel goes, the
-    // record does not.
+    // The same panel taken down by Escape (デザイン規約
+    // §git が言ったことを読む場所). `took=true` is the page claiming the
+    // key; `open=false` alone passes an Escape that fell through.
+    // `wrong=true`: the panel goes, the record does not.
     Verb {
         name: "commands-escape",
         when: &[],
         plain: "commands_escape took=true open=false wrong=true",
     },
-    // Recovery is the show, and the picture can only hold its quiet
-    // half: a band that failed and healed ends the run looking like
-    // one that never failed at all. `was=`/`hadline=`/`wasopen=` are
-    // the red half — without them, a fetch that never failed raised no
-    // line and no panel, and taking down nothing would pass as
-    // recovery. `open=false` is the panel that failure raised going
-    // down with it, which is the whole of what the reader asked for:
-    // a laptop that sleeps wakes with its news taken down.
+    // Recovery. `was=`/`hadline=`/`wasopen=` are the red half — a fetch
+    // that never failed raised nothing, and taking down nothing would
+    // pass. `open=false` is the panel the failure raised going down with
+    // it (a laptop that sleeps wakes with its news taken down).
     Verb {
         name: "fetch-recover",
         when: &[],
         plain: "fetch_recover was=true hadline=true wasopen=true wrong=false line=false failures=0 open=false",
     },
-    // The other side of that one word, and the reason it is a pair: the
-    // reader's own panel, up before anything failed, which the same
-    // recovery must leave standing. `open=true` alone would pass on a
-    // run whose recovery never happened, so it is read beside the
-    // `wrong=`/`line=`/`failures=` the landing fetch cleared. The order
-    // the two panels came up in is the whole difference and no picture
-    // holds it — the orders themselves are walked in
-    // tests/qml/tst_commandsowner.qml.
+    // The pair: the reader's own panel, up before anything failed, which
+    // the same recovery leaves standing. `open=true` alone passes a run
+    // that never recovered, so it is read beside the cleared
+    // `wrong=`/`line=`/`failures=`. The orders the two panels come up in
+    // are walked in tests/qml/tst_commandsowner.qml.
     Verb {
         name: "fetch-recover-held",
         when: &[],
         plain: "fetch_recover was=true hadline=true wasopen=true wrong=false line=false failures=0 open=true",
     },
-    // A run of failures cut short photographs the warning shape,
-    // which is a real state and the one the short arguments are for
-    // — so which shape the run came to rest in is said out loud.
-    // `stopped=` is the tab's own suspension, the thing that puts
-    // the word `Resume` on the button. The counts ride after it
-    // unjudged: the fetch an opening fires lands its own failure
-    // inside the run, and where it lands moves with the machine.
+    // A run of failures cut short rests in the warning shape, which the
+    // short arguments are for. `stopped=` is the tab's suspension (the
+    // `Resume` word). The counts ride unjudged: the opening fetch lands
+    // its own failure inside the run, and where moves with the machine.
     Verb {
         name: "fetch-fail",
         when: &[(Arg::OneOf(&["", "1", "2"]), "fetch_fail stopped=false")],
         plain: "fetch_fail stopped=true",
     },
-    // A hand on each of the three live shapes. `tip=` is the words
-    // on screen (`fetch-tip` judges the string the button hands
-    // over), and `word=` beside `rest=` is the pair a picture
-    // cannot hold: the stopped shape is the one that steps its word
-    // back, so it is the one whose two halves have to differ. The
-    // counts ride after them unjudged for the reason `fetch-fail`'s
-    // do.
+    // A hand on each of the three live shapes. `tip=` is the words on
+    // screen (`fetch-tip` judges the string handed over). `word=` beside
+    // `rest=`: the stopped shape steps its word back, so only there do
+    // the two differ. The counts ride unjudged, as for `fetch-fail`.
     Verb {
         name: "fetch-hover",
         when: &[(
@@ -133,35 +96,25 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "fetch_hover tip=true word=true rest=true stopped=false",
     },
-    // The word inside that tip which is a place to go,
-    // pressed. The panel is put away first — the failures
-    // raised it on the way here — so `open=` is the press's own
-    // doing, and `lit=` is the panel saying which reader it is
-    // standing for. The picture holds the second one alone: a
-    // panel that was never down looks exactly like a panel that
-    // came back up.
+    // The tip's link word, pressed. The panel the failures raised is put
+    // away first, so `open=` is the press's own doing; `lit=` is the
+    // panel naming which reader it stands for.
     Verb {
         name: "fetch-tip-link",
         when: &[],
         plain: "fetch_link open=true lit=true",
     },
-    // The resume on the end of such a run, whose whole show is over
-    // before the picture is taken: what it ends on is a button back
-    // at work, and that frames exactly like `fetch-fail 1`.
+    // The resume at the end of such a run, over before the shot: the
+    // button back at work frames like `fetch-fail 1`.
     Verb {
         name: "fetch-resume",
         when: &[],
         plain: "fetch_resume stopped=true fetched=true",
     },
-    // Nothing is pressed in this one, so the picture on its own is a
-    // graph — and a graph that fetched and one that did not frame the
-    // same way. `fails=0` is the other half: a run whose opening fetch
-    // came back with something to say reached its rows some other way.
-    // The refs that fetch brought back land after its rows and in two
-    // places of their own: `behind=1` is the sidebar's word for them
-    // and `top=origin/main` the graph's, a pass later still. A run
-    // that says neither photographed a graph that had fetched beside a
-    // sidebar that had not.
+    // The fetch an opening fires, nothing pressed. `fails=0`: it came
+    // back clean. Its refs land after the rows, in two places: `behind=1`
+    // is the sidebar's word for them and `top=origin/main` the graph's, a
+    // pass later still.
     Verb {
         name: "open-fetches",
         when: &[],
@@ -174,19 +127,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "push_hold mode=diverged busy=true",
     },
-    // The resting button's wait. `turned=false` is judged: the frame
-    // is drawn either way in this panel, so what a wait must not do
-    // is change its colour — and one line the same colour as the two
-    // beside it is a thing a picture cannot be judged on.
+    // The resting button's wait: the frame is drawn either way here, so
+    // `turned=false` says the wait did not change its colour.
     Verb {
         name: "fetch-busy",
         when: &[],
         plain: "fetch_busy busy=true fails=0 turned=false",
     },
-    // Both halves are absences on the picture: a dim button says
-    // nothing about why it is dim, and a tooltip that stays away
-    // frames exactly like one that was never asked for. The argument
-    // names which side of the pair the run is.
+    // Both halves are absences: a dim button says nothing about why, and
+    // a tooltip that stays away frames like one never asked for. The
+    // argument names the side.
     Verb {
         name: "fetch-tip",
         when: &[(

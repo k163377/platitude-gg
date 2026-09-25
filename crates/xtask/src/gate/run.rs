@@ -43,10 +43,10 @@ struct Options {
     all: bool,
     fresh: bool,
     dry_run: bool,
-    /// Run the rest after a red ([`halt`]) — `--keep-going`, or `--all`.
+    /// Run the rest after a red ([`super::halt`]) — `--keep-going`, or `--all`.
     keep_going: bool,
     verbs: Vec<String>,
-    /// How many verify-ui verbs a side runs at once ([`verbs`]).
+    /// How many verify-ui verbs a side runs at once ([`super::sides::verbs`]).
     jobs: usize,
 }
 
@@ -66,8 +66,7 @@ fn options(args: &[String]) -> Result<Options, String> {
     while let Some(arg) = args.get(at) {
         match arg.as_str() {
             "--host-only" => opts.host_only = true,
-            // Stage 3 is asked for the whole picture, and a picture that
-            // stops at its first red is not that.
+            // Stage 3 is asked for the whole picture, not the first red.
             "--all" => {
                 opts.all = true;
                 opts.keep_going = true;
@@ -110,15 +109,10 @@ fn options(args: &[String]) -> Result<Options, String> {
     Ok(opts)
 }
 
-/// How many verbs a side runs at once unless `--jobs` says: a third of
-/// the logical CPUs, one at least and eight at most. A verb is one app
-/// (its QML engine and offscreen raster) plus the git it spawns, and both
-/// sides run at once; the measurement behind the third is in
-/// internal-docs/反映前テストの機械化.md §実測.
-///
-/// It is also what the machine's whole budget is computed from
-/// (`budget::demand`), so every process on the machine names the same
-/// pool without having to agree on anything but this.
+/// How many verbs a side runs at once unless `--jobs` says (why a third:
+/// internal-docs/反映前テストの機械化.md §実測). Also what the machine's
+/// whole budget is computed from (`budget::demand`), so every process
+/// names the same pool.
 pub(crate) fn default_jobs() -> usize {
     let cpus = std::thread::available_parallelism().map_or(1, |n| n.get());
     (cpus / 3).clamp(1, 8)
@@ -129,9 +123,8 @@ fn gate(args: &[String]) -> Result<(), String> {
     let mut spent = Spent::default();
     // waits(measured): the run's whole, for the record (`Spent::total`)
     let whole_run = std::time::Instant::now();
-    // The tree's one gate, taken before the graph is read: a plan is
-    // seconds of reading, and a second gate here has nothing to read. A
-    // dry run holds nothing, because it runs nothing.
+    // The tree's one gate, taken before the plan's seconds of reading. A
+    // dry run runs nothing and holds nothing.
     let what = format!("gate {}", args.join(" "));
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
@@ -158,10 +151,8 @@ fn gate(args: &[String]) -> Result<(), String> {
     print!("{}", plan::describe(&plan));
     let mut shift = Shift::default();
     if opts.dry_run {
-        // The plan's own cost, said the way a run's is: what a dry run
-        // is for is reading a selection, and how long the reading took
-        // is half of what is asked of it here. Nothing is kept — no run
-        // happened, and a record of one would be a run that did not.
+        // The plan's own cost, said but not kept: a record would name a
+        // run that did not happen.
         spent.total = whole_run.elapsed();
         let head = short(&plan.head);
         let run = stood(&plan, what.trim_end(), &head, opts.jobs, false, "dry run");
@@ -189,12 +180,7 @@ fn gate(args: &[String]) -> Result<(), String> {
     match outcome? {
         Gated::Stamped => {
             // Green, and nothing else is running in this tree: where the
-            // sweep belongs (`crate::sweep`). Stage 3 sweeps whatever
-            // the generation says, because it has asked the tree for
-            // everything anyway; every other tier sweeps only when the
-            // generation has moved since the last one. The daily tier
-            // sweeps this tree and not the container's volume — it has
-            // started no container, and this is no place to.
+            // sweep belongs (反映前テストの機械化.md §世代の掃除).
             crate::sweep::at_a_tail(
                 &plan.dir,
                 &crate::sweep::Tail {
@@ -204,10 +190,9 @@ fn gate(args: &[String]) -> Result<(), String> {
             );
             Ok(())
         }
-        // A tree left dirty without a word is the next gate refusing to
-        // run over a change nobody made — which is the whole complaint
-        // the recording answers. Said as the failure it is for the
-        // stamp: the commit that passed has to be the one holding it.
+        // A failure as far as the stamp goes: it must name the commit
+        // that holds the census. Said aloud, since a dirty tree stops the
+        // next gate.
         Gated::CensusMoved => Err(format!(
             "the verbs passed and the tree moved with them — nothing stamped for {}.{}",
             short(&plan.head),
@@ -280,9 +265,8 @@ fn stood<'a>(
     }
 }
 
-/// The run's block, said and kept ([`record`]). Both roads out of a gate
-/// pass through here — a red run's phases are what a slow one is read
-/// from as much as a green one's.
+/// The run's block, said and kept ([`record`]), for a red run as much as
+/// a green one.
 fn report(
     plan: &Plan,
     what: &str,
@@ -323,8 +307,7 @@ pub(super) fn census_rewritten() -> String {
 }
 
 /// Where a tree's running gate leaves its note (`lanes::sole`): under
-/// `target/`, which the tree's git does not read, so the note is not the
-/// uncommitted change the gate refuses to run over.
+/// `target/`, so the note is no uncommitted change for the gate to refuse.
 fn running_note(dir: &Path) -> std::path::PathBuf {
     dir.join("target").join("gate-running")
 }

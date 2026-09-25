@@ -1,52 +1,18 @@
-//! The board's page.
+//! The board's page — developer tooling, outside デザイン規約.md's token
+//! rule (nothing here ships). It owes the reader the seat that took each
+//! picture, stated where it cannot be missed, and a magnifier that does
+//! not interpolate: whole ratios with `image-rendering: pixelated`, since
+//! the system image viewers all smooth.
 //!
-//! This is developer tooling: the token rule of デザイン規約.md governs
-//! what the app paints, and nothing here ends up in a build. What the
-//! page owes the reader is only this — the seat that took each
-//! picture, stated where it cannot be missed, and a
-//! magnifier that does not interpolate. Whole ratios with
-//! `image-rendering: pixelated` are the point: a 1px design call read off
-//! a smoothed enlargement is a guess, and the system image viewers all
-//! smooth.
+//! One picture opens at 1:1 — nearest neighbour under 1 drops pixels, so
+//! a shrink interpolates and the ratio says `smoothed`. A row opens
+//! fitted: at 1:1 the picture beside the first is off the edge. The rail
+//! stays narrow so the fitted row gets the width.
 //!
-//! Which is why one picture opens at 1:1. Nearest-neighbour only
-//! *adds* pixels honestly; under 1 it drops them,
-//! so a fitted opening would read every picture too big for the
-//! window through the one filter that deletes 1px rules and replaces a
-//! flat colour with whichever neighbour survived. Shrinking interpolates
-//! instead, and the ratio says `smoothed` where it does — the guess is
-//! worth making, but not worth mistaking for the picture.
-//!
-//! A *row* of them opens fitted all the same, because 1:1 costs it the
-//! one thing it is: at one image pixel per screen pixel the picture
-//! beside the first is off the right-hand edge, and a difference read by
-//! panning between the halves is back in the reader's memory, which is
-//! what putting them abreast was meant to end. The whole row is worth
-//! the shrink the bar owns up to, and `1` is one key away where a pixel
-//! has to be read.
-//!
-//! The rail is narrow for the same reason. It carries a label, a date
-//! and a couple of thumbs abreast, and every pixel it holds past those
-//! is one the fitted row beside it does not get.
-//!
-//! The seat filter shows the whole roster whatever the board holds, the
-//! seats with nothing on it disabled. Built from the seats that happen to
-//! have runs, the row would reorder itself every time a seat's last run
-//! swept away or a new seat took its first picture — a button that moves
-//! between two readings of the same board is one nobody can aim at.
-//!
-//! Which of them is chosen rides in the page's fragment. F5 is how the
-//! board is re-read (`window.rs`) and it carries nothing else over, so a
-//! filter held only in a variable comes back as `all` on the one press
-//! whose whole point was the picture the reader has just taken.
-//!
-//! And a chip that hides the picture on the stage hands over the top of
-//! what it left standing; one that leaves it there moves nothing, which
-//! is every press of `all`. The opening goes the same way — the fragment
-//! is read before the first picture is chosen, and a board that came
-//! back from F5 held to a seat would otherwise open on a run its own
-//! filter is hiding. The arrows stay the board's own: filter or no, they
-//! walk every view in the order the runs went up.
+//! The seat filter shows the whole roster, empty seats disabled, so no
+//! chip moves between readings. The choice rides in the fragment: F5
+//! (`window.rs`) carries nothing else over. The arrows walk every view in
+//! the order the runs went up, filter or no.
 
 use super::Run;
 
@@ -95,9 +61,8 @@ const STYLE: &str = r#"
  #empty{position:absolute;inset:0;display:grid;place-items:center;color:#5c6a99}
 "#;
 
-/// The gap between two pictures read abreast, and the band their words
-/// sit in — the same numbers the style above uses, because the view has
-/// to know how big it is before a single picture has loaded.
+/// The `#imgs` gap and `figcaption` height in the style above: the view
+/// is sized before a single picture has loaded.
 const GAP: u32 = 24;
 const CAP: u32 = 28;
 
@@ -264,8 +229,6 @@ const BODY: &str = r#"<div id="wrap"><div id="side"><div id="head">
   <div id="stage"><div id="imgs"></div>
   <div id="empty">no shots yet &mdash; <kbd>F5</kbd> once there are</div></div></div></div>"#;
 
-/// The whole page: a few KB whatever the board holds, because the
-/// runs carry paths.
 pub(super) fn render(runs: &[Run]) -> String {
     let mut out = String::from(
         "<!doctype html><html><head><meta charset=\"utf-8\">\
@@ -316,10 +279,8 @@ fn data(runs: &[Run]) -> String {
     out
 }
 
-/// A JavaScript string literal for text nobody vetted. Labels are written
-/// by hand, so `<` and `>` leave as escapes too: `</script>` inside one
-/// would otherwise end the block and put the rest of the board on the page
-/// as markup.
+/// A JavaScript string literal for text nobody vetted. `<` and `>` are
+/// escaped too: a `</script>` in a label would end the block.
 fn js(text: &str) -> String {
     let mut out = String::from("\"");
     for ch in text.chars() {
@@ -382,8 +343,7 @@ mod tests {
         assert!(page.contains("no shots yet"));
     }
 
-    /// The filter's buttons stand in one order however few seats have
-    /// taken anything, so a chip is in the same place on every reading.
+    /// So a chip is in the same place on every reading.
     #[test]
     fn the_filter_carries_the_whole_roster() {
         let roster = "const ROSTER=['a','b','c','d','e','f','main']";
@@ -391,10 +351,7 @@ mod tests {
         assert!(render(&[run("a", "chip padding")]).contains(roster));
     }
 
-    /// F5 carries the fragment and nothing else, so the chosen seat has
-    /// to be written there and read back out of it: the reader who
-    /// filtered the board down to their own seat pressed it to see the
-    /// picture they had just taken.
+    /// F5 carries the fragment and nothing else.
     #[test]
     fn the_chosen_seat_survives_a_reload() {
         let page = render(&[run("a", "chip padding")]);
@@ -402,28 +359,22 @@ mod tests {
         assert!(page.contains("/^#seat-(.+)$/.exec(location.hash)"));
     }
 
-    /// The chip moves the stage as well as the list. A board held to one
-    /// seat while showing a picture from another says the reader is
-    /// looking at their own work when they are not.
+    /// The chip moves the stage as well as the list: a board held to one
+    /// seat must not be showing another seat's picture.
     #[test]
     fn a_chip_that_hides_the_shown_picture_hands_over_the_top_of_what_is_left() {
         let page = render(&[run("a", "chip padding"), run("e", "graph lanes")]);
         assert!(page.contains("b.onclick=()=>{pick(seat);remember(seat);follow()}"));
         assert!(page.contains("function first(){return only?FLAT.findIndex(f=>f.seat===only):0}"));
-        // And leaves it alone where the chip hides nothing: `all` widens
-        // the board, and a picture already standing under the chosen
-        // seat is the one the reader was reading.
+        // And leaves it alone where the chip hides nothing.
         assert!(
             page.contains("function follow(){if(!FLAT.length||!only||FLAT[i].seat===only)return")
         );
-        // The same on the way in. The fragment is read before the first
-        // picture is chosen, so the board that comes back from F5 held
-        // to a seat opens on that seat's top.
+        // The same on the way in from F5: the fragment is read before
+        // the first picture is chosen.
         assert!(page.contains("show(Math.max(first(),0))"));
     }
 
-    /// A pair reaches the page as one view: the flag the script reads to
-    /// put the two side by side, and the word that goes over each.
     #[test]
     fn a_pair_reaches_the_page_as_one_view() {
         let mut pair = run("a", "the stopped landing");
@@ -440,43 +391,29 @@ mod tests {
         assert!(page.contains("abreast:true"));
         assert!(page.contains("cap:\"before\""));
         assert!(page.contains("cap:\"after\""));
-        // The row's width is the script's to work out, and it needs the
-        // gap and the caption band the style leaves room for.
+        // The script sizes the row from these.
         assert!(page.contains("GAP=24"));
         assert!(page.contains("CAP=28"));
     }
 
-    /// Everything else stays one picture per view.
     #[test]
     fn an_ordinary_run_is_read_one_picture_at_a_time() {
         assert!(render(&[run("a", "chip padding")]).contains("abreast:false"));
     }
 
-    /// A view of one picture opens at 1:1 whatever the
-    /// window holds. The board exists to be read, and a
-    /// fitted opening would put every picture bigger than
-    /// the window through a shrink — which is the one
-    /// ratio at which the picture stops being the evidence.
     #[test]
     fn a_view_of_one_picture_opens_at_one_image_pixel_per_screen_pixel() {
         let page = render(&[run("a", "chip padding")]);
         assert!(page.contains("function oneToOne(){z=1;place()}"));
-        // Both ways in: the picture chosen, and the window reshaped
-        // under whatever the reader had already zoomed to. The name is
-        // load-bearing — `one` is taken inside `show()`, and the call
-        // would reach that local.
+        // Both ways in: the picture chosen, and the window reshaped. The
+        // name is load-bearing — `one` is a local inside `show()`.
         assert!(page.contains("scrollIntoView({block:'nearest'});opening()}"));
         assert!(page.contains("addEventListener('resize',place)"));
-        // No ceiling holds the fit at 100% — one would keep a small
-        // picture from filling the window — so `0` may magnify as well
-        // as shrink.
+        // No 100% ceiling on the fit: `0` may magnify a small picture as
+        // well as shrink.
         assert!(!page.contains("stage.clientHeight/s.h,1)"));
     }
 
-    /// A row of them opens fitted instead — the one place the board
-    /// shrinks a view on the way in. At 1:1 the picture beside the first
-    /// stands off the right-hand edge, and the comparison is read out
-    /// of the reader's memory.
     #[test]
     fn a_row_of_pictures_opens_with_the_whole_row_in_the_window() {
         let page = render(&[run("a", "chip padding")]);
@@ -485,22 +422,15 @@ mod tests {
         );
     }
 
-    /// Nearest-neighbour only where it adds whole pixels. Under 1 it
-    /// deletes them — a 1px rule lands on the pixel that was dropped and
-    /// a flat colour comes back as whichever neighbour survived — so the
-    /// shrink interpolates and the ratio admits it.
     #[test]
     fn only_a_whole_ratio_is_read_without_interpolation() {
         let page = render(&[run("a", "chip padding")]);
         assert!(page.contains("function exact(){return z>=1&&Math.abs(z-Math.round(z))<1e-9}"));
         assert!(page.contains("imgs.style.imageRendering=exact()?'pixelated':'auto'"));
-        // Both halves of the ratio: the mark that keeps a fit rounding
-        // to `100%` from reading as the ratio a 1px call may be made
-        // off, and the word for what is being done to the picture.
+        // `≈` keeps a fit that rounds to `100%` from reading as exact.
         assert!(page.contains("(exact()?'':'≈')+(z*100).toFixed(0)+'%'+(exact()?'':' smoothed')"));
-        // The rule has to live where the ratio changes: a rule on
-        // `#imgs img` outranks what `draw()` writes on their parent,
-        // and the flip would do nothing at all.
+        // No `image-rendering` on `#imgs img`: a rule there outranks what
+        // `draw()` writes on the parent, and the flip would do nothing.
         assert!(page.contains("#imgs img{display:block;background:#000}"));
     }
 

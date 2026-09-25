@@ -1,16 +1,10 @@
-//! The tree this runner serves, and the app it builds out of it.
-//!
-//! Kept out of main.rs on purpose: the crate root is what every module
-//! reaches for and what dispatches to every module, and a helper that
-//! lives there makes every module depend on every other through it. The
-//! gate's dependency graph (`gate::graph`) reads that as "any change
-//! touches everything", which is the one answer that has to be earned
-//! (.claude/rules/structure.md §クレート root).
+//! The tree this runner serves, and the app it builds out of it. Not in
+//! main.rs: .claude/rules/structure.md §分割「クレート root」.
 
 use std::path::{Path, PathBuf};
 
-/// The workspace root, resolved at compile time from this crate's location.
-/// A worktree builds its own task runner, so this is that worktree's root.
+/// The workspace root, fixed at compile time: a worktree builds its own
+/// task runner, so this is that worktree's root.
 pub(crate) fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -19,16 +13,12 @@ pub(crate) fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-/// The primary checkout that the tree at `cwd` belongs to, whichever
-/// tree that is — read off the filesystem rather than asked of git,
-/// because the readers are hooks that run on every line a session types
-/// and a process started there is paid for by all of them.
+/// The primary checkout the tree at `cwd` belongs to — read off the
+/// filesystem, not asked of git, because the readers are hooks that run
+/// on every line a session types.
 ///
-/// `.git` is a directory in the primary checkout and a file in every
-/// linked worktree, naming `<primary>/.git/worktrees/<name>`. A session
-/// that types in the primary checkout and then enters a seat must land
-/// on one answer, or what it wrote before the move is left behind
-/// (`hook::repeat`, `seats::entry`).
+/// A checkout and its seats must give one answer, or what a session wrote
+/// before entering a seat is left behind (`hook::repeat`, `seats::entry`).
 pub(crate) fn primary_root(cwd: &str) -> Option<PathBuf> {
     let mut at: &Path = Path::new(cwd);
     loop {
@@ -43,9 +33,8 @@ pub(crate) fn primary_root(cwd: &str) -> Option<PathBuf> {
     }
 }
 
-/// The primary checkout a linked worktree's `.git` file names. Anything
-/// that does not sit under a `<primary>/.git/worktrees/` — a repository
-/// laid out by `--separate-git-dir`, say — is nobody's primary here.
+/// The primary checkout a linked worktree's `.git` file names; a gitdir
+/// not under `<primary>/.git/worktrees/` (`--separate-git-dir`) has none.
 fn linked_primary(dot_git: &Path) -> Option<PathBuf> {
     let text = std::fs::read_to_string(dot_git).ok()?;
     let named = text
@@ -55,27 +44,21 @@ fn linked_primary(dot_git: &Path) -> Option<PathBuf> {
     root.join(".git").is_dir().then_some(root)
 }
 
-/// The app's verification harness, which is not in a build that did not
-/// ask for it: the `PGG_*` protocol, the drivers, and the `platitude.auto`
-/// QML module (`platitude-app` §features). Everything this task runner
-/// starts drives the app over that protocol, so everything it builds asks
-/// for it — the shipped build is the plain `cargo build --release` nobody
-/// here runs.
+/// The feature that builds the app's verification harness in
+/// (platitude-app's Cargo.toml `[features]`). Every build this runner
+/// drives asks for it; [`shipped_exe`] builds the one without.
 pub(crate) const HARNESS_FEATURE: &str = "automation";
 
-/// Builds the app in release unless `build` says not to, and answers
-/// where its binary sits either way — `--no-build` still needs the path.
+/// Builds the app in release unless `build` is false, and answers where
+/// its binary sits either way.
 ///
-/// Always with [`HARNESS_FEATURE`], including the window `launch` opens:
-/// it is inert without a `PGG_*` variable, and asking for it every time is
-/// what keeps one release binary between the two commands, however
-/// often somebody moves from a window to a verify-ui run.
+/// Always with [`HARNESS_FEATURE`], `launch`'s window included: it is
+/// inert without a `PGG_*` variable, and asking every time keeps one
+/// release binary between `launch` and verify-ui.
 ///
-/// `extra` follows `build --release`: the package and any further features
-/// a caller needs, and every feature names itself in the building line.
-/// `path` is the PATH the *build* runs with, which is not always the one
-/// the run itself gets — verify-ui stages a git shim onto its child's
-/// PATH, and building against that would build against the shim.
+/// `extra` follows `build --release` (package, further features). `path`
+/// is the PATH the *build* runs with — not the run's, which may carry
+/// verify-ui's git shim.
 pub(crate) fn app_exe(
     root: &Path,
     path: &std::ffi::OsStr,
@@ -91,13 +74,11 @@ pub(crate) fn app_exe(
                 .map(|pair| pair[1]),
         );
         println!("building (release, {})…", features.join(" + "));
-        // Announced for as long as it compiles: a build waits for a
-        // measurement to end, and a measurement waits for it (`still`).
+        // A build and a measurement wait for each other (`still`).
         let _busy = crate::still::busy(root, "cargo build --release")?;
-        // Through the budget's own runner: this cargo is what the unit
-        // that asked for a build is actually doing, and a ledger reading
-        // this process's ticket after it is killed has to know which
-        // number is still compiling (`crate::budget::watched`).
+        // Through the budget's runner, so a ledger reading this process's
+        // ticket after it is killed knows which cargo still compiles
+        // (`crate::budget::watched`).
         let status = crate::budget::watched(
             std::process::Command::new("cargo")
                 .args([
@@ -123,18 +104,13 @@ pub(crate) fn app_exe(
 /// directory only this build writes (Cargo.toml).
 const SHIPPED_PROFILE: &str = "shipped";
 
-/// The release binary with **no** features on it: the build a person
-/// installs, and the one nothing here can drive.
-///
-/// Deliberately separate from [`app_exe`]: that one asks for the harness,
-/// which is the whole of what the two callers here are about — `shipped`
-/// checks that the QML still loads without it, and `perf --shipped`
-/// weighs it. It is built in a profile of its own, `target/shipped/`, so
-/// that neither build ever replaces the other's binary: the gate runs
-/// `shipped` beside its verbs, which read `target/release/` as they run.
-/// The evidence still names the feature set it asked for
-/// (`perf::Options::features`) — a `--no-build` run is measuring whatever
-/// the directory holds.
+/// The release binary with no features: the build a person installs,
+/// for `shipped` (the QML loads without the harness) and `perf --shipped`
+/// (what the harness weighs). A profile of its own, so it never replaces
+/// the binary the gate's verbs read from `target/release/` while
+/// `shipped` runs beside them. A `--no-build` run measures whatever the
+/// directory holds; the evidence names the feature set asked for
+/// (`perf::Options::features`).
 pub(crate) fn shipped_exe(
     root: &Path,
     path: &std::ffi::OsStr,
@@ -160,16 +136,11 @@ pub(crate) fn shipped_exe(
 /// What to add to a failed release build when a run of this tree is
 /// standing on the binary it links, and nothing when none is.
 ///
-/// Windows holds a running image against every write to it, so a run
-/// left over from an earlier command turns the next `--release` step red
-/// with a linker error that names a path and no reason. **Whether that
-/// is what happened is the reader's to say**: the exit status is all
-/// this has of the build, and a compile error under a standing run is
-/// still a compile error. Who is standing is what cargo's lines cannot
-/// tell them; why the build failed is already above. The window a person
-/// opened is not the one to look at — `launch` stands it from a copy
-/// (`crate::gui::standing_copy`). Best effort: a listing that will not
-/// answer is not a reason to say less than cargo already did.
+/// Windows locks a running image, so a leftover run turns the next
+/// `--release` red with a linker error naming a path and no reason. Only a
+/// hint: the exit status cannot tell that from a compile error. A `launch`
+/// window is never the one — it runs from a copy
+/// (`crate::gui::standing_copy`).
 fn held_by(root: &Path) -> String {
     match crate::gui::standing_under(root) {
         Ok(standing) if !standing.is_empty() => {
@@ -188,7 +159,6 @@ fn held_by(root: &Path) -> String {
     }
 }
 
-/// The app's file name on this platform.
 pub(crate) fn exe_name() -> &'static str {
     if cfg!(windows) {
         "platitude-gg.exe"
@@ -213,9 +183,6 @@ fn where_it_lands(root: &Path, profile: &str) -> Result<PathBuf, String> {
 mod tests {
     use super::primary_root;
 
-    /// A seat and the checkout it hangs off answer with one path, so
-    /// what a session writes before it enters a seat is found again
-    /// after it has.
     #[test]
     fn a_seat_and_its_checkout_name_one_root() {
         let base = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-hook"), "roots")

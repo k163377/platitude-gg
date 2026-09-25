@@ -3,44 +3,35 @@
 use super::repo::{DemoRepo, file_url};
 
 /// A branch that has never been sent anywhere, in a repository with two
-/// remotes — so the question the first push raises has something to pick
-/// between, and two names on the far side to run into.
+/// remotes — so the first push's question has something to pick between.
 ///
-/// The three names over there are the whole point, because a push meets
-/// each of them differently (measured): `taken` left the trunk with a commit of
-/// its own, so a push there is **refused**; `carried` is behind us on our
-/// own line, so a push there **lands and moves somebody else's branch on**;
-/// `outsider` was pushed from another clone and never fetched here, so
-/// **neither answer can be given from this end**. The checked-out branch
-/// has no upstream at all.
+/// A push meets each of the three names over there differently: `taken`
+/// left the trunk with a commit of its own (refused), `carried` is behind
+/// us on our own line (lands and moves somebody else's branch on), and
+/// `outsider` was never fetched here (no answer from this end). The
+/// checked-out branch has no upstream.
 ///
-/// **"Never fetched here" is `verify::seed`'s to keep.** Opening a tab
-/// fetches once, and one that runs puts `outsider`'s commit in the
-/// repository — the comparison then answers `refused` like any other
-/// diverged name and the third shape is gone. What holds it is
-/// `verify::seed`, which turns the opening's fetch off for this preset.
+/// "Never fetched here" holds only because `verify::seed` turns the
+/// opening's fetch off for this preset.
 pub(super) fn unpublished(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
     repo.add_origin()?;
     repo.git(&["push", "--set-upstream", "origin", "main"])?;
 
-    // A second place to send things, so the chooser has a choice to make.
     let fork = repo.root.join("fork.git");
     std::fs::create_dir_all(&fork).map_err(|e| e.to_string())?;
     repo.git_at(&fork.clone(), &["init", "--bare", "-b", "main"])?;
     let fork_url = file_url(&fork);
     repo.git(&["remote", "add", "fork", &fork_url])?;
 
-    // Somebody else's branch, off the trunk with a commit we never take.
-    // Pushed without `-u`, so nothing here records that it went anywhere.
+    // `taken`: pushed without `-u`, so nothing here records that it went
+    // anywhere.
     repo.git(&["switch", "--create", "taken"])?;
     repo.commit("src/app.txt", "app v2\n", "feat: theirs")?;
     repo.git(&["push", "origin", "taken"])?;
 
-    // A third name, put there by somebody else and never fetched here: the
-    // commit it holds is not in this repository, so the two histories
-    // cannot be compared from this end at all.
+    // `outsider`, pushed from another clone.
     let seeder = repo.root.join("seeder");
     let url = file_url(&repo.root.join("origin.git"));
     let root = repo.root.clone();
@@ -60,26 +51,19 @@ pub(super) fn unpublished(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["switch", "main"])?;
     repo.git(&["switch", "--create", "feature/new-thing"])?;
     repo.commit("src/new.txt", "new\n", "feat: draft the new thing")?;
-    // Sent from here under a second name, then left behind: the name is
-    // taken over there by a commit this branch still contains, which is
-    // the half git carries.
+    // `carried`: sent from here under a second name, then left behind.
     repo.git(&["push", "origin", "HEAD:refs/heads/carried"])?;
     repo.commit("src/new.txt", "new v2\n", "feat: finish the new thing")?;
     Ok(())
 }
 
-/// A fork workflow: the branch goes on fetching from `origin`, and its
-/// own mark (`branch.main.pushRemote`) sends every push of it to `fork`.
+/// A fork workflow: the branch fetches from `origin`, and its own
+/// `branch.main.pushRemote` sends every push to `fork`.
 ///
-/// **The branch's own mark is what decides.** git
-/// weighs the branch's mark first and the repository's second
-/// (git-config(5); measured 2.55), so a destination worked out from the
-/// repository's alone names `origin` here while the push goes to the
-/// fork — and the counts beside it, which are about origin, are then
-/// about somewhere else entirely (`push-target`, デザイン規約 §リモートへ送る).
-///
-/// The commit of our own is what makes the button live and gives those
-/// counts a number to be wrong with.
+/// git weighs the branch's mark before the repository's (git-config(5)),
+/// so a destination worked out from the repository's alone names `origin`
+/// while the push goes to the fork (`push-target`, デザイン規約
+/// §リモートへ送る). The commit of our own makes the button live.
 pub(super) fn forkmark(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.add_origin()?;
@@ -90,8 +74,6 @@ pub(super) fn forkmark(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git_at(&fork.clone(), &["init", "--bare", "-b", "main"])?;
     let fork_url = file_url(&fork);
     repo.git(&["remote", "add", "fork", &fork_url])?;
-    // Only where the pushes go. `branch.main.remote` goes on saying
-    // `origin`, which is the whole shape of a fork checkout.
     repo.git(&["config", "branch.main.pushRemote", "fork"])?;
 
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
@@ -126,20 +108,12 @@ pub(super) fn behind(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// The remote moved on and **this end still does not know**: a commit of
-/// its own is sitting on a branch git will not send until the remote has
-/// been read again.
+/// [`behind`] with work of our own on top and nothing fetched since: the
+/// remote moved on and this end does not know, so the toolbar offers a
+/// plain `push`.
 ///
-/// [`behind`] with work of our own on top, and nothing fetched since.
-///
-/// **Any window over this opens with the fetch off**, or what is on
-/// screen is [`diverged`] — the preset next door, which is this one plus
-/// the fetch. `verify::seed` writes the settings that stop the timer,
-/// and it does it for the whole preset, because the fetch an opening
-/// fires asks that same setting for its permission
-/// (`session::fetch_on_open`). That is also what makes the toolbar offer
-/// a plain `push`: an end that had fetched would know it was diverged and
-/// offer the overwrite instead.
+/// A window over this must open with the fetch off (`verify::seed`), or
+/// what is on screen is [`diverged`].
 pub(super) fn outrun(repo: &mut DemoRepo) -> Result<(), String> {
     behind(repo)?;
     repo.commit("b.txt", "ours\n", "feat: work of our own")?;
@@ -147,18 +121,11 @@ pub(super) fn outrun(repo: &mut DemoRepo) -> Result<(), String> {
 }
 
 /// A branch that still names an upstream the far side no longer holds:
-/// git answers `[gone]` for it, and the row has a remote branch to say
-/// with nothing behind it (デザイン規約 §左メニューの所作).
+/// git answers `[gone]` for it (デザイン規約 §左メニューの所作).
 ///
-/// **The prune is what puts the state on record.** A copy that only
-/// deleted the far branch goes on holding its remote-tracking ref and
-/// reads as tracking; git calls the upstream gone once that ref is not
-/// there and the configuration still names it. The window's own fetch on
-/// opening does the same thing, so the state holds however a run arrives
-/// at it.
-///
-/// **The name carries no slash** — one would fold the row under a folder,
-/// and this preset is about the branch's own line.
+/// The prune is what makes it gone: without it the remote-tracking ref
+/// stays and the branch reads as tracking. The name carries no slash,
+/// which would fold the row under a folder.
 pub(super) fn gone(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.add_origin()?;
@@ -172,10 +139,8 @@ pub(super) fn gone(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Puts one hook into `hooks` and makes it runnable — the mechanics all
-/// three hook-carrying presets share, so a platform fix (the exec bit is
-/// the one that only matters on machines the author is not on) lands in
-/// every preset at once. `script` is the whole file, shebang included.
+/// Puts one hook into `hooks` and makes it runnable (the exec bit matters
+/// off Windows). `script` is the whole file, shebang included.
 fn install_hook(hooks: &std::path::Path, name: &str, script: &str) -> Result<(), String> {
     std::fs::create_dir_all(hooks).map_err(|e| e.to_string())?;
     let path = hooks.join(name);
@@ -189,13 +154,11 @@ fn install_hook(hooks: &std::path::Path, name: &str, script: &str) -> Result<(),
     Ok(())
 }
 
-/// A repository whose own `pre-commit` hook says no, with something
-/// staged for it to say it about.
+/// A repository whose own `pre-commit` hook says no, with an unstaged
+/// change for it to say it about.
 ///
-/// **A hook is the only way to have that refusal offline**, and it is
-/// also the honest one: a linter wrapped in a hook is what most of these
-/// are, so it writes its complaint to stdout and its own noise to stderr —
-/// the arrangement that says whether both streams reach the report
+/// Like a wrapped linter, the hook writes its complaint to stdout and its
+/// noise to stderr — which says whether both streams reach the report
 /// (`commit::refused`).
 pub(super) fn hooked(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
@@ -214,16 +177,11 @@ pub(super) fn hooked(repo: &mut DemoRepo) -> Result<(), String> {
 
 /// A repository whose own `pre-commit` hook takes its time, with
 /// something already staged — so a run's one write is the commit itself,
-/// and it is provably still in flight when the run acts over it (the
-/// quit verbs close the window across it).
+/// still in flight when the quit verbs close the window across it.
 ///
-/// `sleep` is the blocking command all three machines agree on (the
-/// seeded merge tool's own stand-in says why — `verify::repos`), and two
-/// seconds holds the write across a sampler beat and the close behind it
-/// without making every run pay for more. The wait is arrangement: a
-/// hook that somehow ends early fails the run out loud — the close goes
-/// through and takes the window the shots
-/// needed.
+/// `sleep` is the blocking command all three OSes agree on
+/// (`verify::repos`); two seconds holds the write across a sampler beat
+/// and the close behind it. A hook that ends early fails the run out loud.
 pub(super) fn slowhook(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.write("held.txt", "held by the hook\n")?;
@@ -235,13 +193,9 @@ pub(super) fn slowhook(repo: &mut DemoRepo) -> Result<(), String> {
     )
 }
 
-/// Both sides moved on, and this repository has already seen it happen:
-/// the fetch is part of the preset, so the toolbar offers the overwrite
-/// (`push -f`) from the moment the window opens.
-///
-/// Break the remote's URL afterwards (`.git/config`) and the overwrite
-/// fails without the tracking refs moving — which is how the refused shape
-/// of that button gets photographed.
+/// Both sides moved on and the fetch is part of the preset, so the toolbar
+/// offers the overwrite (`push -f`) from the moment the window opens.
+/// Breaking the remote's URL afterwards photographs the refused overwrite.
 pub(super) fn diverged(repo: &mut DemoRepo) -> Result<(), String> {
     behind(repo)?;
     repo.git(&["fetch", "origin"])?;
@@ -249,24 +203,13 @@ pub(super) fn diverged(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// A remote nothing can reach: `origin` is pushed to and tracked, and
-/// its URL then names a directory that was never made.
+/// A remote nothing can reach: `origin` is pushed to and tracked, then its
+/// URL names a directory that was never made — the only shape a fetch
+/// fails in without a network (`fetch-fail`, `fetch-resume`; the runs
+/// carry `--allow-write-failure`).
 ///
-/// **The only shape a fetch fails in without a network.** Every other
-/// preset's `origin` is a `file://` beside the work tree and answers
-/// every time, so a verb about a run of failed fetches (`fetch-fail`,
-/// `fetch-resume`) says `fetch_fail reachable=true` there and is left to
-/// the watchdog. A fetch here is refused before a byte moves, which is a
-/// failed write — the runs carry `--allow-write-failure`.
-///
-/// The push comes first, so the branch has an upstream and the remote's
-/// ref is on record: what the failures are about is a remote that
-/// went away.
-///
-/// **The URL is absolute**, which is what lets a copy of this preset's
-/// template be rebound to its own root along with the rest of git's
-/// metadata (`template::rebind`) — a copy is then unreachable in the
-/// copy's own words.
+/// The URL is absolute so a template copy rebinds it to its own root with
+/// the rest of git's metadata (`template::rebind`).
 pub(super) fn unreachable(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
@@ -278,13 +221,8 @@ pub(super) fn unreachable(repo: &mut DemoRepo) -> Result<(), String> {
 }
 
 /// A remote that keeps what it holds: every push to it is turned away by a
-/// `pre-receive` hook, in the words a forge writes over a protected branch.
-///
-/// **A hook is the only way to have that refusal offline.** A protected
-/// branch, a repository rule and a hook all reach this end as the same
-/// `[remote rejected]`, and the sentence underneath is whatever the far
-/// side chose to say — which is exactly what the report shows, so the
-/// hook's message is written the way GitHub writes its own.
+/// `pre-receive` hook, in GitHub's words for a protected ref. A forge's
+/// protection and a hook reach this end as the same `[remote rejected]`.
 pub(super) fn protected(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
@@ -294,19 +232,14 @@ pub(super) fn protected(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("src/app.txt", "app v2\n", "feat: carry on with the app")?;
     repo.git(&["push", "origin", "feature/topic-a"])?;
     repo.git(&["switch", "main"])?;
-    // A tag on both sides, put over **before** the hook goes in: a forge
-    // that protects its release tags refuses taking one off exactly the
-    // way it refuses a branch, and the row that asks for that is only
-    // offered where the remote is known to hold the name (`tag-refused`).
+    // A tag on both sides, pushed before the hook goes in: the delete row
+    // is offered only where the remote holds the name (`tag-refused`).
     repo.git(&["tag", "v1.0"])?;
     repo.git(&["push", "origin", "refs/tags/v1.0"])?;
 
-    // **The words follow the ref, the way a forge's do.** GitHub writes
-    // `Protected tag update failed` over a tag and `Protected branch
-    // update failed` over a branch; a fixture that said `branch` while a
-    // tag was being refused would put a sentence on screen that this end
-    // could be blamed for writing (measured — the report quotes it as it came).
-    // The refs arrive on stdin as `<old> <new> <ref>`.
+    // The words follow the ref, as GitHub's do (`Protected tag` /
+    // `Protected branch`): the report quotes them as they came. The refs
+    // arrive on stdin as `<old> <new> <ref>`.
     install_hook(
         &repo.root.join("origin.git").join("hooks"),
         "pre-receive",

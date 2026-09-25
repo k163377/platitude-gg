@@ -10,8 +10,6 @@ use super::queue::Rank;
 use super::unit::{Ask, HELD, LIGHT};
 use crate::wait::{Budget, LOOK_AGAIN, Wait};
 
-/// `cargo xtask budget` — what the machine is doing, and the hold the
-/// tests take from a process of their own.
 pub fn run(args: &[String]) -> Result<(), String> {
     if args.first().is_some_and(|first| first == "hold") {
         return hold(&args[1..]);
@@ -31,12 +29,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// `cargo xtask budget hold …` — one unit's ticket, taken from a process
-/// of this machine's own so that the priority, the exclusion and the
-/// death of a holder can be watched between real processes. Says one
-/// word when it has joined the queue (`--queued`) and one when it is
-/// admitted (`--say`), and holds until a file appears: the test drives
-/// every edge, and no clock is in it.
+/// `cargo xtask budget hold …` — one unit's ticket held by a real
+/// process, so `tests/gate/budget.rs` can watch priority, exclusion and a
+/// holder's death. Writes its pid to `--queued` on joining the queue and
+/// to `--say` on admission, and holds until `--until` exists: the test
+/// drives every edge, with no clock.
 fn hold(args: &[String]) -> Result<(), String> {
     let mut dir = crate::tree::workspace_root();
     let (mut weight, mut jobs) = (LIGHT, crate::gate::default_jobs());
@@ -76,9 +73,8 @@ fn hold(args: &[String]) -> Result<(), String> {
     }
     let until = until.ok_or("budget hold needs --until <file>: the word to let go")?;
     let pool = Pool::of(&dir, jobs)?;
-    // The arrival, said by this unit at the instant its ticket is in the
-    // ledger. A closure says nothing back, so what it could not write is
-    // kept here and answered for after the wait it was said during.
+    // The closure cannot return an error, so a failed write is kept and
+    // reported after the wait.
     let unwritten: Cell<Option<String>> = Cell::new(None);
     let arrived = || {
         if let Some(path) = &queued
@@ -101,11 +97,9 @@ fn hold(args: &[String]) -> Result<(), String> {
     if let Some(error) = unwritten.take() {
         return Err(error);
     }
-    // A child of this unit, standing in for the cargo or the container a
-    // step starts: the ledger is told its number, so a test can kill
-    // this holder and watch the room stay held until the child goes
-    // (`tests/gate/budget.rs`). Under this unit's own ticket, so it takes
-    // none of its own.
+    // Stands in for the cargo or container a step starts: the ledger is
+    // told its pid, so a test can kill this holder and watch the room
+    // stay held until the child goes.
     let mut child = match &child_until {
         Some(word) => {
             let me = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -130,10 +124,8 @@ fn hold(args: &[String]) -> Result<(), String> {
             .map_err(|e| format!("could not write {}: {e}", say.display()))?;
     }
     println!("held {what} after {}ms", held.waited.as_millis());
-    // The ceiling is the queue's silence one: a hold is a test's, and
-    // one whose word never comes — the suite gone, the directory taken
-    // away with it — gives the machine's room back once the queue has
-    // been silent that long.
+    // A hold whose word never comes (the suite gone with its directory)
+    // gives the room back after the queue's silence ceiling.
     let mut wait = Wait::new(
         format!("the word at {}", until.display()),
         Budget::whole(QUIET_CEILING),

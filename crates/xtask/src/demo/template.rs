@@ -1,31 +1,23 @@
-//! The built repository a run copies.
+//! The built repository a run copies. A preset is dozens of git
+//! subprocesses and the gate builds one per verb, yet the result is the
+//! same repository every time, so the first run to ask builds it and the
+//! rest copy it.
 //!
-//! A preset is a run of git subprocesses — twenty-nine for `basic`,
-//! thirty-three for `stack` — and a side of the gate builds one per verb,
-//! a hundred and thirty-five times over. What comes out is the same
-//! repository every time, so the first run to ask builds it and the rest
-//! copy it.
+//! A built repository names where it was built: `origin`'s URL is a
+//! `file://` of an absolute path, a linked worktree's `.git` names one,
+//! and `.git/worktrees/*/gitdir` names the way back. A copy that kept them
+//! would push into the template and take the next run's worktrees with
+//! it, so a copy is rebound as it is made.
 //!
-//! **A built repository names where it was built.** `origin`'s URL is a
-//! `file://` of an absolute path, a linked worktree's `.git` is a line
-//! naming one, and `.git/worktrees/*/gitdir` names the way back. A copy
-//! that kept them would push into the template and take the next run's
-//! worktrees with it, so a copy is rebound as it is made.
-//!
-//! **That path is spelled two ways.** What this process hands git
-//! comes out of `std::env::temp_dir()`, which on Windows is the profile's
-//! short name (`C:/Users/WRONGW~1/…`); git resolves a worktree's own
-//! paths and writes the long one (`C:/Users/wrongwrong/…`). One
-//! directory, two names, two files of one repository (measured). So the
-//! template stands beside the runs, and what gets rewritten is the
-//! single path segment they differ in: a
-//! leaf that is ASCII, that neither git nor Windows respells, and that is
-//! the whole of the difference between the template and the copy.
+//! That path is spelled two ways on Windows: `std::env::temp_dir()` gives
+//! the profile's short name (`WRONGW~1`), while git writes a worktree's
+//! paths with the long one. So the template stands beside the runs and
+//! only the leaf they differ in is rewritten — ASCII, which neither git
+//! nor Windows respells.
 //!
 //! A preset that names its own path anywhere but git's metadata is
 //! refused — rewriting a tracked file would leave the copy dirty where
-//! the template was clean — and refused presets go on being built a run
-//! at a time.
+//! the template was clean — and is built a run at a time.
 
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -33,25 +25,22 @@ use std::sync::OnceLock;
 
 /// The file a finished template carries, and the one a preset that
 /// cannot be copied carries instead. Both sit at the template's top
-/// level, and neither is copied into a run.
+/// level and are not copied into a run.
 const READY: &str = ".pgg-template-ready";
 const REFUSED: &str = ".pgg-template-refused";
 
-/// Copies the template for `preset` into `root`, building the template
-/// first if this run is the one that finds it missing.
-///
-/// Falls back to building in `root` whenever there is no template to be
-/// had: a preset that was refused, a copy that failed, a template swept
-/// out from under this run. Answers the work tree, as [`super::presets::build`] does.
+/// Copies the template for `preset` into `root`, building it first if
+/// missing. Falls back to building in `root` when there is no template to
+/// be had (refused, copy failed, swept away). Answers the work tree, as
+/// [`super::presets::build`] does.
 pub(super) fn build_or_copy(root: &Path, preset: &str, name: &str) -> Result<PathBuf, String> {
     let leaf = leaf(preset, name);
     let template = super::presets::base().join(&leaf);
     if standing(&template, preset, name)? {
         match copy_in(&template, &leaf, root) {
             Ok(()) => return Ok(root.join(name)),
-            // A template can go while it is being read — the sweep takes
-            // yesterday's, and yesterday's is still a template until it
-            // does. Nothing about this run is wrong, so it builds its own.
+            // The sweep can take yesterday's template mid-copy; nothing is
+            // wrong with this run, so it builds its own.
             Err(e) => {
                 println!("demo template ({preset}): not copied, building instead — {e}");
                 clear(root)?;
@@ -73,16 +62,15 @@ fn standing(template: &Path, preset: &str, name: &str) -> Result<bool, String> {
     make(template, preset, name)
 }
 
-/// Builds the template, at a name of this run's own, and moves it under
-/// the one every run reads.
+/// Builds the template under a staging name of this run's own and renames
+/// it into place.
 ///
-/// **The move is what settles a race.** Runs start together and any
-/// number of them can find the template missing at once; each builds its
-/// own and the first to rename wins, because a rename onto a directory
-/// that is already there fails on both operating systems. The losers drop
-/// what they built and read the winner's. Nothing is locked: a lock held
-/// across a build is a lock held for seconds, and the work being
-/// duplicated is what every run would do without a template.
+/// The rename settles the race: any number of runs can find the template
+/// missing at once, each builds its own, and the first rename wins, since
+/// renaming onto an existing directory fails on both systems; the losers
+/// drop theirs and read the winner's. No lock: it would be held across a
+/// build, and the duplicated work is only what each run would do without
+/// a template.
 fn make(template: &Path, preset: &str, name: &str) -> Result<bool, String> {
     let base = super::presets::base();
     let leaf = template
@@ -90,13 +78,12 @@ fn make(template: &Path, preset: &str, name: &str) -> Result<bool, String> {
         .ok_or("a template needs a name")?
         .to_string_lossy()
         .to_string();
-    // The one moment a template is made is the one worth taking
-    // yesterday's away in: templates and runs share a directory, a
-    // template is built once a fingerprint, and inside a container the
-    // gate's own sweep never runs (`linux`).
+    // Yesterday's templates go here: one is built only once a
+    // fingerprint, and inside a container the gate's own sweep never runs
+    // (`linux`).
     crate::verify::sweep_yesterdays_runs();
-    // The staging name carries the template's, so the rebind below has one
-    // string to look for and the scan has one string to prove gone.
+    // The staging name carries the template's, so the rebind has one
+    // string to look for and the scan one string to prove gone.
     let staging = crate::verify::claim_dir(&base, &format!("{leaf}-staging"))?;
     let staging_leaf = staging
         .file_name()
@@ -118,8 +105,7 @@ fn make(template: &Path, preset: &str, name: &str) -> Result<bool, String> {
             }
             Ok(refusal.is_none())
         }
-        // Somebody else got there first. Theirs is this one's equal — the
-        // fingerprint says so — so this one goes and theirs is read.
+        // Another run renamed first; the fingerprint makes theirs equal.
         Err(_) => {
             let _ = std::fs::remove_dir_all(&staging);
             Ok(template.join(READY).is_file())
@@ -127,11 +113,9 @@ fn make(template: &Path, preset: &str, name: &str) -> Result<bool, String> {
     }
 }
 
-/// The name a preset's template stands under, beside the runs.
-///
-/// Shorter than a run's own name for the common case, which is what the
-/// deepest preset needs it to be: a template is built at this name and
-/// the paths inside it are the ones Windows measures against its limit.
+/// The name a preset's template stands under, beside the runs. Shorter
+/// than a run's name in the common case, because the deepest preset is
+/// built at this name and its paths must fit Windows' limit.
 fn leaf(preset: &str, name: &str) -> String {
     let fingerprint = fingerprint();
     if name == "repo" {
@@ -141,25 +125,18 @@ fn leaf(preset: &str, name: &str) -> String {
     }
 }
 
-/// What a template is good for: the sources that type its git commands,
-/// the git that ran them, and the day it was built on.
+/// What a template is keyed on: the sources that type its git commands,
+/// the git that ran them, and the UTC day.
 ///
-/// **Not the executable's bytes.** The linker stamps every link (the PE
-/// header's time, the PDB's GUID), so a key on the exe names a new set of
-/// templates after every relink — a rebase is one — and every seat's exe
-/// is its own. Each new set is built by the runs that find it missing,
-/// all of them at once, in the middle of a gate. The sources are the same
-/// bytes on every seat that stands on the same presets, so one set serves
-/// all of them.
+/// Not the executable's bytes: the linker stamps every link (PE time, PDB
+/// GUID), so every relink and every seat would get its own set of
+/// templates, each built mid-gate; the sources are the same on every
+/// seat.
 ///
-/// The git version is in it because the repository is that git's output:
-/// the runs that stand a copy in for git (`--old-git`) build their
-/// repositories with the real one, so what changes this is an upgrade.
-/// The day is in it because a preset dates its commits from the moment it
-/// is built (`DemoRepo::init`): a template stands for one UTC day, the age
-/// the sweep already allows a run's litter. The day turns at 09:00 in
-/// Japan, and the runs going at that moment build the new set between
-/// them, as after any change to a preset's source.
+/// The git version because the repository is that git's output
+/// (`--old-git` runs still build with the real one). The day because a
+/// preset dates its commits from its build (`DemoRepo::init`); one day is
+/// also the age the sweep allows a run's litter.
 fn fingerprint() -> &'static str {
     static FINGERPRINT: OnceLock<String> = OnceLock::new();
     FINGERPRINT.get_or_init(|| {
@@ -174,10 +151,9 @@ fn fingerprint() -> &'static str {
     })
 }
 
-/// Every source a preset is built by: this module's own (its tests aside)
-/// and the PNG writer its pictures come out of. Its git runs under this
-/// module's own spawner (`repo::output_of`), so nothing else of the crate
-/// shapes a template. A test holds the list to the code
+/// Every source a preset is built by: this module's own (tests aside) and
+/// the PNG writer its pictures come out of; its git runs under its own
+/// spawner (`repo::output_of`). A test holds the list to the code
 /// (`the_fingerprint_reads_every_source_a_preset_is_built_by`).
 const BUILT_BY: &[(&str, &[u8])] = &[
     ("demo/authorship.rs", include_bytes!("authorship.rs")),
@@ -200,8 +176,7 @@ const BUILT_BY: &[(&str, &[u8])] = &[
     ("png/write.rs", include_bytes!("../png/write.rs")),
 ];
 
-/// The UTC day, counted from the epoch. A clock before 1970 reads day
-/// zero, which is still one day.
+/// The UTC day since the epoch; a clock before 1970 reads day zero.
 fn day() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -209,9 +184,8 @@ fn day() -> u64 {
         .unwrap_or_default()
 }
 
-/// The git every preset is built by: the one on PATH, which is the one
-/// `DemoRepo` spawns. Unreadable answers empty, and the build that comes
-/// next says why.
+/// The version of the git on PATH, which `DemoRepo` spawns. Unreadable
+/// answers empty; the build that follows says why.
 fn git_version() -> String {
     let mut command = std::process::Command::new("git");
     command.arg("--version");
@@ -222,14 +196,9 @@ fn git_version() -> String {
         .unwrap_or_default()
 }
 
-/// Rewrites `from` to `to` wherever a file under `dir` names it.
-///
-/// Refuses a tree that names it anywhere but git's own metadata. git
-/// writes absolute paths into its own files and reads them back; a file
-/// git *tracks* is content, and rewriting content would leave the copy
-/// dirty where the template was clean — so a preset that commits its own
-/// path is one this cannot copy, and says
-/// so.
+/// Rewrites `from` to `to` wherever a file under `dir` names it. Refuses
+/// when such a file is content rather than git's own metadata (see the
+/// module doc).
 fn rebind(dir: &Path, from: &str, to: &str) -> Result<(), String> {
     walk(dir, &mut |path, kind| {
         match kind {
@@ -264,10 +233,8 @@ fn rebind(dir: &Path, from: &str, to: &str) -> Result<(), String> {
     })
 }
 
-/// Copies a template's contents into `root`, rebound to it on the way.
-///
-/// The markers stay behind: they say what the template is, and a run is
-/// handed a repository.
+/// Copies a template's contents into `root`, rebound to it on the way,
+/// leaving the markers behind.
 fn copy_in(template: &Path, leaf: &str, root: &Path) -> Result<(), String> {
     let into = root
         .file_name()
@@ -355,16 +322,10 @@ fn is_marker(rest: &Path) -> bool {
     rest == Path::new(READY) || rest == Path::new(REFUSED)
 }
 
-/// Whether `path` is one of git's own files: under the `.git` a work
-/// tree stands on, or under a bare repository — a preset's
-/// `origin.git`, and the clone that seeds it, name their paths in the
-/// files a work tree names them in, and git tracks nothing in
-/// either.
-///
-/// A bare repository is recognised by what is in it: a directory
-/// called `foo.git` that git does not keep is a directory a preset
-/// could commit, and rewriting what it holds would leave the copy
-/// dirty where the template was clean.
+/// Whether `path` is one of git's own files: under a work tree's `.git`,
+/// or under a bare repository (a preset's `origin.git`). A bare
+/// repository is recognised by its contents, not its name: a `foo.git`
+/// directory without them could be committed content.
 fn under_git_metadata(root: &Path, path: &Path) -> bool {
     let Ok(rest) = path.strip_prefix(root) else {
         return false;
@@ -382,9 +343,8 @@ fn under_git_metadata(root: &Path, path: &Path) -> bool {
     false
 }
 
-/// Whether `haystack` holds `needle`. Written out because xtask
-/// depends on std alone, and a repository's pack files go through
-/// here.
+/// Whether `haystack` holds `needle`, as bytes: pack files go through
+/// here, and xtask is std-only.
 fn holds(haystack: &[u8], needle: &[u8]) -> bool {
     let Some((first, rest)) = needle.split_first() else {
         return false;

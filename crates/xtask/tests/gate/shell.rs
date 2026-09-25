@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::support::Sandbox;
 
 /// What `hook pre-shell` prints for `command`, typed in `dir` by
-/// `session`. Empty is the hook's way of saying it has no objection.
+/// `session`; empty is no objection.
 fn pre_shell(sb: &Sandbox, dir: &Path, session: &str, command: &str) -> String {
     sb.hook(
         "pre-shell",
@@ -32,8 +32,7 @@ fn a_wait_asked_again_is_held_where_the_work_it_waits_on_is_not() {
     let held = pre_shell(&sb, &sb.seat, "waiting", "tail  -2   target/gate.log");
     assert!(held.contains("run_in_background"), "{held}");
 
-    // The ledger is one session's: another session asking the same
-    // thing is asking it for the first time.
+    // The ledger is one session's.
     assert_eq!(pre_shell(&sb, &sb.seat, "elsewhere", wait), "");
 
     // Cargo waits for itself, so it is never a poll.
@@ -41,9 +40,8 @@ fn a_wait_asked_again_is_held_where_the_work_it_waits_on_is_not() {
         assert_eq!(pre_shell(&sb, &sb.seat, "waiting", "cargo xtask gate"), "");
     }
 
-    // A session types in the checkout while it is handed a seat and in
-    // the seat afterwards; the ledger is beside the checkout either
-    // way, so it is the same ledger and the session's end clears it.
+    // A session types in the checkout, then in the seat: the ledger is
+    // beside the checkout either way.
     assert!(sb.repo.join(".repeats").join("waiting.tsv").is_file());
     assert!(!sb.seat.join(".repeats").exists());
     let held_across = pre_shell(&sb, &sb.repo, "waiting", wait);

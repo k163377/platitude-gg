@@ -3,61 +3,36 @@
 
 use std::path::PathBuf;
 
-/// What the run is judged on.
-///
-/// A refused write counts against it: the verb asked for one, and a
-/// picture of the state it never reached proves nothing. Verbs that
-/// exist to walk a refusal (`fetch-fail`, `delete-branch-refused`) say
-/// so with `--allow-write-failure`.
+/// What the run is judged on. A refused write counts against it — a
+/// picture of the state it never reached proves nothing — unless the verb
+/// walks a refusal (`--allow-write-failure`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Outcome {
     pub(super) exit_ok: bool,
     pub(super) saved: bool,
     pub(super) timed_out: bool,
-    /// Whether the app's own watchdog ended the run. It quits cleanly when
-    /// it fires, so the parent sees an ordinary exit — and a run that
-    /// wedged after its first `grabToImage` came back has a screenshot to
-    /// show for itself as well (observed: a half-finished shot pair
-    /// passed on the strength of `app.png` alone). Reaching the ceiling
-    /// is the harness saying it stopped waiting, and a red.
+    /// Whether the app's own watchdog ended the run: a red, though the app
+    /// quits cleanly and may already have saved one shot of a pair.
     pub(super) watchdog_expired: bool,
     pub(super) write_failures: usize,
     pub(super) allow_write_failure: bool,
-    /// Whether the run said its own write barrier's contract broke
-    /// (`AutoActDriver.sayBroken`). **A red whatever else the run did**:
-    /// the harness is saying the run stopped being about the write it
-    /// was pressed for, so the shot is of some other page —
-    /// `--allow-write-failure` is about git refusing a write the verb
-    /// meant to make, which is a different sentence.
-    ///
-    /// The run ends itself the moment it says so, so this line is the
-    /// whole of the evidence.
+    /// Whether the run said its write barrier's contract broke
+    /// (`AutoActDriver.sayBroken`): a red `--allow-write-failure` does not
+    /// reach (rules-refs/app-ui.md「違反は取り消せない」).
     pub(super) contract_broken: bool,
-    /// Whether the app was refused the settings it was handed *and
-    /// nothing staged that* — the two verbs whose subject is a held
-    /// store are not counted here ([`super::child`]).
-    ///
-    /// A run's config directory is made for it alone, so the only
-    /// reading left is that something else got hold of it, and the run
-    /// goes on with an empty store and a window about *that*, which the
-    /// verb's own waiting never comes back from. Said in the second it
-    /// happens, so the reading is had at once, with the ceiling
-    /// still standing (`super::options`).
+    /// Whether the app was refused the settings it was handed, for a verb
+    /// that did not stage that itself ([`super::child`]). A run's config
+    /// directory is its own, so this is two runs given one — judged the
+    /// moment it is said, not at the ceiling.
     pub(super) store_refused: bool,
     /// What a verb whose failure the camera cannot see has to be caught
-    /// saying. `solo` photographs a perfectly good ordinary window if the
-    /// lock was never held, `details-fit` frames a pane whose content ran
-    /// off the right of the window the same as one that fits, and
-    /// `window-fill` is about a maximised window, which leaves no desktop
-    /// beside itself for a short edge to show against — nor any way to
-    /// photograph the frame it paints out past the screen.
+    /// saying (`super::verbs::must_say`).
     pub(super) must_say: Option<&'static str>,
     pub(super) said: bool,
-    /// Whether the identity a held save wrote is in the run's own
-    /// gitconfig, read once the app has ended — the witness outside the
-    /// app that the exit waited for the save (`quit-save-held`,
-    /// `super::shim::held_save_landed`). `None` for every verb with no
-    /// such witness.
+    /// Whether the identity a held save wrote is in the run's gitconfig
+    /// once the app has ended — the witness outside the app that the exit
+    /// waited for the save (`quit-save-held`,
+    /// `super::shim::held_save_landed`). `None` for every other verb.
     pub(super) held_save_landed: Option<bool>,
 }
 
@@ -130,25 +105,18 @@ pub(super) fn judge(
     }
 }
 
-/// Which of the two reds this is: the one no ceiling ended.
-///
-/// The app's own watchdog is a QML `Timer` (`auto/AutoShotDriver.qml`),
-/// so a run it ended answered its event loop when the timer fired.
-/// This says nothing about earlier stalls or which completion was missing.
-/// The other red is a process that stopped answering, and is
-/// read off the ceiling (`super::wedge`), whose account
-/// already carries the machine's load. **Exclusive, so the load is said
-/// once**: a run whose watchdog fired and whose teardown then wedged is
-/// the ceiling's, and the account under it is the fuller reading.
+/// Which of the two reds this is: the one no ceiling ended. The app's
+/// watchdog is a QML `Timer` (`auto/AutoShotDriver.qml`), so a run it
+/// ended had its event loop turning when it fired — which says nothing
+/// about earlier stalls. Exclusive with the ceiling's reading
+/// (`super::wedge`), whose account is the fuller one and already carries
+/// the machine's load.
 pub(super) fn loop_was_turning(outcome: &Outcome, ran: &super::child::Ran) -> bool {
     outcome.watchdog_expired && !super::wedge::at_a_ceiling(ran)
 }
 
-/// The pictures the run left, named, and filed on the board as the run
-/// goes: the seat is read from the working directory there, so a
-/// picture that is registered is a picture that says which tree took
-/// it. Filed whatever the verdict — a failing run's picture is the one
-/// most worth looking at.
+/// The pictures the run left, named, and filed on the board whatever the
+/// verdict — a failing run's picture is the one most worth looking at.
 fn filed_shots(opts: &super::options::Options, shot_dir: &std::path::Path) -> Vec<PathBuf> {
     let mut shots: Vec<PathBuf> = std::fs::read_dir(shot_dir)
         .map(|it| {
@@ -170,16 +138,14 @@ fn filed_shots(opts: &super::options::Options, shot_dir: &std::path::Path) -> Ve
         };
         match crate::shots::record(&label, &opts.verb, &shots) {
             Ok(page) => println!("board: {}", crate::shots::shown(&page)),
-            // This run is judged on its pictures. Say the reason the
-            // board could not be updated and let the verdict stand.
+            // A board that could not be updated leaves the verdict alone.
             Err(message) => println!("board: not updated ({message})"),
         }
     }
     shots
 }
 
-/// Prints what the run said, files its pictures on the board, and gives
-/// the verdict — the whole of what a person reads off one run.
+/// Prints what the run said, files its pictures, and gives the verdict.
 /// `census_unwritten` is why a run that passed did not write the census
 /// line it owed (`run::tell_the_census`), which fails it.
 pub(super) fn announce(
@@ -214,8 +180,7 @@ pub(super) fn announce(
         ),
         outcome.saved,
         outcome.write_failures,
-        // Reaped where it was ordered to hold, or at the ceiling: two
-        // different ends, and the words `wedge-check` reads them by
+        // Two different ends, and the words `wedge-check` reads them by
         // (`super::faults`).
         match (&ran.held_at, timed_out) {
             (Some(station), _) => format!(", HELD AT {station}"),
@@ -228,10 +193,8 @@ pub(super) fn announce(
     if let Some(why) = super::wedge::gave_up_early(ran) {
         println!("  {why}");
     }
-    // A run ended by a ceiling is the one that says nothing for itself:
-    // the app's own account of where it stood, and what only the parent
-    // can see about it, are the whole of what the next occurrence is read
-    // from ([`super::wedge`]).
+    // A run ended by a ceiling says nothing for itself: the account is
+    // the whole of what the next occurrence is read from (`super::wedge`).
     else if super::wedge::at_a_ceiling(ran) {
         for line in super::wedge::account(shot_dir, ran, &shots) {
             println!("{line}");
@@ -245,8 +208,7 @@ pub(super) fn announce(
              whether it should have or not."
         );
     }
-    // Said either way: the pass is the witness having been read, and a
-    // reader who sees the line knows what was read.
+    // Said either way, so a reader knows what the pass read.
     match outcome.held_save_landed {
         Some(true) => println!(
             "  witness on disk: the identity the held save wrote is in the run's gitconfig \
@@ -304,18 +266,13 @@ fn say_the_watchdog(shot_dir: &std::path::Path, ran: &super::child::Ran, outcome
         "  the app's own watchdog ended this run — the act, screenshot, and census did \
          not all finish; a run stalled between grabs can still leave app.png behind."
     );
-    // The other half of the reading, and the half a red under load is
-    // told from a red that is wrong by. This watchdog is a QML
-    // `Timer`, so its firing proves the loop answered at that point.
-    // Earlier stalls and lost completion edges are still possible.
     if loop_was_turning(outcome, ran) {
         println!(
             "  the loop answered its watchdog — this does not rule out earlier stalls. {}",
             super::wedge::lanes_line()
         );
-        // The trail also contains the teardown after the watchdog
-        // asked to quit. Reaching `exiting` does not explain which
-        // completion was missing while the loop was up.
+        // The trail includes the teardown after the watchdog asked to
+        // quit: reaching `exiting` does not say which completion was missing.
         for line in super::wedge::trail(shot_dir) {
             println!("{line}");
         }
@@ -343,11 +300,6 @@ mod tests {
         held_save_landed: None,
     };
 
-    /// **The harness saying its own barrier broke is a red on its own.**
-    /// `--allow-write-failure` is about git refusing a write the verb
-    /// meant to make; this is the run saying it stopped being about the
-    /// write it was pressed for, and the picture it took is of some
-    /// other page.
     #[test]
     fn a_broken_contract_fails_the_run_whatever_else_it_did() {
         let broken = Outcome {
@@ -366,10 +318,8 @@ mod tests {
         );
     }
 
-    /// The witness on disk is the verdict for the one verb that has it:
-    /// a run that printed every line it should have and left the run's
-    /// gitconfig without the identity is a process that ended before its
-    /// save wrote, and that is the failure the verb is for.
+    /// A run that printed every line and left the gitconfig without the
+    /// identity ended before its save wrote — the failure the verb is for.
     #[test]
     fn the_held_saves_witness_on_disk_decides_where_it_exists() {
         let waited = Outcome {
@@ -385,11 +335,8 @@ mod tests {
         assert!(WELL.passed(), "and every other verb has no such witness");
     }
 
-    /// A run's settings are its own — nothing else knows the directory —
-    /// so a store that came back held means two runs were handed one, and
-    /// the picture is of a window about that. Waiting out the watchdog to
-    /// discover it costs the whole ceiling — the backstop's height — and
-    /// says only that the verb never finished.
+    /// Waiting out the watchdog to discover it would cost the whole
+    /// ceiling and say only that the verb never finished.
     #[test]
     fn a_run_refused_its_own_settings_fails_where_it_stands() {
         let refused = Outcome {
@@ -405,8 +352,6 @@ mod tests {
 
     #[test]
     fn a_verb_the_harness_stages_has_to_be_caught_saying_so() {
-        // `solo` photographs an ordinary window if the lock was never
-        // held, and an ordinary window takes a perfectly good picture.
         let quiet = Outcome {
             must_say: Some("solo blocked=true"),
             said: false,
@@ -450,9 +395,6 @@ mod tests {
 
     #[test]
     fn a_run_that_reached_its_ceiling_fails_with_a_picture_in_hand() {
-        // The app quits itself when the watchdog fires, and one half of a
-        // shot pair can already be on disk by then: exit 0, screenshot
-        // saved, nothing refused.
         let wedged = Outcome {
             watchdog_expired: true,
             ..WELL
@@ -491,11 +433,8 @@ mod tests {
         std::process::ExitStatus::from_raw(code << 8)
     }
 
-    /// The two reds are read apart, and the load is said under one of
-    /// them: a QML timer can only fire from a loop that is turning, so a
-    /// run it ended is not a process that stopped answering — and how
-    /// full the machine was is what tells a verb that is wrong from a
-    /// verb that was starved.
+    /// The load is said under exactly one of the two reds: how full the
+    /// machine was tells a verb that is wrong from one that was starved.
     #[test]
     fn a_watchdog_red_is_told_from_a_process_that_stopped_answering() {
         let wedged = Outcome {
@@ -503,13 +442,10 @@ mod tests {
             ..WELL
         };
         assert!(loop_was_turning(&wedged, &ran(false, Some(0))));
-        // Both ceilings are the other reading, whose account carries the
-        // load already: said twice, the two would disagree about which
-        // moment they were probed at.
+        // Both ceilings are the other reading, which says the load itself.
         assert!(!loop_was_turning(&wedged, &ran(true, None)));
         assert!(!loop_was_turning(&wedged, &ran(false, Some(97))));
-        // Nothing to say about the load of a run that answered for
-        // itself in words anybody can read.
+        // And none without the watchdog.
         assert!(!loop_was_turning(&WELL, &ran(false, Some(0))));
         assert!(!loop_was_turning(
             &Outcome {
@@ -520,9 +456,8 @@ mod tests {
         ));
     }
 
-    /// **A run judged well that did not write the census line it owed
-    /// fails**: the census would still say what the verbs showed before,
-    /// and a gate would stamp what it chose off that.
+    /// Else the census would still say what the verbs showed before, and a
+    /// gate would choose off that.
     #[test]
     fn a_run_judged_well_that_did_not_write_its_census_line_fails() {
         let opts = super::super::options::parse(&["wip".to_string(), "--no-board".to_string()])

@@ -1,13 +1,12 @@
-//! The one read every handler starts from: a value out of the hook's
-//! JSON payload.
+//! The hook's JSON: values read out of the payload, and answers spliced
+//! into hand-built JSON.
 
 /// Returns the first JSON string value for `key` in `input`, unescaped just
-/// enough for paths (\\ \" \/). The payload is machine-produced JSON, so the
-/// first occurrence of a key like "file_path" is the tool input's.
+/// enough for paths (\\ \" \/ \n \t). The payload is machine-produced JSON,
+/// so the first occurrence of a key like "file_path" is the tool input's.
 ///
-/// `\uXXXX` passes through as written: the harness writes non-ASCII as
-/// raw UTF-8, and a wrong four-byte guess would corrupt a path where
-/// passing the escape through merely fails a comparison loudly.
+/// `\uXXXX` is not decoded (only its backslash is dropped): the harness
+/// writes non-ASCII as raw UTF-8, and a wrong decode would corrupt a path.
 pub(super) fn string_field(input: &str, key: &str) -> Option<String> {
     let needle = format!("\"{key}\"");
     let after_key = &input[input.find(&needle)? + needle.len()..];
@@ -29,9 +28,8 @@ pub(super) fn string_field(input: &str, key: &str) -> Option<String> {
     None
 }
 
-/// Returns the first JSON boolean value for `key` in `input`. A field the
-/// tool left out is `None`, which is not the same answer as `false` for a
-/// caller that only wants to act on an explicit yes.
+/// Returns the first JSON boolean value for `key` in `input`; `None` when
+/// the field is absent, which is not `false`.
 pub(super) fn bool_field(input: &str, key: &str) -> Option<bool> {
     let needle = format!("\"{key}\"");
     let after_key = &input[input.find(&needle)? + needle.len()..];
@@ -42,8 +40,7 @@ pub(super) fn bool_field(input: &str, key: &str) -> Option<bool> {
     after_colon.starts_with("false").then_some(false)
 }
 
-/// The one shape of an outright refusal, printed: a PreToolUse hook's
-/// deny, with the reason made safe for the hand-built JSON it rides in.
+/// Prints a PreToolUse deny, with `reason` made safe for the JSON.
 pub(super) fn deny(reason: &str) {
     println!(
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
@@ -52,8 +49,7 @@ pub(super) fn deny(reason: &str) {
     );
 }
 
-/// A string sanitized for splicing into the hook's hand-built JSON:
-/// everything that could end the string or the payload early is dropped.
+/// `text` made safe to splice into a hand-built JSON string.
 pub(super) fn printable(text: &str) -> String {
     text.chars()
         .map(|c| match c {

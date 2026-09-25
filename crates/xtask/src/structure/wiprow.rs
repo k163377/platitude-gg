@@ -1,59 +1,23 @@
-//! Who may answer "is this window's own working-tree row on the graph",
-//! counted by machine (.claude/rules/app-ui.md §作業コピーの行は全部 git の
-//! all-zero id を着ている).
-//!
-//! **The id cannot answer it.** Every working copy's uncommitted work is
-//! drawn as a row wearing git's all-zero id — that spelling means "there
-//! is no object here", which is as true of a neighbour's row as of ours
-//! (`GraphModel::carried_row_of`) — and the walk prepends this window's
-//! only once the status has said there is something to commit. So a pass
-//! that beat that status carries every copy's row and none of ours, and a
-//! reader that takes a row out of the graph by index and asks the id
-//! whether it is the working tree's is answered yes by somebody else's.
-//! The graph answers it in one place instead (`GraphModel::wip_row`), and
-//! which row a landing on a real commit measures against is another
-//! (`newestCommitRow`).
-//!
-//! That question was spelled out by hand in several readers and one of
-//! them was missed when the rule changed, which is the shape this exists
-//! to stop: **the working tree's question is the graph's to answer,
-//! whatever position a row was read at.** A position is not a row
-//! anybody is on, so the answer reads as "ours is there", and it is not.
-//!
-//! **Asking it of a row somebody is on is untouched** — the row a click
-//! landed on, the row a selection stood at, the row a reword names. There
-//! the question is what kind of row this is, and a copy's row answers it
-//! as truly as ours: neither is a commit to select.
+//! Refuses the working tree's question (`GitFacts.wipOid`) asked of a row
+//! taken out of the graph by index (.claude/rules-refs/app-ui.md
+//! 「作業コピーの行は全部 git の all-zero id を着ている」). A row somebody
+//! is on — a click's, a selection's, a reword's — is left alone: there the
+//! question is what kind of row it is, and a copy's row answers it as truly
+//! as ours.
 //!
 //! **The source is walked in the order it is written**, one character at
-//! a time: a `{` opens a scope and a `}` closes it, wherever they are, so
-//! a body written on one line reads exactly as the same body written on
-//! five. Anything read line by line gets this wrong — a function whose
-//! whole body is on its line opens no scope at all, and its neighbour's
-//! parameter is then answered by a name from inside it.
+//! a time: a `{` opens a scope and a `}` closes it wherever they are. Read
+//! line by line, a function whose whole body is on its line opens no
+//! scope, and its neighbour's parameter is answered by a name from inside
+//! it.
 //!
-//! **It decides a spelling.** Two readings are refused:
-//! the question asked of a numbered row in one expression, and the
-//! question asked of a name whose innermost binding is given a numbered
-//! row anywhere — on any path, since a name given one on a branch still
-//! holds it there. **A name bound by anything this cannot read is
-//! uncertain, and an uncertain name passes**: parameters,
-//! arrows, loop variables and patterns all land there, and so does a word
-//! one scope declares twice. Which row such a name means needs the
-//! program, and what the landing does with it is what `wip-landing` and
-//! `wip-landing-stopped` run against a real window (verify-ui スキル
-//! §作業ツリー行への 2 つの着地). No branch is read here and no value is
-//! followed.
-//!
-//! **A binder list this cannot read whole closes the body it opens to
-//! names from outside.** A pattern or a default binds a name the list
-//! does not spell plainly, so a reader inside is asking about that one —
-//! and answering it with the word standing outside the body is the one
-//! way a sound reader gets refused. The walk stops at such a scope and
-//! says nothing, however the list is spaced.
-//!
-//! Read across both QML modules: the product's own and the harness's,
-//! which asks the same question of the same graph.
+//! **It decides a spelling.** Refused: the question asked of a numbered
+//! row in one expression, and asked of a name whose innermost binding is
+//! given a numbered row on any path. A name bound by anything this cannot
+//! read (parameters, arrows, loop variables, patterns, a word one scope
+//! declares twice) passes; what the landing does with it is checked
+//! against a real window by `wip-landing` / `wip-landing-stopped`
+//! (verify-ui スキル verbs.md「作業ツリー行への 2 つの着地」).
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -65,14 +29,13 @@ const TREES: &[&str] = &[
 ];
 /// How a row is taken out of the graph at a numbered position.
 const BY_INDEX: &str = "oidAt";
-/// What is refused of it. **Only the working tree's question**: a
-/// stash row carries a real object, so asking the id whether it names one
-/// (`stashRefOf`) is answered by the row itself and by nothing else.
+/// What is refused of it — only the working tree's question: a stash row
+/// carries a real object, so `stashRefOf` is answered by the row itself.
 const OF_THE_ID: &[&str] = &["wipOid"];
-/// The words that introduce a name.
 const DECLARES: &[&str] = &["const", "let", "var"];
 /// Where a failing line sends its reader.
-const RULE: &str = ".claude/rules-refs/app-ui.md §作業コピーの行";
+const RULE: &str =
+    ".claude/rules-refs/app-ui.md「作業コピーの行は全部 git の all-zero id を着ている」";
 
 /// One failure per line that asks a row read by index what kind of row it
 /// is, and how many QML files were read.
@@ -113,10 +76,9 @@ fn findings(text: &str) -> Vec<(usize, &'static str)> {
 /// What a scope knows about one name.
 #[derive(Default)]
 struct Knows {
-    /// It is given a row read at a numbered position somewhere. **On any
-    /// path** — a name given one inside an `if` holds it wherever that
-    /// `if` was taken, and a reader after the block is asking about it
-    /// there.
+    /// It is given a row read at a numbered position somewhere, on any
+    /// path: a name given one inside an `if` holds it wherever that `if`
+    /// was taken.
     numbered: bool,
     /// Something bound it that this cannot read: a parameter, an arrow's,
     /// a loop's, or a second declaration in the same scope. Always
@@ -129,10 +91,9 @@ struct Knows {
 struct Scope {
     names: BTreeMap<String, Knows>,
     /// A binder list opened this scope that this could not read whole — a
-    /// pattern, a default, a rest. **A name not bound here may then not
-    /// be answered by one from outside it**, because what that list bound
-    /// is exactly what could not be read: the walk stops here and says
-    /// nothing.
+    /// pattern, a default, a rest. A name not bound here may then not be
+    /// answered by one from outside: it may be the one that list bound, so
+    /// the walk stops here and says nothing.
     unreadable: bool,
 }
 
@@ -214,22 +175,19 @@ impl<'a> Walk<'a> {
             .iter()
             .copied()
             .find(|of| *of == word)
-            // A space between the name and its bracket changes nothing
-            // about what is asked.
             .filter(|_| matches!(self.non_space(self.at), Some((_, '('))));
         match word {
-            // The names a function binds are its body's, and the body is
-            // whatever `{` comes next — on this line or five below.
+            // A function's names are its body's: whatever `{` comes next,
+            // on this line or five below.
             "function" if !member => {
                 if let Some((bound, close)) = self.binders_after(self.at) {
                     self.owe(bound);
                     self.skip_past(close);
                 }
             }
-            // A loop or a catch binds only names its head spells out, and
-            // every one of those is taken, so the body it opens is read
-            // like any other. It may have no brace at all, so the scope
-            // standing here is told as well.
+            // Every word of a loop's or a catch's head is taken as bound,
+            // so its body is not closed to outer names. It may have no
+            // brace at all, so the scope standing here is told as well.
             "for" | "catch" if !member => {
                 if let Some((bound, close)) = self.binders_after(self.at) {
                     for name in &bound.names {
@@ -239,7 +197,6 @@ impl<'a> Walk<'a> {
                     self.skip_past(close);
                 }
             }
-            // QML gives a property its value with `:`.
             "property" if !member => self.a_property(),
             _ => match asked {
                 Some(asked) => self.asked(asked),
@@ -280,8 +237,7 @@ impl<'a> Walk<'a> {
         let name = self.slice(from, after_name);
         let numbered = match self.non_space(after_name) {
             Some((at, ':')) => at_a_number(self.value_from(at + 1)),
-            // A property with no value of its own holds whatever QML
-            // gives it, which is not a row read by number.
+            // No value of its own: not a row read by number.
             _ => false,
         };
         self.give(name.to_string(), true, numbered);
@@ -298,10 +254,9 @@ impl<'a> Walk<'a> {
         }
     }
 
-    /// Whether `(` at `open` closes on an `=>`, so the names inside it
-    /// are that arrow's parameters. Answers where it closed, for the walk
-    /// to step over: a list is not a body, and a pattern's braces are not
-    /// blocks.
+    /// Whether `(` at `open` closes on an `=>`, so the names inside are
+    /// that arrow's parameters. Answers where it closed, for the walk to
+    /// step over: a pattern's braces are not blocks.
     fn an_arrow_at(&mut self, open: usize) -> Option<usize> {
         let close = self.closing(open)?;
         if !matches!(self.non_space(close + 1), Some((at, '=')) if self.next_is(at, '>')) {
@@ -331,8 +286,8 @@ impl<'a> Walk<'a> {
         if declares {
             if let Some(scope) = self.scopes.last_mut() {
                 match scope.names.get_mut(&name) {
-                    // One scope, two declarations of a word: which one a
-                    // reader means is not this rule's to say.
+                    // Two declarations in one scope: which one a reader
+                    // means is not this rule's to say.
                     Some(knows) => knows.uncertain = true,
                     None => {
                         scope.names.insert(
@@ -352,8 +307,7 @@ impl<'a> Walk<'a> {
                 knows.numbered |= numbered;
                 return;
             }
-            // A write cannot reach past a list this could not read
-            // either: the name it means may well be one of that list's.
+            // Nor may a write reach past an unreadable list.
             if scope.unreadable {
                 break;
             }
@@ -392,9 +346,6 @@ impl<'a> Walk<'a> {
             if let Some(knows) = scope.names.get(word) {
                 return knows.numbered && !knows.uncertain;
             }
-            // **The walk stops at a list it could not read.** What such a
-            // list bound is exactly what could not be read, so a name it
-            // does not plainly hold is not the outer one either.
             if scope.unreadable {
                 return false;
             }
@@ -507,10 +458,9 @@ impl<'a> Walk<'a> {
         Some((names_in(self.slice(open + 1, close)), close))
     }
 
-    /// What a name is given: from `at` to the end of the statement, or to
-    /// the comma that starts the next name's. **Read to the end of the
-    /// line instead and one name is given another's value**, which is how
-    /// a reader of a selection's row came to look numbered.
+    /// What a name is given: from `from` to the end of the statement, or
+    /// to the comma that starts the next name's. Read to the end of the
+    /// line instead and one name is given the next one's value.
     fn value_from(&self, from: usize) -> &'a str {
         let mut depth = 0usize;
         let mut at = from;
@@ -548,15 +498,13 @@ fn is_word(c: char) -> bool {
 struct Binders {
     names: Vec<String>,
     /// False where an entry had more shape than a word — a pattern, a
-    /// default, a rest. **What such an entry binds cannot be read**, and
-    /// the names taken out of it are only the words it mentions.
+    /// default, a rest — whose names are then only the words it mentions.
     readable: bool,
 }
 
-/// The names in a comma-separated binder list. **An entry this cannot
-/// read whole gives up every word in it**: a pattern
-/// binds one of them, and which one is what could not be read. Read per
-/// entry, so `oid=fallback` and `oid = fallback`
+/// The names in a comma-separated binder list. An entry this cannot read
+/// whole gives up every word in it, since which one it binds is what could
+/// not be read. Read per entry, so `oid=fallback` and `oid = fallback`
 /// answer the same.
 fn names_in(list: &str) -> Binders {
     let mut names = Vec::new();
@@ -606,8 +554,7 @@ fn at_a_number(expression: &str) -> bool {
     let mut rest = expression;
     while let Some((before, after)) = rest.split_once(BY_INDEX) {
         rest = after;
-        // `myOidAt(0)` is not the reader this names, and a space between
-        // the name and its bracket changes nothing about what is read.
+        // `myOidAt(0)` is not the reader this names.
         if before.ends_with(is_word) {
             continue;
         }
@@ -645,7 +592,7 @@ mod tests {
     /// And through the name it was put in.
     const THROUGH_A_NAME: &str =
         "const oidHex = graphModel.oidAt(0)\nif (GitFacts.wipOid(oidHex))\n";
-    /// A row somebody is on, which is nobody's business but the reader's.
+    /// A row somebody is on.
     const SOMEBODY_IS_ON: &str = "const oidHex = graphModel.oidAt(page.selectedRow)\n\
                                   if (!GitFacts.wipOid(oidHex))\n";
     /// A whole body on its line, and the same body on five.
@@ -774,19 +721,12 @@ mod tests {
         WRAPPED_VALUE,
     ];
 
-    /// The shape this exists to refuse, in both spellings: the question
-    /// asked of a numbered row where it is read, and asked of the name it
-    /// was put in.
     #[test]
     fn a_row_at_a_numbered_position_may_not_be_asked_the_working_tree_s_question() {
         assert_eq!(findings(DIRECT).len(), 1, "asked in one expression");
         assert_eq!(findings(THROUGH_A_NAME).len(), 1, "asked through a name");
     }
 
-    /// The row a click landed on, a selection stood at or a reword names
-    /// is a row somebody is on: what is asked there is what kind of row it
-    /// is, and a copy's row answers that as truly as this window's —
-    /// neither is a commit to select.
     #[test]
     fn a_row_somebody_is_on_is_left_alone() {
         assert!(findings("if (GitFacts.wipOid(oidHex))\n").is_empty());
@@ -800,18 +740,15 @@ mod tests {
         assert!(findings("// never GitFacts.wipOid(graphModel.oidAt(0))\n").is_empty());
     }
 
-    /// **A body written on its own line is a body.** Two functions, one
-    /// holding a numbered row and the next taking a parameter of the same
-    /// name, read the same however they are laid out — anything that
-    /// waited for a line to end deeper than it began answers the second
-    /// with the first's name.
+    /// Two functions, one holding a numbered row and the next taking a
+    /// parameter of the same name: the parameter is its own however the
+    /// bodies are laid out.
     #[test]
     fn a_body_reads_the_same_on_one_line_as_on_five() {
         assert!(findings(BODY_ON_ONE_LINE).is_empty(), "one line");
         assert!(findings(BODY_ON_FIVE).is_empty(), "five lines");
     }
 
-    /// And the reading that is refused is refused either way round.
     #[test]
     fn the_refused_reading_reads_the_same_on_one_line_as_on_five() {
         assert_eq!(
@@ -822,9 +759,8 @@ mod tests {
         assert_eq!(findings(REFUSED_ON_FIVE), vec![(3, "wipOid")], "five lines");
     }
 
-    /// **Two names given rows in one block are two names**, whether the
-    /// block is a line or five. Read to the end of the line, the first is
-    /// handed the second's value and a sound reader is refused for it.
+    /// Binds `Walk::value_from`: the first name is not handed the
+    /// second's value when both share a line.
     #[test]
     fn two_names_in_a_block_read_the_same_on_one_line_as_on_five() {
         assert!(findings(TWO_IN_A_BLOCK).is_empty(), "one line");
@@ -833,27 +769,22 @@ mod tests {
         assert_eq!(findings(&asked), vec![(1, "wipOid")], "the other name");
     }
 
-    /// **A name given the numbered row on one path still holds it there.**
-    /// The branch that leaves it alone is the branch the question is
-    /// asked of it on, so an analysis that took the last write for the
-    /// only one would call this sound.
+    /// An analysis that took the last write for the only one would call
+    /// this sound.
     #[test]
     fn a_name_given_the_numbered_row_on_any_path_is_asked_about_it() {
         assert_eq!(findings(ON_ONE_PATH), vec![(6, "wipOid")]);
     }
 
-    /// **The same word in two functions is two words**, and a block that
-    /// declares it again is a third: the inner reader is asking about its
-    /// own, and the one after that block about the outer.
+    /// The same word in two functions is two words, and a block that
+    /// declares it again a third: the reader after that block asks about
+    /// the outer one.
     #[test]
     fn a_word_is_the_innermost_one_that_bound_it() {
         assert_eq!(findings(TWO_FUNCTIONS), vec![(3, "wipOid")]);
         assert_eq!(findings(SHADOWED), vec![(8, "wipOid")]);
     }
 
-    /// Everything else that binds a name is read as binding it and
-    /// nothing more: an arrow's parameter with no brace of its own, and a
-    /// loop's variable.
     #[test]
     fn a_name_bound_by_what_this_cannot_read_is_never_refused() {
         assert!(findings(ARROW).is_empty(), "an arrow's own");
@@ -861,10 +792,8 @@ mod tests {
         assert!(findings(LOOP).is_empty(), "a loop's own");
     }
 
-    /// **A parameter this cannot read whole is still a parameter.** The
-    /// pattern binds a name the list does not spell plainly, so the
-    /// reader inside the body is asking about that one — and answering it
-    /// with the word standing outside the body refuses a sound reader.
+    /// Binds `Scope::unreadable`; a reader in the body that declared the
+    /// outer word is still refused.
     #[test]
     fn a_parameter_this_cannot_read_is_never_the_word_outside() {
         assert!(findings(PATTERN_PARAMETER).is_empty());
@@ -875,8 +804,6 @@ mod tests {
         );
     }
 
-    /// And how a list is spaced is not what it binds: a default reads the
-    /// same written tight or apart.
     #[test]
     fn a_default_parameter_reads_the_same_spaced_or_not() {
         let spaced = DEFAULT_PARAMETER.replace("oid=fallback", "oid = fallback");
@@ -884,8 +811,6 @@ mod tests {
         assert!(findings(&spaced).is_empty(), "spaced");
     }
 
-    /// A property is given its value with `:`, and the question asked of
-    /// one that holds a numbered row is the same question.
     #[test]
     fn a_property_given_the_numbered_row_is_asked_about_it() {
         assert_eq!(findings(PROPERTY), vec![(2, "wipOid")]);
@@ -893,24 +818,17 @@ mod tests {
         assert!(findings(plain).is_empty(), "no value of its own");
     }
 
-    /// **Neither half of the question has to stay on one line.** A call
-    /// wrapped across two is the same call, reported where it opened, and
-    /// a value wrapped after its `=` is the same value.
+    /// A wrapped call is reported on the line where it opened.
     #[test]
     fn a_call_wrapped_over_two_lines_is_the_same_call() {
         assert_eq!(findings(WRAPPED_CALL), vec![(1, "wipOid")]);
         assert_eq!(findings(WRAPPED_VALUE), vec![(3, "wipOid")]);
     }
 
-    /// **Nothing this decides is decided by a space or a line break.**
-    /// The rule is about which row a reader asks about, and no part of
-    /// that is spelled by whitespace — yet every defect found in it so
-    /// far was one of the two leaking into the answer (a list read per
-    /// word, a body that opened no scope because its
-    /// line ended where it began, a call whose bracket had to touch its
-    /// name). So it is checked as a property over every shape above
-    /// at once, which is what reading the code
-    /// kept failing to catch.
+    /// Whitespace leaking into the answer is how a reader like this goes
+    /// wrong (a list read per word, a body on one line that opens no
+    /// scope, a call whose bracket must touch its name), so it is checked
+    /// as a property over every shape above rather than case by case.
     #[test]
     fn nothing_here_is_decided_by_a_space_or_a_line_break() {
         for source in EVERY_SHAPE {
@@ -934,7 +852,7 @@ mod tests {
     }
 
     /// The same source with a space either side of every bracket, comma
-    /// and lone `=`. None of that changes what any of it binds or reads.
+    /// and lone `=`.
     fn spaced_out(code: &str) -> String {
         let chars: Vec<char> = code.chars().collect();
         let mut out = String::new();
@@ -979,8 +897,8 @@ mod tests {
         out
     }
 
-    /// What the two shapes above are read for: a word is a word however
-    /// it is written, and the transforms keep every one of them.
+    /// The two transforms keep every word, so the property test compares
+    /// one program laid out differently.
     #[test]
     fn the_shapes_this_is_read_in_keep_every_word() {
         for source in EVERY_SHAPE {

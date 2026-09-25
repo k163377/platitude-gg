@@ -1,5 +1,5 @@
 //! The git side: `refs/heads/main` moves only onto a stamped commit,
-//! whichever git moves it — and not at all for the user's own.
+//! whichever git moves it, except the user's own.
 
 use crate::support::Sandbox;
 
@@ -28,8 +28,8 @@ fn main_moves_only_onto_a_gated_commit_whatever_moves_it() {
         "{direct:?}"
     );
     assert_eq!(sb.main_sha(), main_before, "main did not move");
-    // A reset to where main already stands writes the ref to its own
-    // value; git runs the hook for it, and it must pass with no stamp.
+    // A reset to where main already stands still runs the hook; it must
+    // pass with no stamp.
     sb.git_ok(&sb.repo, &["reset", "-q", "--hard", "HEAD"]);
 
     // The manual test-skip control, which the Claude hook denies to sessions.
@@ -58,12 +58,9 @@ fn main_moves_only_onto_a_gated_commit_whatever_moves_it() {
     assert_eq!(sb.main_sha(), tip);
 }
 
-/// The gate is held over sessions and over nobody else: without the mark
-/// in the environment a direct commit on main and a rewind both go
-/// through, with no stamp anywhere and no manual test-skip flag. That git is
-/// the user's — a terminal of their own, an IDE, a window they are
-/// clicking in — and an IDE's has no cargo on PATH to reach a verdict
-/// with either.
+/// Without the session mark (`CLAUDECODE`) main moves with no stamp and
+/// no skip flag: that git is the user's, and an IDE's has no cargo on
+/// PATH to reach a verdict with.
 #[test]
 fn the_users_own_git_moves_main_with_no_stamp() {
     let sb = Sandbox::new("user");

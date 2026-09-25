@@ -1,22 +1,15 @@
 //! What a red step leaves behind for the run after it.
 //!
 //! A step's log is named by the step's index (`super::step::log_of`), so the
-//! next gate in this tree writes over it: the one container run that has
-//! ever been stopped by `Cargo.lock` lost its log to the re-run that
-//! passed, and what it said is known only from a terminal that happened
-//! to still hold it. A red step's log is copied here under the run that
-//! wrote it, where nothing but this module's own sweep takes it away.
+//! next gate in this tree writes over it. A red step's log is copied here
+//! under the run that wrote it, where only this module's own sweep takes it
+//! away.
 //!
-//! One shape of red gets more than a copy. Cargo stopping on the lock
-//! file is a cargo that did not agree with a file on disk, for a
-//! reason that is not in the message, and the change stands unjudged.
-//! The host's side of that same question is
-//! written beside the log while the tree still stands as it stood: what
-//! the files a resolve reads are out here (the root's three and every
-//! member's manifest), which cargo is out here, and which image was in
-//! there. The container's side of it is in the log already
-//! (`linux::watched_from_inside`), and **neither side is the read cargo
-//! made** — see that function for what a bracket can and cannot settle.
+//! Cargo stopping on the lock file (a cause the message does not give, the
+//! change unjudged) also gets the host's side written beside the log while
+//! the tree still stands as it stood: the files a resolve reads, the host's
+//! cargo, and the image. The container's side is in the log already
+//! (`linux::watched_from_inside`); neither side is the read cargo made.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -24,31 +17,23 @@ use std::time::Duration;
 
 use crate::subprocess::{Answer, bounded};
 
-/// How many runs' worth of red logs stand here. A run keeps only the
-/// logs of the steps that failed, so this is small; what it has to
-/// outlive is the re-run that follows a red gate, and the one after
-/// that.
+/// How many runs' worth of red logs stand here — enough to outlive the
+/// re-run that follows a red gate, and the one after that.
 const KEEP: usize = 10;
 
-/// How long a question asked about a red step may take. **The evidence
-/// is held to a ceiling of its own**: this runs after the step's
-/// own watched run has ended, on the gate's own thread and inside the
-/// step's ticket, so a docker that does not answer would hold both for
-/// as long as it liked. A daemon that is up answers in well under a
-/// second; what this height is set for is one that is not.
+/// How long a question asked about a red step may take. This runs after
+/// the step's watched run has ended, on the gate's thread and inside the
+/// step's ticket, so a docker that does not answer would hold both
+/// unbounded. Sized for a daemon that is not up.
 const ASKING_CEILING: Duration = Duration::from_secs(15);
 
 /// The files a resolve reads before it decides the lock is wrong: the
-/// three at the root, and **every member's own manifest** — a resolve
-/// reads all of them, so evidence that stopped at the root would call a
-/// run sound when it was a member manifest that arrived wrong.
+/// three at the root and every member's own manifest — evidence that
+/// stopped at the root would miss a member manifest that arrived wrong.
 ///
-/// Read off the tree, so a member added to the
-/// workspace is not a member this forgets. What it reads is every
-/// `crates/*/Cargo.toml`, which is where this workspace keeps its
-/// members (root Cargo.toml); **a member kept anywhere else would not be
-/// in here**. The container's own look globs the same shape
-/// (`linux::watched_from_inside`).
+/// Read off the tree as `crates/*/Cargo.toml`, where the root Cargo.toml
+/// keeps the members; a member kept anywhere else would not be in here.
+/// The container's look globs the same shape (`linux::watched_from_inside`).
 fn read_to_resolve(tree: &Path) -> Vec<String> {
     let mut files: Vec<String> = ["Cargo.lock", "Cargo.toml", ".cargo/config.toml"]
         .map(str::to_string)
@@ -67,27 +52,17 @@ fn read_to_resolve(tree: &Path) -> Vec<String> {
 }
 
 /// Cargo's three ways of saying it would not stand on the lock file as
-/// it found it: it would have rewritten one, written a first one, or
-/// could not read the one that is there.
+/// it found it: an absent lock is "cannot create", a zero-byte one (valid
+/// TOML, an empty resolve) "cannot update", one cut short mid-entry
+/// "failed to parse". A lock merely older than the registry still
+/// satisfies the manifests and is none of the three.
 ///
-/// **Measured** (2026-09-15, a throwaway crate, the host's cargo): an
-/// absent lock is "cannot create", a lock of zero bytes is "cannot
-/// update" — an empty file is valid TOML, so it parses as a resolve with
-/// nothing in it — and a lock cut short mid-entry is "failed to parse".
-/// A lock that is merely older than the registry is none of the three:
-/// it still satisfies the manifests, so cargo stands on it.
+/// The mapping runs one way: a manifest that arrived wrong also gives
+/// "cannot update".
 ///
-/// **The mapping runs one way.** "cannot update" is what cargo
-/// says about any lock its resolve disagrees with, an empty one being
-/// only the cheapest way to get there — a manifest that arrived wrong
-/// says the same thing. Which is why the evidence beside this is
-/// the bytes of every file the resolve reads, on both sides, as
-/// they stood.
-///
-/// **Cargo's own line.** A log that
-/// quotes the message is not a cargo that stopped — this file's own
-/// tests hold those sentences as data, so a red `test xtask` carrying
-/// them in a panic would otherwise be filed as a cargo that never ran.
+/// Only cargo's own `error: ` line counts: this file's tests quote the
+/// messages, and a red `test xtask` carrying them would otherwise be filed
+/// as a cargo that never ran.
 fn stopped_on_the_lock(log: &str) -> bool {
     log.lines().any(|line| {
         let Some(said) = line.trim_start().strip_prefix("error: ") else {
@@ -107,8 +82,7 @@ fn stopped_on_the_lock(log: &str) -> bool {
 /// stopping on the lock file — writes the host's side of it alongside.
 /// Answers the line the gate should say about this red, if any.
 ///
-/// The error is the keeping's own: a log that could not be copied is
-/// worth saying so, and is never a second failure of the step.
+/// An error is the keeping's own, never a second failure of the step.
 pub(crate) fn keep(
     logs: &Path,
     run: &str,
@@ -116,9 +90,7 @@ pub(crate) fn keep(
     log: &Path,
     command: &[String],
 ) -> Result<Option<String>, String> {
-    // No log is a step that never wrote one (the tests' faked
-    // runs), and there is nothing here to do about
-    // it.
+    // No log is a step that never wrote one (the tests' faked runs).
     let Ok(wrote) = std::fs::read(log) else {
         return Ok(None);
     };
@@ -135,9 +107,8 @@ pub(crate) fn keep(
         return Ok(None);
     }
     let beside = dir.join(format!("{}.host.txt", name.to_string_lossy()));
-    // Named after this log: both sides of a gate fail on their own
-    // threads, and two reds sharing one scratch file would read each
-    // other's answers.
+    // Named after this log: the two sides fail on their own threads, and
+    // two reds sharing one scratch file would read each other's answers.
     let asking = dir.join(format!("{}.asked.txt", name.to_string_lossy()));
     std::fs::write(&beside, host_side(run, tree, &asking, command, &said))
         .map_err(|e| format!("{}: {e}", beside.display()))?;
@@ -151,13 +122,10 @@ pub(crate) fn keep(
 /// The host's answer to what the container was asked, taken while the
 /// tree still stands as it stood.
 ///
-/// **Both sides are the same digest** (`crate::digest`, against the
-/// container's `sha256sum`), cut to the same width: equal byte counts
-/// and two digests of different kinds could not tell the same file from
-/// a different one of the same length, which is the whole question.
-///
-/// Everything asked of another program in here is bounded
-/// ([`ASKING_CEILING`]).
+/// Both sides print the same digest (`crate::digest`, against the
+/// container's `sha256sum`): with digests of different kinds, only byte
+/// counts would compare, and those cannot tell two files of one length
+/// apart.
 fn host_side(run: &str, tree: &Path, asking: &Path, command: &[String], said: &str) -> String {
     let mut out = format!("gate run  {run}\ntree      {}\n", tree.display());
     out.push_str(&format!("step      {}\n", command.join(" ")));
@@ -212,8 +180,6 @@ fn asked(what: &str, command: Command, ceiling: Duration, scratch: &Path) -> Str
 }
 
 /// One file as this side has it: what a cargo out here would have read.
-/// The digest is cut to the width the container's look prints, so the
-/// two lines stand side by side.
 fn as_it_stands(path: &Path) -> String {
     let Ok(bytes) = std::fs::read(path) else {
         return "absent".to_string();
@@ -226,9 +192,8 @@ fn as_it_stands(path: &Path) -> String {
     )
 }
 
-/// How much of the digest either side prints. Sixteen hex characters is
-/// what tells two files apart here; the whole thing would push the line
-/// past the width of everything else in the file.
+/// How much of the digest either side prints — the container's look cuts
+/// to the same width, so the two lines stand side by side.
 const SHA_SHOWN: usize = 16;
 
 /// The image the run was in, from the line the launcher wrote when it
@@ -251,8 +216,8 @@ fn shown(tree: &Path, path: &Path) -> String {
         .replace('\\', "/")
 }
 
-/// All but the newest [`KEEP`] runs. The name is the second the run
-/// started, which sorts as it counts.
+/// Removes all but the newest [`KEEP`] runs. A run's name starts with
+/// the second it started, so names sort by age.
 fn sweep(kept: &Path) {
     let Ok(entries) = std::fs::read_dir(kept) else {
         return;
@@ -292,8 +257,7 @@ mod tests {
         log
     }
 
-    /// The three refusals, in cargo's own words — measured against a
-    /// throwaway crate, one state each (see [`stopped_on_the_lock`]).
+    /// The three refusals, in cargo's own words ([`stopped_on_the_lock`]).
     #[test]
     fn the_three_ways_cargo_says_it_would_not_stand_on_the_lock() {
         for said in [
@@ -306,14 +270,12 @@ mod tests {
         assert!(!stopped_on_the_lock(
             "error: test failed, to rerun pass `--lib`"
         ));
-        // The verb's own red, which names the file for a different
-        // reason: this is the step failing.
+        // The verb's own red, naming the file: the step failing.
         assert!(!stopped_on_the_lock(
             "FAIL: the census moved a line for Cargo.lock"
         ));
-        // A log that *quotes* cargo's line is not cargo's line — this
-        // file's own tests are such a log, and a red `test xtask`
-        // carrying them must stay the step's own failure.
+        // A log that quotes cargo's line (this file's own tests, red) is
+        // not cargo's line.
         assert!(!stopped_on_the_lock(
             "test gate::evidence::tests::the_three_ways ... FAILED\n\
              note: \"error: cannot update the lock file /work/Cargo.lock\"\n"
@@ -326,9 +288,6 @@ mod tests {
         ));
     }
 
-    /// A resolve reads every member's manifest, so the evidence does.
-    /// Read off the tree, so a member added to the workspace arrives
-    /// here without anybody remembering to add it.
     #[test]
     fn every_members_manifest_is_part_of_what_a_resolve_reads() {
         let dir = ours("members");
@@ -357,8 +316,7 @@ mod tests {
         assert_eq!(read_to_resolve(&bare).len(), 3);
     }
 
-    /// The same digest on both sides, cut to the same width: the
-    /// container prints `sha256sum | cut -c1-16` for the same bytes.
+    /// The container prints `sha256sum | cut -c1-16` for the same bytes.
     #[test]
     fn the_digest_is_the_one_the_container_prints() {
         let dir = ours("digest");
@@ -374,10 +332,8 @@ mod tests {
         assert_eq!(as_it_stands(&dir.join("nothing-here")), "absent");
     }
 
-    /// A question that cannot be asked is an answer. What
-    /// a question that never answers does is `bounded`'s own
-    /// (`subprocess`, `verify::look`'s tests): the ceiling is passed in
-    /// here so the call sites say what they are willing to wait.
+    /// A question that never answers is `bounded`'s to test
+    /// (`subprocess`, `verify::look`).
     #[test]
     fn a_question_that_cannot_be_asked_answers_anyway() {
         let dir = ours("asking");
@@ -401,8 +357,6 @@ mod tests {
         assert_eq!(image_in("nothing of the sort\n"), None);
     }
 
-    /// The whole point: the log of a red step outlives the re-run that
-    /// would have written over it.
     #[test]
     fn a_red_steps_log_is_kept_where_the_next_run_does_not_reach() {
         let dir = ours("kept");

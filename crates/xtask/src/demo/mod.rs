@@ -1,7 +1,7 @@
 //! `cargo xtask demo-repo` — throwaway repositories in known states.
 //!
 //! Every invocation builds a fresh repository, isolated from the
-//! developer's git configuration; nothing is ever reused.
+//! developer's git configuration.
 
 mod authorship;
 mod basic;

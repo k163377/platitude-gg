@@ -1,15 +1,10 @@
-//! One measured run of the app: the process it starts, the memory and the
-//! host conditions it samples off it while it runs, and the wait that ends
-//! on the app's own completion.
+//! One measured run of the app: the process it starts, the memory and
+//! host conditions sampled off it, and the wait that ends on the app's
+//! own completion.
 //!
-//! **A real window, deliberately.** `verify-ui` runs offscreen, and
-//! offscreen Qt builds no scene graph worth measuring.
-//!
-//! **On one named screen, deliberately.** The window's place is
-//! written into the run's own `state.toml`: a machine's screens need
-//! not run at one rate, and the screen a window lands on sets the
-//! rate its frames can possibly arrive at
-//! (`perf::display`).
+//! The window is placed on one named screen through the run's
+//! `state.toml`: screens need not share a rate, and the screen sets the
+//! rate frames can arrive at (`perf::display`).
 
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -19,19 +14,16 @@ use super::reading::{Reading, missing, read_app};
 use super::{Options, SAMPLE_MS, artifacts, attribution, sampler};
 use crate::wait::{Budget, Expired, Wait};
 
-/// How long the app is left alone after `perf_done`
-/// even when the run asked for no settling: enough for
-/// at least one more sample, so the final reading is one
-/// the sampler actually took.
+/// The least the app is left alone after `perf_done`, even with no
+/// settling asked: one more sample, so the final reading is one the
+/// sampler actually took.
 const AFTER_DONE_MS: u64 = 250;
 
-/// How long the scroll bench is given past the twelve seconds it asks
-/// for. Past this it is not slow, it is not running: the window it draws
-/// into is covered, and the animation that advances it stopped with the
-/// frames. Thirty seconds, against the twenty-four a bench at half the
-/// screen's rate takes — the least the frame gate publishes, so a run
-/// slower than that is refused by the frame gate anyway, and every
-/// second past it only makes a covered window cost more.
+/// The most the scroll bench (twelve seconds of animation) is given.
+/// Past it the bench is not slow but stopped: nothing draws the window,
+/// so the animation does not advance. It sits just past the twenty-four
+/// seconds a bench at half the screen's rate (the least the frame gate
+/// publishes) takes; more only makes a covered window cost more.
 const SCROLL_CEILING: Duration = Duration::from_secs(30);
 
 fn scroll_deadline() -> Wait {
@@ -42,38 +34,31 @@ fn scroll_deadline() -> Wait {
     )
 }
 
-/// Why a run produced no reading, and whether taking it again could
-/// help. The difference matters: a machine that spoiled a run will not
-/// have spoiled the next one, and an application that stopped answering
-/// will stop answering again.
+/// Why a run produced no reading, which decides whether taking it again
+/// could help ([`Spoiled::budget`]).
 #[derive(Debug)]
 pub(super) enum Spoiled {
     /// The machine: a lock, a minimised window, a screen change, a busy
-    /// machine. Worth taking again for as long as `--retries` allows.
+    /// machine.
     Host(String),
     /// A bench that stood still with nothing else wrong with the
-    /// machine: the window was covered, or the screen was off. Worth one
-    /// more attempt — what covers a window either passes or stays, and a
-    /// stayer is not worth two more ceilings of saying so
-    /// (`perf::Bench::take`).
+    /// machine: the window was covered, or the screen was off.
     Covered(String),
     Run(String),
 }
 
 impl From<String> for Spoiled {
-    /// Anything that went wrong before the machine could be asked is
-    /// the run's own — a directory that would not open, a process
-    /// that would not start, a sampler that panicked.
+    /// Anything that failed before the machine could be asked (a
+    /// directory, the spawn, the sampler) is the run's own.
     fn from(said: String) -> Self {
         Self::Run(said)
     }
 }
 
 impl Spoiled {
-    /// How many causes there are, for a count per cause.
     pub(super) const CAUSES: usize = 3;
 
-    /// Which cause this is, as an index into a count per cause.
+    /// Which cause this is, as an index below [`Self::CAUSES`].
     pub(super) fn cause(&self) -> usize {
         match self {
             Self::Host(_) => 0,
@@ -82,11 +67,10 @@ impl Spoiled {
         }
     }
 
-    /// How many attempts a run spoiled this way is worth. The machine,
-    /// `--retries` — it will not have spoiled the next one. A covered
-    /// window, one of those: what covers it either passes or stays, and a
-    /// stayer is not worth two more ceilings of saying so. The
-    /// application, none: it will stop answering again.
+    /// How many attempts a run spoiled this way is worth: the machine will
+    /// not have spoiled the next one; what covers a window either passes
+    /// or stays, so one more ceiling tells; the application will stop
+    /// answering again.
     pub(super) fn budget(&self, retries: u32) -> u32 {
         match self {
             Self::Host(_) => retries,
@@ -124,9 +108,8 @@ impl Spoiled {
 
 /// The process this run measures, and everything it is told.
 ///
-/// A build with no harness in it is told nothing at all beyond where its
-/// two files are: it answers no `PGG_AUTO_*` knob, and the repository it
-/// opens comes out of the `state.toml` written beside them
+/// A build with no harness answers no `PGG_AUTO_*` knob: the repository
+/// it opens comes from the `state.toml` in its config directory
 /// (`artifacts::state_file`).
 fn command(
     exe: &std::path::Path,
@@ -142,32 +125,27 @@ fn command(
         .env("QT_FORCE_STDERR_LOGGING", "1")
         .env("PGG_CONFIG_DIR", config_dir)
         .env("PGG_LOG", &opts.log)
-        // Which graphics device and backend Qt chose, said by Qt itself.
-        // Two runs on different adapters are not each other's control, and
-        // this machine has more than one (ci/baseline/perf-windows-x64.md).
+        // Qt names the adapter and backend it chose: runs on different
+        // adapters are not each other's control.
         .env("QSG_INFO", "1")
         // A real window, deliberately: `verify-ui` runs offscreen, and
         // offscreen Qt builds no scene graph worth measuring.
         .env_remove("QT_QPA_PLATFORM")
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
-    // `--software` draws with the software scene graph, whose frames go
-    // through the backing store and so need no display: the D3D swap
-    // chain presents nothing to a display that is off — no frame ever
-    // swaps, and the driver never gets past the first one (measured:
-    // eighty seconds, a finished graph, not one `perf_graph_frame`) —
-    // where the software adaptation goes the whole way, lit or dark.
-    // What that renderer's numbers are is the report's to say
-    // (`report::memory`).
+    // `--software`: the software scene graph's frames go through the
+    // backing store, so it runs with the display off, where the D3D swap
+    // chain never presents a frame. What its numbers mean is
+    // `report::memory`'s to say.
     if opts.software {
         cmd.env("QT_QUICK_BACKEND", "software");
     }
     if !opts.harness {
         return cmd;
     }
-    // The app reports completion only after every requested measurement
-    // has answered. The parent owns termination so it can take the last
-    // process-memory sample and reap exactly the child it started.
+    // The app says `perf_done` once every requested measurement has
+    // answered; the parent, not the app, ends the process, so it takes the
+    // last memory sample and reaps exactly the child it started.
     cmd.env("PGG_AUTO_PERF", "1")
         .env("PGG_PERF_SELECTION", &opts.selection)
         .env("PGG_PERF_OID", &opts.oid)
@@ -210,11 +188,11 @@ pub(super) fn measure(
     // run's restored state cannot decide what this one does.
     let (config_dir, log, samples) = artifacts::open_run(run_dir, opts, screen)?;
     let mut cmd = command(exe, path, root, opts, &config_dir);
-    // Armed before the clock starts: the sampler's compile stays out of
-    // the timed window (`sampler::Armed`), and so does the attribution
-    // script's, for the same reason. The sum cannot overflow —
-    // `options::settle` holds the two under a day, and the attribution's
-    // ceiling is what keeps the sampler watching through the walk.
+    // Armed before the clock starts, so the sampler's and the attribution
+    // script's compiles stay out of the timed window (`sampler::Armed`).
+    // The sum cannot overflow (`options::settle` holds the two under a
+    // day); the attribution's ceiling keeps the sampler watching through
+    // the walk.
     let mut window = Duration::from_millis(opts.watchdog_ms + opts.settle_ms + AFTER_DONE_MS);
     let attributing = if opts.attribute {
         window += attribution::CEILING;
@@ -223,10 +201,9 @@ pub(super) fn measure(
         None
     };
     let armed = sampler::arm(window, samples, opts.software)?;
-    // Started with nothing executed yet: the sampler puts the process in
-    // its job object and only then lets it run, so the first git the app
-    // spawns is inside the job with everything after it. The clock starts
-    // when the sampler says the process is running.
+    // Started suspended: the sampler puts it in its job object before
+    // letting it run, so every git the app spawns is inside the job. The
+    // clock starts when the sampler resumes it.
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -238,16 +215,13 @@ pub(super) fn measure(
     let (sampler, started) = match armed.watch(child.id()) {
         Ok(watching) => watching,
         Err(said) => {
-            // Never resumed, so never running: ended
-            // here.
+            // Never resumed, so never running: ended here.
             if let Err(error) = child.kill() {
                 println!("  note: could not end the app that never ran: {error}");
             }
             return Err(Spoiled::Run(said));
         }
     };
-    // Counted from the instant the sampler resumed the process, at the
-    // samplers' own pace: the looks here are what the wait comes round at.
     let mut run = Wait::since(
         started,
         "the app",
@@ -256,14 +230,11 @@ pub(super) fn measure(
     );
     let stderr = child.stderr.take();
     let (done_rx, scroll, reader) = read_app(stderr, started, log, opts.harness);
-    // `perf_done` is the success edge. The deadline is
-    // only an outer diagnostic guard for an app that stopped answering.
-    // **`--allow-noisy` opens this one too.** The ceiling is a rate in
-    // disguise: twelve seconds of vsync-stepped animation take twelve
-    // seconds only at the screen's full rate, and past this they have
-    // not finished — so an absolute ceiling refuses everything below
-    // about a quarter of that rate. That is a slow machine, which is
-    // the case `--allow-noisy` exists to publish.
+    // `perf_done` is the success edge; the deadline only guards an app
+    // that stopped answering. `--allow-noisy` lifts the bench ceiling too:
+    // vsync-stepped animation finishes on time only at the screen's full
+    // rate, so the ceiling would refuse the slow machine that flag exists
+    // to publish.
     let bounded = !opts.limits.quiet_percent.is_infinite();
     let mut bench: Option<Wait> = None;
     let mut scroll_generation = 0;
@@ -277,10 +248,8 @@ pub(super) fn measure(
             Err(e) => break Ended::WaitFailed(format!("waiting on the app failed: {e}")),
         }
         // The bench's own deadline, counted from the look that first saw
-        // it running and read inside this loop's looks. A window nothing
-        // is drawing advances no animation, so the bench that should end
-        // in twelve seconds ends never — and waiting the whole watchdog
-        // out to say so costs five minutes and names the wrong culprit.
+        // it running: without it a covered window waits out the whole
+        // watchdog and is blamed on the app.
         if scroll.running() {
             if scroll.generation() != scroll_generation {
                 scroll_generation = scroll.generation();
@@ -298,11 +267,9 @@ pub(super) fn measure(
         }
     };
     let done = matches!(ended, Ended::Done(true));
-    // Held idle first, so the last reading is taken
-    // of a process that has stopped working. The one
-    // sampler is still running, which is what makes
-    // both the peak and the settled value readings
-    // of the same series.
+    // Held idle first, so the last reading is of a process that stopped
+    // working; the same sampler still runs, so the peak and the settled
+    // value are one series.
     if done {
         // waits(measured): the settling stretch the last reading is taken after — the
         // run is done and nothing is waited for; the stretch is a condition of the
@@ -310,10 +277,10 @@ pub(super) fn measure(
         std::thread::sleep(Duration::from_millis(opts.settle_ms.max(AFTER_DONE_MS)));
     }
     let held = sampler.read();
-    // After the settled reading and before the kill: of the process the
-    // reading was read from, without the walk's own thread and page
-    // touches in that reading. A run that never settled has nothing to
-    // attribute, and dropping the armed script ends it.
+    // After the settled reading and before the kill: the process the
+    // reading was of, without the walk's own touches in that reading. A
+    // run that never settled has nothing to attribute; dropping the armed
+    // script ends it.
     let walked = done && attributing.is_some();
     let attributed = match attributing {
         Some(armed) if done => attribution::record(armed, child.id(), run_dir),
@@ -338,22 +305,18 @@ pub(super) fn measure(
         0
     };
     reading.conditions = series.conditions.clone();
-    // The walk read back against the same series: the last tick before
-    // the app said it was about to ask, and the last before it said it
-    // had settled (`fonts::FontWalk::weigh`).
+    // Against the same series (`fonts::FontWalk::weigh`).
     reading.font_walk = reading
         .font_walk
         .take()
         .map(|walk| walk.weigh(&series.history));
-    // Written before the verdict, because the verdict may be that this
-    // is not a reading — and a run refused for the state of the machine
-    // is exactly the one whose numbers a later reader wants to see.
+    // Written before the verdict: a run refused for the machine's state is
+    // exactly the one whose numbers a later reader wants to see.
     let _ = std::fs::write(run_dir.join("reading.txt"), format!("{reading:#?}"));
     verdict(reading, opts, ended, screen.map(|s| s.name.as_str()))
 }
 
-/// How the wait ended: exactly one of these, because the loop leaves
-/// through exactly one edge.
+/// How the wait ended.
 enum Ended {
     /// The app reported `perf_done`, and whether it called the scenario
     /// a success. A false here is not an ending of its own — what went
@@ -363,20 +326,16 @@ enum Ended {
     Exited,
     /// The scroll bench stood still past [`SCROLL_CEILING`].
     Covered,
-    /// The app reported no end within its watchdog and was killed: what
-    /// the wait says of it.
+    /// The app reported no end within its watchdog and was killed.
     TimedOut(Expired),
     WaitFailed(String),
 }
 
 /// Whether the run is a reading, and if not whose fault that was.
 ///
-/// **The host first, whatever else went wrong.** A dark screen or a
-/// locked session stops the compositor presenting, which freezes the
-/// animation the scroll is driven by, and the run then dies at its
-/// deadline — reported as an application that stopped answering unless
-/// the machine is asked about first. Anything the host spoiled is worth
-/// taking again; nothing else is (`Spoiled`).
+/// The host is asked first, whatever else went wrong: a dark screen or a
+/// locked session freezes the scroll's animation and the run dies at its
+/// deadline, which would otherwise read as an app that stopped answering.
 fn verdict(
     reading: Reading,
     opts: &Options,
@@ -393,8 +352,8 @@ fn verdict(
     let host = reading
         .conditions
         .complaint(&opts.limits, pinned, opts.software);
-    // A bench that stood still on a machine with nothing else to say
-    // about itself: its own kind, because it is retried its own way.
+    // A bench that stood still on an otherwise quiet machine: its own
+    // kind, because it is retried its own way.
     let stood = (host.is_none() && covered).then(|| stood_still(&reading.conditions));
     let failed = reading
         .failure
@@ -418,14 +377,10 @@ fn verdict(
     }
 }
 
-/// What to say about a bench that never advanced.
-///
-/// **Only the frames know, and there are none — so the evidence has to
-/// pick the sentence.** A window that lost the front was plausibly
-/// covered; one that held it for every tick was not, and saying so
-/// anyway sends a reader looking for a window that was never there.
-/// What is left in that case is the screen, the desktop in front of it,
-/// and the application itself standing still.
+/// What to say about a bench that never advanced. With no frames, the
+/// foreground share picks the sentence: a window that lost the front was
+/// plausibly covered; calling one that held it covered sends a reader
+/// looking for a window that was never there.
 fn stood_still(conditions: &super::sampler::Conditions) -> String {
     let held_the_front = conditions
         .foreground_share()
@@ -474,12 +429,10 @@ mod tests {
         }
     }
 
-    /// The bench's animation advances one vsync-step per presented
-    /// frame, so twelve seconds of animation takes twelve seconds only
-    /// at full rate: at half the frames it takes twice as long.
-    /// [`SCROLL_CEILING`] must sit past what the frame gate still
-    /// publishes, or a run refused here would have been reported as
-    /// merely slow — and it dies with no fps in it, blaming the screen.
+    /// The animation advances one vsync-step per presented frame, so at
+    /// half the frames the bench takes twice as long. [`SCROLL_CEILING`]
+    /// must sit past what the frame gate still publishes, or a merely
+    /// slow run dies with no fps in it, blaming the screen.
     #[test]
     fn the_ceiling_cannot_refuse_a_run_the_frame_gate_would_publish() {
         let slowest = Duration::from_secs(12).div_f64(Limits::default().frame_share);
@@ -489,8 +442,8 @@ mod tests {
         );
     }
 
-    /// A window nothing drew is the machine's fault and worth another
-    /// run, however the application ended up looking.
+    /// A window nothing drew is `Covered`, however the application ended
+    /// up looking.
     #[test]
     fn a_covered_window_is_the_hosts_fault() {
         let reading = Reading {
@@ -507,10 +460,6 @@ mod tests {
         assert!(said.contains("covered"), "{said}");
     }
 
-    /// **A window that held the front was not covered**, and saying so
-    /// sends a reader looking for a window that was never there. With
-    /// no frames there is no evidence either way, so the sentence has
-    /// to follow what the conditions do say.
     #[test]
     fn a_window_that_held_the_front_is_not_called_covered() {
         let reading = Reading {
@@ -524,9 +473,6 @@ mod tests {
         assert!(said.contains("in front the whole time"), "{said}");
     }
 
-    /// An application that answered nothing, on a machine with no
-    /// complaint against it, is its own fault — and taking it again
-    /// would produce the same nothing.
     #[test]
     fn an_application_that_said_nothing_is_its_own_fault() {
         let reading = Reading {
@@ -538,9 +484,8 @@ mod tests {
         assert!(matches!(spoiled, Spoiled::Run(_)), "{spoiled:?}");
     }
 
-    /// A complete reading on a quiet machine is a reading. Without
-    /// this every other test here passes with the `Ok` arm deleted, and
-    /// a verdict that never returns one refuses every measurement.
+    /// Without this every other test here passes with the `Ok` arm
+    /// deleted.
     #[test]
     fn a_complete_reading_on_a_quiet_machine_is_one() {
         let mut reading = Reading {
@@ -563,9 +508,8 @@ mod tests {
         verdict(reading, &opts, Ended::Done(true), None).expect("a reading with its numbers in it");
     }
 
-    /// An application that left before saying anything is its own
-    /// fault, and so is one whose wait could not be taken — neither is
-    /// worth another four runs.
+    /// An early exit and a wait that could not be taken are both the
+    /// run's own.
     #[test]
     fn an_application_that_left_is_not_retried() {
         for (ending, said) in [
@@ -587,8 +531,7 @@ mod tests {
         }
     }
 
-    /// A run nobody sampled says nothing about the machine, so taking
-    /// it again would produce the same nothing. It is the run's own.
+    /// A run nobody sampled says nothing about the machine.
     #[test]
     fn a_run_the_sampler_never_watched_is_the_runs_own() {
         let spoiled = verdict(Reading::default(), &defaults(), Ended::Done(true), None)
@@ -598,10 +541,8 @@ mod tests {
         assert!(text.contains("never sampled"), "{text}");
     }
 
-    /// `--allow-noisy` publishes what a slow machine produced, and the
-    /// bench ceiling is a rate in disguise: an absolute one refuses
-    /// every run below about a quarter of the screen's frame rate,
-    /// which is the case the flag exists for.
+    /// The bench ceiling is keyed off `quiet_percent`, so `--allow-noisy`
+    /// must make it infinite (the ceiling's reason is in `measure`).
     #[test]
     fn the_bench_ceiling_opens_with_every_other_gate() {
         let open = options(&["--repo", ".", "--allow-noisy"]);
@@ -609,8 +550,7 @@ mod tests {
         assert!(defaults().limits.quiet_percent.is_finite());
     }
 
-    /// The machine is named first: a run that died at
-    /// its deadline with the window minimised is a
+    /// A run that died at its deadline with the window minimised is a
     /// minimised window.
     #[test]
     fn the_machine_is_named_before_the_application() {
@@ -629,8 +569,7 @@ mod tests {
         assert!(said.ends_with("and the run was killed"), "{said}");
     }
 
-    /// What the run's wait says once its budget is gone: a budget of
-    /// nothing is spent at the first look.
+    /// An expired run wait: a budget of nothing is spent at the first look.
     fn spent() -> Expired {
         Wait::new("the app", Budget::whole(Duration::ZERO), Duration::ZERO)
             .check("perf_done")

@@ -10,18 +10,13 @@ use super::plan::Required;
 use super::record;
 use super::runner::{FAKE_STAMP, Finished, execute_step};
 
-/// Where a side's step at `index` writes what it says.
 pub(super) fn log_of(ground: &Ground<'_>, index: usize) -> std::path::PathBuf {
     ground.logs.join(format!("{}-{index:02}.log", ground.name))
 }
 
-/// What became of one step short of red: it ran here, a stamp answered
-/// for it, or the run's halt stopped it ([`halt`]).
-///
-/// The first two are not the same to the caller. A verb that ran here
-/// built the release the rest of its block reuses; a verb a stamp
-/// answered for built nothing here, whatever it built in the tree that
-/// took the stamp ([`verbs`]).
+/// What became of one step short of red. `Step` and `Stamped` differ to
+/// the caller: a verb that ran here built the release the rest of its
+/// block reuses; one a stamp answered for built nothing here ([`verbs`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Ran {
     Step,
@@ -29,22 +24,19 @@ pub(super) enum Ran {
     Halted,
 }
 
-/// One step against its log: the machine's room taken for it, then run,
-/// timed, said as ok or FAIL, and stamped when green (an always-step's
-/// seconds are not worth one). `no_build` is a verb's
+/// One step, stamped when green (an always-step never is). `no_build` is a verb's
 /// `--no-build`, the block's to hand out ([`verbs`]). A failure comes
 /// back as the line to report.
 ///
-/// **The step is the unit** the budget hands the machine out in
-/// (`budget`), which is the granularity the runner already had. What
-/// that costs is that a landing waits out whichever unit is running, so
-/// the longest of them are kept and said ([`Waited::ran`]) — a unit that
-/// is minutes long is a landing's wait, and the one worth splitting.
+/// The step is the unit the budget hands the machine out in, and nothing
+/// is killed to make room, so a landing waits out whichever unit is
+/// running: the longest are kept ([`Waited::ran`]), since a minutes-long
+/// unit is the one worth splitting.
 ///
 /// The ticket is taken before the step announces itself to a measurement
-/// (`still::busy`, inside `check::run_step`) and let go after the step
-/// has ended, so nothing holds room it is not using and nothing holds
-/// part of what it needs while waiting for the rest.
+/// (`still::busy`, inside `check::run_step`) and let go after it ends, so
+/// nothing holds room it is not using, or part of what it needs while
+/// waiting for the rest.
 pub(super) fn run_one(
     ground: &Ground<'_>,
     index: usize,
@@ -58,26 +50,18 @@ pub(super) fn run_one(
         return Ok(stamp_answered(ground, id, "cached", 0, Duration::ZERO));
     }
     let weight = crate::budget::weight_of(&required.step.command, no_build);
-    // A unit that could not be given room is a red of the run like any
-    // other, and stops it like any other.
+    // No room is a red of the run like any other.
     let Some(room) =
         room_for(ground, id, weight).inspect_err(|_| ground.halt.red(id, required.step.always))?
     else {
         return Ok(Ran::Halted);
     };
-    // Looked at again now, after the plan was made: a unit that stood
-    // in the queue may have been answered while it stood — another tree
-    // gating the same commit writes the same key, and the stamps are the
-    // repository's, whichever tree wrote them (`stamp`). It takes
-    // duplicated work off a machine full of seats; what it cannot do is
-    // stop two that miss at the same instant, which both then run.
-    // Skipped under `--fresh`, which is the ask to run the step whatever
-    // any stamp says.
-    // The tests' switch for the window itself: the instant between the
-    // plan and this look is another tree's to write in, and nothing a
-    // test drives from outside can land in it. Named by step id, it
-    // stamps this very key here — which is what the tree that took the
-    // stamp would have left behind (`FAKE_LOG`).
+    // Looked at again after the plan: another tree gating the same commit
+    // may have stamped this key while this unit stood in the queue (the
+    // stamps are the repository's). Two that miss at the same instant
+    // both still run. `--fresh` skips the look.
+    // The tests' switch for that window, which nothing driven from outside
+    // can land in: it stamps this key here, as the other tree would have.
     if std::env::var(FAKE_STAMP).is_ok_and(|named| named == *id) {
         ground
             .store
@@ -106,10 +90,6 @@ pub(super) fn run_one(
     let outcome = execute_step(ground, id, &command, &log, &room);
     let ran = at.elapsed();
     let secs = ran.as_secs();
-    // How long this unit held the machine, kept because it is how long a
-    // landing arriving behind it would have waited: nothing is killed to
-    // make room (`budget`), so the longest unit is the interruption's
-    // own ceiling. A unit the halt ended held it until then.
     ground.waited.ran(id, weight, ran);
     let outcome = match outcome {
         Ok(Finished::Halted) => {
@@ -126,10 +106,6 @@ pub(super) fn run_one(
         waited: room.waited,
         from_start,
         ran,
-        // Off the step's own log, where the step wrote one: a verb says
-        // what its fixture, its build and its window took, and the wall
-        // clock above says nothing about which of the three it was
-        // (`verify::run::say_what_it_spent`).
         spent: spent_in(&log),
     });
     match outcome {
@@ -142,8 +118,7 @@ pub(super) fn run_one(
                     &format!("{id}\n{}\n", required.step.command.join(" ")),
                 )
             {
-                // Green, and still a run that cannot say so for next time:
-                // red, and stopped as any red is.
+                // A green that cannot be stamped is a red.
                 ground.halt.red(id, required.step.always);
                 return Err(format!("{id}: green but not stamped: {why}"));
             }
@@ -157,10 +132,9 @@ pub(super) fn run_one(
     }
 }
 
-/// The machine's room for one unit, or `None` for a unit the run's halt
-/// stopped first — its row already filed ([`halted`]). The halt is looked
-/// at before the unit queues, while it waits, and once it is admitted, so
-/// a run gone red starts nothing more and holds no place in the queue.
+/// The machine's room for one unit, or `None` when the run's halt stopped
+/// it first (its row already filed). The halt is checked before, during
+/// and after the queue, so a run gone red starts nothing and holds no place.
 fn room_for(
     ground: &Ground<'_>,
     id: &str,
@@ -197,10 +171,9 @@ fn room_for(
     Ok(Some(room))
 }
 
-/// A red step's line for the gate's failure, its log kept first: the
-/// re-run that follows a red gate writes over it in place (`evidence`),
-/// and a keeping that failed is said here and is never a second failure
-/// of the step.
+/// A red step's line for the gate's failure, its log kept first (the
+/// re-run after a red gate writes over it in place). A failed keeping is
+/// said, never a second failure.
 fn kept_red(ground: &Ground<'_>, required: &Required, log: &Path) -> String {
     let (name, id) = (ground.name, &required.step.id);
     match evidence::keep(
@@ -222,10 +195,8 @@ fn kept_red(ground: &Ground<'_>, required: &Required, log: &Path) -> String {
     }
 }
 
-/// A unit a stamp answered for, filed in the ledger under the word that
-/// says which stamp it was: one found when the plan was made, or one
-/// another tree wrote while this unit stood in the queue. It ran
-/// nothing, and the room it waited for is the only machine it took.
+/// A unit a stamp answered for, filed under `outcome`: `cached` (found at
+/// planning) or `cached-late` (written by another tree while it queued).
 fn stamp_answered(
     ground: &Ground<'_>,
     id: &str,
@@ -245,11 +216,9 @@ fn stamp_answered(
     Ran::Stamped
 }
 
-/// A unit the run's halt stopped ([`halt`]) — at its door, while it
-/// waited for room, or while it ran — filed as `halted`: not a red of its
-/// own, and not a green either, so nothing is stamped for it and the next
-/// run owes it. `weight` is the room it held (none short of running) and
-/// `ran` how long it had run when it was ended.
+/// A unit the run's halt stopped, filed as `halted`: neither red nor
+/// green, so nothing is stamped and the next run owes it. `weight` is the
+/// room it held (none short of running), `ran` how long it had run.
 fn halted(ground: &Ground<'_>, id: &str, weight: u32, waited: Duration, ran: Duration) -> Ran {
     ground.waited.filed(record::Row {
         id: id.to_string(),
@@ -263,14 +232,9 @@ fn halted(ground: &Ground<'_>, id: &str, weight: u32, waited: Duration, ran: Dur
     Ran::Halted
 }
 
-/// What a step said it spent, off its own log, or empty where it said
-/// nothing.
-///
-/// **The step is the one that can split its own time.** From out here a
-/// unit is one wall clock, and a verb's is a release build plus a
-/// fixture plus a window in whatever proportion the block's ordering
-/// gave it. The line is the step's words verbatim, so nothing is
-/// invented on the way into the ledger.
+/// The `spent ` line of a step's own log, verbatim, or empty. Only the
+/// step can split its wall clock — a verb's is build, fixture and window
+/// (`verify::run::say_what_it_spent`).
 fn spent_in(log: &Path) -> String {
     let Ok(text) = std::fs::read_to_string(log) else {
         return String::new();

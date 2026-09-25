@@ -1,27 +1,20 @@
-//! UserPromptSubmit: the half of a review that is not in the diff.
-//!
-//! The code is one of the two things a review answers for. The other is
-//! the session that asked for it: every instruction the user gave in it,
-//! met exactly once. That half has no diff to read, and the turns
-//! it lives in are the first thing a summarized context drops, so the ask
-//! for a review carries it back in.
+//! UserPromptSubmit: the half of a review that is not in the diff — every
+//! instruction the user gave in the session, met exactly once. A
+//! summarized context drops those turns first, so the ask for a review
+//! carries them back in.
 
 use super::payload::string_field;
 
-/// The words that ask for a review. Matched case-insensitively against
-/// the whole prompt, so `/code-review` and a sentence with レビュー in it
-/// are the same trigger.
+/// The words that ask for a review, matched case-insensitively anywhere
+/// in the prompt (`/code-review` included).
 const ASKS: [&str; 2] = ["レビュー", "review"];
 
-/// The everyday words that carry one of those whole inside them. A diff
-/// pane is called nothing else here, and Japanese writes no spaces, so
-/// there is no word boundary to test for: the containers are named, and
-/// a prompt asks for a review when it holds more asks than containers.
+/// Everyday words that contain an ask. Japanese has no word boundary to
+/// test, so these are counted and subtracted.
 const CONTAINERS: [&str; 2] = ["プレビュー", "preview"];
 
 /// UserPromptSubmit: plain stdout becomes this turn's context. The
-/// message is also what the landing permit answers to (`permit`), so it
-/// goes there first to supply the pre-landing completion check.
+/// landing permit reads the same message first (`permit`).
 pub(super) fn prompt_submit(input: &str) -> Result<(), String> {
     let Some(prompt) = string_field(input, "prompt") else {
         return Ok(());
@@ -36,23 +29,20 @@ pub(super) fn prompt_submit(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Whether this prompt is asking for a review at all. A prompt that only
-/// mentions one pays the paragraph, which is the cheaper of the two
-/// mistakes; a prompt that says プレビュー pays nothing.
+/// Whether this prompt asks for a review. One that only mentions a review
+/// still gets the note — the cheaper of the two mistakes.
 fn asks_for_review(prompt: &str) -> bool {
     let lowered = prompt.to_lowercase();
     occurrences(&lowered, &ASKS) > occurrences(&lowered, &CONTAINERS)
 }
 
-/// How many times any of `words` appears in `text`.
 fn occurrences(text: &str, words: &[&str]) -> usize {
     words.iter().map(|word| text.matches(word).count()).sum()
 }
 
-/// What the review covers besides the code. Both directions are spelled
-/// out because only one of them is looked for on its own: work that is
-/// missing announces itself the moment the user reads the result, while
-/// work nobody asked for reads as diligence.
+/// What the review covers besides the code. Both directions are named
+/// because only missing work shows itself; work nobody asked for reads as
+/// diligence.
 fn note(transcript: Option<&str>) -> String {
     let record = transcript
         .map(|path| {

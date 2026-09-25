@@ -1,38 +1,30 @@
 //! `cargo xtask structure` — the per-file length backstop of
-//! .claude/rules/structure.md, counted by machine.
+//! .claude/rules/structure.md §長さの閾値, counted by machine.
 //!
-//! **Code lines**: blank lines and comment-only lines do not count, the way
-//! clippy counts a function for `too_many_lines`. A count that charged for
-//! comments would pay a reader to delete them, and deleting them is not
-//! what a long file needs.
+//! **Code lines**: blank and comment-only lines do not count, as clippy
+//! counts a function for `too_many_lines` — a count that charged for
+//! comments would pay a reader to delete them.
 //!
-//! One number covers every file, and it is a backstop:
-//! what a file past it needs is a look at its design, which is a person's
-//! call on the reason and not a machine's on the count. So the count only
-//! has to be loud once, and a file has one of three standings:
+//! The backstop only has to be loud once, so a file has one of three
+//! standings:
 //!
 //! * **on the ledger** — .claude/rules-refs/structure.md 分割しない判断 holds
-//!   a written reason not to split it, which is the rule's own escape hatch.
-//!   No backstop applies and no baseline entry is kept: the entry is the
-//!   whole of the standing, and what the file measures is nobody's to
-//!   record (a length on the entry would be rewritten on every growth
-//!   without anyone re-reading the reason). The check that remains is
-//!   that the entry names a file that is still there.
+//!   a written reason not to split it. No backstop and no baseline entry
+//!   (a length kept for it would be rewritten on every growth without
+//!   anyone re-reading the reason); the one check left is that the entry
+//!   names a file still there.
 //! * **in the baseline** — pinned at the length it had. It may shrink, and
 //!   the baseline follows it down; it may not grow.
-//! * **neither** — the backstop applies as written, so a file that crosses
-//!   it for the first time fails on the run that first sees it.
+//! * **neither** — the backstop applies as written.
 //!
-//! Three other things about how the tree is divided are counted here,
-//! because they are the same shape of question and the same second of
-//! work: the product's QML may not name a type from the verification
-//! harness's module ([`modules`]), the app's Rust may not look a `PGG_*`
-//! variable up outside the one module that owns them ([`env`]), and
-//! nothing in the product's QML closes a popup that is not its own to
-//! close ([`popups`]).
+//! Four other questions of how the tree is divided are counted here too:
+//! the product's QML may not name a harness type ([`modules`]), the app's
+//! Rust may not look a `PGG_*` variable up outside the module that owns
+//! them ([`env`]), the product's QML closes no popup but its own
+//! ([`popups`]), and QML asks the graph, not a row's id, which row is this
+//! window's working tree ([`wiprow`]).
 //!
-//! The fn half of the same § is left to clippy's `too_many_lines`, which
-//! already knows where functions begin and end.
+//! The fn half of the same § is left to clippy's `too_many_lines`.
 
 mod env;
 mod modules;
@@ -56,8 +48,7 @@ pub(crate) static STRUCTURE: command::Command = command::Command {
 pub(crate) static COMMANDS: &[&command::Command] = &[&STRUCTURE];
 
 /// The length past which a file's design is the question, in code lines
-/// (.claude/rules/structure.md §長さの閾値). It is clippy's proposed
-/// `too_many_lines_in_file` default, counted the way that lint counts.
+/// (.claude/rules/structure.md §長さの閾値).
 const BACKSTOP: usize = 1000;
 
 /// Where the ratchet keeps what was already over when it went in.
@@ -86,8 +77,7 @@ const BASELINE_HEADER: &str = "\
 ";
 
 /// One file counted: the code lines it is held to, and the physical lines
-/// they sit in, because "long in comments" and "long in code" want
-/// different answers and only the second is this check's business.
+/// they sit in.
 struct Counted {
     path: String,
     code: usize,
@@ -95,8 +85,6 @@ struct Counted {
 }
 
 impl Counted {
-    /// How long it is, in the terms a reader needs to pick a fix: the
-    /// number it is held to, and how much of the file is comment.
     fn measured(&self) -> String {
         format!(
             "{} code lines in {} physical ({}% comment and blank)",
@@ -160,7 +148,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     } else if closing_for_others == failures.len() {
         Err(format!(
             "{closing_for_others} line(s) closing a popup that is not theirs to close \
-             (.claude/rules/app-ui.md §メニューを閉じるのは自分)"
+             (.claude/rules-refs/app-ui.md「メニューを閉じるのは自分」)"
         ))
     } else {
         Err(format!(
@@ -170,10 +158,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// The baseline ratchet, over the files the ledger does not answer for.
-///
-/// Gives back how many files the baseline pins and one failure per file
-/// that crossed a line it may not cross.
+/// The baseline ratchet over the files the ledger does not answer for:
+/// how many files it pins, and one failure per file past its line.
 fn check_baseline(
     root: &Path,
     rest: &[&Counted],
@@ -217,8 +203,7 @@ fn check_baseline(
                     file.code - was,
                     file.code - BACKSTOP,
                 ));
-                // Pinned where it was: a run that fails leaves the bar it
-                // failed against where it stood.
+                // A failing run leaves its bar where it stood.
                 next.insert(file.path.clone(), was);
             }
             Some(&was) => {
@@ -247,15 +232,9 @@ fn check_baseline(
     Ok((next.len(), failures))
 }
 
-/// Every .rs and .qml under crates/, counted.
-///
-/// All of them: the run reports what
-/// the tree costs in code and what it spends on comments, and a ledgered
-/// file still owes its entry the fact that it is there.
-///
-/// crates/ is the whole of what the rule covers: spike/ is throwaway Phase 0
-/// reference code the workspace already excludes, and target/ is not walked
-/// even where a stray per-crate one appears.
+/// Every .rs and .qml under crates/, counted — all of them, since the
+/// totals and the ledger check need the files under the backstop too.
+/// spike/ is outside the rule, as it is outside the workspace.
 fn scan(root: &Path) -> Result<Vec<Counted>, String> {
     let mut files = Vec::new();
     collect(&root.join("crates"), &mut files)?;
@@ -275,11 +254,8 @@ fn scan(root: &Path) -> Result<Vec<Counted>, String> {
 
 /// The lines of a .rs or .qml file that carry code, counted the way clippy
 /// counts a function body for `too_many_lines`: a line counts once it has
-/// anything on it outside a `//` or `/* */` comment.
-///
-/// Both languages comment alike, so one counter answers for both. A `//`
-/// inside a string literal ends the line early here, as it does in clippy —
-/// what is left of the line is still code, so the line is still counted.
+/// anything on it outside a `//` or `/* */` comment. A `//` inside a
+/// string literal ends the line early, as in clippy; the line still counts.
 fn code_lines(text: &str) -> usize {
     let mut count = 0;
     let mut in_comment = false;
@@ -328,9 +304,8 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
         let name = entry.file_name().to_string_lossy().into_owned();
         let path = entry.path();
         if path.is_dir() {
-            // Neither holds anything a person wrote: a crate-local target/
-            // appears the moment somebody runs cargo from inside a crate,
-            // and a dot-directory belongs to tooling.
+            // Neither holds anything a person wrote (a crate-local target/
+            // appears when cargo runs inside a crate).
             if name != "target" && !name.starts_with('.') {
                 collect(&path, out)?;
             }
@@ -421,16 +396,9 @@ fn without_comments_and_strings(text: &str) -> String {
     out
 }
 
-/// The ledger, its text, and the entries that exempt a file.
-///
-/// The text comes back with them because a shrink rewrites the numbers in
-/// place, and the offsets the entries carry are into this string.
-///
-/// Ledger entries name a file by however much of its tail tells it apart
-/// (`ui/AutoActDriver.qml`), so these match as path suffixes. Only the
-/// 分割しない判断 section counts — the sections above it name files as
-/// examples of a trap, and reading the whole
-/// document would quietly excuse them.
+/// The ledger's entries: each names a file by the tail of its path that
+/// tells it apart ([`names`]). Only the 分割しない判断 section counts — the
+/// sections above it name files as examples of a trap.
 fn read_ledger(root: &Path) -> Result<Vec<String>, String> {
     let path = root.join(LEDGER);
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -458,15 +426,10 @@ fn ledger_entries(section: &str) -> Vec<String> {
         .collect()
 }
 
-/// The file one bullet exempts, if it is one of the bullets that do.
-///
-/// A bullet exempts the file it is *about*, and that is the one it opens
-/// with in bold: ``- **`path` は割らない** — …``. The same section also
-/// carries bullets about one long function inside a file, which name their
-/// file in passing and leave the file's standing as it is;
-/// leading on the file in bold is what tells the two apart. Losing the bold
-/// costs an exemption and turns the count red, which is the direction a
-/// formatting slip should fail in.
+/// The file one bullet exempts: the path it opens with in bold,
+/// ``- **`path` …** — …``. A bullet naming a file in passing (about one
+/// long fn in it) exempts nothing; a lost bold turns the count red, the
+/// safe direction for a formatting slip.
 fn ledger_bullet(line: &str) -> Option<String> {
     let rest = line.trim_start().strip_prefix("- **")?.strip_prefix('`')?;
     let (raw, _) = rest.split_once('`')?;
@@ -476,9 +439,8 @@ fn ledger_bullet(line: &str) -> Option<String> {
     Some(raw.replace('\\', "/"))
 }
 
-/// That every entry still names a file, which is the one thing about a
-/// permanent exemption a machine can hold: a file that was split away
-/// leaves its entry behind, and the entry goes on excusing a name.
+/// That every entry still names a file: a split-away file's entry would
+/// go on excusing a name.
 fn check_ledger(ledger: &[String], counted: &[Counted]) -> Vec<String> {
     ledger
         .iter()
@@ -530,9 +492,8 @@ fn read_baseline(path: &Path) -> Result<Option<BTreeMap<String, usize>>, String>
     Ok(Some(entries))
 }
 
-/// Writes the baseline with LF endings, which .gitattributes pins the tree
-/// to on all three OSes — a CRLF rewrite here would show up as a diff on
-/// every Windows run.
+/// Writes the baseline with LF endings, as .gitattributes pins the tree:
+/// a CRLF rewrite would show as a diff on every Windows run.
 fn write_baseline(path: &Path, entries: &BTreeMap<String, usize>) -> Result<(), String> {
     let mut text = String::from(BASELINE_HEADER);
     for (file, lines) in entries {

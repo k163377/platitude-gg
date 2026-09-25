@@ -1,89 +1,63 @@
 //! Waiting, in this runner: the budget every wait is held to, the pace a
 //! look is taken at, and what a wait that ran out says.
 //!
-//! Nothing here establishes correctness by elapsed
-//! time (.claude/rules/core.md §非同期・並行テスト): a wait
-//! ends on what it was waiting for — a lock granted, a
-//! process gone, a line said — and the budget is the
-//! diagnostic under it, so that a thing that stopped is
-//! named. A budget that runs out is a failure, worded
-//! with what was waited for, at which stage, and what
-//! was last seen ([`Expired`]). The one wait whose end
-//! *is* the answer is spelled out as such ([`stood`]).
+//! A wait ends on what it was waiting for — a lock granted, a process
+//! gone, a line said — and the budget is only the diagnostic under it
+//! (.claude/rules/core.md §非同期・並行テスト); the one wait whose end is
+//! the answer is [`stood`].
 //!
-//! **The suite's budget is one budget** ([`Budget::SUITE`]), as it is in
-//! the core crate's `support::wait`: a silence budget every sign of
-//! progress renews, and an overall cap only a livelock reaches. A test
-//! given a budget of its own is handed a head start on noticing a hang —
-//! or, the other way, goes red for the load on the machine — so tests
-//! take this one. The runner's verbs bring ceilings of their own, since
-//! what they wait out is other work on the machine (a measurement's hold,
-//! a gate's lanes, a step's cargo) and the reason for each number stands
-//! beside it where it is declared; what they take from here is the
-//! mechanism — the clock, the pace, and the words.
+//! Tests take the suite's one budget ([`Budget::SUITE`]): a budget of a
+//! test's own either notices a hang early or goes red for the load. The
+//! runner's verbs bring their own ceilings, with the reason beside each
+//! declaration, and take only the mechanism from here.
 //!
-//! **The looks stay where they are.** A lock another process holds and a
-//! process that has not exited are announced by nothing this runner can
-//! block on, so a wait on them is a loop of looks; what this makes of the
-//! loop is that its deadline and its pace are not spelled out at the seat.
-//!
-//! This file is where the clock is read on purpose, and `cargo xtask
-//! waits` reads neither it nor its twin in the core crate. It names
-//! nothing else in the runner: the gate's own tests read it in by path
-//! (`tests/gate`), and `crate::` is another crate there.
+//! The clock is read here on purpose, and `cargo xtask waits` does not
+//! read this file. It names nothing else in the runner: the gate's own
+//! tests read it in by path (`tests/gate`), where `crate::` is another
+//! crate.
 
 use std::fmt;
 use std::time::{Duration, Instant};
 
-/// How long a test's wait puts up with nothing changing. Every sign of
-/// progress renews it, so what spends it is silence — not the wait
-/// taking a while. The core suite's number, for the core suite's reason:
-/// under `cargo test --workspace` one round trip inflates many times over
-/// its solo time, and a shorter budget goes red for the load.
+/// How long a test's wait puts up with nothing changing; every sign of
+/// progress renews it. The core suite's number: under load one round trip
+/// inflates many times over, and a shorter budget goes red for the load.
 #[cfg(test)]
 const QUIET_BUDGET: Duration = Duration::from_secs(120);
 
-/// The whole of a test's wait, as a backstop under [`QUIET_BUDGET`]:
-/// something that keeps changing without ever getting to the answer
-/// renews the silence budget forever, and only a livelock reaches this
-/// one.
+/// The whole of a test's wait: the backstop for a livelock, which renews
+/// [`QUIET_BUDGET`] forever.
 #[cfg(test)]
 const OVERALL_BUDGET: Duration = Duration::from_secs(900);
 
 /// How long between looks at something the operating system announces
 /// nothing about — a lock another process holds, a process that has not
-/// exited, a file that will not rename yet. A look is cheap (a
-/// `try_lock`, a `try_wait`, a `stat`), so the pace is set by how soon a
-/// wait should notice and not by what a look costs; a look that costs
-/// more sets its own pace where it is taken.
+/// exited. Set by how soon a wait should notice, since such a look is
+/// cheap; a look that costs more sets its own pace where it is taken.
 pub(crate) const LOOK_AGAIN: Duration = Duration::from_millis(100);
 
-/// How long between tries at a name a reader holds for the microseconds
-/// of a sweep — a lock file being taken down under its own lock. The
-/// other side is a call or two away, so the tries come close together.
+/// How long between tries at a name held only for the microseconds of a
+/// sweep — a lock file being taken down under its own lock.
 pub(crate) const TRY_AGAIN: Duration = Duration::from_millis(5);
 
 /// What a wait is held to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Budget {
-    /// How long nothing new may be seen for ([`Wait::saw`]); None where
-    /// the wait has nothing to watch change, and the whole is the budget.
+    /// How long nothing new may be seen for ([`Wait::saw`]); None for a
+    /// wait with nothing to watch change.
     quiet: Option<Duration>,
-    /// The whole of the wait.
     whole: Duration,
 }
 
 impl Budget {
-    /// The suite's: what every test waits with, and only a test — the
-    /// runner's verbs bring ceilings of their own.
     #[cfg(test)]
     pub(crate) const SUITE: Budget = Budget {
         quiet: Some(QUIET_BUDGET),
         whole: OVERALL_BUDGET,
     };
 
-    /// A ceiling on the whole of a wait that sees nothing change on the
-    /// way — a lock that is held until it is not.
+    /// A ceiling alone, for a wait that sees nothing change on the way (a
+    /// held lock).
     pub(crate) const fn whole(whole: Duration) -> Budget {
         Budget { quiet: None, whole }
     }
@@ -98,10 +72,8 @@ impl Budget {
     }
 }
 
-/// A wait under way: who is waiting, what it is held to, and what it has
-/// seen. Made where the waiting starts; every look the loop takes ends in
-/// [`Wait::look_again`], which is where the budget is checked and the
-/// pace is paid.
+/// A wait under way. Every look of its loop ends in [`Wait::look_again`],
+/// which checks the budget and pays the pace.
 #[derive(Debug)]
 pub(crate) struct Wait {
     what: String,
@@ -115,15 +87,14 @@ pub(crate) struct Wait {
 }
 
 impl Wait {
-    /// A wait by `what` — the party that waits, or the thing waited on,
-    /// as the failure should open — under `budget`, `pace` between looks.
+    /// `what` opens the failure's words: the party that waits, or the
+    /// thing waited on.
     pub(crate) fn new(what: impl Into<String>, budget: Budget, pace: Duration) -> Self {
         Self::since(Instant::now(), what, budget, pace)
     }
 
-    /// The same, with its clock started at `started`: the instant another
-    /// party says the thing began, such as a sampler resuming the process
-    /// it times.
+    /// The same, with its clock started at an instant another party
+    /// reports, such as a sampler resuming the process it times.
     pub(crate) fn since(
         started: Instant,
         what: impl Into<String>,
@@ -141,8 +112,8 @@ impl Wait {
         }
     }
 
-    /// Notes what a look saw. What is new renews the silence budget; what
-    /// is not stays as the last thing seen, for the failure to name.
+    /// Notes what a look saw: something new renews the silence budget, and
+    /// the last thing seen is named by the failure.
     pub(crate) fn saw(&mut self, seen: impl fmt::Display) {
         let seen = seen.to_string();
         if self.seen.as_deref() != Some(seen.as_str()) {
@@ -156,13 +127,13 @@ impl Wait {
     }
 
     /// How many looks have ended in [`Wait::look_again`]: zero for a wait
-    /// answered at the first look, which is no wait at all.
+    /// answered at the first look.
     pub(crate) fn looks(&self) -> u32 {
         self.looks
     }
 
-    /// Time until the budget runs out — what a blocking receive is given,
-    /// so that its timeout fires when the budget does.
+    /// Time until the budget runs out: a blocking receive's timeout, so
+    /// that it fires when the budget does.
     fn remaining(&self) -> Duration {
         let whole = self.budget.whole.saturating_sub(self.started.elapsed());
         match self.budget.quiet {
@@ -171,9 +142,9 @@ impl Wait {
         }
     }
 
-    /// Whether the budget has run out, said as the failure it is. For a
-    /// wait that pays no pace of its own (a second deadline read inside
-    /// another wait's loop); a loop's own looks end in [`Wait::look_again`].
+    /// Whether the budget has run out, as the failure. For a wait that
+    /// pays no pace of its own (a second deadline read inside another
+    /// wait's loop); a loop's own looks end in [`Wait::look_again`].
     pub(crate) fn check(&self, stage: &str) -> Result<(), Expired> {
         let (quiet, whole) = (self.renewed.elapsed(), self.started.elapsed());
         let limit = if whole >= self.budget.whole {
@@ -186,9 +157,9 @@ impl Wait {
         Err(self.expired(stage, limit))
     }
 
-    /// Ends a look that found nothing: the budget is checked, and the
-    /// pace is paid before the next — no longer than the budget has left,
-    /// so a wait is named the moment it runs out.
+    /// Ends a look that found nothing: checks the budget, then sleeps the
+    /// pace — no longer than the budget has left, so a wait is named the
+    /// moment it runs out.
     pub(crate) fn look_again(&mut self, stage: &str) -> Result<(), Expired> {
         self.looks += 1;
         self.check(stage)?;
@@ -196,8 +167,6 @@ impl Wait {
         Ok(())
     }
 
-    /// The failure, worded now: who waited for what, which limit was met,
-    /// how long it took and how many looks, and what was last seen.
     fn expired(&self, stage: &str, limit: Limit) -> Expired {
         let what = &self.what;
         let head = match limit {
@@ -215,8 +184,6 @@ impl Wait {
         }
     }
 
-    /// The failure of a channel whose other end went away: the answer
-    /// never came, and no limit had to be met for that to be known.
     #[cfg(any(windows, test))]
     fn gone(&self, stage: &str) -> Expired {
         Expired {
@@ -228,8 +195,6 @@ impl Wait {
         }
     }
 
-    /// What every failure ends with: how long it took, how many looks,
-    /// how long nothing new had been seen for, and what was last seen.
     fn trailer(&self) -> String {
         let mut said = format!(" — after {}", clock(self.started.elapsed()));
         if self.looks > 0 {
@@ -248,9 +213,8 @@ impl Wait {
     }
 }
 
-/// A wait that ran out: who was waiting for what, which limit it met,
-/// and what it last saw — worded as it happened ([`Wait::expired`]), for
-/// a caller to put its own advice after.
+/// A wait that ran out, worded as it happened ([`Wait::expired`]), for a
+/// caller to put its own advice after.
 #[derive(Debug)]
 pub(crate) struct Expired {
     said: String,
@@ -259,9 +223,7 @@ pub(crate) struct Expired {
 /// Which limit a wait met.
 #[derive(Debug, Clone, Copy)]
 enum Limit {
-    /// Nothing new for the whole of the silence budget.
     Quiet(Duration),
-    /// The ceiling on the whole.
     Whole(Duration),
 }
 
@@ -271,8 +233,6 @@ impl fmt::Display for Expired {
     }
 }
 
-/// A duration as a person reads one in a failure: tenths under a minute,
-/// minutes and seconds past it.
 fn clock(duration: Duration) -> String {
     let secs = duration.as_secs();
     if secs < 60 {
@@ -286,13 +246,10 @@ fn clock(duration: Duration) -> String {
 /// of the clock, `pace` between looks, and answers how long it stood, or
 /// what a look said when it ended before then.
 ///
-/// **The one wait here whose end is the answer**, and the shape
-/// says so: what is asked is "did it stay", and a thing still
-/// there at the end of the stretch has stood for at least that
-/// long — a lower bound on the product's own time, which no load
-/// can break (§非同期: 実時間で見るのは製品の clock の下限 1 本だけ).
-/// This shape is for staying alone; a stretch that passes says
-/// nothing about a completion.
+/// The one wait here whose end is the answer: a thing still there at the
+/// end of the stretch stood for at least that long — a lower bound no
+/// load can break (.claude/rules/core.md「製品の実時間を下限で見る」). A
+/// stretch that passes says nothing about a completion.
 pub(crate) fn stood<T>(
     stretch: Duration,
     pace: Duration,
@@ -312,10 +269,9 @@ pub(crate) fn stood<T>(
 }
 
 /// Receives on `rx` under `budget`: the answer, or the failure that it
-/// never came — the budget run out, or the other end gone. The channel
-/// waits in this runner's verbs are the Windows samplers' (`perf::sampler`
-/// reads its scripts on a thread of their own); elsewhere the tests'. The
-/// cfg follows the callers.
+/// never came — the budget run out, or the other end gone. The cfg
+/// follows the callers: the Windows script readers (`perf::sampler`,
+/// `perf::attribution`) and the tests.
 #[cfg(any(windows, test))]
 pub(crate) fn receive<T>(
     what: &str,

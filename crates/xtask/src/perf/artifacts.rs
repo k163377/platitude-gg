@@ -1,12 +1,7 @@
-//! Immutable run evidence, and the two files that decide what the run is.
-//!
-//! Failed runs keep their logs too.
-//!
-//! `settings.toml` and `state.toml` are written here because three of
-//! the things that move a measurement are settings: whether it fetches
-//! while being timed, how many rows the window holds, and which screen
-//! the window lands on. A run that did not write them is measuring
-//! whatever the platform felt like.
+//! Immutable run evidence — failed runs keep their logs too — and the
+//! `settings.toml` / `state.toml` every run writes: fetching while timed,
+//! the rows the window holds and the screen it lands on are settings, and
+//! a run that did not write them measures whatever the platform chose.
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -15,9 +10,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use super::Options;
 use super::display::Screen;
 
-/// The window every run is measured in. The app's own default, said out
-/// loud: the number of rows a graph builds is set by the height, and the
-/// scroll bench's speed is set by how far the content overhangs it.
+/// The app's own default window, said out loud: the height sets how many
+/// rows a graph builds, and the overhang sets the scroll bench's speed.
 const WINDOW_WIDTH: i32 = 1440;
 const WINDOW_HEIGHT: i32 = 900;
 
@@ -36,9 +30,8 @@ pub(super) fn open_run(
     Ok((config, log, samples))
 }
 
-/// The settings every run is measured under: no fetch while it is timed,
-/// and whatever `--setting` named on top — written after, so a run that
-/// asks for the interval back gets it.
+/// No fetch while timed, then whatever `--setting` named — written after,
+/// so a run that asks for the interval back gets it.
 fn settings_file(opts: &Options) -> String {
     let mut text = String::from("version = 1\n\n[defaults]\nauto_fetch_minutes = 0\n");
     for (key, value) in &opts.settings {
@@ -47,14 +40,12 @@ fn settings_file(opts: &Options) -> String {
     text
 }
 
-/// The window's place and size, and — for a build with no harness in it —
-/// the repository to open, which is the only way to ask one for a tab
-/// (`platitude-app` §features; there is no command line).
+/// The window's place and size, and — for a build with no harness — the
+/// repository to open: a shipped build has no command line to take one.
 fn state_file(opts: &Options, screen: Option<&Screen>) -> String {
     let mut text = String::from("version = 1\n\n[window]\n");
     if let Some(screen) = screen {
-        // Centred on the chosen screen, which is a function of that
-        // screen's own bounds and so the same place every run.
+        // Centred on the chosen screen: the same place every run.
         let x = screen.x + (screen.width - WINDOW_WIDTH).max(0) / 2;
         let y = screen.y + (screen.height - WINDOW_HEIGHT).max(0) / 2;
         text.push_str(&format!("x = {x}\ny = {y}\n"));
@@ -71,12 +62,9 @@ fn state_file(opts: &Options, screen: Option<&Screen>) -> String {
     text
 }
 
-/// A path as a TOML basic string: a literal (`'…'`)
-/// cannot hold a quote of its own at all, and a single
-/// quote is a legal character in a path on every platform
-/// this runs on — a repository under `C:/it's mine/` would
-/// otherwise write a `state.toml` that does not parse, and
-/// the run would measure an empty window.
+/// A path as a TOML basic string: a literal (`'…'`) cannot hold the
+/// single quote a path may contain, and a `state.toml` that does not
+/// parse measures an empty window.
 fn toml_string(path: &str) -> String {
     let mut quoted = String::with_capacity(path.len() + 2);
     quoted.push('"');
@@ -91,11 +79,9 @@ fn toml_string(path: &str) -> String {
     quoted
 }
 
-/// The evidence directory, reserved and written with everything that
-/// decides what the runs are of, and the measured exe's blob id. `root`
-/// is the tree the command runs in, where the evidence lands; what was
-/// measured is `built`, which is the rig's tree under `--at` and this one
-/// otherwise.
+/// The evidence directory and the measured exe's blob id. The evidence
+/// lands in `root`, the tree the command runs in; what was measured is
+/// `built`, the rig's tree under `--at`.
 pub(super) fn prepare(
     root: &Path,
     built: &super::rig::Built,
@@ -136,10 +122,8 @@ pub(super) fn prepare(
         std::env::consts::OS, std::env::consts::ARCH, exe.display(), opts.features(),
         opts.repo.display(), opts.selection, opts.oid, opts.file, opts.diff, opts.scroll,
         opts.open, opts.settle_ms, opts.breakdown, opts.attribute, opts.calibrate, opts.runs, opts.software).map_err(|e| e.to_string())?;
-    // Which source the exe is of: the tree it was built in and the commit
-    // that tree stood on. Under `--at` the tree is the rig and the commit
-    // is exactly the one asked for; otherwise source.patch below says
-    // what the tree held beyond its commit.
+    // Under `--at` the commit is exactly the one asked for; otherwise
+    // source.patch below says what the tree held beyond it.
     writeln!(
         manifest,
         "tree={}\ncommit={}\nat={}\n",
@@ -285,8 +269,6 @@ mod tests {
         );
     }
 
-    /// A quote in a path is legal and a TOML literal string cannot hold
-    /// one, so the file has to be written as a basic string.
     #[test]
     fn a_path_with_a_quote_in_it_still_writes_a_file_that_parses() {
         let text = state_file(

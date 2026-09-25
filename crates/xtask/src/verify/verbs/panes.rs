@@ -1,9 +1,8 @@
 //! What a pane is judged against: the room it was given, and the grip
 //! that asks for more of it.
 //!
-//! `solo` is here because it is the same kind of claim about the run
-//! itself — the window had the machine to itself, which an ordinary
-//! window photographs exactly like.
+//! `solo` is here as the same kind of claim about the run itself: the
+//! window had the machine to itself, which no picture shows.
 
 use super::{Arg, Verb};
 
@@ -13,23 +12,19 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "solo blocked=true",
     },
-    // The same screen, with its words taken from the air around them.
-    // This is the surface with nothing behind it: the gate stands
-    // before any repository is open, so the command log that carries
-    // git's words everywhere else does not exist yet. `held=true` is
-    // the fixture half — the path is only on screen while another
-    // build holds the store, and an empty gate has air and no fields.
+    // The same gate screen, swept (verbs.md §面の掃き): it stands before
+    // any repository opens, so no command log carries its words.
+    // `held=true`: the path is on screen only while another build holds
+    // the store.
     Verb {
         name: "gate-sweep",
         when: &[],
         plain: "gate_sweep all=true caret=true hand=true held=true",
     },
-    // The two failures a folder that will not open lands on. The
-    // dialog is the one with no way out to the log either — a modal
-    // window carries no seat for the panel — and the tab's screen does
-    // carry one, but only for git's half: the folder is written
-    // nowhere else. `kind=` says which of the three screens was swept,
-    // since only one of them has a line from git in it at all.
+    // The two failures a folder that will not open lands on: the modal
+    // dialog has no seat for the log, and the tab's screen has one only
+    // for git's half — the folder is written nowhere else. `kind=` says
+    // which of the three screens was swept (only one has a line from git).
     Verb {
         name: "open-dialog-sweep",
         when: &[],
@@ -40,55 +35,37 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "open_fail_sweep all=true caret=true hand=true kind=plain",
     },
-    // Two ways the pane's column stops being one, and a photograph
-    // answers neither. `fits` is the overflow: a child that will not
-    // shrink is a floor the whole column sits on, and every box in the
-    // pane then paints past the window's edge with its glyphs cut in
-    // half — which frames exactly like a pane that fits. `fills` is the
-    // other end of the same axis: the author row was given the whole
-    // block or it was not, and the hash plate is right-aligned against
-    // it, so a row that took only its own width parks the plate against
-    // the end of the name. A picture shows a
-    // plate either way; it does not say which edge it was meant to be
-    // on.
+    // `fits`: a child that will not shrink floors the column, and every
+    // box paints past the window's edge — framing like a pane that fits.
+    // `fills`: the author row got the whole block, so the right-aligned
+    // hash plate sits at the edge rather than against the end of the name.
     Verb {
         name: "details-fit",
         when: &[],
         plain: "details_fit fills=true fits=true",
     },
-    // The pane's values are fields, and `Ctrl+A` is what reaches the
-    // whole of one — including a tail the row had to cut. A picture
-    // cannot answer this: a `Text` put back in place of the field draws
-    // the identical row, and the wash a selection leaves is a few pixels
-    // of colour a scaled-down look drops. So the claim is that what came
-    // out of the field is what the model says the pane is showing.
+    // `Ctrl+A` on a value field reaches the whole of it, cut tail
+    // included; the claim is that what came out is what the model says the
+    // pane shows (a `Text` in place of the field draws the identical row).
     Verb {
         name: "details-select",
         when: &[],
         plain: "details_select match=true",
     },
-    // One selection in the window. The pane shipped with every field
-    // keeping what it held, so a reader who swept a second value found
-    // the first still lit (observed — three at once), and
-    // no picture of a single run can say that: one lit field frames the
-    // same either way. Both halves are claimed, because a pane that had
-    // simply cleared everything would answer the first on its own.
+    // One selection in the window: sweeping a second value drops the
+    // first (`dropped=`) and keeps the second (`held=`) — a pane that
+    // cleared everything would pass on the first alone.
     Verb {
         name: "details-select-away",
         when: &[],
         plain: "details_select_away dropped=true held=true",
     },
-    // A range selection is taken from the room beside the values —
-    // they are a few characters wide and one line tall, and aiming
-    // at them misses. Two claims, because
-    // either alone photographs as a working pane: the sweep reaches the
-    // value, and a press on the value's own box is still whatever
-    // control was there. On the plate's two that second answer must be
-    // `false`, which is the whole of "the hit areas did not shrink".
-    //
-    // For a value the row shows whole: a sweep reaches what is on
-    // screen, which is the point of it, and the tail lives in the card
-    // and under Ctrl+A (`details-select`).
+    // A range selection is swept from the room beside the values (a few
+    // characters, one line — aiming at them misses). Claimed together: the
+    // sweep reaches the value, and a press on the value's box is still the
+    // control there (`grabs=` / `ours=`), which on the plate's two is
+    // `false` — the hit areas did not shrink. A sweep reaches what is on
+    // screen; a cut tail is `details-select`'s.
     Verb {
         name: "details-sweep",
         when: &[
@@ -103,59 +80,40 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "details_sweep reach=9/9 caret=true grabs=true ours=true",
     },
-    // The plate's own gesture, told apart by whether the press
-    // travelled: a click copies the whole hash, a drag picks out the
-    // shown one. No half of that is on screen — the clipboard is not,
-    // and a plate that copied on every press frames exactly like one
-    // that told the two apart, selection and all. `quiet=` is the half
-    // `held=` does not give; `let=` is what the press before the copy
-    // did to the drag before it, without which the plate copies out
-    // from under a wash nobody is making any more; and `hand=` is the
-    // half no gesture gives itself: the run enters the hand's own
-    // functions, so a hand taken out, disabled or shrunk would answer
-    // every gesture it was asked and never see a press. Whether Qt
-    // hands the press to the plate at all is a
-    // question only a real pointer answers, and it is asked where one
-    // can be made (`qmltest`, tst_hashplate).
+    // The plate's gesture: a click copies the whole hash, a drag picks out
+    // the shown one — neither is on screen. `quiet=` is the half `held=`
+    // does not give; `let=` the press releasing the drag before it, or the
+    // plate copies from under a stale wash; `hand=`: the run calls the
+    // hand's functions, so a hand removed, disabled or shrunk would still
+    // answer. Whether Qt delivers a real press is `qmltest`'s
+    // (tst_hashplate).
     Verb {
         name: "details-hand",
         when: &[],
         plain: "details_hand acted=true held=true quiet=true let=true hand=true",
     },
-    // The other half of that press: the one word the control has says
-    // what it did, and it has to say so on the tip the reader is
-    // already looking at — a tip does not go down to change its mind.
-    // Neither claim spells the words, so a translation leaves this
-    // green and a tip that kept the old sentence turns it red. The
-    // photograph does carry it (the tip is in overlay.png), but only
-    // for a reader who knows which of the two sentences was due.
+    // The press's word, said on the tip the reader is already looking at
+    // — a tip does not go down to change its mind. The words are not
+    // spelled, so a translation stays green and a tip keeping the old
+    // sentence goes red.
     Verb {
         name: "hash-tip",
         when: &[],
         plain: "hash_tip offered=true said=true",
     },
-    // And the other order, which is the one that breaks: the press
-    // lands before the tip arrives. The attached tooltip takes its
-    // words when `visible` rises, so a tip still counting out its
-    // rest comes up answering a press with the
-    // offer unless the answer re-arms it. `counting=` is the setup
-    // half — nothing was up when the press went in — and it has to be
-    // said, because a run where the tip had already arrived would
-    // answer the other half on its own.
+    // The order that breaks: the press lands before the tip arrives. The
+    // attached tooltip takes its words when `visible` rises, so a tip
+    // still counting comes up with the offer unless the answer re-arms it.
+    // `counting=`: nothing was up when the press went in.
     Verb {
         name: "hash-tip-counting",
         when: &[],
         plain: "hash_tip_counting counting=true said=true",
     },
-    // The author's name, capped at its own width so the signature's one
-    // word stays against it. A ceiling drawn a fraction of a pixel under
-    // that width cuts the name, and a cut is what a picture answers
-    // worst — the mark is a few pixels wide, both OSes draw one, and the
-    // box around it does not move, so the run that lost the last glyph
-    // frames exactly like the run that kept it (observed:
-    // Ubuntu drew `Yuki Tana…` where Windows drew `Yuki Tanaka`, in the
-    // same 78px of ink). At the window the verbs open, the row has 200px
-    // of slack — nothing here is meant to give.
+    // The author's name, capped at its own width so the signature's word
+    // stays against it. A ceiling a fraction of a pixel under that width
+    // cuts the last glyph, which frames like the whole name. At the verbs'
+    // window the row has 200px of slack — nothing is meant to give.
     Verb {
         name: "author-card",
         when: &[],
@@ -166,12 +124,10 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "author_card cut=false",
     },
-    // A pull that took more room than the pane had leaves what sits
-    // under the box — the author card, the commit button — drawn over
-    // the window's own footer, and that frames like a pane that fits:
-    // the same blind spot details-fit answers for. Only that half is
-    // judged here: whether the grip was offered at all depends on the
-    // message, and the run where it stays away is half of the pair.
+    // A pull past the pane's room draws what sits under the box over the
+    // window's footer, framing like a pane that fits (as `details-fit`).
+    // Only that is judged: whether the grip is offered depends on the
+    // message.
     Verb {
         name: "details-grow",
         when: &[],
@@ -192,32 +148,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "description_grow keeps=true",
     },
-    // Whether the corner text gives the pane's foot back. **The
-    // working tree's foot stays its own** — a commit button is pinned
-    // to it — so `shown=false room=0` is the whole of that pane's
-    // answer, whatever list is above it; the give-and-take that can
-    // go either way is the details pane's, and which way it goes
-    // there is the preset's business, so only the pane is claimed
-    // for a row.
-    //
-    // Judged on `shown=`, the label's own visibility. `room=` is what
-    // was asked, and a run that claimed only that would be green with
-    // the answer overwritten — which is exactly how this shipped: an
-    // instance wrote its own `visible` over the corner's, and every
-    // WIP pane carried the version across its commit button until a
-    // picture was looked at.
-    // The pane is named and never defaulted: a bare run meaning this
-    // same `wip` — the same staging, the same press, the same line —
-    // would be one path entered twice, so the default is the one refused
-    // (`verify::options::name_the_verb`).
-    //
-    // **What is left is a pair, and the rows say which half each run
-    // is.** `basic` leaves the corner bare and `long` runs the list into
-    // it, so judging both on `pane=details` alone is judging neither:
-    // measured, the two came back identical on one platform for a
-    // fortnight (the run read the room before the list had arrived) and
-    // the pair went on passing. The claim keyed on the preset is what
-    // reads that as the failure it is.
+    // Whether the corner text gives the pane's foot back. The working
+    // tree's foot is the commit button's, so `wip` is always
+    // `shown=false room=0`; the details pane goes either way by preset.
+    // Judged on `shown=` (the label's own visibility), not `room=` (what
+    // was asked): an instance writing its own `visible` over the corner's
+    // stays green on `room=`. The pane is named, never defaulted
+    // (`verify::options::name_the_verb`). `basic` leaves the corner bare
+    // and `long` runs the list into it; keyed on the preset, a run that
+    // read the room before the list arrived fails instead of passing as
+    // both.
     Verb {
         name: "corner",
         when: &[
@@ -227,8 +167,7 @@ pub(super) const TABLE: &[Verb] = &[
                 "git_corner pane=details shown=false room=0",
             ),
             // `room=` is left off: how much the one-file list leaves bare
-            // is the platform's font talking, and what is claimed is that
-            // the corner is standing in it.
+            // is the platform's font.
             (
                 Arg::WithPreset("basic"),
                 "git_corner pane=details shown=true",
@@ -236,17 +175,12 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "git_corner pane=details",
     },
-    // The two bars a panel carries, each judged as a pair, because each
-    // says its state in brightness alone: a few pixels of ink at the
-    // edge of a 1440px frame, one step apart. A screenshot cannot
-    // settle that, and neither state means anything without the other
-    // one beside it.
-    //
-    // The panel's slab is opaque, so it steps between named inks and the
-    // colour itself is the report — a frame's ink while the list is
-    // being sent, one step off the pane's ground once the reader has
-    // left (デザイン規約 §QML 実装ルール のバーの明るさ). The ink is the
-    // paint that landed; the asked-for `bright` stays green with it
+    // The two bars a panel carries, each judged as a pair: each says its
+    // state in brightness alone, a few pixels one step apart. The panel's
+    // slab is opaque, so the named ink is the report — a frame's ink while
+    // the list is being sent, one step off the pane's ground once the
+    // reader has left (デザイン規約 §QML 実装ルール のバーの明るさ). It is
+    // the paint that landed; the asked-for `bright` stays green with it
     // cut off.
     Verb {
         name: "pane-bar",
@@ -258,13 +192,10 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "pane_bar ink=#0f172a",
     },
-    // The bar inside the description box is the style's see-through one,
-    // which reaches the same two inks by carrying three tenths of its
-    // single one. That box is also the one place the window hands a bar
-    // to a `ScrollView`, whose flickable never calls itself moving — the
-    // lit half is what says the wiring around that is still there
-    // (observed: no bar at all until the bar was told to
-    // watch the text).
+    // The description box's bar is the style's see-through one, reaching
+    // the same two looks by carrying all or three tenths of its single ink.
+    // It is the one bar handed to a `ScrollView`, whose flickable never
+    // reports moving, so the lit half says the bar still watches the text.
     Verb {
         name: "text-bar",
         when: &[],
@@ -275,14 +206,11 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "text_bar ink=0.3",
     },
-    // The middle button's hand on one surface that scrolls, left running
-    // for the shot. **The picture cannot say the surface went** — the
-    // anchor's ring stands the same over a list that moved and one whose
-    // hand drives nothing — so `answered=` is read off the surface itself.
-    // The working tree's two boxes are the one place where the answer
-    // turns on the platform: text being written keeps the middle button
-    // for a paste where the platform has one, and there `answered=` is the
-    // hand having stepped aside (`MiddleAutoScroll.claimedAt`).
+    // The middle button's hand left running on a surface: the anchor ring
+    // stands the same over a list that moved and one that did not, so
+    // `answered=` is read off the surface. In the working tree's two boxes
+    // the platform decides — where it pastes on middle, `answered=` is the
+    // hand stepping aside (`MiddleAutoScroll.claimedAt`).
     Verb {
         name: "middle-hand",
         when: &[(
@@ -296,18 +224,13 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "answered=true took=true",
     },
-    // A commit git wrote, and the boxes it was typed into being let go.
-    // **The picture cannot judge this either**, for a reason of its own:
-    // git answers before the reading that redraws the pane
-    // (`session::write::run_write`), so at the moment the shot is taken
-    // an emptied editor and a full one frame identically — and the press
-    // is two writes, the staging in front and the commit behind it, so
-    // the write barrier is answered by whichever finished first.
-    // `empty=true` is the whole claim: the answer found the editor that
-    // sent it, out of the answers that notify carried (`ops::Press`),
-    // where a property would be rewritten by the fetch behind it.
-    // `amend=` is the row under the boxes going down with them, which is
-    // why the two verbs want the same line — `amend` turns it on first.
+    // A commit git wrote, and its boxes let go. git answers before the
+    // reading that redraws the pane (`session::write::run_write`), and the
+    // press is two writes (stage, then commit), so the barrier may answer
+    // for the first. `empty=true`: the answer found the editor that sent
+    // it among what the notify carried (`ops::Press`) — a property would
+    // be rewritten by the fetch behind it. `amend=false` for both verbs:
+    // `amend` turns the row on first, and it goes down with the boxes.
     Verb {
         name: "commit",
         when: &[],
@@ -318,105 +241,75 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "commit_answered landed=true empty=true amend=false",
     },
-    // The offer to take HEAD's authorship over, which stands only where
-    // there is something to take over. **`differs=` is the whole of
-    // why the row is there** and no picture holds it: a window that read
-    // HEAD's author and found it its own frames exactly like one that
-    // never read it, since both leave the row off. The name is beside it
-    // because a `differs=true` worked out against an author that never
-    // arrived is the same answer for the wrong reason.
-    //
-    // What git records either way is `commit_integration.rs`'s
-    // (`amending_keeps_the_author_until_reset_author_is_asked_for`);
-    // this is the reading reaching the editor.
+    // The offer to take HEAD's authorship over, standing only where there
+    // is something to take. `differs=` is why the row is there (a window
+    // that never read HEAD's author also leaves it off); the name, because
+    // `differs=true` against an author that never arrived is the wrong
+    // reason. What git records is `commit_integration.rs`'s
+    // (`amending_keeps_the_author_until_reset_author_is_asked_for`).
     Verb {
         name: "amend-author",
         when: &[],
         plain: "amend_author differs=true name=Yuki Tanaka",
     },
-    // And the box ticked, sent, and the page back afterwards. **The
-    // claim is whose name is in the picture**: the amend answers before
-    // the rebuild it asks for is started, so a run that stopped at the
-    // write photographs the commit that was replaced — still under the
-    // author the amend was sent to take over (observed: this preset
-    // photographed `Yuki Tanaka` on a green run). Both names, because
-    // a plain amend already moves the committer, and the author is the
-    // one `--reset-author` is asked for.
+    // The box ticked and sent, judged after the page is back: the amend
+    // answers before the rebuild starts, so a run stopped at the write
+    // photographs the replaced commit under the old author. Both names,
+    // because a plain amend already moves the committer.
     Verb {
         name: "amend-reset-author",
         when: &[],
         plain: "author=Demo User committer=Demo User",
     },
-    // A commit a hook would not have. **The picture cannot judge this**
-    // for the same reason the far side's refusals cannot be: a bar
-    // saying nothing frames exactly like a bar saying the right thing,
-    // and the whole claim is that the sentence was built out of what
-    // core classified. `why=true` is the hook's own words arriving, and
-    // `log=false wrong=false` the half that says nothing was raised as
-    // an error beside them (デザイン規約 §答えの要らない報せ).
+    // A commit a hook would not have, read as `remote-refused`: `said=` is
+    // built from what core classified, `why=true` the hook's own words,
+    // `log=false wrong=false` nothing raised as an error
+    // (デザイン規約 §答えの要らない報せ).
     Verb {
         name: "commit-refused",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=The commit was not made",
     },
-    // The same refusal **with a file open in the middle**, which is the
-    // arrangement that keeps the bar out of the graph pane: a bar that
-    // lived in that pane would say nothing at all here, and the two
-    // windows would photograph the same. `clears=true` is the claim itself —
-    // the middle is standing under the bar.
+    // The same refusal with a file open in the middle, where a bar living
+    // in the graph pane would be hidden. `clears=true`: the middle stands
+    // under the bar.
     Verb {
         name: "notice-over-diff",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=The commit was not made",
     },
-    // A part of a file that is not that file any more. **This end is the
-    // one that said no**, before git ran, so there is no row in the log to
-    // read — raising the panel for it would put an empty panel over the
-    // very diff it was about (P3-確認事項, observed).
-    // `why=true` is this application's own second line arriving through
-    // `Words.writeReportedWhy`, since nobody outside wrote one.
+    // A part of a file that is not that file any more, refused here before
+    // git ran: there is no log row, so raising the panel would put it empty
+    // over the diff. `why=true` is our own second line
+    // (`Words.writeReportedWhy`).
     Verb {
         name: "stale-part",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=Nothing was staged",
     },
-    // **The door, not the table.** Which dress a kind wears — the
-    // heading, whether the second line is ours, and the colour — is a
-    // switch over that kind, and every arm of it is asked of the real
-    // `Words` and a real `NoticeBar` for the price of one process
-    // (`tests/qml/tst_reportdress.qml`). What only a window can answer is
-    // this: the page's own door (`RepoPage.showReport`) hands those three
-    // answers to the bar the reader sees, and the middle of the page
-    // stands under it.
-    //
-    // **One kind, and it is the one that is nobody's default**: a
-    // half-finished rename is the arm where the colour is `warning` and
-    // the second line is this end's own, so a door that dropped either on
-    // the way would read as the other arm here. `log=false` is the verb
-    // handing the kind in with nothing spawned.
+    // The door, not the table: each kind's dress (heading, whose second
+    // line, colour) is `tests/qml/tst_reportdress.qml`'s; this is the
+    // page's door (`RepoPage.showReport`) handing it to the bar the reader
+    // sees. Half-rename is nobody's default — `warning` with our own
+    // second line — so a door dropping either reads as another arm.
+    // `log=false`: the kind is handed in with nothing spawned.
     Verb {
         name: "report-tone",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
                 said=The rename did not finish",
     },
-    // Another working copy's uncommitted work, read in this window as a
-    // pane of its own. `copy=` is that pane standing on that copy;
-    // `files=` and `tally=` are the one list and the row above it
-    // agreeing, which they only do because both fold
-    // a path's two sides into one (`Bucket::Whole` / `Kinds::folded`);
-    // `cut=` and `tip=` are what a name too long for the band does; and
-    // the two after them are the diff offering neither its whole-file
-    // word nor a hunk's seat.
-    //
-    // **The three runs are the claim.** `topic` holds one path staged and
-    // then written again, which is the fold — counted per side it would
-    // read 2 twice. `here` holds two untracked files, which is the only
-    // copy the arrows have anywhere to step in (`stepped=`). The third is
-    // named past the pane's floor, and is the only one whose name is cut.
+    // Another working copy's uncommitted work, as a pane of its own.
+    // `files=` / `tally=` agree only because both fold a path's two sides
+    // into one (`Bucket::Whole` / `Kinds::folded`); `cut=` / `tip=` are a
+    // name too long for the band; `stageFile=` / `pieces=` the diff
+    // offering no whole-file word or hunk seat. `topic` holds one path
+    // staged then written again (per side it would read 2 twice), `here`
+    // two untracked files (the only copy the arrows can step in), and the
+    // third a name past the pane's floor (the only one cut).
     Verb {
         name: "carried-read",
         when: &[
@@ -435,27 +328,17 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "carried_read copy=topic files=1 tally=0,1,0,0,0,0 lit=true litRows=1 \
                 cut=false tip=false stepped=false stageFile=false pieces=false",
     },
-    // The same pane at rest, which is where picking the row leaves a reader
-    // and where the verb above has already read a file past.
-    //
-    // **`litRows=0` is the whole of the first claim.** This pane's only light is
-    // the reading, so with nothing open no row wears one — and a list that
-    // cannot tell its rows apart lights all of them, which the verb above
-    // cannot see: its one open file makes the top of a wholly lit list read
-    // exactly like the one correct row.
-    //
-    // `folderPath=` is the other name this pane could not read: the model
-    // under it folds by `<run>:<path>` and keeps the path itself beside
-    // that, so a folder row handed the fold key says `whole:src` wherever
-    // it says a name — the hover above all, which is the only place a
-    // path is spelled out at all. Empty on the copy whose files are all
+    // The same pane at rest, where picking the row leaves a reader.
+    // `litRows=0`: the only light is the reading, and a list that cannot
+    // tell its rows apart lights all of them — invisible to the verb
+    // above, whose one open file lights the top row either way.
+    // `folderPath=`: the model folds by `<run>:<path>`, so a folder row
+    // handed the fold key says `whole:src`, and the hover is the only
+    // place the path is spelled out. Empty on the copy whose files are all
     // at the root, which is why the claim is made on the other two.
-    //
-    // `corner=` is the version in the pane's own foot. Nothing is pinned
-    // there — this pane lends the seat the way the commit pane does — and
-    // `corner` itself cannot make the claim: that verb picks between this
-    // window's own tree and a commit of its history, and neither of those is
-    // another copy's work.
+    // `corner=` is the version in the pane's foot, which this pane lends
+    // like the commit pane; `corner` cannot claim it, since that verb picks
+    // between this window's tree and a commit of its history.
     Verb {
         name: "carried-stand",
         when: &[

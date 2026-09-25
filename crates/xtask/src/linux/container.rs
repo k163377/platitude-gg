@@ -1,56 +1,37 @@
-//! The gate's own container: the one the Linux side's verbs go into,
-//! by `docker exec`, instead of a container apiece.
+//! The gate's own container: the one the Linux side's verbs go into by
+//! `docker exec`, instead of a container apiece. It is owned by the gate
+//! that prepared the copy they start from (`runner`) and taken down when
+//! that gate's side is over. The cargo steps, `bare` and `offline` keep a
+//! container of their own: different images, mounts or network.
 //!
-//! A full gate's Linux side is five hundred verbs, and each one was a
-//! container of its own: created, given a network namespace and a
-//! cgroup, run, torn down. The verbs start from one prepared copy
-//! already (`runner`); this puts them into one container as well,
-//! owned by the gate that prepared the copy and taken down when that
-//! gate's side is over. Everything that is *not* one of the copy's
-//! verbs — the cargo steps, `bare`, `offline` — keeps a container of
-//! its own, because those are different images, different mounts, or
-//! a different network.
+//! **What is shared and what is not.** The side's mounts are carried
+//! once. Each verb has its own environment and its own `/out` leaf under
+//! a mount of the whole `pgg-linux` directory, so two verbs never see one
+//! settings store (`keepsakes::Landing::Leaf`). `/tmp` is one for the
+//! whole container, and what stands in it is claimed by liveness
+//! (`verify::ownership`). `HOME` is not written: the app reads
+//! `PGG_CONFIG_DIR` under the verb's `/out` leaf, and git reads
+//! `GIT_CONFIG_GLOBAL` from a leaf of the container's `/tmp` — a file git
+//! rewrites cannot stand on the mount, where a rename is not atomic
+//! (`verify::run::gitconfig_home`).
 //!
-//! **What is shared and what is not.** Every verb of a side has the
-//! same mounts anyway (the checkout, the build volume, the registry,
-//! the demo volume), so the container carries those once. What a verb
-//! has of its own is its environment and its `/out`: the exec hands
-//! each verb its own marks and its own leaf under a mount of the whole
-//! `pgg-linux` directory, so two verbs never see one settings store
-//! (`keepsakes::Landing::Leaf`). `/tmp` is one for the whole container
-//! — as it already was across containers for the demo volume — and
-//! what stands in it is claimed by liveness (`verify::ownership`), so
-//! a leaf of one run is never handed to another. `HOME` is the image's
-//! and is not written: the app reads `PGG_CONFIG_DIR` under the verb's
-//! own `/out` leaf, and git reads `GIT_CONFIG_GLOBAL` from a leaf of the
-//! container's own `/tmp` — a file git rewrites cannot stand on the
-//! mount, where a rename is not atomic (`verify::run::gitconfig_home`).
+//! **A process is addressed by its mark, never by a pid.** Every process
+//! a verb starts inherits `PGG_STEP=<mark>` from the exec, so a stop is a
+//! walk over `/proc` for that mark — no pid file, no process group, no
+//! reach into another verb. The wrapper takes its own leftovers the same
+//! way, from a shell started without the mark ([`MARKED_FN`]).
 //!
-//! **A process is addressed by its mark, never by a pid.** Every
-//! process a verb starts inherits `PGG_STEP=<mark>` from the exec, so
-//! a stop is a walk over `/proc` for that mark: it needs no pid file,
-//! no process group and no notion of who started what, and it cannot
-//! reach another verb's processes. The verb's own wrapper takes its
-//! leftovers the same way as it ends, from a shell started without the
-//! mark, so that the walk is not in the walk ([`MARKED_FN`]).
-//!
-//! **The container's life has a ceiling of its own** ([`IDLE_SCRIPT`]).
-//! The gate takes it down when its side is over
-//! ([`remove_container`]), and the next gate in this tree takes down
-//! whatever an earlier one left ([`take_down_earlier_gates`]); but a
-//! gate can be killed from outside with nothing of its own left
-//! running, so the container's own process leaves when no verb has
-//! been in for a while and none is running, and says so in the gate's
-//! log directory. A verb's mark counts as running for the step ceiling
-//! and no longer, so a verb that never ends cannot hold the container
-//! up forever either.
+//! **The container's life has a ceiling of its own** ([`IDLE_SCRIPT`]):
+//! the gate removes it ([`remove_container`]) and the next gate in this
+//! tree takes down what an earlier one left ([`take_down_earlier_gates`]),
+//! but a gate killed from outside leaves nothing running, so the
+//! container leaves once no verb has been in for a while and none is
+//! running. A mark counts as running for the step ceiling and no longer.
 //!
 //! **Every docker command out here is bounded**
-//! (`subprocess::bounded_both_streams`): a start, a listing, a stop and
-//! a removal each have a ceiling and a file for what docker said on
-//! either stream, and what did not happen is said in the gate's own
-//! words — never a container quietly left, never a `docker run` in
-//! place of an exec that failed.
+//! (`subprocess::bounded_both_streams`), with a file for what docker
+//! said, and a failure is said in the gate's words — never a container
+//! quietly left, never a `docker run` in place of a failed exec.
 
 use std::path::Path;
 use std::process::Command;
@@ -70,36 +51,31 @@ const GATE_LABEL: &str = "pgg.gate";
 const RUN_LABEL: &str = "pgg.run";
 
 /// Where the gate's log directory is mounted, so the container's own
-/// process can say why it left where a reader looks for the gate's
-/// logs. Not under `/work`, which the build volume covers.
+/// process can say why it left. Not under `/work`, which the build
+/// volume covers.
 const LOGS_MOUNT: &str = "/pgg-gate-logs";
 
-/// The container's own log in that directory, and the file the host
-/// side of a start writes docker's answer to.
+/// The container's own log in that directory.
 const CONTAINER_LOG: &str = "linux-container.log";
 
-/// Where the container keeps the marks of the verbs in it (`steps/`)
-/// and the time a verb was last in (`live`). Inside the container, so
-/// nothing of it crosses a mount. Every script takes it as an
-/// argument, so a test can run them somewhere it may write.
+/// The marks of the verbs in the container (`steps/`) and when one was
+/// last in (`live`) — inside it, so nothing crosses a mount. The scripts
+/// take it as an argument, so a test can point them where it may write.
 const STATE_DIR: &str = "/run/pgg-gate";
 
-/// How long the container waits with no verb in it before it leaves
-/// on its own. The verbs of a side follow each other by seconds; a
-/// gate that is gone has none coming.
+/// How long the container waits with no verb in it before it leaves on
+/// its own. The verbs of a side follow each other by seconds.
 const IDLE: Duration = Duration::from_secs(5 * 60);
 
-/// How long a docker command about the container may take out here.
-/// A start is a create and an attach against a daemon that may be
-/// wedged; a stop is an exec that walks `/proc`; a removal is a kill
-/// and a teardown. All three are seconds when they work at all.
+/// How long a docker command about the container may take out here,
+/// against a daemon that may be wedged — each is seconds when it works.
 const START_CEILING: Duration = Duration::from_secs(120);
 const STOP_CEILING: Duration = Duration::from_secs(30);
 const REMOVE_CEILING: Duration = Duration::from_secs(60);
 
 /// The gate's container for the run `name`, in this tree. Named for
-/// the tree (as its volumes are) and the run, so two seats' gates and
-/// two runs of one seat never meet at a name.
+/// the tree and the run, so two seats' gates and two runs of one seat
+/// never meet at a name.
 pub(crate) fn container_of(root: &Path, name: &str) -> String {
     format!(
         "{}-gate-{}-{name}",
@@ -110,10 +86,9 @@ pub(crate) fn container_of(root: &Path, name: &str) -> String {
 
 /// Starts the container the copy's verbs go into, and says so.
 ///
-/// `--init`, so that what a verb leaves orphaned is reaped: the
-/// container's own process is a shell that waits on nothing.
-/// `--detach`, so no process out here holds it — its life is the
-/// gate's removal, or its own idle ceiling ([`IDLE_SCRIPT`]).
+/// `--init`, so what a verb leaves orphaned is reaped: the container's
+/// own process is a shell that waits on nothing. `--detach`, so no
+/// process out here holds it.
 pub(super) fn start_container(root: &Path, name: &str, gate: u32, tag: &str) -> Result<(), String> {
     let container = container_of(root, name);
     let out = crate::keepsakes::keepsake_base()?;
@@ -127,9 +102,8 @@ pub(super) fn start_container(root: &Path, name: &str, gate: u32, tag: &str) -> 
         .arg(format!("{GATE_LABEL}={gate}"))
         .arg("--label")
         .arg(format!("{RUN_LABEL}={name}"));
-    // The marks every process in there is under (`super::carried`), on
-    // the container as on every exec into it: a road that carries one
-    // and forgets the other counts the machine twice.
+    // The marks, on the container as on every exec into it
+    // (`super::carried`).
     super::marked(&mut cmd);
     cmd.arg("--volume")
         .arg(format!("{}:{}", super::mount_path(root), super::WORK))
@@ -199,8 +173,7 @@ pub(super) fn start_container(root: &Path, name: &str, gate: u32, tag: &str) -> 
 
 /// The pid the tree's gate note names now, or why it cannot be read.
 /// Read beside each decision, never once at the top, for the reason
-/// the copy's emptying (`runner::SCRIPT`) reads it late: the moment a
-/// preparation started is the moment not to be trusted.
+/// `runner::SCRIPT` reads it late.
 fn live_gate(root: &Path) -> Result<u32, String> {
     let note = note_of(root);
     std::fs::read_to_string(&note)
@@ -210,14 +183,10 @@ fn live_gate(root: &Path) -> Result<u32, String> {
         .ok_or_else(|| format!("no pid to spare in {}", note.display()))
 }
 
-/// Takes down the containers earlier gates of this tree left behind —
-/// a gate killed from outside before its removal, an idle ceiling not
-/// yet reached — sparing the one whose gate the tree's note names now.
-///
-/// **Bounded by what it can name**: only containers labelled for this
-/// tree, and only those whose gate is not the live one. A note that
-/// yields no pid stops this, as it stops the copy's emptying, because
-/// an emptying that cannot say what to spare must spare everything.
+/// Takes down the containers earlier gates of this tree left behind,
+/// sparing the one whose gate the tree's note names now. A note that
+/// yields no pid stops this: what cannot say what to spare must spare
+/// everything.
 pub(super) fn take_down_earlier_gates(root: &Path) -> Result<(), String> {
     let logs = root.join("target").join("gate-logs");
     let said = logs.join("linux-container.list.txt");
@@ -268,9 +237,7 @@ pub(super) fn take_down_earlier_gates(root: &Path) -> Result<(), String> {
 }
 
 /// Removes the gate's container, and answers a line saying what
-/// became of it — never an error: a removal that did not happen is
-/// said, with what to do about it, and the gate's verdict is about
-/// its steps.
+/// became of it — never an error: the gate's verdict is about its steps.
 pub(crate) fn remove_container(root: &Path, name: &str) -> String {
     // Under the container's name, so a sweep of several keeps every
     // answer docker gave.
@@ -286,10 +253,8 @@ pub(crate) fn remove_container(root: &Path, name: &str) -> String {
         Answer::Ended { status, .. } if status.success() => {
             format!("{name} removed in {:.1}s", at.elapsed().as_secs_f32())
         }
-        // Not there: it left on its own idle ceiling (`--rm` takes it
-        // with it, and one leaving at this very moment answers "already
-        // in progress"), or it was never started because the
-        // preparation stopped before it.
+        // Gone on its idle ceiling (`--rm`; one leaving right now
+        // answers "already in progress"), or never started.
         Answer::Ended { stdout, .. }
             if stdout.contains("No such container") || stdout.contains("already in progress") =>
         {
@@ -312,13 +277,10 @@ pub(crate) fn remove_container(root: &Path, name: &str) -> String {
 }
 
 /// Starts `command` — a prepared copy and its verb — inside the gate's
-/// container `container`, every process of it carrying `mark`.
-///
-/// The line is the one [`super::in_container`] would run in a
-/// container of its own, with the container's creation taken out:
-/// the same marks, the same `/work`, the copy's guard, and the verb's
-/// pictures out through `/out` — as a leaf of it, since the mount is
-/// the whole directory ([`crate::keepsakes::Landing::Leaf`]).
+/// container `container`, every process of it carrying `mark`: the line
+/// [`super::in_container`] would run, minus the container's creation,
+/// with the verb's `/out` a leaf of the whole-directory mount
+/// ([`crate::keepsakes::Landing::Leaf`]).
 pub(crate) fn exec_in(container: &str, command: &[String], mark: &str) -> Result<(), String> {
     let mut inside = command.to_vec();
     let keepsake = crate::keepsakes::bridge(
@@ -326,9 +288,8 @@ pub(crate) fn exec_in(container: &str, command: &[String], mark: &str) -> Result
         crate::keepsakes::Landing::Leaf(super::OUT_MOUNT),
     )?;
     let mut cmd = exec_line(container, &inside, mark)?;
-    // Through the budget's runner, as a container of the verb's own is:
-    // the process in there goes on when this launcher is killed, and
-    // what then reaches it is its mark (`stop_step`).
+    // A killed launcher leaves the process in there running; what
+    // reaches it then is its mark (`stop_step`).
     let status =
         crate::budget::watched(&mut cmd).map_err(|e| format!("failed to run docker: {e}"))?;
     if status.success() {
@@ -362,28 +323,23 @@ pub(super) fn exec_line(container: &str, inside: &[String], mark: &str) -> Resul
         .arg(super::WORK)
         .arg(container)
         .args(["sh", "-c", &exec_script(copy, mark, STATE_DIR), "pgg-step"])
-        // The leavings walk, as the wrapper's first argument: text it
-        // hands to a shell of its own once the verb is over
-        // ([`exec_script`]).
+        // The leavings walk, the wrapper's `$1` ([`exec_script`]).
         .arg(leftovers_script())
         .args(inside);
     Ok(cmd)
 }
 
-/// Ends every process in `container` carrying `mark`, and answers what
-/// that came to. For a step ended at its ceiling out here: the host
-/// side of it is reaped by the runner, and this is the other side.
+/// Ends every process in `container` carrying `mark` — the container
+/// side of a step ended at its ceiling, whose host side the runner reaps.
 ///
 /// `Ok` is a walk that ran and left nothing carrying the mark; `Err`
 /// is the same line for a walk that left something, could not run, or
-/// did not come back — so a typed stop can exit as it found things,
-/// while a step's failure stays what it was whichever came back.
+/// did not come back.
 pub(crate) fn stop_step(container: &str, mark: &str, logs: &Path) -> Result<String, String> {
     if spelled(mark).is_err() {
         return Err(format!("{mark:?} is not a mark this addresses"));
     }
-    // The stop's whole account is kept here; the line answered is its
-    // last, which counts what went and what would not.
+    // The stop's whole account; the line answered is its last.
     let said = logs.join(format!("linux-stop-{mark}.txt"));
     let account = format!("(the stop's account: {})", said.display());
     let mut stop = Command::new("docker");
@@ -439,12 +395,11 @@ pub(crate) fn stop_step(container: &str, mark: &str, logs: &Path) -> Result<Stri
 ///
 /// **The shell that walks must have been started without the mark.**
 /// `/proc/<pid>/environ` is the block a process was *started* with:
-/// `unset` does not touch it, and a subshell forked for the `|` or the
-/// `$( )` carries the parent's block whole. A marked shell that walked
-/// would list its own pipeline and kill it (measured: the walk in
-/// every green verb took one `sh` with it — its own). So the walker is
-/// always an `env -u` exec of a fresh shell ([`exec_script`]), or a
-/// `docker exec` that never had the mark ([`stop_step`]).
+/// `unset` does not touch it, and a subshell forked for `|` or `$( )`
+/// inherits it whole, so a marked walker would list and kill its own
+/// pipeline. The walker is an `env -u` exec of a fresh shell
+/// ([`exec_script`]) or a `docker exec` that never had the mark
+/// ([`stop_step`]).
 const MARKED_FN: &str = "marked() {\n\
      \x20 for p in /proc/[0-9]*; do\n\
      \x20 \x20 pid=${p#/proc/}\n\
@@ -460,13 +415,10 @@ const MARKED_FN: &str = "marked() {\n\
 /// ([`leftovers_script`]) and the rest is the copy and its arguments,
 /// as [`super::watched_from_inside`] takes them.
 ///
-/// The step's mark file stands for as long as the verb runs, and the
-/// live file is touched at both ends: those two are what the
-/// container's own process reads to know whether it is still wanted
-/// ([`IDLE_SCRIPT`]). The leavings are walked by a shell `exec`ed
-/// without the mark in its environment — the one way the walk cannot
-/// meet itself ([`MARKED_FN`]) — which carries the verb's own exit
-/// code out.
+/// The step's mark file stands while the verb runs and `live` is touched
+/// at both ends — what [`IDLE_SCRIPT`] reads. The leavings are walked by
+/// a shell `exec`ed without the mark ([`MARKED_FN`]), which carries the
+/// verb's exit code out.
 fn exec_script(copy: &str, mark: &str, state: &str) -> String {
     format!(
         "leftovers=$1\nshift\n\
@@ -497,11 +449,9 @@ fn leftovers_script() -> String {
 
 /// What a stop runs inside the container: `$1` is the mark, `$2` the
 /// state directory ([`STATE_DIR`]). Ends what carries the mark, looks
-/// again once the kills have had a second to land, takes the mark's
-/// file down so the container does not count the step as running, and
-/// ends with one line saying how many went and how many would not.
-/// Sent by `docker exec` from a side that never had the mark, so the
-/// walk is clean ([`MARKED_FN`]).
+/// again a second later, takes the mark's file down so the container no
+/// longer counts the step as running, and ends with one line saying how
+/// many went and how many would not.
 fn stop_script() -> String {
     format!(
         "mark=$1\nsteps=$2/steps\ntook=0\n{MARKED_FN}\
@@ -522,12 +472,9 @@ fn stop_script() -> String {
 /// `$2` minutes is a verb running. `$3` is where it says so, `$4` the
 /// state directory ([`STATE_DIR`]).
 ///
-/// This is the ceiling on a container whose gate died: the gate's own
-/// removal is the ordinary end, the next gate's sweep is the second,
-/// and this is the one that needs nobody. A `live` it cannot read is
-/// read as now, so a state directory it could not make keeps it up —
-/// that is a container to be taken down, not one to leave under a
-/// verb.
+/// A `live` it cannot read is read as now: a state directory it could
+/// not make keeps it up, for a removal to take down, rather than
+/// leaving under a verb.
 const IDLE_SCRIPT: &str = "idle=$1\n\
      mark_minutes=$2\n\
      log=$3\n\
@@ -553,9 +500,7 @@ mod tests {
 
     use super::super::runner::spelled;
 
-    /// The gate's container is named for the tree and the run, as the
-    /// tree's volumes are: two seats and two runs of one seat never
-    /// meet at a name, and the name is one docker and a shell accept.
+    /// The name is also one docker and a shell accept.
     #[test]
     fn the_gates_container_is_named_for_the_tree_and_the_run() {
         let root = Path::new("C:\\Users\\x\\IdeaProjects\\platitude-gg\\.claude\\worktrees\\c");
@@ -570,12 +515,8 @@ mod tests {
         assert!(spelled(&super::container_of(root, "1758-40")).is_ok());
     }
 
-    /// **What runs in the gate's container carries its mark, and the
-    /// mark is a name.** A step's mark is written into a file name and
-    /// a shell script, so it is held to the same characters as a copy's
-    /// name; and the `exec` carries both machine marks, the container
-    /// mark and the step's, with no `run` and no `--rm` in it —
-    /// nothing is created.
+    /// The `exec` carries both machine marks, the container mark and the
+    /// step's, with no `run` and no `--rm` in it.
     #[test]
     fn a_verbs_exec_carries_every_mark_and_creates_nothing() {
         let inside = [
@@ -619,8 +560,6 @@ mod tests {
             .iter()
             .position(|arg| arg == "pgg-step")
             .expect("the script's $0");
-        // The leavings walk rides as the wrapper's first argument, and
-        // the copy and its verb follow it.
         assert_eq!(args[at + 1], super::leftovers_script());
         assert_eq!(args[at + 2..], inside[..]);
         assert!(
@@ -630,12 +569,10 @@ mod tests {
         assert!(super::exec_line("c", &[], "m").is_err());
     }
 
-    /// **The wrapper marks the step for as long as it runs, and hands
-    /// its leavings to a shell that was never marked.** The mark's file
-    /// is made before the verb and taken down after; the walk is an
-    /// `exec` of a fresh shell with the mark taken out of its
-    /// environment ([`MARKED_FN`]), which carries the verb's own exit
-    /// code out.
+    /// The mark's file is made before the verb and taken down after; the
+    /// walk is an `exec` of a fresh shell without the mark
+    /// ([`MARKED_FN`]). The walk's, the stop's and the idle script's
+    /// orders are read here too.
     #[test]
     fn the_wrapper_marks_the_step_and_hands_its_leavings_to_an_unmarked_shell() {
         let script = super::exec_script("/w/xtask-1", "1758-40-linux-12", "/run/pgg-gate");
@@ -703,9 +640,9 @@ mod tests {
     }
 
     /// A root of this test's own with a state directory in it, and the
-    /// mark its processes carry. **The copy's path is spelled into the
-    /// wrapper**, so the name carries nothing a shell reads — which is
-    /// the yard's rule too ([`crate::yard::Yard`]).
+    /// mark its processes carry. The copy's path is spelled into the
+    /// wrapper, so the name carries nothing a shell reads
+    /// ([`crate::yard::Yard`]).
     #[cfg(target_os = "linux")]
     fn a_marked_root(what: &str) -> (crate::yard::Yard, std::path::PathBuf, String) {
         let root = crate::yard::Yard::new(&format!("marked-{what}"));
@@ -736,10 +673,9 @@ mod tests {
             .is_ok_and(|stat| !stat.contains(") Z "))
     }
 
-    /// **The stop ends what carries the mark and nothing else**, and its
-    /// last line counts both. Run against the real shell: Linux only,
-    /// where `/proc` is what the walk reads — the container runs this
-    /// crate's tests every gate.
+    /// Its last line counts what went and what was left. Linux only, where
+    /// `/proc` is what the walk reads; the container runs this crate's
+    /// tests every gate.
     #[test]
     #[cfg(target_os = "linux")]
     fn the_stop_takes_what_carries_the_mark_and_spares_the_rest() {
@@ -766,13 +702,9 @@ mod tests {
         let _ = unmarked.wait();
     }
 
-    /// **The wrapper carries the verb's own exit code and takes the
-    /// leftover its verb left — and nothing else**: a stub verb that
-    /// leaves a marked sleeper behind and exits 3. The sleeper goes,
-    /// the mark's file goes, 3 is what comes out, and the walk names
-    /// exactly one process. A walk that met itself named its own `sh`
-    /// beside the leftover, in every green verb of a gate (measured),
-    /// which is what the count is for.
+    /// A stub verb leaves a marked sleeper and exits 3: the sleeper and
+    /// the mark's file go, 3 comes out, and the walk names exactly one
+    /// process — a walk that met itself would name its own `sh` too.
     #[test]
     #[cfg(target_os = "linux")]
     fn the_wrapper_carries_the_verbs_code_and_takes_its_leftover() {
@@ -831,9 +763,8 @@ mod tests {
         );
     }
 
-    /// **The container's own process leaves once nothing has been in**:
-    /// with one second of idle allowed and nothing running, it leaves
-    /// on its first look and says so where it was told to.
+    /// With one second of idle allowed and nothing running, it leaves on
+    /// its first look and says so where it was told to.
     #[test]
     #[cfg(target_os = "linux")]
     fn the_idle_ceiling_lets_the_container_leave_and_say_why() {

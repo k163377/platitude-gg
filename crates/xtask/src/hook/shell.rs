@@ -1,14 +1,10 @@
-//! How a shell line reads, for the guards that judge one: the pieces a
-//! line runs in order, and the program standing at the head of a piece.
-//!
-//! Every reader here works on the text alone. A line is judged before it
-//! runs, so a guard that cannot tell what a piece invokes says so and
-//! the guard's own rule decides what that silence means.
+//! How a shell line reads, for the guards that judge one: its pieces in
+//! run order, and the program at the head of each. Text only — where a
+//! reader cannot tell what a piece invokes it says so, and each guard's
+//! own rule decides what that means.
 
-/// The programs a command is run through: stepped over to reach the
-/// command, flags and all, so `env X=1 cargo build`, `time cargo test`,
-/// `bash -c "cargo build"` and `cmd /c cargo build` are read as the
-/// cargo they run.
+/// The programs a command is run through, stepped over with their flags so
+/// `env X=1 cargo build` and `cmd /c cargo build` read as cargo.
 const WRAPPERS: [&str; 12] = [
     "env",
     "time",
@@ -25,9 +21,7 @@ const WRAPPERS: [&str; 12] = [
 ];
 
 /// The pieces a line runs one after another: cut at `;`, a line break,
-/// `&&` and `||`. Pipes stay inside a piece — what a piece hands to the
-/// next program is its own business, and the readers that care call
-/// [`pipe_pieces`].
+/// `&&` and `||`, with pipes left inside (see [`pipe_pieces`]).
 pub(super) fn shell_segments(command: &str) -> Vec<&str> {
     cut(command, Pipes::Inside)
 }
@@ -45,13 +39,10 @@ enum Pipes {
     Inside,
 }
 
-/// The line cut where the shell would cut it — and nowhere a quote
-/// covers. A separator inside quotes is somebody's data (a search
-/// pattern, a commit message, a regular expression full of `|`), and
-/// cutting there invents a command nobody typed and hands it to a guard
-/// as a program to judge. A quote left open covers the rest of the line,
-/// which cuts nothing: a line this reader cannot parse is one no guard
-/// refuses.
+/// The line cut where the shell would cut it, never inside quotes: a
+/// separator there is data (a pattern, a commit message), and cutting it
+/// hands a guard a program nobody typed. An unclosed quote covers the rest
+/// of the line, so no guard refuses a line this cannot parse.
 fn cut(command: &str, pipes: Pipes) -> Vec<&str> {
     let bytes = command.as_bytes();
     let mut pieces = Vec::new();
@@ -84,10 +75,8 @@ fn cut(command: &str, pipes: Pipes) -> Vec<&str> {
     pieces
 }
 
-/// A segment's tokens and where its program stands among them: past the
-/// environment the line sets in front of its command, and past the
-/// programs it runs the command through, with their flags. None where
-/// the segment invokes nothing at all.
+/// A segment's tokens and where its program stands among them, past any
+/// `NAME=value` and `WRAPPERS`. None where the segment invokes nothing.
 pub(super) fn program_at(segment: &str) -> Option<(Vec<&str>, usize)> {
     let tokens: Vec<&str> = segment
         .split_whitespace()
@@ -108,8 +97,6 @@ pub(super) fn program_at(segment: &str) -> Option<(Vec<&str>, usize)> {
     (at < tokens.len()).then_some((tokens, at))
 }
 
-/// `NAME=value` in front of a command, which the shell takes as
-/// environment.
 fn is_assignment(token: &str) -> bool {
     token.split_once('=').is_some_and(|(name, _)| {
         !name.is_empty() && name.bytes().all(|b| b == b'_' || b.is_ascii_alphanumeric())
@@ -131,8 +118,8 @@ pub(super) fn is_cargo(token: &str) -> bool {
     matches!(program_name(token).as_str(), "cargo" | "cargo.exe")
 }
 
-/// Whether the line runs cargo in command position anywhere in it,
-/// whatever it does there — a pipe's halves included.
+/// Whether the line runs cargo in command position anywhere in it, a
+/// pipe's halves included.
 pub(super) fn runs_cargo(command: &str) -> bool {
     pipe_pieces(command)
         .into_iter()

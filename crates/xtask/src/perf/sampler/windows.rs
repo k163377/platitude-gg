@@ -7,8 +7,6 @@ use std::process::{Command, Stdio};
 use super::{Sample, parse_sample};
 use crate::perf::SAMPLE_MS;
 
-/// The script's output, read a line at a time. The attribution script
-/// speaks the same way (`perf::attribution`).
 pub(in crate::perf) type Lines = std::io::Lines<std::io::BufReader<std::process::ChildStdout>>;
 
 /// The process creation flag that starts a process with its primary
@@ -16,20 +14,14 @@ pub(in crate::perf) type Lines = std::io::Lines<std::io::BufReader<std::process:
 /// resumes once the process is in its job object.
 pub(in crate::perf) const CREATE_SUSPENDED: u32 = 0x0000_0004;
 
-/// How long the script is given to compile and say `ready`, and later to
-/// join and resume the process and say `resumed`: seconds against a
-/// compile measured in hundreds of milliseconds. A script that says
-/// nothing in that time is a sampler that will never sample, and a wait
-/// on it with no ceiling would hold the machine's every build behind a
-/// measurement that never starts.
+/// How long the script is given to say `ready`, and later `resumed` — the
+/// compile takes a fraction of it. A wait with no ceiling would hold every
+/// build on the machine behind a measurement that never starts.
 const SCRIPT_CEILING: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Reads the script's lines until `wanted`, within [`SCRIPT_CEILING`],
-/// and hands the rest back. A `note:` on the way is said out loud — the
-/// one thing the script says that is not a sample: the job object could
-/// not take the process, so its children go uncounted and the peak gate
-/// sees them as somebody else's. The read blocks, so it runs on a thread
-/// of its own and the ceiling is kept here; a script that never answers
+/// and hands the rest back; a `note:` on the way is printed. The read
+/// blocks, so it runs on a thread of its own; a script that never answers
 /// leaves that thread on the pipe until the script is ended.
 pub(in crate::perf) fn await_line(mut lines: Lines, wanted: &'static str) -> Result<Lines, String> {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -43,8 +35,8 @@ pub(in crate::perf) fn await_line(mut lines: Lines, wanted: &'static str) -> Res
                     }
                     continue;
                 }
-                // Said of "it": every caller names which script this
-                // was, and the attribution script waits here too.
+                // "it": the caller names which script — the attribution
+                // script waits here too.
                 Some(Err(error)) => Err(format!("its output failed: {error}")),
                 None => Err(format!("it ended before it said `{wanted}`")),
             };
@@ -73,10 +65,8 @@ pub(in crate::perf) fn end(child: &mut std::process::Child, what: &str) {
     }
 }
 
-/// The script, compiled and holding a job object, up to the `ready` it
-/// prints once it is waiting for a process to watch. Anything it prints
-/// before that is PowerShell complaining, and a script that ends before
-/// saying it is a sampler that will never sample.
+/// Starts the script and reads up to its `ready`: compiled, holding a job
+/// object, and waiting on stdin for the process to watch.
 pub(super) fn windows_arm(
     seconds: u64,
     software: bool,
@@ -143,21 +133,17 @@ pub(super) fn windows_watch(
 
 /// `SetThreadExecutionState` flags: `ES_CONTINUOUS | ES_SYSTEM_REQUIRED |
 /// ES_DISPLAY_REQUIRED` to hold the screen on, `ES_CONTINUOUS |
-/// ES_SYSTEM_REQUIRED` to hold only the machine awake while the screen
-/// is left to whoever is driving it (`--software`), and `ES_CONTINUOUS`
-/// alone to let go of both again.
+/// ES_SYSTEM_REQUIRED` to hold only the machine (`--software`), and
+/// `ES_CONTINUOUS` alone to let go.
 ///
-/// Spelled in decimal because PowerShell reads a hexadecimal literal with
-/// the top bit set as a negative `Int32` and then refuses to hand it to a
-/// `uint` parameter.
+/// Spliced into the scripts in decimal: PowerShell reads a hexadecimal
+/// literal with the top bit set as a negative `Int32` and will not hand it
+/// to a `uint` parameter.
 pub(super) const AWAKE: u32 = 0x8000_0003;
 pub(super) const SYSTEM_AWAKE: u32 = 0x8000_0001;
 pub(super) const CONTINUOUS: u32 = 0x8000_0000;
 
-/// The Win32 the sampler script calls: who is in front, the input idle
-/// counter, the execution state, the whole-machine times, and the job
-/// object the measured process is put in and resumed under
-/// (`windows_script` says what each is for).
+/// The Win32 the sampler script calls (`windows_script` says what for).
 const HOST_CLASS: &str = "public static class PerfHost {
   [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();
   [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
@@ -194,14 +180,10 @@ const HOST_CLASS: &str = "public static class PerfHost {
   }
 }";
 
-/// The display's power state, kept current beside whichever script asks.
-/// A `NativeWindow` on a thread of its own pumps the power broadcast for
-/// `GUID_CONSOLE_DISPLAY_STATE` (0 off, 1 on, 2 dimmed), which Windows
-/// sends once on registration and again on every change; `Dark()` is
-/// `1` / `0` / `-` for off / on-or-dimmed / not answered yet. Spliced
-/// into the sampler script (`windows_script`). `Start()` waits up to a
-/// second for the first answer, which in practice arrives within the
-/// registration call.
+/// The display's power state: a `NativeWindow` on a thread of its own
+/// pumps the `GUID_CONSOLE_DISPLAY_STATE` broadcast (0 off, 1 on, 2
+/// dimmed), which Windows sends on registration and on every change.
+/// `Dark()` is `1` / `0` / `-` for off / on-or-dimmed / not answered yet.
 const DISPLAY_CLASS: &str = "public class PerfDisplay : System.Windows.Forms.NativeWindow {
   [DllImport(\"user32.dll\")] static extern IntPtr RegisterPowerSettingNotification(IntPtr h, ref Guid guid, int flags);
   [StructLayout(LayoutKind.Sequential, Pack=4)] struct PBS { public Guid PowerSetting; public uint DataLength; public byte Data; }
@@ -231,53 +213,37 @@ const DISPLAY_CLASS: &str = "public class PerfDisplay : System.Windows.Forms.Nat
 
 /// The whole of the Windows sampler, as one script held for the run.
 ///
-/// Three things it does that a `Get-Process` loop does not, all of them
-/// about the host:
+/// Beside the process's memory it:
 ///
-/// * **Keeps the screen on.** [`AWAKE`] for the length of the run,
-///   released at the end. A blanked screen stops the compositor
-///   presenting, and the frames the run is counting stop with it.
-/// * **Says who is in front.** A window that lost the foreground, was
-///   minimised, or vanished behind a locked session is not being drawn
-///   at the rate the run reports.
-/// * **Says what the rest of the machine did.** `GetSystemTimes` beside
-///   the process's own processor time separates a slow application from a
-///   busy machine.
-/// * **Counts the process's children as its own.** The process arrives
-///   suspended, is put in a job object, and is resumed only then; the
-///   job's accounting — which keeps the time of children that have
-///   already exited — is what `app=` reports. The app answers a
-///   repository by running git, and git counted as somebody else's trips
-///   the peak gate on every run of the corpus. A process the job will not
-///   take (`note:`) is resumed all the same and counted alone.
+/// * holds the machine awake, and the screen too for a D3D run ([`AWAKE`]);
+/// * says whether the window is up, in front or minimised, and whether the
+///   session is locked;
+/// * reads `GetSystemTimes` beside the process's own time, which tells a
+///   slow application from a busy machine;
+/// * counts the process's children as its own: the process arrives
+///   suspended, joins a job object, and only then is resumed; `app=` is
+///   the job's accounting, which keeps the time of children that already
+///   exited. A process the job will not take (`note:`) is resumed all the
+///   same and counted alone.
 ///
 /// Two phases, on one pipe each way: the script compiles, makes the job
 /// and says `ready`; the pid comes down stdin; `resumed` and then the
 /// samples go up stdout.
 ///
-/// The window handle is resolved once and held: `Process.MainWindowHandle`
-/// enumerates every top-level window on the desktop, and `Refresh()` (which
-/// the counters need) throws the cached one away — so asking per tick
-/// would cost two desktop-wide sweeps every 100ms, on the machine whose
-/// business is exactly what the run is trying not to measure.
+/// The window handle is resolved once and held: `MainWindowHandle`
+/// enumerates every top-level window, and `Refresh()` (which the counters
+/// need) throws the cached one away — asking per tick would sweep the
+/// desktop twice a tick.
 ///
-/// The window is raised — `SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE`, so
-/// it comes to the top without taking anybody's focus — when it first
-/// appears, and again on the slow cadence whenever something else has
-/// the foreground. A covered window is not drawn, and a window that is
-/// not drawn advances no animation, which is the scroll bench never
-/// starting (`measure::SCROLL_CEILING`); raising it once only answers
-/// the things that were already in the way. **`HWND_TOP` does not beat
-/// a topmost window**, so a notification that sets `HWND_TOPMOST` stays
-/// in front however often this fires. A software run raises it not at
-/// all: its frames need no compositing, and a person at the machine
-/// would otherwise have the window in their face every second.
+/// The window is raised without taking focus (`SWP_NOMOVE | SWP_NOSIZE |
+/// SWP_NOACTIVATE`) when it appears and, while it is not in front, on every
+/// tenth tick: a covered window advances no animation, so the scroll bench
+/// never starts (`measure::SCROLL_CEILING`). `HWND_TOP` does not beat a
+/// topmost window, so a `HWND_TOPMOST` notification stays in front.
 fn windows_script(seconds: u64, software: bool) -> String {
-    // Drawing with the software scene graph the screen is left alone —
-    // its frames need no display, and `ES_DISPLAY_REQUIRED` would hold
-    // it on once a person lit it — so only the machine is kept from
-    // sleeping; nor is the window raised, which a person at the machine
-    // would otherwise have in their face every second.
+    // A software run's frames need no display: the screen is left alone
+    // (`ES_DISPLAY_REQUIRED` would hold it on once a person lit it) and
+    // the window is not raised into a person's face every second.
     let awake = if software { SYSTEM_AWAKE } else { AWAKE };
     let raise = u8::from(!software);
     // waits(paced): the sampler's tick — a reading every `SAMPLE_MS`, the loop

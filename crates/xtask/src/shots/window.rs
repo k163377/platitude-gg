@@ -1,48 +1,33 @@
 //! The one window the board is read in.
 //!
 //! The page lives at a fixed path and is rewritten in place, so a window
-//! already showing the board is one keypress away from showing the run
-//! that was just taken: F5, and the board is read from the top down in
-//! the order the runs were put up (`board::load_runs`). A second
-//! window gains nothing and costs the reader the only thing they have to
-//! be sure of — which of the windows in front of them is the board as it
-//! stands now.
+//! already showing the board is one F5 from the run just taken; a second
+//! window only leaves the reader unsure which one is current. So `open`
+//! hands out a window only while none stands, whoever asks and from
+//! whichever seat, and `--again` is the one way past it — for the case
+//! the board cannot see, the reader having closed theirs.
 //!
-//! Prose did not hold it. The rule was written down twice — in the
-//! verify-ui skill and in memory — and the windows piled up anyway,
-//! because every session starts without having watched the last one open
-//! one. So the count is kept here instead: `open` hands out a window
-//! only while none stands, whoever asks and from whichever seat, and
-//! `--again` is the one way past it — for the single case the board
-//! cannot see, which is the reader having closed theirs.
-//!
-//! What stands is remembered beside the page, because six seats read
-//! one board (`board_dir`): a marker each session kept to itself would
-//! let six of them open a window apiece and each be certain it had
-//! opened only one.
+//! What stands is remembered beside the page, because every seat reads
+//! one board (`board_dir`): a marker kept per session would let each open
+//! a window of its own.
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::board::{seat_here, shown};
 
-/// Where the board remembers the window it handed out.
-///
-/// Beside the page: the sweeps reach `runs/` and
-/// `img/`, and a window is not evidence — it outlives
-/// the run that was opened to be looked at, the session
-/// that took it, and the seat that landed.
+/// Where the board remembers the window it handed out: beside the page,
+/// out of the sweeps' reach (`runs/`, `img/`), since a window outlives
+/// the run, session and seat that opened it.
 fn marker(board: &Path) -> PathBuf {
     board.join("window")
 }
 
 /// A window handed out earlier and still standing.
 pub(super) struct Standing {
-    /// Milliseconds since the epoch, so a reader can be told how old the
-    /// window they are being sent to is.
+    /// Milliseconds since the epoch.
     at: u128,
-    /// The tree it was opened from: the answer to "who opened this",
-    /// since the window shows the whole board.
+    /// The tree it was opened from.
     seat: String,
 }
 
@@ -51,14 +36,10 @@ pub(super) fn standing(board: &Path) -> Option<Standing> {
     read_standing(&std::fs::read_to_string(marker(board)).ok()?)
 }
 
-/// Puts the board in front of the reader.
-///
-/// The ordinary answer is that it is already in front of them: say where
-/// the window is and what refreshes it, and open nothing. `again` is the
-/// reader's own word that they closed it — nothing else may set it,
-/// because nothing else can know (the browser is spawned and forgotten,
-/// and on every OS it may hand the window to a process that was already
-/// running, so there is no child to watch).
+/// Puts the board in front of the reader; while a window stands, says
+/// where and opens nothing. `again` is the reader's own word that they
+/// closed it — nothing else can know, since the browser may hand the
+/// window to an already-running process and leave no child to watch.
 pub(super) fn show(board: &Path, page: &Path, again: bool) -> Result<(), String> {
     if !again && let Some(open) = standing(board) {
         println!(
@@ -75,9 +56,8 @@ pub(super) fn show(board: &Path, page: &Path, again: bool) -> Result<(), String>
         "board: opened {} with {program} — F5 in that window from now on",
         shown(page)
     );
-    // The window is open whatever happens next, so a marker that would
-    // not write is reported: failing here would say the board did not
-    // open when it did.
+    // The window is open regardless: a marker that will not write is
+    // reported, not an error.
     if let Err(message) = remember(board) {
         println!(
             "board: could not write down the window ({message}) — the next `open` will open another"
@@ -87,9 +67,7 @@ pub(super) fn show(board: &Path, page: &Path, again: bool) -> Result<(), String>
 }
 
 impl Standing {
-    /// The seat, or a mark for a marker written without one — a window
-    /// that stands is worth saying so even when nobody can be named for
-    /// it.
+    /// The seat, or `?` for a marker written without one.
     fn named_seat(&self) -> &str {
         if self.seat.is_empty() {
             "?"
@@ -99,9 +77,8 @@ impl Standing {
     }
 }
 
-/// Where the pictures that were just put on the board are read — said at
-/// the moment somebody has taken one to show, which is the moment a
-/// second window would otherwise get opened.
+/// Where the pictures just put on the board are read — said right after
+/// a run, the moment a second window would otherwise get opened.
 pub(super) fn how_to_see_it(board: &Path) -> String {
     match standing(board) {
         Some(open) => format!(
@@ -115,7 +92,6 @@ pub(super) fn how_to_see_it(board: &Path) -> String {
     }
 }
 
-/// Writes down the window that was just handed out.
 fn remember(board: &Path) -> Result<(), String> {
     let at = now().ok_or("the clock is before the epoch")?;
     let text = format!("at\t{at}\nseat\t{}\n", seat_here());
@@ -123,9 +99,8 @@ fn remember(board: &Path) -> Result<(), String> {
     std::fs::write(&path, text).map_err(|e| format!("could not write {}: {e}", shown(&path)))
 }
 
-/// The inverse. None when the file says nothing a window can be read
-/// out of — an unreadable marker is no window, which errs towards
-/// opening one.
+/// The inverse of `remember`. An unreadable marker is no window, which
+/// errs towards opening one.
 fn read_standing(text: &str) -> Option<Standing> {
     let mut at = 0;
     let mut seat = String::new();
@@ -145,7 +120,6 @@ fn read_standing(text: &str) -> Option<Standing> {
     (at > 0).then_some(Standing { at, seat })
 }
 
-/// Milliseconds since the epoch, or None when the clock is before it.
 fn now() -> Option<u128> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -153,12 +127,8 @@ fn now() -> Option<u128> {
         .map(|since| since.as_millis())
 }
 
-/// How old the standing window is, in words.
-///
-/// The one thing this command cannot see is a window that was closed, so
-/// the age is what a reader judges that by: "opened 4 days ago" is the
-/// line that gets `--again` typed, where a bare timestamp is one more
-/// number to work out.
+/// How old the standing window is, in words: the age is how a reader
+/// judges whether it was closed, which this command cannot see.
 fn ago(at: u128) -> String {
     let Some(now) = now() else {
         return "at a time this clock cannot read".to_string();
@@ -179,14 +149,9 @@ fn words(since: u128) -> String {
     }
 }
 
-/// Opens the board in a window of its own, answering what opened it.
-///
-/// A browser in `--app` mode is a bare window — no tabs, no address bar —
-/// which is what the board wants to be. The system image viewers are the
-/// alternative and they smooth what they magnify, so they cannot answer
-/// the question the board exists for. Falling back to the ordinary
-/// handler is still better than nothing: a tab in the default browser
-/// zooms just as exactly, it merely brings its furniture along.
+/// Opens the board in a window of its own (a browser in `--app` mode),
+/// answering what opened it. System image viewers are no candidate: they
+/// smooth what they magnify.
 fn spawn(page: &Path) -> Result<&'static str, String> {
     let url = format!("file:///{}", page.display().to_string().replace('\\', "/"));
     let app = format!("--app={url}");
@@ -205,9 +170,7 @@ fn spawn(page: &Path) -> Result<&'static str, String> {
     ))
 }
 
-/// Candidates in order of preference, per OS. Named here: xtask
-/// carries std alone, and the differences between the three targets
-/// belong in code (CLAUDE.md ビルド・テスト).
+/// Candidates in order of preference, per OS.
 fn browsers(app: &str, url: &str) -> Vec<(&'static str, Vec<String>)> {
     if cfg!(windows) {
         vec![
@@ -255,10 +218,6 @@ fn browsers(app: &str, url: &str) -> Vec<(&'static str, Vec<String>)> {
 mod tests {
     use super::{browsers, read_standing, remember, standing, words};
 
-    /// The rule is carried between two runs of the command by a file, so
-    /// the file is the rule: a window written down here has to be the
-    /// window the *next* command finds — the next seat's, the next
-    /// session's, tomorrow's.
     #[test]
     fn a_window_written_down_is_the_one_the_next_command_finds() {
         let board = crate::yard::Yard::new("shots-window");
@@ -274,8 +233,6 @@ mod tests {
         );
     }
 
-    /// What the marker has to survive: it is the whole difference
-    /// between "press F5" and a second window.
     #[test]
     fn a_standing_window_survives_the_round_trip() {
         let open = read_standing("at\t1700000000000\nseat\tc\n").expect("a whole marker reads");
@@ -283,10 +240,8 @@ mod tests {
         assert_eq!(open.named_seat(), "c");
     }
 
-    /// A marker nothing can be read out of is no window. The error has
-    /// to fall this way: a reader sent to a window that is not there has
-    /// nowhere to press F5, where one extra window is the thing they can
-    /// close.
+    /// Errs towards no window: a reader sent to a window that is not
+    /// there has nowhere to press F5, where an extra one can be closed.
     #[test]
     fn a_marker_that_says_nothing_stands_for_no_window() {
         assert!(read_standing("").is_none());
@@ -298,8 +253,6 @@ mod tests {
         assert_eq!(open.named_seat(), "?");
     }
 
-    /// The age is what gets `--again` typed, so it has to read as an age
-    /// at every scale the board is left standing for.
     #[test]
     fn an_age_reads_as_one() {
         assert_eq!(words(0), "a moment ago");
@@ -312,9 +265,6 @@ mod tests {
         assert_eq!(words(9 * 24 * 60 * 60_000), "9 days ago");
     }
 
-    /// Every candidate carries the board, one way or the other: a bare
-    /// window where the browser offers one, the plain URL where it does
-    /// not.
     #[test]
     fn every_candidate_is_handed_the_board() {
         let candidates = browsers("--app=file:///b/index.html", "file:///b/index.html");

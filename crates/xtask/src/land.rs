@@ -1,24 +1,11 @@
-//! `cargo xtask land [<branch>]` — the one way a branch reaches main.
+//! `cargo xtask land [<branch>]` — the one way a branch reaches main
+//! (steps: internal-docs/反映前テストの機械化.md §land).
 //!
-//! Sessions cannot be trusted to run the merge by hand: a worktree
-//! session's git is fenced to its own tree, and a merge typed in the
-//! primary checkout inherits whatever HEAD happens to be there — a
-//! detached HEAD or a stray branch turns "merge into main" into a
-//! fast-forward of the wrong thing, or strands the commits off every
-//! branch (both observed). This verb reads where main actually is and
-//! picks the safe move; the pre-shell hook lets it through only on the
-//! permit the user's own latest message opened (hook/permit.rs), and the
-//! fast-forward here is what spends that permit — one message, one
-//! landing that moved main, and a landing that stopped short spent
-//! nothing.
-//!
-//! The order is the gate's (internal-docs/反映前テストの機械化.md): a
-//! branch behind main is rebased onto it in its own worktree first, then
-//! gated there — every step its diff owes, cached by what each step
-//! reads, so a run taken before the rebase is not paid twice — and only
-//! then is main fast-forwarded, which the reference-transaction hook
-//! allows onto a stamped commit only. History stays linear,
-//! and a landed seat already stands at main's tip.
+//! A merge typed in the primary checkout inherits whatever HEAD is there:
+//! a detached HEAD or a stray branch fast-forwards the wrong thing or
+//! strands the commits. This verb reads where main actually is and picks
+//! the safe move. Its fast-forward is what spends the permit
+//! (hook/permit.rs).
 
 use crate::command::{self, Permission, Where};
 use crate::gate::Gated;
@@ -99,7 +86,7 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
         && tree.path != primary.path
     {
         // A seat sitting on main would receive the merge into its own
-        // working tree — nobody expects a seat to be main's window.
+        // working tree.
         return Err(format!(
             "main is checked out in {} — \
              free it (switch that tree to another branch) and land again",
@@ -115,12 +102,9 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     let seat_dir = std::path::Path::new(&seat.path);
     phases.target(seat_dir, &branch);
     settle_the_tree(&seat.path, &branch)?;
-    // The landings' own queue, taken before anything of this one runs
-    // and held to the end: one landing at a time goes through rebase,
-    // gate, census and fast-forward, in the order they arrived
-    // (`budget::Pool::turn`). Nothing else is held while this waits —
-    // the seat's tree, its gate and the machine's budget are all taken
-    // after it — so a landing standing in line stands in nobody's way.
+    // The landings' queue (`budget::Pool::turn`), held to the end. Taken
+    // before the seat's tree, its gate and the machine's budget, so a
+    // landing standing in line stands in nobody's way.
     let pool = crate::budget::Pool::of(&root, crate::gate::default_jobs())?;
     phases.mark("preflight");
     let turn = pool.turn(&crate::seats::slashed(seat_dir), &format!("land {branch}"));
@@ -144,33 +128,28 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     }
     phases.mark("fast-forward (verdict included)");
     let after = git_query(&here, &["rev-parse", "--short", "main"]).unwrap_or_default();
-    // The permit this landing ran on is spent here:
-    // a landing that stopped before this line moved nothing.
+    // The permit is spent only here: a landing that stopped before this
+    // line moved nothing.
     crate::hook::permit::landed(&here, &Identity::current(None).session);
-    // Again, now that main carries what it carries: git runs the copy
-    // beside .git, and a landing that changed the script would otherwise
-    // leave the old copy answering until some later session start.
+    // Again, now that main moved: git runs a copy of the hook script, and
+    // a landing that changed the script would leave the old copy answering.
     println!("{}", crate::gate::install(&root)?);
     println!("landed {branch}: main {before} -> {after} ({ahead} commit(s)).");
-    // After the landing is said and while the claim still stands, so
-    // nothing else is building here: a rebase onto a main carrying a new
-    // Cargo.lock is exactly the event that leaves a generation of build
-    // products behind, and the seat has just done one (`crate::sweep`).
+    // While the claim still stands, so nothing else is building here: the
+    // rebase may have left a generation of build products behind.
     crate::sweep::at_a_tail(seat_dir, &crate::sweep::Tail::after_a_landing());
     phases.mark("sweep");
-    // The claim comes off last: from the moment it does, another session
-    // may take the letter, and the board this landing still has to clear
-    // is the one the next stretch there would be clearing for itself.
+    // The claim comes off last: once it does, another session may take the
+    // letter, and clearing the board after that would clear its runs.
     clear_the_board(&listing, &branch);
     release_claim(&here, &trees, &branch);
     phases.mark("hook, board and claim");
     Ok(())
 }
 
-/// What would land is what stands committed in the seat, so the tree is
-/// clean — except for the census a gate or a verb run in the seat
-/// rewrote since its last commit, a generated file the landing commits
-/// as it commits its own gate's rewrite (`gate_in_the_seat`).
+/// What would land is what stands committed, so the seat must be clean —
+/// except for a census a gate or verb run there rewrote, which the
+/// landing commits as it does its own gate's rewrite (`gate_in_the_seat`).
 fn settle_the_tree(seat: &str, branch: &str) -> Result<(), String> {
     let dirty = git_query(seat, &["status", "--porcelain"]).unwrap_or_default();
     if census_alone(&dirty) {
@@ -203,17 +182,15 @@ fn prepare_gate(root: &std::path::Path, seat: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// A duration the way the gate says its wall clock: minutes and seconds,
-/// to the second — a phase of a landing is compared against the gate's
-/// line, and a minute rounded down would hide most of one.
+/// A duration to the second, the way the gate says the wall clock a
+/// landing's phases are compared against.
 fn clock(took: std::time::Duration) -> String {
     let secs = took.as_secs();
     format!("{}m{:02}s", secs / 60, secs % 60)
 }
 
 /// What a landing leaves in a build slot it stepped out of and could not
-/// take away — its own image, on a system that holds the last link to a
-/// running one.
+/// delete: its own running image.
 const INFLIGHT: &str = "xtask-inflight-";
 
 /// Where cargo writes the binary the slot is linked to.
@@ -222,29 +199,15 @@ const DEPS: &str = "deps";
 /// Frees the cargo build slot this process occupies, when the slot is one
 /// of `trees`'.
 ///
-/// The gate builds the seat's task runner (`cargo build -p xtask`) over
-/// the sources the rebase brought in and starts its steps from a copy of
-/// it, and `cargo xtask land` is itself `<tree>/target/debug/xtask` — so
-/// a landing run from the seat's own runner would have that build stop
-/// on Windows at `failed to remove file … (os error 5)`, a running image
-/// being one that cannot be replaced, before its first step. (The hook's
-/// verdict builds nothing here: it runs from `target/hooks`, a slot of
-/// its own.) Renaming one is allowed on both systems, so this process
-/// moves out of the name and runs on from the copy beside it.
+/// The gate rebuilds the seat's task runner, and this process is
+/// `<tree>/target/debug/xtask`: on Windows a running image cannot be
+/// replaced (`os error 5`) but can be renamed, so this process moves out
+/// of the name. Out of every name ([`names_of_this_image`]): cargo
+/// hard-links the slot to `deps/xtask-<hash>`, and freeing one name alone
+/// stops the gate's link step at the other (`LNK1104`), after the rebase.
 ///
-/// **Out of every name this image answers to.** cargo writes the binary
-/// under `deps/` with a hash in its name and hard-links the slot to it,
-/// so the image the loader holds stands under two names and the linker's
-/// next `CREATE_ALWAYS` is refused at whichever of them is still there.
-/// Freeing the slot alone leaves the link step of the gate's first
-/// `cargo build -p xtask` to stop at the other (`LNK1104`), which is a
-/// landing that has already rebased and cannot go on
-/// ([`names_of_this_image`]).
-///
-/// What is left standing where it cannot be moved waits for the next
-/// landing's sweep. Silent when this binary is in nobody's way; a move
-/// that fails says so, ahead of the cargo error it was meant to
-/// explain.
+/// What cannot be moved waits for the next landing's sweep. Silent when
+/// this binary is in nobody's way; a move that fails says so.
 fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
     let exe = std::env::current_exe().ok()?;
     let mine = build_slot_tree(&exe)?;
@@ -280,12 +243,9 @@ fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
 /// binary under: the slot the run was started from, and the hashed names
 /// in `deps/` the slot is linked to.
 ///
-/// **By name.** Asking the file system which entry
-/// is this very file wants an inode, and Windows only offers one through
-/// an unstable interface; the names are cargo's own and confined to one
-/// tree's build directory, which answers the same question. A hash that
-/// is not the one in use is an older build of this binary, and taking
-/// the name away costs the link cargo is about to make anyway.
+/// By name, not by inode: Windows offers one only through an unstable
+/// interface. A hash not in use is an older build of this binary, which
+/// cargo relinks anyway.
 fn names_of_this_image(exe: &std::path::Path, dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut names = vec![exe.to_path_buf()];
     let Ok(entries) = std::fs::read_dir(dir.join(DEPS)) else {
@@ -299,10 +259,9 @@ fn names_of_this_image(exe: &std::path::Path, dir: &std::path::Path) -> Vec<std:
     names
 }
 
-/// Whether a name in `deps/` is one cargo writes this binary under:
-/// `xtask` or `xtask-<hash>`, carrying the platform's executable suffix
-/// alone — the `.d` and `.pdb` beside it are not images, and
-/// an aside an earlier landing left is already swept.
+/// Whether a name in `deps/` is `xtask` or `xtask-<hash>` with the
+/// executable suffix alone — not the `.d` / `.pdb` beside it, nor an
+/// earlier landing's aside (already swept).
 fn cargo_writes_this_binary_at(name: &str) -> bool {
     let Some(stem) = name.strip_suffix(std::env::consts::EXE_SUFFIX) else {
         return false;
@@ -312,8 +271,7 @@ fn cargo_writes_this_binary_at(name: &str) -> bool {
         && !name.starts_with(INFLIGHT)
 }
 
-/// Moves one name off the image and takes the name away. `at` keeps the
-/// asides apart where this image answers to more than one name.
+/// Moves one name off the image. `at` keeps the asides of one image apart.
 fn step_aside(name: &std::path::Path, at: usize) -> Result<(), std::io::Error> {
     let dir = name.parent().unwrap_or(name);
     let mut aside = dir.join(format!("{INFLIGHT}{}-{at}", std::process::id()));
@@ -340,8 +298,6 @@ fn sweep(dir: &std::path::Path) {
 
 /// The checkout whose build slot `exe` is, when it is one:
 /// `<tree>/target/<profile>/xtask[.exe]` is what cargo writes and runs.
-/// The tree is what tells the binary a step is about to rebuild from
-/// another tree's, which this landing never touches.
 fn build_slot_tree(exe: &std::path::Path) -> Option<String> {
     if exe.file_stem()? != "xtask" {
         return None;
@@ -353,13 +309,10 @@ fn build_slot_tree(exe: &std::path::Path) -> Option<String> {
     Some(target.parent()?.to_string_lossy().replace('\\', "/"))
 }
 
-/// The gate in the seat, and the census its verbs may move: a verb that
-/// passed rewrote its line, and the tree that passed is then not the
-/// commit a stamp names. The rewrite is a generated file's, committed
-/// here where a session would commit it, and the gate is asked again —
-/// which finds every step cached, the census being no step's input.
-/// Twice is a census moving under the machine's timing, and that is
-/// reported.
+/// The gate in the seat. A census its verbs rewrote leaves the tree that
+/// passed unstamped, so it is committed and the gate asked again (every
+/// step cached: the census is no step's input). A second rewrite is a
+/// census moving under the machine's timing, and is reported.
 fn gate_in_the_seat(seat: &std::path::Path, branch: &str) -> Result<(), String> {
     if crate::gate::for_landing(seat, "main")? == Gated::Stamped {
         return Ok(());
@@ -380,8 +333,7 @@ fn gate_in_the_seat(seat: &std::path::Path, branch: &str) -> Result<(), String> 
     ))
 }
 
-/// The message every commit of the census the gate rewrote carries — the
-/// one sessions wrote by hand for it before the landing did.
+/// The message of every commit of the census the gate rewrote.
 const CENSUS_COMMIT: &str = "chore(xtask): the verb census as the land's gate rewrote it";
 
 /// Whether a seat's `status --porcelain` says the census, modified in the
@@ -390,10 +342,8 @@ fn census_alone(dirty: &str) -> bool {
     dirty.trim() == format!("M {}", crate::gate::CENSUS_FILE)
 }
 
-/// Commits the census the gate's verbs rewrote, alone:
-/// the gate ran over a clean tree, so the rewrite is the whole of what
-/// can stand — and anything else standing there is refused, because a
-/// landing commits only what the machine wrote.
+/// Commits the census the gate's verbs rewrote, alone: a landing commits
+/// only what the machine wrote, so anything else standing is refused.
 fn commit_census(seat: &str) -> Result<(), String> {
     let census = crate::gate::CENSUS_FILE;
     let dirty = git_query(seat, &["status", "--porcelain"]).unwrap_or_default();
@@ -419,9 +369,8 @@ fn commit_census(seat: &str) -> Result<(), String> {
     ))
 }
 
-/// `git rebase main` in the seat, non-interactively. A rebase that stops
-/// is walked back and reported — resolving conflicts unattended is
-/// nobody's instruction.
+/// A rebase that stops is walked back and reported: resolving conflicts
+/// unattended is nobody's instruction.
 fn rebase(seat: &str) -> Result<(), String> {
     let mut command = std::process::Command::new("git");
     command
@@ -451,14 +400,10 @@ fn rebase(seat: &str) -> Result<(), String> {
     ))
 }
 
-/// The seat's pictures go with its claim (CLAUDE.md ビルド・テスト): the
-/// work they were taken to show is on main and has been read, and a
-/// board that keeps them makes the next session hunt through spent
-/// evidence for the picture that is current. Only this seat's — the runs
-/// beside them belong to seats still working.
-///
-/// The board is not what a land turns on, so a sweep that cannot happen
-/// says so and leaves the merge reported as the success it was.
+/// The seat's pictures go with its claim: their work is on main, and
+/// spent pictures make the next session hunt for the current one. Only
+/// this seat's — the others belong to seats still working. A sweep that
+/// cannot happen is only said: the board is not what a land turns on.
 fn clear_the_board(listing: &str, branch: &str) {
     let Some(seat) = crate::seats::seat_entries(listing)
         .into_iter()
@@ -477,22 +422,14 @@ fn clear_the_board(listing: &str, branch: &str) {
     }
 }
 
-/// The claim's release point (CLAUDE.md ビルド・テスト): the landed
-/// branch is on main and the tree is at main's tip, so the letter goes
-/// back to the roster.
-/// Only the hooks' own kind of lock is lifted; a lock a person wrote
-/// stays.
+/// The claim's release point (CLAUDE.md ビルド・テスト): the letter goes
+/// back to the roster. Only the hooks' own kind of lock is lifted; a lock
+/// a person wrote stays.
 ///
-/// Whoever's claim it is comes off. A landing is the user's word that
-/// this stretch of work is done, and the session that worked it is the
-/// usual lander; when the user has another session land the branch —
-/// the one that worked it being gone — the letter is freed all the
-/// same, rather than left under a claim nobody will hand back (a seat
-/// claim is never lifted for its process being gone, `seats::claim`).
-/// A session that goes on working here takes the seat back at its next
-/// edit or picture (the post-write hook, `seats::held_by_this_run`),
-/// and if another session took the letter in between, `cargo xtask
-/// seat` hands out a fresh one.
+/// Whoever's claim it is comes off: a landing is the user's word that the
+/// work is done, and a claim whose session is gone would never be handed
+/// back (`seats::claim`). A session going on here takes the seat back at
+/// its next edit or picture (`seats::held_by_this_run`).
 fn release_claim(here: &str, trees: &[WorktreeBlock], branch: &str) {
     let Some(tree) = landed_claim(trees, branch) else {
         return;
@@ -535,9 +472,8 @@ fn release_already_landed(here: &str, branch: &str) -> Result<(), String> {
 }
 
 /// The unlock itself, and what to do when git will not do it. `why` says
-/// whose claim this was, because the two read differently to whoever
-/// meets the line: one seat is free again, the other is free again and
-/// this session may still be sitting in it.
+/// whose claim this was: when it was this session's own, the session may
+/// still be sitting in the seat.
 fn hand_back(here: &str, path: &str, why: &str) {
     if git_query(here, &["worktree", "unlock", path]).is_some() {
         println!("released the seat claim on {path} — {why}");

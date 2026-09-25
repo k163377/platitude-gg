@@ -66,12 +66,10 @@ fn land_rebases_then_gates_then_fast_forwards() {
     assert!(ok && text.contains("nothing to land"), "{text}");
 }
 
-/// A landing runs cargo in the trees it has just moved — the gate's
-/// steps build the seat's task runner after the rebase — and `cargo
-/// xtask land` is itself the binary in that slot. Windows cannot replace
-/// a running image, so the slot is freed before the first step: the name
-/// is empty afterwards, and what an earlier landing could not delete
-/// (its own image, still running) is swept on the way past.
+/// The gate's steps rebuild the seat's task runner after the rebase, and
+/// `land` is itself the binary in that slot. Windows cannot replace a
+/// running image, so the slot is freed before the first step, and an
+/// earlier landing's undeletable image is swept on the way past.
 #[test]
 fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
     let sb = Sandbox::new("slot");
@@ -90,12 +88,10 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
     sb.write_refs(&sb.seat, 16);
     sb.commit_all(&sb.seat, "feat(core): sixteen", &[]);
 
-    // The slot as cargo leaves it: the image is written under `deps/`
-    // with a hash in its name, and the slot is a *hard link* to it. Both
-    // names are the linker's to replace on the next build, and a running
-    // image is refused under whichever of them is still there — so a
-    // landing that freed only the one it was started from would have the
-    // gate's first `cargo build -p xtask` stop at the other.
+    // As cargo leaves it: the image under `deps/` with a hashed name, and
+    // the slot a hard link to it. A running image is refused under either
+    // name, so freeing only the one started from stops the gate's first
+    // `cargo build -p xtask` at the other.
     let slot = sb.seat.join("target").join("debug");
     let deps = slot.join("deps");
     std::fs::create_dir_all(&deps).expect("the build slot");
@@ -126,20 +122,15 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
     assert_eq!(sb.main_sha(), sb.head(&sb.seat));
 }
 
-/// The other half of that: a runner published into a slot by `fs::copy`
-/// is exactly the image a neighbour's fork can be holding open, and what
-/// this suite has to survive is the refusal (the fork is a window too
-/// short to catch on purpose). Held open here on purpose: one
-/// attempt is refused outright, and the run that keeps asking gets its
-/// answer as soon as the handle goes.
+/// A runner published by `fs::copy` can be held open by a neighbour's
+/// fork, too briefly to catch, so it is held open here on purpose.
 ///
-/// Linux only, because POSIX only says `execve` *may*
-/// refuse a file open for writing — this asserts that it does, which is
-/// a promise Linux makes and the container is the machine that keeps it.
+/// Linux only: POSIX says `execve` *may* refuse a file open for writing,
+/// and Linux does.
 #[test]
 #[cfg(target_os = "linux")]
 fn a_runner_held_open_for_writing_is_run_once_the_handle_goes() {
-    // A sandbox for the temp root it takes away again: nothing here gates.
+    // Only for the temp root: nothing here gates.
     let sb = Sandbox::new("busy");
     let slot = sb.root.join("slot");
     std::fs::create_dir_all(&slot).expect("the build slot");
@@ -211,8 +202,7 @@ fn land_refuses_a_dirty_seat_and_a_rebase_that_stops_is_walked_back() {
     assert_eq!(sb.main_sha(), main_before);
 }
 
-/// The landing commits the census its gate rewrote and gates again,
-/// on its own.
+/// After committing it, the landing gates again on its own.
 #[test]
 fn land_commits_the_census_its_gate_rewrote() {
     let sb = Sandbox::new("land-census");
@@ -256,9 +246,7 @@ fn land_commits_the_census_its_gate_rewrote() {
     );
 }
 
-/// A census a gate or a verb run in the seat rewrote before the landing
-/// is the landing's to commit, as its own gate's rewrite is: a seat
-/// dirty with that one generated file is not a seat refused.
+/// A seat dirty with only that generated file is not refused.
 #[test]
 fn land_commits_a_census_the_seat_was_holding_dirty() {
     let sb = Sandbox::new("land-census-dirty");
@@ -281,14 +269,9 @@ fn land_commits_a_census_the_seat_was_holding_dirty() {
     assert_eq!(sb.main_sha(), sb.head(&sb.seat));
 }
 
-/// A landed seat goes back to the roster: the branch is on main and the
-/// tree is at main's tip, so the letter is free for whoever asks next
-/// without anybody having to say the words (CLAUDE.md ビルド・テスト).
-/// The session that landed takes it back at its next edit if it goes on
-/// working there. Whoever's claim was on the seat comes off — a landing
-/// is the user's word that the stretch of work is done, and a claim is
-/// never lifted for its process being gone, so a letter the landing
-/// left claimed would be one nobody hands back.
+/// Whoever's claim was on the seat comes off (CLAUDE.md §ビルド・テスト):
+/// a claim is never lifted for its process being gone, so a letter the
+/// landing left claimed would be one nobody hands back.
 #[test]
 fn a_landed_seat_goes_back_to_the_roster() {
     let sb = Sandbox::new("claim");

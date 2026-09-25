@@ -1,50 +1,38 @@
 //! The verbs about remotes: where a push goes, the mark that decides it,
 //! and the forms that set one.
 //!
-//! Almost none of them can be judged from the picture — a mark, a
+//! Almost none of them can be judged from the picture: a mark, a
 //! destination and a row that should have gone are each a few pixels or
-//! none at all — so these rows carry more reasoning per verb than the
-//! panes do.
+//! none at all.
 
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
-    // Fetching a repository that has no tab yet. The three verbs are one
-    // road stopped at three places, and none of the three stops can be
-    // read off the picture: a box that never opened and one that opened
-    // empty are both a window with a card in front of it, a clone that
-    // landed and a strip that always had that tab frame alike, and a
-    // refusal is one line of git's in a box that is up either way.
-    //
-    // `folder=` is the half nobody presses for: the box is opened with a
-    // destination already in it, and one that opened without one would
-    // sit there refusing its own accept button with nothing to say why.
+    // Cloning: three verbs, one road stopped at three places. `folder=`:
+    // the box opens with a destination already in it, or it would refuse
+    // its own accept button with nothing to say why.
     Verb {
         name: "clone-dialog",
         when: &[],
         plain: "clone dialog=true said=false cloning=false grew=false folder=true",
     },
-    // The clone that landed: the box is down, git is not out any more,
-    // said nothing against it, and the strip gained the tab it became.
+    // The clone that landed: box down, git done and silent, and the strip
+    // gained its tab.
     Verb {
         name: "clone-go",
         when: &[],
         plain: "clone dialog=false said=false cloning=false grew=true",
     },
-    // The clone git would not make — the destination is the source's own
-    // folder, which is taken. The box stays up and quotes the answer,
-    // and no tab was made out of it.
+    // Refused (the destination is the source's own folder): the box stays
+    // up quoting git, and no tab.
     Verb {
         name: "clone-refused",
         when: &[],
         plain: "clone dialog=true said=true cloning=false grew=false",
     },
-    // The `+` on a REMOTES band that has gone unavailable around it.
-    // The picture holds the band; it cannot hold whether the mark
-    // still answers, and a `+` wired to nothing frames exactly like
-    // one that opened the form. Folded, `collapsed=` is the second
-    // half: the rail's own cell must reach the dialog and leave
-    // the fold standing over whatever it was made for.
+    // The `+` on a REMOTES band gone unavailable around it: a `+` wired to
+    // nothing frames like one that opened the form. `folded` reaches the
+    // dialog from the rail's cell and must leave the fold standing.
     Verb {
         name: "nav-add-remote",
         when: &[(
@@ -53,19 +41,13 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "nav_add_remote dialog=true",
     },
-    // The tag menu's push row, whose whole shape — chip, hold, colour —
-    // comes off what a remote was last heard to carry. The two forms
-    // differ by five glyphs in an otherwise identical card, and the one
-    // thing no picture holds is the commit the lease is pinned to: a
-    // forced push wearing an empty lease is a plain force, which is the
-    // failure this row exists to prevent (デザイン規約 §相手の履歴を置き換える).
-    //
-    // **`:drift` is a wait.** The readings come from
-    // `ls-remote --tags` well after the fetch they ride out with, so a
-    // run that stopped at the fetch would photograph the plain row and
-    // call it the forced one. Both halves are needed: the plain side
-    // alone passes for an implementation that never reads the remotes,
-    // and the drifted side alone for one that always forces.
+    // The tag menu's push row, whose chip, hold and colour come off what a
+    // remote was last heard to carry; a forced push with an empty lease is
+    // a plain force (デザイン規約 §相手の履歴を置き換える). `:drift` waits:
+    // the readings come from `ls-remote --tags` after the fetch, so
+    // stopping at the fetch photographs the plain row. The pair: plain
+    // alone passes an implementation that never reads the remotes, drift
+    // alone one that always forces.
     Verb {
         name: "push-tag",
         when: &[(
@@ -74,12 +56,11 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "push=true code=push held=false lease= ",
     },
-    // The two that run a delete. **Judged on the sidebar afterwards**:
-    // the read that rebuilds the list answers after the write
-    // does, so a run stopped at the write barrier photographs the row it
-    // just deleted and passes. `was=` / `sides=` is that name's own
-    // reading either side of the press — a count would not do, since the
-    // remote half of a name held on both sides takes no row away.
+    // The two that run a delete, judged on the sidebar afterwards: the
+    // rebuild answers after the write, so the barrier alone photographs
+    // the deleted row. `was=` / `sides=` are the name's reading either
+    // side of the press, not a count — the remote half of a name held on
+    // both sides takes no row away.
     Verb {
         name: "delete-remote-tag",
         when: &[(
@@ -93,35 +74,21 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "was=both sides= row=-1",
     },
-    // The three deletes a tag's name can want, told apart by which of
-    // them is drawn at all — a card missing one frames exactly like a
-    // card that never offered it. `sides=` is the reading they come off,
-    // so a wrong row and a wrong reading are not the same failure.
-    //
-    // **Two runs, and what each is here for.** Which rows a state may
-    // offer is core's (`offers::each_delete_row_needs_the_side_it_names`
-    // covers every side a name can stand on), and what the card does
-    // with core's answer is `tests/qml/tst_tagcard.qml`, which drives
-    // the real card on plain values. What no test off a window reaches
-    // is the two lookups the menu carrying the card makes for it
-    // (`RefRowMenu.tagFacts`), so that is what these claim: `:remote`
-    // that `tagSides` arrived — a reading nobody read answers `here`,
-    // which draws one delete row instead of three — and `:drift` that
-    // `remoteTagDrift` did, which is the push row's second form and the
-    // two greyed rows in one line.
-    //
-    // No run is spent on a name held only here or only over there: it
-    // would assert rows off words core has already decided, through a
-    // card that stands on plain values.
+    // The three deletes a tag's name can want; `sides=` is the reading
+    // they come off, so a wrong row and a wrong reading fail apart. Which
+    // rows a side offers is core's
+    // (`offers::each_delete_row_needs_the_side_it_names`) and the card's
+    // use of it `tests/qml/tst_tagcard.qml`'s; these claim the two lookups
+    // the menu makes (`RefRowMenu.tagFacts`): `:remote` that `tagSides`
+    // arrived (unread answers `here`, one row instead of three), `:drift`
+    // that `remoteTagDrift` did. No run for a name on one side only: core
+    // and the card test already decide those.
     Verb {
         name: "tag-menu",
         when: &[
-            // The drifted run answers for both halves of one reading:
-            // the push row takes its second form, and the two rows that
-            // would reach the name over there stand greyed
-            // (デザイン規約 §左メニューの所作 の削除の表). They sit
-            // together in the line because one run has to assert them
-            // together.
+            // One reading, both halves in one line: the push row's second
+            // form, and the two rows reaching the remote name greyed
+            // (デザイン規約 §左メニューの所作 の削除の表).
             (
                 Arg::Ends(":drift"),
                 "blocked=remote,both tag_here=true push=true code=push --force held=true lease=",
@@ -133,76 +100,51 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "sides=here local_del=true remote_del=false both_del=false blocked=none",
     },
-    // The far side keeping a branch. **The picture cannot judge this**:
-    // a bar saying nothing frames exactly like a bar saying the right
-    // thing, and the whole claim is that the sentence was built out of
-    // what core classified — which remote, which branch, and that it was
-    // a deletion. `why=true` is the other half: the
-    // far side's own words came across as well, and a report without
-    // them is a report of nothing (デザイン規約 §可否・警告の出し場所).
-    //
-    // It is also the run that proves no error was raised — `log=false`
-    // (the panel did not come up over the same news) and `wrong=false`
-    // (the mark in the corner is not calling it one). A window that
-    // opened the log and closed it again frames exactly like one that
-    // never opened it, so neither is a claim the picture can make.
-    // `tone=danger` is what a press that was turned down and is over wears
-    // (デザイン規約 §答えの要らない報せ) — and the hairline that says so is two
-    // pixels of colour, which no picture is judged on.
+    // The far side keeping a branch: `said=` is the sentence built from
+    // what core classified (remote, branch, a deletion), `why=true` the
+    // far side's own words (デザイン規約 §可否・警告の出し場所).
+    // `log=false`: the panel did not come up over the same news;
+    // `wrong=false`: the corner's mark is not calling it an error.
+    // `tone=danger` is a press turned down and over
+    // (デザイン規約 §答えの要らない報せ).
     Verb {
         name: "remote-refused",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=origin would not delete main",
     },
-    // The same refusal over a tag, which has to come down in the bar the
-    // way the branch's does: a `push_tag` or `delete_remote_tag` that
-    // returned a plain failure whatever the far side had said would put
-    // the log up over news the branch beside it reports quietly. `said=`
-    // naming the tag is the whole of the claim — a run that classified
-    // nothing frames identically, with the panel up instead.
+    // The same refusal over a tag: a `push_tag` / `delete_remote_tag`
+    // returning a plain failure would put the log up over news the branch
+    // reports quietly. `said=` naming the tag is the claim.
     Verb {
         name: "tag-refused",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=origin would not delete v1.0",
     },
-    // A push git itself will not send. **The next move is already made**
-    // — the session fetches on this one — so it is a report like the
-    // others, and `why=true` is git's own advice arriving with its
-    // `hint:` framing off.
+    // A push git will not send. The session fetches on it, so it is a
+    // report like the others; `why=true` is git's advice, `hint:` off.
     Verb {
         name: "push-outdated",
         when: &[],
         plain: "write_notice open=true clears=true why=true tone=danger log=false wrong=false \
                 said=main was not sent to origin",
     },
-    // Which remote a push goes to. The mark is one badge on one row:
-    // a picture of the band cannot tell "marked" from "the badge was
-    // never wired", and `local=true` is what says the repository's own
-    // config holds it. The run only ends once `checkout.defaultRemote`
-    // names the remote as well — the two keys arrive in one snapshot —
-    // and `origin=` on the line is that name.
+    // Which remote a push goes to: `local=true` is the repository's own
+    // config holding the mark. The run ends once `checkout.defaultRemote`
+    // names the remote too (the two keys arrive in one snapshot), which is
+    // `origin=` on the line.
     Verb {
         name: "push-default",
         when: &[],
         plain: "push_default local=true",
     },
-    // Where the toolbar says the push is going. **The picture cannot
-    // judge this at all** — the destination lives in the button's
-    // tooltip, and a label naming the wrong remote is spelled exactly
-    // like one naming the right remote.
-    //
-    // `--preset forkmark` is the arrangement that separates the two
-    // readings: the branch tracks `origin` and its own mark sends
-    // pushes to `fork`. A label worked out from `remote.pushDefault`
-    // and the upstream says `origin/main` here and the push still
-    // goes to the fork; git weighs the branch's mark first
-    // (git-config(5); measured 2.55). `state=elsewhere` is the other half
-    // — the ahead/behind counts are about origin, so they say nothing
-    // about where this is going.
-    // With neither mark set the upstream is the destination, and the
-    // counts beside it are about the remote it is really going to.
+    // Where the toolbar says the push is going (the button's tooltip).
+    // `--preset forkmark`: the branch tracks `origin` and its own mark
+    // sends pushes to `fork`, which git weighs first (git-config(5)) — a
+    // label from `remote.pushDefault` and the upstream says `origin/main`
+    // here. `state=elsewhere`: the counts are about origin, not the
+    // destination. With neither mark set the upstream is the destination.
     Verb {
         name: "push-target",
         when: &[(
@@ -211,11 +153,9 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "push_target label=origin/main state=ready branch_mark=",
     },
-    // A hand on that same button, and the words it opens. `tip=true`
-    // is the words on screen (`tipDelayMs` waited out); `mode=` says
-    // which of the button's sentences they are — `ready` says what a
-    // push sends, `diverged` what the overwrite drops — and the counts
-    // are the number that sentence carries, pinned to the fixture.
+    // A hand on that button: `tip=true` the words up (`tipDelayMs` waited
+    // out), `mode=` which sentence (`ready` what a push sends, `diverged`
+    // what the overwrite drops), and the counts it carries, per fixture.
     Verb {
         name: "push-hover",
         when: &[(
@@ -224,10 +164,8 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "push_hover tip=true mode=ready ahead=1 behind=0",
     },
-    // The row a remote's own menu is offering. `open=true` because a
-    // menu that never opened photographs as the sidebar it stands on,
-    // and the count because the row that is gone on the marked remote
-    // is the whole of what this reads.
+    // A remote's own menu: `rows=` because the marked remote's menu loses
+    // a row, `open=true` since an unopened menu photographs as the sidebar.
     Verb {
         name: "remote-menu",
         when: &[(Arg::Ends(":marked"), "remote_menu open=true rows=1")],
@@ -240,43 +178,23 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[(Arg::Ends(":marked"), "remote_url dialog=true box=true")],
         plain: "remote_url dialog=true box=false",
     },
-    // The surface a first push raises, read in the turn the button was
-    // pressed in.
-    //
-    // **The half worth judging cannot be keyed.** `dialog=` / `name=` is
-    // `true` / `origin` on a repository with no remote and `false` on one
-    // with two, and those two runs are told apart by their preset — which
-    // this verb's argument cannot carry the way `push-target`'s does,
-    // since here it is the branch to publish. What is left is the state
-    // the press was taken in, which is the one thing both runs say; it is
-    // a thin row, and the line above is why there is no thicker one.
+    // The surface a first push raises, read in the turn of the press. Only
+    // the state both presets share is claimed: `dialog=` / `name=` split
+    // by preset (`noremote` opens the dialog on `origin`, `unpublished`
+    // does not), a pair `Arg::WithPreset` could key.
     Verb {
         name: "publish",
         when: &[],
         plain: "publish state=publish",
     },
-    // The first push against each of the three shapes a name on the far
-    // side can wear. **The picture tells none of them apart**: one bar,
-    // one pill, and three characters between `push` and `push -f` —
-    // while the frame and the `!` that mark the third are a colour and
-    // one glyph.
-    //
-    // **Read as a set of three.** `taken` is the refusal (a plain push
-    // cannot land, so the pill is held and leased against what the far
-    // side holds), `carried` the one that lands and moves somebody
-    // else's branch on, and `outsider` the one neither answer fits — the
-    // name is there and the commit under it is not in this repository.
-    // Any one of them alone passes for an implementation that always
-    // says the same thing.
-    //
-    // **`outsider` is the shape an opening's fetch answers away.** The
-    // commit lands here, the comparison then reads `refused` like any
-    // other diverged name, and the run photographs the wrong fixture and
-    // passes on the picture (measured, 10 runs of 10). `verify::seed` is
-    // what holds the fetch off; this row is what says so afterwards.
-    //
-    // `plain` claims only that the check answered at all — an argument
-    // nobody has measured passes on any true answer.
+    // The first push against the three shapes a name on the far side can
+    // wear, read as a set (any one alone passes an implementation that
+    // always says the same): `taken` refused (pill held, leased against
+    // the far side), `carried` lands and moves somebody else's branch on,
+    // `outsider` the name is there but its commit is not in this
+    // repository. An opening fetch would bring that commit in and turn
+    // `outsider` into `refused`; `verify::seed` holds it off and this row
+    // says so. `plain` claims only that the check answered.
     Verb {
         name: "publish-taken",
         when: &[
@@ -297,11 +215,8 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "publish settled far=",
     },
-    // The refusal above with a hand on its pill: what the overwrite
-    // drops is said in the pill's tip and nowhere else on the bar.
-    // `tip=true` is the words on screen; `far=` and `theirs=` pin the
-    // fixture whose count those words carry. Any other argument is
-    // asked only that a tip stood over some answer.
+    // The refusal with a hand on its pill, whose tip alone says what the
+    // overwrite drops; `far=` / `theirs=` pin the fixture behind the count.
     Verb {
         name: "publish-tip",
         when: &[(
@@ -310,15 +225,10 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "publish_tip tip=true far=",
     },
-    // The answer, given — the line goes out in
-    // the same turn as the press.
-    //
-    // Plain, the branch this publishes is one no remote holds under that
-    // name, so `far=free` is the fixture pinned: the picture is a bar
-    // that has gone, which a repository already holding the name leaves
-    // behind just the same. Any other argument is asked only that a
-    // classification arrived at all, since the branch it names decides
-    // which one.
+    // The answer given; the line goes out in the turn of the press. With
+    // no argument the branch is one no remote holds, so `far=free` pins
+    // the fixture (the gone bar looks the same either way); other branches
+    // claim only that a classification arrived.
     Verb {
         name: "publish-go",
         when: &[(
@@ -327,59 +237,38 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "publish answering far=",
     },
-    // The destination list with the mark in it. `marked=` is the field
-    // the rows read — a list drawn with no mark and a list whose mark
-    // was never plumbed frame the same way, and
-    // the plain `publish-remotes` run is the half with nothing marked.
+    // The destination list with the mark in it: `marked=` is the field the
+    // rows read. The plain `publish-remotes` run is the unmarked half.
     Verb {
         name: "publish-remotes-marked",
         when: &[],
         plain: "publish_remotes open=true marked=true",
     },
-    // What the bar wears on the way back up, after the ✕. **No picture
-    // of this run can hold it**: the bar takes 200ms to go and the shot
-    // is taken once it has, so a bar that spent the whole of it as an
-    // empty band in the wrong colour frames exactly like one that kept
-    // its question.
-    //
-    // Every field is read in the turn the ✕ was pressed in, which is
-    // why `shut=false` leads: it is what says the reading was taken
-    // while the bar was still on screen. `neutral=` is the frame — this
-    // question asks where a branch goes, so it wears the accent
-    // colour — and `code=push` is the pill's word, which two of the
-    // flow's own bindings hold. Both
-    // fall off a bar re-dressed at the press, and so do the words.
+    // What the bar wears on its way out after the ✕: the shot comes once
+    // it has gone, so an empty band in the wrong colour frames like one
+    // that kept its question. Read in the turn of the press — `shut=false`
+    // says the bar was still up. `neutral=` (the accent: it asks where a
+    // branch goes) and `code=push` come off the flow's bindings; both fall
+    // off a bar re-dressed at the press, and so do the words.
     Verb {
         name: "publish-dismiss",
         when: &[],
         plain: "ask_dismissed shut=false words=true detail=true code=push neutral=true",
     },
-    // The question about what a branch is measured against. **The
-    // picture holds two boxes and a pill and cannot say what any of them
-    // are worth**: whether the name answered with is one this repository
-    // actually holds is what the bar's line is about, and a pill greyed
-    // for one reason frames like a pill greyed for any other.
-    //
-    // **`:missing` is the half that is not here.** The reserved name is
-    // one no demo repository carries, so the run photographs the line a
-    // name that was never fetched puts up — and it is **answerable all
-    // the same**, which is the rule itself (デザイン規約
-    // §ブランチが測られる相手を決める): the branch is measured against a
-    // remote branch the next push makes. Both halves are needed — the
-    // plain side alone passes for an implementation that refuses
-    // nothing and reads nothing, and this side alone for one that never
-    // looks at the refs at all.
+    // The question of what a branch is measured against: `there=` is
+    // whether the typed name is one this repository holds. `:missing`
+    // types a name no demo repository carries, answerable all the same —
+    // the next push makes it (デザイン規約 §ブランチが測られる相手を決める).
+    // The pair: plain alone passes an implementation that reads nothing,
+    // `:missing` alone one that never looks at the refs.
     Verb {
         name: "set-upstream",
         when: &[(Arg::Ends(":missing"), "there=false answerable=true")],
         plain: "there=true answerable=true",
     },
-    // The other half of the name box: the rows it offers past typing
-    // one. **`open=true` is the whole of what the report can say and
-    // the picture cannot** — a list nothing plumbed and a list with no
-    // rows in it both come down as nothing, and the box only opens one
-    // it has rows for (`AppCombo.hasList`). What is *in* it is the
-    // picture's (overlay.png), with `rows=` on the line to count by.
+    // The name box's list: the box opens one only when it has rows
+    // (`AppCombo.hasList`), so `open=true` is the list plumbed. What is in
+    // it is the picture's (overlay.png), with `rows=` to count by.
     Verb {
         name: "set-upstream-list",
         when: &[],
@@ -393,37 +282,28 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "there=true answerable=true",
     },
-    // The first push's question, answered from its name box instead of
-    // the pill (デザイン規約 §立っている質問は 1 か所で聞く). The line
-    // is `publish-go`'s own, read the same way; the write barrier
-    // behind it is what says the key reached the pill's run. **Not for
-    // a question that is held** (`taken`): a keystroke is not a
-    // gesture, so that run would wait out the watchdog — which is the
-    // rule, not a gap.
+    // The first push's question answered from its name box instead of the
+    // pill (デザイン規約 §立っている質問は 1 か所で聞く), on `publish-go`'s
+    // line; the write barrier says the key reached the pill's run. Not for
+    // a held question (`taken`): a keystroke is not a hold, so that run
+    // waits out the watchdog by rule.
     Verb {
         name: "publish-enter",
         when: &[],
         plain: "publish answering far=free unsure=false answerable=true",
     },
-    // The same answer given from the name box instead of the pill
-    // (デザイン規約 §立っている質問は 1 か所で聞く). **The write
-    // barrier is the whole of the claim**: the run raises the box's own
-    // `accepted` and nothing else, so a build where Enter reaches
-    // nothing waits out the watchdog. The line below is the same one
-    // the pill's run reads, and the picture is the same picture — what
-    // separates the two verbs is which door the write came through.
+    // The same from the name box: the run raises the box's own `accepted`
+    // and nothing else, so the write barrier is the claim — a build where
+    // Enter reaches nothing waits out the watchdog.
     Verb {
         name: "set-upstream-enter",
         when: &[],
         plain: "there=true answerable=true",
     },
-    // **What the toolbar does with an upstream the far side has not got
-    // yet.** The counts are silent there (`tracked=false`), which is the
-    // standing that can send the press back to a question about a
-    // destination nobody has written down — so what is read is where
-    // that question *opened*: the name the branch was just pointed at,
-    // not the guess. A picture of the bar cannot say which of the two it
-    // is holding, because both are a remote and a name in two boxes.
+    // The toolbar with an upstream the far side has not got yet
+    // (`tracked=false`): the press reopens the destination question, and
+    // what is read is that it opened on the name the branch was just
+    // pointed at, not the guess.
     Verb {
         name: "publish-upstream",
         when: &[(
@@ -433,15 +313,10 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "tracked=false state=publish",
     },
-    // The `pull` row, on the two ends of the comparison it stands on and
-    // on a remote row that is neither. **The picture cannot say whether
-    // the row was offered at all** — a card with one row fewer frames
-    // like a card that never had it — so the three forms are read here:
-    // the branch the working tree is on, the upstream it is measured
-    // against, and a remote nothing here tracks, which must *not* carry
-    // the row (a pull there would move a branch the row does not name).
-    // `sentence=false` is the other half: both offered rows run the same
-    // `git pull`, so both are the chip alone.
+    // The `pull` row on the current branch, on its upstream, and on a
+    // remote nothing here tracks, which must not carry it (a pull there
+    // would move a branch the row does not name). `sentence=false`: both
+    // offered rows run the same `git pull`, so both are the chip alone.
     Verb {
         name: "pull-menu",
         when: &[
@@ -456,15 +331,10 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "pull_menu open=true kind=remote pull=false",
     },
-    // The same row where both sides have moved: bringing those together
-    // is a choice, so the row is out and the line under the pointer is
-    // the only place saying where the choice is made. **None of it is in
-    // the picture**: a greyed row and a live one are a shade apart, and
-    // no shot carries the sentence a pointer raises.
-    //
-    // **Two runs, one claim**: the sidebar's row and the graph chip's are
-    // handed the answer from the same place, and a run through one says
-    // nothing about the other.
+    // The same row once both sides moved: bringing them together is a
+    // choice, so the row is out and its tooltip says where the choice is
+    // made. The sidebar's row and the graph chip's get the answer from the
+    // same place, but a run through one says nothing about the other.
     Verb {
         name: "pull-blocked",
         when: &[(

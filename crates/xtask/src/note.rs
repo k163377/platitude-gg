@@ -1,8 +1,6 @@
-//! The small text notes this runner leaves for itself — a hold beside
-//! `.git`, a build announced, what a measurement warmed — in one shape:
-//! `key value` lines and a clock in whole seconds since the epoch. Two
-//! writers (`still`, `perf::warmth`) and one reader for both, so a note
-//! read back is parsed the way it was written.
+//! The `key value` text notes this runner leaves for itself (`still`,
+//! `perf::warmth`) and their clock in whole seconds since the epoch: one
+//! reader for every writer, so a note is parsed the way it was written.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 

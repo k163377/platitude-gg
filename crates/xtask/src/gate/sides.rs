@@ -14,15 +14,11 @@ use super::stamp::Store;
 use super::step::{Ran, log_of, run_one};
 
 /// Both sides at once, each on a thread of its own ([`side`]) and every
-/// unit of both out of the machine's one budget: what came back red,
-/// once the wall clock has been said.
+/// unit of both out of the machine's one budget: what came back red.
 ///
-/// **The always-steps go first, ahead of both sides.** They are the
-/// host's and seconds long, and a red among them is what a person fixes
-/// before anything else ([`halt`]) — a Linux side started beside them
-/// would spend its minutes on greens that fix takes away, the app being
-/// every verb's input. What that costs the Linux side is their seconds,
-/// and it is not the side a gate waits on.
+/// The always-steps go first, ahead of both sides: a red among them is
+/// what a person fixes first, and the fix would take away the greens a
+/// side started beside them had spent minutes on.
 #[expect(
     clippy::too_many_arguments,
     reason = "the run's own pieces, each read by both sides"
@@ -47,10 +43,9 @@ pub(super) fn run_sides(
         .iter()
         .filter(|r| r.step.side == Side::Linux)
         .collect();
-    // The budget is the machine's — beside the repository's `.git`,
-    // which every seat shares (`budget`). `jobs` above the machine's
-    // count widens the pool, an explicit ask; below it, it narrows this
-    // gate's share of it.
+    // The budget is the machine's, shared by every seat (`budget`). `jobs`
+    // above the machine's count widens the pool; below it, it narrows only
+    // this gate's share.
     let count = jobs.max(default_jobs());
     let pool = crate::budget::Pool::of(&plan.dir, count)?;
     let seat = seat_of(&plan.dir);
@@ -69,9 +64,7 @@ pub(super) fn run_sides(
     let host_waited = Waited::default();
     let linux_waited = Waited::default();
     // This run's own name, for what a red step leaves behind
-    // (`evidence`). The second it started and the process that ran it,
-    // as the record beside it is named (`record::keep`) — one pair of
-    // eyes reading a red gate has both.
+    // (`evidence`), spelled as the record's (`record::keep`).
     let run = format!(
         "{}-{}",
         std::time::SystemTime::now()
@@ -113,9 +106,8 @@ pub(super) fn run_sides(
     }
     failures.extend(std::thread::scope(|scope| {
         let host = scope.spawn(|| side(&host_ground, &host, always, jobs));
-        // On this side and not ahead of both, so the host side starts
-        // now: what the preparation owes is only that it is in before
-        // the first step of *this* side (`runner::linux_runner`).
+        // The container's preparation is on this side, not ahead of both,
+        // so the host side starts now (`runner::linux_runner`).
         let linux = scope.spawn(|| linux_side(&linux_ground, &linux, jobs));
         let mut failures = Vec::new();
         for handle in [host, linux] {
@@ -135,12 +127,8 @@ pub(super) fn run_sides(
     spent.linux_budget = linux_waited.read();
     spent.longest = Waited::longest_of([&host_waited, &linux_waited]);
     spent.ledger = record::ledger([("host", &host_waited), ("linux", &linux_waited)]);
-    // The ledger against the plan, before either is read as a number.
-    // Every step has a row whichever way the run went — cached, run,
-    // failed, or not reached — so a step with none is a path through the
-    // runner that files nothing, and the arithmetic somebody does over
-    // this table would be short by exactly the steps nobody can see are
-    // missing. A red for the gate, because it is the gate's own books.
+    // The ledger against the plan (`record::Waited::unaccounted`): a red
+    // for the gate, because it is the gate's own books.
     for (name, waited, steps) in [
         ("host", &host_waited, &host),
         ("linux", &linux_waited, &linux),
@@ -208,18 +196,13 @@ pub(super) fn rank(landing: bool) -> crate::budget::Rank {
     }
 }
 
-/// One side's steps from `from` on (the host's always-steps before it
-/// have run ahead of both sides — [`run_sides`]), as two groups that
-/// share no build directory and so run beside each other: the checks —
-/// clippy, the tests, shipped, deny, whatever else the plan owes — one at
-/// a time in the plan's order, stopping at the first red (a build that
-/// failed makes every later step of the group noise); and the built app —
-/// the verify-ui verbs as one block through [`verbs`], then `bare` —
-/// which alone read the release the first verb builds. Beside each other
-/// they slow each other — every verb pays for the compile beside it, and
-/// a cold checks chain can be the side's wall clock — and the side still
-/// ends sooner than the two would as a sum (the numbers are in
-/// internal-docs/反映前テストの機械化.md §実測).
+/// One side's steps from `from` on (the always-steps before it ran ahead
+/// of both sides in [`run_sides`]), as two groups that share no build
+/// directory and so run beside each other: the checks ([`in_order`]) and
+/// the built app ([`against_the_build`]), which alone read the release
+/// the first verb builds. Beside each other they slow each other, and the
+/// side still ends sooner than as a sum
+/// (internal-docs/反映前テストの機械化.md §実測).
 fn side(ground: &Ground<'_>, steps: &[&Required], from: usize, jobs: usize) -> Vec<String> {
     let (built, checks): (Vec<_>, Vec<_>) = (from..steps.len())
         .map(|i| (i, steps[i]))
@@ -252,14 +235,9 @@ fn in_order(ground: &Ground<'_>, steps: &[(usize, &Required)]) -> Vec<String> {
     Vec::new()
 }
 
-/// The steps a side stopped short of, filed as what they are.
-///
-/// **A step the run did not reach and a step the ledger lost are two
-/// different things**, and only one of them is a fault of the runner:
-/// a red stops the group it is in, and the plan's other steps are then
-/// answered for by a row saying so. Anything the ledger still has no row
-/// for after that is a path through here that files nothing, which is
-/// what `record::Waited::unaccounted` refuses.
+/// The steps a side stopped short of, filed as `not-run` rows: a step the
+/// run did not reach is not one the ledger lost
+/// (`record::Waited::unaccounted`).
 fn not_run(ground: &Ground<'_>, ids: impl IntoIterator<Item = String>) {
     for id in ids {
         ground.waited.filed(record::Row {
@@ -313,32 +291,19 @@ fn against_the_build(
 
 /// One side's verbs: the first uncached one runs alone and builds the
 /// release, the rest reuse that build `jobs` at a time. A red verb stops
-/// the run ([`halt`]) — and under `--keep-going` none of the others: a
-/// verb breaks nothing the next one reads, and every green is stamped, so
-/// the run after the fix owes the reds alone.
-/// Only a verb of this side that built in this very invocation earns the
-/// others their `--no-build`: a cached verb's build happened in whatever
-/// tree took the stamp, and the binary here may be older than the tree.
+/// the run — under `--keep-going` none of the others: every green is
+/// stamped, so the run after the fix owes the reds alone.
 ///
 /// Every verb takes a ticket out of the machine's budget ([`run_one`]),
-/// the first one included: what bounds the load is what is running, and
-/// the building verb is one of them — the heavier one, since it is the
-/// build.
+/// the building one included.
 ///
 /// A building verb that went red because the app did not build ends the
-/// block: the next one alone would build the same sources to the same
-/// error, and a block of a hundred verbs would spend its minutes saying
-/// so a hundred times. The checks group's clippy fails on the same
-/// source beside this block, so the block has to
-/// stop itself.
+/// block even under `--keep-going`: the next one would build the same
+/// sources to the same error.
 fn verbs(ground: &Ground<'_>, block: &[(usize, &Required)], jobs: usize) -> Vec<String> {
     let name = ground.name;
-    // **Through the same door as every other unit**, cached or not: the
-    // line a stamped verb prints and the row it files are one path
-    // ([`run_one`]), and a block that said `cached` here and filed
-    // nothing would leave the ledger with no answer for a step the plan
-    // has — a number read off a file with holes in it, which
-    // `record::Waited::unaccounted` refuses.
+    // Cached verbs through the same door as every other unit
+    // ([`run_one`]), so each files its row.
     for (index, required) in block.iter().filter(|(_, r)| r.cached) {
         let _ = run_one(ground, *index, required, false);
     }
@@ -356,12 +321,10 @@ fn verbs(ground: &Ground<'_>, block: &[(usize, &Required)], jobs: usize) -> Vec<
         };
         match run_one(ground, *index, required, false) {
             // Only a verb that actually ran here has left a release for
-            // the others to reuse. One answered by a stamp another tree
-            // wrote built nothing in this tree, and reading it as a
-            // build is how the rest of the block would be handed
+            // the others to reuse: one a stamp another tree wrote answered
+            // for built nothing here, and the rest would be handed
             // `--no-build` against a binary older than the sources. A
-            // halted one built nothing either, and every one after it
-            // is filed as halted at its own door.
+            // halted one built nothing either.
             Ok(Ran::Step) => built = true,
             Ok(Ran::Stamped | Ran::Halted) => continue,
             Err(why) => {

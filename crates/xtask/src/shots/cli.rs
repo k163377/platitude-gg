@@ -1,4 +1,4 @@
-//! `cargo xtask shots <add|open|list|path>`.
+//! `cargo xtask shots <add|crop|prune|open|list|path>`.
 
 use std::path::PathBuf;
 
@@ -116,8 +116,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// `shots open` — the board in front of the reader, and the whole of the
-/// one-window rule is in `window::show`.
+/// The one-window rule is in `window::show`.
 fn open(args: &[String]) -> Result<(), String> {
     let mut again = false;
     for arg in args {
@@ -147,18 +146,14 @@ fn add(args: &[String]) -> Result<(), String> {
     let mut rest = args.iter();
     while let Some(arg) = rest.next() {
         match arg.as_str() {
-            // Refused here, before a picture is copied anywhere: a name
-            // the reader cannot read is the one thing about a run that
-            // cannot be fixed by looking at it again.
+            // Refused before any picture is copied: a run cannot be
+            // renamed afterwards.
             "--label" => label = board::written_label(rest.next().map_or("", String::as_str))?,
             "--verb" => verb = rest.next().cloned().unwrap_or_default(),
             "--before" => before = rest.next().map(PathBuf::from),
             "--after" => after = rest.next().map(PathBuf::from),
-            // The word and then the picture, taken in one step: a flag
-            // that only opened the word would leave the pictures in the
-            // catch-all below, and the two lists would be matched up by
-            // counting — which is wrong exactly when a picture is
-            // missing.
+            // Word and picture in one step: two lists matched up by
+            // counting go wrong exactly when a picture is missing.
             "--part" => match (rest.next(), rest.next()) {
                 (Some(word), Some(png)) if !word.is_empty() && !png.starts_with("--") => {
                     parts.push((word.clone(), PathBuf::from(png)));
@@ -170,9 +165,8 @@ fn add(args: &[String]) -> Result<(), String> {
                     );
                 }
             },
-            // Named here, so the hand that reaches
-            // for it is told where the board is
-            // read.
+            // Named, so whoever reaches for it is told where the board
+            // is read.
             "--open" => {
                 return Err(format!(
                     "shots add: --open is gone — the board is read in one window, \
@@ -186,9 +180,6 @@ fn add(args: &[String]) -> Result<(), String> {
             other => pngs.push(PathBuf::from(other)),
         }
     }
-    // The halves arrive as one run: the whole point of the pair
-    // is that they are looked at together, and half of a
-    // comparison is a picture.
     let (page, count) = match (before, after) {
         (Some(before), Some(after)) if pngs.is_empty() && parts.is_empty() => {
             (board::record_pair(&label, &verb, &before, &after)?, 2)
@@ -211,8 +202,7 @@ fn add(args: &[String]) -> Result<(), String> {
         board::seat_here(),
         label
     );
-    // Where these pictures are read — said, not opened: a second door
-    // onto the board piles windows up until nobody can say which one is
+    // Said, not opened: a second window leaves nobody sure which one is
     // the board as it stands.
     if let Some(board) = page.parent() {
         println!("board: {}", window::how_to_see_it(board));
@@ -228,10 +218,8 @@ fn prune(args: &[String]) -> Result<(), String> {
     while let Some(arg) = rest.next() {
         match arg.as_str() {
             "--seat" => match rest.next().map(String::as_str) {
-                // The sweep is a word: a prune that reached every
-                // seat because nobody typed anything is the one
-                // mistake this command can make that another session
-                // pays for.
+                // Every seat only when typed: other sessions pay for a
+                // prune that reached them by default.
                 Some("all") => every = true,
                 Some(seat) => seats.push(seat.to_string()),
                 None => return Err("shots prune: --seat wants a letter, or `all`".to_string()),
@@ -268,15 +256,10 @@ fn prune(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Milliseconds since the epoch as `YYYY-MM-DD HH:MMZ`.
-///
-/// The page has a calendar of its own and shows local time; this is for
-/// the listing, where a bare epoch is a number nobody can read. UTC, and
-/// the `Z` says so — the two readings of one run differ by the offset,
-/// and a listing that looked local while the page was would be worse
-/// than one that plainly is not. The conversion is Howard Hinnant's
-/// `civil_from_days`, which is the whole job once the era arithmetic is
-/// written down; xtask carries std alone (CLAUDE.md 技術スタック).
+/// Milliseconds since the epoch as `YYYY-MM-DD HH:MMZ`, for the listing.
+/// UTC and says so: the page shows local time, and the two must not be
+/// mistaken for each other. Howard Hinnant's `civil_from_days` (xtask is
+/// std only).
 fn stamp(millis: u128) -> String {
     let secs = (millis / 1000) as i64;
     let (days, rest) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
@@ -300,17 +283,15 @@ fn stamp(millis: u128) -> String {
 mod tests {
     use super::stamp;
 
-    /// Dates the era arithmetic gets wrong when it is written from
-    /// memory: a leap day, the turn of a century that is not a leap
-    /// year, and the turn of one that is.
+    /// Dates the era arithmetic gets wrong: a leap day, a century that is
+    /// not a leap year, and one that is.
     #[test]
     fn a_listing_reads_as_a_date() {
         assert_eq!(stamp(0), "1970-01-01 00:00Z");
         assert_eq!(stamp(1_709_164_800_000), "2024-02-29 00:00Z");
         assert_eq!(stamp(951_782_400_000), "2000-02-29 00:00Z");
         assert_eq!(stamp(4_107_542_400_000), "2100-03-01 00:00Z");
-        // UTC: this run was taken at 02:12 local on the 22nd,
-        // nine hours ahead.
+        // UTC, not local time.
         assert_eq!(stamp(1_787_332_329_346), "2026-08-21 17:12Z");
     }
 }

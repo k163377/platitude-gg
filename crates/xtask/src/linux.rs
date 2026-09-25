@@ -1,46 +1,25 @@
 //! `cargo xtask linux <command…>` — the workspace on Linux, from a
-//! workstation that has none.
+//! workstation that has none. The rest of the line goes to cargo in a
+//! container built from ci/linux/Dockerfile; an xtask verb gets `cargo
+//! xtask` in front. On Linux the container drops out and the command runs
+//! where it stands.
 //!
-//! Everything after the options goes to cargo inside a container built from
-//! ci/linux/Dockerfile, so `cargo xtask linux test -p platitude-core` is
-//! `cargo test -p platitude-core` on Ubuntu. Naming an xtask verb puts
-//! `cargo xtask` in front of it instead, so `cargo xtask linux verify-ui
-//! commit` is the line a person already knows, run somewhere else. On Linux
-//! the container drops out and the command runs where it stands: one verb,
-//! three operating systems (CLAUDE.md: no Windows-only dev tooling).
+//! Four images (the Dockerfile's stages): `core` and `app` are chosen by
+//! what the command needs ([`stage_for`]) — the small one when it will do,
+//! so a run need not download Qt first; `bare` and `runtime` belong to the
+//! `bare` verb.
 //!
-//! Four images. Two are chosen by what the command needs: the core stage
-//! is Ubuntu and the toolchain, the app stage adds Qt, a software GL stack
-//! and the fonts デザイン規約 names for Ubuntu — asking for the small one
-//! when it will do is the difference between a run that starts now and one
-//! that downloads Qt first. The other two belong to the `bare` verb and
-//! are the opposite of a build environment: stock Ubuntu carrying only
-//! the Qt tree a distribution would ship beside the app. `bare` installs
-//! no package at all — the blank sheet `--discover` works the declaration
-//! out on — and `runtime` adds exactly the packages that came out, which
-//! is the only place that can say the built thing runs somewhere it was
-//! not built.
+//! The build directory (/work/target) and the cargo registry are docker
+//! volumes, never the host's: one target/ shared between two operating
+//! systems is two cargos on one build lock and two sets of fingerprints.
+//! Only source reading crosses the host filesystem — slow, but once per
+//! build, and a copy inside a volume would be a second answer to "which
+//! tree is the real one".
 //!
-//! The build directory is a docker volume mounted over /work/target, never
-//! the host's. One target/ shared between two operating systems is two
-//! cargos on one build lock and two sets of fingerprints for the same paths
-//! — the serialized-and-rebuilding failure worktrees exist to avoid, one
-//! boundary further out. The cargo registry is a volume for the same
-//! reason, and the tests build their repositories under the container's own
-//! /tmp, so the only thing crossing the host filesystem is reading source.
-//!
-//! Reading source across the host boundary is measurably slow, but cargo
-//! pays it once per build to check fingerprints, against a compile
-//! measured in seconds. Keeping a second copy of the tree inside a volume
-//! would buy that back and cost a second answer to "which tree is the
-//! real one", so the source stays where it is edited.
-//!
-//! One thing does not survive the boundary: a worktree's `.git` is a file
-//! naming an absolute Windows path, which git inside reads as relative and
-//! cannot follow, so any git run with /work as its working directory calls
-//! it a broken repository. Nothing a run depends
-//! on stands there — `verify-ui` starts the app outside every checkout,
-//! on a git configuration of its own (`verify::run`).
+//! A worktree's `.git` names an absolute Windows path that git inside
+//! cannot follow, so any git run with /work as its working directory sees
+//! a broken repository. Nothing a run depends on stands there
+//! (`verify::run` starts the app outside every checkout).
 
 use std::collections::BTreeSet;
 use std::io::IsTerminal;
@@ -110,19 +89,14 @@ pub(crate) use runner::a_runner_verb;
 /// The image. Its tag names the stage and fingerprints what built it.
 const IMAGE: &str = "pgg-linux";
 
-/// Every stage ci/linux/Dockerfile builds, which is every stage a line
-/// can ask for ([`stage_for`], `bare`, `offline`, `runner`). The
-/// accounting that decides which images are still somebody's has to name
-/// them all: a stage missing from here is one whose images no checkout
-/// is seen to need, and the next build takes them away from the checkout
-/// that was using them. A test reads the Dockerfile's own targets back
-/// against this.
+/// Every stage ci/linux/Dockerfile builds (a test holds the two together).
+/// A stage missing here is one whose images [`forget_older_images`] takes
+/// away from the checkout using them.
 const STAGES: [&str; 4] = ["core", "app", "bare", "runtime"];
 
-/// The kinds of volume a checkout mounts ([`volume`]), and so the kinds
-/// a checkout that is gone leaves behind. `{IMAGE}-registry` is the one
-/// volume that belongs to the machine rather than to a checkout, and
-/// nothing here names it.
+/// The kinds of volume a checkout mounts ([`volume`]), and so leaves
+/// behind when gone. `{IMAGE}-registry` is the machine's, not a
+/// checkout's.
 const VOLUME_KINDS: [&str; 2] = ["target", "demo"];
 
 /// Where the checkout, the build directory, the download cache and anything
@@ -131,16 +105,10 @@ const WORK: &str = "/work";
 const TARGET_MOUNT: &str = "/work/target";
 const REGISTRY_MOUNT: &str = "/usr/local/cargo/registry";
 const OUT_MOUNT: &str = "/out";
-/// Where the demo repositories a run builds itself go, and — the reason
-/// it is a volume — where the template each of them is copied from
-/// stands (`demo::template`).
-///
-/// A container is one verb, so nothing built in it outlives it: without
-/// this, every run in here would build its template and then throw it
-/// away. One volume per checkout, as the build directory is: what fills
-/// it is that checkout's runs, and a template is keyed by the preset
-/// sources it was built from (`demo::template`), which two checkouts need
-/// not share.
+/// Where the demo repositories a run builds go, and the template each is
+/// copied from (`demo::template`). A volume so the template outlives the
+/// one-verb container; one per checkout, since a template is keyed by
+/// that checkout's preset sources.
 pub(crate) const DEMO_MOUNT: &str = "/tmp/pgg-demo";
 /// Set for everything the container runs, and by nothing else: the mark a
 /// run reads to know it is not on the machine whose checkout it is
@@ -151,37 +119,24 @@ pub(crate) const IN_CONTAINER: &str = "PGG_IN_CONTAINER";
 /// <verb>`, so the command reads the same as on the host.
 const XTASK_VERBS: [&str; 4] = ["verify-ui", "demo-repo", "qmltest", "sweep"];
 
-/// Cargo verbs that build something, and so care which stage they run
-/// in. A list of what needs Qt can be short without being unsafe: a verb
-/// missing from it picks the smaller image and fails to build, in front
-/// of the person who typed it — which is why the lock flag is decided
-/// the other way round ([`UNLOCKED_VERBS`]). Cargo's own one-letter
-/// aliases are here because `linux t` reaches the app exactly as
-/// `linux test` does.
+/// Cargo verbs that build something (one-letter aliases included), and
+/// so care which stage they run in. A verb missing here only picks the
+/// smaller image and fails to build, loudly — unlike a missing lock flag
+/// ([`UNLOCKED_VERBS`]).
 const BUILD_VERBS: [&str; 11] = [
     "build", "check", "test", "clippy", "bench", "run", "doc", "b", "c", "t", "r",
 ];
 
-/// The cargo verbs that are handed to the container **without**
-/// `--locked`. Everything else gets it.
+/// The cargo verbs handed to the container without `--locked`; everything
+/// else gets it.
 ///
-/// **The default is locked, and the list is of the exceptions**, because
-/// the two ways of being wrong are not the same size. The tree at /work
-/// is the host's own checkout, so a cargo in there that rewrites the
-/// lock writes it on the machine outside — a verb this forgot would do
-/// that silently, which is the thing there must be no path to (CLAUDE.md
-/// 絶対制約: a dependency change is a human's decision). A verb wrongly
-/// given the flag says so and stops, in front of the person who typed
-/// it. A list of the verbs that resolve is a list to be caught short by:
-/// it was, twice — `metadata`, `tree` and then `fetch`, which generates
-/// a lock file of its own if none is there.
-///
-/// So: `fmt`, which resolves nothing (`cargo-fmt` asks for `--no-deps`
-/// metadata and would reject the flag), and the verbs whose whole
-/// purpose is to move the lock or the manifest, which `--locked` exists
-/// to refuse. A third-party subcommand that does not take the flag is
-/// the loud kind of wrong: run it through `--shell`, or add it here if
-/// it is one this project uses.
+/// Locked by default because /work is the host's checkout: a verb this
+/// forgot would silently rewrite the host's lock file (CLAUDE.md 絶対制約:
+/// a dependency change is a human's decision), while a verb wrongly given
+/// the flag stops loudly. So only `fmt` (`cargo-fmt` rejects the flag) and
+/// the verbs whose purpose is to move the lock or the manifest. A
+/// third-party subcommand that rejects the flag: run it through
+/// `--shell`, or add it here.
 const UNLOCKED_VERBS: [&str; 9] = [
     "fmt",
     "update",
@@ -194,9 +149,8 @@ const UNLOCKED_VERBS: [&str; 9] = [
     "help",
 ];
 
-/// The packages that hold no Qt. A build restricted to these needs no Qt
-/// either; anything else reaches platitude-app, including a bare `cargo
-/// test`, whose default members have the app in them.
+/// The packages that hold no Qt. Anything else reaches platitude-app,
+/// including a bare `cargo test` (the default members have the app).
 const QT_FREE: [&str; 2] = ["platitude-core", "xtask"];
 
 /// The leading options of a `linux` line, and where the command begins.
@@ -207,19 +161,17 @@ struct Options {
     /// `--runner`: the name of a prepared copy to start the verb from
     /// ([`runner`]).
     copy: Option<String>,
-    /// `--container`: the gate's own container to start the verb in,
-    /// by `docker exec`, instead of a container of the verb's own
-    /// ([`container::exec_in`]). Only with `--runner`: what runs in
-    /// there is a prepared copy and nothing else.
+    /// `--container`: the gate's own container to `docker exec` the verb
+    /// in ([`container::exec_in`]). Only with `--runner`.
     container: Option<String>,
     /// `--step`: the mark every process of this verb carries inside
-    /// that container, which is what a stop is addressed to
+    /// that container, which a stop is addressed to
     /// ([`container::stop_step`]). Only with `--container`.
     step: Option<String>,
     at: usize,
 }
 
-/// **Options are the leading tokens only**: everything from the first one
+/// Options are the leading tokens only: everything from the first one
 /// that is not ours belongs to the command, `--` and all.
 fn options(args: &[String]) -> Result<Options, String> {
     let mut opts = Options {
@@ -286,11 +238,9 @@ fn options(args: &[String]) -> Result<Options, String> {
             rest.join(" ")
         ));
     }
-    // A container to exec into is for a prepared copy and nothing else,
-    // and a mark is for a process in such a container: either one
-    // without the other is a line nobody spelled on purpose. The one
-    // line that names a container with no copy is `stop`, which is
-    // about what is already in there.
+    // A container to exec into is for a prepared copy — except on `stop`,
+    // which is about what is already in there — and a mark is for a
+    // process in such a container.
     let stopping = rest.first().is_some_and(|verb| verb == "stop");
     if opts.container.is_some() && opts.copy.is_none() && !stopping {
         return Err(
@@ -336,11 +286,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     if let Some(mark) = &step {
         runner::spelled(mark)?;
     }
-    // `stop`: end what carries the mark in the gate's container, by
-    // hand — what the gate does at a ceiling (`gate::runner`), for a
-    // person standing at a gate that was killed with a verb still in.
-    // It never falls back to anything: what it found and what would
-    // not go is the line it prints.
+    // `stop`: by hand, what the gate does at a ceiling (`gate::runner`),
+    // for a gate that was killed with a verb still in.
     if rest.first().is_some_and(|verb| verb == "stop") {
         return stop(
             &root,
@@ -350,10 +297,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
             rest,
         );
     }
-    // A prepared copy starts the task runner's own verbs and nothing
-    // else: a cargo command in there is cargo's work, and a line that
-    // silently dropped the flag would be a line nobody could read the
-    // road of afterwards (`runner`).
+    // A prepared copy starts the task runner's own verbs only; anything
+    // else is refused rather than run through cargo with the flag
+    // silently dropped (`runner`).
     if let Some(name) = &copy {
         runner::spelled(name)?;
         if !runner::a_runner_verb(rest) {
@@ -366,35 +312,24 @@ pub fn run(args: &[String]) -> Result<(), String> {
         }
     }
     let command = command_line(rest, copy.as_deref().map(|name| runner::at(&root, name)));
-    // The container's work is this machine's work — the image built as
-    // much as the command run in it — and it is counted here
-    // (`crate::budget`): a VM's worth of cargo is not less of this
-    // machine for being behind a mount. Ahead of every road out of this
-    // verb, because all four of them are that work: the container, the
-    // two that stay in a container on Linux, and the one that runs the
-    // command where it stands. Everything inside the container is under
-    // this ticket ([`in_container`] hands the mark across, as it hands
-    // the measurement's).
+    // The container's work (image build included) is this machine's, and
+    // is counted here (`crate::budget`), ahead of every road out of this
+    // verb. Everything inside the container is under this ticket
+    // ([`carried`] hands the mark across).
     let _room = crate::budget::standalone(
         &root,
         crate::budget::weight_of(&command, false),
         crate::budget::Rank::Normal,
         &format!("linux {}", rest.join(" ")),
     )?;
-    // Declared after the ticket and so dropped before it: whatever this
-    // line builds, the cache is cut back once, past the last stage of
-    // it, on every road out of here including the failing ones.
+    // Declared after the ticket, so dropped before it ([`TrimTheCache`]).
     let _cache = TrimTheCache;
-    // The verb that prepares what the others start from. Before the two
-    // below it for the same reason they are before the road out: it is
-    // this side's work whichever machine the host is, and on Linux it
-    // runs where it stands like everything else (`runner::prepare`).
+    // The verb that prepares what the others start from, on any host
+    // (`runner::prepare`).
     if rest.first().is_some_and(|verb| verb == "runner") {
-        // `--gate` is not a nicety: a preparation builds in this
-        // checkout's volume and stands at its one preparation
-        // container, so the line has to name the gate it is under and
-        // that gate has to be the live one
-        // (`runner::owned_by_the_gate`). Nothing types this by hand.
+        // A preparation builds in this checkout's volume at its one
+        // preparation container, so the line names the gate it is under,
+        // which has to be the live one (`runner::owned_by_the_gate`).
         let [_, name, flag, pid] = rest else {
             return Err(format!(
                 "`{}` is the gate's own step — it builds in this checkout's volume and \
@@ -415,16 +350,14 @@ pub fn run(args: &[String]) -> Result<(), String> {
             .map_err(|_| format!("--gate takes the pid of the gate that sent this; got {pid:?}"))?;
         return runner::prepare(&root, name, pid);
     }
-    // The one verb that is about a different machine: it runs in the
-    // container even on Linux, because what it asks is whether a stock
+    // In the container even on Linux: what it asks is whether a stock
     // Ubuntu is enough.
     if rest.first().is_some_and(|verb| verb == "bare") {
         let discover = rest.iter().any(|word| word == "--discover");
         return bare::bare(&root, discover);
     }
-    // The other verb that is about a machine, and the other one that
-    // stays in the container on Linux: what it asks is whether the
-    // suite passes with no network, which the host has.
+    // In the container even on Linux: what it asks is whether the suite
+    // passes with no network, which the host has.
     if rest.first().is_some_and(|verb| verb == "offline") {
         if let Some(extra) = rest.get(1) {
             return Err(format!("offline takes no arguments (got {extra:?})"));
@@ -448,10 +381,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     // Announced here as well (its own xtask is under the announcement);
     // a verb run where it stands announces itself.
     let _busy = crate::still::busy(&root, "linux")?;
-    // The gate's own container, already up: no image to ensure and no
-    // container of this verb's own — the line goes in by `docker exec`
-    // (`container::exec_in`). A container that is not there is a red
-    // step saying so, never a `docker run` in its place.
+    // The gate's own container, already up, by `docker exec`: one that is
+    // not there is a red step saying so, never a `docker run` in its place.
     if let (Some(name), Some(mark)) = (&container, &step) {
         return container::exec_in(name, &command, mark);
     }
@@ -494,27 +425,15 @@ fn stop(
     Ok(())
 }
 
-/// The container's half of a tail's sweep (`crate::sweep`): the same
-/// verb, run against the build volume this checkout's Linux side
-/// compiles in.
+/// The container's half of a tail's sweep (`crate::sweep`), run against
+/// this checkout's build volume.
 ///
-/// **What runs in there decides whether it sweeps.** The volume is a
-/// build directory of its own and carries its own stamp, so a tail with
-/// a Linux side starts this whatever this machine's key says, and the
-/// verb compares the keys the volume answers to (`sweep::asks`).
-/// `whatever_the_key_says` — stage 3 — is the one case that skips the
-/// comparison, on both sides alike.
-///
-/// **In a container of its own, not the gate's.** The gate takes its
-/// container down with the side that used it, and what this reads is the
-/// volume — which outlives every container that ever mounted it. A start
-/// here is seconds against an image already built, and it is one start
-/// per sweep.
-///
-/// **It never builds an image.** Housekeeping is no reason to spend the
-/// minutes an image costs, and a tag that is not there is a tag nothing
-/// has run the Linux side under — so the volume behind it holds nothing
-/// this would take away either.
+/// The volume carries its own stamp, so this starts whatever this
+/// machine's key says and the verb compares the volume's keys
+/// (`sweep::asks`); `whatever_the_key_says` (stage 3) skips that on both
+/// sides alike. In a container of its own: the gate's goes down with its
+/// side, and the volume outlives it. It never builds an image: a tag that
+/// is not there is one nothing has built in the volume under.
 pub(crate) fn sweep_the_volume(root: &Path, whatever_the_key_says: bool) -> Result<(), String> {
     if cfg!(target_os = "linux") {
         // There is no volume: the container drops out here and both
@@ -541,9 +460,8 @@ pub(crate) fn sweep_the_volume(root: &Path, whatever_the_key_says: bool) -> Resu
         "the container's sweep",
     )?;
     let _busy = crate::still::busy(root, "linux")?;
-    // The housekeeping this road's container passes through can take the
-    // last image of a generation away ([`TrimTheCache`]), and this road
-    // starts no other command that would notice.
+    // Housekeeping on this road can take a generation's last image away
+    // ([`TrimTheCache`]).
     let _cache = TrimTheCache;
     in_container(root, &tag, &command, false, None, None)
 }
@@ -556,24 +474,17 @@ fn ensure_image(root: &Path, stage: &str, rebuild: bool) -> Result<String, Strin
     Ok(tag)
 }
 
-/// Cargo's own options that take their value in the next word. **A
-/// subcommand is not simply the first word that is not an option**:
-/// cargo takes its own options ahead of one (`cargo --offline fetch`),
-/// and the value of one of these is a word that starts with no dash —
-/// `cargo --config net.retry=2 test` would hand `net.retry=2` out as the
-/// subcommand to anything that only looked for that. The `--flag=value`
-/// spelling is one word and needs none of this.
+/// Cargo's own options that take their value in the next word: in
+/// `cargo --config net.retry=2 test` the subcommand is not the first word
+/// without a dash. (`--flag=value` is one word.)
 const GLOBAL_OPTIONS_WITH_A_VALUE: [&str; 5] = ["--explain", "--color", "--config", "-C", "-Z"];
 
 /// Where the subcommand stands in the line, past cargo's own options, or
 /// `None` for a line that has none (`--version`, `--list`).
 ///
-/// An option this does not know is read as a flag, so its value — if it
-/// had one — is taken for the subcommand and `--locked` lands after it.
-/// That is the loud kind of wrong: cargo answers "no such subcommand" in
-/// front of the person who typed it, where a line that quietly went
-/// unlocked would have rewritten the host's lock instead
-/// ([`UNLOCKED_VERBS`]).
+/// An unknown option is read as a flag, so its value would be taken for
+/// the subcommand: the loud kind of wrong (cargo says "no such
+/// subcommand"), never a line quietly unlocked ([`UNLOCKED_VERBS`]).
 fn subcommand_at(rest: &[String]) -> Option<usize> {
     let mut at = 0;
     while let Some(word) = rest.get(at) {
@@ -591,19 +502,13 @@ fn subcommand_at(rest: &[String]) -> Option<usize> {
     None
 }
 
-/// What to run inside: a cargo command, with `xtask` folded in when the
-/// subcommand is one of the task runner's own verbs, and `--locked`
-/// spelled on unless that subcommand is one of
-/// [`UNLOCKED_VERBS`].
+/// What to run inside: a cargo command, with `xtask` folded in for the
+/// task runner's own verbs (the alias carries `--locked` already,
+/// .cargo/config.toml), and `--locked` spelled on unless the subcommand
+/// is one of [`UNLOCKED_VERBS`].
 ///
-/// A task-runner verb needs neither: `cargo xtask` is an alias that
-/// carries `--locked` already (.cargo/config.toml), and a second one
-/// would be a second place to forget it.
-///
-/// `copy` is a prepared task runner ([`runner`]), and a line that has one
-/// starts from it: no cargo, no resolve, no manifest read across the
-/// mount. Only a line whose verb is the task runner's own ever carries
-/// one, which `run` refuses anything else at.
+/// With `copy` (a prepared task runner, [`runner`]) the line starts from
+/// it: no cargo, no resolve across the mount.
 fn command_line(rest: &[String], copy: Option<String>) -> Vec<String> {
     if let Some(copy) = copy {
         let mut line = vec![copy];
@@ -619,15 +524,12 @@ fn command_line(rest: &[String], copy: Option<String>) -> Vec<String> {
     };
     let verb = rest[at].as_str();
     if XTASK_VERBS.contains(&verb) {
-        // Where the subcommand stands, which is not always the front:
-        // `--offline verify-ui commit` is cargo's option and then ours.
+        // At the subcommand, not always the front: `--offline verify-ui`.
         line.insert(at + 1, "xtask".to_string());
         return line;
     }
-    // Only what the caller typed as options: past `--` the words belong
-    // to the program being run, and one of those spelling `--locked` is
-    // not this line carrying it. `--frozen` is `--locked` and
-    // `--offline` in one word, so a line that has it is already locked.
+    // Only the caller's options: a `--locked` past `--` belongs to the
+    // program being run. `--frozen` includes `--locked`.
     let options = rest.split(|word| word == "--").next().unwrap_or(rest);
     let spelled = options
         .iter()
@@ -643,18 +545,14 @@ fn command_line(rest: &[String], copy: Option<String>) -> Vec<String> {
 /// Which image the command needs. Nothing here is a guess about Qt itself:
 /// either the command names only Qt-free packages, or it can reach the app.
 fn stage_for(rest: &[String]) -> &'static str {
-    // The subcommand, for the reason [`subcommand_at`] gives:
-    // `--offline test` is cargo's option and then the verb that reaches
-    // the app.
     let Some(verb) = subcommand_at(rest).map(|at| rest[at].as_str()) else {
         // A bare `--shell`, or a line that is all options. The small
         // image opens; --stage app asks for the other one.
         return "core";
     };
     if XTASK_VERBS.contains(&verb) {
-        // verify-ui builds the app and runs it, and qmltest wants
-        // qmltestrunner and the QtTest QML module, which ship with Qt;
-        // demo-repo only wants git, but it is not worth a second answer.
+        // verify-ui and qmltest need Qt; the rest are not worth a second
+        // answer.
         return "app";
     }
     if !BUILD_VERBS.contains(&verb) {
@@ -672,12 +570,9 @@ fn stage_for(rest: &[String]) -> &'static str {
     }
 }
 
-/// The image is named after what builds it: change the Dockerfile, the
-/// toolchain pin or (for the app stage) the Qt version and the tag changes
-/// with it, so a stale image can never be the one that answers. Docker's
-/// layer cache keeps the rebuild cheap. FNV-1a over the files — a
-/// fingerprint, and the tree is LF everywhere (.gitattributes) so it
-/// comes out the same on all three systems.
+/// The image is named after what builds it, so a stale image can never be
+/// the one that answers. FNV-1a over the files: the same on all three
+/// systems, the tree being LF everywhere (.gitattributes).
 fn image_tag(root: &Path, stage: &str) -> Result<String, String> {
     let mut inputs = vec!["ci/linux/Dockerfile", "rust-toolchain.toml"];
     if stage != "core" {
@@ -699,9 +594,7 @@ fn image_tag(root: &Path, stage: &str) -> Result<String, String> {
     Ok(format!("{IMAGE}:{stage}-{hash:016x}"))
 }
 
-/// The Qt version, read from CI's workflow — which names itself this
-/// project's place to pin a toolchain. A copy in the Dockerfile would be a
-/// second place to forget.
+/// The Qt version, read from CI's workflow: the one place it is pinned.
 fn qt_version(root: &Path) -> Result<String, String> {
     let path = root.join(".github").join("workflows").join("ci.yml");
     let text = std::fs::read_to_string(&path)
@@ -731,9 +624,8 @@ fn image_exists(tag: &str) -> Result<bool, String> {
 
 fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
     println!("building {tag} — the first one takes a while");
-    // Ahead of the build, not after it: a build that stops halfway has
-    // written cache entries all the same, and those are the ones with
-    // no image to belong to.
+    // Ahead of the build: one that stops halfway has written cache
+    // entries with no image to belong to.
     SHARING_MOVED.store(true, Ordering::Relaxed);
     let mut cmd = Command::new("docker");
     cmd.arg("build")
@@ -755,12 +647,8 @@ fn build_image(root: &Path, stage: &str, tag: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The tags of `stage` that no checkout on this machine names.
-///
-/// Pure, because this is the rule and the caller only says what exists:
-/// which tag is nobody's is decided here and held by a test, where a
-/// docker run would decide it against whatever the machine happened to
-/// hold that day.
+/// The tags of `stage` that no checkout on this machine names. Pure, so a
+/// test holds the rule.
 fn stale_images<'a>(listed: &'a str, stage: &str, keep: &BTreeSet<String>) -> Vec<&'a str> {
     let prefix = format!("{IMAGE}:{stage}-");
     listed
@@ -770,30 +658,17 @@ fn stale_images<'a>(listed: &'a str, stage: &str, keep: &BTreeSet<String>) -> Ve
         .collect()
 }
 
-/// Removes the images that no checkout names. The tag is a fingerprint,
-/// so every edit to the Dockerfile leaves the last image behind —
-/// gigabytes a stage, the app one the larger of the two — and nothing
-/// would ever name them again.
+/// Removes the images that no checkout names: every change to what builds
+/// an image leaves the last one behind, and nothing would name it again.
 ///
-/// **`keep` is every living checkout's tags, not the tags of the one
-/// running this.** A seat is normally behind main (CLAUDE.md §Git 運用),
-/// so on the day ci/linux/Dockerfile, ci.yml or the toolchain pin moves
-/// there are two generations of images alive at once and each is the
-/// only one some tree can use. Keeping only this tree's would take the
-/// other seat's 4.3 GB away, and the next line typed over there would
-/// build it again from nothing.
+/// `keep` is every living checkout's tags, not this one's: a seat is
+/// normally behind main (CLAUDE.md §Git 運用), so two generations can be
+/// alive at once, each the only one some tree can use. Whether this line
+/// built anything decides nothing — a tag dies with the last checkout
+/// naming it.
 ///
-/// **Whether this line built anything decides nothing.** A tag is dead
-/// when the last checkout that named it is gone, which is a thing that
-/// happens to a tree and not to a build — tied to a build, the
-/// generation nobody uses would stand until the Dockerfile moved again.
-///
-/// Two things keep this from taking something out from under anybody.
-/// Docker refuses to remove an image a container is still running, so a
-/// run in progress next door is safe by construction; and what a rebuild
-/// costs after this is the layer cache, because the layers stay. Every
-/// removal is printed: a command that quietly frees gigabytes is one
-/// nobody can audit.
+/// Docker refuses to remove an image a running container uses, so a run
+/// next door is safe. Every removal is printed.
 fn forget_older_images(listed: &str, stage: &str, keep: &BTreeSet<String>) {
     for tag in stale_images(listed, stage, keep) {
         let Ok(done) = Command::new("docker")
@@ -808,8 +683,8 @@ fn forget_older_images(listed: &str, stage: &str, keep: &BTreeSet<String>) {
             println!("removed the older image {tag}");
             continue;
         }
-        // The seat next door swept it between the listing and this
-        // line: the state this wanted, reached by somebody else.
+        // Swept by the seat next door since the listing: the state this
+        // wanted.
         let said = String::from_utf8_lossy(&done.stderr);
         if !said.contains("No such image") {
             println!(
@@ -824,30 +699,20 @@ fn forget_older_images(listed: &str, stage: &str, keep: &BTreeSet<String>) {
 /// mounts are spelled with ([`volume`]) and the image tags their builds
 /// answer to ([`image_tag`]).
 ///
-/// **Every tree `git worktree list` shows, read when it is used.** The
-/// trees are the primary checkout, the seats, the measurement's rig and
-/// whatever fresh worktree a task is standing in — a set that changes
-/// while the machine runs, so a roster of letters written down anywhere
-/// would be wrong about it. Nothing here knows what a seat is.
+/// Every tree `git worktree list` shows, read when used: the set changes
+/// while the machine runs, so no roster of seats is written down.
 struct Alive {
     /// [`checkout_name`] of every tree.
     names: BTreeSet<String>,
     /// Every stage's tag for every tree, or `None` when one tree would
-    /// not say. **An accounting with a hole in it keeps every image**:
-    /// the hole is exactly where the one tree that still needs a tag
-    /// would have stood, and what a wrong removal costs is the
-    /// cold rebuild [`forget_older_images`] exists to prevent. The
-    /// volumes are unaffected — a name is the path's, and a tree that
-    /// will not open still has one.
+    /// not say — and then every image is kept: the hole may be the tag a
+    /// tree still needs. Volumes are unaffected: a tree that will not open
+    /// still has a name.
     tags: Option<BTreeSet<String>>,
 }
 
-/// The names in a `git worktree list --porcelain` listing.
-///
-/// Pure, and the reason the trees are passed rather than the root: the
-/// naming is what a test can hold, and a tree inside the container
-/// cannot run git at all (the module doc's one thing that does not
-/// survive the boundary).
+/// The names of the trees a `git worktree list --porcelain` listing
+/// holds. Pure, so a test can hold the naming.
 fn checkout_names(trees: &[crate::seats::WorktreeBlock]) -> BTreeSet<String> {
     trees
         .iter()
@@ -891,13 +756,10 @@ fn alive(root: &Path) -> Result<Alive, String> {
     })
 }
 
-/// The volumes on this machine that no checkout names any more.
-///
-/// Pure, for the reason [`stale_images`] is. **A name is the checkout
-/// directory's last segment and nothing more** ([`checkout_name`]), so a
-/// second clone of this repository in another directory of the same name
-/// would have its volumes read as this machine's orphans. There is no
-/// such clone; the trap is written down in P3-確認事項.
+/// The volumes on this machine that no checkout names any more (pure, as
+/// [`stale_images`] is). A name is the directory's last segment only
+/// ([`checkout_name`]): a same-named clone elsewhere would see these
+/// volumes as orphans (P3-確認事項).
 fn orphan_volumes<'a>(listed: &'a str, names: &BTreeSet<String>) -> Vec<&'a str> {
     listed
         .lines()
@@ -912,23 +774,17 @@ fn orphan_volumes<'a>(listed: &'a str, names: &BTreeSet<String>) -> Vec<&'a str>
         .collect()
 }
 
-/// Takes away what no checkout on this machine names any more — the
-/// volumes of checkouts that are gone, and the images of the generations
-/// they were the last to need — once per process, ahead of the container
-/// about to mount this checkout's own.
+/// Takes away what no checkout on this machine names any more (gone
+/// checkouts' volumes, and the images of the generations they were last
+/// to need), once per process, ahead of a container mounting this
+/// checkout's own.
 ///
-/// **Here rather than where an image is made sure of.** A run that
-/// mounts a volume is the whole of what leaves one behind, and one of
-/// them reaches a container without asking for an image at all
-/// ([`sweep_the_volume`] looks the tag up itself). Not on a Linux host
-/// and not inside the container: in there the names belong to the
-/// machine outside, which this one cannot see.
+/// Here rather than in [`ensure_image`]: [`sweep_the_volume`] reaches a
+/// container without ensuring an image. Not on a Linux host nor inside
+/// the container, where the names are the outside machine's.
 ///
-/// Two seats sweeping at once go for the same orphan, so a volume that
-/// is already gone is the state this wanted, reached by somebody else.
-/// One that a container still has mounted docker refuses, and that is
-/// printed — a command that frees gigabytes without saying so is one
-/// nobody can audit.
+/// A volume already gone was swept by another seat; one still mounted
+/// docker refuses, and that is printed.
 fn housekeeping(root: &Path) {
     static ONCE: std::sync::Once = std::sync::Once::new();
     if cfg!(target_os = "linux") || std::env::var_os(IN_CONTAINER).is_some() {
@@ -943,9 +799,8 @@ fn housekeeping(root: &Path) {
             }
         };
         forget_orphan_volumes(&alive.names);
-        // Nothing when the accounting has a hole in it: `alive` has
-        // already said which checkout would not answer, and a tag
-        // removed off a half-read list is the one that tree still needs.
+        // Nothing off a half-read list (`Alive::tags`); `alive` has said
+        // which checkout would not answer.
         let Some(keep) = &alive.tags else {
             return;
         };
@@ -994,61 +849,31 @@ fn forget_orphan_volumes(names: &BTreeSet<String>) {
     }
 }
 
-/// What the build cache may hold of what no image holds, and so what a
-/// `linux` line that built something trims it back to.
+/// What the build cache may hold of what no image holds. buildkit never
+/// counts or prunes a record an image shares (code-costs-windows-x64.md
+/// §コンテナのイメージと build cache), so this is not what keeps a checkout
+/// that is behind from building cold — the keep set of
+/// [`forget_older_images`] is.
 ///
-/// **The ceiling counts the unreferenced cache and nothing else.**
-/// buildkit measures a prune's total over the records an image does not
-/// share and never makes a shared record a candidate at all (v0.33
-/// `cache/manager.go`; measured here 2026-09-21 — a ceiling of 6.0 GB
-/// against 6.328 GB unreferenced took one 616 MB record out of the
-/// generation nobody holds, and the 6.38 GB shared with the images did
-/// not move: ci/baseline/code-costs-windows-x64.md). So **a cache
-/// ceiling is not what keeps the checkout that is behind from building
-/// cold** — its generation is shared because [`forget_older_images`]
-/// keeps its image, and what protects it is that keep set.
-///
-/// What is left for the ceiling to decide is how much dead cache to
-/// hoard, and the answer is none: every stage this Dockerfile builds is
-/// tagged, so cache an image does not share is the layers of a
-/// generation whose tag has been taken away plus the build context's
-/// snapshots — and once the tags kept are every living checkout's,
-/// nothing is left that would read them. Not zero, which reads as no
-/// ceiling at all.
-///
-/// **A size and not an age.** `--filter unused-for=<days>` would be the
-/// same shape as a clock that clears a cache on a timer, and the thing
-/// being bounded here is disk.
+/// Every stage is tagged, so unshared cache is dead generations and
+/// context snapshots: hoard none. Not zero, which reads as no ceiling at
+/// all. A size, not an age: what is bounded is disk.
 const CACHE_CEILING: u64 = 64 * 1024 * 1024;
 
 /// Set when this line moved what the build cache is shared with: it
 /// built an image ([`build_image`]) or took one away
-/// ([`forget_older_images`]). Nothing else on a `linux` line can, and a
-/// line that moved neither would be asking docker a question whose
-/// answer it already knows.
-///
-/// **Removing counts, and it is the one that usually fires.** The tag a
-/// generation answered to is what held its cache records down as shared;
-/// the moment the last checkout naming it is gone and the image with it,
-/// every record behind it is nobody's — and the line that took the image
-/// away is not, in general, a line that built anything.
+/// ([`forget_older_images`]). Removing is the one that usually fires: it
+/// leaves a generation's records nobody's, on a line that built nothing.
 static SHARING_MOVED: AtomicBool = AtomicBool::new(false);
 
 /// The build cache, cut back to [`CACHE_CEILING`] when the line that
 /// moved the sharing ([`SHARING_MOVED`]) is done.
 ///
-/// **Not between the stages of one line.** `bare` builds three images
-/// and the second is built out of the first's cache, so a trim in
-/// [`ensure_image`] would take away what the next stage is about to ask
-/// for. A guard, because the roads out of a command are many and this
-/// belongs after every one of them — and declared under the ticket, so
-/// the docker it ends with is counted like the docker it followed.
-///
-/// **Two commands hold one**: [`run`], and [`sweep_the_volume`], which
-/// reaches a container of its own without passing through the other.
-/// Without the second, a housekeeping that took the last image of a
-/// generation away on a tail sweep would leave that generation's cache
-/// standing with nobody left to notice it.
+/// Not between the stages of one line: `bare` builds an image out of the
+/// previous one's cache, so a trim in [`ensure_image`] would take what the
+/// next stage asks for. A guard, so it runs on every road out; declared
+/// under the ticket, so its docker is counted. Held by [`run`] and by
+/// [`sweep_the_volume`], whose housekeeping can move the sharing too.
 struct TrimTheCache;
 
 impl Drop for TrimTheCache {
@@ -1086,16 +911,12 @@ impl Drop for TrimTheCache {
 }
 
 /// `copy` is the name of the prepared task runner the line starts from
-/// ([`runner`]), which the script in there says is missing rather than
-/// letting `sh` answer for it.
+/// ([`runner`]).
 ///
-/// **No container started here is named, and none is reaped.** A name
-/// would be for finding an interrupted one to take away, and taking one
-/// away is a `docker rm` on this side with nothing watching how long it
-/// takes. Neither is needed: an interrupted container cannot reach this
-/// checkout's copies at all (`runner::SCRIPT`), and the one thing it
-/// does hold — the volume's cargo lock — the next build waits out under
-/// the step's own ceiling (`check::run_step`).
+/// No container started here is named or reaped: an interrupted one
+/// cannot reach this checkout's copies (`runner::SCRIPT`), and the
+/// volume's cargo lock it holds the next build waits out under the step's
+/// own ceiling (`check::run_step`).
 fn in_container(
     root: &Path,
     tag: &str,
@@ -1104,9 +925,8 @@ fn in_container(
     copy: Option<&str>,
     note: Option<&Path>,
 ) -> Result<(), String> {
-    // Ahead of the mounts below, because they are what this is about:
-    // every host-side container that names a checkout's volumes starts
-    // here, and a checkout that is gone left the same two behind.
+    // Ahead of the mounts below: every host-side container that names a
+    // checkout's volumes starts here.
     housekeeping(root);
     let mut cmd = carried();
     // The tree's gate note, read-only, for the one line that has to
@@ -1131,9 +951,8 @@ fn in_container(
         .arg(format!("{}:{DEMO_MOUNT}", volume(root, "demo")))
         .arg("--workdir")
         .arg(WORK)
-        // The checkout is mounted, so anything in here writes the host's
-        // own files. What a run generates says which machine ran it,
-        // and the container is never that machine
+        // The checkout is mounted, so what a run generates here would land
+        // in the host's files: the mark keeps another machine's census out
         // (`verify::options::census_line`).
         .arg("--env")
         .arg(format!("{IN_CONTAINER}=1"));
@@ -1156,12 +975,10 @@ fn in_container(
             copy.map(|name| runner::at(root, name)).as_deref(),
         ));
     }
-    // Through the budget's runner: the container goes on running when
-    // the launcher is killed, so the ledger has to know which number is
-    // still holding the machine (`crate::budget::watched`). It knows the
-    // docker command that is waiting on the container, which is as far
-    // as a process table reaches — a container whose CLI has been killed
-    // too is past what this can see, and `docker ps` is what finds it.
+    // Through the budget's runner (`crate::budget::watched`): the
+    // container goes on running when the launcher is killed. It sees the
+    // docker CLI only; a container whose CLI was killed too is `docker
+    // ps`'s to find.
     let status =
         crate::budget::watched(&mut cmd).map_err(|e| format!("failed to run docker: {e}"))?;
     if status.success() {
@@ -1177,14 +994,9 @@ fn in_container(
 }
 
 /// The files whose bytes decide what a cargo in there resolves, as the
-/// mount hands them over: the three at the root and **every member's own
-/// manifest**, which a resolve reads too. A glob, so a member
-/// added to the workspace is one this reads — the host's side of
-/// the same evidence reads the same set off the tree
-/// (`gate::evidence::read_to_resolve`). All of them are the host's own
-/// files, read across the boundary between a Windows checkout and a
-/// Linux container, which is the one thing about /work that the machine
-/// outside cannot see.
+/// mount hands them over: the three at the root and every member's own
+/// manifest (a glob, so a new member counts). The host's side of the same
+/// evidence reads the same set (`gate::evidence::read_to_resolve`).
 const READ_TO_RESOLVE: [&str; 4] = [
     "Cargo.lock",
     "Cargo.toml",
@@ -1192,33 +1004,20 @@ const READ_TO_RESOLVE: [&str; 4] = [
     "crates/*/Cargo.toml",
 ];
 
-/// The command with a look at those files bracketed around it.
+/// The command with a look at those files bracketed around it. A
+/// container is `--rm`, so nothing survives it that it did not say while
+/// it ran: a later look sees a mount that has since settled. Both looks
+/// are printed only if the command fails.
 ///
-/// **A container is `--rm`, so nothing survives it that it did not say
-/// while it ran.** A cargo that stops on the lock file leaves a message
-/// naming the file and nothing about the bytes it read, and every look
-/// taken afterwards — from out here, or from a second container — is a
-/// look at a different moment through a mount that has since settled.
-/// The look before the command runs is held in a variable and printed
-/// only if the command fails, so a green run says nothing new and a red
-/// one carries both ends of the bracket.
+/// `bytes=0` on the near side of a failure says this container was handed
+/// an empty file. Both ends intact says nothing about the read cargo
+/// itself made in between.
 ///
-/// **What it can and cannot settle**: `bytes=0` on the near side of a
-/// failure says this container was handed an empty file. Both ends
-/// intact says only that nothing was standing wrong before the command
-/// and after it — **the read cargo itself made is in between, and is not
-/// bracketed**, so neither end is evidence of what cargo read.
-///
-/// **A line that starts from a prepared task runner gets a guard instead
-/// of the bracket** ([`runner`]). Two reasons, and the second is the one
-/// that matters: a line with no cargo in it resolves nothing, so a look
-/// at what a resolve reads could only say something about a read nobody
-/// made — and taking it would start a `cargo --version` of its own on
-/// every red step, which is the very thing the copy exists to stop. What
-/// the guard answers instead is the one failure a copy has: it is not
-/// there, because the preparation did not happen. It says so by name and
-/// stops, where `sh` would say `not found` and a number. The line the
-/// command was is printed either way.
+/// A line that starts from a prepared task runner ([`runner`]) gets a
+/// guard instead: a look would start a `cargo --version` on every red
+/// step, the very thing the copy exists to stop. The guard names the
+/// copy's one failure — not prepared — where `sh` would say `not found`.
+/// The line the command was is printed either way.
 fn watched_from_inside(inside: &[String], copy: Option<&str>) -> Vec<String> {
     // The line as the container was handed it, on either road: what a red
     // step leaves for a reader who was not standing there.
@@ -1231,10 +1030,9 @@ fn watched_from_inside(inside: &[String], copy: Option<&str>) -> Vec<String> {
              if [ \"$code\" -ne 0 ]; then\n  {ran}fi\nexit \"$code\"\n"
         ),
         // Unquoted so the glob is the shell's to expand; a pattern that
-        // matches nothing stays as it was typed, and the test below
-        // reports it absent under its own name.
+        // matches nothing stays as typed and is reported absent.
         // `${f#/work/}`: the name as the host's side of the evidence
-        // spells it, so the two lines stand side by side.
+        // spells it.
         None => {
             let looks = READ_TO_RESOLVE
                 .map(|file| format!("{WORK}/{file}"))
@@ -1261,20 +1059,15 @@ fn watched_from_inside(inside: &[String], copy: Option<&str>) -> Vec<String> {
     line
 }
 
-/// A `docker run`, already carrying the marks everything a container
-/// runs is under: this command's announcement to a measurement and this
-/// command's ticket, neither of which the container may take again
-/// (`still::UNDER`, `budget::HELD`).
+/// A `docker run` already carrying this command's announcement to a
+/// measurement and its ticket, neither of which the container may take
+/// again (`still::UNDER`, `budget::HELD`).
 ///
-/// **Every container starts here, because a road that carries one mark
-/// and forgets the other is a road where the machine is counted twice**
-/// — the launcher holding a compile's weight while what it started
-/// queues for weight of its own, and a machine of such pairs where
-/// neither half can move. Three roads run a container (the command,
-/// `bare`, `offline`); the fourth (`here`, on a Linux host) marks its
-/// child the same way through `budget::under`; and the fifth, a `docker
-/// exec` into the gate's own container, takes the same marks from
-/// [`marked`] (`container::exec_line`).
+/// Every container starts here: a road that forgot a mark would count the
+/// machine twice — the launcher holding weight while what it started
+/// queues for its own, a pair where neither half can move. `here` marks
+/// its child through `budget::under`, and a `docker exec` into the gate's
+/// container takes [`marked`] (`container::exec_line`).
 pub(super) fn carried() -> Command {
     let mut cmd = Command::new("docker");
     cmd.arg("run").arg("--rm");
@@ -1294,11 +1087,8 @@ fn here(root: &Path, command: &[String]) -> Result<(), String> {
     let (program, arguments) = command.split_first().ok_or("nothing to run")?;
     let mut cmd = Command::new(program);
     cmd.args(arguments).current_dir(root);
-    // Under this command's ticket, exactly as the container's contents
-    // are ([`carried`]). Without the mark a `linux verify-ui` here holds
-    // four weight in this process while the verb it started queues for
-    // its own — the machine counted twice, and a machine full of such
-    // pairs where neither half can move.
+    // Under this command's ticket, as the container's contents are
+    // ([`carried`] says why).
     crate::budget::under(&mut cmd);
     let status =
         crate::budget::watched(&mut cmd).map_err(|e| format!("failed to run {program}: {e}"))?;
@@ -1313,29 +1103,25 @@ fn here(root: &Path, command: &[String]) -> Result<(), String> {
     })
 }
 
-/// A host path as docker wants it in --volume: forward slashes, drive letter
-/// and all. `C:/Users/…` mounts, `C:\Users\…` is read as three arguments'
-/// worth of colons and backslashes.
+/// A host path as docker wants it in --volume: forward slashes, drive
+/// letter and all (backslashes do not mount).
 fn mount_path(path: &Path) -> String {
     path.display().to_string().replace('\\', "/")
 }
 
-/// One volume per checkout, named after it. Two worktrees sharing a build
-/// directory would put back exactly what worktrees exist to prevent: one
-/// lock, one incremental cache, two sessions.
+/// One volume per checkout, named after it: two worktrees sharing a build
+/// directory would share one build lock.
 pub(super) fn volume(root: &Path, kind: &str) -> String {
     format!("{IMAGE}-{kind}-{}", checkout_name(root))
 }
 
 /// The checkout's own name, as docker may spell it: the volumes and the
-/// gate's container are named after it (`runner::container_of`).
+/// gate's container are named after it (`container::container_of`).
 pub(super) fn checkout_name(root: &Path) -> String {
-    // The last segment after either separator: the path being named is
-    // a Windows one whenever the host is Windows, and everywhere else a
-    // backslash is an ordinary character in a name, so `file_name` would
-    // answer with the whole path.
-    // Only the host ever calls this, so the difference is invisible in a
-    // run and visible in a test — which is where it was found.
+    // The last segment after either separator: the path is a Windows one
+    // when the host is, and off Windows (where the tests also run) a
+    // backslash is an ordinary character, so `file_name` would answer
+    // with the whole path.
     let text = root.display().to_string();
     let name = text
         .rsplit(['/', '\\'])

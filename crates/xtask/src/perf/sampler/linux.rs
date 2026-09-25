@@ -5,11 +5,9 @@ use std::time::{Duration, Instant};
 use super::Sample;
 use crate::perf::SAMPLE_MS;
 
-/// Samples `pid` at the samplers' pace for as long as the process stands,
-/// and for `window` past `started` at the most. The window's end is
-/// nobody's failure — `measure` ends the run at a deadline of its own
-/// inside it, and this only has to outlast that — so the sampling is a
-/// stand watched (`wait::stood`).
+/// Samples `pid` while the process stands, for at most `window` past
+/// `started`. Reaching the window's end is nobody's failure — `measure`
+/// ends the run inside it — so this is a stand watched (`wait::stood`).
 pub(super) fn linux_sampler(
     pid: u32,
     started: Instant,
@@ -31,9 +29,8 @@ pub(super) fn linux_sampler(
     }
 }
 
-/// Memory and whole-machine processor time. There is no window question
-/// here: nothing on this side of the project measures a real window on
-/// Linux (`perf::guard_the_window`, ci/linux).
+/// Memory and processor time only: nothing measures a real window on
+/// Linux (`perf::guard_the_window`).
 fn linux_sample_once(pid: u32) -> Sample {
     let mut sample = Sample::default();
     let Ok(text) = std::fs::read_to_string(format!("/proc/{pid}/status")) else {
@@ -55,8 +52,8 @@ fn linux_sample_once(pid: u32) -> Sample {
             sample.private = kb(rest);
         }
     }
-    // `/proc/stat`'s first line is in USER_HZ ticks; the ratios this feeds
-    // are unit-free, so it is only the shape that has to match Windows.
+    // USER_HZ ticks: the ratios this feeds are unit-free, so only the
+    // shape has to match Windows.
     if let Ok(stat) = std::fs::read_to_string("/proc/stat")
         && let Some(cpu) = stat.lines().next().and_then(|l| l.strip_prefix("cpu "))
     {
@@ -68,9 +65,9 @@ fn linux_sample_once(pid: u32) -> Sample {
         sample.idle = values.get(3).copied().unwrap_or(0);
         sample.kernel = values.iter().sum::<u64>() - sample.user;
     }
-    // The process's own share, in the same USER_HZ ticks. Everything after
-    // the closing parenthesis is field 3 onwards, which is the only way to
-    // index past a command name that may hold spaces and parentheses.
+    // The process's utime + stime. After the last `)` is field 3 onwards —
+    // the only safe split past a command name that may hold spaces and
+    // parentheses.
     if let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat"))
         && let Some(after) = stat.rfind(')').map(|at| &stat[at + 1..])
     {

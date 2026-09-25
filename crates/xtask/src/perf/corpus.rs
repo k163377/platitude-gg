@@ -1,17 +1,8 @@
 //! What the benchmark repository *is*, as one token that changes whenever
-//! the measurement would.
-//!
-//! `HEAD` is the wrong thing to watch and watching it is worse than
-//! watching nothing, because it holds still while everything that decides
-//! the numbers moves. The graph is `HEAD --branches --remotes --tags`, the
-//! memory is dominated by the ref tables, and the interaction is timed
-//! against the newest ref-reachable commit — so a `git fetch` that leaves
-//! the local branch alone still changes the rows, the ref counts and the
-//! commit whose diff is being opened.
-//!
-//! So the token is taken over the whole ref listing, and the
-//! parts that made it are printed beside it so a mismatch says
-//! what moved.
+//! the measurement would: taken over the whole ref listing, not `HEAD`
+//! (rules-refs/app-ui.md「ベンチマークリポジトリは `HEAD` では固定できない」),
+//! and printed beside the parts that made it so a mismatch says what
+//! moved.
 
 use std::io::Write;
 use std::path::Path;
@@ -25,8 +16,8 @@ pub(super) struct Corpus {
     pub(super) refs: usize,
     pub(super) tags: usize,
     pub(super) remotes: usize,
-    /// Tracked paths the working tree has changed. The app puts a working
-    /// -tree row at the top of the graph, so this is part of the scenario.
+    /// Tracked paths the working tree has changed: the app puts a
+    /// working-tree row atop the graph, so this is part of the scenario.
     pub(super) dirty: usize,
 }
 
@@ -71,7 +62,6 @@ pub(super) fn describe(repo: &Path) -> Result<Corpus, String> {
     })
 }
 
-/// One line of prose about a corpus that is not the one asked for.
 pub(super) fn mismatch(found: &Corpus, wanted: &str) -> Option<String> {
     (!wanted.is_empty() && found.token != wanted).then(|| {
         format!(

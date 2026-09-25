@@ -19,10 +19,9 @@ pub(super) struct DemoRepo {
 const TICK_SECS: u64 = 30 * 60;
 const HISTORY_SECS: u64 = 40 * 60 * 60;
 
-/// Runs a command to its end, its output captured — the road every git a
-/// preset types goes down. **The demo module's own**: a template's key is
-/// the sources of this module (`super::template`), and a spawner shared
-/// with the rest of the crate would put every change to it in that key.
+/// Runs a command to its end, output captured. The demo module's own: a
+/// template's key is this module's sources (`super::template`), and a
+/// spawner shared with the crate would put every change to it in that key.
 pub(super) fn output_of(cmd: &mut Command) -> Result<std::process::Output, String> {
     let display = format!("{cmd:?}");
     cmd.output()
@@ -94,19 +93,12 @@ impl DemoRepo {
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
 
-    /// For commands whose non-zero exit is the state we want (a merge
-    /// stopping on conflicts). Only a spawn failure is an error.
-    /// Runs a command whose success is a *stopped* operation — a rebase
-    /// waiting on an emptied commit, a merge or a cherry-pick waiting on
-    /// a conflict. git answers those with a non-zero exit, so the exit
-    /// alone cannot tell "stopped where we wanted" from "refused the
-    /// command outright": a flag the minimum git does not know exits the
-    /// same way, and the preset then builds a repository with nothing
-    /// standing in it (measured — 2.43 knows `--empty=ask`, not
-    /// its 2.45 rename `stop`, and every rebase-empty run on the Linux
-    /// container photographed a resting page). The markers are the proof
-    /// — the same ones core reads (`platitude_core::opstate`), spelled
-    /// out here because xtask depends on std alone.
+    /// Runs a command whose success is a stopped operation (a rebase,
+    /// merge or cherry-pick waiting on the user). git exits non-zero both
+    /// for that and for refusing the command outright — e.g. a flag the
+    /// minimum git does not know — so the operation's markers are the
+    /// proof: the ones core reads (`platitude_core::opstate`), spelled out
+    /// here because xtask depends on std alone.
     pub(super) fn git_expecting_stop(&mut self, args: &[&str]) -> Result<(), String> {
         let dir = self.work.clone();
         output_of(&mut self.command(&dir, args)).map(drop)?;
@@ -135,7 +127,6 @@ impl DemoRepo {
         self.write_bytes(rel, content.as_bytes())
     }
 
-    /// The same for a file that is not text — a picture.
     pub(super) fn write_bytes(&self, rel: &str, content: &[u8]) -> Result<(), String> {
         let path = self.work.join(rel);
         if let Some(parent) = path.parent() {
@@ -161,10 +152,9 @@ impl DemoRepo {
     }
 
     /// Commits something written `earlier` seconds before it was
-    /// committed, optionally by somebody other than this repository's
-    /// own identity. `--date` beats the `GIT_AUTHOR_DATE` every command
-    /// here carries — the committer date keeps the marching stamp, so
-    /// the two moments come out apart by exactly what was asked for.
+    /// committed, optionally by another author. `--date` beats the
+    /// `GIT_AUTHOR_DATE` every command here carries; the committer date
+    /// keeps the marching stamp.
     pub(super) fn commit_written_earlier(
         &mut self,
         rel: &str,
@@ -189,9 +179,8 @@ impl DemoRepo {
         Ok(())
     }
 
-    /// One process for a batch of refs: a repository of thousands of
-    /// tags built a `git tag` at a time is minutes of process spawning
-    /// on Windows.
+    /// One process for a whole stream: thousands of `git tag` spawns
+    /// would make process startup the build's cost on Windows.
     pub(super) fn git_stdin(&mut self, args: &[&str], input: &str) -> Result<String, String> {
         let dir = self.work.clone();
         let mut child = self
@@ -218,8 +207,6 @@ impl DemoRepo {
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     }
 
-    /// The bare repository `origin` points at, which lives beside the
-    /// work tree.
     fn origin_bare(&self) -> PathBuf {
         self.root.join("origin.git")
     }
@@ -236,12 +223,9 @@ impl DemoRepo {
     /// Replaces the work tree with a `--depth` clone of its own origin,
     /// which has to have been pushed to first.
     ///
-    /// The only route to a repository whose oldest commit names a parent
-    /// it does not hold: core reads the commit object itself
-    /// (`sequencer::plan::base_of`), so a `.git/shallow` written over a
-    /// full object store answers exactly as no shallow file at all.
-    /// **`file://` is what makes `--depth` mean anything** — git ignores
-    /// the depth on a plain local path and takes the whole store.
+    /// A `.git/shallow` written over a full object store does not do: core
+    /// reads the parent object itself (`sequencer::plan::base_of`). The
+    /// URL must be `file://` — git ignores `--depth` on a plain path.
     pub(super) fn reclone_shallow(&mut self, depth: usize) -> Result<(), String> {
         let name = self
             .work

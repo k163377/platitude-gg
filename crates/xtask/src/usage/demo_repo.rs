@@ -1,7 +1,5 @@
-//! The `demo-repo` section: one line per shape a repository can be handed to
-//! the app in. Written where a preset is added (`demo.rs`), and kept apart
-//! from the runner's own paragraphs so that neither list's growth is the
-//! other's problem.
+//! The usage page's `demo-repo` section: a line for every preset
+//! `demo/presets.rs` builds, added with the preset.
 
 // No `"\` continuation on the opening line: it swallows the next line's
 // leading whitespace, and every line of this page is indented.

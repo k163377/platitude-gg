@@ -8,19 +8,17 @@ use super::payload::{bool_field, string_field};
 use super::shell::shell_segments;
 use crate::seats::worktree_root;
 
-/// PreToolUse(Bash|PowerShell): starting the app from a worktree takes
-/// something from the sessions beside it — a real window covers whatever
-/// is on the screen, and an unsupervised process can hold the exe against
-/// the next build's link. Offscreen QPA alone is not a parent kill guard.
-/// Only worktree sessions are held to it — a launch in the primary checkout
-/// is the user's own (CLAUDE.md ビルド・テスト). Answers whether it refused.
+/// PreToolUse(Bash|PowerShell): a real window covers the screen, and an
+/// unsupervised process can hold the exe against the next build's link.
+/// Only worktree sessions are held to it — a launch in the primary
+/// checkout is the user's own (CLAUDE.md ビルド・テスト). Answers whether
+/// it refused.
 pub(super) fn pre_launch(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(false);
     };
-    // Checked before the approval flag and outside any worktree: the flag records
-    // that the user asked for a window, and a launch takes the turn
-    // wherever it is started from.
+    // Before the approval flag and in any tree: the flag grants a window,
+    // and a read launch takes the turn wherever it starts.
     if reads_the_launch(&command) {
         println!(
             "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
@@ -38,9 +36,6 @@ pub(super) fn pre_launch(input: &str) -> Result<bool, String> {
         );
         return Ok(true);
     }
-    // Same reason from the other side: a background task keeps the session
-    // busy while it runs and wakes the agent again when it lands, and a
-    // launch has nothing to wait for once the window is up.
     if !launch_segments(&command).is_empty() && bool_field(input, "run_in_background") == Some(true)
     {
         println!(
@@ -81,14 +76,10 @@ pub(super) fn pre_launch(input: &str) -> Result<bool, String> {
     Ok(true)
 }
 
-/// Whether `command` puts a reader on `cargo xtask launch`'s output. The
-/// launch is detached, but Windows hands a new process every inheritable
-/// handle the starting one holds — the write end of a shell pipe included —
-/// so the reader waits for an end-of-file that only the window's death
-/// brings. A redirect has no reader and is harmless; a pipe and a
-/// substitution are readers. Only the detached launch is held to this:
-/// `verify-ui` ends the app it starts, and `cargo run` holds it in the
-/// foreground on purpose.
+/// Whether `command` puts a reader (a pipe or a substitution) on `cargo
+/// xtask launch`'s output. On Windows the detached window inherits the
+/// pipe's write end, so the reader never sees end-of-file. A redirect has
+/// no reader; `verify-ui` and `cargo run` end or hold their app themselves.
 fn reads_the_launch(command: &str) -> bool {
     launch_segments(command)
         .iter()
@@ -109,15 +100,14 @@ fn launch_segments(command: &str) -> Vec<&str> {
         .collect()
 }
 
-/// What `command`, run from `cwd`, would take from the sessions beside it.
-/// Empty when it starts nothing, when it starts it the harmless way, or when
-/// the session is not in a worktree at all.
+/// What `command`, run from `cwd`, would take from the sessions beside it;
+/// empty when it starts no app or the session is in no worktree.
 fn launch_objections(command: &str, cwd: &str) -> Vec<String> {
     let Some(root) = worktree_root(cwd) else {
         return Vec::new();
     };
-    // `cargo xtask launch` reaps its own tree and builds for itself; the
-    // one thing left to object to is the window, which is its purpose.
+    // `xtask launch` reaps and builds its own tree; only the window is
+    // left to object to.
     if xtask_verb(&command.split_whitespace().collect::<Vec<_>>(), "launch") {
         return vec![
             "it opens a real window over whatever is on the screen, which is \
@@ -156,14 +146,13 @@ fn launch_objections(command: &str, cwd: &str) -> Vec<String> {
 
 /// A start of the app found in a shell line.
 struct Launch<'a> {
-    /// The binary as the command names it, when it names a path at all.
-    /// `cargo run` leaves the path to cargo, which builds in this tree.
+    /// The binary's path as the command names it; `None` for `cargo run`,
+    /// which builds in this tree.
     exe: Option<&'a str>,
 }
 
 /// The first start of the app in `command`, if any. `cargo xtask verify-ui`
-/// is not one and needs no exception: it names no binary and is not
-/// `cargo run`, so nothing here sees it.
+/// needs no exception: it names no binary and is not `cargo run`.
 fn launch(command: &str) -> Option<Launch<'_>> {
     let tokens: Vec<&str> = command.split_whitespace().collect();
     let mut index = 0;
@@ -181,9 +170,8 @@ fn launch(command: &str) -> Option<Launch<'_>> {
             .take_while(|token| !matches!(**token, "&&" | "||" | ";" | "|" | "--"))
             .map(|token| unquote(token))
             .collect();
-        // A named package that is not the app is someone else's binary — the
-        // task runner's, usually. Without one, the workspace's default
-        // members leave exactly one runnable target, which is the app.
+        // Another named package is someone else's binary (xtask, usually);
+        // unnamed, the default members leave the app as the only target.
         let package = arguments
             .iter()
             .position(|argument| matches!(*argument, "-p" | "--package"))
@@ -196,8 +184,7 @@ fn launch(command: &str) -> Option<Launch<'_>> {
 }
 
 /// Whether `token` names the app's binary. The repository directory is
-/// called platitude-gg as well, so a path that only ends in the bare name
-/// has to be a built one before it counts.
+/// called platitude-gg too, so the bare name counts only under `target`.
 fn names_the_binary(token: &str) -> bool {
     let path = token.replace('\\', "/");
     let Some(name) = path.rsplit('/').next() else {
@@ -266,8 +253,8 @@ mod tests {
         for command in [
             "cargo xtask verify-ui commit --preset basic",
             "cargo xtask demo-repo basic",
-            // A container start is headless by construction: it has no
-            // display to take and it holds this tree's exe not at all.
+            // A container start has no display to take and does not hold
+            // this tree's exe.
             "cargo xtask linux test -p platitude-core",
             "cargo xtask linux verify-ui commit --preset basic",
             "cargo build --release",

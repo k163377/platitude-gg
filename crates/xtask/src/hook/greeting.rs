@@ -1,5 +1,4 @@
-//! SessionStart: where the session sits, where the seats stand, and which
-//! free letter it should take.
+//! SessionStart: where the session sits and where the seats stand.
 
 use super::payload::string_field;
 use crate::seats::{
@@ -8,24 +7,17 @@ use crate::seats::{
 };
 use crate::subprocess::git_query;
 
-/// SessionStart: sessions opened in the primary checkout get the worktree
-/// rule injected, and every session gets told where the seats stand, so
-/// taking a free one needs no survey. Plain stdout becomes session
-/// context for this event.
+/// SessionStart: plain stdout becomes session context for this event.
 pub(super) fn session_start(input: &str) -> Result<(), String> {
     let cwd = string_field(input, "cwd").unwrap_or_default();
-    // The hook that holds main to the gate's stamp goes in on every
-    // session start, so no clone and no seat is ever without it. A
-    // failure is printed: the greeting still has to be given.
+    // Installed on every start so no clone or seat is without it. A
+    // failure is printed, not returned: the greeting still has to be given.
     match crate::gate::install(std::path::Path::new(&cwd)) {
         Ok(_) => {}
         Err(why) => println!("The gate's git hook could not be installed: {why}"),
     }
-    // This event is a session by definition, so the mark that tells a
-    // session's git from the user's has to be in this environment. If it
-    // ever is not, the gate has stopped holding anything — and it would
-    // stop silently, which is the one way it could fail unnoticed
-    // (gate::hooks).
+    // A session's environment must carry the mark; without it the gate
+    // silently holds nothing (gate::hooks).
     if std::env::var_os(crate::gate::SESSION).is_none_or(|mark| mark.is_empty()) {
         println!(
             "The gate cannot tell this session's git from the user's: {} is not in this \
@@ -78,18 +70,15 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// A session that starts inside an unclaimed seat claims it, so the
-/// `claude --worktree <letter>` road is covered the same way EnterWorktree
-/// is. A seat somebody else holds gets told so and stays theirs.
+/// A session started inside an unclaimed seat claims it (the `claude
+/// --worktree <letter>` road). A seat somebody else holds stays theirs.
 fn claim_at_start(cwd: &str, session: &str) -> Option<String> {
-    // The lock names the worktree by its top-level path (git resolves the
-    // argument by exact real path); a session started in a subdirectory
-    // would otherwise fail the claim silently.
+    // git resolves the lock's argument by exact top-level path; from a
+    // subdirectory the claim would fail silently.
     let root = crate::seats::worktree_root(cwd).unwrap_or_else(|| cwd.to_string());
     let me = Identity::current(Some(session));
-    // A claim that could not be written is a survey concern: the session
-    // is already sitting here either way, and the greeting still says
-    // where the seat stands.
+    // A claim that could not be written is left to the survey: the
+    // session sits here either way.
     match take_seat(&root, &root, &me, Held::BySession) {
         Standing::Ours | Standing::Free => None,
         Standing::Foreign(reason) | Standing::Stale(reason) => Some(format!(
@@ -102,9 +91,7 @@ fn claim_at_start(cwd: &str, session: &str) -> Option<String> {
     }
 }
 
-/// One line about the seat this session sits in. A merged seat starts
-/// over from main's tip; a seat carrying unmerged commits is a merge
-/// waiting to happen, and only its own continuation should build on it.
+/// One line about the seat this session sits in.
 fn seat_stand(cwd: &str, seats: &str) -> Option<String> {
     let branch = git_query(cwd, &["rev-parse", "--abbrev-ref", "HEAD"])?;
     let ahead = commits_in(cwd, &format!("main..{branch}"))?;
@@ -125,8 +112,7 @@ fn seat_stand(cwd: &str, seats: &str) -> Option<String> {
     })
 }
 
-/// The seat roster in one line, read from the same survey `cargo xtask
-/// seats` prints, so the answer is the repository's.
+/// The seat roster in one line, from the survey `cargo xtask seats` prints.
 fn seat_report(cwd: &str) -> Option<String> {
     let survey = seats::survey(cwd)?;
     let buckets = seat_buckets(&survey);
@@ -152,7 +138,6 @@ fn seat_report(cwd: &str) -> Option<String> {
     ))
 }
 
-/// The greeting's buckets.
 struct SeatBuckets {
     free: Vec<String>,
     pending: Vec<String>,
@@ -160,10 +145,8 @@ struct SeatBuckets {
     missing: Vec<&'static str>,
 }
 
-/// Sorts a survey into the greeting's buckets. A live claim is a session
-/// sitting there, uncommitted changes are work in progress, and commits
-/// ahead of main are a merge waiting to happen. Pure so the tests can
-/// hand it surveys git never produced.
+/// Sorts a survey into the greeting's buckets. Pure so the tests can hand
+/// it surveys git never produced.
 fn seat_buckets(survey: &[seats::Seat]) -> SeatBuckets {
     let mut buckets = SeatBuckets {
         free: Vec::new(),
@@ -178,17 +161,14 @@ fn seat_buckets(survey: &[seats::Seat]) -> SeatBuckets {
             continue;
         };
         // A claim is a session in the seat whatever became of its
-        // process: the conversation behind it may be between processes,
-        // and only the user can say it is over (`seats::claim`).
+        // process (`seats::claim`).
         if state.locked {
             let tree = if state.on_disk { "" } else { ", no tree" };
             buckets.in_use.push(format!("{name} (locked{tree})"));
             continue;
         }
-        // A letter whose tree went away is not one nobody has used: it
-        // is work nothing can reach until a takeover grows the tree
-        // back, and reading it as unused is how two of them sat there
-        // for days while the roster ran out of letters.
+        // A letter whose tree went away is not unused: its work is
+        // unreachable until a takeover grows the tree back.
         if !state.on_disk {
             let ahead = state.ahead.unwrap_or(0);
             buckets
@@ -217,9 +197,8 @@ fn seat_buckets(survey: &[seats::Seat]) -> SeatBuckets {
                     .push(format!("{name} ({dirty} uncommitted change(s))"));
             }
             (Some(0), Some(behind), Some(0)) => {
-                // Where a free seat stands is the reader's business only:
-                // whoever is handed one is put on its branch at main's tip
-                // by the assignment itself.
+                // For the reader only: the assignment itself puts a
+                // handed-out seat at main's tip.
                 let at = match (state.branch.is_empty(), behind) {
                     (true, _) => "detached",
                     (false, 0) => "at main",
@@ -251,7 +230,6 @@ mod tests {
         }
     }
 
-    /// A letter the survey measured, whatever it found.
     fn seat(name: &'static str, state: SeatState) -> Seat {
         Seat {
             name,
@@ -273,13 +251,11 @@ mod tests {
         )
     }
 
-    /// A letter nobody has used: no tree, and no branch carrying work.
     fn never_used(name: &'static str) -> Seat {
         Seat { name, state: None }
     }
 
-    /// A claimed seat is in use whatever the survey says about its tree:
-    /// the claim is the session, and nothing here asks after a process.
+    /// The claim is the session; nothing here asks after a process.
     #[test]
     fn a_claimed_seat_is_in_use_even_at_main_with_nothing_in_it() {
         let buckets = seat_buckets(&[seat("a", surveyed("worktree-a", true, 0, 0, 0))]);
@@ -314,11 +290,8 @@ mod tests {
         assert_eq!(buckets.missing, vec!["d"]);
     }
 
-    /// A letter whose tree went away under a branch that still carries
-    /// commits reads as a merge waiting to happen, not as a letter nobody
-    /// has used: "not created yet" is what sent two of these unnoticed
-    /// for days while the roster ran out of letters. Claimed, it reads
-    /// as what it is — somebody's, and treeless.
+    /// Claimed, a treeless letter reads as somebody's, not as waiting for
+    /// merge.
     #[test]
     fn a_letter_whose_tree_went_away_is_waiting_for_merge_not_uncreated() {
         let buckets = seat_buckets(&[treeless("c", false, 17)]);

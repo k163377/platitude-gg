@@ -4,18 +4,14 @@
 use super::repo::{DemoRepo, file_url};
 
 /// Other working copies with something uncommitted in them, so the rows
-/// they draw on the graph have something to say.
+/// they draw on the graph have something to say. Its own preset because
+/// `worktrees` keeps its copies clean: a carried row in the graph would
+/// move every row number its verbs address.
 ///
-/// **Its own preset.** Those copies
-/// are clean on purpose — the verbs that use them are about the rows in
-/// the sidebar, and a carried row appearing in the graph would move every
-/// row number they address by.
-///
-/// Three copies, one of each shape the row has to draw: one standing
-/// where this window stands (its row goes above the stash on the same
-/// commit), one on a branch of its own further down the history, and one
-/// clean (no row at all). The dirt differs so the tallies cannot all be
-/// the same number: untracked only, and one staged edit.
+/// A copy of each shape the row draws: standing where this window stands
+/// (its row goes above the stash on the same commit), on a branch further
+/// down the history, and clean (no row at all). The dirt differs so the
+/// tallies do too.
 pub(super) fn carried(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -41,10 +37,9 @@ pub(super) fn carried(repo: &mut DemoRepo) -> Result<(), String> {
     std::fs::write(here.join("notes.txt"), "jotted over here\n")
         .map_err(|e| format!("writing notes.txt: {e}"))?;
 
-    // Further down the history, holding **one path on both sides**: staged
-    // and then written again. The pane reading it shows one row — the
-    // split is that copy's index, which nothing here can move — so this is
-    // the copy the fold is read on (`Kinds::folded`, `Bucket::Whole`).
+    // Further down the history, holding one path staged and then written
+    // again: the pane shows it as one row, since nothing here can move
+    // that copy's index (`Kinds::folded`, `Bucket::Whole`).
     repo.git(&["worktree", "add", "../topic", "feature/topic-a"])?;
     let topic = repo.root.join("topic");
     std::fs::write(topic.join("src/topic.txt"), "topic redrafted\n")
@@ -56,9 +51,9 @@ pub(super) fn carried(repo: &mut DemoRepo) -> Result<(), String> {
     // Clean: a copy with nothing to say draws no row at all.
     repo.git(&["worktree", "add", "-b", "side/quiet", "../quiet"])?;
 
-    // A name with nowhere to go: the pane's floor is 300px and this is
-    // past it whatever the font, so the band, the block and the diff's own
-    // header are all read on this one (`carried-long`).
+    // A name past the pane's 300px floor in any font, so the band, the
+    // block and the diff's own header are read cut on this one
+    // (`carried-read` on this copy).
     repo.git(&[
         "worktree",
         "add",
@@ -81,11 +76,9 @@ pub(super) fn carried(repo: &mut DemoRepo) -> Result<(), String> {
 /// How many more untracked files `carried-many` leaves in `../here`.
 const CARRIED_MANY: usize = 40;
 
-/// `carried`, with the copy standing where this window stands holding
-/// forty more untracked files: the one shape in which the pane reading
-/// another copy has more rows than it has room for (`middle-hand
-/// carried`). Its own preset, because the counts `carried` is read by
-/// are the point of its verbs.
+/// `carried`, with `here` holding forty more untracked files, so the pane
+/// reading it overflows (`middle-hand carried`). Its own preset because
+/// `carried`'s verbs read its counts.
 pub(super) fn carried_many(repo: &mut DemoRepo) -> Result<(), String> {
     carried(repo)?;
     let here = repo.root.join("here");
@@ -97,18 +90,10 @@ pub(super) fn carried_many(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// The same copies, over a tree with nothing uncommitted in it and a
-/// branch whose one commit lands on the line this one just moved.
-///
-/// **Both halves are needed and they pull against each other.** A replay
-/// is refused over uncommitted work, so the press that stops has to
-/// start from a clean tree — and the row a stopped operation's landing
-/// goes to only exists because the stop itself leaves conflicts behind.
-/// So the tree is committed here and dirtied by git, in a graph where
-/// every other copy already has a row of its own — and one of them
-/// stands where the replay stops, so the pass the run holds this
-/// window's row back from leads with somebody else's
-/// (`PGG_AUTO_ACT=wip-landing-stopped`).
+/// The same copies, over a clean tree and a branch whose one commit lands
+/// on the line this one just moved (`wip-landing-stopped`). A replay is
+/// refused over uncommitted work, so the tree starts clean and the stop's
+/// conflicts dirty it.
 pub(super) fn carried_clashing(repo: &mut DemoRepo) -> Result<(), String> {
     carried(repo)?;
     repo.commit(
@@ -124,19 +109,14 @@ pub(super) fn carried_clashing(repo: &mut DemoRepo) -> Result<(), String> {
     )?;
     repo.git(&["switch", "main"])?;
 
-    // A copy standing where the replay stops, holding work of its own.
-    // **Its row is what the held-back pass leads with**: a carried row is
-    // handed out by the walk at the commit its copy stands on
-    // (`session::rows::CarriedRows::take_for`), the replay leaves this
-    // window detached at that same commit, and the rows of the copies
-    // `carried` already put further down the history draw nowhere near
-    // the top. Without it the pass this run arranges leads with an
-    // ordinary commit, which the reading this verb is about answers
-    // correctly anyway — and the run would pass without ever asking.
-    //
-    // **Holding the branch the replay names is fine**: git rebases onto
-    // that commit without checking the branch out here, and the press
-    // answers in a second and a half either way (measured both forms).
+    // A copy standing where the replay stops, holding work of its own: the
+    // walk hands a carried row out at its copy's commit
+    // (`session::rows::CarriedRows::take_for`) and the replay leaves this
+    // window detached there, so this row leads the held-back pass. Without
+    // it the pass leads with an ordinary commit, which reads correctly
+    // anyway, and the run would pass without asking. Holding the branch
+    // the replay names is fine: git rebases onto it without a checkout
+    // here.
     repo.git(&["worktree", "add", "../clashing", "side/clash"])?;
     let clashing = repo.root.join("clashing");
     std::fs::write(clashing.join("scratch.txt"), "held over on the side\n")
@@ -144,24 +124,18 @@ pub(super) fn carried_clashing(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// One worktree in each state git can report: an everyday linked one, a
-/// detached one, a detached one that is also locked, a lock with a reason
-/// and a lock without, and an entry whose folder is gone (`prunable`). The
-/// checkout this window opens is the main one, so it is the row that wears
-/// the current mark.
+/// One worktree in each state git can report: linked, detached, detached
+/// and locked, locked with and without a reason, and one whose folder is
+/// gone (`prunable`). This window opens the main checkout, so that row
+/// wears the current mark.
 ///
-/// **The graph reads the same list**: a branch another copy holds wears
-/// the green frame, a copy with no branch wears its own folder name in
-/// one, and a lock on either puts the padlock beside the name
-/// (デザイン規約 §ref の種別), so every one of those is on a row here.
-/// **And two copies stand on one commit**, which is the row that draws a
-/// green sheet behind a green card — the one colour a fan repeats
-/// (§重ね表示).
+/// The graph reads the same list — a green frame on a held branch, a
+/// branchless copy's folder name in one, a padlock for a lock
+/// (デザイン規約 §ref の種別) — so each is on a row here.
 ///
-/// The branches matter as much as the folders: `feature/topic-a` is
-/// checked out over in `topic`, and git refuses both `switch` and
-/// `branch --delete` for a branch another worktree holds (measured), so the
-/// BRANCHES row for it is the one the menu has to answer for.
+/// `feature/topic-a` is out in `topic`, and git refuses `switch` and
+/// `branch --delete` for a branch another worktree holds, so its BRANCHES
+/// row is the one the menu has to answer for.
 pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -180,13 +154,11 @@ pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
 
     // Ordinary: a second checkout of a branch this one is not on.
     repo.git(&["worktree", "add", "../topic", "feature/topic-a"])?;
-    // **A second copy standing where the first one is**, on no branch of
-    // its own: the row then carries two green records — the branch
-    // `topic` holds and this marker — which is the one shape that draws
-    // the fan's repeated sheet in the front card's own colour
+    // A second, branchless copy where the first stands: two green records
+    // on one row, the one shape that repeats the front card's colour
     // (デザイン規約 §重ね表示「先頭のカードとその 1 つ後ろが同色の時だけ」).
-    // **Named to sort after `topic`**, so the rows the verbs address by
-    // number stay where they are.
+    // Named to sort after `topic`, so the rows the verbs address by number
+    // stay put.
     repo.git(&[
         "worktree",
         "add",
@@ -196,11 +168,9 @@ pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
     ])?;
     // Detached: no branch to name on the right of the row.
     repo.git(&["worktree", "add", "--detach", "../detached", "v0.1"])?;
-    // Detached **and** locked: the one shape the graph draws with a name
-    // of its own and a padlock beside it (デザイン規約 §ref の種別). A
-    // commit of its own, so the marker stands on a row nothing else
-    // names. **Named to sort between `topic` and the long one**, so the
-    // rows the verbs address by number stay where they are.
+    // Detached and locked: a name of its own with a padlock beside it, on
+    // a commit nothing else names. Named to sort between `topic` and the
+    // long one, so row numbers stay put.
     repo.git(&["worktree", "add", "--detach", "../vaulted", "main~1"])?;
     repo.git(&[
         "worktree",
@@ -209,7 +179,6 @@ pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
         "kept for the audit",
         "../vaulted",
     ])?;
-    // Locked, with the words git was given for why.
     repo.git(&["worktree", "add", "-b", "hotfix/urgent", "../hotfix"])?;
     repo.git(&[
         "worktree",
@@ -218,7 +187,6 @@ pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
         "release run is using this checkout",
         "../hotfix",
     ])?;
-    // Locked with no reason at all — the flag on its own.
     repo.git(&["worktree", "add", "-b", "spike/idea", "../spike"])?;
     repo.git(&["worktree", "lock", "../spike"])?;
     // Listed, but the folder it names is gone: `git worktree prune`
@@ -226,11 +194,10 @@ pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["worktree", "add", "-b", "gone/branch", "../gone"])?;
     let gone = repo.root.join("gone");
     std::fs::remove_dir_all(&gone).map_err(|e| format!("removing {}: {e}", gone.display()))?;
-    // A folder and a branch that both run past the pane, on a row that
-    // also carries a mark: the seat, the elided name and the branch on
-    // the right have to share the narrowest sidebar there is (180),
-    // each keeping clear of the others. **Named to sort last** so the
-    // rows the verbs address by number stay put.
+    // A folder and a branch both past the pane, on a row with a mark: the
+    // seat, the elided name and the branch share the narrowest sidebar
+    // (180) without overlapping. Named to sort last, so row numbers stay
+    // put.
     repo.git(&[
         "worktree",
         "add",
@@ -250,16 +217,11 @@ pub(super) fn worktrees(repo: &mut DemoRepo) -> Result<(), String> {
 }
 
 /// A branch that reads a remote and is checked out somewhere else: the
-/// one shape in which a REMOTES row opens on all three of its lines —
-/// the reading's own name, the branch measured against it with the
-/// counts, and the working copy holding that branch
-/// (デザイン規約 §左メニューの所作).
-///
-/// **All three have to be true at once**, and no other preset has them:
-/// `worktrees` has copies and no remote, and the remote presets have
-/// readings and no second copy. The commit made over in the copy is what
-/// gives the line a count to draw — a branch level with its reading
-/// draws none.
+/// one shape in which a REMOTES row opens on all three of its lines — the
+/// reading's own name, the branch measured against it, and the copy
+/// holding that branch (デザイン規約 §左メニューの所作). No other preset
+/// has both a remote and a second copy. The commit made in the copy gives
+/// the line a count; a branch level with its reading draws none.
 pub(super) fn tracked_elsewhere(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -287,14 +249,9 @@ pub(super) fn tracked_elsewhere(repo: &mut DemoRepo) -> Result<(), String> {
 }
 
 /// A working copy standing where no ref reaches: detached, with a commit
-/// made in it. **That commit is in the graph only because the walk is
-/// told to name it** (`session::walk::walk_command`) — `git log` reads
-/// the HEAD of the tree it runs in and no other, and there is no branch,
-/// no tag and no remote pointing here.
-///
-/// Small on purpose: the subject is one row and the chip on it, and a
-/// preset with branches in it would leave the reader hunting for which
-/// row is the one with no ref.
+/// made in it, which is in the graph only because the walk names it
+/// (`session::walk::walk_command`) — `git log` reads only its own tree's
+/// HEAD. Small, so the one row with no ref is easy to find.
 pub(super) fn worktree_detached(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -304,9 +261,7 @@ pub(super) fn worktree_detached(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
     repo.commit("src/app.txt", "app v2\n", "feat: grow the app")?;
 
-    // Detached at the tip, and then a commit of its own: from here the
-    // only thing in the repository that names that commit is the
-    // worktree listing.
+    // From here only the worktree listing names that commit.
     repo.git(&["worktree", "add", "--detach", "../spike"])?;
     let spike = repo.root.join("spike");
     std::fs::write(spike.join("idea.txt"), "an idea nobody named yet\n")
@@ -319,26 +274,16 @@ pub(super) fn worktree_detached(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Where [`nested_copy`] puts its linked working copy, under the root
-/// that preset was built in.
-///
-/// Named here because two places need it and neither owns it: the
-/// preset that makes the copy, and the run that opens at it
-/// (`verify::repos`) — every other fixture hands a run the repository's
-/// own copy, which is the one path `demo::create` answers with.
+/// Where [`nested_copy`] puts its linked working copy, under the preset's
+/// root. Shared with `verify::repos`, which opens the run at it rather
+/// than at the path `demo::create` answers with.
 pub const NESTED_COPY: &str = "copies/nested";
 
-/// One linked working copy, kept in a folder of its own a level below
-/// the root — the way copies are kept where they are gathered together
-/// rather than scattered beside the repositories
-/// (`.claude/worktrees/<letter>` in this tree).
-///
-/// **The nesting is the whole of the preset.** Every other copy in
-/// these fixtures is the repository's sibling, and there the folder
-/// above the copy and the folder above the repository are one and the
-/// same — a picker pointed at either lands in the same place, so a run
-/// on such a fixture cannot say which of the two it was pointed at
-/// (`open-picker copy`).
+/// One linked working copy a level below the root, the way gathered
+/// copies are kept (`.claude/worktrees/<letter>` in this tree). The
+/// nesting is the point: for a sibling copy the folder above it and the
+/// folder above the repository are the same, so a picker run could not
+/// say which it was pointed at (`open-picker copy`).
 pub(super) fn nested_copy(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -363,23 +308,13 @@ pub(super) fn nested_copy(repo: &mut DemoRepo) -> Result<(), String> {
 /// `band-actions-fold`).
 const LONG_BRANCH: &str = "release/2026-08-candidate-with-a-very-long-branch-name-for-the-panel";
 
-/// Every name the operation panel writes, long enough to be cut — so the
-/// order it gives them up in, and the shapes its actions take as they
-/// give their words up, can be photographed at widths a hand can drag
-/// the window to. **Short names never reach those shapes**: the panel
-/// only runs short when the names are long, so a repository called
-/// `repo` on a branch called `main` photographs the whole set as one
-/// picture of a band with room to spare.
-///
-/// **The names are the subject**, so the history under them is the
-/// shortest one that still gives a branch an upstream to be measured
-/// against, a remote that has moved on without it, and a copy to be
-/// standing in.
-///
-/// **The branch's own line is what the panel pays for** — the upstream
-/// is written under it, not after it (`OpsPicker`) — so that line alone
-/// has to run long enough for the actions to give their words up above
-/// the window's floor ([`LONG_BRANCH`]).
+/// Every name the operation panel writes, long enough to be cut, so the
+/// order it gives them up in and the shapes its actions take can be
+/// photographed at widths a window can be dragged to — short names never
+/// run the panel short. The history is the shortest that still gives the
+/// branch an upstream, a remote that has moved on, and a copy. The
+/// branch's own line is what the panel pays for (the upstream goes under
+/// it, `OpsPicker`), hence [`LONG_BRANCH`].
 pub(super) fn long_names(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -395,9 +330,8 @@ pub(super) fn long_names(repo: &mut DemoRepo) -> Result<(), String> {
         "feat: prepare the release",
     )?;
     repo.git(&["push", "--set-upstream", "origin", LONG_BRANCH])?;
-    // The remote moves on under it, from a clone of its own, and this
-    // end is never told: what the panel then says is a branch that has
-    // one of each, and a push git will not send.
+    // The remote moves on from a clone, unfetched here: with the commit
+    // below, one each way, and a push git will not send.
     let seeder = repo.root.join("seeder");
     let url = file_url(&repo.root.join("origin.git"));
     let root = repo.root.clone();
@@ -436,21 +370,18 @@ pub(super) fn long_names(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// The operation panel's two cards with something in every column they
-/// draw — the shape a repository being worked in gives them, where
-/// [`worktrees`] gives the copies' states one at a time.
+/// The operation panel's two cards with something in every column — the
+/// shape a repository being worked in gives them, where [`worktrees`]
+/// gives the copies' states one at a time.
 ///
-/// **Every kind of row the branch card has**: a folder of two
-/// (`topic/`), a branch standing alone (`rig`), one measured against a
-/// remote it has parted from (`feature/tracked`, one each way — the
-/// counts and the cloud), and two another copy has out (`worktree-a`,
-/// `worktree-b` — the tree mark). **The branch the window stands on is
-/// ahead of what it reads by two**, with a name shorter than that
-/// reading: the panel's second line is then the longer of the two, which
-/// is where the counts are set against its end.
-///
-/// The copy the second branch is out in is locked, so the copies' card
-/// holds a row with a mark in its seat beside one without.
+/// Every kind of row the branch card has: a folder of two (`topic/`), a
+/// lone branch (`rig`), one parted from its remote (`feature/tracked`,
+/// one each way — the counts and the cloud), and two out in other copies
+/// (`worktree-a`, `worktree-b` — the tree mark). The current branch is two
+/// ahead of its reading, whose name is longer, so the counts are set
+/// against the end of the panel's longer second line. `worktree-b`'s copy
+/// is locked, so the copies' card has a row with a mark in its seat beside
+/// one without.
 pub(super) fn panel(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",

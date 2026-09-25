@@ -1,8 +1,5 @@
 //! Running another program and reading what it said — the shapes every
 //! verb here uses, and the git one in particular.
-//!
-//! Not in main.rs, for the reason `tree` gives: a helper on the crate
-//! root ties every module to every other in the gate's dependency graph.
 
 use std::fs::File;
 use std::path::Path;
@@ -41,18 +38,13 @@ pub(crate) enum Answer {
 /// Runs `command` to its end or to `ceiling`, whichever comes first, and
 /// says which. A diagnostic past its ceiling is ended and waited for
 /// before this answers, so whatever runs after it never runs beside a
-/// diagnostic still holding what it was looking at (`verify::look`: a
-/// dumper holding the process open; `gate::evidence`: a docker that
-/// would hold a red gate's own thread and its ticket).
+/// diagnostic still holding what it was looking at.
 ///
-/// **Stdout goes to a file, never a pipe.** A pipe is read to its end,
-/// and its end is every write handle closed — a child of the diagnostic
-/// that inherited its stdout and outlives it holds one, and would hold
-/// the answer for as long as it lives (the test that leaves such a child
-/// behind waited its whole twenty seconds on the pipe). A file has no
-/// other end: what the diagnostic wrote is read off the disk once it has
-/// exited, and whatever still holds the file holds nothing here. `said`
-/// is that file; `None` for a diagnostic whose words are not wanted.
+/// **Stdout goes to a file, never a pipe**: a pipe ends only when every
+/// write handle closes, so a child of the diagnostic that inherited its
+/// stdout and outlives it would hold the answer for as long as it lives.
+/// `said` is that file; `None` for a diagnostic whose words are not
+/// wanted.
 pub(crate) fn bounded(
     what: &str,
     command: Command,
@@ -63,11 +55,10 @@ pub(crate) fn bounded(
 }
 
 /// [`bounded`], with the diagnostic's stderr written into the same file
-/// as its stdout. For a program whose refusal is on stderr and *is* the
-/// answer — a docker that will not start, list or remove a container
-/// says why there and nothing on stdout (`linux::container`). Not the
-/// default: a listing that is parsed off the file
-/// (`verify::look`) must not have a warning interleaved with its rows.
+/// as its stdout — for a program whose refusal on stderr is the answer
+/// (docker, `linux::container`). Not the default: a listing parsed off
+/// the file (`verify::look`) must not have a warning interleaved with its
+/// rows.
 pub(crate) fn bounded_both_streams(
     what: &str,
     command: Command,
@@ -122,8 +113,7 @@ fn run_bounded(
             }
         }
         if wait.look_again("its exit").is_err() {
-            // Asking it to end is only asking; the wait is what says the process is
-            // gone, and either failing is carried out as the answer.
+            // `kill` only asks; the wait is what says the process is gone.
             let ended = child
                 .kill()
                 .and_then(|()| child.wait())
@@ -155,10 +145,7 @@ pub(crate) fn git_query(dir: &str, arguments: &[&str]) -> Option<String> {
     })
 }
 
-/// The repository `dir` belongs to, shared by all of its worktrees, so
-/// that a merge run from a worktree is recognised as the same repository
-/// as the session that runs it, and a hold taken beside it is seen from
-/// every seat.
+/// The git directory `dir` belongs to, shared by all of its worktrees.
 pub(crate) fn common_git_dir(dir: &str) -> Option<String> {
     git_query(
         dir,
@@ -172,9 +159,6 @@ pub(crate) fn common_git_dir(dir: &str) -> Option<String> {
 /// leaving a dead one standing.
 #[cfg(windows)]
 pub(crate) fn process_exists(pid: u32) -> bool {
-    // Through the same three-answer probe as everything else here: a
-    // question that could not be asked reads as alive, never as gone
-    // ([`listed_by_tasklist`]).
     !matches!(behind(pid), Behind::Nobody)
 }
 
@@ -189,11 +173,9 @@ pub(crate) fn process_exists(pid: u32) -> bool {
 }
 
 /// What is behind a pid right now, in the three answers a probe can
-/// honestly give. A pid is a name the machine hands out again the moment
-/// its process is gone, so a claim a killed process left behind would
-/// otherwise stand for as long as whatever inherited the number — a git,
-/// a browser tab — and hold what it claimed until that stranger exits.
-/// The image name tells the two apart.
+/// honestly give. A pid is handed out again once its process is gone, so
+/// a dead claim would otherwise stand for as long as whatever inherited
+/// the number; the image name tells the two apart.
 enum Behind {
     /// The program at that number, as this probe spells it.
     Named(String),
@@ -222,15 +204,10 @@ fn behind(pid: u32) -> Behind {
 
 /// What `tasklist` said, as one of the three answers.
 ///
-/// **A probe that could not ask is not a process that is gone.** The
-/// tool answers a pid nobody has with a line saying so and an exit of
-/// zero, so an empty result on its own means "nobody" — but a tool that
-/// was refused, or is not there, or is restricted by policy, also
-/// returns nothing that matches, and reading *that* as nobody hands out
-/// a running process's claim. Every claim here is broken on the strength
-/// of this answer, so the two are told apart: a non-zero exit, or
-/// anything said on the error stream, is a question that did not get
-/// asked.
+/// **A probe that could not ask is not a process that is gone**: a
+/// refused, missing or policy-restricted `tasklist` also matches nothing,
+/// and reading that as nobody hands out a running process's claim. So a
+/// non-zero exit, or anything on stderr, is `Unanswerable`.
 #[cfg(windows)]
 fn listed_by_tasklist(ok: bool, stdout: &str, stderr: &str, pid: u32) -> Behind {
     if !ok || !stderr.trim().is_empty() {
@@ -250,14 +227,9 @@ fn listed_by_tasklist(ok: bool, stdout: &str, stderr: &str, pid: u32) -> Behind 
 
 /// The same, asking `ps` for the state and the command name.
 ///
-/// **A zombie is nobody.** It has already exited and holds no processor,
-/// no memory and no lock; what keeps its number in the table is that
-/// whoever started it has not waited on it — and where the parent was
-/// killed, nobody ever will unless the system's first process reaps
-/// (inside a container that process is the command the container was
-/// started with, and cargo reaps nothing it did not start). Read as
-/// alive, such a number would hold a machine claim for as long as the
-/// container lived.
+/// **A zombie is nobody**: it holds nothing, and in the container PID 1
+/// is cargo, which reaps nothing it did not start — read as alive, it
+/// would hold a machine claim for as long as the container lived.
 #[cfg(not(windows))]
 fn behind(pid: u32) -> Behind {
     let Ok(out) = std::process::Command::new("ps")
@@ -281,11 +253,9 @@ fn behind(pid: u32) -> Behind {
     Behind::Named(name.to_string())
 }
 
-/// Whether the process `pid` names still exists **and is a program
-/// `is_wanted` accepts** — the shape every claim that records its writer
-/// is asked with. Answers "alive" when it could not ask, as
-/// [`process_exists`] does: every caller asks this to decide whether
-/// somebody else's claim may be broken.
+/// Whether the process `pid` names still exists and is a program
+/// `is_wanted` accepts. Answers "alive" when it could not ask, as
+/// [`process_exists`] does.
 fn image_matches(pid: u32, is_wanted: impl Fn(&str) -> bool) -> bool {
     match behind(pid) {
         Behind::Named(image) => is_wanted(&image),
@@ -294,12 +264,9 @@ fn image_matches(pid: u32, is_wanted: impl Fn(&str) -> bool) -> bool {
     }
 }
 
-/// The program behind `pid`, for the tests that stand this module's
-/// probes against a process they can name — this one. Nothing in the
-/// runner records a program name: whose a seat is, is not a question
-/// about processes (`seats::claim`). The probes ask after a name they
-/// already have ([`image_still_at`]) or after this very program
-/// ([`task_runner_exists`]).
+/// The program behind `pid`, for the tests only: the probes ask after a
+/// name they already have ([`image_still_at`]) or after this very program
+/// ([`task_runner_exists`]), never for a name to record.
 #[cfg(test)]
 pub(crate) fn image_of(pid: u32) -> Option<String> {
     match behind(pid) {
@@ -308,38 +275,31 @@ pub(crate) fn image_of(pid: u32) -> Option<String> {
     }
 }
 
-/// Whether anything is still *running* at `pid` — for a claim that has
-/// no name to compare against and only wants to know whether the work
-/// is still on the machine (`budget::Pool::leftover`). Stricter than
-/// [`process_exists`] in the one way that matters there: a process that
-/// has exited and not been waited on holds nothing, and [`behind`] reads
-/// it as nobody. Answers "alive" when it could not ask, as every probe
-/// here does.
+/// Whether anything is still *running* at `pid` — for a claim with no
+/// name to compare against (`budget::Pool::leftover`). Stricter than
+/// [`process_exists`]: a process that has exited and not been waited on
+/// holds nothing, and [`behind`] reads it as nobody.
 pub(crate) fn running_at(pid: u32) -> bool {
     image_matches(pid, |_| true)
 }
 
 /// Whether `pid` still names this task runner — for the claims nothing
-/// but the runner ever writes (a verify-ui run's hold on a repository, a
-/// shot directory, a config directory). The runner is the one program
-/// this may name outright: it is asking after itself.
+/// but the runner ever writes. The runner is the one program this may
+/// name outright: it is asking after itself.
 pub(crate) fn task_runner_exists(pid: u32) -> bool {
     image_matches(pid, is_task_runner)
 }
 
 /// Whether the program a claim recorded is still the one at `pid` — for
-/// the claims written about somebody else's process, whose name this has
-/// no business knowing (the budget's tickets, out of the program a step
-/// was launched as). The claim carries the answer; this only compares.
+/// claims about somebody else's process (the budget's tickets), whose
+/// name this has no business knowing; it only compares.
 pub(crate) fn image_still_at(pid: u32, recorded: &str) -> bool {
     image_matches(pid, |image| same_image(image, recorded))
 }
 
-/// Whether two spellings name one program. The tolerance is a probe's
-/// own drift and a launcher's — a path where a bare name was expected,
-/// Windows' indifference to case, and the suffix the loader adds to a
-/// program a caller spelled without one ([`stem`]) — and not a guess at
-/// what any particular program is called.
+/// Whether two spellings name one program. The tolerance is a path, case
+/// and the executable suffix ([`stem`]) — never a guess at what any
+/// particular program is called.
 fn same_image(image: &str, recorded: &str) -> bool {
     !recorded.is_empty() && stem(image).eq_ignore_ascii_case(stem(recorded))
 }
@@ -358,12 +318,10 @@ fn basename(image: &str) -> &str {
     image.rsplit(['/', '\\']).next().unwrap_or(image)
 }
 
-/// The same, with the executable suffix off as well — because the two
-/// sides of a comparison are not always written by the same hand. A
-/// claim that records what a *launcher* spelled has `cargo` or `docker`
-/// where the machine hands back the image it loaded, `cargo.exe`
-/// (`budget::Pool::leftover`). A name that is nothing but a suffix is
-/// left whole: two dotfiles are not one program.
+/// The same, with the executable suffix off as well: a claim that records
+/// what a launcher spelled has `cargo` where the machine hands back
+/// `cargo.exe` (`budget::Pool::leftover`). A name that is nothing but a
+/// suffix is left whole: two dotfiles are not one program.
 fn stem(image: &str) -> &str {
     let base = basename(image);
     match base.rsplit_once('.') {
@@ -374,16 +332,13 @@ fn stem(image: &str) -> &str {
 
 /// A program a caller spelled itself, written in the vocabulary a probe
 /// on this machine answers in — for a claim that has to record a name
-/// without paying a process for it (asking the machine costs one, and
-/// the budget records a name on every step of a gate).
+/// without paying a process to ask.
 ///
 /// **Linux keeps only the first fifteen characters of a program's name**
-/// (`TASK_COMM_LEN` less its terminator), so a gate's runner copy is
-/// `xtask-runner-12345` to the launcher and `xtask-runner-1` to `ps` —
-/// and a claim that recorded the whole of it would read as a stranger's
-/// on every step. Nothing else here truncates: Windows hands the image
-/// name back whole and macOS hands back a path, and [`same_image`] takes
-/// the path and the suffix off either side.
+/// (`TASK_COMM_LEN` less its terminator): recorded whole, a runner copy
+/// `xtask-runner-12345` never matches the `xtask-runner-1` that `ps`
+/// answers, and reads as a stranger's on every step. Windows and macOS do
+/// not truncate.
 pub(crate) fn as_probed(program: &str) -> String {
     let stem = stem(program);
     if !cfg!(target_os = "linux") {
@@ -397,12 +352,11 @@ pub(crate) fn as_probed(program: &str) -> String {
 }
 
 /// A pid no process on this machine can carry — for the tests that need a
-/// claim whose process is gone. Spawning a child and reaping it hands its
-/// number back to the kernel, which gives it out again; under a suite
-/// forking git on every thread the number is somebody else's before the
-/// assertion runs, and the test meets a live stranger where it looked for
-/// a corpse. Windows hands out multiples of four only, and Linux stops at
-/// `pid_max`, which is 2^22 at the most: odd, and above both, so nobody's.
+/// claim whose process is gone. A reaped child's pid will not do: the
+/// kernel hands it out again, and under a suite forking git it is a live
+/// stranger's before the assertion runs. Windows hands out multiples of
+/// four only, and Linux's `pid_max` is 2^22 at the most: odd, and above
+/// both.
 #[cfg(test)]
 pub(crate) const NO_SUCH_PID: u32 = 0x7FFF_FFFD;
 
@@ -413,11 +367,6 @@ mod tests {
         task_runner_exists,
     };
 
-    /// A probe that was refused is not a process that is gone. Every
-    /// claim on this machine is broken on the strength of this answer —
-    /// a seat's, a run's, and the room a unit is holding on the
-    /// machine's budget — so a `tasklist` that could not answer comes
-    /// back as the third answer.
     #[test]
     #[cfg(windows)]
     fn a_refused_listing_is_not_a_process_that_is_gone() {
@@ -484,11 +433,8 @@ mod tests {
         }
     }
 
-    /// Two recordings of one program are one program, and nothing here
-    /// knows what any of them is called — which is the point: whatever a
-    /// session is installed as, its claim records that and this compares
-    /// it. An empty recording is not a match with anything, so a claim
-    /// that recorded nothing cannot be read as naming what it met.
+    /// An empty recording matches nothing, so a claim that recorded
+    /// nothing cannot be read as naming what it met.
     #[test]
     fn one_program_is_known_by_the_name_the_claim_recorded() {
         for (image, recorded) in [
@@ -497,9 +443,7 @@ mod tests {
             ("node", "node"),
             ("node.exe", "C:\\Program Files\\nodejs\\node.exe"),
             ("/usr/local/bin/claude", "claude"),
-            // What a launcher spelled against what the loader ran: the
-            // budget's leftover records the program it started, and the
-            // machine hands the image back with the suffix on.
+            // What a launcher spelled against what the loader ran.
             ("cargo.exe", "cargo"),
             ("docker.exe", "docker"),
         ] {
@@ -511,18 +455,15 @@ mod tests {
             ("claude.exe", ""),
             ("", ""),
             ("claude.exe", "claude-code.exe"),
-            // Nothing but a suffix: two of those are not one program.
+            // Nothing but a suffix.
             (".bashrc", ".profile"),
         ] {
             assert!(!same_image(image, recorded), "{image} vs {recorded}");
         }
     }
 
-    /// This process is the runner's own test binary, and the pid no
-    /// process can have is nobody's — whichever probe is asked. A live
-    /// number is not by itself an answer: the runner reads as the runner
-    /// and not as whatever else a claim recorded, which is the whole of
-    /// what the image name adds.
+    /// A live number is not by itself an answer: the runner reads as the
+    /// runner and not as whatever else a claim recorded.
     #[test]
     fn this_process_is_alive_and_the_pid_nobody_can_have_is_not() {
         let me = std::process::id();

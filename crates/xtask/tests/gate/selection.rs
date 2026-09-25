@@ -258,10 +258,8 @@ fn a_harness_change_without_qml_edges_owes_every_recorded_verb() {
     }
 }
 
-/// What no census can name is owed by every verb. A singleton stands in
-/// no item tree, so no run ever reports it and the file that changed
-/// cannot be matched against a line; the same for the app's own Rust,
-/// which is the binary every verb runs.
+/// A singleton stands in no item tree, so no run reports it; the app's
+/// Rust is the binary every verb runs.
 #[test]
 fn a_singleton_and_the_apps_rust_owe_every_verb_the_census_holds() {
     let sb = Sandbox::new("qml-unnameable");
@@ -300,9 +298,7 @@ fn a_singleton_and_the_apps_rust_owe_every_verb_the_census_holds() {
 }
 
 /// The verbs of a side share nothing but the release the first one
-/// builds, so under `--keep-going` a red one stops none of the others:
-/// every verb the change owes runs, the greens are stamped, and the run
-/// after the fix owes the red alone.
+/// builds, so under `--keep-going` a red one stops none of the others.
 #[test]
 fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
     let sb = Sandbox::new("red-verb");
@@ -340,15 +336,10 @@ fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
     assert_eq!(again, set(&[red]), "{again:?}");
 }
 
-/// A verb answered by a stamp another tree wrote **while this one stood
-/// in the queue** built nothing here, so it does not earn the rest of
-/// the block their `--no-build`. Read as a build, every verb after it
-/// would be judging whatever release happened to be lying in this tree
-/// — older than the sources, or absent.
-///
-/// The window between the plan and the look is another tree's to write
-/// in and nothing outside can land in it, so the runner's own switch
-/// stands in for it (`PGG_GATE_FAKE_STAMP`).
+/// A verb stamped by another tree while this one queued built nothing
+/// here; read as a build, the verbs after it would judge whatever release
+/// lies in this tree — stale or absent. Nothing outside can land in that
+/// window, so the runner's switch stands in (`PGG_GATE_FAKE_STAMP`).
 #[test]
 fn a_verb_stamped_while_it_queued_does_not_earn_the_block_its_no_build() {
     let sb = Sandbox::new("stamped-while-queued");
@@ -365,8 +356,8 @@ fn a_verb_stamped_while_it_queued_does_not_earn_the_block_its_no_build() {
         "Item {\n    width: 3\n    property var model: StashModel\n}\n",
     );
     sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
-    // The first of the host's verbs in the plan's order, which is the
-    // one that would otherwise build the release for the rest.
+    // The host's first verb in plan order: the one that would build the
+    // release for the rest.
     let first = "verify stash --preset basic";
     let (ok, text) = sb.gate(
         &sb.seat,
@@ -399,14 +390,12 @@ fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
     );
     sb.commit_all(&sb.seat, "test(app-ui): probe", &[]);
     sb.gate_ok(&sb.seat, &[]);
-    // It stands in a runner of its own, so no census owes it a verb and
-    // nothing here is built: not shipped, not a verb, not bare.
+    // A runner of its own: no census owes it a verb and nothing is built.
     let ran = without_always(&sb.ran());
     assert_eq!(ran, set(&["qmltest", "qmltest-linux"]), "{ran:?}");
 
-    // The qmldir declares the singletons the tests resolve through, so it
-    // is as much of the module as the components are. The file above goes
-    // again, so what stands against main is this and nothing else.
+    // The qmldir declares the singletons the tests resolve through. The
+    // file above goes, so only this stands against main.
     std::fs::remove_file(sb.seat.join("crates/platitude-app/tests/qml/tst_probe.qml")).expect("rm");
     sb.write(
         &sb.seat,
@@ -418,8 +407,7 @@ fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
     let ran = without_always(&sb.ran());
     assert_eq!(ran, set(&["qmltest", "qmltest-linux"]), "{ran:?}");
 
-    // Their README is not something the runner reads, so it is a document
-    // like any other and nothing at all is owed for it.
+    // The runner does not read their README: nothing is owed.
     sb.write(
         &sb.seat,
         "crates/platitude-app/src/ui/qmldir",
@@ -436,8 +424,8 @@ fn a_qtest_file_owes_the_qml_runner_and_nothing_the_app_is_built_for() {
     let ran = without_always(&sb.ran());
     assert!(ran.is_empty(), "{ran:?}");
 
-    // The staging is what a run resolves through, so a change to the
-    // runner is a change nothing else here would exercise.
+    // The staging is what a run resolves through; nothing else exercises
+    // a change to the runner.
     sb.write(
         &sb.seat,
         "crates/xtask/src/qmltest.rs",
@@ -497,8 +485,8 @@ fn a_component_no_verb_shows_stops_the_gate_by_name() {
         !text.contains("ui/Main.qml\n") || text.contains("Main"),
         "{text}"
     );
-    // The census is asked before anything runs, so a line asked of this
-    // gate is recorded too late to answer, and is no road out.
+    // The census is asked before anything runs, so `--verb` here records
+    // too late and is no way out.
     let (ok, text) = sb.gate(&sb.seat, &["--verb", "extra"], &[]);
     assert!(!ok && text.contains("ui/Extra.qml"), "{text}");
     let way_out = text
@@ -512,7 +500,7 @@ fn a_component_no_verb_shows_stops_the_gate_by_name() {
         "{way_out}"
     );
     assert!(sb.ran().is_empty());
-    // A singleton stands in no item tree, so it is never owed a census.
+    // A singleton is never owed a census.
     sb.write(
         &sb.seat,
         "crates/platitude-app/src/ui/Theme.qml",
@@ -528,8 +516,7 @@ fn a_component_no_verb_shows_stops_the_gate_by_name() {
     sb.gate_ok(&sb.seat, &[]);
 }
 
-/// A census holding a row no run wrote chooses nothing: the gate names the
-/// row and runs no step, and the file is as it was.
+/// A row no run wrote: no step runs, and the file is left as it was.
 #[test]
 fn a_census_that_cannot_be_read_whole_stops_the_gate_by_its_row() {
     let sb = Sandbox::new("census-rows");
@@ -619,8 +606,8 @@ fn a_policy_change_owes_cargo_deny_and_nothing_else() {
     assert_eq!(without_always(&sb.ran()), set(&["deny"]));
 }
 
-/// The policy is read against the closure: a
-/// change to neither leaves the step unselected, however far it reaches.
+/// The policy is read against the closure: a change to neither leaves the
+/// step unselected, however far it reaches.
 #[test]
 fn a_source_change_owes_no_policy_check() {
     let sb = Sandbox::new("deny-source");
@@ -630,10 +617,9 @@ fn a_source_change_owes_no_policy_check() {
     assert!(!sb.ran().contains("deny"));
 }
 
-/// A source taken out of the tree has no readers the graph can name —
-/// the graph is read off the tree, and `Main.qml` still naming the pane
-/// resolves to nothing — so its reach is
-/// everything: the one reach that cannot miss the reader.
+/// The graph is read off the tree, so a removed source has no readers it
+/// can name (`Main.qml` naming the pane resolves to nothing): everything
+/// is the one reach that cannot miss them.
 #[test]
 fn a_source_taken_out_of_the_tree_owes_everything() {
     let sb = Sandbox::new("gone");
@@ -656,10 +642,8 @@ fn a_source_taken_out_of_the_tree_owes_everything() {
     }
 }
 
-/// A test file taken out is not that: nothing outside its own binary can
-/// name it, and the root that declared it changes with it — which is
-/// the whole binary, what any change to the core's crate owes (its
-/// clippy, the app's bare start), and nothing beside them.
+/// Unlike a source: nothing outside its binary can name it, and the root
+/// that declared it changes with it.
 #[test]
 fn a_test_taken_out_of_its_binary_owes_that_binary_and_nothing_else() {
     let sb = Sandbox::new("test-gone");
@@ -691,9 +675,8 @@ fn a_test_taken_out_of_its_binary_owes_that_binary_and_nothing_else() {
     );
 }
 
-/// A file moved is a file gone under its old name, and git's rename
-/// detection would list the new name alone: the readers still naming
-/// the old one would then never be reached. Read with renames off.
+/// git's rename detection would list the new name alone, and readers of
+/// the old one would never be reached: read with renames off.
 #[test]
 fn a_renamed_source_is_seen_to_have_gone() {
     let sb = Sandbox::new("renamed");
@@ -777,9 +760,8 @@ fn the_tier_table_says_which_lines_each_gate_owes_and_where() {
     );
 }
 
-/// A full line is still owed before a merge when it is the only line
-/// showing a component the change reaches: waiting for the full gate
-/// would leave that component with no run before the merge.
+/// Waiting for the full gate would leave that component with no run
+/// before the merge.
 #[test]
 fn a_full_line_that_alone_shows_a_reached_component_is_owed_before_the_merge() {
     let sb = Sandbox::new("tiers-alone");

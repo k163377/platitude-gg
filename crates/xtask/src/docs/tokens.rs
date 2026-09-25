@@ -1,38 +1,14 @@
-//! The value cells of internal-docs/デザイン規約.md, as quotations of the
-//! two QML singletons that hold the values.
-//!
-//! `Theme.qml` and `Metrics.qml` are where a token's value lives, and the
-//! comment saying why it is that value lives beside it. The document says
-//! which token a place uses and why that one —
-//! everything a reader needs the Japanese for — and it prints the values
-//! so that a § can be read without opening the source.
-//!
-//! Printing them is the machine's part of that. A value written in
-//! two places drifts on the edit that only
-//! remembers one of them, and the drift reads as correct in both: the
-//! document states a number, the source states a number, and nothing
-//! about either says which one anything is drawn with. So the value cells
-//! are generated. `cargo xtask docs --sync` writes them from the source;
-//! `cargo xtask docs` fails when what stands in the document is not what
-//! the source says.
-//!
-//! Nothing else in the document is touched. Which tokens a table lists,
-//! the order of its rows, the 用途 column and every word of prose are the
-//! writer's, and a machine with an opinion on those would be answering a
-//! question nobody asked it. What this owns is one cell per row.
+//! The value cells of internal-docs/デザイン規約.md, generated from the two
+//! QML singletons that hold the values (the rule: デザイン規約 §本書の運用).
 
 use std::collections::BTreeMap;
 use std::path::Path;
 
-/// The QML singletons that hold the values, in the order they have to be
-/// read: `Metrics` defines values as `Theme`'s, so `Theme` must already
-/// be known when a `Metrics` line naming one is resolved.
 const SOURCES: [&str; 2] = [
     "crates/platitude-app/src/ui/Theme.qml",
     "crates/platitude-app/src/ui/Metrics.qml",
 ];
 
-/// The document whose value cells quote them.
 pub(crate) const DOCUMENT: &str = "internal-docs/デザイン規約.md";
 
 /// One token, as the source declares it.
@@ -41,9 +17,8 @@ struct Token {
     /// declaration runs over several.
     rhs: String,
     /// The token this one is declared as, when the right-hand side is a
-    /// reference to another and nothing else (`laneW: Theme.iconLg`).
-    /// The document prints the derivation beside the number, so that a
-    /// reader sees a lane is an icon square without opening the source.
+    /// reference to another and nothing else (`laneW: Theme.iconLg`); the
+    /// document prints it beside the number.
     via: Option<String>,
     /// What it resolves to: the right-hand side itself, or the literal of
     /// whatever it referred to.
@@ -52,9 +27,8 @@ struct Token {
 
 impl Token {
     /// How the document prints it, or `None` for a value that is not a
-    /// literal at all — the font families are picked from what the
-    /// machine running the app has installed, so there is no number to
-    /// quote and the document says so in prose instead.
+    /// literal (the font families, picked per machine — the document says
+    /// so in prose).
     fn cell(&self) -> Option<String> {
         if let Some(via) = &self.via {
             return Some(format!("{}(={via})", self.literal));
@@ -72,20 +46,17 @@ impl Token {
     }
 }
 
-/// What one run found, so that the caller can say it the way its own
-/// stage says things.
 pub(crate) struct Quoted {
-    /// The cells that do not say what the source says, as sentences.
+    /// What does not quote the source, as sentences.
     pub findings: Vec<String>,
     /// The document with every value cell as the source has it, present
     /// only when that differs from what is on disk.
     pub rewritten: Option<String>,
-    /// How many cells were read, so a run that matched nothing at all is
-    /// not reported as a pass.
+    /// How many cells were read — the pass line prints it, so a run that
+    /// matched nothing shows as 0.
     pub cells: usize,
 }
 
-/// Read the sources, and hold the document's value cells to them.
 pub(crate) fn quote(root: &Path) -> Result<Quoted, String> {
     let mut tokens: BTreeMap<String, Token> = BTreeMap::new();
     for source in SOURCES {
@@ -100,12 +71,9 @@ pub(crate) fn quote(root: &Path) -> Result<Quoted, String> {
     Ok(hold(&text, &tokens))
 }
 
-/// Every `readonly property` in one file, added to what is known.
-///
-/// A declaration whose right-hand side opens a bracket runs on until the
-/// bracket closes (the lane colours take four lines, the font families
-/// two), so the lines are joined before anything is read off them —
-/// otherwise the array reads as unterminated and the value as missing.
+/// Every `readonly property` in one file. A right-hand side that opens a
+/// bracket runs on until it closes, so those lines are joined first — or
+/// the array reads as unterminated.
 fn declared(text: &str, out: &mut BTreeMap<String, Token>) {
     let mut lines = text.lines().peekable();
     while let Some(line) = lines.next() {
@@ -135,15 +103,12 @@ fn declared(text: &str, out: &mut BTreeMap<String, Token>) {
     }
 }
 
-/// How many brackets a right-hand side has opened and not closed.
 fn depth(rhs: &str) -> usize {
     let opened = rhs.matches('[').count();
     let closed = rhs.matches(']').count();
     opened.saturating_sub(closed)
 }
 
-/// Fill in what a reference resolves to, for the declarations that are
-/// nothing but a reference to another token.
 fn resolve(tokens: &mut BTreeMap<String, Token>) {
     let literals: BTreeMap<String, String> = tokens
         .iter()
@@ -163,29 +128,19 @@ fn resolve(tokens: &mut BTreeMap<String, Token>) {
 
 /// Where a row writes the name of the token it is about.
 enum Names {
-    /// In a cell of its own. Several tokens that share a use may be
-    /// folded into it with ` / `, and then the value cell folds their
-    /// values the same way.
+    /// In a cell of its own, possibly several folded (`folded`).
     Cell(usize),
     /// Inside the value cell, after the number (`` 640(`textWidth`) ``).
-    /// The layout table is keyed by the measurement a screen opens at,
-    /// because most of what it lists is the
-    /// starting width of something a hand then drags; the rows that do
-    /// name a token still quote it.
     AfterValue,
 }
 
 /// Which cell of a row names the token, and which cells hold its values.
 struct Shape {
-    /// Where the token's name stands.
     names: Names,
-    /// The cell holding its value.
     value: usize,
-    /// The cell holding the line height of the same token, for the one
-    /// table that sets a type step's two numbers side by side. The token
-    /// is the step's own name with `Line` on the end; a step that has no
-    /// such token has no line height to print, and the document leaves
-    /// the cell as it found it.
+    /// The cell holding the line height: the token is the step's own name
+    /// with `Line` on the end, and a step with no such token keeps the
+    /// cell as it was.
     line: Option<usize>,
 }
 
@@ -327,7 +282,6 @@ struct Cell<'a> {
     to: usize,
 }
 
-/// The cells of a row: what stands between its pipes, in order.
 fn split(line: &str) -> Vec<Cell<'_>> {
     let bars: Vec<usize> = line.match_indices('|').map(|(at, _)| at).collect();
     bars.windows(2)
@@ -346,9 +300,8 @@ fn is_rule(text: &str) -> bool {
 }
 
 /// The token names a cell holds, or `None` when it holds anything else.
-/// A row may fold several tokens that share a use into one line, and then
-/// the value cell folds their values the same way (`iconXs / iconSm / …`
-/// against `10 / 12 / …`), so both sides are read as lists throughout.
+/// A row may fold tokens that share a use (`iconXs / iconSm / …` against
+/// `10 / 12 / …`), so both sides are read as lists throughout.
 fn folded(text: Option<&str>) -> Option<Vec<String>> {
     let bare = text?.trim();
     if bare.is_empty() {
@@ -365,10 +318,9 @@ fn folded(text: Option<&str>) -> Option<Vec<String>> {
     Some(names)
 }
 
-/// The token a value cell names after its own number, for a row written
-/// `` 640(`textWidth`) ``. A cell that names none — most of the layout
-/// table, where the number is a pane's starting width and belongs to the
-/// component that owns the pane — is left where it stands.
+/// The token a value cell names after its own number (`` 640(`textWidth`) ``).
+/// A cell that names none — most of the layout table, whose numbers are
+/// panes' starting widths owned by their components — is left as it stands.
 fn named_after(text: Option<&str>) -> Option<String> {
     let (_, rest) = text?.trim().split_once("(`")?;
     let name = rest.strip_suffix("`)")?;

@@ -1,72 +1,25 @@
 //! `cargo xtask perf` — the memory / startup / fps measurement, repeated
-//! the same way every time.
+//! the same way every time. What each flag does is on the usage page
+//! (`usage.rs`).
 //!
 //! The record in `ci/baseline/perf-windows-x64.md` is only worth anything
 //! if the run behind it can be repeated exactly, so the conditions live
-//! here: release build, a **real window** (offscreen
-//! reports neither memory nor fps honestly), **on one
-//! named screen**, warm cache, the `PGG_AUTO_*` hooks,
-//! WorkingSet sampled every 100ms for its maximum,
-//! causal `perf_done`, and an outer kill guard.
+//! here: release build, a real window (offscreen reports neither memory
+//! nor fps honestly) on one named screen, warm cache, the `PGG_AUTO_*`
+//! hooks, WorkingSet sampled every 100ms for its maximum, causal
+//! `perf_done`, and an outer kill guard.
 //!
-//! **Three of those conditions belong to the machine.** A
-//! window somebody covered, a session somebody locked, a screen that went
-//! to sleep and a parallel build all answer with numbers that read
-//! exactly like a slower application, so the run measures them too and
-//! refuses (`perf::sampler::Conditions`). The benchmark
-//! repository is the fourth, and it is generated for that reason
-//! (`cargo xtask corpus`): a clone is fetched behind the
-//! measurement's back, and a fetch changes the rows, the ref tables
-//! and the commit the interaction opens while `HEAD` holds still.
-//! `perf::corpus` fingerprints whichever repository it is given and
-//! compares that fingerprint either side of the runs.
+//! The machine is a condition too: a covered window, a locked session, a
+//! sleeping screen and a parallel build all read exactly like a slower
+//! application, so the run measures them and refuses
+//! (`perf::sampler::Conditions`). So is the benchmark repository: a fetch
+//! changes the rows, the ref tables and the commit the interaction opens
+//! while `HEAD` holds still, so `perf::corpus` fingerprints it either side
+//! of the runs.
 //!
-//! `--breakdown` adds `PGG_MEM_REPORT=1` and prints the largest `mem
-//! report` line the run produced, which is what says *where* the bytes
-//! are. That needs a binary built with the `memprobe` feature; without it
-//! the line still comes, with `counted=false` and no Rust-heap total.
-//!
-//! `--attribute` answers the other side of that line. The Rust counter
-//! sees nothing of the C++ objects QML builds, tree-sitter's trees or
-//! the fonts DirectWrite maps, so at the end of the `--settle-ms` wait
-//! the settled process is read from outside ([`attribution`]): private /
-//! mapped / image, what is resident by file, and the process heaps block
-//! by block, into `attribution.txt` in each run and a summary at the end
-//! of the report.
-//!
-//! `--shipped` measures the other build — `cargo build --release` with no
-//! features, which is what a person installs. It answers memory and the
-//! time to a finished graph and nothing else, because every `perf_*` line
-//! belongs to the harness the shipped build leaves out; run it beside the
-//! ordinary one to say what carrying the harness costs.
-//!
-//! `--no-font-walk` leaves out the calibration run. By default every
-//! invocation starts with one: the repository opened and driven no
-//! further than a graph, then one glyph the UI family lacks shaped
-//! before `perf_done`, idle either side. That is Qt populating its whole
-//! font database — tens of MB once per process, whichever glyph asked —
-//! and the record reads the budget line net of it, so it is weighed
-//! where the sampler can see it ([`fonts`]). The report says the walk,
-//! and the working set less it.
-//!
-//! `--at <rev>` measures the rig's build of that commit
-//! ([`rig`]): the seat keeps its target/ and its edits, the
-//! number is of a commit anybody can name again, and the other side of
-//! an A/B builds nothing the second time.
-//!
-//! `--software` draws with the software scene graph, and so measures
-//! without needing the display at all: on, off, or a person turning it
-//! on and off while the runs go. The D3D swap chain presents nothing to
-//! a display that is off — its frames never swap, and the driver never
-//! gets past the first one — while the software adaptation's frames go
-//! through the backing store, which waits for no display. Nothing then
-//! holds the screen awake or pokes the input timer, the window is not
-//! raised over whatever a person has in front, and the display's state
-//! is sampled as evidence. What that answers is the working set of a
-//! run that went the whole way — selection, diff, scroll, font walk —
-//! with a renderer of its own; what it cannot answer is anything about
-//! the display path, and the report says so beside every frame number
-//! ([`report`]).
+//! Every invocation starts with a calibration run that weighs the font
+//! database's population, which the record reads the budget line net of
+//! ([`fonts`]; `--no-font-walk` leaves it out).
 
 mod artifacts;
 mod attribution;
@@ -92,8 +45,7 @@ use options::{Options, parse};
 use reading::Reading;
 use report::{mb, report};
 
-/// The escape is read here through [`window_allowed`]: a run told to
-/// stay offscreen needs no window and no ask.
+/// The escape is read by `guard_the_window`.
 pub(crate) static PERF: command::Command = command::Command {
     id: "perf.measure",
     call: "perf --repo <path>",
@@ -112,10 +64,8 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&PERF];
 /// [`measure`] comes round.
 const SAMPLE_MS: u64 = 100;
 
-/// How long a run will wait for the machine to go quiet before giving up
-/// on it. Long enough to outlast a lunch break, since that is exactly the
-/// case: somebody walked away, the session locked, and the measurement
-/// should be taken when they are back.
+/// How long a run waits for the machine to go quiet: long enough to
+/// outlast a lunch break (the session locked while nobody was there).
 const QUIET_CEILING: Duration = Duration::from_secs(1_800);
 
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -136,16 +86,13 @@ fn run_options(opts: Options) -> Result<(), String> {
     let path = crate::qt::path_with_qt()?;
     guard_the_window(&root)?;
 
-    // Held for the whole invocation, and taken before the build: the
-    // screen goes dark between runs as readily as during one, and a
-    // release build is minutes of exactly the idle that darkens it
-    // (`sampler::keep_awake`). A software run holds only the machine:
-    // its frames need no display.
+    // Taken before the build: a release build is minutes of exactly the
+    // idle that darkens the screen. A software run holds only the
+    // machine: its frames need no display.
     let _awake = sampler::keep_awake(!opts.software);
 
-    // The build, announced as one: it waits for a measurement holding
-    // the machine, a measurement waits for it, and the compiles inside it
-    // — this tree's or the rig's — are under this announcement (`still`).
+    // One announced build (`still`), covering the compiles inside it —
+    // this tree's or the rig's.
     let built = {
         let _building = crate::still::busy(&root, "cargo xtask perf (building)")?;
         build(&root, &path, &opts)?
@@ -189,12 +136,11 @@ fn run_options(opts: Options) -> Result<(), String> {
     )?;
     announce(&output, corpus.as_ref(), screen.as_ref(), &opts);
 
-    // After the build and before the runs: the build can share the
-    // machine, the runs cannot (`still`). Every build here waits for this
-    // to lift, and this waits for the ones already under way.
+    // After the build, before the runs: the build can share the machine,
+    // the runs cannot (`still`).
     let _still = crate::still::hold(&root, "cargo xtask perf")?;
-    // Decided under the hold, after whatever the hold waited out: a
-    // build that ran meanwhile is what would have made the cache cold.
+    // Decided under the hold: a build the hold waited out is what would
+    // have made the cache cold.
     let warmed = warmth::Warmed::now(
         &exe_hash,
         corpus.as_ref().map_or("-", |corpus| corpus.token.as_str()),
@@ -242,9 +188,6 @@ fn run_options(opts: Options) -> Result<(), String> {
     Ok(())
 }
 
-/// What the runs are about to be taken under, said before the first:
-/// where the evidence lands, which repository, which screen, and
-/// whether the screen is being held awake or left alone (`--software`).
 fn announce(
     output: &std::path::Path,
     corpus: Option<&corpus::Corpus>,
@@ -266,9 +209,8 @@ fn announce(
     }
 }
 
-/// The exe this invocation measures: the rig's build of the commit
-/// `--at` named, or this tree's own build — of whatever the tree holds,
-/// edits included, which is what the evidence's `source.patch` is for.
+/// The rig's build of `--at`'s commit, or this tree's own — edits
+/// included, which the evidence's `source.patch` records.
 fn build(
     root: &std::path::Path,
     path: &std::ffi::OsStr,
@@ -287,8 +229,7 @@ fn build(
     })
 }
 
-/// The app built in `tree` with the feature set the options name — the
-/// one place the harness, memprobe and shipped choice is spelled for a
+/// The one place the harness / memprobe / shipped choice is spelled for a
 /// build, so the shelf and the manifest name what was built
 /// (`Options::features`).
 fn build_in(
@@ -327,12 +268,10 @@ fn scenario(opts: &Options) -> String {
     )
 }
 
-/// The calibration run, before the others: the repository opened and
-/// driven no further than a graph, then the font walk, idle either side
-/// (`fonts`). The discarded run still stands — this opens nothing a
+/// The font-walk calibration run (`fonts::calibration`), before the
+/// others. It does not replace the discarded run: it opens nothing a
 /// `git show` reads, so the cold cache is still the first run's to pay
-/// (`warmth`) — and its one number is read beside the kept runs.
-/// `None` where the invocation declined it.
+/// (`warmth`).
 fn calibrate(
     bench: &Bench<'_>,
     opts: &Options,
@@ -346,10 +285,9 @@ fn calibrate(
     Ok(reading.font_walk)
 }
 
-/// Which run the kept ones start at. The first run is discarded to pay
-/// for a cold cache — unless an invocation minutes ago warmed exactly
-/// this and nothing built since, in which case every run is kept
-/// (`warmth`).
+/// Which run the kept ones start at: run 0 is discarded to pay for a
+/// cold cache, unless an invocation minutes ago warmed exactly this and
+/// nothing built since (`warmth`).
 fn first_run(root: &std::path::Path, warmed: &warmth::Warmed, opts: &Options) -> u32 {
     if opts.cache != "warm" {
         println!(
@@ -384,7 +322,6 @@ fn first_run(root: &std::path::Path, warmed: &warmth::Warmed, opts: &Options) ->
     first
 }
 
-/// Everything one run needs, held once so a run is `take(n)`.
 struct Bench<'a> {
     output: &'a std::path::Path,
     exe: &'a std::path::Path,
@@ -395,19 +332,10 @@ struct Bench<'a> {
 }
 
 impl Bench<'_> {
-    /// Whether the scroll bench was presented at all, read against what
-    /// the screen it was on could have shown.
-    ///
-    /// This is the gate that focus cannot be. A window that is not in
-    /// front is still composited and still presents — the app does not
-    /// always take the focus off the shell that started it — and there
-    /// is no API that answers "was it covered". The frames answer it.
-    ///
-    /// **Too few frames.** A bench that received nothing at
-    /// all never finished, so it never reached here: it was killed at
-    /// `measure::SCROLL_CEILING` and classified there. What is left for
-    /// this to catch is a bench that ran to the end on so few frames
-    /// that its fps is not a reading of the application.
+    /// The gate focus cannot be: a window not in front still presents (the
+    /// app does not always take the focus), and no API answers "was it
+    /// covered" — the frames do. A bench that got no frames at all died at
+    /// `measure::SCROLL_CEILING` and never reaches here.
     fn frames_delivered(&self, reading: &Reading) -> Option<String> {
         frames_delivered(
             self.screen.map(|screen| screen.hz),
@@ -418,16 +346,9 @@ impl Bench<'_> {
     }
 
     /// One run, taken again for as long as its cause's budget allows
-    /// (`measure::Spoiled::budget`). `opts` is the run's own: the
-    /// calibration run drives less than the kept ones
-    /// (`fonts::calibration`).
-    ///
-    /// A run spoiled by the host is thrown away and taken again:
-    /// published, it would read as a slow application, and it is
-    /// no failure of one either, so it ends nothing. Between
-    /// attempts the runner waits for the machine — which is what
-    /// makes "somebody walked away and the session locked" end in
-    /// a measurement.
+    /// (`measure::Spoiled::budget`), each attempt after the machine went
+    /// quiet. `opts` is the run's own: the calibration run drives less
+    /// than the kept ones (`fonts::calibration`).
     fn take(&self, run: &str, opts: &Options, retries: &mut u32) -> Result<Reading, String> {
         let mut attempt = 0;
         let mut spent = [0u32; measure::Spoiled::CAUSES];
@@ -446,10 +367,8 @@ impl Bench<'_> {
                 .map_err(|e| e.to_string())?;
             display::capture(&run_dir, "after")?;
             let spoiled = match result {
-                // The host conditions were read inside `measure`, which
-                // is what an `Ok` means — what is left to ask is the one
-                // question only the frames answer, and too few frames is
-                // the machine's doing as much as a lock is.
+                // An `Ok` already passed the host conditions; too few
+                // frames is the machine's doing as much as a lock is.
                 Ok(reading) => match self.frames_delivered(&reading) {
                     None => return Ok(reading),
                     Some(complaint) => measure::Spoiled::Host(complaint),
@@ -475,12 +394,9 @@ impl Bench<'_> {
     }
 }
 
-/// Whether the scroll bench was presented at all, read against what the
-/// screen it was on could have shown. `None` where there is nothing to
-/// read it against — a run with no scroll, a screen whose mode table
-/// owned no refresh rate, or a software run, whose frames reach no
-/// screen and whose rate is the software scene graph's own
-/// (`measure::command`).
+/// The complaint when the scroll delivered under `limits.frame_share` of
+/// the screen's rate. A software run is never read against the screen:
+/// its frames reach none (`measure::command`).
 fn frames_delivered(
     hz: Option<u32>,
     fps: Option<f64>,
@@ -502,11 +418,10 @@ fn frames_delivered(
     })
 }
 
-/// One graphics stack across the kept runs. Two runs that drew on
-/// different adapters are not each other's control, and a machine can
-/// offer several — a discrete, an integrated and the basic render driver
-/// (the rig's own: ci/baseline/perf-windows-x64.md §計測条件.
-/// `QT_D3D_ADAPTER_INDEX` is the lever if Qt ever takes a different one).
+/// Two runs that drew on different adapters are not each other's
+/// control, and a machine can offer several (the rig's:
+/// ci/baseline/perf-windows-x64.md §計測条件). `QT_D3D_ADAPTER_INDEX` is
+/// the lever if Qt ever takes a different one.
 fn one_graphics_stack(kept: &[Reading]) -> Result<(), String> {
     let Some(first) = kept.first() else {
         return Ok(());
@@ -522,9 +437,6 @@ fn one_graphics_stack(kept: &[Reading]) -> Result<(), String> {
     ))
 }
 
-/// The corpus again at the end: a fetch that landed between the first run
-/// and the last one leaves every earlier reading measuring a different
-/// repository from the later ones.
 fn unmoved_corpus(opts: &Options, before: Option<&corpus::Corpus>) -> Result<(), String> {
     let Some(before) = before.filter(|_| opts.open) else {
         return Ok(());
@@ -544,8 +456,8 @@ fn corpus_line(corpus: Option<&corpus::Corpus>) -> String {
     corpus.map_or_else(|| "no repository".to_string(), ToString::to_string)
 }
 
-/// One run's line. `walk=` is the graph walk; the font walk, where the
-/// run paid one, follows it by name.
+/// `walk=` is the graph walk; the font walk, where the run paid one,
+/// follows it by name.
 fn say(run: &str, note: &str, reading: &Reading) {
     println!(
         "  run {run}{note}: ws={:.1}MB private={:.1}MB startup={} graph={} walk={} fps={}{}",
@@ -563,11 +475,9 @@ fn say(run: &str, note: &str, reading: &Reading) {
     );
 }
 
-/// The one command in the task runner that opens a real window.
-///
-/// `cargo xtask hook pre-shell` cannot see this one because it names no app
-/// binary. A worktree window can overlap another session's screenshot, so
-/// the explicit `PGG_ALLOW_GUI=1` remains the authorization boundary.
+/// `cargo xtask hook pre-shell` cannot see this command (it names no app
+/// binary), so `PGG_ALLOW_GUI=1` is checked here: a worktree window can
+/// overlap another session's screenshot.
 fn guard_the_window(root: &std::path::Path) -> Result<(), String> {
     let in_worktree = root
         .to_string_lossy()
@@ -609,9 +519,6 @@ mod tests {
         assert!(complaint.contains("180Hz"), "{complaint}");
     }
 
-    /// Nothing to read the frames against is not a spoiled run: a screen
-    /// whose mode table owned no rate, a run that did not scroll, and a
-    /// software run, whose frames reach no screen by design.
     #[test]
     fn a_run_with_nothing_to_compare_against_is_not_refused() {
         let limits = Limits::default();
@@ -619,9 +526,8 @@ mod tests {
         assert!(frames_delivered(Some(0), Some(1.0), &limits, false).is_none());
         assert!(frames_delivered(Some(180), None, &limits, false).is_none());
         assert!(frames_delivered(Some(180), Some(12.0), &limits, true).is_none());
-        // --allow-noisy publishes the frames a covered window did
-        // deliver. One that delivered none still dies at
-        // `measure::SCROLL_CEILING`, where there is no reading to open.
+        // --allow-noisy publishes what a covered window did deliver; one
+        // that delivered none still dies at `measure::SCROLL_CEILING`.
         assert!(frames_delivered(Some(180), Some(1.0), &Limits::OPEN, false).is_none());
     }
 

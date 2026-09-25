@@ -1,21 +1,11 @@
-//! A digest both machines compute the same way.
+//! SHA-256, the host's side of what `gate::evidence` compares with the
+//! container's `sha256sum` — so it has to be the same algorithm, not
+//! merely a cheaper fingerprint.
 //!
-//! Evidence taken on two sides of a mount is only evidence if the two
-//! sides can be compared (`gate::evidence`): equal byte counts and two
-//! digests of different kinds cannot tell "the same file" from "a
-//! different file of the same length", which is the question the
-//! evidence is there to answer. The container's side is `sha256sum`,
-//! which every coreutils has; this is the host's side of the same
-//! answer.
-//!
-//! In here, because a dependency is a human's decision (CLAUDE.md
-//! 絶対制約) and the task runner's are std only. It is a fingerprint
-//! a second machine can also produce, pinned to the published
-//! vectors below — a chosen collision is outside what it
-//! answers.
+//! Hand-written because xtask is std only; a chosen collision is outside
+//! what it answers.
 
-/// FIPS 180-4 §4.2.2. Laid out as the standard prints it — eight rows
-/// of eight — so a reader can check it against the table it came from.
+/// FIPS 180-4 §4.2.2, eight to a row as the standard prints it.
 #[rustfmt::skip]
 const K: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -34,13 +24,11 @@ const H0: [u32; 8] = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
-/// The SHA-256 of these bytes, lowercase hex — the same 64 characters
-/// `sha256sum` prints for the same bytes.
+/// Lowercase hex — the 64 characters `sha256sum` prints for the same bytes.
 pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     let mut h = H0;
-    // The message, padded: 0x80, zeros to 56 mod 64, then the length in
-    // bits, big-endian (FIPS 180-4 §5.1.1). Built a block at a time so
-    // nothing here holds a second copy of the file.
+    // Padding per FIPS 180-4 §5.1.1. Only the tail is copied, so nothing
+    // here holds a second copy of the file.
     let blocks = bytes.chunks(64);
     let mut tail = Vec::with_capacity(128);
     for block in blocks {
@@ -62,9 +50,8 @@ pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     h.iter().map(|word| format!("{word:08x}")).collect()
 }
 
-/// One 64-byte block into the state (FIPS 180-4 §6.2.2). The caller
-/// hands whole blocks: a short slice would read as zeros, which is a
-/// different message.
+/// FIPS 180-4 §6.2.2. The caller hands whole 64-byte blocks: a short
+/// slice would read as zeros, which is a different message.
 fn compress(h: &mut [u32; 8], block: &[u8]) {
     let mut w = [0u32; 64];
     for (at, word) in w.iter_mut().take(16).enumerate() {
@@ -109,9 +96,7 @@ fn compress(h: &mut [u32; 8], block: &[u8]) {
 mod tests {
     use super::*;
 
-    /// The published vectors (FIPS 180-4 / NIST CAVP): the empty
-    /// message, one short of a block, one that pads into a second block,
-    /// and one long enough to run many.
+    /// FIPS 180-4 / NIST CAVP.
     #[test]
     fn the_published_vectors_come_out() {
         for (message, digest) in [
@@ -137,8 +122,7 @@ mod tests {
         }
     }
 
-    /// A million bytes, which is the vector that says the block loop
-    /// carries state across as many blocks as a lock file has.
+    /// State carries across as many blocks as a lock file has.
     #[test]
     fn the_long_vector_comes_out() {
         assert_eq!(
@@ -147,8 +131,6 @@ mod tests {
         );
     }
 
-    /// A length that lands exactly on the boundary where the padding
-    /// needs a whole block of its own.
     #[test]
     fn a_message_that_fills_its_last_block_pads_into_another() {
         assert_eq!(

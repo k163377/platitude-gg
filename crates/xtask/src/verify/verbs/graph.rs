@@ -36,35 +36,27 @@ pub(super) const TABLE: &[Verb] = &[
                 "perf_complete selection=first details=true diff=true graph=false scrolled=false",
             ),
             // The last of the calibration run's three lines, said only
-            // once the walk before it was paid and left to settle.
+            // once the walk before it settled.
             (Arg::Is("font-walk"), "perf_font_walk_settled clock_ms="),
         ],
         plain: "perf_complete selection=first details=true diff=true graph=true scrolled=true",
     },
-    // The eye at the end of the TAGS band. Both sides of it frame as
-    // a graph with the same tags listed beside it, and what separates
-    // them — a row, and every tag chip — depends on the repository, so
-    // the picture cannot say on its own whether the switch answered.
-    // `there=` is the named tag's commit, held against `shown=`: off
-    // takes the commits nothing but a tag reaches out of the walk, and
-    // pressing again brings them back.
+    // The eye at the end of the TAGS band. `there=` is the named tag's
+    // commit, held against `shown=`: off takes the commits only a tag
+    // reaches out of the walk, and pressing again brings them back.
     Verb {
         name: "tags-eye",
         when: &[(Arg::Ends(":back"), "tags_eye shown=true there=true")],
         plain: "tags_eye shown=false there=false",
     },
-    // A commit of what is staged over a tree that keeps the rest: the
-    // one shape where the uncommitted row survives its own commit, so
-    // the pair shows the row moving. `moved=` is
-    // HEAD, and `wipRow=true` on the far side is the row drawn again
-    // above where it went — which is the whole claim, since a row the
-    // graph had to be walked for a second time would be missing from
-    // that frame.
+    // Committing what is staged over a tree that keeps the rest — the one
+    // shape where the uncommitted row survives its own commit. `moved=` is
+    // HEAD; `wipRow=true` is the row drawn again above where it went (a
+    // graph walked a second time would be missing it from that frame).
     //
-    // `during` is the write out and the picture not yet moved. **The
-    // three flags are what is judged**: where the swap
-    // lands between the latch and the grab the flags still describe the
-    // moment the run stopped at, and the picture is read by eye.
+    // `during` is the write out and the picture not yet moved. The flags
+    // are judged: if the swap lands between the latch and the grab they
+    // still describe the moment the run stopped at.
     Verb {
         name: "wip-commit-half",
         when: &[(
@@ -73,15 +65,12 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "wip_half stage=after busy=false moved=true wipRow=true",
     },
-    // The two verbs whose whole picture is the card in overlay.png,
-    // and the one line that says the card is in it: `popups=` is the
-    // window overlay's own count of what it was holding when the
-    // mirror was refreshed for the shot, so a blank overlay.png can
-    // only mean nothing was open. Any verb whose subject is a menu, a
-    // dialog or a tooltip can be judged the same way — these two are
-    // where it bit (observed: two of four concurrent `commit-menu`
-    // runs photographed a blank overlay and passed). `reset-menu`
-    // counts two because the submenu is a popup of its own.
+    // The card in overlay.png is the whole picture. `popups=` is the
+    // window overlay's count when the mirror was refreshed for the shot,
+    // so a blank overlay.png can only mean nothing was open — otherwise a
+    // mirror refreshed over an empty overlay passes. Any verb whose
+    // subject is a menu, dialog or tooltip can be judged this way.
+    // `reset-menu` counts two: the submenu is a popup of its own.
     Verb {
         name: "commit-menu",
         when: &[],
@@ -92,13 +81,10 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "overlay saved=true popups=2",
     },
-    // The two cards this menu ends with, opened one level in (デザイン規約
-    // §メニュー の入れ子). Judged the same way and for the same reason:
-    // what is being looked at is entirely inside the second popup, so a
-    // run that opened nothing frames as a menu nobody pressed. `branch-
-    // card` is also the proof that a graph row offers what its own chip
-    // offers — an empty card would take its row with it and the run
-    // would come back with one popup.
+    // The menu's two nested cards (デザイン規約 §メニュー の入れ子),
+    // judged as above. `branch-card` also proves a graph row offers what
+    // its chip offers — an empty card takes its row with it, leaving one
+    // popup.
     Verb {
         name: "branch-card",
         when: &[],
@@ -109,76 +95,60 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "overlay saved=true popups=2",
     },
-    // The delete that card offers, run to git's answer from this
-    // entrance. **Nothing here is a picture**: the row is left standing
+    // The delete that card offers, run to git's answer. The row stays up
     // for a refusal (`AppMenuItem.staysOpen`), so what is judged is the
-    // card going once none is coming — and a card that closed frames
-    // exactly like one that was never opened. `code=` is the other half,
-    // since a refused delete would leave the menu up for a reason of its
-    // own: on a landing the row is still wearing `branch --delete`,
-    // where a refusal turns it into `branch -D`.
+    // card going once none came; `code=` tells a landing (still
+    // `branch --delete`) from a refusal (turned `branch -D`).
     Verb {
         name: "delete-branch-chip",
         when: &[],
         plain: "chip_delete branch=base row=-1 code=branch --delete menu=false card=false",
     },
-    // The card a chip unfolds into, standing over the chip: the card is
-    // placed at the chip's near edge and its rows are measured to their
-    // own names, so a chip wearing a `+N` and a fan is wider than any of
-    // them — and the end of its frame left showing past the card is a
-    // few pixels no reduced picture holds. `covers=` is read off the two
-    // boxes as the scene has them, the chip where it stands once its
-    // sheets are down.
+    // The card a chip unfolds into must cover the chip. It sits at the
+    // chip's near edge with rows measured to their names, so a chip with
+    // a `+N` and a fan is wider and its end shows past the card by a few
+    // pixels. `covers=` reads the two boxes, the chip as it stands once
+    // its sheets are down.
     Verb {
         name: "ref-list",
         when: &[],
         plain: "covers=true",
     },
-    // The same card, opened from the stand-in for a HEAD scrolled off:
-    // the stand-in writes where the pointer is and asks for it itself,
-    // so `on=` is the card having landed on its chip rather than on a
-    // row's — the one thing that takes its sheets down and holds its
-    // ground lit.
+    // The same card from the stand-in for a HEAD scrolled off, which asks
+    // for it itself: `on=` is the card landing on the stand-in's chip, not
+    // a row's — the one that takes its sheets down and keeps its ground lit.
     Verb {
         name: "graph-head-list",
-        // `click` presses the card's first row: that is the stand-in's
-        // press, so the row it stands for comes on screen and is the one
-        // read — the card and the stand-in both gone, and the rows under
-        // the hand told the rest of the gesture is not theirs (a
-        // double-click's second press lands on whatever row is there).
-        // `held=` is the row that came under the still hand opening
-        // nothing on its chip: a card there was the picture reported.
+        // `click` presses the card's first row = the stand-in's press: its
+        // row comes on screen and is read, card and stand-in gone, and the
+        // rows under the hand are told the gesture is not theirs (a
+        // double-click's second press lands there). `held=`: the row that
+        // came under the still hand opens nothing on its chip.
         when: &[(
             Arg::Is("click"),
             "list=false landed=true pin=false hushed=true held=true",
         )],
         plain: "shown=true list=true on=true covers=true",
     },
-    // The pointer resting on one of that card's rows. The wash is one
-    // shade over the card's own ground, so a row that never took the
-    // answer frames the same as one that did — and the row worth aiming
-    // at is one with nowhere to go, which is what `nowhere=` pins down:
-    // every other row is told apart by the colour of its name as well,
-    // so the wash is the only thing that row has.
+    // The pointer resting on one of that card's rows. `nowhere=` pins the
+    // aim to a row with nowhere to go: the others differ by name colour
+    // too, and the one-shade wash is all that row has.
     Verb {
         name: "ref-list-lit",
         when: &[],
         plain: "list=true lit=true nowhere=true",
     },
-    // A held click in that list moves the choice and nothing else: the
-    // commit read stays, two rows draw themselves chosen, and the card
-    // stays up — a press that took the plain road would have closed it
-    // and read the row instead.
+    // A held click in that list moves the choice alone: the commit read
+    // stays, two rows draw themselves chosen, and the card stays up.
     Verb {
         name: "ref-list-choose",
         when: &[],
         plain: "chosen=2 lit=2 read=true list=true",
     },
     // The name a row of that list opens under itself, pressed: the card
-    // goes with the press (it stands over the row it was opened from),
-    // the graph's row for the commit that name is on is lit, and the
-    // rows the card stood over were told the rest of that gesture is
-    // not theirs — the second press of a double-click lands on them.
+    // goes, the graph lights that name's commit, and the rows under the
+    // card are told the gesture is not theirs (a double-click's second
+    // press lands on them).
     Verb {
         name: "ref-list-follow",
         when: &[],
@@ -191,138 +161,91 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "list=true aimed=true",
     },
-    // The pointer resting on the note a cut message puts out. `lit=`
-    // alone is the rule that was always kept — the line under the words
-    // is the words' own colour — so what pins this note's step down is
-    // `word=`: the note is the one target in that family whose words are
-    // `textMuted`, and a rule following them there moved by half the step
-    // the same vocabulary makes anywhere else. The hex is the token's
-    // value; move `textSecondary` and this line moves with it.
+    // The pointer resting on the note a cut message puts out. The rule
+    // under the words takes the words' colour, so `lit=` alone passes;
+    // `word=` pins the step — this note alone rests at `textMuted`, where
+    // following the words moves half the step it makes elsewhere. The hex
+    // is `textSecondary`'s value; move the token and this line moves too.
     Verb {
         name: "card-note-lit",
         when: &[],
         plain: "card_note lit=true word=#94a3b8",
     },
-    // The card that stays away. A picture cannot carry an
-    // absence on its own — an empty overlay would frame the same as a
-    // run whose hover request never arrived — so the menu is judged
-    // with it: `menu=true` says there was something for the card to be
-    // behind. Read as a pair with `row-card`, which proves that same
-    // input does open the card.
+    // The card stays away while a menu is up: `menu=true` says there was
+    // something for it to be behind. Paired with `row-card`, which proves
+    // the same input opens it.
     Verb {
         name: "menu-hover",
         when: &[],
         plain: "menu_hover menu=true card=false",
     },
-    // The card of a row's own message, and the row it came out of.
-    // `lit=` is the half a picture answers badly: the band is one
-    // shade off the ground under a card that covers the rows below
-    // it, and the card takes the pointer off the row the moment the
-    // hand walks in to read it — so the row went dark while its own
-    // card stood, and nothing on screen said which commit the message
-    // was of.
+    // The card of a row's message. `lit=`: the card takes the pointer off
+    // the row as the hand walks in, and a row gone dark leaves nothing on
+    // screen saying which commit the message is of.
     Verb {
         name: "row-card",
         when: &[],
         plain: "row_card open=true lit=true",
     },
-    // The hand that walked down into that card and came back to the row
-    // it came off. **Not a picture's question at all**: a card held up
-    // and a card taken down and opened again frame identically once the
-    // beats are over, and the only difference a reader sees is the blink
-    // and the sideways step in between (P3-確認事項, observed).
-    //
-    // `held=` is the claim — the hold is back in the same turn as the
-    // return, which is the only way it beats `hoverKeepMs`.
-    //
-    // **`moved=` is a guard.** The seat comes off the
-    // row's own `pointerX`, which is `MouseArea.mouseX` and therefore the
-    // one thing a headless run cannot write (verify-ui §hover の絵の撮り方):
-    // the card cannot slide here whatever the code does, so this field
-    // holds a future seat worked out from something a run *can* move, and
-    // the sideways step a real hand sees is argued from where the seat
-    // comes from.
+    // The hand walks into that card and back to its row, and the card
+    // stays (rules-refs/app-ui.md「カードが既に出ている行へ手が戻ったら」).
+    // `held=` is the claim: the hold is back in the same turn as the
+    // return, the only way it beats `hoverKeepMs`. `moved=` is a guard for
+    // a seat worked out from something a run can move: today the seat
+    // comes off `MouseArea.mouseX`, which a headless run cannot write
+    // (verify-ui §hover の絵の撮り方), so the card cannot slide here.
     Verb {
         name: "row-card-return",
         when: &[],
         plain: "row_card_return held=true open=true moved=false oid=true",
     },
-    // The note under a message that card had to cut, pressed. Three of
-    // the four are things a picture frames the same either way: a card
-    // that never opened and a card that closed leave the same empty
-    // overlay, the mark the pane wears says nothing about *why* it is
-    // there, and the row the selection landed on is not written
-    // anywhere on screen. `picked=` is the whole of the claim — the
-    // press has to land on the commit the card was of, whatever row
-    // the page had before.
+    // The note under a cut message, pressed. `picked=` is the claim: the
+    // press lands on the commit the card was of, whatever row the page
+    // had before.
     Verb {
         name: "card-message",
         when: &[],
         plain: "card_message open=false picked=true mark=true shown=true",
     },
-    // The same walk, carried on to Escape. A picture cannot answer any of
-    // it: a mark put away frames exactly like a mark that was never
-    // raised, and whether the page took the key or let it pass is not
-    // drawn at all. `took=` is the half that matters — the mark going is
-    // only this page's doing if this page is what answered.
+    // The same walk carried on to Escape. `took=`: the mark going is this
+    // page's doing only if this page answered the key.
     Verb {
         name: "card-message-esc",
         when: &[],
         plain: "card_message_esc mark=false took=true picked=true",
     },
-    // The same card's words taken from the air around them — the
-    // padding band, the step between two lines, the room beside a
-    // short one (規約 §hover のツールチップ). This card is the one
-    // worth sweeping: several lines and a badge row beside them, where
-    // a card of one sentence would prove the padding band and nothing
-    // else.
-    //
-    // `all=`, for the reason `tip-sweep` carries — how much air a card
-    // has depends on the words in it. `open=` rides with it because a
-    // card that never came up has no air either, and a run with
-    // nothing to press fails here.
+    // The card's words taken from the air around them — padding band,
+    // line step, room beside a short line (規約 §hover のツールチップ).
+    // This card has several lines and a badge row; a one-sentence card
+    // proves only the padding. `all=` as in verbs.md §面の掃き; `open=`
+    // fails a card that never came up.
     Verb {
         name: "card-sweep",
         when: &[],
         plain: "card_sweep all=true caret=true hand=true open=true",
     },
-    // Where a graph row divides into the chip's half and the commit's,
-    // asked at one point along the row. The picture shows which card
-    // came out, but not which point was asked for or whether that is
-    // the one the reader would have called it, so the run carries the
-    // question with the answer and is judged on the two agreeing —
-    // and on the other card being shut, since only one of the two is
-    // ever meant to be out.
+    // Where a graph row divides into the chip's half and the commit's.
+    // The run carries the point asked with the card that came out and is
+    // judged on the two agreeing, and on the other card being shut.
     Verb {
         name: "row-part",
         when: &[],
         plain: "agrees=true",
     },
-    // Naming one of the stacked names: the row's own menu, aimed at
-    // the name under the press. Three things the picture cannot
-    // carry. **`list=`** — the card the press was made
-    // on has to still be standing under the menu, and a list that went
-    // down leaves a menu that frames exactly like one raised from the
-    // row. **`branch=` / `tag=`** — which card the naming brought up is
-    // the whole of what this gesture decides, and a card that is on the
-    // menu but not opened is not drawn at all. The tag row of the
-    // stacked list is the case worth pinning: it must swap the cards
-    // over.
-    // The chip's own entrance, which raises the row's menu aimed at
-    // that name — there is no second menu on the chip's side of the
-    // column (デザイン規約 §グラフ行の右クリック). **`ref=`
-    // is the one that stays away**: a picture of the ref menu
-    // and a picture of this one differ by rows nobody counts by eye.
+    // `list-menu` (below) names one of the stacked names: the row's menu
+    // aimed at the name under the press. `list=`: the card pressed on
+    // still stands under the menu. `branch=` / `tag=`: which card the
+    // naming brought up — the stacked list's tag row must swap them over.
     //
-    // **What a window is for here is the aim**, not the row: that the
-    // press reaches `CommitMenuState.askRefRows` with the name the chip
-    // drew and the branch the tree is on. Whether the row is then drawn
-    // from that answer is `tst_commitrowmenu.qml`, and which answer the
-    // state comes to is `offers::ref_menu`. So the two lines are the two
-    // aims — a name the tree is not on, and the one it is — and neither
-    // stands for the other: they read the lookup from opposite sides.
-    // A run naming no branch at all is not one of them; it aims at an
-    // empty name, which is a row the graph never draws.
+    // The chip's own entrance raises the row's menu aimed at that name —
+    // no second menu on the chip's side (デザイン規約 §グラフ行の右クリック);
+    // `ref=false` is the ref menu staying away. A window checks the aim:
+    // the press reaches `CommitMenuState.askRefRows` with the chip's name
+    // and the tree's branch (the drawing is `tst_commitrowmenu.qml`, the
+    // answer `offers::ref_menu`). The two lines are the two aims — a name
+    // the tree is not on, and the one it is; neither stands for the
+    // other. A run naming no branch aims at an empty name, which the graph
+    // never draws.
     Verb {
         name: "chip-menu",
         when: &[],
@@ -341,20 +264,13 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "list_menu list=true menu=true",
     },
-    // Several commits held at once, taken one at a time with Ctrl and
-    // swept with Shift. **The tally is the completion's** — the run
-    // will not finish until the page holds as many as it pressed *and*
-    // that many rows draw themselves lit, so a choice that never
-    // reached the rows runs into the watchdog instead of reporting.
-    // What is left for this line is the half the completion cannot
-    // reach: a held press moves the choice alone, and a picture of
-    // three lit rows says nothing about which of them the pane on
-    // the right is describing.
-    // `spare=0` is the other half a picture cannot answer: the list
-    // stands as tall as what it holds, **its own top margin counted**.
-    // Counted from the rows alone it came out one margin short, which is
-    // a view that scrolls two pixels to reach nothing at all — and two
-    // pixels of scroll frame exactly like none.
+    // Several commits held at once, by Ctrl and by Shift. The completion
+    // owns the tally (the run finishes only once the page holds as many
+    // as it pressed and that many rows are lit); this line is the rest: a
+    // held press moves the choice alone, and three lit rows say nothing
+    // of which one the right pane describes. `spare=0`: the list stands
+    // as tall as it holds, its own top margin counted — counted from the
+    // rows alone it scrolls two pixels to reach nothing.
     Verb {
         name: "graph-choose",
         when: &[],
@@ -365,90 +281,65 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "read=true wip=false spare=0",
     },
-    // The row of that list cuts its summary to a line; the card its rest
-    // opens holds nothing back and offers no way out of itself. Neither
-    // half is a thing a picture answers — a mark is a few pixels wide, so
-    // a row that dropped the tail frames like one that did not, and a
-    // card that held its body back frames as a shorter card. `lit=` is
-    // the band the row keeps under the card, which takes the pointer off
-    // it the moment it is up.
-    // At the wall the card does stop — the room the window has is what
-    // bounds it, and a message past that has to end somewhere or the card
-    // covers the pane it was opened from. So `held=` is dropped there and
-    // the rest of the claim stands: the card is up, it offers no way out
-    // of itself, and the row it came off keeps its band.
+    // The list's row cuts its summary to a line; the card its rest opens
+    // holds nothing back and offers no way out of itself. `lit=` is the
+    // band the row keeps under the card, which takes the pointer off it.
+    // At the window's wall the card does stop — past it, it would cover
+    // the pane it came from — so `7:8:11` drops `held=` and keeps the rest.
     Verb {
         name: "graph-choose-said",
         when: &[(Arg::Is("7:8:11"), "open=true door=false lit=true")],
         plain: "open=true door=false lit=true held=false",
     },
-    // And the words being a reader's to take away, reached from every
-    // corner of the row's air: a hand that works from the middle and
-    // nowhere else is the fault this kind of row ships with. `hand=`
-    // is the half a sweep cannot say for itself — a pad whose area had
-    // been taken out would answer every sweep it was asked and never
-    // see a press.
+    // The row's words, reached from every corner of its air. `hand=` as in
+    // verbs.md §面の掃き.
     Verb {
         name: "graph-choose-sweep",
         when: &[],
         plain: "all=true caret=true hand=true",
     },
-    // And what a row of the merged file list opens: each chosen commit's
-    // own patch of that file, one band after another. `bands=2` is the
-    // whole claim — two of the three chosen commits touched it, and a
-    // diff across the span would be one block carrying the work of the
-    // one that was not chosen.
+    // A row of the merged file list opens each chosen commit's own patch
+    // of that file, one band after another: `bands=2` because two of the
+    // three touched it, where a diff across the span would be one block
+    // carrying the work of a commit not chosen.
     Verb {
         name: "graph-choose-diff",
         when: &[],
         plain: "bands=2 chosen=3",
     },
-    // The gesture a choice stops short of. Toggling a row out of the
-    // choice and back in, quickly, is two presses at one spot — which the
-    // area hands over as a double-click, modifier and all (measured,
-    // `tst_moddblclick`). On the other side of the plain one is `switch`,
-    // which moves the working tree and takes uncommitted changes with it.
-    // `led=false` is the claim, and it is the row's own answer: the write
-    // lands ticks later, so the branch on screen at the moment of the
-    // press says nothing either way. `movable=true` is what keeps the run
-    // from being vacuous — a row that leads nowhere would answer `false`
-    // for a reason of its own. `naming=false` is the other half of the
-    // same press: the spaced second click opens a name box, and a hand
-    // building a choice is not naming anything.
+    // Toggling a row out of the choice and back quickly is two presses at
+    // one spot, which the area hands over as a double-click, modifier and
+    // all (`tst_moddblclick`) — and the plain double-click is `switch`.
+    // `led=false` is the row's own answer (the write lands ticks later);
+    // `movable=true` keeps it from being vacuous; `naming=false`: the
+    // spaced second click opens a name box, and building a choice is not
+    // naming.
     Verb {
         name: "graph-choose-dbl",
         when: &[],
         plain: "led=false movable=true naming=false",
     },
-    // A commit taken back out from the list of what is held. Two presses
-    // on one row and only the second is the row's: `takes=false kept=3`
-    // is the plain one, which the words underneath have to keep — a
-    // choice that came back smaller after it would mean this hand had
-    // taken the drag away from the text. `hand=true` is the half a press
-    // cannot say for itself, since the run enters the row's own
-    // function: an area taken out, disabled or shrunk would answer
-    // every press it was asked and never see one.
+    // A commit taken back out of the held list. Of two presses on a row
+    // only the second is the row's: `takes=false kept=3` is the plain one
+    // left to the words underneath (a smaller choice would mean the hand
+    // took the drag from the text). `hand=true`: the run enters the row's
+    // function, so an area taken out, disabled or shrunk would still pass.
     Verb {
         name: "graph-choose-drop",
         when: &[],
         plain: "takes=false kept=3 dropped=true hand=true chosen=2 lit=2",
     },
-    // The two clicks of the rename gesture, at the row and at the card
-    // its chip unfolds into. `armed=` is the half no picture answers —
-    // a box that never opened and a wait that was never taken frame
-    // the same — and the two are read as one run because the box is
-    // what the wait turns into. The card's own run carries `list=` as
-    // well: it was standing on the column the box opens in, and one
-    // left up would be covering the whole subject of the shot.
+    // The rename gesture's two clicks, at the row and (`graph-reclick-list`)
+    // at the card its chip unfolds into. `armed=` and `box=` are read as
+    // one because the box is what the wait turns into. `list=false`: the
+    // card stood on the column the box opens in, and left up covers it.
     Verb {
         name: "graph-reclick",
         when: &[],
         plain: "armed=true box=true",
     },
-    // The same gesture carried through to git. The name lands and the
-    // row wears it whichever way the box was opened, so the write is
-    // no answer about the gesture: this half asks for the two the
-    // plain form does.
+    // Carried through to git. The name lands whichever way the box
+    // opened, so the write says nothing about the gesture: the same two.
     Verb {
         name: "graph-rename",
         when: &[],
@@ -459,48 +350,34 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "armed=true box=true list=false",
     },
-    // The same two clicks put in through the strip over the lane
-    // column. That strip is up wherever the lanes overflow their
-    // column — which is every repository wide enough for a reader to
-    // aim at the middle of a row — and it took presses of its own
-    // without handing them to the row, so the gesture did nothing
-    // between the two dividers while working either side of them.
-    // `strip=` says the layer was actually up: with the lanes
+    // The same clicks through the strip over the lane column, up wherever
+    // the lanes overflow it; a strip keeping its presses kills the gesture
+    // between the two dividers. `strip=` says it was up — with the lanes
     // inside their column there is nothing to prove.
     Verb {
         name: "graph-reclick-lanes",
         when: &[],
         plain: "strip=true armed=true box=true",
     },
-    // The same two clicks with the pointer rested on the chip, so the
-    // card's own rest is running under the wait. The screen holds
-    // still in that beat: the reader has clicked and is watching one
-    // spot for the box, and a card that arrived halfway through is a
-    // change they did not ask for. `list=` and
-    // `card=` are what would have opened — a picture of the box says
-    // nothing about what came and went before it.
+    // The same clicks with the pointer rested on the chip, so the card's
+    // rest runs under the wait. The screen holds still in that beat:
+    // `list=` and `card=` say nothing opened before the box.
     Verb {
         name: "graph-reclick-still",
         when: &[],
         plain: "armed=true box=true list=false card=false",
     },
     // The mark the chip wears while the second click waits out its
-    // window — the one thing on screen between the press and the box.
-    // This run ends inside the wait, so the picture frames the
-    // mark; `mark=` is the chip's own answer, since
-    // a shot taken a beat late frames the box and would read the same
-    // either way.
+    // window. The run ends inside the wait; `mark=` is the chip's own
+    // answer, since a shot a beat late frames the box instead.
     Verb {
         name: "graph-reclick-mark",
         when: &[],
         plain: "armed=true mark=true box=false",
     },
-    // Every way out of the name box, one route per run. `armed=` is
-    // the half that catches the box coming back by itself: a wait left
-    // running after the box has been walked away from reopens it a
-    // window later, as a row clicked while its own box is up would.
-    // The picture cannot tell a
-    // box that closed for good from one that is about to return.
+    // Every way out of the name box, one route per run. `armed=false`: a
+    // wait left running after the box is walked away from reopens it a
+    // window later.
     Verb {
         name: "rename-box-out",
         when: &[
@@ -510,75 +387,56 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "box=false armed=false",
     },
-    // The two clicks put in at one spot but two surfaces: the row, and
-    // then the card its chip opens into on the rest between them. That
-    // is what a reader's hand does without knowing it, and with a
-    // memory per surface the second click comes up as a first one — the
-    // gesture does nothing, and nothing on screen says why
-    // (observed).
+    // The two clicks at one spot but on two surfaces: the row, then the
+    // card its chip opened into on the rest between. With a memory per
+    // surface the second click reads as a first and the gesture does
+    // nothing.
     Verb {
         name: "graph-reclick-across",
         when: &[],
         plain: "armed=true box=true list=false",
     },
-    // The same gesture with the history scrolled away under the wait
-    // it opened. The row that was clicked is pooled by that scroll, so
-    // a wait carried by the row would go down with it — and the box
-    // that does open has to be sent back into sight, since a name
-    // changing itself off screen is a name nobody agreed to. Neither
-    // half is anything a picture answers: a run whose box never opened
-    // frames the same history as one whose box opened two hundred rows
-    // above the fold.
+    // The history scrolled away under the wait. The clicked row is pooled
+    // by the scroll, so a wait carried by the row goes down with it; the
+    // box that opens has to be brought back into sight (`shown=true`) — a
+    // name changing off screen is one nobody agreed to.
     Verb {
         name: "graph-reclick-scrolled",
         when: &[],
         plain: "armed=true box=true list=false card=false mode=rename kind=branch typed=main branch=main shown=true",
     },
-    // The graph column pulled past its floor: the clamp has to land
-    // on the floor exactly, and the floor is the message tick
-    // brought up against lane 0's co-author badge without touching
-    // it (GraphPane.graphColWMin). The number is the token
-    // arithmetic spelled out — it moves only when those tokens do,
-    // and a clamp that stopped anywhere else photographs just as
-    // neatly, since the gap in question is one pixel of the frame.
+    // The graph column pulled past its floor must clamp on it exactly: the
+    // message tick against lane 0's co-author badge without touching it
+    // (GraphPane.graphColWMin). The number is the token arithmetic — it
+    // moves only when those tokens do.
     Verb {
         name: "graph-min",
         when: &[],
         plain: "graph_min w=21 min=21",
     },
-    // A drag carried past one of a divider's bounds. The badge is 12
-    // pixels in the middle of a pane, and a run where the hook never
-    // reached the divider photographs a window that looks entirely
-    // well — so the refusal is said out loud. `line=` rides with it
-    // because the two are a pair: the boundary still moves the other
-    // way, and one that withdrew its line would be answering a
-    // different question (that is `graph-divider`'s squeezed half).
-    // One wanted line for every case: `line=` is already whichever
-    // divider has the hand, so the argument does not change it.
+    // A drag carried past one of a divider's bounds. `line=` rides with
+    // the refusal: the boundary still moves the other way, and one that
+    // withdrew its line answers a different question (`graph-divider`'s
+    // squeezed half). `line=` is whichever divider has the hand, so one
+    // line serves every argument.
     Verb {
         name: "divider-refuse",
         when: &[],
         plain: "divider_refuse refuses=true line=true",
     },
-    // The end of a history and the end of what was loaded are the
-    // same picture but for one line, and a footer that failed to draw
-    // takes that line with it — so the cut says itself. `shown=` is
-    // the footer's own visible, beside the model's answer: the two
-    // are what the verb is for, and only neighbours are caught in one
-    // substring.
+    // The end of what was loaded differs from the end of history by one
+    // footer line. `shown=` is the footer's own visible, next to the
+    // model's answer — only neighbours are caught in one substring.
     Verb {
         name: "graph-tail",
         when: &[],
         plain: "graph_tail truncated=true shown=true",
     },
-    // The press on that footer, and the four things the camera cannot
-    // answer for. `waiting=` is the ring, which is gone before the
-    // shutter — the press is answered in under a second. Whether the
-    // rows arrived *under* the ones being read is the pair after it:
-    // a window that grew by starting the stream over lands the same row
-    // count and photographs the same. `truncated=false` closes it —
-    // this preset's history is 2100 commits, so one step of 500 past a
-    // window of 2000 reaches the end of it and the footer goes with it.
+    // The press on that footer. `waiting=` is the ring, gone before the
+    // shot. `restarted=` / `held=`: the rows arrived under the ones being
+    // read — restarting the stream lands the same count. The preset's
+    // 2100 commits end within one step of 500 past a window of 2000, so
+    // `truncated=false`.
     Verb {
         name: "graph-tail-more",
         when: &[],
@@ -586,25 +444,18 @@ pub(super) const TABLE: &[Verb] = &[
     },
     // The dotted edges under the uncommitted row, in the tokens the
     // delegate paints from (uppercase = dashed). Under `--preset
-    // conflict` a merge is standing, so the row leashes HEAD and the
-    // side being brought in: two lanes, both dotted. A lane is a
-    // couple of pixels wide and its dashes are one each, so a row
-    // that leashed only HEAD photographs as very nearly the same
-    // picture.
+    // conflict` a merge stands, so the row leashes HEAD and the side
+    // being brought in: two lanes, both dotted.
     Verb {
         name: "wip-lanes",
         when: &[],
         plain: "wip_lanes geometry=O0.0;O1.1",
     },
     // The lanes' sideways bar: out while the hand is in the pane, gone
-    // when it leaves, and at full ink only once the lanes have actually
-    // been sent (デザイン規約 §グラフを横へ送る / §バーの明るさ). Neither
-    // half frames as an answer on its own — a bar six pixels tall on a
-    // pane's bottom edge is as easy to miss in a picture as it is to
-    // imagine, and a quarter of opacity is not something a screenshot
-    // settles. `overflow=` stands beside them so a run over lanes that
-    // already fit — where the bar is rightly absent and nothing was
-    // proven — cannot read as the half where it went away.
+    // when it leaves, at full ink only once the lanes have been sent
+    // (デザイン規約 §グラフを横へ送る /「バーの明るさ」). `overflow=` beside
+    // them tells lanes that already fit (bar rightly absent, nothing
+    // proven) from the half where it went away.
     Verb {
         name: "graph-bar",
         when: &[],
@@ -615,22 +466,16 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "graph_bar shown=false",
     },
-    // Which column the middle click landed in is the whole question,
-    // and a photograph answers neither half of it: lanes carried
-    // sideways and lanes left where they were frame alike at this
-    // size, and so do a gesture that panned and one that never
-    // started. The two halves want opposite lines, which is what the
-    // argument is for.
+    // Which column the middle click landed in: lanes carried sideways,
+    // or (`message`) left where they were. The argument picks the half.
     Verb {
         name: "middle-scroll",
         when: &[(Arg::Is("message"), "middle_scroll lanes=false x=0")],
         plain: "middle_scroll lanes=true",
     },
-    // How the gesture ends, which no picture can answer: a drift that
-    // stayed and one that ended with the hand frame alike, and so do a
-    // hand holding still inside the dead zone and one that never
-    // asked. Each half wants the other's line to be wrong, which is
-    // what the argument is for.
+    // How the gesture ends: a drift that stays against one that ends with
+    // the hand, and a hand still inside the dead zone against one that
+    // never asked. The argument picks the half.
     Verb {
         name: "middle-scroll-exit",
         when: &[(

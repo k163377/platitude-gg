@@ -1,7 +1,6 @@
-//! The `verify-ui` section: the options every run takes, and a paragraph for
-//! each verb that cannot be judged the ordinary way — by its screenshot and
-//! by git having refused nothing. Kept apart from the runner's own paragraphs
-//! for the reason the preset list is.
+//! The usage page's `verify-ui` section: the options, and a paragraph for
+//! each verb not judged the ordinary way (its screenshot, and git having
+//! refused nothing).
 
 // No `"\` continuation on the opening line (see `demo_repo`).
 pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]

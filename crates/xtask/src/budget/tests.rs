@@ -1,16 +1,6 @@
-//! The ledger between threads: what a unit waits for, what it is handed
-//! and what a holder that is gone gives back.
-//!
-//! Every wait here is driven by the thing it waits for — a ticket
-//! dropped, a look taken and said on a channel
-//! (.claude/rules/core.md §非同期・並行テスト). The rule that decides the
-//! order is arithmetic and is tested as such in [`super::queue`]; what
-//! these watch is the ledger under it: the files, the locks, the sweep,
-//! and the loop that reads them.
-//!
-//! Between processes — a holder killed outright, a landing's turn
-//! against another program's — is `tests/gate/budget.rs`, where the
-//! runner can be started as itself.
+//! The ledger between threads: the files, the locks, the sweep and the
+//! loop that reads them. The rule is tested as arithmetic in
+//! [`super::queue`]; between real processes is `tests/gate/budget.rs`.
 
 use std::path::Path;
 use std::sync::mpsc::Receiver;
@@ -26,8 +16,7 @@ fn common(name: &str) -> Yard {
     Yard::new(&format!("budget-{name}"))
 }
 
-/// The waits under test say every look they take on a channel, so a look
-/// is proved by the word of it.
+/// A channel the wait under test says each of its looks on.
 fn polls() -> (Receiver<()>, impl Fn()) {
     let (said, looks) = std::sync::mpsc::channel();
     (looks, move || {
@@ -41,9 +30,8 @@ fn until_polled(looks: &Receiver<()>) {
     crate::wait::heard("the wait under test", "a look", looks);
 }
 
-/// Waits for a look taken after this moment — the ones already said
-/// drained first, so what it proves is that the waiter looked again
-/// under the state the test has just made.
+/// Waits for a look taken after this moment (earlier ones drained), so
+/// the waiter has looked under the state the test just made.
 fn until_polled_again(looks: &Receiver<()>) {
     while looks.try_recv().is_ok() {}
     crate::wait::heard("the wait under test", "another look", looks);
@@ -68,7 +56,6 @@ struct Held {
 }
 
 impl Held {
-    /// Starts a unit that asks for `weight` at `rank` for `seat`.
     fn start(dir: &Path, what: &str, weight: u32, rank: Rank, seat: &str, budget: u32) -> Held {
         let (looks, polled) = polls();
         let (said, admitted) = std::sync::mpsc::channel();
@@ -91,7 +78,7 @@ impl Held {
         }
     }
 
-    /// Waits until this unit has the machine, and says how long it stood.
+    /// Waits until this unit has the machine; returns how long it waited.
     fn taken(&self) -> Duration {
         crate::wait::heard("the test", "the unit admitted", &self.admitted)
     }
@@ -102,8 +89,6 @@ impl Held {
     }
 }
 
-/// A unit that does not fit waits, and takes the room the one before it
-/// gives back.
 #[test]
 fn a_unit_takes_the_room_the_one_before_it_gives_back() {
     let dir = common("room");
@@ -120,8 +105,6 @@ fn a_unit_takes_the_room_the_one_before_it_gives_back() {
     second.let_go();
 }
 
-/// The room a unit gives back goes to the landing that was waiting for
-/// it, and the gate's unit that was waiting first goes on waiting.
 #[test]
 fn a_landing_is_handed_the_room_a_gate_s_unit_was_waiting_for() {
     let dir = common("landing-first");
@@ -143,10 +126,8 @@ fn a_landing_is_handed_the_room_a_gate_s_unit_was_waiting_for() {
     ordinary.let_go();
 }
 
-/// The admission stop: while a landing's unit is short of room, the room
-/// a finishing unit gives back is not handed to ordinary work that
-/// would fit in it — otherwise a stream of small units would keep the
-/// landing short for as long as the stream lasted.
+/// Otherwise a stream of small units would keep the landing short for as
+/// long as the stream lasted.
 #[test]
 fn ordinary_work_is_not_admitted_into_room_a_waiting_landing_is_short_of() {
     let dir = common("admission-stop");
@@ -173,7 +154,6 @@ fn ordinary_work_is_not_admitted_into_room_a_waiting_landing_is_short_of() {
     small.let_go();
 }
 
-/// What is left over after the landing's units fit is handed on.
 #[test]
 fn room_a_landing_will_not_use_goes_on_down_the_queue() {
     let dir = common("leftover");
@@ -189,8 +169,6 @@ fn room_a_landing_will_not_use_goes_on_down_the_queue() {
     landing.let_go();
 }
 
-/// Landings go one at a time in the order they arrived, and the turn
-/// asks for none of the budget.
 #[test]
 fn landings_take_their_turn_in_the_order_they_arrived() {
     let dir = common("turns");
@@ -224,10 +202,8 @@ fn landings_take_their_turn_in_the_order_they_arrived() {
     assert!(waited > Duration::ZERO, "the wait is reported");
 }
 
-/// A ticket whose holder is gone holds nothing: the next process to read
-/// the ledger takes it away and the machine is whole again. This is the
-/// shape a killed gate leaves — the lock is the operating system's to
-/// release, and the file it names is not.
+/// The shape a killed gate leaves: the OS releases the lock, not the file
+/// beside it.
 #[test]
 fn a_ticket_nobody_holds_the_lock_beside_gives_the_machine_back() {
     let dir = common("dead-ticket");
@@ -240,11 +216,10 @@ fn a_ticket_nobody_holds_the_lock_beside_gives_the_machine_back() {
     )
     .expect("a dead gate's ticket");
     std::fs::write(ledger.join("t-0.lock"), b"").expect("its lock, held by nobody");
-    // The counter past it, so that what the sweep takes away is told
-    // apart from the name this unit writes at.
+    // The counter past it, so what the sweep takes away is told apart
+    // from the name this unit writes at.
     std::fs::write(ledger.join(SEQ), "1\n").expect("the counter");
-    // A lock a register died before writing a ticket at, which nothing
-    // else would ever look at again.
+    // A lock whose register died before writing the ticket.
     std::fs::write(ledger.join("t-9.lock"), b"").expect("a name nobody wrote at");
     let pool = Pool::at(&dir, 4);
     let mine = pool
@@ -257,17 +232,13 @@ fn a_ticket_nobody_holds_the_lock_beside_gives_the_machine_back() {
     drop(mine);
 }
 
-/// A ticket a killed unit left, with the process it had started still
-/// on the machine: the room stays held, and the ledger says what it is
-/// being held for.
 #[test]
 fn a_killed_unit_s_room_is_held_while_what_it_started_runs() {
     let dir = common("left-behind");
     let ledger = dir.join(DIR);
     std::fs::create_dir_all(&ledger).expect("the ledger");
-    // This very process stands in for the cargo the unit started: it is
-    // certainly running, and its number is certainly not one the system
-    // has handed out to somebody else.
+    // This process stands in for the unit's cargo: certainly running, and
+    // certainly not a pid handed out again.
     dead_ticket(&ledger, "t-0", std::process::id(), &my_name(), now());
     let pool = Pool::at(&dir, 4);
     let text = pool.standing().expect("the standing");
@@ -279,18 +250,13 @@ fn a_killed_unit_s_room_is_held_while_what_it_started_runs() {
     assert!(ledger.join("t-0").exists(), "the leftover was swept");
 }
 
-/// And it is held for the work itself. A pid is handed out again
-/// the moment its process is gone, so the unit wrote down what it
-/// started beside where; a live number carrying somebody else's
-/// program is not the work, and the room goes back at once, at the
-/// first look.
 #[test]
 fn a_leftover_lets_the_room_go_when_the_number_carries_a_stranger() {
     let dir = common("left-behind-stranger");
     let ledger = dir.join(DIR);
     std::fs::create_dir_all(&ledger).expect("the ledger");
-    // This process's own number again — certainly live, so the name is
-    // the only thing that can answer — recorded as a program it is not.
+    // This process's own live number, so only the name can answer,
+    // recorded as a program it is not.
     dead_ticket(
         &ledger,
         "t-0",
@@ -307,20 +273,14 @@ fn a_leftover_lets_the_room_go_when_the_number_carries_a_stranger() {
     assert!(!ledger.join("t-0").exists(), "the leftover stands");
 }
 
-/// And a leftover that has run past the longest a step may run is
-/// **reported, its room held**. The load behind it is on the machine
-/// whether or not it is late, so letting the room go on elapsed time
-/// alone is the over-subscription this whole thing exists to stop —
-/// admitting four weight into a room whose occupant is still
-/// compiling, with nobody left to notice. Crossing the ceiling says
-/// only that nothing but a person will end it.
+/// The load is on the machine whether or not it is late, so elapsed time
+/// alone never hands the room out.
 #[test]
 fn a_leftover_past_the_ceiling_is_reported_and_its_room_is_not_handed_out() {
     let dir = common("left-behind-ceiling");
     let ledger = dir.join(DIR);
     std::fs::create_dir_all(&ledger).expect("the ledger");
-    // The same live number and the same name as the leftover above —
-    // only the second it started running is moved past the ceiling.
+    // The live leftover above, only started past the ceiling.
     let long_ago = now() - ledger::LEFTOVER_CEILING - 1;
     dead_ticket(&ledger, "t-0", std::process::id(), &my_name(), long_ago);
     let pool = Pool::at(&dir, 4);
@@ -337,9 +297,7 @@ fn a_leftover_past_the_ceiling_is_reported_and_its_room_is_not_handed_out() {
     );
 }
 
-/// A leftover past the ceiling whose child has gone is nobody's: the
-/// probe is the whole of the decision, so the room comes back at once
-/// and the ceiling changes nothing about it.
+/// The probe is the whole of the decision; the ceiling changes nothing.
 #[test]
 fn a_leftover_past_the_ceiling_gives_the_room_back_when_its_child_has_gone() {
     let dir = common("left-behind-ceiling-gone");
@@ -357,11 +315,7 @@ fn a_leftover_past_the_ceiling_gives_the_room_back_when_its_child_has_gone() {
     assert!(!ledger.join("t-0").exists(), "the leftover stands");
 }
 
-/// That ceiling is measured from the second the unit was handed the
-/// machine, which is why a ticket carries no date at all until then. A
-/// date written at the registration would put a unit that queued out a
-/// busy machine past its ceiling in the first second it ran, and the
-/// room it was still using would be handed to somebody else.
+/// Why: `queue::Ticket::ran_since`.
 #[test]
 fn a_ticket_is_dated_from_the_run_and_not_from_the_registration() {
     let dir = common("dated-from-the-run");
@@ -387,14 +341,11 @@ fn a_ticket_is_dated_from_the_run_and_not_from_the_registration() {
     queued.let_go();
 }
 
-/// One ticket file as the ledger holds it.
 fn ticket_at(path: &Path) -> super::queue::Ticket {
     ledger::parse(&std::fs::read_to_string(path).expect("the ticket file")).expect("a ticket")
 }
 
-/// A ticket its owner is no longer there to give back: the file with
-/// nobody holding the lock beside it, naming `child` and `program` as
-/// the work it started and when it started running.
+/// A killed unit's ticket, its lock held by nobody.
 fn dead_ticket(ledger: &Path, name: &str, child: u32, program: &str, ran_since: u64) {
     std::fs::write(
         ledger.join(name),
@@ -419,8 +370,6 @@ fn my_name() -> String {
     )
 }
 
-/// A ticket comes down with its holder, files and all: nothing collects
-/// in the ledger and nothing is counted twice.
 #[test]
 fn a_ticket_takes_its_own_files_with_it() {
     let dir = common("clean-up");
@@ -442,9 +391,7 @@ fn a_ticket_takes_its_own_files_with_it() {
     assert_eq!(files(), 0, "the ticket outlived its holder");
 }
 
-/// A wait for room given up (`admit_unless`, a gate gone red) comes back
-/// with no ticket and leaves none behind: the room it stood in line for
-/// is not held for a run that has nothing left to start.
+/// `admit_unless`, as a red gate gives up: no ticket back, none left.
 #[test]
 fn a_wait_given_up_leaves_no_ticket() {
     let dir = common("given-up");
@@ -452,8 +399,8 @@ fn a_wait_given_up_leaves_no_ticket() {
     let holder = pool
         .admit(&ask("clippy", 4, Rank::Normal, "a"))
         .expect("a ticket");
-    // Asked between looks at a ledger that had no room: the first ask is
-    // the word that the unit is in line, and the answer is the test's.
+    // `stop` is asked between looks at a full ledger: its first ask says
+    // the unit is in line.
     let (said, asked) = std::sync::mpsc::channel();
     let given_up = std::sync::atomic::AtomicBool::new(false);
     let result = std::thread::scope(|scope| {
@@ -480,9 +427,6 @@ fn a_wait_given_up_leaves_no_ticket() {
     drop(holder);
 }
 
-/// A gate whose ticket is refused by nothing still says what it is
-/// waiting behind: what `cargo xtask budget` prints, and what a wait
-/// that ran out has to name.
 #[test]
 fn the_standing_names_what_is_holding_the_machine() {
     let dir = common("standing");
@@ -506,10 +450,7 @@ fn the_standing_names_what_is_holding_the_machine() {
     drop(held);
 }
 
-/// A pool named outright answers to its arguments and to nothing in the
-/// environment. The runner's own suite runs as a step of a gate, which
-/// marks every child of a step as carried — a pool that read that mark
-/// would hand a pass to the very tests above, which watch units queue.
+/// Why: `Pool::of`.
 #[test]
 fn a_pool_named_outright_carries_nothing_from_the_environment() {
     let dir = common("no-ambient");
@@ -535,13 +476,9 @@ fn the_gate_suite_clears_the_name_this_module_spells() {
     );
 }
 
-/// A standalone command that carries its parent's mark answers before it
-/// goes looking for a ledger. That order is the whole of how a container
-/// run works: the ticket was taken on the host, where the ledger is, and
-/// from inside the mount there may be no road to it at all — a `.git`
-/// that is a file naming a directory outside the container
-/// (`verify::wedge`). A pass that needed a repository would turn every
-/// such run into an error.
+/// The mark is answered before a ledger is looked for: inside a container
+/// the seat's `.git` names a directory outside the mount, so a pass that
+/// needed a repository would fail every container run.
 #[test]
 fn a_carried_command_is_admitted_without_a_ledger_to_ask() {
     let nowhere = std::env::temp_dir().join("pgg-budget-no-repository-here");
@@ -553,8 +490,6 @@ fn a_carried_command_is_admitted_without_a_ledger_to_ask() {
     assert!(refused.contains("not a git repository"), "{refused}");
 }
 
-/// A child of an admitted unit runs under its parent's ticket: the mark
-/// goes on the command, and a nested ask is answered with a pass.
 #[test]
 fn a_child_is_marked_as_running_under_its_parent_s_ticket() {
     let mut command = std::process::Command::new("git");
@@ -567,8 +502,8 @@ fn a_child_is_marked_as_running_under_its_parent_s_ticket() {
     );
 }
 
-/// What a unit takes is read off the words it is spelled with, whether
-/// the plan's spelling or the copy the gate starts it from.
+/// Both spellings: the plan's `cargo run … --`, and the runner copy the
+/// gate starts.
 #[test]
 fn the_weight_is_read_off_the_command() {
     let words = |line: &[&str]| line.iter().map(|w| (*w).to_string()).collect::<Vec<_>>();
@@ -596,8 +531,7 @@ fn the_weight_is_read_off_the_command() {
         words(&["cargo", "run", "-p", "xtask", "--", "deny"]),
         words(&["cargo", "run", "-p", "xtask", "--", "linux", "qmltest"]),
         words(&["C:/x/target/gate-logs/xtask-runner-7.exe", "docs"]),
-        // The alias, which is how the container's own command line is
-        // built and how a person types it.
+        // The alias: the container's command line, and a person's.
         words(&["cargo", "xtask", "qmltest"]),
         words(&["cargo", "xtask", "linux", "docs"]),
     ];
@@ -615,8 +549,6 @@ fn the_weight_is_read_off_the_command() {
     assert_eq!(weight_of(&verb, true), LIGHT);
 }
 
-/// The budget is one gate's widest moment, so a gate running alone never
-/// waits for itself.
 #[test]
 fn the_budget_is_one_gate_s_worth_of_machine() {
     // Both sides at once: a compiling checks chain beside eight verbs.
@@ -628,8 +560,6 @@ fn the_budget_is_one_gate_s_worth_of_machine() {
     );
 }
 
-/// A unit that asks for nothing and holds nothing: what a child under
-/// its parent's ticket gets back.
 #[test]
 fn a_carried_pass_holds_no_files() {
     let carried = Admitted::carried();

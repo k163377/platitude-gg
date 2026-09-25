@@ -1,12 +1,8 @@
-//! The screens this machine has, outside the timed app process. Read only.
-//!
-//! Read for two things. It is evidence — what the modes were on
-//! either side of a run — and it is also what the run is *placed* against:
-//! the window is pinned onto one named screen (`perf::screen`), and that
-//! screen's nominal Hz is the ceiling the delivered frames are read
-//! against. A machine whose monitors do not all run at one rate answers
-//! a different fps for the same application on each of them otherwise
-//! (the rig's own screens: ci/baseline/perf-windows-x64.md §計測条件).
+//! The screens this machine has, read outside the timed app process: as
+//! evidence of the modes either side of a run, and as what the run is
+//! placed against — the window is pinned onto one named screen
+//! (`--screen`), whose nominal Hz the delivered frames are read against
+//! (rules-refs/app-ui.md「窓は名前の付いた画面へ固定する」).
 use std::path::Path;
 
 /// One screen, as both the OS mode table and the virtual desktop see it.
@@ -24,10 +20,9 @@ pub(super) struct Screen {
     pub(super) hz: u32,
 }
 
-/// What the screens are right now: the evidence text, and the same thing
-/// read. Always answers — a machine whose modes cannot be read still
-/// takes a measurement, it just cannot pin the window or name a refresh
-/// rate, and the note says so once.
+/// The evidence text and the screens read from it. Always answers: a
+/// machine whose modes cannot be read still measures, unpinned and with
+/// no refresh rate.
 pub(super) fn survey() -> (String, Vec<Screen>) {
     match query() {
         Ok(evidence) => {
@@ -116,7 +111,6 @@ fn query() -> Result<String, String> {
 
 // DEVMODEW's Unicode layout is fixed in wingdi.h on both x86 and x64.
 // Only read fields owned by EnumDisplaySettingsW, with dmSize initialized.
-// The setting is an integer nominal Hz.
 // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-enumdisplaysettingsw
 #[cfg(windows)]
 const WINDOWS_QUERY: &str = r#"
@@ -187,7 +181,6 @@ mod tests {
         );
         assert_eq!(screens[1].hz, 180);
         assert!(screens[1].primary);
-        // A mode table that owned no frequency answers 0.
         assert_eq!(screens[2].hz, 0);
     }
 

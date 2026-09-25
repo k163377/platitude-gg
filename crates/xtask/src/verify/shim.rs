@@ -1,5 +1,6 @@
 //! What a run is staged with before the app starts: a git that answers
-//! `--version` old, and the identity the screen begins from.
+//! `--version` old or a second git off PATH, and the identity the screen
+//! begins from.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -15,15 +16,12 @@ pub(super) const SHIM_REAL: &str = "PGG_SHIM_REAL_GIT";
 pub(super) const OTHER_GIT: &str = "PGG_OTHER_GIT";
 
 /// Stands in for git when this binary was copied onto a run's PATH under
-/// git's name (`--old-git`), and returns `None` in every other process —
-/// including the xtask that set it up, which never has these two set.
+/// git's name (`--old-git`); `None` in every other process, the xtask
+/// that set it up included. Only `--version` is answered here — the rest
+/// goes to the real git, so the app sees a working install that is old.
 ///
-/// Only `--version` is answered here; the rest is handed to the real git,
-/// so what the app sees is an installation that works and is old.
-///
-/// This binary: CLAUDE.md rules out `.bat`/`.ps1` dev tooling, and a
-/// second binary would have to be built before it could be copied. This
-/// one is already built — it is the one running.
+/// This binary because it is already built, and script work belongs in
+/// xtask (CLAUDE.md §技術スタック).
 pub fn git_shim() -> Option<ExitCode> {
     let version = std::env::var(SHIM_VERSION).ok()?;
     let real = std::env::var_os(SHIM_REAL)?;
@@ -32,12 +30,10 @@ pub fn git_shim() -> Option<ExitCode> {
         println!("git version {version}");
         return Some(ExitCode::SUCCESS);
     }
-    // Straight through, stdio and all: the app reads this child's output as
-    // if it were git's, because it is.
+    // Stdio inherited: the app reads this output as git's.
     let status = Command::new(&real).args(&args).status();
     let code = match status {
-        // 128 is git's own "fatal", which is what a git that could not be
-        // reached at all amounts to here.
+        // 128 is git's own "fatal".
         Err(e) => {
             eprintln!("fatal: shim could not run {}: {e}", real.to_string_lossy());
             128
@@ -57,15 +53,10 @@ pub(super) fn real_git(path: &std::ffi::OsStr) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("--old-git needs a real git on PATH; no {name} found on it"))
 }
 
-/// Stands a second git beside the pictures and leaves PATH alone,
-/// returning where it is.
-///
-/// **The one thing a run cannot find for itself.** The settings screen's
-/// git chapter grows its button only for a git that answers and is not the
-/// one running, and no path names a second installation on both a desk and
-/// a container. This one is the same copy `--old-git` puts on PATH, put
-/// somewhere nothing resolves to — so a run can point the box at
-/// it and the app spawns it exactly as it would any other git.
+/// Stands a second git (the copy `--old-git` uses) beside the pictures,
+/// off PATH, and returns where it is. The settings' git chapter grows its
+/// button only for a git that answers and is not the one running, and no
+/// path names a second install on both a desk and a container.
 pub(super) fn stage_other_git(shot_dir: &std::path::Path) -> Result<PathBuf, String> {
     let dir = shot_dir.join("gitother");
     std::fs::create_dir_all(&dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
@@ -85,8 +76,7 @@ pub(super) fn stage_old_git(
     std::fs::create_dir_all(&dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
     let me = std::env::current_exe().map_err(|e| format!("could not find this binary: {e}"))?;
     let shim = dir.join(if cfg!(windows) { "git.exe" } else { "git" });
-    // Copies the permission bits with it, which is what makes the Unix side
-    // executable without a chmod of its own.
+    // Keeps the permission bits, so Unix needs no chmod.
     std::fs::copy(&me, &shim).map_err(|e| format!("could not write {}: {e}", shim.display()))?;
     let mut parts = vec![dir];
     parts.extend(std::env::split_paths(path));
@@ -98,15 +88,11 @@ pub(super) fn stage_old_git(
 /// the write landed.
 const IDENTITY_ASKED: &str = "Ada Lovelace|ada@example.com";
 
-/// The identity handed to every run that is not about the identity screen.
-///
-/// The picture is the same whatever machine it was taken on, and a git
-/// with no `user.*` would put this one in it: the window opens a modal
-/// asking for one, and that modal and its dimmer are two popups counted
-/// by verbs with nothing to do with either (`verbs::graph`,
-/// `commit-menu`). Deliberately unlike what the demo repositories commit
-/// as (`demo::repo`), so a settings screen holding a global value beside
-/// a repository's own still holds two different things.
+/// The identity handed to every run not about the identity screen: with
+/// no `user.*` (every container) the window opens a modal whose two
+/// popups are counted by unrelated verbs (`verbs::graph`, `commit-menu`).
+/// Unlike what the demo repositories commit as (`demo::repo`), so the
+/// settings screen's global and repository values differ.
 const MACHINE_IDENTITY: &str =
     "[user]\n\tname = Verify Fixture\n\temail = verify@example.invalid\n";
 
@@ -117,31 +103,24 @@ pub(super) fn global_seed(verb: &str) -> &'static str {
 }
 
 /// The git configuration an identity run starts from, or `None` for every
-/// verb that has nothing to do with one.
+/// other verb. Neither seed names a name, so the screen asks on its own.
 ///
-/// `identity-half` is the whole point of the pair. A `user.email` with two
-/// values in the file refuses a plain set (measured: exit 5, `cannot
-/// overwrite multiple values`) while the `user.name` written just before
-/// it goes in — the same half-landed write a configuration lock lost
-/// between the two calls leaves behind, and the only version of it that
-/// can be produced on demand. Neither seed names a name, so the screen
-/// asks for an identity on its own.
+/// `identity-half`: a `user.email` with two values refuses a plain set
+/// (exit 5, `cannot overwrite multiple values`) after `user.name` went in
+/// — the half-landed write a lost config lock leaves, on demand.
 pub(super) fn identity_seed(verb: &str) -> Option<&'static str> {
     match verb {
-        // The `badges` pair wants the mark: an empty seed is the one
-        // state that raises it without a save having to fail first, and
-        // the repository keeps its own `user.*` so everything else on
-        // the page goes on working.
-        // `quit-save-held` needs the screen up for the save it holds:
-        // the dialog's own submit is the save the close lands on.
+        // `badges` wants the mark, which an empty seed raises without a
+        // failed save (the repository keeps its own `user.*`).
+        // `quit-save-held` needs the screen up: its submit is the save the
+        // close lands on.
         "identity"
         | "badges"
         | "badges-hover"
         | "badges-hover-early"
         | super::child::HELD_SAVE_VERB => Some(""),
-        // `identity-tip` walks the same half-landed save and then closes
-        // the dialog on it: the badge the tooltip belongs to only stands
-        // while the identity is half of what was asked for.
+        // `identity-tip` closes the dialog on the half-landed save: its
+        // badge stands only while the identity is half there.
         "identity-half" | "identity-tip" => {
             Some("[user]\n\temail = personal@example.com\n\temail = second@example.com\n")
         }
@@ -149,10 +128,9 @@ pub(super) fn identity_seed(verb: &str) -> Option<&'static str> {
     }
 }
 
-/// What the dialog on top of that seed is told to do. The identity verbs
-/// are about the write, so they type an identity in; `badges` is about
-/// what stands behind the dialog once it has been waved away, and its
-/// own argument names the shape of the window.
+/// What the dialog on that seed is told to do: the identity verbs type an
+/// identity in; `badges` waves it away, its argument being the window's
+/// shape.
 pub(super) fn identity_answer<'a>(verb: &str, arg: &'a str) -> &'a str {
     match verb {
         "badges" | "badges-hover" | "badges-hover-early" => "skip",
@@ -162,12 +140,11 @@ pub(super) fn identity_answer<'a>(verb: &str, arg: &'a str) -> &'a str {
 }
 
 /// Whether the identity the held save wrote is in `config`, read once
-/// the app has ended — `None` for every verb with no such witness
-/// (`super::child::HELD_SAVE_VERB`). What is looked for is the name and
-/// the address the dialog was told to type, so a save that half landed
-/// answers false as well. **The one witness outside the app**: a
-/// process that ended before its save had written could still have
-/// printed every line the run is judged on.
+/// the app has ended; `None` for every other verb
+/// (`super::child::HELD_SAVE_VERB`). Both name and address are looked
+/// for, so a half-landed save is false. The one witness outside the app:
+/// a process that ended before its save wrote could still have printed
+/// every line the run is judged on.
 pub(super) fn held_save_landed(verb: &str, config: &Path) -> Option<bool> {
     if verb != super::child::HELD_SAVE_VERB {
         return None;
@@ -181,10 +158,8 @@ pub(super) fn held_save_landed(verb: &str, config: &Path) -> Option<bool> {
 mod tests {
     use super::{global_seed, identity_seed};
 
-    /// Every run starts from a seed. A git with no `user.*` opens a
-    /// modal, the modal and its dimmer are popups, and the verbs that
-    /// count popups are about menus — so a run left on the machine's own
-    /// configuration fails or passes by who is sitting at it.
+    /// Every run starts from a seed: one left on the machine's own
+    /// configuration would pass or fail by who is sitting at it.
     #[test]
     fn only_the_identity_verbs_start_without_an_identity() {
         for verb in ["commit-menu", "reset-menu", "perf", "wip", "old-git", ""] {

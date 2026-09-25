@@ -1,18 +1,13 @@
-//! `cargo xtask check` — stage-2 verification (CLAUDE.md 確認は 3 段) with
-//! the host and the container running in parallel.
+//! `cargo xtask check` — stage 2 (CLAUDE.md 確認は 3 段) with the host and
+//! the container in parallel.
 //!
-//! The two sides share nothing that is written: the host builds into this
-//! checkout's target/ while the container builds into its per-checkout
-//! docker volume (linux.rs), and every demo repository lands in its own
-//! temp directory. So the wall clock is whichever side finishes last,
-//! not the sum — the container chain alone runs for minutes, and running
-//! it beside the host chain gives that time back. Parallel sessions were
-//! already isolated a boundary further out (worktree target/ + per-checkout
-//! volume); this is the same idea inside one session.
+//! The sides share nothing written: the host builds into this checkout's
+//! target/, the container into its per-checkout docker volume (linux.rs),
+//! and every demo repository gets its own temp directory.
 //!
-//! Within a side the steps stay sequential on purpose: they share that
-//! side's build directory, so cargo would serialize them on its lock
-//! anyway, and a build failure makes every later step of that side noise.
+//! Within a side the steps stay sequential: they share its build
+//! directory, so cargo would serialize them on its lock anyway, and a
+//! build failure makes every later step noise.
 
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -32,21 +27,14 @@ pub(crate) static STAGE_TWO: command::Command = command::Command {
 
 pub(crate) static COMMANDS: &[&command::Command] = &[&STAGE_TWO];
 
-/// How long a step may say nothing before it is killed and named. Silence,
-/// not wall time: the long steps (a first container image build, a release
-/// link) all keep talking, while every hang this has to catch — a test
-/// deadlocked past its own backstops, a cargo blocked on another cargo's
-/// build lock, a docker CLI waiting out a wedged daemon — goes quiet first.
-/// Generous on purpose: the suite's own 900s backstop must fire before
-/// this one so the failure carries a test name, and a link is the longest
-/// legitimately silent stretch. The log growing is what renews it
-/// (`wait::Wait::saw`).
+/// How long a step may say nothing before it is killed and named: the long
+/// steps keep talking, while a hang goes quiet first. Above the suite's own
+/// `OVERALL_BUDGET` (900s), so that fires first and names the test. The
+/// log growing renews it (`wait::Wait::saw`).
 const QUIET_CEILING: Duration = Duration::from_secs(20 * 60);
 
-/// The absolute ceiling per step, for a hang that keeps talking. Also
-/// how long a killed unit's leftovers may hold the machine's budget,
-/// which is the same question asked from the other side: past the
-/// longest a step may run, what is at that number is not that step
+/// The ceiling per step, for a hang that keeps talking. Also how long a
+/// killed unit's leftover runs before it is reported; its room stays held
 /// (`budget::Pool::leftover`).
 pub(crate) const STEP_CEILING: Duration = Duration::from_secs(90 * 60);
 
@@ -73,42 +61,26 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let started = Instant::now();
 
     let words = |line: &[&str]| line.iter().map(|w| (*w).to_string()).collect::<Vec<_>>();
-    // The `cargo xtask` alias runs `--quiet`, which swallows cargo's
-    // "Blocking waiting for file lock" line — and a step blocked on this
-    // side's own build lock would then sit with an empty log until the
-    // silence ceiling calls it a hang. Spelled out unquieted here, so the
-    // lock line (and the compile lines, which are liveness) reach the log.
-    // `--locked` on every cargo here, as on the gate's: a cargo that would
-    // rewrite `Cargo.lock` says so and stops (反映前テストの機械化.md §gate).
+    // Not the `cargo xtask` alias: its `--quiet` swallows "Blocking waiting
+    // for file lock", and a step blocked on a build lock would sit with an
+    // empty log until the silence ceiling. `--locked` on every cargo here
+    // (反映前テストの機械化.md「gate と check が撃つ cargo は全部 `--locked`」).
     let xtask = |line: &[&str]| {
         let mut step = words(&["cargo", "run", "--locked", "-p", "xtask", "--"]);
         step.extend(line.iter().map(|w| (*w).to_string()));
         step
     };
     let mut host_steps: Vec<Vec<String>> = vec![
-        // First because it is the cheapest thing here that can fail — it
-        // builds nothing and answers in a second or two, and a length backstop
-        // is not worth finding out about after ten minutes of compiling.
+        // What compiles nothing goes first: it answers in seconds, before
+        // the minutes of compiling.
         xtask(&["structure"]),
-        // Same reasoning, same cost: a naked wait is a hang the suite
-        // cannot name, and this answers before anything compiles.
         xtask(&["waits"]),
-        // And again: a torn markdown block compiles nothing and shows
-        // nothing in the source, so it is worth a second before the ten
-        // minutes.
         xtask(&["docs"]),
-        // The QtTest files, which compile nothing of the app either: the
-        // product's QML is staged into an import tree and handed to Qt's
-        // own runner, and a whole file answers in a fraction of a second.
         xtask(&["qmltest"]),
         words(&["cargo", "fmt", "--all", "--", "--check"]),
-        // `--all-features`, because the code a feature switches off is
-        // code nothing else here compiles: the verification harness
-        // (`automation`) and the counting allocator (`memprobe`) are
-        // both off by default, and a warning inside either would
-        // otherwise reach nobody until a release run. The arms those two
-        // features switch *out* are compiled by the test line below,
-        // which runs on the default set.
+        // `--all-features`: nothing else here compiles `automation` and
+        // `memprobe`, both off by default. The arms they switch out are
+        // compiled by the test line below.
         words(&[
             "cargo",
             "clippy",
@@ -121,11 +93,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
             "warnings",
         ]),
         words(&["cargo", "test", "--locked", "--workspace"]),
-        // Before the verbs, and for the reason they cannot answer for it:
-        // every one of them builds the app *with* the harness, and the
-        // build without it is the only one that can fail to load its QML
-        // at all. It leaves a featureless binary behind, which the first
-        // verb below rebuilds over.
+        // The verbs all build with the harness, and only the build without
+        // it can fail to load its QML. The first verb rebuilds over the
+        // featureless binary this leaves.
         xtask(&["shipped"]),
     ];
     let mut linux_steps: Vec<Vec<String>> = vec![
@@ -133,15 +103,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
         // The other Qt build: these ask when a Canvas has painted, and
         // the two stacks paint through different software.
         xtask(&["linux", "qmltest"]),
-        // The same line as the host's clippy above, because the host's
-        // cannot answer for it: a name reachable only under
-        // #[cfg(not(windows))] is not compiled on Windows at all, so an
-        // unused import or an orphaned fn behind that cfg passes here and
-        // fails the Linux and macOS jobs the first time CI runs
-        // (.github/workflows/ci.yml runs this across the whole matrix).
-        // `bare` is the only other thing on this side that compiles the
-        // app for Linux, and it is a release build whose warnings are not
-        // errors and which nobody reads.
+        // The host's clippy never compiles #[cfg(not(windows))] code, which
+        // CI's Linux and macOS jobs lint; `bare` compiles it too, but its
+        // warnings are not errors.
         xtask(&[
             "linux",
             "clippy",
@@ -155,11 +119,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         ]),
     ];
     for (i, verb) in verbs.iter().enumerate() {
-        // A --verb value is a whole verify-ui argument line — some verbs
-        // only mean anything with their preset or argument beside them
-        // ("co-authors 4 --preset co-authors") — and it comes back with
-        // `--no-board`, because a suite's pictures are not the ones
-        // anybody asked to look at (`verify::suite_words`).
+        // A --verb value is a whole verify-ui argument line ("co-authors 4
+        // --preset co-authors"), given `--no-board` (`verify::suite_words`).
         // The first host run builds the release; the rest reuse it.
         let mut host = xtask(&["verify-ui"]);
         host.extend(crate::verify::suite_words(verb));
@@ -167,9 +128,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
             host.push("--no-build".to_string());
         }
         host_steps.push(host);
-        // The container side reuses its first build too: a fingerprint
-        // check across the host boundary is measurably slow, and paying
-        // it once per verb bought nothing.
+        // The container side too: a fingerprint check across the host
+        // boundary is slow.
         let mut linux = xtask(&["linux", "verify-ui"]);
         linux.extend(crate::verify::suite_words(verb));
         if i > 0 {
@@ -186,9 +146,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let seconds = started.elapsed().as_secs() % 60;
     println!("check: {minutes}m{seconds:02}s wall clock");
     if verbs.is_empty() {
-        // Said out loud so a run without verbs cannot pass for the whole
-        // of stage 2 — Done needs the verbs the change touched, on both
-        // OSes (verify-ui skill).
+        // So a run without verbs cannot pass for the whole of stage 2.
         println!("check: no --verb given — verify-ui for the touched verbs still has to run");
     }
     if failures.is_empty() {
@@ -199,27 +157,16 @@ pub fn run(args: &[String]) -> Result<(), String> {
     }
 }
 
-/// Runs one side's steps in order, stopping the side at its first failure
-/// (later steps of a side depend on the same build tree). Output goes to a
-/// log file per step and is only printed for the step that failed, so two
-/// sides can speak at once without shredding each other's lines; the start
-/// and verdict lines carry the liveness.
-///
-/// A file, so this always comes back: reading a pipe to
-/// EOF waits on every process that inherited its write end, and one
-/// straggler a killed or finished child left behind (a wedged git, an
-/// orphaned test binary) would hold the whole check open after every test
-/// had already answered. The file also survives a hang — when a step is
-/// killed at a ceiling, its tail says what the step was doing, which a
-/// pipe lost in a buffer cannot.
 /// Both sides at once, each on a thread of its own, and what came back
-/// red.
+/// red. A side stops at its first failure (its later steps share the build
+/// tree). Each step writes a log file, printed only on failure, so the
+/// sides do not shred each other's lines. A file, not a pipe: reading a
+/// pipe to EOF waits on every process that inherited it, so one straggler
+/// would hold the check open; a file also keeps the tail of a step killed
+/// at a ceiling.
 ///
-/// One pool for the whole run, as the gate builds one for its sides
-/// (`gate::sides::run_sides`): this verb drives steps, and a runner's steps are
-/// units of the machine's budget the same way a gate's are. Not the
-/// standalone road — that one is for a command that *is* one unit and
-/// holds one ticket for its whole life (`budget::standalone`).
+/// One pool for the whole run, as the gate's (`gate::sides::run_sides`) —
+/// not `budget::standalone`, which is for a command that is one unit.
 fn both_sides(
     root: &Path,
     host_steps: &[Vec<String>],
@@ -246,8 +193,8 @@ fn both_sides(
     }))
 }
 
-/// What both of this verb's sides stand on: the tree, and the machine's
-/// budget their steps are admitted out of.
+/// What both sides share: the tree, and the pool their steps are admitted
+/// from.
 #[derive(Clone, Copy)]
 struct Ground<'a> {
     root: &'a Path,
@@ -264,10 +211,6 @@ fn run_side(side: &str, ground: &Ground<'_>, steps: &[Vec<String>]) -> Vec<Strin
     for (index, step) in steps.iter().enumerate() {
         let display = step.join(" ");
         let log = logs.join(format!("{side}-{index:02}.log"));
-        // One step is one unit of the machine, here as in the gate
-        // (`crate::budget`): this verb is the older road to the same
-        // work, and a machine full of seats counts what runs on it
-        // however it was started.
         let room = ground
             .pool
             .admit_once_the_machine_is_free(&crate::budget::Ask {
@@ -294,11 +237,10 @@ fn run_side(side: &str, ground: &Ground<'_>, steps: &[Vec<String>]) -> Vec<Strin
                 println!("[{side}] ok   {display} ({secs}s)");
                 print_shots(side, &log);
             }
-            // Nothing here asks a step to stop, so a stopped one is as
-            // unexplained as a red one, and said the same way.
+            // Nothing here asks a step to stop, so a stopped one is a
+            // failure too.
             Ok(Stepped::Exited(false) | Stepped::Stopped) => {
-                // The whole log: a failure with its tail cut off sends
-                // whoever reads it straight back here to re-run it.
+                // The whole log: a cut one sends the reader to re-run it.
                 println!("[{side}] FAIL {display} ({secs}s)");
                 print!("{text}");
                 return vec![display];
@@ -315,8 +257,8 @@ fn run_side(side: &str, ground: &Ground<'_>, steps: &[Vec<String>]) -> Vec<Strin
     Vec::new()
 }
 
-/// A green verify-ui is only half of Done — the PNGs still get eyeballed
-/// (verify-ui skill), so where they landed survives the capture.
+/// Echoes where a verify-ui's PNGs landed: a green run still needs them
+/// looked at (verify-ui skill).
 pub(crate) fn print_shots(side: &str, log: &Path) {
     let text = String::from_utf8_lossy(&std::fs::read(log).unwrap_or_default()).into_owned();
     for line in text.lines() {
@@ -330,8 +272,7 @@ pub(crate) fn print_shots(side: &str, log: &Path) {
     }
 }
 
-/// The end of a step's log, for a failure that has to say why in place: a
-/// build or a test that stopped says so in its last lines.
+/// The end of a step's log, for a failure that has to say why in place.
 pub(crate) fn log_tail(log: &Path) -> String {
     tail_of(&std::fs::read_to_string(log).unwrap_or_default())
 }
@@ -348,19 +289,17 @@ pub(crate) fn tail_of(text: &str) -> String {
 pub(crate) enum Stepped {
     /// It exited, and this is whether it passed.
     Exited(bool),
-    /// `stop` said so while it ran, and it was ended from here with its
-    /// process tree — a gate that went red elsewhere (`gate::halt`).
+    /// `stop` said so while it ran, and its process tree was ended — a
+    /// gate that went red elsewhere (`gate::halt`).
     Stopped,
 }
 
-/// One step against its log file: spawned with both streams on the file,
-/// watched. `Ok` is the step's own verdict, or the stop it was ended for;
-/// `Err` is a ceiling or a spawn failure — what would otherwise leave a
-/// check waiting forever. The gate runs its steps through here too, `stop`
-/// being its halt; everyone else hands `&|| false`. **A stop ends the
-/// step's process tree and nothing past it**: a container the step brought
-/// up goes on working, so a caller hands `stop` only to a step whose work
-/// ends with that tree or that it reaches by a mark (`gate::runner`).
+/// One step with both streams on its log file, watched. `Ok` is the step's
+/// verdict or the stop it was ended for; `Err` is a ceiling or a spawn
+/// failure. `stop` is the gate's halt; everyone else hands `&|| false`. A
+/// stop ends the step's process tree and nothing past it — a container the
+/// step brought up keeps working — so hand `stop` only to a step whose
+/// work ends with that tree or is reached by a mark (`gate::runner`).
 pub(crate) fn run_step(
     root: &Path,
     step: &[String],
@@ -372,16 +311,14 @@ pub(crate) fn run_step(
     let err = out
         .try_clone()
         .map_err(|e| format!("{}: {e}", log.display()))?;
-    // Every step is a cargo of its own, announced as one (`still`); the
-    // step itself is under that announcement and says nothing more.
+    // Announced as one build (`still`); the step runs under it and
+    // announces nothing more.
     let _busy = crate::still::busy(root, &step.join(" "))?;
     let mut command = Command::new(&step[0]);
     command.args(&step[1..]).current_dir(root);
     crate::still::step(&mut command);
-    // Every caller of this is itself one unit of the machine's budget —
-    // the gate's step under its own ticket, `check`'s under no budget at
-    // all — so what the step starts is under that and takes no second
-    // ticket of its own (`crate::budget`).
+    // Every caller holds a ticket for this step (`room`), so what the step
+    // starts takes no second one.
     crate::budget::under(&mut command);
     // So that a step ended at a ceiling takes its cargo's rustc with it,
     // and this side's build lock stays free (`reap`).
@@ -392,10 +329,8 @@ pub(crate) fn run_step(
         .stderr(Stdio::from(err))
         .spawn()
         .map_err(|e| e.to_string())?;
-    // What this step is, as far as the machine's budget is concerned:
-    // the ticket is this runner's, but the load is the child's, and a
-    // ledger that outlives this process has to know which number to ask
-    // after — and what to expect at it (`budget::Pool::leftover`).
+    // The ticket is this runner's but the load is the child's, which a
+    // ledger outliving this process has to find (`budget::Pool::leftover`).
     room.started(child.id(), &step[0]);
     let mut wait = Wait::new(
         "the step",
@@ -408,8 +343,7 @@ pub(crate) fn run_step(
         }
         if stop() {
             let (reaped, _ended) = crate::reap::reap(&mut child);
-            // Into the step's own log, which is what a reader of the run
-            // opens: the step did not fail, it was ended.
+            // Into the step's log: it did not fail, it was ended.
             let note = format!(
                 "\n[gate] ended here: the run went red elsewhere — {}\n",
                 reaped.line()
@@ -456,9 +390,8 @@ mod tests {
         line.iter().map(|word| (*word).to_string()).collect()
     }
 
-    /// The stop is asked for once the step has said it is running, so what
-    /// comes back `Stopped` is a step ended mid-run and not one that never
-    /// started; the log says so for whoever opens it.
+    /// Stopped only once the step says it is running, so `Stopped` is a
+    /// step ended mid-run, not one that never started; the log says so.
     #[test]
     fn a_step_told_to_stop_is_ended_where_it_stands() {
         let dir = Yard::new("check-stop");

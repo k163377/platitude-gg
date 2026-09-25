@@ -1,28 +1,9 @@
 //! The landing permit: main moves on the user's own message, once.
 //!
-//! The ask is read where the harness shows the user's own words
-//! (UserPromptSubmit) and kept per session beside the primary checkout's
-//! `.git`. What it holds is one fact about the latest message:
-//!
-//! * it asked for main (反映) and nothing has landed on it — open. The
-//!   landing verb goes through on it as many times as it takes: a landing
-//!   that stopped before main moved (a dirty seat, a red gate, a rebase
-//!   that halted) fulfilled nothing, and the ask stands until one does;
-//! * it asked, and a landing moved main on it — spent. The land verb
-//!   writes this at the fast-forward (`landed`);
-//! * it did not ask — closed. A correction, an answer to a question, an
-//!   approval of something else: none carries an earlier ask forward. A
-//!   message that asks again opens it again.
-//!
-//! Only the user's own message moves it. The context a summary carries
-//! back and the harness's tagged events arrive as prompts too, and are
-//! nobody's ask and nobody's answer: they leave the permit as it stands.
-//!
-//! The word that asks is the user's own, 反映, net of the forms that
-//! describe or forbid. land / merge / マージ are not read:
-//! in a git client they name features far more often than the landing
-//! (the merge editor, マージン, tipLanded). What the word catches and
-//! misses is measured in internal-docs/反映前テストの機械化.md §land の許可.
+//! Read off UserPromptSubmit and kept per session beside the primary
+//! checkout's `.git`. The rules — open / spent / closed, which prompts are
+//! the user's own, and why 反映 is the only word read — are in
+//! internal-docs/反映前テストの機械化.md §land の許可.
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -32,9 +13,9 @@ use super::payload::{deny, string_field};
 /// The user's word for putting a branch on main.
 const ASK: &str = "反映";
 
-/// The forms that hold the ask whole but describe a state or forbid the
-/// act. Japanese has no word boundary to test, so each is counted and
-/// taken off: a message asks when it holds more asks than these.
+/// Forms that contain the ask but describe a state or forbid the act.
+/// Japanese has no word boundary to test, so these are counted and
+/// subtracted.
 const CONTAINERS: [&str; 8] = [
     "反映され",
     "反映済",
@@ -46,19 +27,17 @@ const CONTAINERS: [&str; 8] = [
     "反映せず",
 ];
 
-/// What the harness hands in as a prompt when an earlier context was
-/// summarized: it quotes whatever the user said before, and none of it
-/// is said now.
+/// How the harness's summary of an earlier context begins; it quotes old
+/// messages, none of them said now.
 const CARRIED_CONTEXT: &str = "This session is being continued from a previous conversation";
 
 /// How much of the message the refusal quotes back, in characters.
 const EXCERPT: usize = 60;
 
-/// Field separator in the permit file; every value written has tabs and
-/// newlines taken out, as the chip ledger does.
+/// Field separator in the permit file; `excerpt` leaves no tab or newline
+/// in a value.
 const SEP: char = '\t';
 
-/// Where the permit stands.
 #[derive(Debug, PartialEq, Clone, Copy)]
 enum Standing {
     /// The latest message asked, and no landing has moved main on it.
@@ -69,17 +48,15 @@ enum Standing {
     Closed,
 }
 
-/// The permit as the file remembers it: where it stands, when the
-/// message it answers for arrived, and enough of that message to quote.
+/// The permit as the file remembers it.
 struct Permit {
     standing: Standing,
     asked_at: u64,
     excerpt: String,
 }
 
-/// UserPromptSubmit: the user's message opens or closes the permit; a
-/// prompt that is not the user's leaves it as it stands. An open ask
-/// supplies the completion check before the session starts landing.
+/// UserPromptSubmit: the user's own message opens or closes the permit;
+/// any other prompt leaves it as it stands.
 pub(super) fn prompt_submit(input: &str, prompt: &str) {
     if !is_the_users_own(prompt) {
         return;
@@ -106,9 +83,9 @@ pub(super) fn prompt_submit(input: &str, prompt: &str) {
     }
 }
 
-/// PreToolUse: whether `what` — the landing verb — is refused for want
-/// of a permit. Prints the refusal when it is. Letting it through spends
-/// nothing: the landing that moves main is what spends the permit.
+/// PreToolUse: whether the landing verb `what` is refused for want of an
+/// open permit, printing the refusal if so. Letting it through spends
+/// nothing: only a landing that moves main does (`landed`).
 pub(super) fn landing_denied(input: &str, what: &str) -> bool {
     let permit = permit_path(input).and_then(|path| load(&path));
     if permit.as_ref().map(|p| p.standing) == Some(Standing::Open) {
@@ -118,20 +95,18 @@ pub(super) fn landing_denied(input: &str, what: &str) -> bool {
     true
 }
 
-/// The land verb, at the fast-forward: main moved on this session's
-/// permit, and the permit is spent by it. `dir` is any directory of the
-/// repository, `session` the id the session runs under. A permit that is
-/// not open is left as it is — a landing the user ran by hand, or from a
-/// tree whose hooks predate the permit, answered to nobody's message.
+/// Called by the land verb at the fast-forward: spends this session's
+/// open permit. `dir` is any directory of the repository. A permit that
+/// is not open is left as it is — a landing the user ran by hand answered
+/// nobody's message.
 pub(crate) fn landed(dir: &str, session: &str) {
     if let Some(path) = permit_file(dir, session) {
         spend(&path);
     }
 }
 
-/// Stop: distinguish an unfulfilled landing from work left after one.
-/// Dirty files count even when HEAD is already on main; they have not
-/// reached the gate's committed-tip standing yet.
+/// Stop: an unfulfilled landing, or work left after one. Dirty files count
+/// even with HEAD on main — the gate's standing is the committed tip.
 pub(super) fn unmet(input: &str) -> Option<String> {
     let permit = load(&permit_path(input)?)?;
     if permit.standing == Standing::Closed {
@@ -156,11 +131,8 @@ pub(super) fn unmet(input: &str) -> Option<String> {
     })
 }
 
-/// Whether a prompt is the user's own words. Two other things arrive as
-/// prompts: the context a summarized session carries back, which quotes
-/// what the user said before, and the harness's tagged events
-/// (`<task-notification>`, `<ci-monitor-event>`), which quote nothing
-/// the user said at all.
+/// Whether a prompt is the user's own words — not a summary carried back
+/// nor a tagged harness event (`<task-notification>`).
 fn is_the_users_own(prompt: &str) -> bool {
     let text = prompt.trim_start();
     !text.starts_with(CARRIED_CONTEXT) && !opens_a_tag(text)
@@ -171,7 +143,6 @@ fn opens_a_tag(text: &str) -> bool {
     chars.next() == Some('<') && chars.next().is_some_and(|c| c.is_ascii_alphabetic())
 }
 
-/// Whether the message asks for main.
 fn asks_for_main(prompt: &str) -> bool {
     let containers: usize = CONTAINERS
         .iter()
@@ -180,8 +151,6 @@ fn asks_for_main(prompt: &str) -> bool {
     prompt.matches(ASK).count() > containers
 }
 
-/// The refusal, by what the permit says. Every form ends the same way,
-/// because the way out is the same: the branch stays, the user reads.
 fn refusal(what: &str, permit: Option<&Permit>) -> String {
     let report = "This permit controls land only. Complete the work under CLAUDE.md §Git 運用 \
                   before reporting its branch/SHA and verification result";
@@ -233,9 +202,9 @@ fn permit_path(input: &str) -> Option<PathBuf> {
     permit_file(&cwd, &session)
 }
 
-/// `.permits/<session>.land` beside the primary checkout's `.git` (where
-/// the chip ledger sits too), so the seat's landing reads what the prompt
-/// hook wrote from wherever the session sat when the message arrived.
+/// `.permits/<session>.land` beside the primary checkout's `.git`, so a
+/// landing in the seat reads what the prompt hook wrote wherever the
+/// session sat.
 fn permit_file(dir: &str, session: &str) -> Option<PathBuf> {
     let session: String = session
         .chars()
@@ -249,7 +218,6 @@ fn permit_file(dir: &str, session: &str) -> Option<PathBuf> {
     Some(root.join(".permits").join(format!("{session}.land")))
 }
 
-/// An open permit becomes spent; any other stays what it is.
 fn spend(path: &Path) {
     let Some(mut permit) = load(path) else {
         return;
@@ -283,8 +251,8 @@ fn parse(line: &str) -> Option<Permit> {
     })
 }
 
-/// Writes the permit. Advisory in one direction only: a permit that
-/// cannot be written reads as absent, and an absent permit refuses.
+/// Writes the permit. One that cannot be written reads as absent, and an
+/// absent permit refuses.
 fn store(path: &Path, permit: &Permit) {
     let Some(dir) = path.parent() else {
         return;
@@ -299,8 +267,7 @@ fn store(path: &Path, permit: &Permit) {
     };
     let line = format!("{word}{SEP}{}{SEP}{}\n", permit.asked_at, permit.excerpt);
     if let Err(_unheard) = std::fs::write(path, line) {
-        // Nobody to tell from inside a hook; the next landing reads
-        // whatever the file holds, and refuses if it holds nothing.
+        // Nobody to tell from inside a hook.
     }
 }
 
@@ -311,8 +278,7 @@ fn now() -> u64 {
         .unwrap_or(0)
 }
 
-/// How long ago `secs` was, coarsely: what the refusal needs is whether
-/// the message is this turn's or an hour old.
+/// How long ago `secs` was, coarsely.
 fn ago(secs: u64) -> String {
     let elapsed = now().saturating_sub(secs);
     if elapsed < 60 {

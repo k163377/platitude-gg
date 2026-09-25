@@ -1,60 +1,39 @@
 //! The dimensions the benchmark corpus is built to, and the strings that
-//! fill them.
-//!
-//! The numbers are the ones the budget is written against — a repository
-//! of `JetBrains/kotlin` class (CLAUDE.md §性能予算) — rounded so that the
-//! record means the same thing next month. What they were taken from is
+//! fill them: `JetBrains/kotlin` class (CLAUDE.md §性能予算), rounded so a
+//! re-take measures the same corpus. The reference repository is named
 //! in `ci/baseline/perf-windows-x64.md` §計測条件.
 //!
-//! **Lengths matter more than words.** What the memory is mostly made of
-//! is the ref table and the subjects of the rows on screen
-//! (ci/baseline/perf-windows-x64.md §Rust ヒープ), so the generator's job
-//! is to reproduce the *distribution of lengths*, which the tests at the
-//! foot hold it to. The words themselves only have to read like a
-//! repository so that a screenshot of the corpus is legible.
+//! **Lengths matter more than words.** Memory is mostly the ref table and
+//! the on-screen subjects (ci/baseline/perf-windows-x64.md §Rust ヒープ),
+//! so the generator reproduces the distribution of lengths, held by the
+//! tests at the foot; the words only have to read like a repository.
 
-/// Reachable commits. Over the hundred thousand the budget names, and a
-/// round number so a re-take a month from now measures the same
-/// corpus.
+/// Reachable commits: over the budget's hundred thousand.
 pub(super) const COMMITS: u64 = 200_000;
 
 /// Refs, split the way the reference repository splits them (85.6% tags).
-/// The count is what the ref tables are sized by, and they are the
-/// largest named thing on the Rust heap.
 pub(super) const TAGS: u64 = 42_800;
 pub(super) const REMOTE_BRANCHES: u64 = 7_200;
 
-/// Distinct authors. Their names ride on every row the graph draws.
 pub(super) const AUTHORS: u64 = 277;
 
-/// One merge this often. The reference repository's `--all` history is
-/// very nearly linear — 14 merges in 20,000 commits — because almost
-/// every ref is a tag on one line of development.
+/// One merge this often: the reference repository's history is nearly
+/// linear (14 merges in 20,000 commits).
 pub(super) const MERGE_EVERY: u64 = 1_429;
 
-/// Branch tips the graph's window holds, and how long each chain is.
-///
-/// **A window is many chains.** The reference repository's newest 2,000
-/// commits are 232 separate chains of about eight commits with no merge
-/// among them — review branches that were never merged, whose tips are
-/// remote-tracking refs. A corpus whose window were one line of
-/// development would draw a fraction of the lanes, the edges and the
-/// chips a real one does, and would flatter every number taken off it —
-/// a single-column corpus weighed tens of megabytes less
+/// Branch tips the graph's window holds, and how long each chain is: the
+/// reference repository's newest 2,000 commits are 232 unmerged chains
+/// of about eight, tipped by remote-tracking refs. A one-line window
+/// draws a fraction of the lanes and chips and flatters every number
 /// (ci/baseline/code-costs-windows-x64.md §コーパス生成).
 pub(super) const SIDE_BRANCHES: u64 = 232;
 pub(super) const SIDE_LENGTH: u64 = 8;
 
 /// How many files a commit off the trunk changes, as (share in a
-/// thousand, files).
-///
-/// **The window is nine parts side branch.** Its two thousand rows are
-/// the newest by date and the trunk contributes a few hundred of them,
-/// so what a row in the window changes is what a side branch changes —
-/// and one file each makes every details pane in the measurement a list
-/// of one. The reference repository's window answers three files at the
-/// median, twenty at the ninth decile and 1,340 at its worst
-/// (`cargo xtask corpus --against`), which is what these shares are.
+/// thousand, files). The window is nine parts side branch, so this is
+/// what its details panes list; the reference repository's window
+/// answers 3 files at the median, 20 at the ninth decile and 1,340 at
+/// worst (`cargo xtask corpus --against`).
 pub(super) const SIDE_FILES: [(u64, u64); 11] = [
     (300, 1),
     (120, 2),
@@ -70,13 +49,10 @@ pub(super) const SIDE_FILES: [(u64, u64); 11] = [
 ];
 
 /// How many candidates a commit weighs before it picks a file to edit,
-/// keeping the largest.
-///
-/// **Set by where it lands.** The reference repository's
-/// window opens a 10,366-byte file at the median against a 565-byte
-/// median tracked file; the corpus's tree carries the same size
-/// histogram, so the only question is which decile of it the commits
-/// reach for. Held by `stream::tests`.
+/// keeping the largest: the reference repository's window opens 10,366
+/// bytes at the median against a 565-byte median tracked file, and the
+/// tree has the same size histogram, so this picks the decile. Held by
+/// `stream::tests`.
 pub(super) const EDIT_DRAWS: u64 = 12;
 
 /// How many files the `n`th side-branch commit changes.
@@ -91,35 +67,23 @@ pub(super) fn side_files(n: u64) -> u64 {
     1
 }
 
-/// How many branches back each one forks from.
+/// The fork distance [`fork_back`] falls back to.
 ///
-/// **This is what the graph's width is.** A
-/// lane stays open from a branch's tip down to the commit it forked
-/// from, so branches that all fork from one trunk commit below the
-/// window keep every lane open at once: 232 of them, against the
-/// reference repository's 23 on average and 33 at its widest (measured
-/// — and a corpus that wide rendered so slowly the bench never
-/// finished). Forking from a near neighbour closes each lane a few rows
-/// down, and the width settles at about this many branches' worth.
+/// **Fork distance sets the graph's width.** A lane stays open from a
+/// branch's tip down to its fork point, so branches all forking from one
+/// trunk commit keep all 232 lanes open, against the reference
+/// repository's 23 on average and 33 at its widest. Forking from a near
+/// neighbour closes each lane a few rows down.
 ///
-/// **Each branch has to fork from its own commit.** Branches that share
-/// one leave a single lane open between them: a fork distance that
-/// varied in step with the branch number put nine of them on the same
-/// commit and the graph came out four lanes wide where twenty-three
-/// was wanted (measured). A fixed distance back, landing on a
-/// different step of that branch each time, gives one open lane per
-/// branch and a widest row wider than the average.
+/// **Each branch has to fork from its own commit**: branches sharing one
+/// leave a single lane open between them, and the graph comes out too
+/// narrow.
 pub(super) const FORK_BACK: u64 = 27;
 
-/// How far back each branch forks, at the shares that give the window
-/// the reference repository's spread of lane widths.
-///
-/// **A fixed distance is a comb.** Every branch keeping exactly one
-/// lane open for exactly the same number of rows gives a constant
-/// width, and a constant demands nothing of a renderer. The reference
-/// repository's window, walked by the same lane count `corpus::readings::graph`
-/// applies to both, is p25 21 / p50 25 / p75 27 / max 33; what a
-/// spread of distances buys is that shape.
+/// How far back each branch forks, as (share in a hundred, branches
+/// back): a fixed distance gives a constant width, which demands nothing
+/// of a renderer. The reference repository's window, counted by
+/// `corpus::readings::graph`, is p25 21 / p50 25 / p75 27 / max 33.
 pub(super) const FORK_BACKS: [(u64, u64); 7] = [
     (16, 6),
     (20, 14),
@@ -143,13 +107,9 @@ pub(super) fn fork_back(n: u64) -> u64 {
     FORK_BACK
 }
 
-/// Tags whose commit is inside the graph's 2,000-row window, which is
-/// what decides how many chips it draws.
-///
-/// **The window needs its own share of the tags.** The
-/// window is the newest 2,000 commits and the trunk contributes only a
-/// few hundred of them, so tags placed evenly along 198,000 commits put
-/// thirty on screen where the reference repository puts 461.
+/// Tags whose commit is inside the graph's 2,000-row window: spread
+/// evenly along the trunk, about thirty would land there, where the
+/// reference repository puts 461.
 pub(super) const TAGS_IN_WINDOW: u64 = 520;
 
 /// The most refs the corpus puts on any one commit. The reference
@@ -157,67 +117,48 @@ pub(super) const TAGS_IN_WINDOW: u64 = 520;
 /// one `Chips` list and one row laying out 42 chips.
 pub(super) const REFS_ON_ONE: u64 = 44;
 
-/// Tags carrying a tag object of their own. The reference
-/// repository's are 99.3% annotated, and an annotated tag costs a peel
-/// (`%(*objectname)`) where a lightweight one resolves in a single
-/// read.
+/// Tags in a thousand carrying a tag object, as the reference
+/// repository's 99.3%: an annotated tag costs a peel (`%(*objectname)`)
+/// where a lightweight one resolves in a single read.
 pub(super) const ANNOTATED_SHARE: u64 = 993;
 
-/// How large one pack may grow before `fast-import` starts another.
-/// The packs themselves come from the build's shape — one per blob pass
-/// and one for the commits and trees (`corpus::build::BLOB_IMPORTS`), five
-/// like the reference repository's, under a multi-pack-index like its —
-/// and this is the ceiling on any one of them. Every git process an
-/// opening spawns maps all of them before it resolves anything.
+/// How large one pack may grow before `fast-import` starts another. The
+/// pack count is the build's (`corpus::build::BLOB_IMPORTS`); this is
+/// the ceiling on any one of them.
 pub(super) const MAX_PACK_SIZE: &str = "2g";
 
 /// The trunk, once the side branches and the newest commit have taken
 /// their share of [`COMMITS`].
 pub(super) const TRUNK: u64 = COMMITS - SIDE_BRANCHES * SIDE_LENGTH - 1;
 
-/// Files the newest commit changes, and how many lines each of them
-/// gains and loses. That commit is what the interaction measurement
-/// opens, so this is the shape of the details pane and of the diff being
-/// timed.
+/// Files the newest commit — the one the interaction measurement opens —
+/// changes, and how many lines each gains and loses.
 ///
-/// **A few lines, whatever the file's size.** The expensive case for the
-/// diff pane is a small diff *in a large file*: the grammar path parses
-/// the whole source and spans every line of it to colour the handful
-/// that changed. A newest commit that rewrote its files whole would
-/// measure the diff and hide the highlighting.
+/// **A few lines, whatever the file's size**: the diff pane's expensive
+/// case is a small diff in a large file, where the grammar path parses
+/// the whole source to colour a handful of lines.
 pub(super) const NEWEST_FILES: u64 = 75;
 pub(super) const NEWEST_ADDED: u64 = 47;
 pub(super) const NEWEST_REMOVED: u64 = 3;
 
-/// The smallest file [`edited`] will change. Below four lines it has
-/// nowhere to splice and hands the file back as it found it, and a path
-/// the newest commit names but does not change is one the details pane
-/// never lists.
+/// The smallest file [`edited`] will change: below four lines it hands
+/// the file back unchanged, and a path the newest commit names without
+/// changing is one the details pane never lists.
 pub(super) const EDITABLE_FLOOR: usize = 256;
 
-/// The smallest file the default scenario is allowed to open.
-///
-/// **What people edit is larger than the median file.** The
-/// reference repository's median tracked file is 565 bytes and the
-/// median file its window opens is 10,366; drawn uniformly from the
-/// tree, the commit the measurement selects opens three kilobytes, and
-/// the operation-response number is then a reading of a file nobody
-/// edits. This sits between that repository's median opened file and
-/// its ninth decile (60,895), and beside the 25KB its own tip carried
-/// when this was first measured.
+/// The smallest file the default scenario is allowed to open: between
+/// the reference repository's median opened file (10,366 bytes) and its
+/// ninth decile (60,895). Drawn uniformly from the tree, the measured
+/// commit would open a file nobody edits.
 pub(super) const OPENED_BYTES: usize = 24_576;
 
-/// The first commit's date and the step between commits. Fixed, so
-/// that a corpus regenerating to the same object ids is one the
-/// record can name and a cleared machine can get back
-/// (`corpus::token`).
+/// The first commit's date and the step between commits, fixed so the
+/// corpus regenerates to the same object ids (`corpus::token`).
 pub(super) const FIRST_COMMIT_AT: u64 = 1_400_000_000;
 pub(super) const STEP_SECS: u64 = 97;
 
-/// One value out of a counter. SplitMix64 — a few instructions, no
-/// state to carry, and the same answer on every machine, which is the
-/// whole point: the corpus is identified by a token taken over its refs
-/// (`corpus::token`), and that token only holds still if this does.
+/// SplitMix64 over a counter: stateless and the same on every machine,
+/// which `corpus::token` depends on.
 pub(super) fn mix(seed: u64) -> u64 {
     let mut z = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -225,15 +166,11 @@ pub(super) fn mix(seed: u64) -> u64 {
     z ^ (z >> 31)
 }
 
-/// A length. Two draws added together, because a sum of uniforms is
-/// triangular and that is the shape a length distribution has in the
-/// middle — one draw would put as many 12-character subjects on screen
-/// as 60-character ones.
-///
-/// The third draw lands on one name in eight and is what reaches the
-/// tail. A triangle alone cannot: the reference repository's refs run to
-/// 177 characters where their median is 30, and it is the long ones that
-/// decide what the ref table costs.
+/// A length: two uniform draws summed, for the triangular middle a
+/// length distribution has, and on one name in eight a third that
+/// reaches the tail — the reference repository's refs run to 177
+/// characters against a median of 30, and the long ones decide what the
+/// ref table costs.
 fn spread(seed: u64, low: u64, each: u64, tail: u64) -> usize {
     let a = mix(seed) % each;
     let b = mix(seed ^ 0x5DEE_CE66_D000_0000) % each;
@@ -245,9 +182,9 @@ fn spread(seed: u64, low: u64, each: u64, tail: u64) -> usize {
     (low + a + b + long) as usize
 }
 
-/// One whole word out of the vocabulary. **Whole**, because a cut word
-/// can be a Windows device name and git refuses the entire stream on
-/// one — `context` cut to three characters is `con` (measured).
+/// One whole word out of the vocabulary: a cut word can be a Windows
+/// device name (`context` → `con`), and git refuses the whole stream on
+/// one.
 pub(super) fn word(seed: u64) -> &'static str {
     WORDS[(mix(seed) % WORDS.len() as u64) as usize]
 }
@@ -259,9 +196,8 @@ const WORDS: [&str; 32] = [
     "cache", "index", "report", "sample", "fixture", "bridge",
 ];
 
-/// Words joined to about `want` characters, cut to fit. Every caller
-/// wants a length first and a shape second, so the cut is the
-/// point.
+/// Words joined and cut to about `want` characters: callers want a
+/// length first.
 fn words_to(seed: u64, want: usize, joiner: char) -> String {
     let mut text = String::with_capacity(want + 8);
     let mut n = 0;
@@ -273,16 +209,15 @@ fn words_to(seed: u64, want: usize, joiner: char) -> String {
         n += 1;
     }
     text.truncate(want);
-    // A trailing joiner reads as a mistake.
     while text.ends_with(joiner) {
         text.pop();
     }
     text
 }
 
-/// A commit subject. The reference repository's are 59 characters in the
-/// middle and 91 at the 95th percentile; the conventional-commit prefix
-/// is counted inside that length.
+/// A commit subject, its conventional-commit prefix counted in its
+/// length: the reference repository's run 59 at the median and 91 at the
+/// 95th percentile.
 pub(super) fn subject(n: u64) -> String {
     let want = spread(n ^ 0x51_75_62_6A, 21, 36, 60);
     let kind = ["fix", "feat", "test", "chore", "refactor"][(mix(n) % 5) as usize];
@@ -291,12 +226,10 @@ pub(super) fn subject(n: u64) -> String {
     format!("{}{head}{body}", opener(n))
 }
 
-/// What a subject opens with, which is nothing on all but a few.
-///
-/// **The emoji is the expensive one.** No Latin UI family carries it, so
-/// the row that holds it hands it to the system's colour font, whose
-/// glyphs are cached as ARGB rather than as 8-bit alpha. The em dash is
-/// the cheap half of the same axis: the family serves it itself.
+/// What a subject opens with, which is nothing on all but a few. The
+/// emoji goes to the system's colour font (glyphs cached as ARGB, not
+/// 8-bit alpha); the em dash is the cheap case the UI family serves
+/// itself.
 fn opener(n: u64) -> &'static str {
     if mix(n ^ 0x000E_3031).is_multiple_of(EMOJI_EVERY) {
         return EMOJI[(mix(n ^ 0x000E_3032) % EMOJI.len() as u64) as usize];
@@ -314,15 +247,11 @@ const EMOJI_EVERY: u64 = 1_000;
 const DASH_EVERY: u64 = 1_000;
 const EMOJI: [&str; 2] = ["🍒 ", "🎯 "];
 
-/// The whole commit message: the subject, a body, and the credits.
-///
-/// **The body is weight.** `parse::log` asks the graph walk for
-/// `%b` and the `Co-authored-by` trailers on every one of the window's
-/// 2,000 rows, and what comes back is held three times over — in
-/// `CommitMeta`, in `LogRow` inside the sent-row cache, and again in
-/// `RowItem` — before the details pane asks for `%B`. A corpus whose
-/// every message is one line carries none of that and measures none of
-/// it.
+/// The whole commit message: the subject, a body, and the credits. The
+/// graph walk (`parse::log`) reads `%b` and the `Co-authored-by`
+/// trailers for every window row and holds them three times over
+/// (`CommitMeta`, `LogRow`, `GraphRowItem`), so one-line messages would
+/// measure none of it.
 pub(super) fn message(n: u64) -> String {
     let mut text = subject(n);
     let want = body_bytes_of(n);
@@ -353,16 +282,14 @@ const BODY_SIZES: [(u64, u64); 6] = [
     (1, 6_000),
 ];
 
-/// How wide a body's lines run before they wrap. A body is paragraphs,
-/// and six thousand characters on one line is a different layout
-/// problem from ninety short ones.
+/// How wide a body's lines run before they wrap: one 6,000-character
+/// line is a different layout problem from ninety short ones.
 const BODY_COLUMNS: usize = 68;
 
-/// Rows in a thousand that credit somebody besides the author. The
-/// reference repository's window carries 172 in two thousand; the rate
-/// is above that because the rows the window holds are not the rows
-/// this is drawn over, and the corpus has to come out at least as heavy
-/// (86 measured 151 of 2,000, which was under).
+/// Rows in a thousand that credit somebody besides the author. Above
+/// the reference repository's 172 in 2,000, because the window's rows
+/// are not the ones this is drawn over and the corpus has to come out at
+/// least as heavy.
 const CO_AUTHORED_PER_MILLE: u64 = 105;
 
 fn body_bytes_of(n: u64) -> usize {
@@ -409,29 +336,22 @@ fn wrapped(seed: u64, want: usize) -> String {
     text
 }
 
-/// A name of about `want` characters that no other `n` can answer.
-///
-/// **Every ref has to be distinct or there are fewer of them than the
-/// corpus says.** Thirty-two words joined to a dozen characters do not
-/// reach fifty thousand combinations — measured: 7,200 remote branches
-/// collapsed into 799 — so the counter is spelled into the name and the
-/// words are cut to leave room for it.
+/// A name of about `want` characters that no other `n` can answer: the
+/// words alone do not reach fifty thousand combinations, so the counter
+/// is spelled in and the words cut to leave room.
 fn unique_name(seed: u64, want: usize, n: u64) -> String {
     let tail = format!("-{n}");
     let words = words_to(seed, want.saturating_sub(tail.len()).max(3), '-');
     format!("{words}{tail}")
 }
 
-/// A tag name. Tags are where the ref table's bytes are: 42,800 of them
-/// at a median of 30 characters counting `refs/tags/`, and a tail well
-/// past that.
+/// A tag name: a median of 30 characters counting `refs/tags/`, and a
+/// tail well past that.
 pub(super) fn tag(n: u64) -> String {
     let name = unique_name(n ^ 0x7A6_5F1, spread(n ^ 0x7A6_5F1, 8, 13, 40), n);
     if ZERO_WIDTH_TAGS.contains(&n) {
-        // A character the sidebar renders, sorts and elides, and that a
-        // reader cannot see — the reference repository carries two of
-        // them and a name that looks equal to another is a name that
-        // compares unequal.
+        // Invisible, yet rendered, sorted and elided — and unequal to the
+        // name it looks like.
         return name.replacen('-', "-\u{200B}", 1);
     }
     name
@@ -441,16 +361,13 @@ pub(super) fn tag(n: u64) -> String {
 /// repository's do.
 const ZERO_WIDTH_TAGS: [u64; 2] = [7, 20_101];
 
-/// A remote-tracking branch, under the same remote names the reference
-/// repository uses.
+/// A remote-tracking branch, under the reference repository's remote
+/// names.
 ///
-/// **The slashes are the sidebar's rows.** `nav::tree::build_tree`
-/// makes one `NavItem` per distinct directory prefix, with two heap
-/// strings each, and rebuilds the whole tree on every arrange — which
-/// is every refs snapshot. It does not compact single-child chains, so
-/// every segment is its own row. A name shaped `remote/rr/leaf` for all
-/// of them gives the section two folder rows; the reference repository
-/// has 1,295 over 7,823 leaves, and runs eight segments deep.
+/// **The slashes are the sidebar's rows**: `nav::tree::build_tree` makes
+/// a `NavItem` per distinct prefix, without compacting single-child
+/// chains, on every refs snapshot. The reference repository has 1,295
+/// folder rows over 7,823 leaves, eight segments deep.
 pub(super) fn remote_branch(n: u64) -> String {
     let want = spread(n ^ 0x2C4_A1B, 8, 10, 34);
     let mut name = String::from(if n.is_multiple_of(REMOTE_ORIGIN_EVERY) {
@@ -472,9 +389,8 @@ pub(super) fn remote_branch(n: u64) -> String {
 /// carries a handful.
 const REMOTE_ORIGIN_EVERY: u64 = 977;
 
-/// The remotes the corpus configures, first one first. Their names are
-/// the reference repository's own, and the first is where the tags and
-/// the upstream live (`corpus::remotes`).
+/// The remotes the corpus configures, under the reference repository's
+/// names; the first holds the tags and the upstream (`corpus::remotes`).
 pub(super) const REMOTES: [&str; 2] = ["JetBrains", "origin"];
 
 /// How far `main` sits ahead of its upstream, as the reference
@@ -483,9 +399,8 @@ pub(super) const REMOTES: [&str; 2] = ["JetBrains", "origin"];
 /// once.
 pub(super) const AHEAD_OF_UPSTREAM: u64 = 1_943;
 
-/// Every ref the corpus carries, which is what the ref tables are sized
-/// by: the tags, the remote-tracking branches, `main`, the upstream
-/// `main` tracks, and the `HEAD` each remote is read as pointing at.
+/// Every ref the corpus carries: the tags, the remote-tracking branches,
+/// `main`, its upstream, and each remote's `HEAD`.
 pub(super) const REFS: u64 = TAGS + REMOTE_BRANCHES + 2 + REMOTES.len() as u64;
 
 /// How many segments a remote-tracking branch's name runs to, at the
@@ -520,25 +435,19 @@ fn remote_depth(n: u64) -> u64 {
 fn folder(n: u64, level: u64) -> String {
     let pool = FOLDERS_BY_LEVEL[(level as usize - 1).min(FOLDERS_BY_LEVEL.len() - 1)];
     let which = mix(n ^ (level << 48) ^ 0x00F0_1DE7) % pool;
-    // The counter is in the name because the words are not enough to
-    // tell a pool of forty-eight apart: thirty-two of them cut to seven
-    // characters answer at most thirty-two distinct strings, and a pool
-    // that collapses is a folder row that never appears (measured — 833
-    // rows where the tables describe eighteen hundred).
+    // The counter is in the name: thirty-two words cut to seven
+    // characters give at most thirty-two strings, and a pool that
+    // collapses loses folder rows.
     format!(
         "{}-{which}",
         words_to(which ^ (level << 32) ^ 0x00F0_1DE7, 7, '-')
     )
 }
 
-/// Author names that are not ASCII, and why they have to exist.
-///
-/// **A glyph the UI family cannot serve loads a fallback font, and that
-/// font is tens of megabytes of working set in every window, repository
-/// open or not** (measured). The graph draws every row's author and
-/// subject, so the first visible row holding one pays it at startup —
-/// there is no asking first, and nothing to ask. A corpus of pure ASCII
-/// never loads one and so never weighs one.
+/// Author names that are not ASCII: a glyph the UI family cannot serve
+/// loads a fallback font — tens of megabytes of working set — from the
+/// first visible row holding one, at startup. A pure-ASCII corpus never
+/// weighs it.
 ///
 /// Four scripts, because they land on different fallbacks: Latin-1,
 /// Latin Extended-A, Cyrillic and CJK. The emoji is in [`subject`].
@@ -557,18 +466,17 @@ const ACCENTED: [&str; 12] = [
     "Ólafur Þórðarson",
 ];
 
-/// An author. The reference repository has 277 of them and their names
-/// run 15 characters in the middle; 12 of these carry a glyph outside
-/// ASCII, which lands on about one window row in twenty-three, against
-/// the reference repository's one in twenty-two.
+/// An author: the reference repository's names run 15 characters at the
+/// median, and the 12 non-ASCII ones land on about one window row in
+/// twenty-three, against its one in twenty-two.
 pub(super) fn author(n: u64) -> (String, String) {
     let who = n % AUTHORS;
     (name_of(who), format!("{who}@example.com"))
 }
 
-/// Who committed it, which is not who wrote it on [`APPLIED_SHARE`]
-/// rows in a hundred — a patch somebody else applied, which the details
-/// card shows as a second identity beside the author's.
+/// Who committed it: somebody other than the author on
+/// [`APPLIED_SHARE`] rows in a hundred, which the details card shows as
+/// a second identity.
 pub(super) fn committer(n: u64) -> (String, String) {
     if mix(n ^ 0xC0_11_17) % 100 >= APPLIED_SHARE {
         return author(n);
@@ -588,25 +496,21 @@ fn name_of(who: u64) -> String {
     }
 }
 
-/// Files a commit changes, and how many places in the tree it changes
-/// them in. The reference repository's commits touch 16.90 files across
-/// 4.95 directories; changes scattered over the whole tree would
-/// rewrite one tree object per file and cost the pack what a real
-/// commit does not.
+/// Files a commit changes, and in how many clusters: the reference
+/// repository's commits touch 16.90 files across 4.95 directories, and
+/// changes scattered over the whole tree would rewrite a tree object per
+/// file.
 pub(super) const CHANGED_FILES: u64 = 18;
 pub(super) const CLUSTERS: u64 = 5;
 
 /// How far apart the clusters of one commit may sit, in slots. Slots
 /// are handed out directory by directory, so a short reach keeps a
-/// commit's changes in one subtree — which is what makes its clusters
-/// share parent trees.
+/// commit's clusters under shared parent trees.
 pub(super) const CLUSTER_REACH: u64 = 400;
 
-/// Touches of a tracked path that delete it. The reference
-/// repository's first-parent history is 35.8% deletes against 36.3%
-/// adds — a corpus of pure modifications gives `--find-renames`
-/// nothing to score and never opens an added file's diff against
-/// `/dev/null`.
+/// Touches in a hundred that delete a tracked path: pure modifications
+/// give `--find-renames` nothing to score and never open an added
+/// file's diff against `/dev/null`.
 pub(super) const DELETED_SHARE: u64 = 12;
 
 /// One commit in this many renames a path outright: a delete and an add
@@ -614,51 +518,33 @@ pub(super) const DELETED_SHARE: u64 = 12;
 /// reference repository carries one in nineteen.
 pub(super) const RENAME_EVERY: u64 = 19;
 
-/// One commit in this many rewrites a megabyte file. The reference
-/// repository's pack is mostly historical revisions of large files —
-/// without them the corpus packs to three quarters of its size however
-/// many small files it churns (measured: 3.52GiB against 4.66).
-///
-/// **And it is most of the import stream.** Every revision is written
-/// whole, because `fast-import` takes no deltas, so each of these puts
-/// a megabyte or more through a single-threaded reader. The rate is
-/// what holds the pack above the reference repository's without the
-/// stream growing past what a ten-minute build can carry.
+/// One commit in this many rewrites a megabyte file: the reference
+/// repository's pack is mostly historical revisions of large files.
+/// Each revision goes whole through `fast-import`'s single-threaded
+/// reader (it takes no deltas), so the rate trades pack size against
+/// build time.
 pub(super) const HUGE_EVERY: u64 = 30;
 
-/// The build output a working repository accumulates. Ignored, and
-/// still paid for: `status::read` asks for every untracked path
-/// (`-uall`), so git stats each of these and matches it against the
-/// ignore rules before deciding it has nothing to say. The reference
-/// repository carries about 78,000.
+/// The build output a working repository accumulates, as the reference
+/// repository's 78,000: ignored and still paid for, since `status::load`
+/// (`-uall`) stats each against the ignore rules.
 ///
-/// **Beside the sources.** A rule naming a
-/// directory prunes the walk — git stats the directory once and skips
-/// everything beneath it, so 78,000 files under `build/` cost one stat
-/// and the status comes out at about half the reference repository's
-/// (ci/baseline/code-costs-windows-x64.md §コーパス生成). A pattern is
-/// what makes git walk them.
+/// **Beside the sources, matched by pattern**: a rule naming a directory
+/// prunes the walk to one stat
+/// (ci/baseline/code-costs-windows-x64.md §コーパス生成).
 pub(super) const IGNORED_FILES: u64 = 78_000;
 
 /// What the tracked ignore rules say. Patterns, for the reason
 /// above.
 pub(super) const GITIGNORE: &str = "*.class\n*.jar.tmp\n*.stamp\n";
 
-/// Ignore files below the root. **git builds a per-directory exclude
-/// stack**, pushing and popping one of these as it walks, and a
-/// repository with a single root rule never makes it do that: the
-/// reference repository carries sixteen and its status is twice this
-/// one's over the same number of files.
+/// Ignore files below the root, as the reference repository's sixteen:
+/// git pushes and pops a per-directory exclude stack as it walks, which
+/// a single root rule never exercises.
 pub(super) const NESTED_IGNORES: u64 = 16;
 pub(super) const NESTED_GITIGNORE: &str = "*.tmp\n!keep.tmp\n*.local\n";
 
 /// One file's bytes, as of a revision, into a buffer the caller reuses.
-///
-/// **Per revision.** A body that never changed would make
-/// every later commit that names it a tree change and no blob, and the
-/// object database — five million objects in the reference repository,
-/// mapped by every git process the application spawns — would be a
-/// hundredth of the size.
 pub(super) fn content_into(out: &mut Vec<u8>, slot: u64, want: usize, rev: u32, mode: &str) {
     out.clear();
     if mode == "120000" {
@@ -676,13 +562,9 @@ pub(super) fn content_into(out: &mut Vec<u8>, slot: u64, want: usize, rev: u32, 
     source(out, slot, want, rev);
 }
 
-/// Enough of a PNG that the preview pane reads it as one: the eight
-/// signature bytes and an IHDR, then noise to the size the table drew.
-///
-/// **Only where the table drew room for one.** A file smaller than the
-/// header cannot be a picture, and a body that came out longer than it
-/// was asked for is a file of the wrong size — the caller sends the
-/// small ones down the source path instead.
+/// The smallest picture: `image_into` writes the PNG signature and an
+/// IHDR, then noise to the drawn size, and a body longer than asked for
+/// is a file of the wrong size. Smaller ones go down the source path.
 const PICTURE_FLOOR: usize = 29;
 
 fn image_into(out: &mut Vec<u8>, slot: u64, want: usize) {
@@ -697,31 +579,23 @@ fn image_into(out: &mut Vec<u8>, slot: u64, want: usize) {
     out.truncate(want);
 }
 
-/// Whether a slot's bytes change from one revision to the next.
-///
-/// A source carries its revision on its first `fun` line
-/// (`CHURN_STRIDE`), so a file too short to reach past that line's
-/// words is the same bytes at every revision; a picture and a symlink
-/// never carry one. Two placements with the same bytes are one object,
-/// and the blob passes have to know that before git does
-/// (`stream::shard_of`).
+/// Whether a slot's bytes change from one revision to the next: not for
+/// a picture, a symlink, or a source below [`REVISION_FLOOR`]. The blob
+/// passes need this before git does (`stream::shard_of`).
 pub(super) fn carries_revision(slot: u64, want: usize, mode: &str) -> bool {
     mode != "120000"
         && want >= REVISION_FLOOR
         && !(super::tree::extension(slot) == PICTURES[0] && want >= PICTURE_FLOOR)
 }
 
-/// A body short enough that its slot's number may be cut off it: the
-/// package line is cut at the size the tree drew, so two slots' bytes
-/// can be one object, and only the bytes themselves say so.
+/// A body short enough that its package line — slot number and all —
+/// may be cut off, so two slots' bytes can be one object.
 pub(super) const TINY: usize = 64;
 
-/// The smallest source whose revision is spelled on two lines: every
-/// sixteenth line carries it, at about thirty-four bytes a line. One
-/// line can repeat across revisions — its words are drawn from
-/// thirty-two and its number from a thousand, and a floor of one line
-/// left 174 objects in two packs (measured) — where two do not in
-/// practice.
+/// The smallest source whose revision is spelled on two lines (every
+/// sixteenth line, about thirty-four bytes each): one line can repeat
+/// across revisions — thirty-two words, a thousand numbers — where two
+/// do not in practice.
 const REVISION_FLOOR: usize = 1_024;
 
 #[cfg(test)]
@@ -731,19 +605,15 @@ pub(super) fn content(slot: u64, want: usize, rev: u32, mode: &str) -> Vec<u8> {
     out
 }
 
-/// Extensions the preview pane reads as an image, which is a different
-/// path through `preview::file_preview`: the blob is written to a file
-/// of the run's own and shown from there.
+/// Extensions the preview pane reads as an image — a different path
+/// through `preview::file_preview`.
 const PICTURES: [&str; 1] = ["png"];
 
-/// One source file's body, in a language the diff pane
-/// highlights through a grammar, grown to the size the tree
-/// calls for.
+/// One source file's body, in a language the diff pane highlights
+/// through a grammar, grown to the size the tree calls for.
 ///
-/// **Written into a buffer the caller keeps, and with no allocation of
-/// its own.** This is the innermost loop of the whole build: four
-/// million placements of a few dozen lines each, so a `format!` per
-/// line is hundreds of millions of allocations.
+/// **No allocation of its own**: this is the build's innermost loop, and
+/// a `format!` per line is hundreds of millions of allocations.
 fn source(out: &mut Vec<u8>, slot: u64, want: usize, rev: u32) {
     if want == 0 {
         return;
@@ -757,8 +627,7 @@ fn source(out: &mut Vec<u8>, slot: u64, want: usize, rev: u32) {
     let mut line = 0u64;
     while out.len() < want {
         // The revision rides on one line in `CHURN_STRIDE`, so a later
-        // revision is a delta of its predecessor — which is what makes
-        // the pack the shape a real one is.
+        // revision is a delta of its predecessor.
         let churn = if line.is_multiple_of(CHURN_STRIDE) {
             u64::from(rev)
         } else {
@@ -774,9 +643,8 @@ fn source(out: &mut Vec<u8>, slot: u64, want: usize, rev: u32) {
     out.truncate(want);
 }
 
-/// A number, without the formatting machinery. `itoa` by hand because
-/// `write!` on a `Vec<u8>` goes through `fmt::Arguments` and this is
-/// called a few hundred million times.
+/// A number, by hand: `write!` goes through `fmt::Arguments`, and this
+/// runs hundreds of millions of times.
 fn push_u64(out: &mut Vec<u8>, mut value: u64) {
     let mut digits = [0u8; 20];
     let mut at = digits.len();
@@ -810,16 +678,14 @@ fn push_words(out: &mut Vec<u8>, seed: u64, want: usize, joiner: u8) {
     }
 }
 
-/// How often a line carries the revision. Measured on the reference
-/// repository's own megabyte files: its historical revisions pack to
-/// 63,254 bytes each, and this is the first stride at or above that.
+/// How often a line carries the revision: the first stride whose
+/// revisions pack at or above the reference repository's megabyte files
+/// (63,254 bytes a revision).
 const CHURN_STRIDE: u64 = 16;
 
 /// The same body after the newest commit touched it: [`NEWEST_REMOVED`]
 /// of its lines gone from the middle and [`NEWEST_ADDED`] new ones in
-/// their place. Bounded whatever the file's size, so the diff of the
-/// large source is a large *file* and a small *change* — which is the
-/// shape that makes highlighting the cost.
+/// their place, whatever the file's size.
 pub(super) fn edited(slot: u64, want: usize, rev: u32, mode: &str) -> Vec<u8> {
     let mut whole = Vec::new();
     content_into(&mut whole, slot, want, rev, mode);
@@ -864,9 +730,8 @@ mod tests {
         (0..count).map(|n| of(n).chars().count()).collect()
     }
 
-    /// The reference repository's subjects: 59 in the middle, 91 at the
-    /// 95th. Held to a few characters either side — what matters is the
-    /// volume of text 2,000 rows hold.
+    /// Held to a few characters either side: what matters is the volume
+    /// of text 2,000 rows hold.
     #[test]
     fn subjects_are_the_length_the_reference_repository_writes() {
         let mut lengths = lengths(20_000, subject);
@@ -883,28 +748,20 @@ mod tests {
         let (p50, p95) = (at(&mut tags, 50), at(&mut tags, 95));
         assert!((26..=36).contains(&p50), "tag p50 was {p50}");
         assert!((50..=64).contains(&p95), "tag p95 was {p95}");
-        // The reference repository's remote names run 52 in the middle
-        // counting `refs/remotes/`, and the ref table is mostly their
-        // bytes — so this has to run at least as long.
+        // At least the reference repository's median of 52.
         let mut remotes = lengths(7_000, |n| format!("refs/remotes/{}", remote_branch(n)));
         let p50 = at(&mut remotes, 50);
         assert!((52..=72).contains(&p50), "remote p50 was {p50}");
     }
 
-    /// **The glyphs that load a fallback font.** The graph pane draws
-    /// every row's author and subject, so the first visible row with a
-    /// glyph the UI family cannot serve loads the system fallback —
-    /// tens of megabytes of working set, measured. A corpus of pure
-    /// ASCII never loads one, and the reference repository loads two.
+    /// The glyphs that load a fallback font (why: `ACCENTED`, `opener`).
     #[test]
     fn a_window_of_rows_carries_the_glyphs_that_load_a_fallback() {
         let names = (0..2_000).filter(|n| !author(*n).0.is_ascii()).count();
         assert!((60..=140).contains(&names), "{names} author names of 2,000");
         let subjects = (0..2_000).filter(|n| !subject(*n).is_ascii()).count();
         assert!((2..=12).contains(&subjects), "{subjects} subjects of 2,000");
-        // One of them outside the basic multilingual plane: that is the
-        // colour font, whose glyphs are cached as ARGB rather than as
-        // 8-bit alpha.
+        // One outside the basic multilingual plane: the colour font.
         let emoji = (0..20_000).any(|n| subject(n).chars().any(|c| c as u32 > 0xFFFF));
         assert!(
             emoji,
@@ -915,10 +772,6 @@ mod tests {
         assert!(invisible, "no tag carries a zero-width space");
     }
 
-    /// The reference repository's window carries 481,089 bytes of
-    /// message body and 172 rows crediting somebody besides the author.
-    /// `parse::log` asks for both on every row and holds what comes back
-    /// three times over, so a one-line message measures none of it.
     #[test]
     fn messages_carry_the_body_and_the_credits_a_window_holds() {
         let mut bodies = 0;
@@ -935,19 +788,12 @@ mod tests {
         assert!(credited >= 172, "{credited} rows credited of 2,000");
     }
 
-    /// Nearly half the reference repository's rows were applied by
-    /// somebody other than their author, and the details card shows the
-    /// two identities separately.
     #[test]
     fn nearly_half_the_rows_were_committed_by_somebody_else() {
         let applied = (0..2_000).filter(|n| committer(*n) != author(*n)).count();
         assert!((820..=1_060).contains(&applied), "{applied} of 2,000");
     }
 
-    /// The window is nine parts side branch, so what a side-branch
-    /// commit changes is what the details pane in the measurement gets
-    /// handed. The reference repository's window answers three files at
-    /// the median and twenty at the ninth decile.
     #[test]
     fn a_side_branch_commit_changes_what_the_reference_repository_does() {
         let mut files: Vec<u64> = (0..super::SIDE_BRANCHES * super::SIDE_LENGTH)
@@ -961,9 +807,8 @@ mod tests {
             "p90 {}",
             percentile(90)
         );
-        // The tail is the point of the table: a commit that
-        // touches a whole subtree is what makes the pane build a
-        // list.
+        // The tail is the point: a whole-subtree commit makes the pane
+        // build a list.
         assert!(
             files[files.len() - 1] >= 300,
             "max {}",
@@ -978,12 +823,6 @@ mod tests {
         assert!((11..=19).contains(&p50), "author p50 was {p50}");
     }
 
-    /// **The sidebar's rows are the slashes.** `nav::tree::build_tree`
-    /// makes one `NavItem` per distinct directory prefix, two heap
-    /// strings each, rebuilt on every arrange — and it does not compact
-    /// single-child chains. The reference repository's remotes section
-    /// carries 1,295 folder rows over 7,823 leaves and runs eight deep;
-    /// names all shaped `remote/rr/leaf` would carry two.
     #[test]
     fn the_remotes_section_is_a_tree_rather_than_a_list() {
         let mut folders = std::collections::HashSet::new();
@@ -999,7 +838,6 @@ mod tests {
         assert!(deepest >= 7, "{deepest} segments at the deepest");
     }
 
-    /// A corpus that says it has 50,000 refs has to have 50,000 names.
     #[test]
     fn every_ref_name_is_its_own() {
         let tags: std::collections::HashSet<String> = (0..super::TAGS).map(tag).collect();
@@ -1009,9 +847,8 @@ mod tests {
         assert_eq!(remotes.len() as u64, super::REMOTE_BRANCHES);
     }
 
-    /// The same counter always answers the same string: the corpus is
-    /// named by a token over its refs, and a generator that drifted
-    /// would rename the corpus every time it was rebuilt.
+    /// A drifting generator would rename the corpus (`corpus::token`) on
+    /// every rebuild.
     #[test]
     fn the_same_counter_always_answers_the_same_string() {
         assert_eq!(subject(12_345), subject(12_345));
@@ -1023,10 +860,8 @@ mod tests {
         );
     }
 
-    /// A body is exactly the size the tree drew for it. **`data` counts
-    /// bytes**, and every placement pairs the two — a body that ran over
-    /// or under would be a stream fast-import rejects, a hundred seconds
-    /// after it was written.
+    /// `data` counts bytes: a body off its drawn size is a stream
+    /// fast-import rejects, long after it was written.
     #[test]
     fn a_body_is_the_size_the_tree_asked_for() {
         for want in [0, 1, 17, 565, 4_035, 24_570, 1_048_577] {
@@ -1035,20 +870,13 @@ mod tests {
         }
     }
 
-    /// **A later revision is a delta of the one before it.** A
-    /// body that never changed would leave the history one blob
-    /// per path however many commits named it, and the object
-    /// database is what every git process maps before it
-    /// resolves anything.
     #[test]
     fn a_revision_differs_from_the_one_before_without_replacing_it() {
         let first = String::from_utf8(super::content(23, 24_570, 0, "100644")).expect("ascii");
         let second = String::from_utf8(super::content(23, 24_570, 1, "100644")).expect("ascii");
         assert_ne!(first, second, "the revision changed nothing");
-        // Counted in lines: a changed line is a different length, so
-        // everything after it sits at a new offset — which is what a
-        // delta encodes, and what the count of surviving lines
-        // reads.
+        // Counted in lines, not bytes: a changed line's length shifts
+        // every offset after it.
         let was: Vec<&str> = first.lines().collect();
         let same = second.lines().filter(|line| was.contains(line)).count();
         assert!(
@@ -1058,9 +886,6 @@ mod tests {
         );
     }
 
-    /// The newest commit's change is a few lines whatever the file is,
-    /// so opening the large source measures the grammar walking a
-    /// megabyte to colour a handful of changed lines.
     #[test]
     fn the_newest_commit_changes_a_few_lines_of_a_large_file() {
         for want in [24_570_usize, 1_048_577] {

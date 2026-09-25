@@ -8,9 +8,8 @@ const GOLD: [u8; 4] = [0xe9, 0xc4, 0x6a, 0xff];
 const NAVY: [u8; 4] = [0x26, 0x46, 0x53, 0xff];
 const CORAL: [u8; 4] = [0xe7, 0x6f, 0x51, 0xff];
 
-/// A square of one colour with a diagonal band of another across it —
-/// a mark whose two versions are told apart at a glance, and whose
-/// pixels are hard edges an upscale either keeps or blurs.
+/// A square of one colour with a diagonal band of another: hard edges an
+/// upscale either keeps or blurs.
 fn badge(size: u32, face: [u8; 4], band: [u8; 4]) -> Vec<u8> {
     let width = size / 6;
     crate::png::rgba(size, size, move |x, y| {
@@ -34,10 +33,8 @@ fn scene(width: u32, height: u32) -> Vec<u8> {
     })
 }
 
-/// The big one: a weave held in three versions, so both a commit and the
-/// tree can change it. `turn` rotates the gradient's channels and picks
-/// the plain cells' colour, so every version is told from the others at
-/// a glance.
+/// The big one, in three versions so both a commit and the tree can
+/// change it; `turn` tells them apart at a glance.
 fn weave(size: u32, turn: u32) -> Vec<u8> {
     let plain = [NAVY, TEAL, GOLD][turn as usize % 3];
     crate::png::rgba(size, size, move |x, y| {
@@ -89,27 +86,23 @@ pub(super) fn pictures(repo: &mut DemoRepo) -> Result<(), String> {
         "docs: say where the pictures are",
     )?;
 
-    // Unstaged: the logo and the vector mark, both changed in the tree.
     repo.write_bytes("art/logo.png", &badge(96, GOLD, TEAL))?;
     repo.write("art/mark.svg", MARK_V2)?;
-    // Staged: a small icon added (the zoom steps' target), the old mark
-    // deleted.
+    // The icon is the zoom steps' target.
     repo.write_bytes("art/icon.png", &badge(16, NAVY, GOLD))?;
     repo.git(&["add", "--", "art/icon.png"])?;
     repo.git(&["rm", "--quiet", "--", "art/old.png"])?;
-    // Untracked: a photo's shape.
     repo.write_bytes("art/photo.png", &scene(640, 400))?;
     Ok(())
 }
 
-/// Side length of the big picture: past what a data URL could have
-/// carried on either side (16 MiB), so both sides decoded at once are
-/// what the preview costs and hands back.
+/// Side length of the big picture: each diff side is past what a data URL
+/// could carry (16 MiB).
 const BIG_SIDE: u32 = 3000;
 
 /// One picture too big for anything but a file, changed by the newest
-/// commit and changed again in the tree: both the commit's diff (what
-/// `perf --file` opens) and the working tree's have two sides to decode.
+/// commit (what `perf --file` opens) and again in the tree, so both diffs
+/// have two sides to decode.
 pub(super) fn bigpicture(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",

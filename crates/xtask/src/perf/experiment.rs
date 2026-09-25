@@ -52,9 +52,9 @@ pub(super) fn compare(mut opts: Options) -> Result<(), String> {
     let blocks = opts.runs;
     opts.runs = 1;
     opts.build = false;
-    // Both shelves exist before the first timed launch. Each warm sample
-    // warms its own binary immediately before measurement; no shelf switch
-    // can silently borrow the other binary's warm-cache claim.
+    // Both shelves are built before the first timed launch, and each
+    // sample warms its own binary right before it is measured: no shelf
+    // switch borrows the other binary's warm cache.
     let mut expected = None;
     for (step, variant) in order(blocks).iter().enumerate() {
         opts.at = if *variant == "A" {
@@ -133,9 +133,8 @@ pub(super) fn prepare_cold(opts: &Options, exe: &Path, output: &Path) -> Result<
     if opts.cache != "cold" {
         return Ok(());
     }
-    // The operator supplies an OS-specific executable.
-    // It must finish successfully after preparing the named repo and binary.
-    // No repository inspection or calibration follows it before app launch.
+    // Nothing inspects the repository or calibrates between the operator's
+    // executable and the launch.
     let log = std::fs::File::create(output.join("cold-prepare.log")).map_err(|e| e.to_string())?;
     let mut child = Command::new(&opts.cold_prepare)
         .arg(&opts.repo)

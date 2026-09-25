@@ -20,9 +20,8 @@ pub(super) fn basic(repo: &mut DemoRepo) -> Result<(), String> {
     )?;
     repo.git(&["tag", "-a", "v0.1", "-m", "first cut"])?;
     repo.commit("docs/guide.md", "guide v1\n", "docs: add a guide")?;
-    // Japanese subject and body on purpose: every screenshot of this
-    // preset then exercises CJK rendering, and 直 / 骨 make a wrong
-    // (Chinese-variant) glyph visible at a glance.
+    // Japanese on purpose: every shot of this preset exercises CJK
+    // rendering, and 直 / 骨 show a Chinese-variant glyph at a glance.
     repo.commit(
         "docs/guide.md",
         "guide v1\n\n## 使い方\n直感的な操作の案内。骨組みだけ先に日本語で書く。\n",
@@ -60,9 +59,8 @@ pub(super) fn basic(repo: &mut DemoRepo) -> Result<(), String> {
 
     repo.write("src/lib.txt", "lib v2\nstashed experiment\n")?;
     repo.git(&["stash", "push", "-m", "experiment on the library"])?;
-    // A dirty working tree: staged, unstaged, untracked. The
-    // unstaged edit REPLACES the first line, so the diff's body line 0 is
-    // a change — the stage-line / discard-line hooks pick line 0, and a
+    // Staged, unstaged, untracked. The unstaged edit replaces the first
+    // line: the stage-line / discard-line hooks pick body line 0, and a
     // context line there would select nothing.
     repo.write("src/app.txt", "app v2\nwith settings\nstaged line\n")?;
     repo.git(&["add", "--", "src/app.txt"])?;
@@ -90,9 +88,7 @@ pub(super) fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["add", "--", "c.txt"])?;
     repo.write("c.txt", "c v1\nstaged\nand unstaged on top\n")?;
     repo.git(&["mv", "renamed-from.txt", "renamed-to.txt"])?;
-    // Long enough to be read as a file: the diff of something the
-    // repository has never seen is all additions under one heading, and
-    // one line of it cannot show what that looks like.
+    // Long enough that its all-additions diff reads as a file.
     repo.write(
         "untracked.txt",
         "Notes for the next release\n\
@@ -107,16 +103,13 @@ pub(super) fn dirty(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Repositories of their own, sitting in the working copy — the entries
-/// git answers `status` with as one `vendor/nest/` because it will not
-/// cross into them, whatever it is asked about untracked files.
+/// Repositories of their own inside the working copy, which `status`
+/// lists as one `vendor/nest/` entry whatever it is asked about untracked
+/// files.
 ///
-/// Both cases are here, because the pane has a different thing to say
-/// about each: `vendor/nest` has a commit, which is what a stage of the
-/// row would point at, and `vendor/fresh` has none, which is what `git
-/// add` refuses on. The loose file beside them is the contrast — a plain
-/// new directory is opened and listed file by file, and never an entry of
-/// its own.
+/// `vendor/nest` has a commit (what a stage of the row would point at),
+/// `vendor/fresh` has none (what `git add` refuses on); the loose file
+/// beside them is a plain new directory, listed file by file.
 pub(super) fn embedded(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -134,9 +127,8 @@ pub(super) fn embedded(repo: &mut DemoRepo) -> Result<(), String> {
         )?;
         if commit {
             repo.git_at(&dir, &["add", "--", "inside.txt"])?;
-            // The identity is this one repository's, given on the command
-            // line: nothing here reads the other repository's settings,
-            // and one commit is all it is for.
+            // The nested repository has no identity configured; one
+            // commit is all it needs.
             repo.git_at(
                 &dir,
                 &[
@@ -156,11 +148,10 @@ pub(super) fn embedded(repo: &mut DemoRepo) -> Result<(), String> {
 
 /// All four line-ending cases at once, in a directory with a house style.
 ///
-/// The neighbours are what makes the two estimated cases sayable: three
-/// usable votes are needed, and `flipped.kt` (CRLF in the work tree),
-/// `mixed.kt` (mixed) and `bare.kt` (no ending at all) can none of them
-/// vote. The four plain ones sort ahead of `flipped.kt`, so the sample is
-/// unanimous LF and the notice may say "here".
+/// The neighbours make the two estimated cases sayable: three usable votes
+/// are needed and `flipped.kt`, `mixed.kt` and `bare.kt` cannot vote. The
+/// four plain ones sort ahead of `flipped.kt`, so the sample is unanimous
+/// LF and the notice may say "here".
 pub(super) fn eol(repo: &mut DemoRepo) -> Result<(), String> {
     for name in ["alpha", "beta", "delta", "gamma"] {
         repo.commit(
@@ -208,9 +199,8 @@ pub(super) fn eol(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Commits and nowhere to send them: no remote at all. The first push
-/// cannot even pick a destination here — the remote dialog opens by
-/// itself, name prefilled `origin`, with the question standing behind it.
+/// Commits and no remote at all: the first push opens the remote dialog
+/// by itself, name prefilled `origin`.
 pub(super) fn noremote(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
@@ -237,12 +227,10 @@ pub(super) fn stashes(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// A straight run for the interactive-rebase plan: five steps on main
-/// with origin holding all but the newest, a branch standing on the
-/// commit the default plan lands on, and a clean tree. Linear on
-/// purpose — the plan refuses a range with a merge in it, and the
-/// verbs walk down from HEAD by row, which only a branchless stretch
-/// keeps meaning "this branch's own history".
+/// A straight run for the interactive-rebase plan: five steps on main,
+/// origin holding all but the newest, a branch on the commit the default
+/// plan lands on, and a clean tree. Linear because the plan refuses a
+/// range with a merge in it.
 pub(super) fn plan(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("notes.txt", "v1\n", "docs: start the notes")?;
     repo.commit("src/one.txt", "one\n", "feat: the first step")?;
@@ -282,17 +270,15 @@ pub(super) fn rewrite_merge(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// One commit on the branch: it is the first as well as the newest, so a
-/// fold has nothing to fold into and a drop would take the whole history
-/// with it (`report::fold_first_commit` / `report::drop_all_commits`).
+/// One commit on the branch, first and newest at once, so a fold has
+/// nothing to fold into and a drop would take the whole history
+/// (`report::fold_first_commit` / `report::drop_all_commits`).
 ///
-/// `apart` holds one more that main never took, committed last so it is
-/// the newest of the two and the graph draws it first: the third refusal,
-/// about a commit the current branch cannot see
-/// (`report::rewrite_off_branch`). **It belongs to a history with no
-/// merge in it** — a merge anywhere in the branch answers first, since
-/// the range a rewrite would replay is read before the commit is looked
-/// for in it (実測).
+/// `apart` holds one more that main never took, committed last so the
+/// graph draws it first: the refusal about a commit the current branch
+/// cannot see (`report::rewrite_off_branch`). Keep this history
+/// merge-free — a merge in the branch is refused first, since the range
+/// is read before the commit is looked for in it.
 pub(super) fn one_commit(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -305,21 +291,15 @@ pub(super) fn one_commit(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Branch names three folders deep, with the current branch at the
-/// bottom of them — the one shape that shows where the stand-in for it
-/// sits when a fold anywhere along that path closes over its row
-/// (`HeadPinRow.seatedUnder`, デザイン規約 §左メニューの所作).
+/// Branch names three folders deep, the current branch at the bottom —
+/// the shape that shows where its stand-in sits when a fold along that
+/// path closes over its row (`HeadPinRow.seatedUnder`, デザイン規約
+/// §左メニューの所作).
 ///
-/// **Each level forks**, or a fold of one level cannot be told from a
-/// fold of the one under it: the rows left standing when
-/// `team/backend/api` closes are what says the fold was that one.
-///
-/// **`main` stands ahead of them all and has a line to open**: it is the
-/// row at depth 0 the stand-in's column is read against, and the one row
-/// above every fold here — so resting on it is how the seat is made to
-/// move while the stand-in is standing in it. A branch with no upstream
-/// and no other copy holding it opens nothing, which is why it is
-/// pushed.
+/// Each level forks, or a fold of one level cannot be told from a fold of
+/// the one under it. `main` is pushed so its row has a line to open: it is
+/// the depth-0 row above every fold, and resting on it is how the seat is
+/// made to move while the stand-in stands in it.
 pub(super) fn nested(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -340,15 +320,13 @@ pub(super) fn nested(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// A clone made with `--depth`, so the commit under the oldest row it
-/// holds was never fetched and a fold of the newest one is turned down
-/// before git is asked (`report::rewrite_unfetched_base`).
+/// A `--depth` clone, so the commit under the oldest row was never fetched
+/// and a fold of the newest one is turned down before git is asked
+/// (`report::rewrite_unfetched_base`).
 ///
-/// **Depth 2 is what puts the refusal on the tip**: a fold takes the row
-/// above it in, so its range bottoms out at the oldest commit held, whose
-/// own parent is the one that is not here (実測). A drop of the same tip
-/// reaches only itself and plans onto that commit fine — the depth is
-/// what decides.
+/// Depth 2 is what puts the refusal on the tip: the fold's range bottoms
+/// out at the oldest commit held, whose parent is missing. A drop of the
+/// same tip plans fine.
 pub(super) fn shallow(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.commit("src/one.txt", "one\n", "feat: the first step")?;
@@ -361,15 +339,12 @@ pub(super) fn shallow(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// How many merge editors `mergetools` writes down.
 const MERGE_TOOLS: usize = 12;
 
-/// A dozen merge editors written into the repository's own config
-/// (`mergetool.<name>.cmd`): more than the chooser's card shows at once
-/// (eight rows), whatever this machine has installed — the stock-take
-/// `git mergetool --tool-help` makes is the machine's, and on most of
-/// them it names two or three. The one shape in which that card has
-/// anywhere to scroll (`settings-hand tools`).
+/// A dozen merge editors in the repository's own config
+/// (`mergetool.<name>.cmd`): more than the chooser's card shows at once,
+/// whatever this machine has installed — the one shape in which that card
+/// scrolls (`settings-hand tools`).
 pub(super) fn mergetools(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     for n in 1..=MERGE_TOOLS {

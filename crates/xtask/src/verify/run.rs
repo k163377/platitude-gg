@@ -10,20 +10,17 @@ use super::repos::{body_for, folder_for, seed_merge_tool};
 use super::shim::stage_old_git;
 use super::{child, outcome, repos, seed};
 
-/// Which gits a run is staged with: the version an old one answers, the
-/// PATH the app is handed, and where a second one stands.
-///
-/// **A run asks for one of the two** — the copy that stands in for git
-/// reads one pair of variables to know what it is, and two of them on
-/// one app would be the same copy told two things.
+/// Which gits a run is staged with: the version the shim answers, the
+/// PATH the app is handed, and where a second git stands. One of
+/// `--old-git` / `--other-git` per run: both are the same copy, reading
+/// one pair of variables.
 fn gits_for<'a>(
     opts: &'a super::options::Options,
     shot_dir: &std::path::Path,
     path: &std::ffi::OsString,
 ) -> Result<(&'a str, std::ffi::OsString, Option<std::path::PathBuf>), String> {
-    // The three verbs named for it bring their own version, so that the
-    // run reads `verify-ui old-git` and nothing else. Below any minimum
-    // this app will ever have: minimums only go up.
+    // The old-git verbs bring their own version, so the line is just
+    // `verify-ui old-git`. Below any minimum this app will ever have.
     let old_git = match (opts.old_git.as_str(), opts.verb.as_str()) {
         ("", "old-git" | "old-git-card" | "old-git-fold") => "2.42.0",
         (asked, _) => asked,
@@ -36,12 +33,9 @@ fn gits_for<'a>(
         println!("git for this run: {old_git} (real git behind it)");
         return Ok((old_git, staged, None));
     }
-    // The runs whose subject is a second git bring their own version, so
-    // that the line reads `verify-ui settings-git-leave` and nothing else
-    // — and so a run typed without one waits out its watchdog for a path
-    // that was never staged. A plain modern number: the shim only prints
-    // it, and all it has to be is at or above the supported minimum. If a
-    // minimum ever passes it the shots turn red and this moves up.
+    // Likewise the second-git runs, which typed without one would wait
+    // out the watchdog for a path never staged. Any version at or above
+    // the supported minimum; if the minimum passes it, the shots turn red.
     let asks_for_one = opts.verb == "settings-git-leave"
         || (opts.verb == "settings-git-path" && opts.arg == "other");
     let other = match (opts.other_git.as_str(), asks_for_one) {
@@ -51,9 +45,6 @@ fn gits_for<'a>(
     if other.is_empty() {
         return Ok((old_git, path.clone(), None));
     }
-    // A second git, standing where nothing resolves to it, so a run can
-    // point the settings box at a git that answers and is not the one it
-    // is running.
     let staged = super::shim::stage_other_git(shot_dir)?;
     println!(
         "a second git for this run: {} answering {other}",
@@ -62,15 +53,11 @@ fn gits_for<'a>(
     Ok((other, path.clone(), Some(staged)))
 }
 
-/// What this run takes of the machine, held for as long as it runs: one
-/// verb is an app, its offscreen raster and the git it spawns — or a
-/// release build, when it is the one that builds (`crate::budget`).
-///
-/// Taken before the measurement is announced, which is the order the
-/// whole runner keeps, and taken by a run of any kind: a verb a
-/// session runs beside another seat's gate is load like any other. A
-/// verb the gate started is under the gate's own ticket and takes
-/// none.
+/// What this run takes of the machine for as long as it runs — an app
+/// and its git, or a release build when it builds (`crate::budget`).
+/// Taken before the measurement is announced, by every run: a verb
+/// beside another seat's gate is load like any other. Under a gate, the
+/// gate's ticket covers it.
 fn room_for(opts: &super::options::Options) -> Result<crate::budget::Admitted, String> {
     crate::budget::standalone(
         &crate::tree::workspace_root(),
@@ -98,11 +85,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let repos = repos::for_run(&opts)?;
     let fixture = at.elapsed();
 
-    // Explicit resources survive across sequential runs, and belong to
-    // one verify-ui process at a time. Two at once would mix Git
-    // writes, settings, or PNGs and can manufacture a false PASS.
-    // Fresh preset repositories need no cross-process claim: their creator
-    // already gave this run a private directory.
+    // A `--repo` belongs to one verify-ui process at a time: two would mix
+    // git writes and can make a false PASS. Fresh presets need no claim —
+    // their directory is already this run's.
     let mut claimed = BTreeSet::new();
     let mut resource_claims = Vec::new();
     if !opts.repo.is_empty() {
@@ -124,11 +109,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let exe = crate::tree::app_exe(&root, &path, opts.build, &[])?;
     let build = at.elapsed();
 
-    // The claim below answers for this machine only, and inside a
-    // container that machine is one run wide: `/out` is the same path in
-    // every one of them and the lock goes to a `/tmp` nobody else can
-    // see. What two container runs collide over is the host directory
-    // behind the mount, which is claimed out there (`keepsakes::bridge`).
+    // Inside a container this claim guards nothing
+    // (rules-refs/app-ui.md「コンテナの run が持つのはその裏のホストのディレクトリ」);
+    // the host side claims the mount (`keepsakes::bridge`).
     let shot_dir = match &opts.shot_dir {
         Some(dir) => {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
@@ -140,10 +123,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
         None => fresh_shot_dir(&opts.verb)?,
     };
 
-    // A run of its own unless told otherwise. The app would refuse the
-    // real files anyway once it sees a PGG_* variable, but naming a
-    // directory is what lets one run read what the last one wrote — and
-    // what lets anyone look at the two files afterwards.
+    // The run's own unless one is named; naming one lets a run read what
+    // the last one wrote.
     let config_dir = match &opts.config_dir {
         Some(dir) => dir.clone(),
         None => shot_dir.join("config"),
@@ -162,9 +143,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
             Some(body) => body,
             None => folder_for(&opts.verb, &shot_dir, &path)?,
         },
-        // The seed is the whole of this one: the field is never typed
-        // into, so the app is handed the same nothing a bare run gets
-        // and photographs what the store put on screen (`seed::config`).
+        // The seed is the whole of this one (`seed::config`): the field
+        // is never typed into.
         false if opts.verb == "settings-git-path" && opts.arg == "stored-missing" => String::new(),
         false => opts.arg.clone(),
     };
@@ -186,23 +166,11 @@ pub fn run(args: &[String]) -> Result<(), String> {
     );
     let (shim_version, child_path, other_git) = gits_for(&opts, &shot_dir, &path)?;
 
-    // The picture is the same whatever machine it was taken on, and git
-    // takes its answer to "who is sitting here" from two places the run
-    // would otherwise inherit: a configuration file, and the directory it
-    // resolves one from. So every run is handed both of its own — a
-    // gitconfig carrying the fixture identity (`shim::global_seed`), and a
-    // working directory outside every checkout to read it in.
-    //
-    // Without the file a machine with no global `user.*` — which is every
-    // container — puts the first-run modal over the window on the way in,
-    // and the two popups it brings are counted by verbs that have nothing
-    // to do with an identity. Without the directory the tree this ran from
-    // gets a say, and inside a container that tree's `.git` names a
-    // Windows path git calls fatal rather than absent.
-    //
-    // The identity verbs are the ones whose write lands in this
-    // gitconfig; they bring their own seed and answer the screen it
-    // raises, and go through the same door as everyone else.
+    // Git reads "who is sitting here" from a config file and from the
+    // directory it runs in, so every run gets both of its own: a gitconfig
+    // (`shim::global_seed`, which the identity verbs write to) and a
+    // working directory outside every checkout. Without the directory, a
+    // container's checkout `.git` names a Windows path git calls fatal.
     let config = gitconfig_home(
         std::env::var_os(crate::linux::IN_CONTAINER).is_some(),
         &shot_dir,
@@ -211,10 +179,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     std::fs::write(&config, super::shim::global_seed(&opts.verb)).map_err(|e| e.to_string())?;
     println!("git config for this run: {}", config.display());
 
-    // Who was already running beside this run, so that what the app
-    // adds can be told from what was there
-    // (`ownership::give_back_claimed`). Taken here, which is the last
-    // moment before the app exists.
+    // Who was already running, taken at the last moment before the app
+    // exists (`ownership::give_back_claimed`).
     let beside = crate::reap::others_in_this_group();
 
     let ran = child::run_app(&child::Start {
@@ -240,10 +206,9 @@ pub fn run(args: &[String]) -> Result<(), String> {
     outcome::announce(&opts, &shot_dir, &ran, &verdict, census.as_deref())
 }
 
-/// What a run the verdict passed still owes: its census line, and then
-/// the scaffolding it stood up. Answers why the line was not written,
-/// which fails the run — the census would still say what the verbs
-/// showed before it, and a gate would stamp what it chose off that.
+/// What a passed run still owes: its census line, then the scaffolding
+/// it stood up. Answers why the line was not written, which fails the
+/// run — else a gate would choose off a stale census.
 fn settle_a_pass(
     root: &std::path::Path,
     opts: &super::options::Options,
@@ -253,10 +218,6 @@ fn settle_a_pass(
     if let Err(why) = tell_the_census(root, opts.census_line(), &ran.err_lines) {
         return Some(why);
     }
-    // The scaffolding goes back where the run stood it up, and only on
-    // the road where nobody will want to look at it again
-    // (`ownership::give_back_claimed`). A failing run keeps its tree: in
-    // a container that volume is the only place the scene survives.
     let gone = super::ownership::give_back_claimed(beside);
     if gone > 0 {
         println!("demo repositories given back: {gone}");
@@ -264,25 +225,15 @@ fn settle_a_pass(
     None
 }
 
-/// The three parts of a run that are worth telling apart, and what is
-/// left over — said in one line the gate's ledger reads back off this
-/// log (`gate::record`).
+/// The three parts of a run worth telling apart, and the rest — one
+/// line the gate's ledger reads back off this log (`gate::record`).
 ///
-/// **Why they are separate.** A block of verbs shares one release: the
-/// first uncached verb builds it and the rest are handed `--no-build`
-/// (`gate::sides::verbs`), so a verb's wall clock is that build plus the verb
-/// wherever it happened to come first. Ranked by wall clock, the verb
-/// that built would read as the expensive one, and the thing to look at
-/// would be whichever verb the ordering put in front. `fixture` is the
-/// repositories the run stands on — built once per preset and copied
-/// after that (`demo::template`), so the first run of a preset carries
-/// the building of it. `app` is the window itself, which is what the
-/// verb costs when nothing else is on its bill.
-///
-/// **`rest` is named, not split.** It is the seeds, the git shim, the
-/// judging, the census write and the pictures — a handful of small
-/// things, and calling any one of them out would be claiming a
-/// measurement nobody took.
+/// Separate because a block of verbs shares one release, built by
+/// whichever uncached verb came first (`gate::sides::verbs`), and a
+/// preset's first run builds its template (`demo::template`): by wall
+/// clock those verbs would rank as the expensive ones. `app` is what the
+/// verb itself costs. `rest` (seeds, shim, judging, census, pictures) is
+/// not split — nobody measured its parts.
 fn say_what_it_spent(
     whole: std::time::Instant,
     fixture: std::time::Duration,
@@ -304,17 +255,16 @@ fn say_what_it_spent(
     );
 }
 
-/// A passing run tells the census what it showed, so the gate can pick
-/// this line by itself the next time one of those components changes
-/// (`gate::census`). Only a run somebody can type again is recorded
-/// (`line`, from `Options::census_line`), and only one whose page had
-/// stopped arriving writes its line — the rest add to it, having seen
-/// whichever rows the reads had brought.
+/// A passing run tells the census what it showed, so the gate picks this
+/// line when one of those components changes (`gate::census`). Only a
+/// run somebody can type again is recorded (`line`, from
+/// `Options::census_line`); only one whose page had stopped arriving
+/// writes its line, the rest add to it.
 ///
-/// **An error is a line the run owed and did not write**: the run never
-/// said what it showed, or the file could not be read, held or written.
-/// A run that owes no line — not one anybody can type again, or a twin —
-/// answers `Ok` whatever it said.
+/// An error is a line owed and not written: the run never said what it
+/// showed, or the file could not be read, held or written. A run that
+/// owes no line (not typable again, or a twin) answers `Ok` whatever it
+/// said.
 fn tell_the_census(
     root: &std::path::Path,
     line: Option<String>,
@@ -323,9 +273,8 @@ fn tell_the_census(
     let Some(line) = line else {
         return Ok(());
     };
-    // A twin is the same run as a line the census already holds, and no
-    // gate owes it; recording it would bring it back for `verbs` to
-    // refuse (`gate::tiers`).
+    // No gate owes a twin; recording it would bring it back for `verbs`
+    // to refuse (`gate::tiers`).
     if let Some(of) = crate::gate::Tiers::load(root).twin_of(&line) {
         println!("census: {line} — not recorded, the tier table says it is the same run as {of}");
         return Ok(());
@@ -338,10 +287,8 @@ fn tell_the_census(
     let page_settled = crate::gate::page_settled_in(said);
     let (count, shift) = crate::gate::record(root, &line, &names, page_settled)
         .map_err(|why| format!("{line}: {why}"))?;
-    // The names the write moved, beside the count: the file's own diff is
-    // every line when a component came or went, and this is the run
-    // saying which name that was and whether the line it was about is the
-    // one that moved.
+    // The names the write moved: when a component came or went the
+    // file's diff is every line, so the run says which.
     if page_settled {
         println!(
             "census: {line} — {count} component(s) recorded{}",
@@ -357,27 +304,15 @@ fn tell_the_census(
 }
 
 /// Where a run's gitconfig stands: beside its pictures, except inside a
-/// container, where the pictures' directory is the host's.
+/// container, where it goes to a leaf of the container's `/tmp`.
 ///
-/// **A rename on the mount is not a rename.** `/out` is a directory of
-/// the Windows host, and git replaces the configuration file it writes
-/// by renaming its lock over it. On a disk of the container's own that
-/// rename is atomic, and a reader that has just passed `access(2)` opens
-/// the file it was promised. On the mount there is a moment with no file
-/// at that name (measured: one read in every few dozen on `/out` opens
-/// nothing after `access` said yes, and none on `/tmp`), and git's reading
-/// side takes that `ENOENT` for a file that was never there — a `-1`
-/// from a read it had checked, which `repo_read_config` dies on with
-/// `unknown error occurred while reading the configuration files`. The
-/// identity verbs rewrite this file while the session's own `status` and
-/// `for-each-ref` read it (measured: a `verify-linux identity-tip` whose
-/// tab-open `status` and `refs` both died on it, and which then waited
-/// out its whole ceiling for a page that never came).
-///
-/// So inside a container the file stands on the container's `/tmp`, in a
-/// leaf of this run's own. The pictures and the settings stay under
-/// `/out`: the app is the one process writing those, and it reads back
-/// what it finished writing.
+/// A rename on the `/out` mount is not atomic: git replaces its config by
+/// renaming a lock over it, and a reader past `access(2)` then opens
+/// nothing — `repo_read_config` dies with `unknown error occurred while
+/// reading the configuration files`. The identity verbs rewrite this file
+/// while `status` and `for-each-ref` read it. Pictures and settings stay
+/// on `/out`: only the app writes those, and it reads back what it
+/// finished writing.
 fn gitconfig_home(
     in_container: bool,
     shot_dir: &std::path::Path,
@@ -390,9 +325,6 @@ fn gitconfig_home(
 
 #[cfg(test)]
 mod tests {
-    /// Outside a container the gitconfig stands beside the pictures;
-    /// inside one it stands on the container's own disk, never under the
-    /// mount the pictures go out through.
     #[test]
     fn the_gitconfig_leaves_the_mount_inside_a_container() {
         let shot_dir = std::path::Path::new("/out/shots-1");
@@ -431,9 +363,6 @@ mod tests {
         .to_vec()
     }
 
-    /// **A line the run owed and did not write is an error**, and the
-    /// census is as it was; a run that owes no line answers well whatever
-    /// it said.
     #[test]
     fn a_line_owed_and_not_written_is_an_error_and_a_run_that_owes_none_is_not() {
         let root = tree();
@@ -462,8 +391,6 @@ mod tests {
         assert!(text.contains("\nwip\tWipPane\n"), "{text}");
     }
 
-    /// A twin is the same run as another line, and owes none of its own:
-    /// it answers well whatever it said, and its line stays out.
     #[test]
     fn a_twin_owes_no_line() {
         let root = tree();

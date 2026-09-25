@@ -1,10 +1,5 @@
-//! A PNG written by hand.
-//!
-//! Stored (uncompressed) deflate blocks, so the file is as big as its
-//! pixels — nothing here needs to be small, it needs to decode. What it
-//! is for is fixtures: the picture an avatar verb files, the pictures a
-//! demo repository holds in every bucket the diff pane previews from,
-//! and the crop `shots crop` cuts out of a screenshot.
+//! A PNG written by hand, in stored (uncompressed) deflate blocks: the
+//! fixtures and the crop `shots crop` cuts need to decode, not to be small.
 
 use super::checksum::{adler32, crc32};
 
@@ -42,9 +37,8 @@ pub(super) fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], body: &[u8]) {
     out.extend_from_slice(&crc.to_be_bytes());
 }
 
-/// A zlib stream that compresses nothing: the header, the bytes in
-/// stored blocks of the largest size a block may have, and the Adler
-/// checksum the decoder checks them against.
+/// A zlib stream that compresses nothing, in stored blocks of the largest
+/// size a block may have.
 pub(super) fn zlib_stored(raw: &[u8]) -> Vec<u8> {
     const BLOCK: usize = 65_535;
     let mut out = Vec::with_capacity(raw.len() + raw.len() / BLOCK * 5 + 11);

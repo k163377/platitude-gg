@@ -7,10 +7,7 @@ use super::{
 use crate::corpus::{shape, tree};
 
 /// A sink that counts the lines the tests ask about and holds none of
-/// them. **The stream is tens of gigabytes at this shape** — every
-/// revision of every file spelled out, because fast-import has no delta
-/// input — which is why it is written as it goes, and why a test
-/// that collected it would take the process down.
+/// them: the whole stream is tens of gigabytes.
 #[derive(Default)]
 struct Tally {
     bytes: u64,
@@ -18,9 +15,8 @@ struct Tally {
     partial: Vec<u8>,
 }
 
-/// The line openings a test may ask about. Only these, because a body's
-/// own lines go past here too and a prefix a body could start with
-/// would count those as well.
+/// The line openings a test may ask about — none a body's own line
+/// could start with, since bodies go past here too.
 const PREFIXES: [&str; 10] = [
     "commit refs/heads/main",
     "commit refs/remotes/",
@@ -70,9 +66,6 @@ impl Write for Tally {
     }
 }
 
-/// Every file the base commit places is one the index carries and one
-/// `git status` walks — which is the whole of the startup number this
-/// axis exists to reach.
 #[test]
 fn the_base_commit_places_the_whole_tree() {
     let tree = tree::build();
@@ -81,21 +74,15 @@ fn the_base_commit_places_the_whole_tree() {
     let placed = tally.count("M 100644 inline ")
         + tally.count("M 100755 inline ")
         + tally.count("M 120000 inline ");
-    // The tree, the root ignore file, and the nested ones git builds
-    // its exclude stack out of.
+    // The tree, the root ignore file, and the nested ones.
     assert_eq!(placed, tree::TRACKED + 1 + shape::NESTED_IGNORES);
     assert_eq!(tally.count("commit refs/heads/main"), 1);
-    // Modes are an axis of their own, and a tree of one mode never
-    // produces the diff a mode change does.
+    // A tree of one mode never produces the diff a mode change does.
     assert!(tally.count("M 100755 inline ") >= 100, "no executables");
     assert_eq!(tally.count("M 120000 inline "), 1, "no symlink");
 }
 
-/// **A history adds and deletes.** The reference repository's
-/// first-parent history is 36% adds against 36% deletes; a corpus of
-/// pure `M` gives `--find-renames` nothing to score, never sets
-/// `FileChange.orig_path`, and never opens an added file's diff against
-/// `/dev/null`.
+/// Why: `shape::DELETED_SHARE`.
 #[test]
 fn the_history_adds_and_deletes_as_well_as_changes() {
     let tree = tree::build();
@@ -115,8 +102,7 @@ fn the_history_adds_and_deletes_as_well_as_changes() {
         placed > deletes * 3,
         "{placed} placements, {deletes} deletes"
     );
-    // And the tree stays full: a delete takes a path out and an add
-    // puts one back, so what `git status` walks stays the size it was.
+    // And the tree stays full: each delete is paired with an add.
     let tracked = live.tracked.iter().filter(|held| **held).count() as u64;
     assert!(
         tracked.abs_diff(tree::TRACKED) < tree::SPARE,
@@ -125,10 +111,7 @@ fn the_history_adds_and_deletes_as_well_as_changes() {
     );
 }
 
-/// The default scenario opens the first changed file, and git decides
-/// which that is by sorting every path the commit touched — the large
-/// one included. Measuring the tail by accident is measuring the
-/// grammar path where the record says it measures the common case.
+/// git sorts every path the commit touched, the large one included.
 #[test]
 fn the_first_file_of_the_newest_commit_is_an_ordinary_one() {
     let tree = tree::build();
@@ -145,14 +128,8 @@ fn the_first_file_of_the_newest_commit_is_an_ordinary_one() {
     assert_ne!(first, &newest.huge);
 }
 
-/// Every mark a commit or a ref reaches for was minted, and no mark is
-/// minted twice.
-///
-/// **Nothing else holds this.** A `from` or a `merge` naming a mark the
-/// stream never wrote is a stream fast-import rejects — at the end,
-/// after ten minutes, naming a number and nothing else. The counting
-/// sink cannot answer this, so this one reads the marks themselves out
-/// of the parts that mint and use them.
+/// Nothing else holds this before a build: fast-import rejects a stray
+/// mark only at the end, naming just the number.
 #[test]
 fn every_mark_reached_for_was_minted_exactly_once() {
     let tree = tree::build();
@@ -172,9 +149,8 @@ fn every_mark_reached_for_was_minted_exactly_once() {
         marks.minted_count,
         "a mark was minted twice"
     );
-    // The side branches and the refs reach back into the trunk, and
-    // this test only wrote its head — so what it can hold is that every
-    // reach lands inside the range the whole stream mints.
+    // Only the trunk's head was written, so this holds every reach to
+    // the range the whole stream mints.
     let last = BASE_MARK + shape::TRUNK + shape::SIDE_BRANCHES * shape::SIDE_LENGTH;
     for reached in &marks.reached {
         assert!(
@@ -234,11 +210,8 @@ impl Write for Marks {
     }
 }
 
-/// **The window is what gets clicked, and the window is side branches.**
-/// A row whose diff opens the tree's median file measures a sixteenth
-/// of what the same click costs against the reference repository, whose
-/// window opens 10,366 bytes at the median and 60,895 at the ninth
-/// decile. Held here, ahead of a ten-minute build.
+/// Held to the reference repository's window, which opens 10,366 bytes
+/// at the median and 60,895 at the ninth decile.
 #[test]
 fn a_side_branch_edits_the_kind_of_file_people_work_in() {
     let tree = tree::build();
@@ -267,9 +240,8 @@ fn a_side_branch_edits_the_kind_of_file_people_work_in() {
     );
 }
 
-/// The generator alone: the whole stream into a counting sink, timed.
-/// Ignored because it takes minutes; run by hand to attribute the
-/// build's import phase between this side and git's —
+/// The generator alone, timed, to split the build's import phase
+/// between this side and git's —
 /// `cargo test -p xtask time_the_generator_alone -- --ignored --nocapture`.
 #[test]
 #[ignore = "minutes: the whole stream, for attribution only"]
@@ -299,11 +271,9 @@ fn time_the_generator_alone() {
     );
 }
 
-/// **The parallel build's two halves count the same placements.** The
-/// blob passes mint marks by index over the recorded sequence and the
-/// commit stream names marks by its own count; had either walked the
-/// history differently, every file in the corpus would be the wrong
-/// bytes under the right name — and fast-import would not notice.
+/// The blob passes mint marks by index over the recorded placements and
+/// the commit stream by its own count; a mismatch puts the wrong bytes
+/// under the right name, and fast-import would not notice.
 #[test]
 fn the_marks_the_commits_name_are_the_ones_the_blob_passes_mint() {
     const COMMITS: u64 = 500;
@@ -365,11 +335,7 @@ fn the_marks_the_commits_name_are_the_ones_the_blob_passes_mint() {
     assert_eq!(minted, expected[..2_000]);
 }
 
-/// **One object goes through one pass.** fast-import deduplicates only
-/// what one process sees, so the bytes a rename places again, and the
-/// bytes of a file that cannot carry its revision, have to be dealt to
-/// the pass that already has them — and the revisions of a large file
-/// have to be spread, or one pass carries half the huge files' history.
+/// Why: `shard_of`.
 #[test]
 fn placements_with_the_same_bytes_go_through_the_same_pass() {
     let tree = tree::build();
@@ -502,9 +468,6 @@ impl Write for BlobLines {
     }
 }
 
-/// One ref per name, and every one of them hanging off a mark the
-/// stream mints — a `from` naming a mark that was never minted is a
-/// stream fast-import rejects at the end of a build.
 #[test]
 fn the_refs_are_all_there_and_all_reachable() {
     let mut tally = Tally::default();
@@ -512,9 +475,6 @@ fn the_refs_are_all_there_and_all_reachable() {
     let annotated = tally.count("tag ");
     assert_eq!(annotated + tally.count("reset refs/tags/"), shape::TAGS);
     assert_eq!(annotated, tally.count("tagger "), "a tag with no tagger");
-    // **Annotated is the expensive kind and it is what the reference
-    // repository has**: 99.3% of its tags carry an object, so reading
-    // one costs a peel where a lightweight tag is a single read.
     assert!(
         annotated * 1_000 / shape::TAGS >= shape::ANNOTATED_SHARE - 5,
         "{annotated} annotated of {}",

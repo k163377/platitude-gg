@@ -1,28 +1,14 @@
 //! Which of the app's files may look a `PGG_*` variable up, counted by
-//! machine.
+//! machine (.claude/rules/app-ui.md「Rust 側で `PGG_*` を読むのは
+//! `harness::knobs` だけ」). `harness::knobs` is behind the harness
+//! feature, so a shipped window reads no exported variable; a stray lookup
+//! shows nothing at run time, where the variable is simply not set.
 //!
-//! The verification harness is a thing the product can be built without
-//! (`platitude-app` §features), and what keeps that true on the Rust side
-//! is that the app asks one module what is driving it
-//! (`harness::knobs`). That module is behind the feature, so a build
-//! without it never looks a `PGG_*` variable up — which is what stops a
-//! variable somebody happens to have exported from reaching a shipped
-//! window.
+//! `PGG_LOG` (`settings::NOT_AUTOMATION`) is read in `main.rs`, before
+//! there is a harness to ask.
 //!
-//! It is one line to lose and nothing catches it at run time — on the
-//! machine that would have noticed, the variable is simply not set — so it
-//! is counted here instead (.claude/rules/app-ui.md).
-//!
-//! `PGG_LOG` is the exception, and deliberately: it says how loud to be
-//! (`settings::NOT_AUTOMATION`), and it is read
-//! before there is a harness to ask.
-//!
-//! **Spelling a variable is not the only way to read one.** The core's
-//! `settings::Env` is a reader over the same set — `Env::system().automated()`
-//! answers "is anything driving this" without a `PGG_` literal anywhere — so
-//! a shipped window that happened to have one exported would have gone on
-//! answering yes through it while the count above passed. That reader is
-//! held to the same one module.
+//! The core's `settings::Env` reads the same set without a `PGG_` literal
+//! (`Env::system().automated()`), so it is held to the same module.
 
 use std::path::Path;
 
@@ -81,13 +67,9 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
     Ok((failures, files.len()))
 }
 
-/// The `PGG_*` variables one line of Rust names as a string literal.
-///
-/// None on a comment line: the crate's comments point at the protocol
-/// constantly, and a name to read is not a lookup. What is left is close
-/// enough to a literal to hold the rule — a variable has to be spelled
-/// somewhere to be read, and nothing in this crate spells one by pasting
-/// two halves together.
+/// The `PGG_*` variables one line of Rust names as a string literal; none
+/// on a comment line, where a name is a reference and not a lookup. Holds
+/// while nothing in the crate pastes a name together from halves.
 fn named(line: &str) -> Vec<&str> {
     let code = line.trim_start();
     if code.starts_with("//") {
@@ -96,7 +78,6 @@ fn named(line: &str) -> Vec<&str> {
     let mut found = Vec::new();
     let mut rest = code;
     while let Some(at) = rest.find("\"PGG_") {
-        // Past the opening quote, then up to the closing one.
         rest = &rest[at + 1..];
         let end = rest.find('"').unwrap_or(rest.len());
         found.push(&rest[..end]);
@@ -105,11 +86,8 @@ fn named(line: &str) -> Vec<&str> {
     found
 }
 
-/// Whether one line of Rust reaches for the core's environment reader.
-///
-/// None on a comment line, for the reason [`named`] gives: the crate's
-/// comments point at `Env::automated` where they explain what a knob
-/// means, and a name to read is not a lookup.
+/// Whether one line of Rust reaches for the core's environment reader;
+/// false on a comment line, as in [`named`].
 fn uses_reader(line: &str) -> bool {
     let code = line.trim_start();
     !code.starts_with("//") && code.contains(READER_TYPE)

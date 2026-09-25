@@ -1,20 +1,16 @@
 //! `cargo xtask kill` and `cargo xtask launch` — the app's process
 //! lifecycle, scoped to the tree this task runner was built in.
 //!
-//! Kills are the dangerous half: an image-name kill (taskkill /IM,
-//! Stop-Process -Name) reaps every seat's runs and the user's own window
-//! in one line, and that is exactly what a session reaches for when a
-//! stale run holds this tree's exe against the next link. `kill` reaps
-//! only processes whose executable lives under this tree, and the
-//! pre-shell hook points broad kills here.
+//! An image-name kill (taskkill /IM, Stop-Process -Name) reaps every
+//! seat's runs and the user's own window; `kill` reaps only processes
+//! whose executable lives under this tree, and the pre-shell hook points
+//! broad kills here.
 //!
-//! `launch` is the real-window start (the verify-ui skill's fast path):
-//! reap this tree's stale runs, build, start detached from a copy of the
-//! build ([`standing_copy`], so a window left standing stays clear of
-//! the next build), and say whether it lived past the first
-//! second. The app separates its settings store by build tree on its own
-//! (a seat's build locks its own `dev-<seat>`), so no
-//! store juggling happens here.
+//! `launch` reaps this tree's stale runs, builds, starts detached from a
+//! copy of the build ([`standing_copy`]) and says whether it lived past
+//! the first second. The app separates its settings store by build tree
+//! on its own (a seat's build locks its own `dev-<seat>`), so no store
+//! juggling happens here.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -44,16 +40,14 @@ pub(crate) static LAUNCH: command::Command = command::Command {
 pub(crate) static COMMANDS: &[&command::Command] = &[&KILL, &LAUNCH];
 
 /// How long a window just started is watched before it is called
-/// launched: long enough for a Qt platform plugin failure to have ended
-/// the process (that death is immediate — the margin is for a cold
-/// start, ci/baseline/code-costs-windows-x64.md §テストとハーネス).
-/// A stretch of the product's own standing
-/// (`wait::stood`) — a window nothing drives says nothing this could
-/// wait for.
+/// launched: a Qt platform plugin failure ends the process at once, and
+/// the rest is margin for a cold start
+/// (ci/baseline/code-costs-windows-x64.md §テストとハーネス). A fixed
+/// stretch (`wait::stood`), because a window nothing drives says nothing
+/// this could wait for.
 const FIRST_MOMENT: Duration = Duration::from_millis(900);
 
-/// `cargo xtask kill`: reap this tree's app processes. Quiet success when
-/// there is nothing to reap.
+/// `cargo xtask kill`. Nothing to reap is a success.
 pub fn kill(args: &[String]) -> Result<(), String> {
     if !args.is_empty() {
         return Err(format!("kill takes no arguments (got {args:?})"));
@@ -70,9 +64,8 @@ pub fn kill(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// `cargo xtask launch [--no-build]`: start a real window from this tree.
-/// The pre-shell hook requires PGG_ALLOW_GUI=1 in front from a worktree —
-/// a real window is the user's own ask.
+/// `cargo xtask launch [--no-build]`. The pre-shell hook requires
+/// PGG_ALLOW_GUI=1 in front from a worktree.
 pub fn launch(args: &[String]) -> Result<(), String> {
     let mut build = true;
     for arg in args {
@@ -82,11 +75,9 @@ pub fn launch(args: &[String]) -> Result<(), String> {
         }
     }
     let root = crate::tree::workspace_root();
-    // Somebody is waiting at the screen for this, which no test is: it
-    // goes ahead of every test on the machine and behind a landing
-    // (`crate::budget`, Rank::Launch). What is counted is the build and
-    // the start — the window itself is the user's and holds none of the
-    // machine, so the ticket comes down when this verb returns.
+    // Somebody is waiting at the screen: ahead of every test, behind a
+    // landing. The ticket covers the build and the start only — the window
+    // holds none of the machine.
     let _room = crate::budget::standalone(
         &root,
         if build {
@@ -110,11 +101,9 @@ pub fn launch(args: &[String]) -> Result<(), String> {
         .env("PATH", &path)
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    // The window is the user's to drive, so the git it runs is the user's
-    // too: it answers to the gate on main no more than the git in their
-    // IDE does (gate::hooks). Which holds only of a window nothing is
-    // driving — so the automation knobs go first, as they do for every
-    // other app child started here, and the harness stays inert.
+    // The window's git is the user's and does not answer to the gate on
+    // main (gate::hooks) — true only of a window nothing drives, so the
+    // automation knobs go first.
     crate::app_env::clear_automation(&mut command);
     command.env_remove(crate::gate::SESSION);
     let mut child = command
@@ -134,33 +123,26 @@ pub fn launch(args: &[String]) -> Result<(), String> {
 
 const APP_NAME: &str = "platitude-gg";
 
-/// Where the window a person is looking at runs from: a copy of the
-/// build, in a directory cargo does not link into.
+/// Where a launched window runs from: a copy of the build, in a directory
+/// cargo does not link into.
 ///
-/// The slot `cargo build --release` writes is held by whoever is running
-/// it — on Windows that is the file itself, and the release binary is a
-/// hard link to the one in `deps/`, so a standing window fails the link
-/// as well as the uplift. A window is the one process here that outlives
-/// the command that started it, which made "launch, then gate" an order
-/// nobody could walk: the gate's first verb builds ([`crate::tree`]), and
-/// the user's own window is the one run a gate leaves standing. So the
-/// copy is what stands and the slot stays free.
+/// On Windows a running exe holds its file, and the release binary is a
+/// hard link to the one in `deps/`, so a window standing on the build
+/// fails the next link — and the gate's first verb builds
+/// ([`crate::tree`]) while the user's window, the one run a gate leaves
+/// standing, is still up.
 ///
-/// **The file name is the app's** — that is what [`app_processes`]
-/// enumerates by — and the directory is under this tree, which is what
-/// tells this seat's runs from another seat's ([`is_under`]). One copy
-/// per tree, which is both what it takes — `launch` reaps this tree's
-/// runs before it writes the copy, so nothing of ours is standing on it
-/// by then — and what it costs, a second copy of the exe beside the
-/// build it came from.
+/// The file name stays the app's ([`app_processes`] enumerates by it) and
+/// the directory stays under this tree ([`is_under`]), so `kill` still
+/// reaps it. One copy per tree is enough: `launch` reaps this tree's runs
+/// before it writes the copy.
 fn standing_copy(root: &Path) -> PathBuf {
     root.join("target")
         .join("window")
         .join(crate::tree::exe_name())
 }
 
-/// The copy of `built` that a window stands from, refreshed from the
-/// build every launch.
+/// [`standing_copy`], refreshed from `built` every launch.
 fn stand_from_a_copy(root: &Path, built: &Path) -> Result<PathBuf, String> {
     let copy = standing_copy(root);
     if let Some(dir) = copy.parent() {
@@ -178,10 +160,8 @@ fn stand_from_a_copy(root: &Path, built: &Path) -> Result<PathBuf, String> {
 }
 
 /// Every app process whose executable sits under `root`: what
-/// [`reap_under`] kills, and what a red release build asks for so it can
-/// name who might be holding the file it was linking
-/// (`crate::tree::app_exe`). Enumeration is per-OS; the path judgement
-/// is one place, here.
+/// [`reap_under`] kills, and what a red release build names as possibly
+/// holding the file it was linking (`crate::tree::app_exe`).
 pub(crate) fn standing_under(root: &Path) -> Result<Vec<(u32, String)>, String> {
     Ok(app_processes()?
         .into_iter()
@@ -189,8 +169,6 @@ pub(crate) fn standing_under(root: &Path) -> Result<Vec<(u32, String)>, String> 
         .collect())
 }
 
-/// Kills every app process whose executable sits under `root`, and
-/// answers who they were.
 pub(crate) fn reap_under(root: &Path) -> Result<Vec<(u32, String)>, String> {
     let mine = standing_under(root)?;
     for (pid, _) in &mine {
@@ -283,10 +261,9 @@ fn kill_pid(pid: u32) -> Result<(), String> {
     if output.status.success() {
         return Ok(());
     }
-    // A process that ended between the listing and this line is a
-    // success; anything else (access denied, a wedged handle) has to be
-    // reported — "reaped" claimed over a survivor sends the launch
-    // straight into the still-locked exe.
+    // A process that ended since the listing is a success; anything else
+    // is reported — a survivor claimed as reaped sends the launch into the
+    // still-locked exe.
     let said = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
@@ -303,9 +280,8 @@ mod tests {
     use super::{is_under, parse_pid_paths, standing_copy};
     use std::path::{Path, PathBuf};
 
-    /// The two things the copy a window stands from are: beside the
-    /// slot cargo links into, and still this tree's own app — a name the
-    /// process listing does not know is a window `kill` walks past.
+    /// A name the process listing does not know is a window `kill` walks
+    /// past.
     #[test]
     fn the_window_stands_beside_the_slot_and_stays_reapable() {
         let seat = PathBuf::from("C:/x/platitude-gg/.claude/worktrees/a");

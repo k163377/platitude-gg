@@ -7,18 +7,13 @@ use super::launch::resolve;
 use crate::seats::worktree_root;
 use crate::subprocess::common_git_dir;
 
-/// Every commit of this repository rides a worktree branch —
-/// implementation, documents, settings and the shared session rules
-/// alike — because parallel sessions keep reaching for the same files
-/// and direct commits to main collide with theirs (CLAUDE.md Git 運用).
-/// What the commit carries does not narrow this: where it would land is
-/// the whole question.
+/// Denies a commit in the primary checkout whatever it carries (CLAUDE.md
+/// ビルド・テスト: the primary checkout is only read).
 pub(super) fn primary_commit_denied(command: &str, cwd: &str) -> bool {
     let Some(dir) = commit_dir(command, cwd) else {
         return false;
     };
-    // The same bounds as the merge guard: only this repository answers,
-    // and a worktree branch is exactly where the work belongs.
+    // Only this repository, and only outside a seat.
     let (Some(session_repo), Some(target_repo)) = (common_git_dir(cwd), common_git_dir(dir)) else {
         return false;
     };
@@ -35,7 +30,7 @@ pub(super) fn primary_commit_denied(command: &str, cwd: &str) -> bool {
          checkout is only ever read: implementation, documents, settings \
          and the shared session rules all ride worktree branches, because \
          parallel sessions keep reaching for the same files and direct \
-         commits to main collide with theirs (CLAUDE.md Git 運用). Take a \
+         commits to main collide with theirs (CLAUDE.md ビルド・テスト). Take a \
          seat — `claude --worktree <letter>`, or EnterWorktree by path — \
          redo the edit there, and report the branch as ready to merge. If \
          the user asked for this direct commit in so many words, run the \
@@ -47,9 +42,8 @@ pub(super) fn primary_commit_denied(command: &str, cwd: &str) -> bool {
 
 /// The repository the first `git commit` in `command` would run in:
 /// `git -C <dir>`, else a `cd` that preceded it, else wherever the session
-/// sits. None when the line commits nothing — `git add X && git commit`
-/// stages X only after this hook has answered, so the line is the only
-/// place a coming commit shows in time.
+/// sits. None when the line commits nothing. Read off the line because a
+/// `git add` before the commit runs only after this hook has answered.
 pub(super) fn commit_dir<'a>(command: &'a str, cwd: &'a str) -> Option<&'a str> {
     let tokens: Vec<&str> = command.split_whitespace().collect();
     let mut cd_dir = None;
@@ -64,9 +58,8 @@ pub(super) fn commit_dir<'a>(command: &'a str, cwd: &'a str) -> Option<&'a str> 
             index += 1;
             continue;
         }
-        // git's own options come before the subcommand; -C and -c take a
-        // separate value, so stepping one token at a time would read that
-        // value as the subcommand.
+        // -C and -c take a separate value, which one-token steps would read
+        // as the subcommand.
         let mut git_dir = None;
         index += 1;
         while let Some(option) = tokens.get(index).filter(|token| token.starts_with('-')) {
@@ -77,9 +70,8 @@ pub(super) fn commit_dir<'a>(command: &'a str, cwd: &'a str) -> Option<&'a str> 
         }
         match tokens.get(index) {
             None => break,
-            // Everything past the verb belongs to the commit, message
-            // included: reading no further is what keeps a `cd` quoted
-            // inside a message from being read as a directory change.
+            // Read no further: a `cd` quoted in the message is no directory
+            // change.
             Some(&"commit") => return Some(git_dir.or(cd_dir).unwrap_or(cwd)),
             Some(_) => index += 1,
         }
@@ -114,8 +106,7 @@ mod tests {
 
     #[test]
     fn holds_the_files_the_narrow_guard_used_to_wave_through() {
-        // Settings and plain documents are held as the shared rules are:
-        // the primary checkout writes none of them.
+        // The primary checkout writes none of these either.
         for command in [
             "git commit .claude/settings.json -m \"x\"",
             "git add CLAUDE.md && git commit -m \"x\"",

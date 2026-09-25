@@ -16,11 +16,9 @@ fn words(line: &[&str]) -> Vec<String> {
     line.iter().map(|w| (*w).to_string()).collect()
 }
 
-/// `cargo xtask <line>`, spelled unquieted the way `check` does so that
-/// cargo's build-lock line reaches the log — and `--locked`, like every
-/// cargo the gate starts: a cargo that would rewrite `Cargo.lock` says
-/// so and stops
-/// (internal-docs/反映前テストの機械化.md §gate).
+/// `cargo xtask <line>` without the alias's `--quiet`, so cargo's
+/// build-lock line reaches the log; `--locked`
+/// (反映前テストの機械化.md「gate と check が撃つ cargo は全部 `--locked`」).
 fn xtask(line: &[&str]) -> Vec<String> {
     let mut command = words(&["cargo", "run", "--locked", "-p", "xtask", "--"]);
     command.extend(words(line));
@@ -63,8 +61,7 @@ fn cargo_inputs(extra: &[&str]) -> Vec<String> {
         .collect()
 }
 
-/// The same step for the container: `cargo <rest>` becomes `cargo xtask
-/// linux <rest>`, and the Dockerfile joins its inputs.
+/// The same step for the container.
 fn on_linux(id: &str, command: &[String], inputs: &[String]) -> Step {
     let mut linux = xtask(&["linux"]);
     linux.extend(command[1..].iter().cloned());
@@ -79,9 +76,8 @@ fn on_linux(id: &str, command: &[String], inputs: &[String]) -> Step {
     )
 }
 
-/// The reach, sorted for the steps: the Rust files per package, the files
-/// with tests and their module filters per package, and per integration
-/// binary (package, binary) its module filters and files.
+/// The reach, sorted for the steps; `integration` is keyed by (package,
+/// test binary) and holds its module filters and files.
 #[derive(Default)]
 struct Sorted {
     rust_in: BTreeMap<String, Vec<String>>,
@@ -93,20 +89,14 @@ struct Sorted {
 }
 
 /// The packages whose tests the container runs too: the ones that hold
-/// code behind `cfg(not(windows))`, which the host never so much as
-/// compiles. The app needs Qt in the image and is not among them, as it
-/// was not in `check`.
-///
-/// Read by the sweep as well: a test binary the container never builds
-/// is one no line in there may ask for, because asking is building
-/// (`crate::sweep::replays`).
+/// code behind `cfg(not(windows))`, which the host never compiles. The
+/// app needs Qt in the image and is not among them. Read by the sweep as
+/// well (`crate::sweep::tested_here`).
 pub(crate) fn tested_on_linux(package: &str) -> bool {
     matches!(package, "platitude-core" | "xtask")
 }
 
-/// `whole` runs every package's tests unfiltered — the reach is the
-/// whole tree, and a filter naming every module says the same thing
-/// less plainly.
+/// `whole` runs every package's tests unfiltered.
 fn sort(
     g: &Graph,
     reach: &BTreeSet<String>,
@@ -117,13 +107,10 @@ fn sort(
     let mut sorted = Sorted::default();
     for file in reach {
         if file.ends_with(".qml") {
-            // A QtTest file is not a component of the app: nothing ships
-            // it and no verb's census can name it, so it belongs to
-            // `qmltest_steps` alone.
+            // A QtTest file is no component: no census names it, so it
+            // belongs to `qmltest_steps` alone.
             if !under(file, &qml_tests) {
-                // Under every name a run could have met it: a component
-                // that is only ever somebody's root type is in the tree
-                // under the wearer's name (`census::worn_by`).
+                // Under every name a run could have met it (`census::worn_by`).
                 census::through_wearers(&stem_of(file), worn, &mut sorted.qml);
             }
             continue;
@@ -157,7 +144,7 @@ fn sort(
             None => {}
             Some(binary) => {
                 // main.rs and support/ are read by every module: the whole
-                // binary. Otherwise the top-level module the file sits in.
+                // binary.
                 let filter = match module.path.first() {
                     Some(top) if !whole && top != "support" => format!("{top}::"),
                     _ => String::new(),
@@ -208,12 +195,9 @@ fn always_steps() -> Vec<Step> {
         ),
         step("waits", Side::Host, true, xtask(&["waits"]), &["crates"]),
         step("docs", Side::Host, true, xtask(&["docs"]), &DOCS),
-        // What it fails on is a census line no verb answers — a renamed
-        // or deleted verb whose line the gate would go on running, where
-        // the app ignores the name and the run waits out its ceiling
-        // saying nothing. The verbs with no line at all are counted and
-        // printed: that is a backlog to record
-        // (internal-docs/P3-確認事項.md).
+        // Fails on a census line no verb answers: the app would ignore the
+        // name and the run wait out its ceiling silently. Verbs with no
+        // line are only counted (`verify::coverage`).
         step("verbs", Side::Host, true, xtask(&["verbs"]), &["crates"]),
         step(
             "fmt",
@@ -225,22 +209,20 @@ fn always_steps() -> Vec<Step> {
     ]
 }
 
-/// cargo-deny over the resolved graph — the networking and libgit2 bans,
-/// the registries, the license allow list. Nothing in the source graph
-/// reads `deny.toml`, so it is named here on its own; every other way the
-/// closure can move is a manifest, and a manifest already sets `whole`
-/// (`moves_everything`). It goes ahead of every build on its side: a
-/// crate the policy forbids should be said in seconds.
+/// cargo-deny over the resolved graph. `deny.toml` is named on its own
+/// because nothing in the source graph reads it; every other way the
+/// closure moves is a manifest, which already sets `whole`
+/// (`moves_everything`). Ahead of every build, so a forbidden crate is
+/// said in seconds.
 ///
-/// Host only. The policy names no `targets` and takes the graph with
-/// `all-features`, so the set of crates it reads is the same on every OS
-/// and the container would be answering a question already answered.
+/// Host only: the policy names no `targets` and takes `all-features`, so
+/// every OS reads the same crates.
 fn deny_steps(g: &Graph, changed: &[String], whole: bool) -> Vec<Step> {
     if !whole && !changed.iter().any(|f| f == DENY) {
         return Vec::new();
     }
-    // The lock is the closure, and the manifests carry what the lock does
-    // not: a license field and the features a dependency is taken with.
+    // The manifests carry what the lock does not: a license field and the
+    // features a dependency is taken with.
     let mut inputs: BTreeSet<String> = ["Cargo.toml", "Cargo.lock", DENY]
         .into_iter()
         .map(str::to_string)
@@ -256,25 +238,19 @@ fn deny_steps(g: &Graph, changed: &[String], whole: bool) -> Vec<Step> {
 
 /// The QtTest files, when the change reaches them or the QML module they
 /// read. Both sides: the two Qt builds paint through different stacks,
-/// and what these ask about is when a Canvas has painted.
+/// and these ask when a Canvas has painted.
 ///
-/// Ahead of clippy because it compiles nothing of the app — the runner
-/// stages the product's QML and hands it to `qmltestrunner`. Its inputs
-/// are the whole module: the
-/// staging copies all of it, so any of it can be what a test resolves
-/// through (`crate::qmltest`).
+/// Ahead of clippy: it compiles nothing of the app. Its inputs are the
+/// whole module, because the staging copies all of it and a test can
+/// resolve through any of it (`crate::qmltest`).
 ///
-/// `whole` selects it outright, the way it does cargo-deny: neither the
-/// qmldir nor a QtTest file is a node of the source graph, so a reach of
-/// "everything" is not one that can be asked about them.
+/// `whole` selects it outright: neither the qmldir nor a QtTest file is a
+/// node of the source graph.
 fn qmltest_steps(reach: &BTreeSet<String>, whole: bool) -> Vec<Step> {
     let (ui, tests) = qml_dirs();
-    // The module is reached whole — the qmldir as much as the components,
-    // since it is what declares the singletons — but of the tests
-    // directory only what the runner picks up by name, so the README
-    // beside them is a document like any other. The runner itself counts:
-    // the staging is what a run resolves through, and nothing else here
-    // would exercise a change to it.
+    // The qmldir counts (it declares the singletons), and so does the
+    // runner, whose staging a run resolves through; of the tests directory
+    // only the files the runner picks up by name.
     let reads = |file: &String| {
         file == QMLTEST
             || under(file, &ui)
@@ -298,10 +274,8 @@ fn qmltest_steps(reach: &BTreeSet<String>, whole: bool) -> Vec<Step> {
     ]
 }
 
-/// What the record a stopped run leaves is made of, on both sides of the
-/// pipe: the stations and the trail the app writes, the teardown that
-/// passes them, and the parent that reads them back and looks at what
-/// still stands (`verify::faults`).
+/// The files a stopped run's record passes through: what the app writes,
+/// the teardown, and the parent that reads it back (`verify::faults`).
 fn record_of_a_wedge() -> [String; 7] {
     let (app, xtask) = (app(), "crates/xtask/src/verify");
     [
@@ -315,18 +289,12 @@ fn record_of_a_wedge() -> [String; 7] {
     ]
 }
 
-/// Three runs stopped on purpose, when a change reaches what would read
-/// them back.
+/// Three runs stopped on purpose, selected by [`record_of_a_wedge`]
+/// alone: each is a held run paid in wall clock, and nothing outside
+/// those files can stop a stopped run from being readable.
 ///
-/// **Selected by its own files.** Every one of
-/// these is a held run paid for in wall clock, and what they check is one
-/// mechanism: nothing outside [`record_of_a_wedge`] can quietly stop a
-/// stopped run from being readable.
-///
-/// **Host only.** The two sides run the same record through the same
-/// mount, and every verb step already proves the container carries a
-/// file out of it; a second copy of these would buy the same answer at
-/// the container's pace.
+/// Host only: both sides pass the record through the same mount, and
+/// every verb step already proves the container carries a file out.
 fn wedge_steps(reach: &BTreeSet<String>, whole: bool) -> Vec<Step> {
     let inputs = record_of_a_wedge();
     if !whole && !reach.iter().any(|file| inputs.contains(file)) {
@@ -339,9 +307,7 @@ fn wedge_steps(reach: &BTreeSet<String>, whole: bool) -> Vec<Step> {
         xtask(&["wedge-check"]),
         &inputs,
     );
-    // It drives verify-ui, which is the release build with the harness in
-    // it: the same one the verbs are run against, and built once for all
-    // of them.
+    // It drives verify-ui: the same release build as the verbs.
     wedge.builds_app = true;
     wedge.release = true;
     vec![wedge]
@@ -379,8 +345,8 @@ fn clippy_steps(sorted: &Sorted) -> Vec<Step> {
     steps
 }
 
-/// The unit tests in the reach, per package, by module filter; the core's
-/// on the container too. Their inputs are what the selected files read.
+/// The unit tests in the reach, per package, by module filter. Their
+/// inputs are what the selected files read.
 fn unit_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
     let mut steps = Vec::new();
     for (package, filters) in &sorted.unit_filters {
@@ -441,9 +407,8 @@ fn it_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
 const PERIODIC: &str = "::periodic::";
 
 /// Stage 3's own steps: the `periodic` tests of every test target that
-/// holds some, on both sides where the package is. Seldom-changed
-/// promises whose check is slow on some OS — not worth the pre-merge run,
-/// still owed a full one.
+/// holds some, on both sides where the package is (rules-refs/core.md
+/// `periodic`).
 fn periodic_steps(g: &Graph, dir: &Path, sorted: &Sorted) -> Vec<Step> {
     let unit = sorted.unit_files.iter().map(|(package, files)| {
         let mut command = words(&["cargo", "test", "--locked", "-p", package]);
@@ -491,11 +456,10 @@ fn holds_periodic(text: &str) -> bool {
     })
 }
 
-/// Components for a narrower candidate only.
-/// The census records only the final state: `settings-escape` exercises
-/// SettingsDialog but closes it before that snapshot. Absence there is
-/// no proof a run did not use a component. `None` keeps the actual set
-/// when inputs cannot be represented by component names at all.
+/// Components for the shadow candidate only: absence from the census is
+/// no proof a run did not use a component
+/// (反映前テストの機械化.md §動詞の絞り込みは比較表示に留める). `None`
+/// when the changed inputs are not all component names.
 fn verbs_in_snapshot(read: &Reading<'_>, changed: &[String]) -> Option<BTreeSet<String>> {
     if read.whole {
         return None;
@@ -515,19 +479,15 @@ fn verbs_in_snapshot(read: &Reading<'_>, changed: &[String]) -> Option<BTreeSet<
     Some(shown)
 }
 
-/// What the verify-ui verbs read besides the census: the app and the core
-/// they build, the harness they run through, and the manifests every
-/// build reads.
+/// What the verify-ui verbs read besides the census.
 fn verb_inputs() -> Vec<String> {
     let mut inputs = cargo_inputs(&[&app(), &core()]);
     inputs.extend(harness());
     inputs
 }
 
-/// The app as a built thing: shipped when its QML or entry point moved,
-/// the verify-ui verbs reached by a change (and the ones asked
-/// for), bare when the binary moved at all. The first verb of each side
-/// builds the release; the rest reuse it (`check` does the same).
+/// The app as a built thing: `shipped`, the verify-ui verbs, `bare`. The
+/// first verb of each side builds the release; the rest reuse it.
 fn binary_steps(
     read: &Reading<'_>,
     sorted: &Sorted,
@@ -554,8 +514,8 @@ fn binary_steps(
             &binary_inputs,
         ));
     }
-    // Harness behavior can change without any static edge into QML.
-    // Every recorded verb runs through it, even when the QML reach is empty.
+    // Every verb runs through the harness, which has no static edge into
+    // QML.
     let harness_moved = reach
         .iter()
         .any(|file| harness().iter().any(|dir| under(file, dir)));
@@ -576,15 +536,9 @@ fn binary_steps(
     }
     let mut verb_inputs = binary_inputs.clone();
     verb_inputs.extend(harness());
-    // The runs rewrite their own census lines — the container's does not
-    // (`verify::options::census_line` refuses there), so the file stays
-    // one machine's answer, the host's. That is why the gate
-    // records the file itself: it re-runs exactly the lines a QML
-    // change made stale, and a census only hand-typed runs refresh
-    // goes dirty in the middle of unrelated work. A gate whose runs
-    // moved it stops before it stamps, because the stamp names a
-    // commit and the tree that passed is no longer the one it holds
-    // (`gate::execute::execute`).
+    // The host's runs rewrite their census lines, the container's do not
+    // (`verify::options::census_line`); a gate whose runs moved the census
+    // stops before it stamps (`gate::execute::execute`).
     for line in &lines {
         let mut host = xtask(&["verify-ui"]);
         host.extend(crate::verify::suite_words(line));
@@ -637,10 +591,8 @@ fn binary_steps(
 
 /// The selected census lines this gate owes (`tiers`): the full gate owes
 /// every line but a twin; a gate before a merge leaves the full lines out,
-/// **except a full line that is the only one showing a component the
-/// change reaches** — leaving it would leave that component without a run
-/// before the merge, which is what the census is there to rule out (the
-/// perf driver is shown by the perf lines alone).
+/// except one that is the only witness of a component the change reaches
+/// (反映前テストの機械化.md「唯一の証人の例外」).
 fn owed_lines(
     read: &Reading<'_>,
     reached: &BTreeSet<String>,
@@ -675,8 +627,8 @@ fn owed_lines(
 mod tests {
     use super::holds_periodic;
 
-    /// A `periodic` module is found inline and declared, and a module
-    /// that only starts with the word is not one.
+    /// Inline and declared both count; a module that only starts with the
+    /// word does not.
     #[test]
     fn a_periodic_module_is_found_by_its_declaration() {
         assert!(holds_periodic(
@@ -687,10 +639,7 @@ mod tests {
         assert!(!holds_periodic("// see mod periodic in merge_tools.rs\n"));
     }
 
-    /// The runner's own steps are spelled `--locked`, like every cargo
-    /// the gate starts: a cargo that would rewrite the lock says so and
-    /// stops. The
-    /// spelling is also a stamp's key, so a change here re-runs every
+    /// The spelling is also a stamp's key, so a change here re-runs every
     /// step once (`gate::stamp`).
     #[test]
     fn the_runners_steps_are_spelled_locked() {

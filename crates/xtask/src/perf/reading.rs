@@ -1,8 +1,8 @@
 //! What one measured run reported, and whether it reported enough.
 //!
-//! The app says its numbers on stderr as `key=value` (`platitude_gg::init_tracing`),
-//! so a reading is assembled a line at a time as the run talks, and refused as a
-//! whole if a number this run was asked to take never arrived.
+//! The app says its numbers on stderr as `key=value` (`platitude_gg::init_tracing`):
+//! a reading is assembled a line at a time, and refused whole if a number this
+//! run was asked to take never arrived.
 
 use std::io::Write;
 use std::sync::mpsc;
@@ -10,51 +10,39 @@ use std::time::Instant;
 
 use super::Options;
 
-/// What one run reported.
 #[derive(Default, Clone, Debug)]
 pub(super) struct Reading {
     pub(super) peak_working_set: u64,
     pub(super) os_peak_working_set: Option<u64>,
     pub(super) peak_private: u64,
     /// What the process still held after `--settle-ms`, or 0 where the
-    /// run was not asked to wait. Read beside the peak: the difference
-    /// between them is work the process let go of once it was idle.
-    ///
-    /// The working set alone, because that is the side the budget is read
-    /// against (ci/baseline/perf-windows-x64.md §判定).
+    /// run was not asked to wait; the peak minus this is what it let go
+    /// of once idle. The working set alone: the budget is read against it
+    /// (ci/baseline/perf-windows-x64.md §判定).
     pub(super) settled_working_set: u64,
-    /// Process start to the first frame of the visible graph.
-    ///
-    /// Timed here, because the app's own `first_chunk_ms` starts
-    /// counting when the walk starts and so leaves out everything
-    /// before it: the runtime, the window, the QML engine and opening
-    /// the repository. Those are most of what a person waits for.
+    /// Process start to the first frame of the visible graph. Timed here
+    /// because the app's `first_chunk_ms` starts at the walk and leaves out
+    /// the runtime, the window, the QML engine and opening the repository.
     pub(super) startup_ms: Option<u64>,
     /// Process start to the graph stream saying it finished — a data
-    /// event, one frame short of anything being on screen.
-    ///
-    /// Why it is here beside [`Reading::startup_ms`]: this line is
-    /// ordinary application logging, so it is the one startup number a
-    /// build with no harness in it can also answer. It is what makes the
-    /// two builds comparable at all (`Options::harness`).
+    /// event, one frame short of the screen. Ordinary application logging,
+    /// so it is the one startup number a build with no harness also
+    /// answers (`Options::harness`).
     pub(super) graph_ms: Option<u64>,
     pub(super) first_chunk_ms: Option<u64>,
     pub(super) total_ms: Option<u64>,
     pub(super) fps: Option<f64>,
-    /// Frame intervals the scroll bench measured over 16.7ms — the count
-    /// of frames a person would have seen as a stutter, which is the same
-    /// question on a 100Hz screen and a 180Hz one.
+    /// Frame intervals the scroll bench measured over 16.7ms: a fixed
+    /// stutter threshold, so screens of any rate answer the same question.
     pub(super) over_16_ms: Option<usize>,
     pub(super) details_ms: Vec<u64>,
-    /// The same request, measured to where the answer is in the model and
-    /// its signals are out — so the wait divides into the read, this
-    /// call, and the view and painting the frame below ends.
+    /// The same request, to where the answer is in the model and its
+    /// signals are out — so the wait divides into the read, this, and the
+    /// painting the frame below ends.
     pub(super) details_applied_ms: Vec<u64>,
     pub(super) details_frame_ms: Vec<f64>,
-    /// The file's own round trip: asked for until its rows are in the
-    /// model. The frame below is the whole wait, so the two say how much
-    /// of the longest point a person waits at is the read and how much is
-    /// the drawing.
+    /// The file's own round trip. The frame below is the whole wait, so
+    /// the two split the longest wait into the read and the drawing.
     pub(super) diff_ms: Vec<u64>,
     /// And where the rows of it are in the model (`details_applied_ms`).
     pub(super) diff_applied_ms: Vec<u64>,
@@ -69,15 +57,15 @@ pub(super) struct Reading {
     pub(super) scroll_visible: bool,
     pub(super) scroll_framed: bool,
     pub(super) selection: Option<String>,
-    /// The commit the run actually selected. Recorded because the default
-    /// `--selection first` names no commit — it takes the newest
-    /// ref-reachable one, which a `git fetch` replaces (`perf::corpus`).
+    /// The commit the run actually selected: the default `--selection
+    /// first` takes the newest ref-reachable one, which a `git fetch`
+    /// replaces (`perf::corpus`).
     pub(super) selected_oid: Option<String>,
     pub(super) scenario_complete: Option<String>,
     pub(super) rows: Option<usize>,
-    /// What Qt said about the graphics device it chose, from `QSG_INFO`.
-    /// This machine has more than one adapter and Qt does not always take
-    /// the same one (ci/baseline/perf-windows-x64.md §この記録の読み方 3).
+    /// What Qt said about the graphics device it chose, from `QSG_INFO`:
+    /// Qt does not always take the same adapter
+    /// (ci/baseline/perf-windows-x64.md §この記録の読み方 1).
     pub(super) graphics: Vec<String>,
     /// What the machine around the process was doing while it ran.
     pub(super) conditions: super::sampler::Conditions,
@@ -88,23 +76,15 @@ pub(super) struct Reading {
     /// What the settled process held, read from outside it under
     /// `--attribute`; the whole text is `attribution.txt` in the run.
     pub(super) attribution: Option<super::attribution::Attribution>,
-    /// The font walk the run was asked to pay before `perf_done`, as its
-    /// three lines arrived, and — once `measure` has read the sampler
-    /// back at them — what the process weighed either side
-    /// (`perf::fonts`). `None` where the run never said the lines.
+    /// The font walk's three lines as they arrived and, once `measure` has
+    /// weighed them against the sampler, what the process weighed either
+    /// side (`perf::fonts`). `None` where the run never said the lines.
     pub(super) font_walk: Option<super::fonts::FontWalk>,
     pub(super) perf_done: bool,
 }
 
-/// What the parent watches while the app talks: whether the scroll bench
-/// has begun, and whether it has ended.
-///
-/// The bench is the one phase with a deadline of its own. It is driven by
-/// an animation, the animation is advanced by the render loop, and a
-/// window nothing is drawing — covered by another window, or behind a
-/// locked session — advances neither. Nothing then arrives until the
-/// outer watchdog fires minutes later, which says "the app stopped
-/// answering" about a machine that simply covered it up.
+/// What the parent watches while the app talks: the scroll bench, the one
+/// phase with a deadline of its own (`measure::SCROLL_CEILING`).
 #[derive(Default)]
 pub(super) struct Scroll {
     began: std::sync::atomic::AtomicBool,
@@ -123,8 +103,6 @@ impl Scroll {
         self.generation.fetch_add(1, Relaxed);
         self.began.store(true, Relaxed);
     }
-    /// Whether the bench has begun and not yet ended: the stretch a frame
-    /// is owed in, under a deadline of the bench's own (`measure`).
     pub(super) fn running(&self) -> bool {
         use std::sync::atomic::Ordering::Relaxed;
         self.began.load(Relaxed) && !self.ended.load(Relaxed)
@@ -158,7 +136,7 @@ pub(super) fn read_app(
                     found.graph_ms = Some(started.elapsed().as_millis() as u64);
                 }
                 // On the parent's clock, like the two above: the sampler
-                // the walk is read back against runs on that clock.
+                // the walk is weighed against runs on it.
                 if let Some(mark) = super::fonts::mark(&line) {
                     let at_us = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
                     found
@@ -178,10 +156,8 @@ pub(super) fn read_app(
                         .store(true, std::sync::atomic::Ordering::Relaxed);
                 }
                 absorb(&line, &mut found);
-                // A build with no harness never says `perf_done`, so the
-                // graph having finished streaming is the whole of what
-                // ends it: the last thing it says that this measurement
-                // was waiting for.
+                // A build with no harness never says `perf_done`; the
+                // graph finishing its stream is what ends it.
                 let ended = if harness {
                     line.contains("perf_done")
                 } else {
@@ -205,9 +181,8 @@ pub(super) fn read_app(
     (done_rx, scroll, reader)
 }
 
-/// Refuses a reading that lost a number this run was asked to take: a
-/// run that measured nothing says so. The app's log picking up colour
-/// is one way to lose every `key=value` at once
+/// Refuses a reading that lost a number this run was asked to take. The
+/// app's log picking up colour loses every `key=value` at once
 /// (`platitude_gg::init_tracing`).
 pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     super::interactions::validate(reading, opts)?;
@@ -220,7 +195,6 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
         gaps.push("the memory attribution (attribution.txt in the run says what the walk said)");
     }
     if !opts.harness {
-        // The whole of what a build with no harness can be asked for.
         if reading.graph_ms.is_none() {
             gaps.push("a finished graph (no `graph stream finished`)");
         }
@@ -277,10 +251,9 @@ pub(super) fn missing(reading: &Reading, opts: &Options) -> Result<(), String> {
     ))
 }
 
-/// What the scenario this run was asked to drive had to say about
-/// itself: the selection it settled on and the completion it named, each
-/// driven point's two numbers, and the scroll. **Both ways round** —
-/// the numbers a page holds are the ones its scenario asked for.
+/// What the scenario this run was asked to drive had to say about itself,
+/// both ways round: the numbers a page holds are the ones its scenario
+/// asked for.
 fn scenario_gaps(reading: &Reading, opts: &Options) -> Vec<&'static str> {
     let expected = format!(
         "selection={} details={} diff={} graph={} scrolled={}",
@@ -325,9 +298,8 @@ fn scenario_gaps(reading: &Reading, opts: &Options) -> Vec<&'static str> {
     gaps
 }
 
-/// What the calibration run is missing when it lost its one number: the
-/// walk, said in order and sampled either side. Asked of both its
-/// shapes — with a repository and without one — and of no other run.
+/// What the calibration run is missing when it lost its one number. Asked
+/// of both its shapes (with a repository and without) and of no other run.
 fn font_walk_gap(reading: &Reading, opts: &Options) -> Option<&'static str> {
     let weighed = reading
         .font_walk
@@ -339,27 +311,22 @@ fn font_walk_gap(reading: &Reading, opts: &Options) -> Option<&'static str> {
     )
 }
 
-/// The line every build says when the graph has finished streaming —
-/// ordinary application logging, which is what makes it the one edge
-/// the two builds share (`Reading::graph_ms`).
+/// The line every build says when the graph has finished streaming
+/// (`Reading::graph_ms`).
 pub(super) fn graph_finished(line: &str) -> bool {
     line.contains("graph stream finished") || line.contains("graph replaced in place")
 }
 
 /// What Qt says about the device it is drawing on and the rate it thinks
 /// it has, under `QSG_INFO=1`. Kept verbatim: two runs on different
-/// adapters are not each other's control, and a machine can offer several
-/// — a discrete, an integrated and the basic render driver.
+/// adapters are not each other's control.
 fn graphics_note(line: &str) -> bool {
     [
         "Creating QRhi with backend",
         "Adapter ",
         "using this adapter",
         "using vsync:",
-        // The software scene graph, which `--software` draws with
-        // (`measure::command`): it names no adapter, and two runs that
-        // drew with different scene graphs are not each other's control
-        // either.
+        // The software scene graph (`--software`), which names no adapter.
         "Loading backend",
     ]
     .iter()
@@ -381,10 +348,8 @@ pub(super) fn absorb(line: &str, found: &mut Reading) {
         found.perf_done = true;
     }
     if graphics_note(line) && found.graphics.len() < 12 {
-        // Qt says the same thing once per window it builds, and names the
-        // window it is saying it about — an address that is new every
-        // process. The record wants the set of facts, which is what two
-        // runs can be held to having in common.
+        // Qt says it once per window, naming the window by an address new
+        // every process; cut off, the facts compare across runs.
         let said = line
             .split(" for window")
             .next()
@@ -475,11 +440,9 @@ fn interaction_marks(line: &str, found: &mut Reading) {
 }
 
 /// One `key=value` off a line whose keys are whole words: the tables the
-/// runner writes for itself (`perf::display`, `perf::sampler`).
-///
-/// Not [`field`], which finds the key anywhere in the line — that answers
-/// `false` for `y=` on a line carrying `primary=false`, and a screen whose
-/// coordinate would not parse is a screen the window cannot be placed on.
+/// runner writes for itself (`perf::display`, `perf::sampler`). Not
+/// [`field`], which finds the key anywhere: `y=` on a line carrying
+/// `primary=false` answers `false`.
 pub(super) fn token<'a>(line: &'a str, key: &str) -> Option<&'a str> {
     line.split_whitespace()
         .find_map(|word| word.strip_prefix(key))

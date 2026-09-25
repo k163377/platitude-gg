@@ -1,25 +1,17 @@
 //! The git side of the gate: the hook that holds `refs/heads/main` to a
-//! stamp, and the verdict it asks for.
+//! stamp, and the verdict it asks for (反映前テストの機械化.md §git hook).
 //!
 //! `reference-transaction` is the one hook every ref update passes
-//! through — merge, fetch with a refspec, branch -f, update-ref, a commit
-//! on main, a reset on main — and in its `prepared` state a non-zero exit
-//! aborts the update. So one checked-in shell script (`.githooks/`)
-//! guards main against every road a session can take — and against no
-//! road of the user's, which is what [`SESSION`] in the environment
-//! tells apart — and the verdict itself stays here where it can be
-//! tested. The script is POSIX sh: git for Windows runs hooks in its own
-//! sh, and Linux and macOS have one, so a single file serves all three
-//! (CLAUDE.md ビルド・テスト: sh only).
+//! through, and a non-zero exit in its `prepared` state aborts the update,
+//! so one checked-in script (`.githooks/`) guards main against every road a
+//! session can take and none of the user's ([`SESSION`]); the verdict stays
+//! here, where it can be tested.
 //!
 //! The installed copy lives beside the repository's own `.git`
-//! (`pgg-gate/hooks/`), where no worktree edits it and no seat's reset or
-//! removal can pull it out from under main; `core.hooksPath` is written
-//! absolute, to that copy. Beside it, `tree` names the checkout whose
-//! task runner answers the verdict: the script `cd`s there before it
-//! runs cargo, so the answer never depends on which tree the git command
-//! happened to run in — a primary checkout on a main that predates the
-//! gate, or a seat mid-edit, would otherwise be the one asked.
+//! (`pgg-gate/hooks/`), where no seat's edit, reset or removal reaches it.
+//! Beside it, `tree` names the checkout whose task runner answers, so the
+//! verdict never depends on the tree the git command ran in (a seat
+//! mid-edit, say).
 
 use std::path::{Path, PathBuf};
 
@@ -31,22 +23,19 @@ use crate::subprocess::git_query;
 pub(crate) const SKIP: &str = "PGG_GATE_SKIP";
 
 /// The mark Claude Code leaves in the environment of everything it runs,
-/// and so in every git a session starts. It is what tells the gate whose
-/// ref update it is being asked about, and the hook refuses a session
-/// that unsets it — the same step around the tests as spelling
-/// [`SKIP`].
+/// and so in every git a session starts: it tells a session's ref update
+/// from the user's. The pre-shell hook refuses a session's command that
+/// spells it, as it does one spelling [`SKIP`].
 pub(crate) const SESSION: &str = "CLAUDECODE";
 
-/// Where the hook is checked in, from a checkout's root.
 const HOOKS_DIR: &str = ".githooks";
 const HOOK: &str = "reference-transaction";
 
-/// Installs the hook: copies the checked-in script beside `.git`, writes
-/// the tree the verdict runs in, and points `core.hooksPath` at the copy.
-/// Idempotent, and says what it did. `dir` is any tree of the repository;
-/// the script is taken from the primary checkout when it carries one and
-/// from `dir`'s own tree otherwise (the first landing of the gate), and
-/// the tree written is the one the script came from.
+/// Installs the hook beside `.git` and points `core.hooksPath` at it;
+/// idempotent, and says what it did. `dir` is any tree of the repository.
+/// The script, and the tree the verdict runs in, are the primary
+/// checkout's when it carries one and `dir`'s own otherwise (the first
+/// landing of the gate).
 pub(crate) fn install(dir: &Path) -> Result<String, String> {
     let here = dir.display().to_string();
     let common = git_query(
@@ -84,8 +73,6 @@ pub(crate) fn install(dir: &Path) -> Result<String, String> {
     if current == hooks_path {
         return Ok(format!("gate hook: installed (verdict from {source_tree})"));
     }
-    // Somebody's own hooks directory is not ours to replace: the two
-    // would have to be merged by hand.
     if !current.is_empty() {
         return Err(format!(
             "core.hooksPath is already {current}, which is not the gate's — the gate's hook \
@@ -100,8 +87,8 @@ pub(crate) fn install(dir: &Path) -> Result<String, String> {
     ))
 }
 
-/// Writes `text` to `path` and, where the bit exists, makes it
-/// executable — git ignores a hook it cannot execute, silently.
+/// Makes the file executable where the bit exists — git silently ignores
+/// a hook it cannot execute.
 fn write_executable(path: &Path, text: &str) -> Result<(), String> {
     std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))?;
     #[cfg(unix)]
@@ -115,15 +102,13 @@ fn write_executable(path: &Path, text: &str) -> Result<(), String> {
 
 /// The hook's question: may refs/heads/main move from `old` to `new`?
 /// Yes only for a fast-forward onto a commit gated in full while it sat
-/// on main. The refusal reason goes to stderr, which is what git shows
-/// the person whose command was stopped.
+/// on main. The refusal reason is what git shows the person whose command
+/// was stopped.
 pub(crate) fn verdict(dir: &Path, old: &str, new: &str) -> Result<(), String> {
-    // The gate holds sessions to the tests and holds nobody else. A git
-    // without [`SESSION`] in its environment is the user's own — their
-    // terminal, their IDE, a window they are clicking in — and their
-    // main is theirs to move, rewinds included. The hook script asks
-    // this first, before it needs cargo; here it is asked again for the
-    // hand-run `gate verdict` and for the tests.
+    // A git without `SESSION` is the user's own — their terminal, their
+    // IDE, a window they are clicking in — and their main is theirs to
+    // move, rewinds included. The script asks this before it needs cargo;
+    // here it is asked again for the hand-run `gate verdict` and the tests.
     if std::env::var_os(SESSION).is_none_or(|mark| mark.is_empty()) {
         return Ok(());
     }
@@ -131,9 +116,8 @@ pub(crate) fn verdict(dir: &Path, old: &str, new: &str) -> Result<(), String> {
         eprintln!("gate: {SKIP}=1 — main moves without a gate (the user's own call)");
         return Ok(());
     }
-    // A ref written back to its own value (`git reset --hard HEAD` on
-    // main, a checkout) moves nothing and owes nothing — measured: git
-    // runs the transaction for it all the same.
+    // git runs the transaction for a ref written back to its own value
+    // too (`git reset --hard HEAD` on main); that moves nothing.
     if old == new {
         return Ok(());
     }
@@ -181,10 +165,8 @@ pub(crate) fn verdict(dir: &Path, old: &str, new: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    /// The script decides whose git it is looking at before it pays for
-    /// cargo, so it spells the mark itself — and the two spellings have
-    /// to be the same one, or the user's git would reach a verdict that
-    /// waves it through only after failing to find cargo.
+    /// The script reads the mark itself, spelled as `SESSION` does, ahead of
+    /// its cargo guard.
     #[test]
     fn the_hook_script_reads_the_same_session_mark() {
         let script = include_str!("../../../../.githooks/reference-transaction");

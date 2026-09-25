@@ -1,11 +1,8 @@
-//! The two sums a PNG carries, written once for both directions: the
-//! writer puts them in, and the reader is only sure it read the file it
-//! was handed because it works them out again.
+//! The two sums a PNG carries, for both the writer and the reader.
 
 /// The Adler sum a zlib stream ends with, over the bytes it holds.
 pub(super) fn adler32(bytes: &[u8]) -> u32 {
-    // Sums are reduced every so many bytes:
-    // 5552 is the most bytes the sums can take before either overflows.
+    // The most bytes the sums can take unreduced before either overflows.
     const NMAX: usize = 5552;
     let (mut a, mut b) = (1u32, 0u32);
     for run in bytes.chunks(NMAX) {
@@ -49,8 +46,7 @@ fn crc_table() -> [u32; 256] {
 mod tests {
     use super::*;
 
-    /// The reference implementation's own answer for the string the
-    /// PNG spec quotes, and the empty input.
+    /// Published check values for each sum, and the empty input.
     #[test]
     fn the_checksums_are_the_standard_ones() {
         assert_eq!(crc32(b"123456789"), 0xcbf4_3926);

@@ -1,32 +1,20 @@
-//! `cargo xtask corpus` — the repository the performance record is
-//! measured against, built here.
+//! `cargo xtask corpus` — builds the repository the performance record is
+//! measured against.
 //!
-//! **Why it is generated.** A live clone of `JetBrains/kotlin` is
-//! somebody's working copy: an editor fetches it, and a fetch changes
-//! the rows the graph draws, the ref tables the memory is mostly made
-//! of, and the commit whose diff is timed — all while `HEAD` holds
-//! still. A record taken against it stops
-//! being comparable without anything visibly happening
-//! (ci/baseline/perf-windows-x64.md §この記録の読み方 2).
+//! Generated, not a live clone of `JetBrains/kotlin`: a fetch changes the
+//! rows, the ref tables and the timed commit while `HEAD` holds still, and
+//! the record stops being comparable without anything visibly happening
+//! (ci/baseline/perf-windows-x64.md §この記録の読み方 2). The output is
+//! gigabytes, so git holds the generator.
 //!
-//! **Why the generator is what git holds.** It is 200,000 commits,
-//! 50,000 refs and a hundred thousand tracked files — seven and a half
-//! gigabytes on disk, built in six minutes from `shape`'s constants.
-//! The generator is the thing worth keeping.
+//! The cost is millions of objects through `git fast-import`, which reads
+//! its stream on one thread; the bodies go through four processes at once
+//! (`BLOB_IMPORTS`), the commits and trees through one. Going further means
+//! asking for fewer objects — a fidelity decision (`shape`, `tree`).
 //!
-//! **What the six minutes is.** Nine and a half million objects through
-//! `git fast-import`, which reads a stream on one thread. The bodies
-//! are two thirds of that thread's work and go through four processes
-//! at once (`BLOB_IMPORTS`); the trees and the commits are one history
-//! and go through one, and that one is most of what is left. What would
-//! move it further is asking for fewer objects, which is a fidelity
-//! decision (`shape`, `tree`).
-//!
-//! **Why it is built once.** Every seat measures the same corpus, so it
-//! sits beside the primary checkout's `.git`, and a run that finds it
-//! already there does nothing. Delete it and the next `corpus` builds
-//! it again — to the same object ids, because the dates and the
-//! strings are fixed (`shape`).
+//! Built once, beside the primary checkout's `.git`, for every seat; a run
+//! that finds it does nothing. A rebuild gives the same object ids, because
+//! the dates and strings are fixed (`shape`).
 
 mod build;
 mod copies;
@@ -55,14 +43,10 @@ pub(crate) static CORPUS: command::Command = command::Command {
 
 pub(crate) static COMMANDS: &[&command::Command] = &[&CORPUS];
 
-/// The directory name, ignored and beside the primary checkout's `.git`
-/// like the shot board and the chip ledger: one for all six seats, in
-/// the project and outside every seat's own tree (inside one it would
-/// be six copies, one `cargo clean` short of gone).
-///
-/// **A `git clean -xfd` in the primary checkout takes it**, as it takes
-/// the board — it is ignored, which is what an ignored directory means.
-/// Building it again is the whole recovery.
+/// Ignored, beside the primary checkout's `.git` like the shot board: one
+/// for all seats, outside every seat's own tree (inside, it would be one
+/// per seat and one `cargo clean` from gone). A `git clean -xfd` in the
+/// primary checkout takes it; rebuilding is the recovery.
 const DIR_NAME: &str = ".pgg-perf-corpus";
 
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -111,9 +95,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
             .map_err(|e| format!("could not clear {}: {e}", at.display()))?;
     }
     if !at.join(".git").is_dir() {
-        // Minutes of fast-import on every core: announced like a build
-        // (`still`), and only on this path — a corpus already there is
-        // only read.
+        // Announced like a build (`still`) only here: a corpus already
+        // there is only read.
         let _busy = crate::still::busy(&crate::tree::workspace_root(), "corpus")?;
         build(&at)?;
     }
@@ -126,12 +109,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     report(&at)
 }
 
-/// Whether `--force` may delete this directory.
-///
-/// `--force` takes whatever `--path` was given and removes it whole, so
-/// without this `--path .` from a seat deletes the checkout. A corpus is
-/// only ever the one directory name, so that is the test: everything
-/// else is somebody's own directory and is refused.
+/// Whether `--force` may delete this directory: only one named
+/// `DIR_NAME`, or `--path .` from a seat would delete the checkout.
 fn clearable(at: &Path) -> Result<(), String> {
     if at.file_name().is_some_and(|name| name == DIR_NAME) {
         return Ok(());
@@ -143,26 +122,16 @@ fn clearable(at: &Path) -> Result<(), String> {
     ))
 }
 
-/// The `--path` a caller gave, made absolute.
-///
-/// **A relative path is written into the corpus and read from
-/// somewhere else.** The mirrors point at the corpus's objects through
-/// `objects/info/alternates`, which git resolves against the mirror's
-/// own `objects/`, and the remote URLs are resolved against wherever
-/// the git process runs — so a corpus built at `target/corpus` had
-/// mirrors looking for `…/pgg-remotes/JetBrains.git/objects/target/corpus/.git/objects`
-/// and failed on the first ref written through them (measured). The
-/// default path is absolute already (`default_path`); this makes a
-/// given one the same.
+/// The `--path` a caller gave, made absolute: it is written into the
+/// mirrors' `objects/info/alternates` (resolved against the mirror's own
+/// `objects/`) and the remote URLs (resolved against git's working
+/// directory), so a relative one points somewhere else.
 fn given_path(path: PathBuf) -> Result<PathBuf, String> {
     std::path::absolute(&path).map_err(|e| format!("could not resolve {}: {e}", path.display()))
 }
 
-/// In the primary checkout, whichever seat is asking.
-///
-/// `--git-common-dir` answers the *shared* git directory, so six seats
-/// resolve to one corpus — the same call the shot board is placed by
-/// (`shots::board::board_dir`).
+/// In the primary checkout, whichever seat asks: `--git-common-dir` is the
+/// shared git directory, as for the shot board (`shots::board::board_dir`).
 fn default_path() -> Result<PathBuf, String> {
     let cwd = std::env::current_dir().map_err(|e| format!("no working directory: {e}"))?;
     let cwd = cwd.to_string_lossy().replace('\\', "/");
@@ -174,20 +143,17 @@ fn default_path() -> Result<PathBuf, String> {
     beside(&common).ok_or_else(|| format!("{common} has no checkout to hold the corpus"))
 }
 
-/// Where the corpus goes, given the shared git directory: next to it,
-/// which is the root of the checkout that holds it.
+/// The corpus beside the shared git directory, in its checkout's root.
 fn beside(common: &str) -> Option<PathBuf> {
     Path::new(common).parent().map(|root| root.join(DIR_NAME))
 }
 
-/// What a caller needs to measure against it: where it is, what it is,
-/// and the two files the record opens.
+/// Where the corpus is, what it holds, and how to measure against it.
 fn report(at: &Path) -> Result<(), String> {
     let refs = git(at, &["show-ref"])?;
     let commits = git(at, &["rev-list", "--all", "--count"])?;
-    // The copies' branches (`copies::stand_copies`) are refs of this
-    // generator's own making: counted out here, and still in the token,
-    // which is what a run is compared under.
+    // The copies' branches (`copies::stand_copies`) are not counted, but
+    // stay in the token a run is compared under.
     let counted = refs
         .lines()
         .filter(|l| !l.is_empty() && !l.contains(" refs/heads/pgg-copy-"))
@@ -208,18 +174,12 @@ fn report(at: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// The same readings, taken of a repository this generator did not
-/// build.
+/// The same readings of a repository this generator did not build, so
+/// both columns of a distance table come from one implementation of each
+/// definition (window, lane, chip).
 ///
-/// **A distance table is only worth reading if both of its columns came
-/// from here.** Every row of one is a definition — which commits the
-/// window holds, what counts as an open lane, which of them carry a
-/// chip — and two implementations of a definition are two definitions,
-/// which is how a table comes to compare a corpus against a reading of
-/// the reference repository that was never taken the same way.
-///
-/// **It only reads.** The reference repository is somebody's working
-/// clone: nothing here writes to it, down to the status (`worktree`).
+/// Read only: the reference is somebody's working clone, so nothing here
+/// writes to it, down to the status (`readings::worktree`).
 fn against(at: &Path) -> Result<(), String> {
     let refs = git(at, &["show-ref"])?;
     let commits = git(at, &["rev-list", "--all", "--count"])?;
@@ -229,18 +189,11 @@ fn against(at: &Path) -> Result<(), String> {
     readings(at)
 }
 
-/// Whether what is on disk is what this generator describes.
-///
-/// A corpus that is merely *present* is not one that can be measured
-/// against: the generator's constants move, and a directory built
-/// before they did answers every other check — it has a `.git`, it has
-/// refs, it prints a token. The counts are what say it is stale, and
-/// the answer is always the same one, so it is in the message.
-///
-/// **Three counts.** A generator whose lane
-/// widths or file sizes moved leaves all three standing, and what says
-/// *that* is the token the record carries. These are the ones a
-/// half-finished or superseded build gets wrong on its own.
+/// Whether what is on disk is what this generator describes: a corpus
+/// built before the constants moved still has a `.git`, refs and a token,
+/// and only the counts say it is stale. They catch a half-finished or
+/// superseded build; moved lane widths or file sizes leave them standing,
+/// and the record's token says that.
 fn holds_its_shape(commits: &str, refs: usize, at: &Path) -> Result<(), String> {
     let wanted_refs = shape::REFS as usize;
     let wanted_commits = shape::COMMITS.to_string();
@@ -260,9 +213,8 @@ fn holds_its_shape(commits: &str, refs: usize, at: &Path) -> Result<(), String> 
     if refs != wanted_refs {
         return Err(off("refs", refs.to_string(), wanted_refs.to_string()));
     }
-    // The tracked count is the third leg because it is the one the
-    // record's startup number rests on, and the one a half-written
-    // checkout gets wrong while the counts above still answer.
+    // A half-written checkout gets this wrong while the counts above
+    // still answer.
     if tracked.abs_diff(wanted_tracked) > tree::SPARE as usize {
         return Err(off(
             "tracked files",
@@ -316,10 +268,6 @@ fn write_all(child: &mut std::process::Child, input: &str) -> Result<(), String>
 mod tests {
     use super::{beside, clearable, given_path};
 
-    /// A `--path` reaches the mirrors' `alternates` and the remote URLs,
-    /// which git resolves against directories of its own choosing — so
-    /// a relative one has to be made absolute before anything is
-    /// written from it.
     #[test]
     fn a_given_path_is_absolute_before_it_is_written_anywhere() {
         let given = given_path(std::path::PathBuf::from("target/corpus-x"))
@@ -340,11 +288,8 @@ mod tests {
             .replace('\\', "/")
     }
 
-    /// One corpus in the primary checkout, whichever seat asks — the
-    /// answer comes from the shared directory alone, or six seats
-    /// would build six of it. `--git-common-dir` is what makes that
-    /// true: it answers that directory, so every seat is handed the
-    /// same string this works from.
+    /// The answer comes from the shared git directory alone, so every
+    /// seat is pointed at the primary checkout's corpus.
     #[test]
     fn every_seat_is_pointed_at_the_same_corpus() {
         let from_seat = shown("C:/Users/x/IdeaProjects/platitude-gg/.git");
@@ -359,9 +304,6 @@ mod tests {
         );
     }
 
-    /// `--force` removes what `--path` names, so it may only ever name
-    /// a corpus. A seat that typed `--path .` would otherwise delete
-    /// its own checkout.
     #[test]
     fn force_will_not_delete_something_that_is_not_a_corpus() {
         assert!(clearable(std::path::Path::new("/tmp/.pgg-perf-corpus")).is_ok());

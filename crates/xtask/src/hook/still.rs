@@ -1,13 +1,8 @@
-//! The measurement guard: a cargo a session types while a measurement
-//! holds the machine still is refused, because it runs outside any verb
-//! that could wait for the hold (`crate::still`).
-//!
-//! What is let through is the cargo that waits by itself — `cargo xtask
-//! <verb>` and its unquieted spelling `cargo run -p xtask -- <verb>` —
-//! and the cargo that compiles nothing. Everything else cargo does is
-//! held, whatever it is called and whatever it hides behind: a false
-//! hold costs one shell line typed again once the hold lifts, a false
-//! pass costs a spoiled measurement.
+//! The measurement guard: while a measurement holds the machine still
+//! (`crate::still`), a cargo a session types is refused unless it waits
+//! for the hold itself (`cargo xtask <verb>`, `cargo run -p xtask --
+//! <verb>`) or compiles nothing. Doubt holds: a false hold costs a retyped
+//! line, a false pass a spoiled measurement.
 
 use super::payload::{deny, string_field};
 use super::shell::{is_cargo, pipe_pieces, program_at};
@@ -48,12 +43,8 @@ pub(super) fn pre_shell(input: &str) -> Result<bool, String> {
     Ok(true)
 }
 
-/// Whether `command` runs cargo in a way that would compile beside a
-/// measurement: cargo in command position of any segment — a pipe's
-/// halves included — with a subcommand that is neither the task runner
-/// nor one of the harmless few. Judged per segment, so `cargo xtask
-/// structure && cargo build` is still a bare build, and only in command
-/// position, so a commit message that mentions `cargo test` is not.
+/// Whether any piece of `command` runs, in command position, a cargo
+/// that would compile: neither the task runner nor `HARMLESS`.
 fn bare_cargo(command: &str) -> bool {
     pipe_pieces(command).into_iter().any(segment_is_bare_cargo)
 }
@@ -95,9 +86,6 @@ fn runs_the_task_runner(tokens: &[&str]) -> bool {
 mod tests {
     use super::bare_cargo;
 
-    /// The cargo that compiles, in command position, is held whatever
-    /// stands between `cargo` and its subcommand, and whatever it runs
-    /// behind.
     #[test]
     fn a_cargo_that_compiles_is_held_however_it_is_spelled() {
         for line in [
@@ -126,8 +114,6 @@ mod tests {
         }
     }
 
-    /// The task runner waits by itself, the harmless subcommands compile
-    /// nothing, and a mention of cargo is not a run of it.
     #[test]
     fn the_task_runner_and_the_harmless_are_let_through() {
         for line in [

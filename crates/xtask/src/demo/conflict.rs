@@ -14,13 +14,11 @@ Release checklist
 ";
 
 /// `main` and `feature/clash`, each having changed the same line of
-/// `shared.txt`, with the merge **not yet made**.
+/// `shared.txt`, with the merge not yet made.
 ///
-/// The file is long enough to be read as one: a conflicted path's diff is
-/// the combined form, which puts context, our side, their side and the
-/// markers git wrote in one hunk — a one-line file shows none of that.
-/// The two sides also disagree about one line and agree about another, so
-/// both the fenced part and the part that merged cleanly are on screen.
+/// Long enough that the combined diff shows context, both sides and the
+/// markers in one hunk; one side alone also changes another line, so a
+/// cleanly merged part is on screen beside the fenced one.
 fn two_sides_of_one_line(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("shared.txt", BASE, "feat: shared base")?;
     repo.commit("other.txt", "calm\n", "feat: untouched elsewhere")?;
@@ -47,22 +45,15 @@ fn two_sides_of_one_line(repo: &mut DemoRepo) -> Result<(), String> {
 }
 
 /// The two sides with the merge still to come, so pressing `merge` in the
-/// window is what stops it (`merge-stops`). Every other conflict preset
-/// arrives already parked, which cannot show what the press itself
-/// answers with.
+/// window is what stops it (`merge-stops`).
 pub(super) fn clashing(repo: &mut DemoRepo) -> Result<(), String> {
     two_sides_of_one_line(repo)
 }
 
-/// A commit whose undoing collides with the branch that carried on past
-/// it, with the revert **not yet made** — pressing `revert` in the window
-/// is what stops it (`revert-stops`), the way [`clashing`] serves the
-/// merge and the copy.
-///
-/// The row to revert is `row:1`: the tree is clean, so the newest commit
-/// stands at row 0 and the one under it is the one that reworded the
-/// line. Taking it back would put the wording from before it where
-/// neither side's wording is now, and git stops on that one path.
+/// A commit whose undoing collides with the one after it, the revert not
+/// yet made — pressing `revert` in the window is what stops it
+/// (`revert-stops`). The row to revert is `row:1` (a clean tree puts the
+/// newest commit at row 0).
 pub(super) fn revert_clashes(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("shared.txt", BASE, "feat: shared base")?;
     repo.commit("other.txt", "calm\n", "feat: untouched elsewhere")?;
@@ -86,16 +77,13 @@ pub(super) fn conflict(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// The same stopped merge with the conflicted file **typed over**: the
-/// markers are gone and one line stands where the two sides disagreed,
-/// while the index still holds the path unmerged.
+/// The same stopped merge with the conflicted file typed over: markers
+/// gone, one line where the sides disagreed, the path still unmerged in
+/// the index.
 ///
-/// This is the shape the combined diff changes under: while the markers
-/// are there both sides' lines are in the work tree and arrive as
-/// additions, and the moment they are typed over the same two lines
-/// become removals against their own parent. Nothing else in the presets
-/// stands here — a staged resolution has left the conflict bucket
-/// altogether.
+/// The combined diff flips here — both sides' lines turn from additions
+/// into removals against their own parent — and no other preset stands
+/// here, since a staged resolution leaves the conflict bucket.
 pub(super) fn conflict_typed(repo: &mut DemoRepo) -> Result<(), String> {
     conflict(repo)?;
     repo.write(
@@ -110,22 +98,19 @@ pub(super) fn conflict_typed(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// The same merge with that resolution staged: nothing waits on a
-/// decision any more, `MERGE_HEAD` still stands, and the way out is the
-/// commit button (`merge-commit`). One of the two presets where that
-/// button is live under a stopped operation — this is the one with
-/// something left to list, [`conflict_ours`] the one without.
+/// The same merge with that resolution staged: `MERGE_HEAD` still stands
+/// and the way out is the commit button (`merge-commit`). The counterpart
+/// of [`conflict_ours`] with something left to list.
 pub(super) fn conflict_staged(repo: &mut DemoRepo) -> Result<(), String> {
     conflict_typed(repo)?;
     repo.git(&["add", "--", "shared.txt"])?;
     Ok(())
 }
 
-/// The same merge resolved by keeping ours, and staged: the index is back
-/// to what HEAD holds, so `git status` answers empty while `MERGE_HEAD`
-/// stands and the commit button still writes a merge of two parents
-/// (measured, 2.55). The only preset where the uncommitted row is drawn over a
-/// clean tree — nothing to list, and a fork to record.
+/// The same merge resolved by keeping ours, and staged: `git status`
+/// answers empty while `MERGE_HEAD` stands, and the commit still writes
+/// two parents. The only preset where the uncommitted row is drawn over a
+/// clean tree.
 pub(super) fn conflict_ours(repo: &mut DemoRepo) -> Result<(), String> {
     conflict(repo)?;
     repo.write(
@@ -136,10 +121,9 @@ pub(super) fn conflict_ours(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// The two branches of a rebase that will stop, with the rebase **not
-/// yet run** — pressing `rebase` in the window is what stops it
-/// (`rebase-stops`), the way [`clashing`] serves the merge and the copy.
-/// Sitting on `feature/clash`, so the branch to rebase onto is `main`.
+/// The two branches of a rebase that will stop, not yet run — pressing
+/// `rebase` onto `main` from `feature/clash` is what stops it
+/// (`rebase-stops`).
 pub(super) fn rebase_clashes(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("shared.txt", "base\n", "feat: shared base")?;
     repo.commit("other.txt", "calm\n", "feat: untouched elsewhere")?;
@@ -154,23 +138,19 @@ pub(super) fn rebase_clashes(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// A rebase stopped part-way, which a stopped merge cannot stand in for:
-/// it steps (so it counts `1/2` and takes `--skip` / `--quit`), and the
-/// two sides swap over — the commit being replayed is "theirs".
+/// A rebase stopped part-way: it steps (counts `1/2`, takes `--skip` /
+/// `--quit`) and the sides swap over — the commit being replayed is
+/// "theirs".
 pub(super) fn rebase_conflict(repo: &mut DemoRepo) -> Result<(), String> {
     rebase_clashes(repo)?;
     repo.git_expecting_stop(&["rebase", "main"])?;
     Ok(())
 }
 
-/// A drop whose replay goes through and whose *restore* is what collides:
-/// the uncommitted edit sits on the line the newest commit rewrote, and on
-/// nothing the replay itself has to apply.
-///
-/// The drop is of HEAD, so the verb needs no argument. Taking that commit
-/// out puts the line back the way it was, and the work coming out of the
-/// stash changed the same line — two versions of one line, which is the
-/// landing a move already has (規約 §未コミット変更がある状態での移動).
+/// A drop whose replay goes through and whose restore collides: the
+/// uncommitted edit sits on the line the newest commit rewrote. The drop
+/// is of HEAD, so the verb needs no argument; the landing is a move's
+/// (デザイン規約 §未コミット変更がある状態での移動).
 pub(super) fn drop_collides(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.commit(
@@ -191,14 +171,13 @@ pub(super) fn drop_collides(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// A drop the commits after it depend on, over a dirty tree: git will not
-/// replay while the work is there, and once it is stashed out of the way
-/// the replay walks into the hole the drop leaves and stops part-way.
+/// A drop the commits after it depend on, over a dirty tree: once the work
+/// is stashed out of the way the replay walks into the hole the drop
+/// leaves and stops part-way.
 ///
-/// The commit to take out is `row:2` — the WIP row sits above the newest
-/// commit, so the third row of the graph is the second commit back. The
-/// uncommitted edit is somewhere else entirely, so it is what makes git
-/// refuse without taking any part in what the replay collides over.
+/// The commit to take out is `row:2` (the WIP row sits above the newest
+/// commit). The uncommitted edit is in another file, so it takes no part
+/// in the collision.
 pub(super) fn drop_stops(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.commit(
@@ -230,15 +209,12 @@ pub(super) fn rebase_staged(repo: &mut DemoRepo) -> Result<(), String> {
 }
 
 /// A rebase stopped on a commit that came out empty — git's own
-/// `Otherwise, please use 'git rebase --skip'`. Nothing is conflicted or
-/// staged, which is what makes leaving this one out cost nothing.
+/// `Otherwise, please use 'git rebase --skip'`, with nothing conflicted or
+/// staged.
 ///
-/// Reached with `--empty=ask`: the state is the same one, and driving
-/// `-i` from here would need a sequence editor on the PATH of three
-/// operating systems. `ask`, because the rename to `stop` is 2.45's
-/// and the minimum git (2.43 — the Linux container) refuses a value it
-/// does not know, which reads exactly like the stop this expects
-/// (repo.rs).
+/// Reached with `--empty=ask` rather than `-i`, which would need a
+/// sequence editor on three OSes. `ask`, not its 2.45 rename `stop`: the
+/// minimum git refuses a value it does not know (`git_expecting_stop`).
 pub(super) fn rebase_empty(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("f.txt", "a\n", "feat: root")?;
     repo.git(&["switch", "--create", "topic"])?;
@@ -257,8 +233,7 @@ pub(super) fn rebase_empty(repo: &mut DemoRepo) -> Result<(), String> {
 }
 
 /// A cherry-pick stopped on a conflict: it steps the way a rebase does
-/// (so it takes `--skip` and `--quit`) but keeps no count, which is what
-/// tells the card's two tests apart.
+/// (takes `--skip` and `--quit`) but keeps no count.
 pub(super) fn cherry_pick_conflict(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("shared.txt", "base\n", "feat: shared base")?;
     repo.git(&["switch", "--create", "feature/clash"])?;
@@ -269,15 +244,10 @@ pub(super) fn cherry_pick_conflict(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// The same stopped cherry-pick, then let go of with `--quit`.
-///
-/// **What git leaves behind is the conflict**: the operation is gone
-/// — no `CHERRY_PICK_HEAD`, no sequencer, so no badge and no exit card —
-/// while every unmerged path stays exactly where it stood, and a move out
-/// of here is refused all over again in git's other wording
-/// (`you need to resolve your current index first`). The one shape in
-/// which the working tree blocks a switch with nothing standing over it
-/// to explain why.
+/// The same stopped cherry-pick, then let go of with `--quit`: the
+/// operation is gone (no badge, no exit card) while the unmerged paths
+/// stay, so a switch is refused in git's other wording (`you need to
+/// resolve your current index first`) with nothing on screen saying why.
 pub(super) fn cherry_pick_quit(repo: &mut DemoRepo) -> Result<(), String> {
     cherry_pick_conflict(repo)?;
     repo.git(&["cherry-pick", "--quit"])?;

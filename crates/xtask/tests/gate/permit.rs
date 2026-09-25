@@ -1,6 +1,6 @@
-//! The landing permit: the landing verb goes through on the user's own
-//! message, once — and the once is a landing that moved main. Git of
-//! the session's own never writes main at all.
+//! The landing permit: the landing verb goes through once per user
+//! message, spent by a landing that moves main. The session's own git
+//! never writes main.
 
 use std::fs::File;
 use std::path::Path;
@@ -11,8 +11,7 @@ use crate::support::{EXE, Sandbox, output_past_a_busy_image};
 /// The session every payload here comes from, and the land runs as.
 const SESSION: &str = "gate-permit";
 
-/// What `hook <event>` prints for `payload`. Empty is the hook's way of
-/// saying it has no objection.
+/// What `hook <event>` prints for `payload`; empty is no objection.
 fn hook(sb: &Sandbox, event: &str, payload: &str) -> String {
     let file = sb.root.join(format!("{event}.json"));
     std::fs::write(&file, payload).expect("payload");
@@ -47,7 +46,7 @@ fn says(sb: &Sandbox, text: &str) -> String {
     )
 }
 
-/// The session runs a shell line from `dir`, through the pre-shell hook.
+/// The pre-shell hook's answer to `command` typed in `dir`.
 fn shell(sb: &Sandbox, dir: &Path, command: &str) -> String {
     hook(
         sb,
@@ -61,7 +60,7 @@ fn shell(sb: &Sandbox, dir: &Path, command: &str) -> String {
     )
 }
 
-/// The session runs the sanctioned landing from the seat.
+/// The same for `cargo xtask land` from the seat.
 fn lands(sb: &Sandbox) -> String {
     shell(sb, &sb.seat, "cargo xtask land worktree-a")
 }
@@ -197,8 +196,7 @@ fn a_landing_runs_on_the_users_message_until_one_moves_main_and_not_on_the_next(
         "{unasked}"
     );
 
-    // The user asks: the command goes through — and through again after
-    // a landing that moved nothing, since the ask stands unmet.
+    // Asked: it goes through, and again after a landing that moved nothing.
     assert!(says(&sb, "OK main反映").contains("Before landing"));
     assert_eq!(lands(&sb), "");
     sb.write(
@@ -211,8 +209,7 @@ fn a_landing_runs_on_the_users_message_until_one_moves_main_and_not_on_the_next(
     assert_eq!(lands(&sb), "", "a landing that stopped spent nothing");
     std::fs::remove_file(sb.seat.join("crates/platitude-core/src/extra.rs")).expect("clean");
 
-    // The landing that moves main spends it: the next on the same
-    // message is refused, and says why.
+    // The landing that moves main spends it.
     let (ok, text) = sb.land_as("worktree-a", SESSION);
     assert!(ok, "{text}");
     assert_eq!(sb.main_sha(), sb.head(&sb.seat));
@@ -235,9 +232,8 @@ fn a_landing_runs_on_the_users_message_until_one_moves_main_and_not_on_the_next(
     says(&sb, "反映されてない部分がある、直して");
     assert!(lands(&sb).contains("does not ask"));
 
-    // Asking again opens it again, and what is not the user's message —
-    // the context a summary carries back, a tagged event — leaves it as
-    // it stands.
+    // Asking again reopens it; what is not the user's message (a summary's
+    // carried context, a tagged event) leaves it as it stands.
     says(&sb, "直してmain反映");
     assert_eq!(lands(&sb), "");
     says(
@@ -252,9 +248,8 @@ fn a_landing_runs_on_the_users_message_until_one_moves_main_and_not_on_the_next(
     assert_eq!(lands(&sb), "");
 }
 
-/// Git of the session's own never writes main, whatever stands in front
-/// of the line, permit or no permit: the landing verb is the one way,
-/// and the refusal names it.
+/// Permit or no permit, whatever prefixes the line; the refusal names the
+/// landing verb.
 #[test]
 fn a_sessions_own_git_does_not_write_main_on_any_flag() {
     let sb = Sandbox::new("permit-git");

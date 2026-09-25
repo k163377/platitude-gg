@@ -2,58 +2,33 @@
 //! holds: the order the waiting units stand in, and whether the one
 //! asking may start now.
 //!
-//! Nothing here touches a file or a clock. The ledger is read once under
-//! its own lock (`super::look`) and answered here, so the rule that
-//! decides a gate's pace is a function of a list — which is how the
-//! priority, the fairness and the admission stop are tested at all
-//! (`super::tests`).
+//! Nothing here touches a file or a clock: the ledger is read under its
+//! lock (`ledger::Pool::look`) and answered here, so the rule is a
+//! function of a list and is tested as one.
 //!
-//! **The rule is one sentence**: a waiting unit may start when it stands
-//! in the prefix of the ordered queue that fits in what is free, and the
-//! prefix stops at the first unit that does not fit. Everything the
-//! design owes falls out of it:
-//!
-//! - **A landing goes first, then a window the user is waiting for,
-//!   then every test**, because that is the order the ranks sort in
-//!   ([`order`]). One rule covers all three: what is short of room stops
-//!   the walk, so a waiting landing keeps ordinary work out, and a
-//!   waiting launch keeps it out too — but neither keeps out the rank
-//!   above it.
-//! - **Room a landing is short of is kept for it**: the walk stops
-//!   at the landing's unit when the room is not there yet, so the
-//!   weight a finishing unit gives back accumulates until the
-//!   landing fits. That is the whole of the admission stop, and it
-//!   needs no separate reservation.
-//! - **A heavy unit keeps its place.** Skipping past the unit that
-//!   does not fit (a backfill) would let a seat's endless one-weight
-//!   verbs walk over the four-weight `cargo test` behind them
-//!   forever.
-//! - **Room the landing leaves is used**: what is left after the
-//!   landing's units fit goes on down the queue.
-//!
-//! What the rule cannot promise is the other direction, and it is worth
-//! saying where the rule is: with landings first and nothing preempted,
-//! ordinary work behind an unbroken run of landings waits as long as the
-//! landings take.
+//! **The rule is one sentence** ([`admits`]): a waiting unit may start
+//! when it stands in the prefix of the ordered queue that fits in what is
+//! free, and the prefix stops at the first unit that does not fit. So a
+//! waiting landing or launch keeps lower ranks out of the room it is
+//! short of, with no separate reservation; and there is no backfill,
+//! which would let a seat's endless one-weight verbs walk over a
+//! four-weight `cargo test` forever. With landings first and nothing
+//! preempted, ordinary work behind an unbroken run of landings waits as
+//! long as they take (反映前テストの機械化.md §機械の予算と優先キュー).
 
 use std::collections::BTreeMap;
 
 /// Where a unit stands in the one queue every seat on the machine shares.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub(crate) enum Rank {
-    /// A landing's unit. `land` is the one thing that moves main, and in
-    /// one line with the seats' own gates it stands for minutes behind
-    /// work whose branches rebase over what lands anyway.
+    /// A landing's unit: `land` moves main, and the seats' gates rebase
+    /// over what lands anyway.
     Landing,
-    /// A window the user asked for (`cargo xtask launch`, the fast path
-    /// of CLAUDE.md ビルド・テスト). Somebody is waiting at the screen
-    /// for it, which no test is; it goes ahead of every test and behind
-    /// a landing. It is the build and the start that are counted — the
-    /// window itself is the user's and holds none of the machine.
+    /// A window the user asked for (`cargo xtask launch`): somebody is
+    /// waiting at the screen, which no test is. Only the build and the
+    /// start are counted; the window holds none of the machine.
     Launch,
-    /// Everything else — a seat's own gate, whatever it was asked with.
-    /// `--all` and `--fresh` are a bigger run, and nothing here reads
-    /// them.
+    /// Everything else — a seat's own gate, whatever its flags.
     Normal,
 }
 
@@ -66,8 +41,7 @@ impl Rank {
         }
     }
 
-    /// The word back, an unreadable one counting as ordinary work: a
-    /// ticket nobody can parse waits among the ordinary units.
+    /// The word back; an unreadable one counts as ordinary work.
     pub(crate) fn parse(word: &str) -> Rank {
         match word {
             "landing" => Rank::Landing,
@@ -84,15 +58,12 @@ pub(crate) struct Ticket {
     /// fairness, and the whole of the landings' own order.
     pub seq: u64,
     pub pid: u32,
-    /// What the unit takes out of the budget while it runs. Zero for a
-    /// turn, which queues landings against each other and asks for none
-    /// of the machine.
+    /// What the unit takes out of the budget while it runs; zero for a
+    /// turn.
     pub weight: u32,
-    /// The whole its owner asks the machine for. Every gate names the
-    /// same number unless one was told `--jobs` above the machine's
-    /// count, and the pool is the largest any live ticket names
-    /// ([`budget_of`]) — so widening it stays what it was: an explicit
-    /// ask, made by one gate and seen by all.
+    /// The whole its owner asks the machine for. The pool is the largest
+    /// any live ticket names ([`budget_of`]), so a gate told a wider
+    /// `--jobs` widens it for all while it runs.
     pub budget: u32,
     pub rank: Rank,
     /// A landing's turn: outside the budget, and held for the whole of
@@ -104,54 +75,32 @@ pub(crate) struct Ticket {
     pub what: String,
     /// Whether it has been handed the machine.
     pub running: bool,
-    /// When it was handed the machine, and zero for as long as it is
-    /// still waiting.
-    ///
-    /// **The hand-over, where the ledger once wrote the registration**:
-    /// the only thing this dates is how long the unit has been
-    /// *running* (`ledger::LEFTOVER_CEILING`), and a unit that queued
-    /// for an hour and then ran for a minute has been running for a
-    /// minute. Dated from the registration, a step admitted after a
-    /// long queue was already past the ceiling on its first second.
+    /// When it was handed the machine; zero while it is still waiting.
+    /// Dated from the registration instead, a unit admitted after a long
+    /// queue would be past `ledger::LEFTOVER_CEILING` on its first second.
     pub ran_since: u64,
-    /// The process this unit started, once it has started one; zero
-    /// before that and for a unit that starts none.
-    ///
-    /// **A ticket comes down when its owner is done, and its owner waits
-    /// for this** — so on the ordinary road this is only ever a number
-    /// nobody has to look at. It is there for the road where the owner
-    /// is killed: its lock frees at once, but the cargo, the container
-    /// or the app it started is still on the machine, and handing that
-    /// room out is over-subscription with nobody left to notice
-    /// (`super::Pool::read`).
-    pub child: u32,
-    /// The program that was started at [`Ticket::child`], as the unit
-    /// spelled it. A pid is a name the machine hands out again the
-    /// moment its process is gone, so a leftover asked only whether
-    /// *something* is at that number would hold the room for whatever
-    /// inherited it; the name is what tells the work apart from a
-    /// stranger (`subprocess::image_still_at`). Empty for a ticket that
-    /// started nothing.
-    pub child_name: String,
-    /// The second a reader last asked after [`Ticket::child`]. The ask
-    /// costs a process on Windows, and every waiter would otherwise pay
-    /// it ten times a second for as long as the leftover ran.
-    pub probed: u64,
-    /// Whether somebody has already been told this leftover is late.
-    /// The ledger remembers it so that the line is said once for the
-    /// whole machine, whoever looks at it
+    /// The process this unit started; zero before that and for a unit
+    /// that starts none. Read only when the owner is killed: its lock
+    /// frees, but what it started is still on the machine
     /// (`ledger::Pool::leftover`).
+    pub child: u32,
+    /// The program started at [`Ticket::child`]: a pid is handed out
+    /// again, and the name tells the work from a stranger that inherited
+    /// it (`subprocess::image_still_at`). Empty for a ticket that started
+    /// nothing.
+    pub child_name: String,
+    /// The second a reader last asked after [`Ticket::child`] — paced to
+    /// once a second (`ledger::Pool::leftover`).
+    pub probed: u64,
+    /// Whether this late leftover has been reported, so the line is said
+    /// once machine-wide.
     pub told: bool,
-    /// Read off the ledger: the owner of this ticket is gone and
-    /// [`Ticket::child`] is not, so the room is being held for work
-    /// nobody is waiting on any more.
+    /// Read off the ledger: the owner is gone and [`Ticket::child`] is
+    /// not.
     pub orphaned: bool,
-    /// Read off the ledger too: a leftover that has been running longer
-    /// than a step is allowed to. **Its room stays held** — the work is
-    /// still on the machine, and the room is held while it is
-    /// (`ledger::Pool::leftover`) — but the one thing here a person may
-    /// have to end by hand, so it says so wherever the queue is
-    /// shown.
+    /// Read off the ledger too: a leftover past the longest a step may
+    /// run. Its room stays held (`ledger::Pool::leftover`); the standing
+    /// flags it as the one thing a person may have to end.
     pub overdue: bool,
 }
 
@@ -164,46 +113,29 @@ pub(crate) fn used(tickets: &[Ticket]) -> u32 {
         .sum()
 }
 
-/// The pool every live ticket is measured against: the largest budget
-/// any of them names, and never less than `mine` — a process that asked
-/// for more than the others is the explicit ask, and one that asked for
-/// less does not shrink the machine under the others' feet.
+/// The pool: the largest budget any live ticket names, never less than
+/// `mine` — a smaller ask does not shrink the machine under the others.
 pub(crate) fn budget_of(tickets: &[Ticket], mine: u32) -> u32 {
     tickets.iter().map(|t| t.budget).fold(mine, u32::max)
 }
 
 /// What each seat has been handed, by rank: the running total the
-/// fairness is read off ([`order`]). Kept in the ledger beside the
-/// tickets, because it has to outlive the units it counts — a seat just
-/// served has nothing left in the ledger to say so.
+/// fairness is read off ([`order`]), kept in the ledger (`ledger::SERVED`).
 pub(crate) type Served = BTreeMap<(Rank, String), u64>;
 
 /// The waiting units in the order they are handed the machine: the
-/// higher rank first, then the seat that has been handed least of the
-/// machine, then arrival.
+/// higher rank first, then the seat served the least weight, then
+/// arrival.
 ///
-/// **A seat's place is what it has been served.** The smaller answers —
-/// what it is holding, where it stands in its own queue — read right at
-/// one instant and wrong at the next. With a waiting twice and b once,
-/// ordering by the queue hands it to a, and then — a's second unit and
-/// b's only one both first in *their* queues — hands it to a again.
-/// Ordering by what is still running fixes that only while a's first
-/// unit is still running: the moment it finishes, both seats are holding
-/// nothing and the older unit is a's again. So the count is kept in the
-/// ledger and survives the unit that earned it.
+/// **A seat's place is what it has been served**, a count that survives
+/// the unit that earned it: ordering by place in the seat's own queue, or
+/// by what it is running now, hands a seat with two waiting units the
+/// machine twice in a row.
 ///
-/// Weight, because weight is what is being shared: a seat running one
-/// `cargo test` has taken as much as one running four verbs, and the
-/// order says so.
-///
-/// **A seat that arrives late starts where the others stand.** Its
-/// count is the least any seat with work here has — at zero it would
-/// take the machine until it caught up with an hour of somebody else's
-/// gate, and at whatever it had when it last ran it would be paying a
-/// debt it never asked for.
-///
-/// Counted inside a rank, so a seat's ordinary work keeps its place
-/// while that seat is landing.
+/// A seat that arrives late starts at the least any seat here has
+/// ([`floor_of`]): at zero it would take the machine until it caught up,
+/// at its old count it would pay a debt it never asked for. Counted
+/// inside a rank, so a seat's landing costs its ordinary work no place.
 pub(crate) fn order<'a>(tickets: &'a [Ticket], served: &Served) -> Vec<&'a Ticket> {
     let floor = floor_of(tickets, served);
     let mut so_far: BTreeMap<(Rank, &str), u64> = BTreeMap::new();
@@ -232,9 +164,8 @@ pub(crate) fn stood_at(served: &Served, rank: Rank, seat: &str, floor: u64) -> u
         .max(floor)
 }
 
-/// The least any seat with a live ticket has been served, which is what
-/// a seat with no count of its own starts from. Zero when no seat here
-/// has a count yet.
+/// The least any seat with a live ticket has been served — where a seat
+/// with no count of its own starts.
 pub(crate) fn floor_of(tickets: &[Ticket], served: &Served) -> u64 {
     tickets
         .iter()
@@ -262,11 +193,9 @@ pub(crate) fn admits(tickets: &[Ticket], budget: u32, seq: u64, served: &Served)
     false
 }
 
-/// Whether it is `seq`'s turn among the landings: the oldest live turn
-/// is the one landing that runs, and the rest stand in arrival order
-/// behind it (CLAUDE.md Git 運用 — a landing is rebase, gate, census and
-/// fast-forward, and two of them at once would gate against a main that
-/// the other is about to move).
+/// Whether it is `seq`'s turn: the oldest live turn is the one landing
+/// that runs. Two at once would each gate against a main the other is
+/// about to move.
 pub(crate) fn turn_is(tickets: &[Ticket], seq: u64) -> bool {
     tickets
         .iter()
@@ -281,9 +210,8 @@ pub(crate) fn turn_is(tickets: &[Ticket], seq: u64) -> bool {
 pub(crate) fn standing(tickets: &[Ticket], budget: u32, served: &Served) -> String {
     let running: Vec<&Ticket> = tickets.iter().filter(|t| t.running && !t.turn).collect();
     let waiting = order(tickets, served);
-    // The landings' own line, which the budget's queue does not carry: a
-    // turn is an exclusion and holds none of the machine, so a landing
-    // standing in line for one is invisible in everything above.
+    // Turns hold none of the machine and are in neither list above, so
+    // they are listed on their own.
     let mut turns: Vec<&Ticket> = tickets.iter().filter(|t| t.turn).collect();
     turns.sort_by_key(|t| t.seq);
     let mut out = format!(
@@ -317,10 +245,6 @@ fn line(ticket: &Ticket) -> String {
         ticket.what,
         ticket.seat,
         ticket.pid,
-        // What a person has to see to act on it: the unit is nobody's
-        // any more, and the room is held for what it left behind — and
-        // where that has gone on longer than a step may run, that this
-        // is the one thing here nothing but a person will end.
         match (ticket.orphaned, ticket.overdue) {
             (true, false) => format!(
                 " — LEFTOVER: this unit's process is gone and pid {} is not",
@@ -342,7 +266,6 @@ mod tests {
         Rank, Served, Ticket, admits, budget_of, floor_of, order, stood_at, turn_is, used,
     };
 
-    /// A waiting unit of `seat`, `weight` heavy, arrived at `seq`.
     fn waiting(seq: u64, seat: &str, weight: u32, rank: Rank) -> Ticket {
         Ticket {
             seq,
@@ -397,8 +320,6 @@ mod tests {
         assert_eq!(seqs(&order(&tickets, &fresh())), vec![3, 1, 2]);
     }
 
-    /// The order the user asked for: what moves main, then the window
-    /// somebody is waiting at, then every test.
     #[test]
     fn a_window_the_user_asked_for_goes_behind_a_landing_and_ahead_of_the_tests() {
         let tickets = vec![
@@ -407,8 +328,8 @@ mod tests {
             waiting(3, "a", 1, Rank::Landing),
         ];
         assert_eq!(seqs(&order(&tickets, &fresh())), vec![3, 2, 1]);
-        // And the stop is the same rule: a launch short of room keeps
-        // the tests behind it out, and lets the landing past.
+        // A launch short of room keeps the tests behind it out, and lets
+        // the landing past.
         let short = vec![
             running(9, "d", 22),
             waiting(2, "c", 4, Rank::Launch),
@@ -429,8 +350,6 @@ mod tests {
         );
     }
 
-    /// One round of a unit per seat before anybody's second: a seat that
-    /// queued a hundred verbs takes one place in each round.
     #[test]
     fn seats_take_a_round_each_before_anybody_takes_a_second() {
         let tickets = vec![
@@ -443,11 +362,9 @@ mod tests {
         assert_eq!(seqs(&order(&tickets, &fresh())), vec![1, 4, 2, 5, 3]);
     }
 
-    /// The turn has to survive the unit that took it — **including that
-    /// unit finishing**. With a waiting twice and b once the order is a,
-    /// b, a; once a's first has been served and its ticket is gone,
-    /// nothing among the tickets remembers it, and an order read off
-    /// them alone hands a the next room as well.
+    /// The count must survive the served unit finishing: once a's first
+    /// ticket is gone, an order read off the tickets alone hands a the
+    /// next room too.
     #[test]
     fn a_seat_already_served_stands_behind_one_that_was_not() {
         let queued = vec![
@@ -461,14 +378,12 @@ mod tests {
             "a, then b, then a"
         );
         // Both seats have a row from the moment they queued
-        // (`super::Pool::register`); a's has moved by the one unit it was
-        // handed.
+        // (`ledger::Pool::register`); a's has moved by one.
         let after_one = served_of(&[("a", 1), ("b", 0)]);
-        // a's first is admitted and still running.
         let running_now = vec![running(1, "a", 1), queued[1].clone(), queued[2].clone()];
         assert_eq!(seqs(&order(&running_now, &after_one)), vec![3, 2]);
-        // And now it has finished: its ticket is gone, both seats hold
-        // nothing, and a's remaining unit is the older of the two.
+        // a's first has finished: both seats hold nothing, and a's
+        // remaining unit is the older.
         let done = vec![queued[1].clone(), queued[2].clone()];
         assert_eq!(
             seqs(&order(&done, &after_one)),
@@ -477,9 +392,6 @@ mod tests {
         );
     }
 
-    /// Weight, because weight is what the seats are sharing: one `cargo
-    /// test` has taken as much of the machine as four verbs, and the
-    /// seat handed it waits accordingly.
     #[test]
     fn a_seat_s_place_is_the_weight_it_was_served_not_the_units() {
         let tickets = vec![
@@ -493,13 +405,8 @@ mod tests {
         );
     }
 
-    /// A seat that arrives late starts where the seats already here
-    /// are standing. At zero it would take the machine until it had
-    /// caught up with an hour of somebody else's gate; at its own
-    /// stale count it would be paying off a debt from a run nobody
-    /// remembers. This is the number a seat's row is made with when it
-    /// joins the queue
-    /// (`super::Pool::register`).
+    /// The number a seat's row is made with when it joins the queue
+    /// (`ledger::Pool::register`).
     #[test]
     fn a_seat_that_arrives_late_starts_where_the_others_stand() {
         let here = vec![waiting(1, "a", 1, Rank::Normal)];
@@ -529,8 +436,6 @@ mod tests {
         );
     }
 
-    /// The rounds are counted inside a rank, so a seat's landing leaves
-    /// its ordinary work where it stood.
     #[test]
     fn a_seat_s_landing_does_not_cost_its_ordinary_work_a_round() {
         let tickets = vec![
@@ -557,9 +462,6 @@ mod tests {
         assert_eq!(used(&tickets), 5);
     }
 
-    /// The room that is free is handed down the queue in order, and the
-    /// walk stops at the first unit that does not fit — what frees from
-    /// there on is being kept for it.
     #[test]
     fn the_prefix_that_fits_starts_and_the_unit_that_does_not_stops_the_walk() {
         let tickets = vec![
@@ -577,8 +479,6 @@ mod tests {
         );
     }
 
-    /// The admission stop: while a landing's unit is waiting for room it
-    /// has not got yet, no ordinary unit takes what frees.
     #[test]
     fn ordinary_work_stops_being_admitted_while_a_landing_waits_for_room() {
         let tickets = vec![
@@ -594,8 +494,7 @@ mod tests {
             !admits(&tickets, 24, 3, &fresh()),
             "the two free went to ordinary work the landing is waiting for"
         );
-        // The unit that was holding the machine finishes, and the room
-        // the landing was waiting for is there.
+        // The holder finishes.
         let freed = vec![tickets[1].clone(), tickets[2].clone()];
         assert!(
             admits(&freed, 24, 2, &fresh()),
@@ -603,7 +502,6 @@ mod tests {
         );
     }
 
-    /// Room a landing leaves goes on down the queue.
     #[test]
     fn what_the_landing_does_not_need_goes_on_down_the_queue() {
         let tickets = vec![
@@ -640,8 +538,7 @@ mod tests {
         let tickets = vec![turn(7), turn(3), turn(9)];
         assert!(turn_is(&tickets, 3));
         assert!(!turn_is(&tickets, 7));
-        // The one that was running is gone; the next in arrival
-        // order takes it.
+        // The running one is gone; the next in arrival order takes it.
         let rest = vec![tickets[0].clone(), tickets[2].clone()];
         assert!(turn_is(&rest, 7));
         assert!(!turn_is(&[], 7), "a turn nobody holds is nobody's");

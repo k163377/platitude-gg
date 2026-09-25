@@ -22,9 +22,9 @@ pub(crate) fn session_end(input: &str) {
 }
 
 /// This session's ledger: `.chips/<session>.tsv` beside the primary
-/// checkout's `.git`, so every seat writes to one directory (as the shot
-/// board does) while each session keeps a file of its own — the set a
-/// session must keep readable is the set it stacked.
+/// checkout's `.git`, so every seat writes to one directory while each
+/// session keeps a file of its own — the set a session must keep readable
+/// is the set it stacked.
 fn ledger_path(input: &str) -> Option<PathBuf> {
     let session: String = string_field(input, "session_id")?
         .chars()
@@ -76,8 +76,8 @@ fn parse_chip(line: &str) -> Option<Chip> {
     })
 }
 
-/// Writes the ledger back. It is advisory: a session whose ledger cannot
-/// be written keeps working, and the guard simply sees no chips.
+/// Advisory: a session whose ledger cannot be written keeps working, and
+/// the guard judges whatever the file still holds.
 pub(super) fn store(input: &str, live: &[Chip]) {
     let Some(path) = ledger_path(input) else {
         return;
@@ -106,8 +106,7 @@ pub(super) fn store(input: &str, live: &[Chip]) {
         })
         .collect();
     if let Err(_unheard) = std::fs::write(&path, text) {
-        // Nobody to tell from inside a hook; the guard falls back to
-        // judging whatever the file still holds.
+        // Nobody to tell from inside a hook.
     }
 }
 

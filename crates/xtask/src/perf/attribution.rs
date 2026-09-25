@@ -2,44 +2,33 @@
 //! of memory the bytes are, which files the resident pages belong to, and
 //! how the process heaps are cut up.
 //!
-//! **Why from outside.** The Rust counting allocator (`--breakdown`, the
-//! `memprobe` feature) sees the Rust heap and nothing else — the C++
-//! objects QML builds, tree-sitter's trees and the fonts DirectWrite maps
-//! are all on the other side of it, and that side is where most of the
-//! process is (ci/baseline/perf-windows-x64.md). Three Win32 questions
-//! answer it without the process's cooperation:
+//! From outside because the Rust counting allocator (`--breakdown`) sees
+//! only the Rust heap, and most of the process — the C++ objects QML
+//! builds, tree-sitter's trees, the fonts DirectWrite maps — is on the
+//! other side. Three Win32 questions answer it without the process's
+//! cooperation:
 //!
-//! * `VirtualQueryEx` walks every region and says whether its bytes are
-//!   private, a mapped file or an image; the private regions are summed
-//!   per `AllocationBase` and counted by size class, which is where the
-//!   heap segments line up.
-//! * `QueryWorkingSetEx` says which of those pages are resident, so a
-//!   mapped file is charged for what it costs — the working set a
-//!   font adds is this line — and `GetMappedFileNameW` says which
-//!   file each resident page belongs to.
-//! * `RtlQueryProcessDebugInformation(PDI_HEAPS | PDI_HEAP_BLOCKS)` walks
-//!   the process heaps block by block: busy and free by size class, which
-//!   is what turns "the heap grew by this much" into "by this many blocks
-//!   of this size".
+//! * `VirtualQueryEx`: private / mapped / image per region; the private
+//!   regions summed per `AllocationBase` by size class, where the heap
+//!   segments line up.
+//! * `QueryWorkingSetEx`: which pages are resident, so a mapped file is
+//!   charged for what it costs; `GetMappedFileNameW` names the file.
+//! * `RtlQueryProcessDebugInformation(PDI_HEAPS | PDI_HEAP_BLOCKS)`: the
+//!   heaps block by block, busy and free by size class.
 //!
-//! Taken at the end of the `--settle-ms` wait, of a process that has
-//! stopped working, and **after** the settled reading was read off the
-//! sampler: the heap walk runs a thread inside the process and touches
-//! every heap page, so the reading — settled, peak and the host
-//! conditions alike — is of the series as it stood before the walk
-//! (`measure`); `memory.csv` keeps what the walk itself did.
+//! Taken **after** the settled reading was read off the sampler: the heap
+//! walk runs a thread inside the process and touches every heap page, so
+//! the reading is of the series before the walk (`measure`);
+//! `memory.csv` keeps what the walk itself did.
 //!
-//! The script is armed before the app starts, the way the sampler is
-//! (`sampler::Armed`): its C# compiles while nothing is being timed, and
-//! it waits on stdin for the pid. What it says goes to `attribution.txt`
-//! in the run's directory as it is; the first lines of it are `key=value`
-//! and are what the report summarises ([`Attribution`]).
+//! The script is armed before the app starts, like the sampler
+//! (`sampler::Armed`): its C# compiles while nothing is timed, and it
+//! waits on stdin for the pid.
 
 use std::path::Path;
 
-/// The summary the report prints, parsed off the first lines of the
-/// script's text. Bytes throughout; the tables under those lines are the
-/// evidence, and stay in the file.
+/// The summary the report prints, parsed off the script's first lines.
+/// Bytes throughout.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct Attribution {
     pub(super) elapsed_ms: u64,
@@ -54,8 +43,8 @@ pub(super) struct Attribution {
     pub(super) fonts_resident: u64,
     pub(super) fonts_files: u64,
     /// The heap walk, or why there is none: the debug buffer is the one
-    /// part of this that can refuse (`STATUS_NO_MEMORY` once the blocks
-    /// outgrow it), and the regions above are still a reading without it.
+    /// part that can refuse (`STATUS_NO_MEMORY`), and the regions are
+    /// still a reading without it.
     pub(super) heap: Option<Heap>,
     pub(super) heap_error: Option<String>,
 }
@@ -139,10 +128,9 @@ impl Attribution {
     }
 }
 
-/// Takes the attribution of `pid` with the armed script, writes what it
-/// said — or why it said nothing — to `attribution.txt` in `run_dir`, and
-/// answers the summary. Says out loud what it got, since the run's own
-/// line prints before this is taken.
+/// Writes what the script said — or why it said nothing — to
+/// `attribution.txt`, and prints the summary: the run's own line prints
+/// before this is taken.
 pub(super) fn record(armed: Armed, pid: u32, run_dir: &Path) -> Option<Attribution> {
     let path = run_dir.join("attribution.txt");
     let (text, summary) = match armed.take(pid) {
@@ -165,10 +153,9 @@ pub(super) fn record(armed: Armed, pid: u32, run_dir: &Path) -> Option<Attributi
     summary
 }
 
-/// How long the script is given to answer once it has the pid. The
-/// region walk is milliseconds; the heap walk is a thread inside the
-/// process reading every block, and a process with a million of them is
-/// seconds. Past this it is not slow, it is stuck.
+/// How long the script has to answer once it has the pid. The heap walk
+/// dominates — seconds for a process with a million blocks; past this it
+/// is stuck, not slow.
 pub(super) const CEILING: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// The script with its C# compiled, waiting on stdin for a pid.
@@ -303,27 +290,23 @@ impl Armed {
     }
 }
 
-/// The whole of the script: the three questions above as C#, and the
-/// PowerShell that compiles it, says `ready`, reads the pid and prints
-/// the text.
+/// The three questions above as C#, and the PowerShell that compiles it,
+/// says `ready`, reads the pid and prints the text.
 ///
-/// **The heap entry's flags are what this Windows reports.** Busy is
-/// 0x0001 and a segment 0x0002 here and in the published header;
-/// the uncommitted remainder of a segment is 0x0100 in the header and
-/// 0x1000 here (measured on 26100: a 64K segment with 4K committed
-/// reports its 60K remainder under 0x1000), so both are read as one.
-/// 0x4000 marks a block `VirtualAlloc`'d on its own and 0x8000 a
-/// low-fragmentation-heap block; either is busy or free by bit 0.
+/// Heap entry flags: busy 0x0001 and segment 0x0002 as in the published
+/// header; a segment's uncommitted remainder is 0x0100 in the header but
+/// 0x1000 on Windows build 26100, so both are read as one. 0x4000 (a
+/// block `VirtualAlloc`'d on its own) and 0x8000 (low-fragmentation heap)
+/// are busy or free by bit 0.
 ///
-/// **The debug buffer is reserved at 512MB.** The default is far under
-/// what a process with a million blocks writes into it, and the walk
-/// then fails with `STATUS_NO_MEMORY`. The structure offsets —
+/// The debug buffer is reserved at 512MB: the default overflows with
+/// `STATUS_NO_MEMORY` for a process with a million blocks. The offsets —
 /// `Heaps` at +112 of the buffer, 96 bytes per heap with
-/// `NumberOfEntries` at +36 and `Entries` at +80, 32 bytes per entry
-/// with `Size` at +0 and `Flags` at +8 — are the 64-bit layout this
-/// machine measured with, and the only one this runs on.
+/// `NumberOfEntries` at +36 and `Entries` at +80, 32 bytes per entry with
+/// `Size` at +0 and `Flags` at +8 — are the 64-bit layout, the only one
+/// this runs on.
 ///
-/// Every number on the `key=value` lines is bytes; the tables are MiB.
+/// The `key=value` lines are bytes; the tables are MiB.
 #[cfg(windows)]
 const SCRIPT: &str = r#"$ErrorActionPreference='Stop';
 [Console]::OutputEncoding=[Text.Encoding]::UTF8;
@@ -474,9 +457,7 @@ try { $text=[PerfAttribution]::Report($target) } catch { $text='error: ' + $_.Ex
 mod tests {
     use super::{Attribution, Heap, parse};
 
-    /// The prototype's text, cut to the lines the summary is read from
-    /// and the first table: what the script said of a PowerShell that
-    /// had drawn a string with Meiryo.
+    /// Real script output, cut to the summary lines and the first table.
     const SAID: &str = "attribution pid=35484 elapsed_ms=16\n\
         committed private=36528128 mapped=114262016 image=204566528\n\
         resident private=23572480 mapped=4390912 image=56406016 total=84369408\n\
@@ -517,8 +498,6 @@ mod tests {
         assert!(found.said().contains("16097 blocks"), "{}", found.said());
     }
 
-    /// The regions are a reading without the heap walk: the debug buffer
-    /// is the one part that can refuse, and the report says why.
     #[test]
     fn a_heap_walk_that_refused_leaves_the_regions_standing() {
         let text = SAID.replace(
@@ -535,9 +514,7 @@ mod tests {
         assert!(found.said().contains("0xC0000017"), "{}", found.said());
     }
 
-    /// An `error:` text, or a text with no resident
-    /// line, is no attribution — `missing` refuses
-    /// the run.
+    /// No attribution is what `reading::missing` refuses the run on.
     #[test]
     fn a_text_without_a_resident_line_is_no_attribution() {
         assert_eq!(parse("error: OpenProcess(1) failed with error 5\n"), None);
@@ -545,11 +522,8 @@ mod tests {
         assert_eq!(parse("resident private=x mapped=1 image=1 total=2\n"), None);
     }
 
-    /// The script against a real process: the C# compiles
-    /// under this PowerShell, the structure offsets hold on
-    /// this Windows, and a process that did nothing but start
-    /// still has an image, private pages and heap blocks to
-    /// show. Killed after.
+    /// The script against a real process: the C# compiles under this
+    /// PowerShell and the structure offsets hold on this Windows.
     #[cfg(windows)]
     #[test]
     fn a_process_is_attributed_from_outside() {
@@ -579,9 +553,8 @@ mod tests {
         ] {
             assert!(text.contains(table), "{table} missing from:\n{text}");
         }
-        // Case-blind: the kernel names a file object the way whoever
-        // opened it first spelled it, and under a loaded suite the ping
-        // came back as `PING.EXE`.
+        // Case-blind: the kernel keeps the spelling of whoever opened the
+        // file first (`PING.EXE` under a loaded suite).
         assert!(text.to_ascii_lowercase().contains("ping.exe"), "{text}");
     }
 }

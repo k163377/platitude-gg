@@ -1,9 +1,8 @@
 use super::*;
 use crate::perf::options::parse;
 
-/// The bench's deadline exists only between its two lines: before the
-/// first there is nothing to be late for, and after the second a clock
-/// still running would kill a run that had already finished.
+/// After the second line, a clock still running would kill a run that had
+/// already finished.
 #[test]
 fn the_bench_clock_runs_only_between_its_two_lines() {
     use std::sync::atomic::Ordering::Relaxed;
@@ -51,9 +50,7 @@ fn watchdog_is_the_outer_ceiling_and_quit_is_rejected() {
     assert!(err.contains("--watchdog-ms"));
 }
 
-/// The attribution is a number the run was asked to take, of either
-/// build, and a run that lost it is not a whole reading. Asked by the
-/// field, because `parse` refuses the flag off Windows.
+/// Set on the field because `parse` refuses the flag off Windows.
 #[test]
 fn an_attribution_that_was_asked_for_is_required() {
     let mut opts = parse(&["--no-open".into()]).expect("bare window options should parse");
@@ -283,9 +280,7 @@ fn requesting_a_frame_trace_rejects_a_partially_preserved_series() {
     assert!(missing(&reading, &opts).is_ok());
 }
 
-/// A shipped build says no `perf_*` line at all, so what it owes is the
-/// two the application logs on its own — the harness's lines are
-/// beyond what it can produce.
+/// A shipped build says no `perf_*` line at all.
 #[test]
 fn a_shipped_run_owes_the_two_lines_a_build_without_the_harness_can_say() {
     let opts = options(&["--repo", ".", "--shipped"]);
@@ -305,8 +300,7 @@ fn a_shipped_run_owes_the_two_lines_a_build_without_the_harness_can_say() {
     };
     assert!(missing(&whole, &opts).is_ok());
 
-    // None of the harness's own evidence is owed, and none of it is
-    // there to owe: no frame, no selection, no completed scenario.
+    // No harness evidence is owed; the memory still is.
     let no_memory = Reading {
         peak_working_set: 0,
         ..whole

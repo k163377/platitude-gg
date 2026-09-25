@@ -7,17 +7,13 @@ use std::process::{Command, Stdio};
 
 use super::{git, remotes, shape, stream, tree};
 
-/// Builds it somewhere else and moves it into place.
-///
-/// **What is at `at` is either finished or absent.** `git init` makes
-/// `.git` in milliseconds and the import that follows takes a hundred
-/// seconds; a build interrupted anywhere in between would otherwise
-/// leave a directory that every later run reads as "already built", and
-/// the first thing to notice would be a measurement of half a corpus.
+/// Builds it beside `at` and moves it into place, so `at` is finished or
+/// absent: a build interrupted in place would leave a `.git` every later
+/// run reads as "already built".
 pub(super) fn build(at: &Path) -> Result<(), String> {
     sweep(at)?;
-    // Named for this process, so two seats building at once are two
-    // builds, each in a tree of its own.
+    // Named for this process, so two seats building at once do not share
+    // a tree.
     let partial = partial_path(at, std::process::id());
     if partial.exists() {
         std::fs::remove_dir_all(&partial)
@@ -31,11 +27,9 @@ pub(super) fn build(at: &Path) -> Result<(), String> {
         clock.say();
         return Ok(());
     }
-    // **After the move, because a remote records where it was told to
-    // look.** Configured before it, every URL would name the scratch
-    // directory the move then takes away — and the proof would pass,
-    // because the proof would be reading the scratch copy too. The
-    // corpus that gets measured is this one.
+    // After the move: a remote records where it was told to look, so
+    // before it every URL would name the partial directory (and the proof
+    // would pass, reading that too).
     remotes::configure(at)?;
     clock.mark("remotes");
     clock.say();
@@ -64,16 +58,10 @@ fn partial_owner(at: &Path, entry: &Path) -> Option<u32> {
         .ok()
 }
 
-/// Clears the partial builds nobody is behind any more.
-///
-/// **A build that died leaves seven gigabytes under a name nothing
-/// looks for.** The partial is named for its process so that two builds
-/// cannot destroy each other, but the next build is a different process
-/// and only ever clears its own name — so an interrupted build's tree
-/// would sit beside the corpus, ignored by git and read by no later
-/// run, until somebody wondered where the disk went. Each is asked
-/// about by pid: a process still running is another seat building, and
-/// is left alone.
+/// Clears the partial builds nobody is behind any more: each is named for
+/// its process, so the next build (another process) would otherwise leave
+/// a dead one's gigabytes beside the corpus. One whose process still runs
+/// is another seat building, and is left alone.
 fn sweep(at: &Path) -> Result<(), String> {
     let parent = match at.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => parent,
@@ -107,24 +95,15 @@ fn sweep(at: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Moves the finished corpus into place, waiting out whatever is still
-/// holding it. Answers whether the corpus at `at` is this build's:
-/// `false` when another build got there first, in which case this one's
-/// tree has been thrown away and theirs is the one to report.
+/// Moves the finished corpus into place; `false` when another build got
+/// there first, whose corpus is then the one to report and this tree is
+/// thrown away.
 ///
-/// **A rename can be refused for a while.** The build has just written
-/// a hundred and eighty thousand files, and on Windows the scanner or
-/// the indexer walking them keeps handles open into the tree for
-/// seconds afterwards — long enough that the rename fails with an
-/// access error against a destination that does not exist (measured,
-/// after a ten-minute build). Waiting is the whole fix.
-///
-/// **And it can be refused for good.** Two seats that started building
-/// at once both finish, and the second rename lands on a corpus that is
-/// already there — which would otherwise be retried for two minutes and
-/// then reported as a handle somebody left open. A `.git` at the
-/// destination says which of the two this is; anything else sitting
-/// there is not a corpus and is named at once.
+/// On Windows the rename is refused for a while — the scanner or indexer
+/// walking the fresh files holds handles into the tree — so it is
+/// retried. A `.git` already at the destination is another build that
+/// finished first, not a held handle; anything else there is named at
+/// once.
 fn settle(partial: &Path, at: &Path) -> Result<bool, String> {
     let mut wait = crate::wait::Wait::new(
         "the finished corpus",
@@ -140,9 +119,7 @@ fn settle(partial: &Path, at: &Path) -> Result<bool, String> {
                 "  another build finished first at {} — discarding this one",
                 at.display()
             );
-            // A failure here is not this run's: the next build sweeps
-            // what its process left (`sweep`), and the corpus to report
-            // is already in place.
+            // Not this run's failure: the next build sweeps it (`sweep`).
             if let Err(e) = std::fs::remove_dir_all(partial) {
                 println!(
                     "  could not clear {}: {e} — the next build clears it",
@@ -171,15 +148,12 @@ fn settle(partial: &Path, at: &Path) -> Result<bool, String> {
     }
 }
 
-/// How long the move is given. Generous, because the alternative is
-/// throwing away the build that produced what is being moved.
+/// How long the move is given; generous, since running out fails a
+/// finished build.
 const RENAME_CEILING: std::time::Duration = std::time::Duration::from_secs(120);
 
-/// What each phase of the build cost.
-///
-/// **Printed, because an invisible cost is one nobody optimises.** A
-/// tool a person waits ten minutes for says where the ten minutes
-/// went, or the next person to wonder has to measure it from outside.
+/// What each phase of the build cost, printed so a long wait says where
+/// it went.
 struct Clock {
     began: std::time::Instant,
     phases: Vec<(&'static str, std::time::Duration)>,
@@ -224,10 +198,8 @@ fn fill(at: &Path, clock: &mut Clock) -> Result<(), String> {
         shape::REFS
     );
     std::fs::create_dir_all(at).map_err(|e| format!("could not make {}: {e}", at.display()))?;
-    // The hash algorithm is pinned: `init` would otherwise take it
-    // from `init.defaultObjectFormat`, and the same stream under
-    // sha256 produces different object ids — so a corpus built on such
-    // a machine could never match a recorded token.
+    // Pinned: an `init.defaultObjectFormat=sha256` machine would build
+    // other object ids and never match a recorded token.
     git(
         at,
         &[
@@ -237,60 +209,40 @@ fn fill(at: &Path, clock: &mut Clock) -> Result<(), String> {
             "--object-format=sha1",
         ],
     )?;
-    // Nothing here is anybody's identity, and a machine whose global
-    // config has none must still be able to build it.
+    // A machine with no global identity must still be able to build it.
     git(at, &["config", "user.name", "Corpus"])?;
     git(at, &["config", "user.email", "corpus@example.invalid"])?;
-    // **The checkout has to be the same bytes everywhere.** Git for
-    // Windows ships `core.autocrlf=true` in its system config, a fresh
-    // `init` inherits it, and the corpus then checks out CRLF here and
-    // LF on every other machine — a different working tree, a different
-    // `git status` to read, and different bytes in the diff pane, from
-    // object ids that are identical (fast-import writes blobs past the
-    // filter, so only the checkout moves). Measured on this machine
-    // before this line existed.
+    // The checkout has to be the same bytes everywhere: Git for Windows'
+    // system `core.autocrlf=true` would check out CRLF here and LF
+    // elsewhere from identical object ids.
     git(at, &["config", "core.autocrlf", "false"])?;
-    // The reference repository's paths run to 269 characters, and this
-    // one's are no shorter; with the corpus's own prefix in front of
-    // them that is past what the ANSI Windows API takes, so git is told
-    // to use the Unicode one. Without it the checkout fails on the
-    // deepest files and the corpus is a partial one that passes every
-    // other check.
+    // With the corpus's prefix the deepest paths pass the ANSI Windows
+    // limit; without this the checkout fails on them and leaves a partial
+    // corpus that passes every other check.
     git(at, &["config", "core.longpaths", "true"])?;
-    // **The pack is deflated at the cheapest level.** fast-import
-    // compresses every blob as it reads it, single-threaded, and the
-    // stream is tens of gigabytes — at the default level that is most
-    // of the build. The corpus already carries twice the reference
-    // repository's pack, so trading more bytes for less time costs
-    // nothing that is being measured: inflating is what the application
-    // does, and its speed does not depend on the level.
+    // fast-import deflates every blob on one thread, which at the default
+    // level is most of the build; the application's inflating does not
+    // depend on the level.
     git(at, &["config", "pack.compression", "1"])?;
     // The checkout is a hundred thousand files, which on Windows is
     // where the wall clock goes.
     git(at, &["config", "checkout.workers", "0"])?;
-    // **This corpus holds still under a measurement.** `git
-    // fetch` runs `gc --auto` after itself, and against nine million
-    // objects that is four minutes (measured — it was the whole of what
-    // looked like a slow fetch). The application fetches at open and
-    // every minute, so left on, maintenance would land in the middle of
-    // a run and be read as the application being slow. It would also
-    // rewrite the pack the record names.
+    // Holds still under a measurement: the application's fetches would
+    // run `gc --auto` mid-run (minutes at this size), read as the
+    // application being slow, and rewrite the pack the record names.
     git(at, &["config", "gc.auto", "0"])?;
     git(at, &["config", "maintenance.auto", "false"])?;
     git(at, &["config", "fetch.writeCommitGraph", "false"])?;
     let newest = import(at, clock)?;
-    // fast-import writes refs and nothing else: without this the work
-    // tree is the empty one `init` left, and every tracked file reads as
-    // deleted — which the application would show as an enormous
-    // uncommitted change.
+    // fast-import writes no work tree: without this every tracked file
+    // reads as deleted.
     git(at, &["reset", "--hard", "main"])?;
     clock.mark("checkout");
     // The chain the reference repository has. Startup reads it, so a
     // corpus without one is measuring a different walk.
     git(at, &["commit-graph", "write", "--reachable", "--split"])?;
-    // Tens of thousands of loose refs are a file each — slack on every
-    // one, and a walk that reads them all; packed they are one file
-    // (ci/baseline/code-costs-windows-x64.md §メモリの形).
+    // Loose refs are a file each (ci/baseline/code-costs-windows-x64.md
+    // §メモリの形).
     git(at, &["pack-refs", "--all"])?;
     packs(at)?;
     clock.mark("indexes");
@@ -311,38 +263,21 @@ fn fill(at: &Path, clock: &mut Clock) -> Result<(), String> {
     Ok(())
 }
 
-/// How the object database is reached, an axis of its own beside its
-/// size.
+/// A multi-pack-index over the build's packs, as a worked-in repository
+/// has: every git process maps them before it resolves anything.
 ///
-/// **Every git process maps this before it resolves anything**, and an
-/// opening spawns about fifteen of them. A repository that has been
-/// worked in has several packs and a multi-pack-index over them; one
-/// that fast-import wrote has exactly one pack and no index over it.
-///
-/// **The split is the build's own**: one pack per blob pass and one for
-/// the commits and trees ([`BLOB_IMPORTS`]), with `--max-pack-size` as
-/// the ceiling on any one of them. Asking `repack -a -d` for it
-/// afterwards costs a second pass over every object in the database —
-/// measured at over forty minutes for this one, and it produced a
-/// single pack anyway.
+/// The split is the build's own — one pack per blob pass and one for the
+/// commits and trees ([`BLOB_IMPORTS`]). `repack -a -d` would be a second
+/// pass over every object, and it produces a single pack.
 fn packs(at: &Path) -> Result<(), String> {
     git(at, &["multi-pack-index", "write"])?;
     Ok(())
 }
 
-/// The build output a working repository accumulates, which is ignored
-/// and still paid for.
-///
-/// **`-uall` walks it.** `status::read` asks for every untracked path,
-/// so git stats each of these and matches it against the ignore rules
-/// before deciding it has nothing to report.
-///
-/// **Deliberately more than the reference repository has.** That clone
-/// carries 278 ignored paths, because nothing has been built in it; a
-/// checkout somebody works in carries the output of every build, and
-/// this is the axis the application pays for on a machine in use. The
-/// corpus is heavier here on purpose; how much of its status this
-/// accounts for has not been measured on its own.
+/// The ignored build output a working repository accumulates, still paid
+/// for: `-uall` (`status::load`) matches each path against the ignore
+/// rules. More than the reference clone has on purpose — nothing was built
+/// in it. Its share of the status time is unmeasured.
 fn spill(at: &Path, tracked: &[String]) -> Result<(), String> {
     if tracked.is_empty() {
         return Ok(());
@@ -360,36 +295,21 @@ fn spill(at: &Path, tracked: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// How much of the stream is held before it is handed to git. The
-/// stream is written a line at a time and is tens of gigabytes, so
-/// without a buffer this is one write syscall per line.
+/// The stream is written a line at a time; unbuffered, that is a syscall
+/// per line.
 const PIPE_BUFFER: usize = 4 * 1024 * 1024;
 
-/// How many `fast-import` processes the blobs go through at once.
+/// How many `fast-import` processes the blobs go through at once. The
+/// bodies dominate the import (ci/baseline/code-costs-windows-x64.md
+/// §コーパス生成) and are the only part that parallelises: they hash to
+/// the same ids in any process, so they go in under marks the commit
+/// stream names (`stream::Bodies`).
 ///
-/// **The blobs are two thirds of the import and the only part of it
-/// that parallelises.** `fast-import` reads its stream on one thread,
-/// and a stream that spells every body out in its commit puts tens of
-/// gigabytes through that one thread — the bodies are what the wait
-/// is (times:
-/// ci/baseline/code-costs-windows-x64.md §コーパス生成; the generator
-/// writing the whole stream is a rounding error beside it,
-/// `stream::tests::time_the_generator_alone`). The bodies hash to the
-/// same ids whichever process reads them, so they go through this many
-/// at once under marks, and the commit stream names the marks
-/// (`stream::Bodies`).
+/// Four, because each writes a pack: four plus the commits' and trees'
+/// is the reference repository's five. More would add a pack each.
 ///
-/// **Four, because each writes a pack.** The reference repository
-/// carries five packs and a multi-pack-index, and every git process the
-/// application spawns maps them before it resolves anything; four blob
-/// packs and the one the commits and trees make is that shape. More
-/// would shave seconds and add a pack each.
-///
-/// **`--depth=0` costs pack size.** It skips the delta attempt on
-/// every blob, which is about a quarter of a single-process import
-/// (ci/baseline/code-costs-windows-x64.md §コーパス生成), but also the
-/// deltas between versions of the big directories' trees, and the pack
-/// comes out 10.7GiB against 6.5.
+/// Not `--depth=0`: it also skips the deltas between the trees' versions,
+/// and the pack grows by two thirds (same §).
 const BLOB_IMPORTS: usize = 4;
 
 /// The import: the blobs through [`BLOB_IMPORTS`] processes at once,
@@ -398,8 +318,8 @@ fn import(at: &Path, clock: &mut Clock) -> Result<stream::Newest, String> {
     let tree = tree::build();
     let placements =
         stream::placements(&tree).map_err(|e| format!("could not lay out the history: {e}"))?;
-    // Under `.git`, so the checkout does not carry them; each is a mark
-    // and an id per placement, read once by the commit pass and removed.
+    // Under `.git`, so the checkout does not carry them; removed after
+    // the commit pass reads them.
     let marks: Vec<String> = (0..BLOB_IMPORTS)
         .map(|shard| format!(".git/pgg-marks-{shard}"))
         .collect();
@@ -442,19 +362,13 @@ fn import(at: &Path, clock: &mut Clock) -> Result<stream::Newest, String> {
     Ok(newest)
 }
 
-/// Runs one `fast-import` with a stream written straight into it, and
-/// answers what the writer answered.
+/// Runs one `fast-import` fed by `feed`, and answers what the writer
+/// answered.
 ///
-/// **The write is allowed to fail.** A git that rejects the stream exits
-/// while the rest of it is still being written, and the broken pipe that
-/// follows says nothing about why — so it is kept and only reported if
-/// git itself turns out to have had nothing to say.
-///
-/// **Its standard error is drained by a thread**, because both pipes are
-/// live at once for as long as the stream takes: a git that filled its
-/// error pipe would stop reading the stream, and a writer that never
-/// stops writing would never read the error. Each waiting for the other
-/// is a build that hangs.
+/// A write error is reported only when git said nothing: a git that
+/// rejects the stream exits mid-write, and the broken pipe says nothing
+/// about why. Standard error is drained by a thread, or a git with a full
+/// error pipe stops reading the stream and both sides hang.
 fn fast_import<T>(
     at: &Path,
     args: &[&str],
@@ -478,8 +392,7 @@ fn fast_import<T>(
         std::thread::spawn(move || {
             let mut said = String::new();
             match std::io::Read::read_to_string(&mut pipe, &mut said) {
-                // A pipe that broke mid-message still carries the part
-                // of it that arrived, which is the part worth printing.
+                // A pipe that broke mid-message still keeps what arrived.
                 Ok(_) | Err(_) => said,
             }
         })
@@ -494,9 +407,8 @@ fn fast_import<T>(
         }
         None => Err(std::io::Error::other("fast-import took no standard input")),
     };
-    // The pipe closes with the writer above, which is what tells
-    // fast-import the stream is over; waiting before that would wait
-    // forever.
+    // Dropping the writer above closed the pipe, which ends the stream;
+    // waiting before that would hang.
     let status = child.wait().map_err(|e| e.to_string())?;
     let said = match drain.map(std::thread::JoinHandle::join) {
         Some(Ok(said)) => said.trim().to_string(),

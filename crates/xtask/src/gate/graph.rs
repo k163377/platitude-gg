@@ -1,37 +1,26 @@
-//! The file dependency graph, and the reach of a change read off it.
+//! The file dependency graph, and the reach of a change read off it
+//! (反映前テストの機械化.md §依存木).
 //!
-//! Nodes are files (workspace-relative, slashes forward; a directory node
-//! ends in `/`). An edge `a -> b` says a reads b: a `use` path or an
-//! inline `crate::` / `super::` / `self::` / `platitude_core::` / bare
-//! child-module path that resolves into b's module (through `pub use`
-//! re-exports), a string literal naming b's path, an insta snapshot b of
-//! a's tests, a QML type name that is b's file, a QML mention of a
-//! `#[qobject]` type b defines, a `CARGO_BIN_EXE_<name>` naming the
-//! binary b is the root of. A `mod x;` declaration is *not* an edge:
-//! declaring a module is not reading it, and the declaring file — a crate
-//! root or a mod.rs — is the hub every other file would reach through.
-//! For the same reason a crate root defines nothing anybody names
-//! (`the_crate_roots_have_no_readers`).
+//! Nodes are workspace-relative files; a directory node ends in `/`. An
+//! edge `a -> b` says a reads b: a `use` path or an inline `crate::` /
+//! `super::` / `self::` / `platitude_core::` / bare child-module path that
+//! resolves into b's module (through `pub use` re-exports), a string
+//! literal naming b's path, an insta snapshot b of a's tests, a QML type
+//! name that is b's file, a QML mention of a `#[qobject]` type b defines, a
+//! `CARGO_BIN_EXE_<name>` naming the binary b is the root of. A `mod x;`
+//! declaration is not an edge, or the declaring crate root or mod.rs would
+//! be the hub every file reaches through; for the same reason a crate root
+//! defines nothing anybody names
+//! (`the_crate_roots_have_no_readers_and_every_path_resolves`).
 //!
-//! Comments are stripped before paths are read: a comment naming
-//! `Main.qml` or `crate::stash` is not a dependency, and the QML tree
-//! names its neighbours in comments all the time. Inside an inline
-//! `mod tests { … }`, `super` is the file itself.
+//! The tests to run are the tests in the reverse closure of the changed
+//! files, read by module path, which is what `cargo test`'s filter takes.
 //!
-//! The reverse closure of the changed files is then everything whose
-//! behaviour the change can have moved, and the tests to run are the
-//! tests *in* that closure — read by module path, which is what `cargo
-//! test`'s filter takes. QML and Rust are two worlds: a QML change
-//! reaches other QML, never a Rust module's tests, except through a Rust
-//! test that reads QML files off the disk (a directory literal). And a
-//! product file read off the disk that way reaches no integration binary:
-//! those run the tooling against sandboxes of their own ([`Carried`]).
-//!
-//! Everything here over-approximates on purpose: a module is the unit (an
-//! item's file), a glob re-export lands on every file it
-//! could mean, and a path that stops resolving early lands on the
-//! deepest module it did reach. The one failure it guards against is an
-//! edge missing, so unresolvable paths are counted and printed.
+//! Everything here over-approximates on purpose: a module is the unit, a
+//! glob re-export lands on every file it could mean, and a path that stops
+//! resolving early lands on the deepest module it did reach. The one
+//! failure it guards against is an edge missing, so unresolvable paths are
+//! counted and printed.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -48,9 +37,7 @@ pub(crate) struct Module {
     pub package: String,
     /// The `--test` name for an integration binary; None for the lib/bin.
     pub test_binary: Option<String>,
-    /// Tests are defined in the file itself: a `#[test]` or an inline
-    /// `mod tests {`. A `#[cfg(test)] mod x_tests;` declaration is not
-    /// one — the tests are x_tests's.
+    /// Tests are defined in the file itself ([`defines_tests`]).
     pub has_tests: bool,
 }
 
@@ -73,29 +60,20 @@ pub(crate) struct Graph {
     /// file -> the paths it re-exports by glob.
     globs: BTreeMap<String, Vec<Vec<String>>>,
     pub unresolved: Vec<(String, String)>,
-    /// `#[qobject]` type names the app defines -> file, so a QML file
-    /// naming a model depends on the model's file.
+    /// `#[qobject]` type names the app defines -> file.
     app_types: BTreeMap<String, String>,
 }
 
 /// How much of a change a file is handed.
 ///
-/// **Nothing outside the product compiles it** — xtask depends on std
-/// alone — so the product reaches the tooling only as files a tool reads
-/// off the disk: a string literal naming them, a directory holding them.
-/// Such a read is of whichever tree the tool is pointed at, and an
-/// integration binary points what it runs at a sandbox it laid out itself
-/// (its own literals are fixtures, not reads — [`build`]). So a product
-/// change handed on that way stops at an integration binary's modules.
-/// Everything else is handed on whole: the tooling's own files reach the
-/// binary that runs them, and so does a file outside the product that a
-/// binary reads off the real tree itself (the hook script `tests/gate`
-/// copies into its sandbox).
-///
-/// The stop is what keeps a change to the app or the core from owing the
-/// gate's own sandbox tests on both sides: the census reads the app's
-/// sources off the tree under gate, and the gate is what those tests
-/// shoot.
+/// The product reaches the tooling only as files a tool reads off the disk
+/// (nothing outside the product compiles it), and an integration binary
+/// points its tool at a sandbox it laid out itself, so a product change
+/// handed on that way stops at an integration binary's modules. Everything
+/// else is handed on whole, including a non-product file a binary reads
+/// off the real tree (the hook script `tests/gate` copies into its
+/// sandbox). Without the stop, every app or core change would owe the
+/// gate's sandbox tests on both sides, since the census reads the app.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Carried {
     /// A product file, as a tool that does not build it reads it.
@@ -104,7 +82,6 @@ enum Carried {
     Whole,
 }
 
-/// A file of the reach, with what it was handed.
 type Handed = (String, Carried);
 
 /// Whether a file is part of the product — the two crates the app is
@@ -263,8 +240,7 @@ pub(crate) fn build(root: &Path) -> Result<Graph, String> {
         let raw = std::fs::read_to_string(root.join(file)).map_err(|e| format!("{file}: {e}"))?;
         let code = strip_comments(&raw);
         // Spelled in pieces: a whole path here would be read as this
-        // file reading everything under the app, which it does not — it
-        // asks which files a name is under.
+        // file reading everything under the app.
         if file.starts_with(&format!("crates/{}/", "platitude-app")) {
             for name in qobject_names(&code) {
                 g.app_types.entry(name).or_insert_with(|| file.clone());
@@ -290,17 +266,15 @@ pub(crate) fn build(root: &Path) -> Result<Graph, String> {
                 g.edge(file, &target);
             }
         }
-        // An integration binary's strings are its fixtures — a sandbox
-        // laid out like this tree names this tree's files without
-        // reading one of them.
+        // An integration binary's strings lay out its sandbox; they read
+        // nothing of this tree.
         let bodies = string_bodies(raw);
         if g.modules.get(file).is_some_and(|m| m.test_binary.is_none()) {
             for target in literal_paths(root, file, &bodies) {
                 g.edge(file, &target);
             }
         }
-        // Nothing `use`s a binary: a test shoots the built one, and cargo
-        // hands that one over by name, within the package only.
+        // cargo hands a test the built bin by name, within the package only.
         let package = g
             .modules
             .get(file)
@@ -390,8 +364,7 @@ fn bare_roots(g: &Graph, file: &str, code: &str) -> BTreeMap<String, Vec<String>
     bare
 }
 
-/// Every `.rs` directly under `dir`, sorted, and none when there is no
-/// such directory.
+/// Every `.rs` directly under `dir`, sorted.
 fn rust_files_in(dir: &Path) -> Vec<std::path::PathBuf> {
     let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
         .into_iter()
@@ -407,10 +380,7 @@ fn rust_files_in(dir: &Path) -> Vec<std::path::PathBuf> {
 /// The crate roots of one package, each walked into the module index:
 /// the lib, the bins (`src/main.rs` and each `src/bin/*.rs`, a crate
 /// apiece), and the integration binaries — every file directly under
-/// tests/ and every `tests/<name>/main.rs` (core's `it`, the gate's
-/// own), which is a crate of its own. The bins are indexed by the name
-/// cargo builds them under, which is how a test naming
-/// `CARGO_BIN_EXE_<name>` finds the file it shoots.
+/// tests/ and every `tests/<name>/main.rs` (core's `it`, the gate's own).
 fn roots_of(root: &Path, dir: &Path, package: &str, g: &mut Graph) -> Result<(), String> {
     let ident = package.replace('-', "_");
     // The root files, spelled in pieces: a whole path in a string here
@@ -436,9 +406,6 @@ fn roots_of(root: &Path, dir: &Path, package: &str, g: &mut Graph) -> Result<(),
         // would resolve into the bin.
         roots.push((file, format!("{ident}::{}", name.replace('-', "_")), None));
     }
-    // The integration binaries, the two shapes cargo discovers them in:
-    // `tests/<name>.rs`, and `tests/<name>/main.rs` for one split into
-    // modules (core's `it`, the gate's own).
     for file in rust_files_in(&dir.join("tests")) {
         let stem = stem_of(&file.display().to_string());
         roots.push((file, format!("{ident}::{stem}"), Some(stem)));
@@ -566,12 +533,10 @@ fn mod_declaration(line: &str) -> Option<&str> {
 }
 
 /// `text` without its comments (`//` to end of line, nested `/* */`) and
-/// without the insides of its string literals (`"…"`, `r"…"`, `r#"…"#`):
-/// a path spelled in a test's fixture string is not a dependency of the
-/// test, and a comment naming a file is not one either. The quotes
-/// themselves stay, and so do newlines, so anything counting lines or
-/// spans still lines up. File paths in strings are read separately, off
-/// the raw text ([`literal_paths`]).
+/// without the insides of its string literals (`"…"`, `r"…"`, `r#"…"#`),
+/// so that neither reads as a path. The quotes and newlines stay, so
+/// lines and spans still line up. Paths in strings are read off the raw
+/// text ([`literal_paths`]).
 pub(crate) fn strip_comments(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let bytes = text.as_bytes();
@@ -645,8 +610,6 @@ fn char_literal_end(bytes: &[u8], at: usize) -> usize {
     }
 }
 
-/// The string literal opening at `at`, if one does: (start of its body,
-/// index of its closing quote, hashes of a raw string).
 /// Whether the literal opening at `at` carries a byte string's `b` — the
 /// `b` of `b"…"` sits at `at - 1` and the `b` of `br"…"` at `at - 1` with
 /// the `r` at `at`. A `b` that is the tail of an identifier is not one.
@@ -658,6 +621,8 @@ fn byte_prefix(bytes: &[u8], at: usize) -> bool {
             .is_none_or(|i| !is_ident(bytes[i] as char))
 }
 
+/// The string literal opening at `at`, if one does: (start of its body,
+/// index of its closing quote, hashes of a raw string).
 fn string_literal(bytes: &[u8], at: usize) -> Option<(usize, usize, usize)> {
     let (body_start, hashes) = if bytes[at] == b'"' {
         (at + 1, 0)
@@ -724,9 +689,9 @@ fn paths_in(
         {
             continue;
         }
-        // Inside an inline `mod tests { … }`, `super` is this very file —
-        // `use super::*` names no other file. One level deep is the shape
-        // the tree has; a deeper nest keeps its first `super` for the file.
+        // Inside an inline `mod tests { … }`, `super` is this very file.
+        // One level deep is the shape the tree has; a deeper nest keeps its
+        // first `super` for the file.
         let nested = inline
             .iter()
             .any(|(open, close)| start > *open && start < *close);
@@ -878,7 +843,7 @@ fn reexports_in(code: &str) -> (BTreeMap<String, Vec<String>>, Vec<Vec<String>>)
     let mut named = BTreeMap::new();
     let mut globs = Vec::new();
     let mut rest = code;
-    // The earliest of `pub use` and `pub(…) use`, whichever comes first.
+    // The earliest `pub use` or `pub(…) use`.
     let next = |text: &str| -> Option<usize> {
         let plain = text.find("pub use ");
         let scoped = text.find("pub(").filter(|&p| {
@@ -1111,26 +1076,19 @@ fn literal_paths(root: &Path, file: &str, bodies: &[String]) -> Vec<String> {
             if name.starts_with("target") || name.is_empty() {
                 continue;
             }
-            // The census is the plan's input alone: the gate
-            // reads it to pick the verbs and the verbs write it back, and
-            // no test opens the committed one (the sandboxes lay out
-            // their own). An edge here would put it in the cache key of
-            // every test the file that names it reaches, so a landing's
-            // commit of a census a verb rewrote would rerun them all to
-            // the same answer. The tier table beside it is the same kind
-            // of input: it says which steps a gate owes, and no test
-            // opens the committed one.
+            // The census and the tier table are plan inputs no test opens
+            // (sandboxes lay out their own). As edges they would enter the
+            // keys of every test their readers reach, so a landing's census
+            // commit would rerun them all to the same answer.
             if name == super::census::FILE || name == super::tiers::FILE {
                 continue;
             }
             if real.is_dir() {
                 name.push('/');
-                // A file does not read the directory it lives in. Such
-                // an edge says "this file reads everything beside it",
-                // which is the whole-tree answer and not a dependency —
-                // and it is what `../` resolves to against the reading
-                // file's own directory, and what a prefix test like
-                // `starts_with("crates/")` reads as.
+                // A file does not read the directory it lives in: that
+                // edge is the whole-tree answer, not a dependency, and it
+                // is what `../` or a prefix test like
+                // `starts_with("crates/")` resolves to.
                 if file.starts_with(&name) {
                     continue;
                 }
@@ -1142,9 +1100,8 @@ fn literal_paths(root: &Path, file: &str, bodies: &[String]) -> Vec<String> {
     out
 }
 
-/// The environment variable cargo sets per bin of a package, holding the
-/// path of the built executable. Spelled once, as a prefix, so the name
-/// that follows it is what the reading tells apart.
+/// The prefix of the variable cargo sets per bin of a package, holding the
+/// path of the built executable.
 const BIN_EXE: &str = "CARGO_BIN_EXE_";
 
 /// The bins these string literals shoot: the `<name>` of every
@@ -1192,12 +1149,10 @@ fn string_bodies(text: &str) -> Vec<String> {
         } else if bytes[i] == b'\'' {
             i = char_literal_end(bytes, i);
         } else if let Some((body_start, end, hashes)) = string_literal(bytes, i) {
-            // A byte string is bytes: `b"../"` is content
-            // a generator writes into a repository it makes up, and
-            // nothing ever opens it (`corpus::shape::content_into`).
-            // Read as a path it resolved against the writing file's own
-            // directory and made that file a reader of every source
-            // beside it.
+            // A byte string is content, not a path: nothing opens the
+            // `b"../"` a generator writes (`corpus::shape::content_into`),
+            // and as a path it would make its file a reader of every
+            // source beside it.
             if !byte_prefix(bytes, i) {
                 out.push(text[body_start..end].to_string());
             }
@@ -1328,9 +1283,7 @@ pub(crate) fn stem_of(file: &str) -> String {
 /// directory is a reader of each.
 fn directories(root: &Path, g: &mut Graph) -> Result<(), String> {
     // Each named directory once, however many files name it: the walk is
-    // of the whole subtree, and `crates/` alone is every source in the
-    // workspace. Walking per edge read the same trees dozens of times
-    // over for the same answer.
+    // of the whole subtree, and `crates/` alone is every source.
     let dirs: BTreeSet<String> = g
         .deps
         .values()
@@ -1348,18 +1301,13 @@ fn directories(root: &Path, g: &mut Graph) -> Result<(), String> {
     Ok(())
 }
 
-/// What the graph says is wrong with the tree it was read from, as lines
-/// for whoever is looking: a path that resolves nowhere, and a crate root
-/// somebody reads.
+/// What the graph says is wrong with the tree it was read from: a path that
+/// resolves nowhere (an edge not drawn, so every selection through it is
+/// short), and a crate root somebody reads (the hub every change reaches
+/// everything through — .claude/rules/structure.md §分割「クレート root」).
 ///
-/// Neither is a fault of the change at hand, and neither is anything a
-/// step could answer for — an unresolved path is an edge the graph did
-/// not draw, so every selection made through it is short by however much
-/// that edge carried, and a crate root with a reader is the hub every
-/// change reaches everything through (.claude/rules/structure.md
-/// §クレート root). So the gate reads this off the graph it already
-/// holds, on every run (a test would sit in only some
-/// selections).
+/// Neither is the change's fault nor a step's to answer, so the gate reads
+/// this on every run; a test would sit in only some selections.
 pub(crate) fn complaints(g: &Graph) -> Vec<String> {
     let mut out = Vec::new();
     for (file, path) in g.unresolved.iter().take(10) {
@@ -1474,11 +1422,8 @@ mod tests {
         );
     }
 
-    /// A byte string is bytes a generator writes and nothing
-    /// opens: `b"../"` read as one made the file naming it a reader of
-    /// every source beside it (`corpus::shape::content_into`). The `b`
-    /// has to be its own word — `lib"x"` is not a byte string, and the
-    /// tokenizer must still walk past it whole either way.
+    /// The `b` has to be its own word: `lib"x"` is not a byte string, and
+    /// the tokenizer still walks past it whole.
     #[test]
     fn a_byte_string_is_bytes_and_not_a_path() {
         assert_eq!(
@@ -1496,12 +1441,6 @@ mod tests {
         );
     }
 
-    /// A file does not read the directory it lives in: the edge says
-    /// "everything beside me", which is the whole-tree answer and not a
-    /// dependency. It is what `../` and a `starts_with(\"crates/\")` both
-    /// resolve to. The census is the plan's input and no step's, so it is
-    /// no edge either — a landing's commit of a rewritten one would
-    /// otherwise rerun every test whose key names the file that reads it.
     #[test]
     fn a_literal_naming_an_ancestor_directory_or_the_census_is_no_edge() {
         let root = crate::tree::workspace_root();
@@ -1512,9 +1451,8 @@ mod tests {
         assert!(named("crates/xtask/src/hook/seat.rs", "crates/xtask").is_empty());
         assert!(named(plan, crate::gate::census::FILE).is_empty());
         assert!(named(plan, crate::gate::tiers::FILE).is_empty());
-        // What the rule keeps: a directory the file is not
-        // in, and a file of its own. Spelled in pieces, or naming them
-        // here would be this very file reading them.
+        // What the rule keeps: a directory the file is not in, and a file
+        // of its own. Spelled in pieces, or this very file would read them.
         let ui = format!("crates/{}/src/ui", "platitude-app");
         assert_eq!(named(plan, &ui), vec![format!("{ui}/")]);
         let baseline = format!("crates/xtask/{}", "structure-baseline.txt");
@@ -1642,11 +1580,8 @@ mod tests {
         );
     }
 
-    /// A test that shoots a binary reads that binary. Nothing `use`s a
-    /// bin, so `CARGO_BIN_EXE_<name>` is the only place the dependency
-    /// is written down: without the edge, a change to the binary — or to
-    /// anything only the binary reads — selects none of the tests that
-    /// run it.
+    /// Without this edge, a change to a binary, or to anything only it
+    /// reads, selects none of the tests that run it.
     #[test]
     fn a_test_that_shoots_a_binary_reads_the_binary() {
         let root = crate::tree::workspace_root();
@@ -1699,10 +1634,8 @@ mod tests {
         g
     }
 
-    /// A product file a tool reads off the disk stops at an integration
-    /// binary, which runs the tool against a sandbox of its own. What
-    /// still reaches the binary: the tool's own code, a file outside the
-    /// product, and a product change the binary's own crate compiles in.
+    /// What still reaches the binary: the tool's own code, a file outside
+    /// the product, and a product change the binary's own crate compiles in.
     #[test]
     fn a_product_file_read_off_the_disk_stops_at_an_integration_binary() {
         // Spelled in pieces and named after nothing on disk, so that this
@@ -1757,10 +1690,8 @@ mod tests {
         assert_eq!(g.why(&[qml], &shooter), None);
     }
 
-    /// The same stop on the tree as it stands: the app's window reaches
-    /// the gate's census reader, whose unit tests are owed, and not the
-    /// gate's sandbox tests; the hook script those tests copy off the
-    /// real tree still reaches them.
+    /// The same stop on the tree as it stands; the hook script the sandbox
+    /// tests copy off the real tree still reaches them.
     #[test]
     fn the_apps_window_owes_the_census_tests_and_not_the_gates_sandbox() {
         let root = crate::tree::workspace_root();
@@ -1779,18 +1710,14 @@ mod tests {
         assert!(g.reach(&[hook]).contains(&support));
     }
 
-    /// The whole tree, as it stands. The same reading every gate does
-    /// before it runs anything ([`complaints`]) — here so that
-    /// `cargo test -p xtask` says it too, and says it against a graph
-    /// read fresh off the sources.
+    /// The gate's own reading (`complaints`), against a graph read fresh
+    /// off the sources.
     #[test]
     fn the_crate_roots_have_no_readers_and_every_path_resolves() {
         let root = crate::tree::workspace_root();
         let g = build(&root).expect("the graph of this tree");
         assert_eq!(super::complaints(&g), Vec::<String>::new());
-        // A file read into a second crate by `#[path]` stands under its
-        // own name and no other: two names would be two nodes, and a
-        // change to the file would reach only one of them.
+        // A file two crates declare by `#[path]` is one node (`lexical`).
         let doubled: Vec<&String> = g.modules.keys().filter(|f| f.contains("/../")).collect();
         assert!(doubled.is_empty(), "{doubled:?}");
     }

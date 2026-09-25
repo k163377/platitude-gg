@@ -1,24 +1,12 @@
-//! The one gate a tree holds.
-//!
-//! A second gate in the same tree runs the same steps over the same
-//! build directory, and the two wait on each other's cargo for the whole
-//! of it. The first keeps the tree; the second is refused with the
-//! first's pid — there is nothing for it to do that the first is not
-//! already doing. A gate writes that pid the instant it has the lock
-//! and takes it down under the lock at the end, so a lock held with
-//! nothing to read beside it is a gate at one edge or the other,
-//! looked at again before it is named (`still::SWEEP`).
-//!
-//! What runs at once *across* the machine is the budget (`crate::budget`)
-//! — one pool over every unit of both sides and every seat, with a
-//! landing at the head of the queue. This lock is the one thing that
-//! stayed a lock: it is an exclusion, and
-//! it answers at once, so a landing goes
-//! straight to the machine.
+//! The one gate a tree holds: a second gate in the same tree would run
+//! the same steps over the same build directory and wait on the first's
+//! cargo, so it is refused with the first's pid. What runs at once across
+//! the machine is the budget's (`crate::budget`); this is an exclusion
+//! and answers at once.
 //!
 //! Liveness is the lock, as in `still` and `budget`: a lock nobody holds
 //! is free whatever note stands beside it, so a gate killed mid-run
-//! leaves nothing to clean up and nothing anybody waits for.
+//! leaves nothing to clean up.
 
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
@@ -31,20 +19,15 @@ use crate::wait::{Budget, TRY_AGAIN, Wait};
 const LOCK: &str = "lock";
 
 /// The one gate of a tree, for as long as this stands. The note comes
-/// down with it, and the lock after the note; a process that never
-/// unwinds leaves both to the operating system.
+/// down with it.
 ///
-/// The lock file stays where it is, and nothing collects there: it stands
-/// at one name per tree (`gate::run::running_note`). Removing a lock file at
-/// a name every gate opens is what would stop it being one lock — a
-/// second gate that opened it first would go on holding a file no longer
-/// at that name while a third made a new one there
-/// (`still::Name`).
+/// The lock file is never removed (one name per tree,
+/// `gate::run::running_note`): removing a lock file at a name every gate
+/// opens stops it being one lock (`still::Name`).
 #[derive(Debug)]
 pub(crate) struct Sole {
     note: PathBuf,
-    /// Last, so the note comes down before the lock does: dropped after
-    /// the `Drop` below has run.
+    /// Last: dropped after the `Drop` below has taken the note down.
     _lock: Locked,
 }
 
@@ -70,9 +53,9 @@ pub(crate) fn sole(note: &Path, what: &str) -> Result<Sole, String> {
     }
     let lock = open_lock(&note.with_extension(LOCK))?;
     // A gate writes its note the instant it has the lock and takes it
-    // down under the lock at the end, so a held lock with nothing
-    // readable beside it is a gate at one of those two edges: looked at
-    // again for the span of a sweep, and named only once that is spent.
+    // down under the lock at the end, so a held lock with no readable note
+    // is a gate at one of those edges: looked at again for a sweep's span
+    // before it is named.
     let mut unnamed = Wait::new("the gate", Budget::whole(SWEEP), TRY_AGAIN);
     let other = loop {
         match lock.try_lock() {
@@ -148,17 +131,12 @@ mod tests {
         let _again = sole(&note, "gate").expect("the tree, once the first gate is done");
     }
 
-    /// What the unlock is for. A child handed the lock's open file
-    /// description outright stands in for one a fork hands over: the
-    /// gate here lets the lock go and takes its note down while that
-    /// description is still held by somebody who writes no note. The
-    /// unlock reaches the description itself, so the next gate has the
-    /// tree at once — a close would have left it refused until the
-    /// child was gone.
-    ///
-    /// Linux, where `flock(2)` promises the inheritance and where a
-    /// carried lock is seen at all; the gate suite nets the same release
-    /// from outside (`gate::stamps`).
+    /// What the unlock is for: a child handed the lock's open file
+    /// description (as a fork would) still holds it when the gate ends.
+    /// The unlock reaches the description itself, so the next gate has the
+    /// tree at once — a close would leave it refused until the child was
+    /// gone. Linux only, where `flock(2)` promises the inheritance; the
+    /// gate suite nets the same release from outside (`gate::stamps`).
     #[test]
     #[cfg(target_os = "linux")]
     fn a_lock_let_go_of_is_free_though_a_forked_child_holds_the_description() {
@@ -191,8 +169,6 @@ mod tests {
         carrier.wait().expect("the child that carried it");
     }
 
-    /// A note left by a gate that was killed names a process that holds
-    /// no lock: the tree is free, and the note is written over.
     #[test]
     fn a_note_nobody_holds_the_lock_beside_is_litter() {
         let dir = common("litter");
@@ -204,9 +180,9 @@ mod tests {
         assert!(text.contains("what gate --host-only"), "{text}");
     }
 
-    /// The refusal is worded by whoever asks. A gate that spent the span
-    /// of a sweep (`still::SWEEP`) on a lock nobody wrote a note beside
-    /// names a gate — not the measurement `still` holds the machine for.
+    /// A lock left without a note for a sweep's span (`still::SWEEP`) is
+    /// named as a gate — not as the measurement `still` holds the machine
+    /// for.
     #[test]
     fn a_lock_nobody_named_is_refused_in_the_gate_s_own_words() {
         let dir = common("unnamed");

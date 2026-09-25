@@ -1,18 +1,11 @@
-//! The dump guard: a read whose output is the whole file.
-//!
-//! What a shell line prints is read back by every call after it, so a
-//! file printed whole is paid for again on each one — and a source file
-//! here runs to thousands of tokens. The part that answers the question
-//! costs a fraction of that, and the tools that take a part
-//! (`grep -n`, `sed -n '<from>,<to>p'`, the Read tool's offset and
-//! limit) are the same ones that say where in the file the answer was.
+//! The dump guard: a read whose output is the whole file, which every
+//! call after it reads again.
 
 use super::payload::{deny, string_field};
 use super::shell::{pipe_pieces, program_at, program_name, shell_segments};
 
-/// Where printing a file whole starts costing more than it tells:
-/// roughly two thousand tokens, and every call after the dump reads
-/// them again.
+/// Where printing a file whole starts costing more than it tells
+/// (roughly two thousand tokens).
 const LIMIT: u64 = 8 * 1024;
 
 /// The programs whose output is the file they are handed.
@@ -61,9 +54,8 @@ fn dumped(command: &str, cwd: &str) -> Option<(String, u64)> {
 }
 
 /// The files a line hands to a dump whose output reaches the
-/// conversation: the last program of each piece, since anything piped
-/// onward is the next program's to bound, and nothing redirected to a
-/// file is read by anyone here.
+/// conversation: the last program of each piece (anything piped onward
+/// is the next program's to bound), unless redirected to a file.
 fn dump_targets(command: &str) -> Vec<&str> {
     shell_segments(command)
         .into_iter()
@@ -142,8 +134,7 @@ mod tests {
 
     #[test]
     fn a_dump_in_the_middle_of_a_pipe_is_the_next_programs_to_bound() {
-        // The piece that reaches the conversation is `tail`, and the
-        // whole file never arrives.
+        // The piece that reaches the conversation is `tail`.
         assert!(dump_targets("cat a.log | sort | tail -3").is_empty());
         // Both halves of `&&` are pieces of their own.
         assert_eq!(dump_targets("cat a.log | tail -3 && cat b.log"), ["b.log"]);

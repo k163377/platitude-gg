@@ -1,10 +1,7 @@
-//! Locating Qt for build and run.
-//!
-//! Building platitude-app needs `qmake` on PATH (qtbridge), and on Windows
-//! *running* the built exe needs the Qt bin directory too — without it the
-//! process dies at once with no output (verify-ui skill). The harness shells
-//! don't inherit the user's PATH edits, so this module rebuilds a PATH that
-//! works: the current one, with Qt prepended when qmake isn't reachable.
+//! Locating Qt for build and run: qtbridge needs `qmake` on PATH, and on
+//! Windows the built exe needs Qt's bin there too (verify-ui skill,
+//! windows.md). The harness shells don't inherit the user's PATH edits, so
+//! Qt is prepended when qmake isn't reachable.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -44,7 +41,7 @@ fn has_qmake(dir: &Path) -> bool {
     QMAKE_NAMES.iter().any(|name| dir.join(name).is_file())
 }
 
-/// A Qt bin directory found in well-known install locations.
+/// A Qt bin directory: `QT_BIN`, then the well-known install locations.
 fn find_qt_bin() -> Option<PathBuf> {
     if let Some(explicit) = std::env::var_os("QT_BIN") {
         let dir = PathBuf::from(explicit);

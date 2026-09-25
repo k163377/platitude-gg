@@ -1,32 +1,15 @@
-//! The measurement rig: the commit that was asked for, built in a tree
-//! nobody edits, and the build shelved by commit so it is never built
-//! twice.
+//! The measurement rig (`seats::RIG`): the commit that was asked for,
+//! built in a tree nobody edits, and the exe shelved by commit and
+//! feature set so it is never built twice.
 //!
-//! What a seat's own exe cannot answer is *which* source a number was
-//! taken of: the tree carries whatever the session edited since its last
-//! commit, its target/ rebuilds the app every time a source file moves,
-//! and an A/B against main means switching the seat back and forth with
-//! a release build each way. The rig is the one tree under the roster's
-//! directory that is no seat (`seats::RIG`): `perf --at <rev>` resolves
-//! the commit, checks it out there, builds it with the feature set the
-//! measurement asked for, and copies the exe onto a shelf under the rig's
-//! own target/ by commit and feature set. A second measurement of the
-//! same commit — the other side of an A/B, the next stage table of a
-//! record — builds nothing.
+//! The rig is claimed while it is switched and built, the way a seat is
+//! (`seats::take_seat`), so two invocations cannot check two commits out
+//! into one tree — but by the measuring process, so a second `perf --at`
+//! from the same session is refused too. The claim is released once the
+//! exe is on the shelf: the measurement runs off the copy.
 //!
-//! **The rig is claimed while it is switched and built**, the way a seat
-//! is claimed (`seats::take_seat`), so two invocations cannot check two
-//! commits out into one tree at once — and claimed by the measuring
-//! process: a second `perf --at` from the same session is refused
-//! too, and a claim whose process is gone is cleared by the next
-//! one, from any terminal. The claim is released once the exe is on
-//! the shelf: the measurement runs off the copy and needs the tree
-//! for nothing.
-//!
-//! **A dirty rig refuses.** Nothing here resets a tree — an edit in the
-//! rig is somebody's, however wrong it was to make it there — so the
-//! measurement stops and says whose problem it is. The write hook refuses
-//! the edit in the first place (hook/seat.rs).
+//! A dirty rig refuses (`switch`); the write hook refuses the edit in the
+//! first place (hook/seat.rs).
 
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -39,15 +22,14 @@ use crate::subprocess::git_query;
 
 use super::Options;
 
-/// How many builds the shelf keeps. Every entry is one exe of some sixty
-/// megabytes; an A/B needs two, a record's tables three (the harness, the
-/// harness with memprobe, the shipped set), and the rest is room for the
-/// last few commits measured.
+/// How many builds the shelf keeps: an A/B needs two, a record's tables
+/// three (the harness, the harness with memprobe, the shipped set), and
+/// the rest is room for the last few commits measured.
 const KEEP: usize = 8;
 
 /// The directory under the rig's target/ the builds are shelved in. Under
-/// target/ so that git never sees it: the rig has to answer `status` with
-/// nothing, or it is a tree somebody edited.
+/// target/ so that git never sees it: a rig whose `status` says anything
+/// is a tree somebody edited.
 const SHELF: &str = "shelf";
 
 /// A build the measurement can run: where the exe is, which commit it is
@@ -67,10 +49,8 @@ impl Built {
 
 /// The build of `rev`, off the rig's shelf or freshly made there.
 ///
-/// `caller` is the tree the command runs in: the rev is resolved there,
-/// which is what lets a seat name its own branch. `opts.build` false takes
-/// the shelf or nothing — a `--no-build` that would have to build is
-/// refused.
+/// `caller` is where the rev is resolved, so a seat can name its own
+/// branch. `opts.build` false takes the shelf or nothing.
 ///
 /// Called under the measurement's own announcement (`perf::run`), so no
 /// measurement holds the machine while this switches, reaps and builds.
@@ -116,11 +96,9 @@ pub(super) fn build_at(
     }
     let exists = trees.iter().any(|tree| same_tree(&tree.path, &rig));
     let _claim = Claim::take(&primary, &rig, &commit, exists)?;
-    // A run of the rig's exe left standing holds the shelf file against
-    // the copy below and the rig's store against the build; a seat's
-    // `kill` reaps its own tree and never this one. No measurement is
-    // running off the shelf right now — this whole build is announced,
-    // and a measurement's hold is what an announcement waits for.
+    // A run of the rig's exe left standing holds files the copy and the
+    // build must replace, and a seat's `kill` never reaps this tree. Safe
+    // to reap: under the announcement no measurement runs off the shelf.
     for (pid, stale) in crate::gui::reap_under(Path::new(&rig))? {
         println!("rig: reaped a stale run first: {pid} ({stale})");
     }
@@ -153,16 +131,12 @@ struct Claim {
 
 impl Claim {
     /// Locked in the same step that creates it when the rig is new, as a
-    /// seat is (`seats::create_seat`): no moment between the tree
-    /// existing and being claimed for a second invocation to arrive in.
+    /// seat is (`seats::create_seat`), so no second invocation arrives
+    /// between the tree existing and being claimed.
     ///
-    /// The claim names this process: a session runs one measurement at
-    /// a time, and a claim left by a killed one is litter its dead pid
-    /// gives away (`seats::standing`), whichever terminal meets it
-    /// next. That is why this claim is read as `Held::ByRunner` — a
-    /// seat's claim is a conversation's and its number is never asked,
-    /// while a measurement is one process, and a claim outliving it
-    /// would keep the rig from every measurement after.
+    /// The claim names this process and is read as `Held::ByRunner`: a
+    /// claim outliving its measurement would keep the rig from every
+    /// measurement after.
     fn take(primary: &str, rig: &str, commit: &str, exists: bool) -> Result<Self, String> {
         // The session mark carries the pid too: a claim's reason is read
         // back as `<session> pid <pid>`, and an empty session leaves the
@@ -239,11 +213,10 @@ fn switch(rig: &str, commit: &str) -> Result<(), String> {
         .ok_or_else(|| format!("could not put the rig on {}", short(commit)))
 }
 
-/// One exe onto the shelf, under its commit and feature set: copied
-/// beside its place and renamed into it, so a copy that was interrupted
-/// never stands where a finished build would be read; and stamped with
-/// the time it was shelved, because a Windows copy carries the source's
-/// own time and the shelf is swept by that.
+/// One exe onto the shelf: copied beside its place and renamed into it,
+/// so an interrupted copy never stands where a finished build is read;
+/// and stamped with the time it was shelved, because a Windows copy
+/// carries the source's time and the shelf is swept by it.
 fn shelve(fresh: &Path, exe: &Path) -> Result<(), String> {
     let dir = exe.parent().ok_or("the shelf has no directory")?;
     std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
@@ -266,11 +239,10 @@ fn shelve(fresh: &Path, exe: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// The shelf entries past the newest `keep`, oldest first by when their
-/// exe was shelved — the exe's own time, set as it was shelved, because
-/// a directory's is not something std can set on Windows; an entry with
-/// no exe in it is older than any that has one. A shelf that cannot be
-/// read has nothing to take off.
+/// The shelf entries past the newest `keep`, oldest first by their exe's
+/// time (std cannot set a directory's on Windows); an entry with no exe
+/// is older than any that has one. An unreadable shelf has nothing to
+/// take off.
 fn stale_builds(shelf: &Path, keep: usize) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(shelf) else {
         return Vec::new();
@@ -293,7 +265,6 @@ fn stale_builds(shelf: &Path, keep: usize) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Where a build of `commit` with feature set `set` sits on the shelf.
 fn shelf(rig: &Path, commit: &str, set: &str) -> PathBuf {
     rig.join("target")
         .join(SHELF)
@@ -335,7 +306,6 @@ mod tests {
                 .and_then(|file| file.set_modified(shelved))
                 .expect("a shelved exe");
         }
-        // An entry that lost its exe is older than any that kept one.
         std::fs::create_dir_all(dir.join("empty")).expect("a shelf entry with nothing in it");
         let stale = stale_builds(&dir, 2);
         assert_eq!(

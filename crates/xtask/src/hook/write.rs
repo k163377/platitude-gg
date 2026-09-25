@@ -1,13 +1,11 @@
-//! The Write and Edit guards: where a new test file may land, the QML
-//! rules a change keeps missing by attention, and the seat claim an edit
-//! into an unclaimed seat puts back.
+//! The Write and Edit guards: where a write may land, and the notes an
+//! edit gets after (seat re-claim, QML registration and fonts, doc shape).
 
 use super::payload::string_field;
 use super::seat;
 
-/// PreToolUse(Write|Edit): where the write would land, judged before it
-/// lands. One decision per call — two JSON objects on stdout is not a
-/// payload — so the objections run in order and the first is the answer.
+/// PreToolUse(Write|Edit). One decision per call, so the first objection
+/// is the answer.
 pub(super) fn pre_write(input: &str) -> Result<(), String> {
     let Some(path) = string_field(input, "file_path") else {
         return Ok(());
@@ -27,9 +25,8 @@ pub(super) fn pre_write(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// A new .rs directly under crates/platitude-core/tests/ would become a
-/// second, serialized test binary — integration tests are one binary by
-/// rule (tests/it/).
+/// A new .rs directly under crates/platitude-core/tests/, which would be a
+/// second test binary.
 fn second_test_binary(path: &str) -> Option<String> {
     let rest = path.split("crates/platitude-core/tests/").nth(1)?;
     (rest.ends_with(".rs") && !rest.contains('/')).then(|| {
@@ -42,10 +39,8 @@ fn second_test_binary(path: &str) -> Option<String> {
     })
 }
 
-/// PostToolUse(Write|Edit): the seat re-claim, then the QML rules a
-/// change keeps missing by attention. One JSON object is the whole
-/// answer, so every note this call has rides out in a single
-/// additionalContext.
+/// PostToolUse(Write|Edit). One JSON object is the whole answer, so every
+/// note rides in a single additionalContext.
 pub(super) fn post_write(input: &str) -> Result<(), String> {
     let Some(path) = string_field(input, "file_path") else {
         return Ok(());
@@ -65,13 +60,10 @@ pub(super) fn post_write(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The blocks an edit to this tree's markdown just tore off the list they
-/// belonged to, and the cap an always-loaded document just grew past
-/// (`crate::docs`). Said here because nothing about a torn block looks
-/// wrong in the source — every word is still there, in the order it was
-/// written — so the turn that made it is the only one that still knows
-/// what it meant to say; and because the turn that grew the document is
-/// the one that knows what it added.
+/// The blocks an edit to this tree's markdown just tore off their list,
+/// and the cap an always-loaded document just grew past (`crate::docs`).
+/// Said right after the edit: a torn block looks fine in the source, and
+/// only the turn that made it knows what it meant.
 fn doc_notes(path: &str) -> Vec<String> {
     if !crate::docs::covers(path) {
         return Vec::new();
@@ -79,8 +71,6 @@ fn doc_notes(path: &str) -> Vec<String> {
     let Some(name) = path.rsplit('/').next() else {
         return Vec::new();
     };
-    // A file the edit left unreadable is the editor's problem: only
-    // judge what is actually there.
     let Ok(text) = std::fs::read_to_string(path) else {
         return Vec::new();
     };
@@ -92,15 +82,12 @@ fn doc_notes(path: &str) -> Vec<String> {
         .collect()
 }
 
-/// Rules a QML change keeps missing by attention. A file absent from
-/// qmldir or main.rs silently fails to resolve at runtime (qmldir
-/// directories only expose enumerated types), and the font rules below
-/// dodge review because the wrong form still renders fine on the machine
-/// it was written on.
+/// QML rules a change keeps missing: a file absent from qmldir or main.rs
+/// fails to resolve only at runtime, and a wrong font form renders fine on
+/// the machine that wrote it.
 fn qml_notes(path: &str) -> Result<Vec<String>, String> {
-    // Both QML modules: `src/ui` is `platitude.ui`, `src/auto` is the
-    // verification harness's `platitude.auto`. Each has its own qmldir,
-    // and both are embedded from the one main.rs.
+    // Both QML modules (`platitude.ui`, `platitude.auto`) have their own
+    // qmldir and are embedded from the one main.rs.
     let module = ["src/ui/", "src/auto/"]
         .into_iter()
         .find(|dir| path.contains(&format!("crates/platitude-app/{dir}")));
@@ -115,8 +102,7 @@ fn qml_notes(path: &str) -> Result<Vec<String>, String> {
         .ok_or("qml path has no parent")?;
     let mut notes: Vec<String> = Vec::new();
     let mut missing: Vec<String> = Vec::new();
-    // Missing registries are someone else's layout problem: only judge
-    // the files that are actually there.
+    // Only judge the registries that are actually there.
     if let Ok(qmldir) = std::fs::read_to_string(ui_dir.join("qmldir"))
         && !qmldir.contains(&file_name)
     {

@@ -1,54 +1,35 @@
 //! The machine held still for a measurement: the one hold a measurement
-//! takes on it, and the wait every build here makes on that hold.
+//! takes on it, and the wait every build here makes on that hold
+//! (internal-docs/反映前テストの機械化.md §計測との直列化).
 //!
-//! A real-window measurement and a build cannot share a machine. The
-//! build shows up in the run's host conditions as load that was not the
-//! application, and the run is refused and taken again
-//! (`perf::sampler::Limits`); the measurement's window and its
-//! vsync-stepped bench slow the build in turn. The CPU gate sees that a
-//! build happened only after the run it spoiled, and on a twenty-four
-//! thread machine it cannot tell a build from a browser by the counters
-//! either. What it cannot do is *order* the two, and that is what this
-//! does: `perf` holds the machine still for the length of its runs; a
-//! build announces itself and waits for a hold to lift before it begins;
-//! a hold waits for the builds already announced to finish.
+//! A real-window measurement and a build spoil each other, and the CPU
+//! gate (`perf::sampler::Limits`) sees a build only after the run it
+//! spoiled, so the two are ordered here: `perf` holds the machine still
+//! for its runs; a build announces itself and waits for a hold to lift
+//! before it begins; a hold waits for the builds already announced.
 //!
-//! **Announced where the compiling happens**: every app
-//! build goes through `tree::app_exe` / `tree::shipped_exe` and every
-//! cargo step of `check` and `gate` through `check::run_step`, so a verb
-//! that builds is announced without naming itself — `perf`'s own build
-//! included. The verbs that are heavy without compiling say so
-//! themselves (`verify-ui`, the `linux` container and its image, the
-//! corpus). The pre-shell hook holds a bare `cargo build` a session
-//! types while a hold stands, because that one runs outside any verb
-//! that could wait (hook/still.rs).
+//! Builds are announced where the compiling happens (`tree::app_exe` /
+//! `tree::shipped_exe`, `check::run_step`), so a verb that builds need not
+//! name itself; verbs heavy without compiling announce themselves. A bare
+//! `cargo build` a session types runs outside any verb, so the pre-shell
+//! hook holds it (hook/still.rs).
 //!
-//! **Liveness is a file lock.** The hold and each
-//! announcement are a note beside the repository's own `.git` — which
-//! every worktree shares — and a lock file beside the note, held open by
-//! the process for as long as the note stands. A `try_lock` that fails is
-//! a live holder; one that succeeds is nobody, and the note beside it is
-//! litter cleared by whoever meets it. A killed xtask never unwinds, but
-//! the operating system releases its locks, so nothing is ever waited for
-//! that is not there — and no pid is asked about, so a pid handed to
-//! somebody else cannot stand for a measurement that ended. Every lock
-//! here is let go of by unlocking it ([`crate::locks`]), so a note that
-//! is down is a lock that is free, whatever this process forked in the
-//! meantime.
+//! Liveness is a file lock beside each note (beside the shared `.git`),
+//! held for as long as the note stands: a failing `try_lock` is a live
+//! holder, a succeeding one makes the note litter for whoever meets it.
+//! The OS releases a killed xtask's locks and no pid is asked about, so a
+//! reused pid cannot stand for an ended measurement. Locks are let go of
+//! by unlocking ([`crate::locks`]).
 //!
-//! **A step a verb starts is under its parent's announcement**, and says
-//! nothing of its own ([`UNDER`], set by [`step`] on every child a verb
-//! runs): a gate's verify-ui step that waited on the hold would wait for
-//! a measurement that is waiting for the gate. The container's processes
-//! are under it for the same reason, and because they are not this
-//! machine's.
+//! A step a verb starts is under its parent's announcement ([`UNDER`], set
+//! by [`step`]; the container's processes too): a gate's verify-ui step
+//! that waited on the hold would wait for a measurement waiting for the
+//! gate.
 //!
-//! **What ended when** is left as one more note per process
-//! ([`BUILT`]): an announcement that ends stamps the time under its pid,
-//! which is how a measurement knows whether another process's build ran
-//! between two invocations (`perf::warmth`) — its own is what made the
-//! exe it measures, and a stamp per process is what keeps its own from
-//! covering somebody else's.
+//! Each process stamps when its announcement ended ([`BUILT`]), so a
+//! measurement can tell whether another process's build ran between two
+//! invocations (`perf::warmth`); one stamp per process keeps its own end
+//! from covering somebody else's.
 
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
@@ -78,8 +59,7 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&STILL];
 /// its parent is being waited for by.
 pub(crate) const UNDER: &str = "PGG_STILL_UNDER";
 
-/// The hold's note, beside `.git`; its lock is the same name with
-/// [`LOCK`] for an extension.
+/// The hold's note, beside `.git`.
 const HOLD: &str = "pgg-still";
 
 /// The announcements, beside `.git`: one note per announcing thread, and
@@ -87,17 +67,14 @@ const HOLD: &str = "pgg-still";
 const BUSY: &str = "pgg-busy";
 
 /// The stamps, beside `.git`: one per process, the time its last
-/// announcement ended. Swept of anything older than a day as they are
-/// read — a pid is a name a machine hands out again.
+/// announcement ended, swept after [`STAMP_FOR`] as they are read.
 const BUILT: &str = "pgg-built";
 
-/// The extension of the lock file beside a note.
 const LOCK: &str = "lock";
 
-/// How long a build waits for a hold to lift. A measurement is minutes of
-/// runs, retries included; a hold this old is a run that stopped
-/// answering, and the failure names its process. A ceiling and nothing
-/// finer: a hold changes in nothing while it stands (`crate::wait`).
+/// How long a build waits for a hold to lift: a measurement is minutes of
+/// runs, so a hold this old is a run that stopped answering. A ceiling
+/// only — a hold shows no progress while it stands.
 const HOLD_CEILING: Duration = if cfg!(test) {
     Duration::from_secs(20)
 } else {
@@ -112,15 +89,10 @@ const BUSY_CEILING: Duration = if cfg!(test) {
     Duration::from_secs(30 * 60)
 };
 
-/// How long a name a reader is sweeping is given to come free. A reader
-/// takes a dead run's note or lock file down *under* the lock ([`held`],
-/// [`announcing`], `lanes::a_landing_waits`) — the microseconds of two
-/// calls — and that reader is the one holder a process can meet at a
-/// name of its own, or at the hold's name beside a note nobody has
-/// written. A name still held past this is a holder and not a sweep:
-/// another measurement at the hold's name, a refusal at one's own.
-/// Generous against the microseconds, because the alternative is a build
-/// refused for the leavings of a run that is gone.
+/// How long a name a reader is sweeping is given to come free. A sweep
+/// holds the lock for the microseconds of two calls ([`held`],
+/// [`announcing`]); a name held past this is a real holder. Generous,
+/// because too short refuses a build for the leavings of a dead run.
 pub(crate) const SWEEP: Duration = Duration::from_millis(500);
 
 /// How long a stamp is kept: longer than any warm window it could answer
@@ -131,24 +103,19 @@ const STAMP_FOR: u64 = 24 * 60 * 60;
 /// file comes down with the note.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Name {
-    /// One every process here opens: the hold. Removing a lock file at
-    /// such a name stops it being one lock — a waiter that opened it
-    /// before the removal goes on locking a file that is no longer at
-    /// that name, the next holder makes a second file there and locks
-    /// that, and the two hold nothing against each other. So it stays:
-    /// one file per repository, which nothing accumulates, and a lock
-    /// nobody holds beside a note that is gone reads as free anyway.
+    /// One every process here opens: the hold. It stays — removed, a
+    /// waiter that opened it before would lock a file no longer at the
+    /// name while the next holder locks a new one there, two locks that
+    /// hold nothing against each other.
     Shared,
-    /// One nothing else writes: an announcement, named for the process
-    /// and the announcement. It goes with the note, and a killed
-    /// process's is cleared by whoever next reads them ([`live_notes`]).
+    /// One nothing else writes: an announcement. It goes with the note,
+    /// and a killed process's is cleared by the next reader
+    /// ([`live_notes`]).
     Own,
 }
 
 /// A note and its lock, held for as long as the note stands. Dropping it
-/// removes the note, and the lock file where that name is this process's
-/// own ([`Name`]); the lock itself is let go of after them, and with the
-/// process however it ends.
+/// removes the note, and the lock file where the name is [`Name::Own`].
 #[derive(Debug)]
 struct Held {
     note: PathBuf,
@@ -177,8 +144,7 @@ pub(crate) struct Hold {
 
 /// A build announced, withdrawn when dropped — and stamped as ended
 /// ([`BUILT`]). Empty for the reasons a [`Hold`] is, and for a build this
-/// thread already announced: the verb's announcement covers the compile
-/// inside it.
+/// thread already announced.
 #[derive(Debug)]
 pub(crate) struct Busy {
     _announced: Option<Announced>,
@@ -192,9 +158,8 @@ struct Announced {
 
 impl Drop for Announced {
     fn drop(&mut self) {
-        // A plain file where the stamps' directory goes is a stamp of
-        // every process at once, which nothing reads: cleared, so the
-        // directory can stand there.
+        // A plain file where the stamps' directory goes is cleared, so
+        // the directory can stand there.
         if let Some(stamps) = self.stamp.parent()
             && stamps.is_file()
         {
@@ -219,9 +184,9 @@ impl Drop for Announced {
 
 thread_local! {
     /// Whether this thread has an announcement standing, so a build
-    /// inside an announced verb does not announce again. Per thread:
-    /// the gate runs its two sides in two threads, and each is its
-    /// own announcement.
+    /// inside an announced verb does not announce again. Per thread
+    /// because the gate's two sides are two threads, each its own
+    /// announcement.
     static ANNOUNCING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -230,7 +195,7 @@ static ANNOUNCEMENTS: AtomicUsize = AtomicUsize::new(0);
 
 /// Holds the machine still for `what`, once the builds already announced
 /// have finished. Refused while another hold stands: two measurements
-/// spoil each other as surely as a build spoils one.
+/// spoil each other too.
 pub(crate) fn hold(tree: &Path, what: &str) -> Result<Hold, String> {
     match common_dir(tree) {
         Some(common) => hold_in(&common, what, &|| {}),
@@ -247,29 +212,20 @@ pub(crate) fn busy(tree: &Path, what: &str) -> Result<Busy, String> {
 }
 
 /// Waits until no measurement holds the machine still, and announces
-/// nothing.
+/// nothing: what a unit does before it takes a ticket from the machine's
+/// budget (internal-docs/反映前テストの機械化.md §機械の予算と優先キュー).
+/// The announcement still happens inside the step (`busy`), which waits
+/// out a hold that arrives in between.
 ///
-/// **What a unit does before it takes room out of the machine's budget**
-/// (`crate::budget`). A ticket taken first would be held by something
-/// that cannot start — the ledger would say a unit is running where
-/// nothing is, and a reader could not tell a queue from a stall
-/// (internal-docs/反映前テストの機械化.md §機械の予算と優先キュー). The
-/// announcement itself still happens inside the step (`busy`), where it
-/// belongs; a hold that arrives in between is waited out there.
-///
-/// Silent under a parent's announcement, as `busy` is: a step of a verb
-/// is not a second thing to wait for.
-/// Beside a `.git` the caller already knows, because it is asked once
-/// per unit and the path comes free that way: the pool holds the
-/// directory its ledger stands in, and the hold stands beside it
+/// Silent under a parent's announcement, as `busy` is. Takes the `.git`
+/// the caller already knows, since it is asked once per unit
 /// (`budget::Pool::admit_once_the_machine_is_free`).
 pub(crate) fn until_free_in(common: &Path, what: &str) -> Result<(), String> {
     until_free_in_unless(common, what, &|| false).map(|_free| ())
 }
 
 /// The same, given up the moment `stop` says so: `Ok(false)` is a wait
-/// that ended with the machine still held — what a gate that has gone
-/// red asks for, since it has nothing left to run (`budget::Pool::admit_unless`).
+/// that ended with the machine still held (`budget::Pool::admit_unless`).
 pub(crate) fn until_free_in_unless(
     common: &Path,
     what: &str,
@@ -283,8 +239,8 @@ pub(crate) fn until_free_in_unless(
     wait_for_hold(&common.join(HOLD), what, &mut wait, &mut said, &|| {}, stop)
 }
 
-/// This workspace, and the build in it announced: the two lines a verb
-/// that is heavy without compiling opens with, as one.
+/// This workspace, and the build in it announced: how a verb heavy
+/// without compiling opens.
 pub(crate) fn announced(what: &str) -> Result<(PathBuf, Busy), String> {
     let root = crate::tree::workspace_root();
     let busy = busy(&root, what)?;
@@ -297,16 +253,14 @@ pub(crate) fn step(command: &mut Command) {
 }
 
 /// Whether an announcement of another process ended after `secs` — a
-/// build that ran between two measurements, which is what evicts the
-/// cache the second one would otherwise trust (`perf::warmth`). This
-/// process's own ends do not count: a measurement's own build is what
-/// made the exe it measures.
+/// build between two measurements evicts the cache the second would
+/// trust (`perf::warmth`). This process's own ends do not count: its
+/// build made the exe it measures.
 pub(crate) fn build_ended_since(tree: &Path, secs: u64) -> bool {
     common_dir(tree).is_some_and(|common| stamps_ended_since(&common.join(BUILT), secs))
 }
 
-/// The stamps under `stamps` read for another process's end after
-/// `secs`, sweeping the ones a day old on the way.
+/// [`build_ended_since`] over `stamps`, sweeping the ones a day old.
 fn stamps_ended_since(stamps: &Path, secs: u64) -> bool {
     let Ok(entries) = std::fs::read_dir(stamps) else {
         return false;
@@ -366,9 +320,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// The repository's shared `.git`, which every worktree of it resolves to
-/// the same — and so the one place a hold is seen from every seat. None
-/// under a parent's announcement, where there is nothing to say.
+/// The repository's shared `.git` — the one place every seat sees a hold.
+/// None under a parent's announcement.
 fn common_dir(tree: &Path) -> Option<PathBuf> {
     if std::env::var_os(UNDER).is_some() {
         return None;
@@ -379,9 +332,8 @@ fn common_dir(tree: &Path) -> Option<PathBuf> {
 fn hold_in(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Hold, String> {
     let note = common.join(HOLD);
     let lock = open_lock(&lock_of(&note))?;
-    // Tried past the instant a reader holds the lock while it takes a
-    // dead hold's note down ([`held`]): a lock still held past that is a
-    // measurement's, and the note beside it says whose.
+    // Tried for a sweep's span ([`held`]): a lock held past it is a
+    // measurement's.
     let mut tries = Wait::new(what, Budget::whole(SWEEP), TRY_AGAIN);
     loop {
         match lock.try_lock() {
@@ -407,8 +359,7 @@ fn hold_in(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Hold, String>
     }
     std::fs::write(&note, Note::now(what).text())
         .map_err(|e| format!("could not write the hold at {}: {e}", note.display()))?;
-    // Dropped on the way out of a wait that failed, so a hold that never
-    // got its quiet does not stand in everybody's way.
+    // Made before the wait, so a wait that fails lifts it.
     let hold = Hold {
         _held: Some(Held {
             note,
@@ -420,7 +371,6 @@ fn hold_in(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Hold, String>
     Ok(hold)
 }
 
-/// Waits until no announced build is still running.
 fn wait_for_builds(busy: &Path, what: &str, polled: &dyn Fn()) -> Result<(), String> {
     let mut wait = Wait::new(
         format!("{what} holding the machine still"),
@@ -494,8 +444,7 @@ fn announce(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Announced, S
             name: Name::Own,
             _lock: lock,
         };
-        // A hold that came between the wait and the announcement wins:
-        // the measurement is the one that cannot share.
+        // A hold that came between the wait and the announcement wins.
         if held(&hold, "a measurement")?.is_none() {
             return Ok(Announced {
                 _held: mine,
@@ -506,16 +455,10 @@ fn announce(common: &Path, what: &str, polled: &dyn Fn()) -> Result<Announced, S
     }
 }
 
-/// The lock beside `note`, held and standing at its own name. Both,
-/// because the two are not one step. A lock file at this name can be a
-/// dead run's — a pid is handed out again, and the first announcement of
-/// every run is numbered the same — and the reader that sweeps one takes
-/// it down under its lock ([`announcing`]). So an announcement meets the
-/// file held, or comes to hold a file the reader has already taken from
-/// the name, and neither is the lock it needs: a note written beside the
-/// second stands with nothing beside it, which the next reader clears as
-/// a dead run's, and the build is gone from under a hold about to stand.
-/// Either way the name is opened again.
+/// The lock beside `note`, held and still at its own name. A lock file
+/// here can be a dead run's that a reader is sweeping under its lock
+/// ([`announcing`]), so a file found held, or held after the name went,
+/// is opened again (rules-refs/core.md「lock ファイルは握ったまま消し」).
 fn lock_beside(note: &Path) -> Result<Locked, String> {
     lock_beside_polled(note, &|| {})
 }
@@ -535,8 +478,7 @@ fn lock_beside_polled(note: &Path, polled: &dyn Fn()) -> Result<Locked, String> 
                 if path.exists() {
                     return Ok(lock);
                 }
-                // The name went while this held the file: let go of and
-                // opened again, the sweep being microseconds long.
+                // The name went while this held the file: opened again.
                 tries.saw("the lock granted on a file no longer at the name");
             }
             Err(TryLockError::WouldBlock) => tries.saw("the lock held"),
@@ -590,12 +532,10 @@ fn wait_for_hold(
     }
 }
 
-/// Who holds the lock beside `note`, or nobody. A note whose lock nobody
-/// holds is litter, and is taken down here — while this probe holds the
-/// lock, so a holder arriving this instant writes its note after the
-/// removal and not before. `what` is what the asker knows the writer of
-/// this kind of note to be, for the window where the lock is held and
-/// the note is not written yet.
+/// Who holds the lock beside `note`, or nobody. A note nobody holds is
+/// litter, taken down while this holds the lock, so a holder arriving
+/// now writes its note after the removal. `what` names the writer while
+/// the lock is held and the note not yet written.
 fn held(note: &Path, what: &str) -> Result<Option<Note>, String> {
     if !note.exists() {
         return Ok(None);
@@ -603,9 +543,8 @@ fn held(note: &Path, what: &str) -> Result<Option<Note>, String> {
     let lock = open_lock(&lock_of(note))?;
     match lock.try_lock() {
         Ok(()) => {
-            // Let go of by unlocking at the end of this arm, so the
-            // instant somebody else has to wait out is these two calls
-            // and not a forked child's scheduling ([`SWEEP`]).
+            // Unlocked, not just closed, at the end of this arm, so
+            // others wait out these two calls ([`SWEEP`]) and not a fork.
             let _lock = Locked::new(lock);
             if let Err(error) = std::fs::remove_file(note)
                 && error.kind() != std::io::ErrorKind::NotFound
@@ -652,19 +591,11 @@ fn live_notes(busy: &Path) -> Vec<Note> {
 }
 
 /// A lock file whose note is not there: a build announcing itself this
-/// instant, or a killed process's leavings. [`announce`] takes its lock
-/// before it writes its note, so a lock somebody holds beside no note is
-/// the first of the two, and is a build under way — its note stands a
-/// moment later, and the hold that took this for nothing would already
-/// be standing beside it.
-///
-/// One nobody holds is litter, taken down here while this holds the lock
-/// — as [`held`] takes a note down. An announcer arriving at that name
-/// this instant is between its own open and its own lock, and a lock
-/// file removed from under it there is one it goes on holding under no
-/// name: the note it then writes stands with nothing beside it, the next
-/// reader takes that note for a dead process's and clears it, and the
-/// build is gone from under a hold about to stand.
+/// instant ([`announce`] locks before it writes), or a killed process's
+/// leavings. One somebody holds is a build under way — missing it would
+/// let a hold stand beside it. One nobody holds is litter, taken down
+/// while this holds the lock, as [`held`] does
+/// (rules-refs/core.md「lock ファイルは握ったまま消し」).
 fn announcing(lock: &Path) -> Option<Note> {
     let file = File::options().read(true).write(true).open(lock).ok()?;
     match file.try_lock() {
@@ -674,8 +605,7 @@ fn announcing(lock: &Path) -> Option<Note> {
             None
         }
         Err(TryLockError::WouldBlock) => Some(Note::unreadable("a build")),
-        // Nothing could be read about it: left where it is, for the
-        // reader that can.
+        // Left for a reader that can probe it.
         Err(TryLockError::Error(_)) => None,
     }
 }
@@ -729,9 +659,8 @@ impl Note {
     }
 
     /// A lock somebody holds beside a note not yet written, or not
-    /// written the way this reads it. The note itself says nothing, so
-    /// `what` is the asker's own word for whoever writes this kind of
-    /// note: a measurement, a build, a gate.
+    /// written the way this reads it. `what` is the asker's word for
+    /// whoever writes this kind of note.
     pub(crate) fn unreadable(what: &str) -> Self {
         Self {
             pid: 0,
@@ -740,10 +669,8 @@ impl Note {
         }
     }
 
-    /// Whose note this is. What it is good for is deciding whether a
-    /// process is the one somebody else named — the note alone never
-    /// says a holder is alive, which is the lock's answer
-    /// (`linux::runner::owned_by_the_gate`).
+    /// Whose note this is — never whether its holder is alive, which is
+    /// the lock's answer (`linux::runner::owned_by_the_gate`).
     pub(crate) fn pid(&self) -> u32 {
         self.pid
     }
@@ -791,8 +718,7 @@ mod tests {
         Yard::new(&format!("still-{name}"))
     }
 
-    /// The waits under test say every look they take on a channel, so a
-    /// look is proved by the word of it.
+    /// Every look the wait under test takes is sent on the channel.
     fn polls() -> (std::sync::mpsc::Receiver<()>, impl Fn()) {
         let (said, looks) = std::sync::mpsc::channel();
         (looks, move || {
@@ -800,9 +726,8 @@ mod tests {
         })
     }
 
-    /// Waits for the first look: a wait that has looked once is a wait
-    /// that found the hold up. Under the suite's budget, so a wait that
-    /// never looks is named.
+    /// Waits for the first look: a wait that has looked once found the
+    /// other side up.
     fn until_polled(looks: &std::sync::mpsc::Receiver<()>) {
         crate::wait::heard("the wait under test", "a look", looks);
     }
@@ -868,11 +793,8 @@ mod tests {
         );
     }
 
-    /// The hold's lock file stands at a name every process opens, so it
-    /// outlives the hold that took it. Taken away instead, it would stop
-    /// being one lock: the waiter here would hold a file that is no
-    /// longer at that name while the next hold made a second one there,
-    /// and two measurements would run at once.
+    /// Binds `Name::Shared`: a hold's lock file removed with the hold
+    /// would let two measurements run at once.
     #[test]
     fn the_lock_a_hold_frees_is_the_one_the_next_hold_is_refused_by() {
         let dir = common("one-hold");
@@ -888,18 +810,10 @@ mod tests {
         drop(waiter);
     }
 
-    /// What the unlock is for. A child handed the hold's lock
-    /// description outright stands in for one a fork hands over: the
-    /// hold lets the lock go and its note comes down while that
-    /// description is still held by somebody that answers nothing about
-    /// it. The unlock reaches the description itself, so the waiter has
-    /// the lock at once — a close would have left it refused by the
-    /// child until the child was gone.
-    ///
-    /// Linux, where `flock(2)` promises the inheritance and where a
-    /// carried lock is seen at all; the gate's own lock is netted for
-    /// the same release from inside (`lanes`) and from outside
-    /// (`gate::stamps`).
+    /// What the unlock is for: a child handed the hold's lock description
+    /// (as a fork would be) must not keep the lock past the hold — a
+    /// close would. Linux only, where `flock(2)` promises the inheritance;
+    /// the gate's lock has the same net (`lanes`, `gate::stamps`).
     #[test]
     #[cfg(target_os = "linux")]
     fn a_lock_let_go_of_is_free_though_a_forked_child_holds_the_description() {
@@ -938,10 +852,8 @@ mod tests {
         drop(waiter);
     }
 
-    /// A killed xtask never unwinds, so a note can be left behind — but
-    /// its lock is released with its process, and a note nobody holds the
-    /// lock beside is cleared by whoever meets it, as is a lock file whose
-    /// note is gone.
+    /// A killed xtask leaves its note but not its lock: such a note, and a
+    /// lock file whose note is gone, are cleared by whoever meets them.
     #[test]
     fn a_note_nobody_holds_the_lock_beside_is_litter() {
         let dir = common("litter");
@@ -962,9 +874,6 @@ mod tests {
         assert!(!dir.join(BUSY).join("1-9.lock").exists());
     }
 
-    /// An announcement locked but not yet readable is read
-    /// as what the asker was looking for — a build under
-    /// way.
     #[test]
     fn an_announcement_not_yet_readable_is_named_a_build() {
         let dir = common("half-written");
@@ -985,12 +894,9 @@ mod tests {
         drop(held);
     }
 
-    /// The instant before that one: the lock is taken and the note is
-    /// not written yet, so a lock file is all that stands. It is not the
-    /// litter a killed process leaves — a build is announcing itself
-    /// there, and a lock file taken from under it would leave the note
-    /// it writes next with nothing beside it, which the next reader
-    /// clears as a dead process's.
+    /// The lock is taken and the note not yet written. Taking that lock
+    /// file down would leave the note written next with no lock beside
+    /// it, cleared by the next reader as a dead process's.
     #[test]
     fn a_lock_file_held_beside_no_note_is_a_build_announcing_itself() {
         let dir = common("announcing");
@@ -1014,12 +920,10 @@ mod tests {
         drop(held);
     }
 
-    /// The other side of that instant. A lock file at an announcement's
-    /// name can be a dead run's — a pid comes round again, and every
-    /// run's first announcement is numbered the same — and the reader
-    /// sweeping one holds it while it takes it down. The announcement
-    /// waits that out and takes the name: a build refused there would be
-    /// a build refused for the leavings of a run that is gone.
+    /// A lock file at an announcement's name can be a dead run's (a pid
+    /// comes round, and every run's first announcement is numbered the
+    /// same), held by the reader sweeping it. The announcement waits that
+    /// out rather than refusing a build for a gone run's leavings.
     #[test]
     fn an_announcement_waits_out_the_reader_sweeping_its_name() {
         let dir = common("swept-name");
@@ -1031,9 +935,8 @@ mod tests {
             .expect("held, as the reader sweeping it holds it");
         let sweeping = Mutex::new(Some(sweeping));
         let lock = lock_beside_polled(&note, &|| {
-            // Taken down under the lock and let go of, the way
-            // `announcing` sweeps it — on the first look again, so what
-            // is under test is the try after it.
+            // Swept as `announcing` does, on the first look again, so the
+            // try after it is what is under test.
             if let Some(held) = sweeping
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -1060,9 +963,6 @@ mod tests {
         assert!(refused.contains("perf (pid"), "{refused}");
     }
 
-    /// A verb's announcement covers the compiles inside it: the same
-    /// thread announcing again gets nothing to withdraw, and only the
-    /// outer withdrawal takes the note down.
     #[test]
     fn a_build_inside_an_announced_verb_does_not_announce_again() {
         let dir = common("nested");
@@ -1076,9 +976,6 @@ mod tests {
         assert_eq!(standing(&dir), (0, 0));
     }
 
-    /// Only another process's build ended since `secs` is a build that
-    /// cooled the cache; this process's own made the exe being measured,
-    /// and a stamp a day old is a pid that may be somebody else's by now.
     #[test]
     fn only_another_processes_build_counts_as_ended_since() {
         let dir = common("stamps");
@@ -1104,8 +1001,6 @@ mod tests {
         assert!(!stamps.join("2").exists());
     }
 
-    /// A plain file standing where the stamps' directory goes is cleared
-    /// by the first announcement that ends, and the stamp lands under it.
     #[test]
     fn a_file_where_the_stamps_directory_goes_is_cleared() {
         let dir = common("stamp-file");

@@ -12,13 +12,12 @@ use super::sides::run_sides;
 use super::stamp::{CommitStamp, Store};
 
 /// Runs what is not cached, one thread per side and two groups within a
-/// side ([`side`]), and stamps the commit when both sides came back with
-/// nothing red. The first red stops the run on both sides ([`halt`]);
-/// under `keep_going` a group stops at its first red step — except among
-/// its verbs, which run to the end of their block `jobs` at a time
-/// ([`verbs`]) — and everything else finishes, so its green steps are
-/// stamped and need not run again. A `landing`'s units are handed the
-/// machine ahead of any other gate's (`budget`).
+/// side (`sides::side`), and stamps the commit when both sides came back
+/// with nothing red. The first red stops both sides ([`Halt`]); under
+/// `keep_going` a group stops at its first red step — its verbs still run
+/// to the end of their block, `jobs` at a time (`sides::verbs`) — and the
+/// rest finishes, so its green steps are stamped and need not run again.
+/// A `landing`'s units get the machine ahead of other gates' (`budget`).
 pub(super) fn execute(
     plan: &Plan,
     jobs: usize,
@@ -30,10 +29,8 @@ pub(super) fn execute(
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     refuse_what_no_stamp_could_answer_for(plan)?;
-    // Yesterday's runs go on their way out: a verb's repositories and
-    // pictures are left where a person can look at them, and nothing
-    // else ever takes them away (measured: sixty thousand of them, six
-    // gigabytes, in three days).
+    // A verb's repositories and pictures are left for a person to look
+    // at, and nothing else ever takes them away.
     crate::verify::sweep_yesterdays_runs();
     // What the census said before the verbs ran, so that a line one of
     // them rewrote can be told from the file as it was committed.
@@ -72,10 +69,9 @@ pub(super) fn execute(
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     let census_now = census::bytes(&plan.dir)?;
-    // The bytes answer whether the tree moved (a header the sources
-    // changed moves it too, and the next gate would refuse to run over
-    // that); the sets answer what moved, which is what a reader of a
-    // whole-file diff cannot get at.
+    // The bytes answer whether the tree moved (a changed header too,
+    // which the next gate would refuse to run over); the sets answer
+    // what moved.
     let rewrote = census_now != census_before;
     *shift = Shift::between(&Census::read(&census_before)?, &Census::read(&census_now)?);
     spent.census_after = at.elapsed();
@@ -95,10 +91,9 @@ pub(super) fn execute(
     if rewrote {
         return Ok(Gated::CensusMoved);
     }
-    // A daily run over a commit the full gate already stamped keeps the
-    // full stamp: what it ran is a part of what that one ran, and
-    // writing `full=false` over it would send the next landing back
-    // through a container side that has already answered.
+    // A host-only run keeps a full stamp already on the commit: writing
+    // `full=false` over it would send the next landing back through a
+    // container side that has already answered.
     if plan.host_only
         && store
             .commit(&plan.head)
@@ -137,9 +132,9 @@ pub(super) fn execute(
     Ok(Gated::Stamped)
 }
 
-/// A tree with uncommitted changes (a stamp names a commit, and this is
-/// not one) and a component no verb shows: nothing a run could answer
-/// for, said before anything runs.
+/// A tree with uncommitted changes, a graph that cannot read it whole,
+/// and a component no verb shows: nothing a run could answer for, said
+/// before anything runs.
 fn refuse_what_no_stamp_could_answer_for(plan: &Plan) -> Result<(), String> {
     let here = plan.dir.display().to_string();
     let dirty = crate::subprocess::git_query(&here, &["status", "--porcelain"])
@@ -150,10 +145,8 @@ fn refuse_what_no_stamp_could_answer_for(plan: &Plan) -> Result<(), String> {
              first:\n{dirty}"
         ));
     }
-    // Not the change's fault, and not a thing a step could answer for:
-    // an edge the graph failed to draw is one every selection through it
-    // is short by, so a stamp written over this tree would be saying more
-    // than the run knows (`graph::complaints`).
+    // An edge the graph failed to draw is one every selection through it
+    // is short by (`graph::complaints`).
     if !plan.complaints.is_empty() {
         return Err(format!(
             "the graph cannot read this tree whole, so no selection off it can be stamped:\n{}",

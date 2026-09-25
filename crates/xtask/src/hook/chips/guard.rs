@@ -8,10 +8,9 @@ use super::at_hand;
 use super::ledger::{load, store};
 use crate::hook::payload::{deny, printable, string_field};
 
-/// The mark a chip wears when it is a question:
-/// the user decides whether the work is wanted at all, and may decide it
-/// is not. It sits right after the number (`3. [任意] …`) and is spelled
-/// exactly this way, because what it buys is a list read at a glance.
+/// The mark a chip wears when it asks the user to decide. It sits right
+/// after the number (`3. [任意] …`) and has one spelling, so the list reads
+/// at a glance.
 const OPTIONAL: &str = "[任意]";
 
 /// The directories a path is recognized by when it names no file at all:
@@ -43,15 +42,13 @@ pub(crate) fn pre_spawn(input: &str) -> Result<(), String> {
         return Ok(());
     }
     let live = load(input);
-    // A re-stack is the same chip under a new number, and it is how the
-    // set is renumbered at all — nothing below applies to it. The
-    // duplicate it leaves is cleared by the dismiss that follows.
+    // A re-stack (same body, new number) is how the set is renumbered, so
+    // nothing below applies; the dismiss that follows clears the duplicate.
     if live.iter().any(|chip| chip.body == body) {
         return Ok(());
     }
     let claimed = targets(&words(asked));
-    // Asked before anything about the list is: a chip over work this
-    // session is already holding is refused, whatever its number.
+    // Before the list: work this session holds is refused whatever the number.
     if let Some(objection) = at_hand::objection(&session_cwd(input), &claimed) {
         deny(&objection);
         return Ok(());
@@ -101,12 +98,9 @@ pub(crate) fn post_chip(input: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Stop: a turn ends only on a list that reads by its numbers.
-///
-/// It is judged here because a renumbering
-/// passes through states no single call can approve — the replacement is
-/// stacked before the chip it replaces is dismissed, so the set is
-/// briefly two of everything. What matters is where it comes to rest.
+/// Stop: a turn ends only on a live set that reads 1..N. Judged here, not
+/// per call: a renumbering stacks each replacement before dismissing the
+/// old one, so the set passes through duplicates.
 pub(crate) fn stop(input: &str) -> Result<bool, String> {
     let live = load(input);
     let problems = problems(&live);
@@ -172,9 +166,8 @@ fn spawned(input: &str) {
     }
 }
 
-/// Drops a chip the session withdrew. A dismiss the harness refused (the
-/// user got there first) drops it too: either way it is no longer a chip
-/// waiting to be run.
+/// Drops a chip the session withdrew — also when the harness refused the
+/// dismiss (the user got there first).
 fn dismissed(input: &str) {
     let Some(id) = id_in(section(input, "\"tool_input\"")) else {
         return;
@@ -187,7 +180,7 @@ fn dismissed(input: &str) {
     }
 }
 
-/// What is wrong with the live set, in words. Pure so the tests can ask.
+/// What is wrong with the live set, in words.
 fn problems(live: &[Chip]) -> Vec<String> {
     if live.is_empty() {
         return Vec::new();
@@ -232,10 +225,7 @@ fn numbered(title: &str) -> Option<(usize, String, bool)> {
     (priority >= 1 && !body.is_empty()).then(|| (priority, body.to_string(), optional))
 }
 
-/// What two chips over one path are told to do about it. There is no one
-/// answer: it turns on what each of them weighs, because a chip asking
-/// the user to decide and a chip proposing work can be neither folded
-/// together nor ordered the same way.
+/// What two chips over one path are told to do, by what each weighs.
 fn resolution(claimed: bool, held: bool) -> &'static str {
     match (claimed, held) {
         (true, true) => {
@@ -259,11 +249,10 @@ fn resolution(claimed: bool, held: bool) -> &'static str {
     }
 }
 
-/// Whether a title spelled the weight mark some other way, or reached
-/// for a mark of its own — a tag nobody else writes is a column only
-/// this chip has. The right spelling is off the title by now, so a `[…]`
-/// still leading it is a second one; 任意 is looked for in the head
-/// alone, since a chip may use the word in its own sentence further on.
+/// Whether a title spelled the weight mark some other way, or invented a
+/// mark of its own. The right spelling is off the title by now, so any
+/// leading `[…]` is wrong; 任意 is looked for in the head alone, since a
+/// chip may use the word further on.
 fn misspelt_mark(body: &str) -> bool {
     body.starts_with(['[', '［']) || body.chars().take(8).collect::<String>().contains("任意")
 }
@@ -271,17 +260,14 @@ fn misspelt_mark(body: &str) -> bool {
 /// The shapes a title takes when it asks and does not end on the asking.
 const QUESTIONS: [&str; 4] = ["かどうか", "どちらが", "どちらを", "べきか"];
 
-/// Whether a title asks a question. The user answers a
-/// question and may answer no, which is the whole of what the mark
-/// carries — a chip nobody is recommending yet.
+/// Whether a title asks a question, which is what the mark is for.
 fn asks(body: &str) -> bool {
     let body = body.trim_end_matches(['?', '？', '。', '.', ' ']);
     body.ends_with('か') || QUESTIONS.iter().any(|shape| body.contains(shape))
 }
 
-/// The paths a chip's words name. A chip prompt is written to stand
-/// alone, so the files it will work on are in it — which is the only
-/// thing two chips can be compared on before either has run.
+/// The paths a chip's words name — a standalone prompt names its files,
+/// the only thing two chips can be compared on before either has run.
 fn targets(text: &str) -> BTreeSet<String> {
     text.split(|c: char| c.is_whitespace() || "\"'`(),、。「」【】[]<>|".contains(c))
         .filter_map(one_target)
@@ -304,10 +290,8 @@ fn one_target(token: &str) -> Option<String> {
     (names_a_file || ROOTS.contains(&segments[0])).then(|| path.to_string())
 }
 
-/// The targets two claims both cover — one chip's against another's, or
-/// a chip's against what this session has open (`at_hand`). A directory
-/// covers what is under it: a chip over `crates/platitude-app/src/ui`
-/// and a chip over one .qml inside it are the same collision.
+/// The targets two claims both cover — chip against chip, or against what
+/// this session has open (`at_hand`). A directory covers what is under it.
 pub(super) fn shared(claimed: &BTreeSet<String>, held: &BTreeSet<String>) -> Vec<String> {
     claimed
         .iter()
@@ -326,7 +310,6 @@ fn covers(wide: &str, narrow: &str) -> bool {
             .is_some_and(|rest| rest.starts_with('/'))
 }
 
-/// The words of a chip: its title, its one-line summary and its prompt.
 fn words(asked: &str) -> String {
     ["title", "tldr", "prompt"]
         .iter()
@@ -335,27 +318,23 @@ fn words(asked: &str) -> String {
         .join(" ")
 }
 
-/// The payload from `key` on. Tool input and tool response carry fields
-/// under the same names, and a chip's own prompt can quote either —
-/// reading from the section that owns the field keeps a quoted word out
-/// of the answer.
+/// The payload from `key` on. Input and response share field names, and a
+/// prompt can quote either — reading from the owning section keeps a
+/// quoted word out of the answer.
 fn section<'a>(input: &'a str, key: &str) -> &'a str {
     input.find(key).map_or(input, |at| &input[at..])
 }
 
-/// Where the session asking is standing, read from the payload's own
-/// half: a chip may carry a `cwd` of its own
-/// for another repository, and the first `"cwd"` in the input is the
-/// answer `string_field` gives.
+/// The session's cwd, read before `tool_input`: a chip may carry a `cwd`
+/// of its own, and `string_field` answers the first one.
 fn session_cwd(input: &str) -> String {
     let payload = input.split("\"tool_input\"").next().unwrap_or(input);
     string_field(payload, "cwd").unwrap_or_default()
 }
 
-/// The task id in `input`, however the harness quoted it. An MCP result
-/// arrives as text with its JSON escaped inside, so the id is read as
-/// the stable part — the first run of id characters after the key —
-/// past whatever quoting sits around it.
+/// The task id in `input`, however the harness quoted it: an MCP result
+/// carries its JSON escaped inside text, so the id is the first run of id
+/// characters after the key.
 fn id_in(input: &str) -> Option<String> {
     const KEY: &str = "task_id";
     let tail = &input[input.find(KEY)? + KEY.len()..];
@@ -367,9 +346,8 @@ fn id_in(input: &str) -> Option<String> {
     (!id.is_empty()).then_some(id)
 }
 
-/// Where the live set stands, for the refusal that asks for a number:
-/// a session that cannot see the list picks one that is taken and
-/// spends a second call on the same chip.
+/// The live set, for the refusal that asks for a number — without it a
+/// session picks a taken one and spends a second call.
 fn standing(live: &[Chip]) -> String {
     if live.is_empty() {
         return "Nothing is live, so this one is 1.".to_string();
@@ -453,8 +431,6 @@ mod tests {
         assert_eq!(numbered("3. "), None);
     }
 
-    /// The refusal that asks for a number says which ones are taken, so
-    /// the chip is stacked again once rather than twice.
     #[test]
     fn the_refusal_that_asks_for_a_number_names_the_live_ones() {
         assert_eq!(standing(&[]), "Nothing is live, so this one is 1.");
@@ -484,7 +460,7 @@ mod tests {
     fn holds_the_mark_to_one_spelling_and_asks_for_it_on_a_question() {
         assert!(misspelt_mark("(任意) 余白を詰める"));
         assert!(misspelt_mark("任意: 余白を詰める"));
-        // A tag of the chip's own invention is a column only it has.
+        // A mark of the chip's own invention.
         assert!(misspelt_mark("[要判断] 余白を詰める"));
         assert!(misspelt_mark("［任意］余白を詰める"));
         // Stripped already when the spelling was right, and a chip may
@@ -511,7 +487,7 @@ mod tests {
         assert!(resolution(false, true).contains("[任意]"));
         assert_eq!(resolution(true, false), resolution(false, true));
         // Two questions are one question; two proposals are merged or
-        // serialized. Neither borrows the other's answer.
+        // serialized.
         assert!(resolution(true, true).contains("one chip"));
         assert_ne!(resolution(true, true), resolution(false, false));
         assert_ne!(resolution(false, false), resolution(true, false));

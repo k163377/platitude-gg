@@ -1,22 +1,12 @@
 //! The line each verb has to be caught saying, for the verbs whose
-//! failure the camera cannot see (`Outcome::must_say`).
+//! failure the camera cannot see (`Outcome::must_say`). A verb that fails
+//! invisibly is one row here.
 //!
-//! A table: a verb that fails invisibly is one row here, and the run
-//! stays about running.
-//!
-//! The rows are data, so the tables can be walked, and the two walks in
-//! `tests` are what let them be split by subject at all.
-//! `no_verb_is_claimed_twice` catches a verb written
-//! onto two of the files, which a chain of `match`es would hand to
-//! whichever was asked first without a word. And
-//! `every_verb_is_one_the_drivers_dispatch` catches the failure this
-//! table has in the field — a verb renamed on the QML side leaves a key
-//! nothing reaches, `must_say` goes quiet, and the run is judged on a
-//! picture that reads the same either way (rules-refs/app-ui.md).
-//!
-//! Which file a verb sits in carries nothing of its own: the tables are
-//! walked in the order [`TABLES`] lists them and each verb stands on
-//! one, so a verb that moves house changes no answer. Grep the verb.
+//! The rows are data so `tests` can walk them: `no_verb_is_claimed_twice`
+//! is what lets the tables be split by subject (a chain of `match`es
+//! would answer a doubled verb silently), and
+//! `every_verb_is_one_the_drivers_dispatch` catches a verb renamed on the
+//! QML side. Which file a verb sits in carries no meaning — grep the verb.
 
 mod diff;
 mod fetch;
@@ -42,11 +32,9 @@ pub(super) enum Arg {
     Starts(&'static str),
     Ends(&'static str),
     Has(&'static str),
-    /// Not the argument at all: **which repository the run was given**.
-    /// Two runs of one verb that differ only in what the preset built are
-    /// two states, and a row keyed on the argument alone claims one line
-    /// for both — which is a pair that goes on passing after the two stop
-    /// telling each other apart (`corner`, measured).
+    /// Not the argument: which preset the run was given. Two runs that
+    /// differ only in preset are two states, and one line for both would
+    /// go on passing after they stop differing (`corner`).
     WithPreset(&'static str),
 }
 
@@ -64,11 +52,8 @@ impl Arg {
 }
 
 /// One verb's line, and the arguments that want a different one.
-///
-/// `plain` is a field, and the compiler asks for it — a
-/// verb that answered no argument at all would put
-/// `must_say` back to `None`, which is the one failure that
-/// passes.
+/// `plain` is required so every argument gets a line: `None` from
+/// `must_say` is the one failure that passes.
 pub(super) struct Verb {
     pub(super) name: &'static str,
     /// The arguments with a line of their own, narrowest first.
@@ -95,10 +80,8 @@ const TABLES: &[&[Verb]] = &[
 ];
 
 /// What `verb` has to say for its picture to be worth anything, or `None`
-/// when the picture is the whole of it. `arg` is the verb's own argument
-/// (one verb serves two panes and wants a different line for each) and
-/// `presets` the repositories it was given — a run's state is the two of
-/// them together, and a row may key on either.
+/// when the picture is the whole of it. A run's state is `arg` and
+/// `presets` together, and a row may key on either.
 pub(super) fn must_say(verb: &str, arg: &str, presets: &[String]) -> Option<&'static str> {
     let found = TABLES.iter().copied().flatten().find(|v| v.name == verb)?;
     Some(
@@ -118,9 +101,6 @@ mod tests {
         TABLES.iter().copied().flatten()
     }
 
-    /// The tables are split by subject, and a verb written onto two of
-    /// them would be answered by whichever is walked first while the
-    /// other row sat there looking right.
     #[test]
     fn no_verb_is_claimed_twice() {
         let mut seen: Vec<&str> = Vec::new();
@@ -134,19 +114,15 @@ mod tests {
         }
     }
 
-    /// The key is a verb's spelling, so a rename on the QML side leaves a
-    /// row nothing reaches: `must_say` goes quiet and the run is judged
-    /// on a picture that reads the same whether the verb worked or not
-    /// (rules-refs/app-ui.md).
-    ///
-    /// Only this direction can be asked. The drivers dispatch far more
-    /// verbs than this table judges, because most verbs are judged on
-    /// their picture and belong in no table at all.
+    /// A rename on the QML side leaves a row nothing reaches: `must_say`
+    /// goes quiet and the run is judged on the picture alone
+    /// (rules-refs/app-ui.md「xtask verify/verbs.rs」). Only this direction
+    /// can be asked — most verbs are judged on their picture and have no
+    /// row.
     #[test]
     fn every_verb_is_one_the_drivers_dispatch() {
-        // The harness is a QML module of its own, so every file in it is
-        // one of the drivers — no name filter to keep in step with what
-        // the verbs are grouped by (.claude/rules/app-ui.md §QML モジュール).
+        // Every file of the harness module is a driver, so no name filter
+        // (.claude/rules/app-ui.md §QML モジュール).
         let auto = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../crates/platitude-app/src/auto");
         let mut drivers = String::new();
@@ -182,8 +158,6 @@ mod tests {
         names.iter().map(|name| (*name).to_string()).collect()
     }
 
-    /// The narrow rows come first, and what no row claims falls to
-    /// `plain`.
     #[test]
     fn the_narrow_row_answers_before_the_plain_one() {
         assert_eq!(
@@ -200,10 +174,6 @@ mod tests {
         );
     }
 
-    /// A row may be keyed on the repository instead: two runs of one verb
-    /// that differ only in what the preset built are two states, and a
-    /// pair judged on the argument alone goes on passing after the two
-    /// stop telling each other apart.
     #[test]
     fn a_row_may_answer_to_the_preset_rather_than_the_argument() {
         assert_eq!(
@@ -219,9 +189,8 @@ mod tests {
             must_say("corner", "1", &presets(&["long"])),
             "the pair is two states or it is one run twice"
         );
-        // The argument still outranks it where the pane decides on its
-        // own: the working tree's foot is the commit button's, whatever
-        // list is above it.
+        // The argument outranks the preset where the pane decides alone:
+        // the working tree's foot is the commit button's.
         for preset in [&["basic"][..], &["long"][..]] {
             assert_eq!(
                 must_say("corner", "wip", &presets(preset)),
@@ -230,7 +199,6 @@ mod tests {
         }
     }
 
-    /// A verb no table claims is one whose picture is the whole of it.
     #[test]
     fn a_verb_no_table_claims_says_nothing() {
         assert_eq!(must_say("no-such-verb", "", &[]), None);

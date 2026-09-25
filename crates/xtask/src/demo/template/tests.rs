@@ -6,8 +6,7 @@ use std::path::Path;
 
 use super::{BUILT_BY, Entry, holds, leaf, walk};
 
-/// git's answer in `dir`, or the reason it had none — a test that cannot
-/// ask has failed.
+/// git's answer in `dir`; a test that cannot ask has failed.
 fn git(dir: &Path, arguments: &[&str]) -> String {
     let dir = dir.display().to_string();
     crate::subprocess::git_query(&dir, arguments)
@@ -37,14 +36,10 @@ fn naming(dir: &Path, needle: &str) -> Vec<String> {
     found
 }
 
-/// Two runs of one preset are the same repository, down to the commit
-/// names — which is the whole claim a template makes, and the thing two
-/// builds could never say: a build stamps its commits off the clock, so
-/// two of them agree on the shape and on nothing else.
-///
-/// The preset is one with something of everything to disagree about: an
-/// origin with an upstream, tags pushed and unpushed, and a commit past
-/// the last push.
+/// Down to the commit names — the claim a template makes, which two
+/// builds could not (a build stamps its commits off the clock). `tags` has
+/// something of everything to disagree about: an upstream, tags pushed and
+/// unpushed, a commit past the last push.
 #[test]
 fn two_runs_of_a_preset_are_the_same_repository() {
     let first = crate::demo::create("tags", None).expect("a run of the preset");
@@ -64,9 +59,8 @@ fn two_runs_of_a_preset_are_the_same_repository() {
     }
 }
 
-/// A copy's `origin` is its own. Left as the template's, the first verb
-/// to push would write into the repository every later run is copied
-/// from.
+/// Left as the template's, the first verb to push would write into the
+/// repository every later run is copied from.
 #[test]
 fn a_copy_pushes_to_its_own_origin() {
     let work = crate::demo::create("tags", None).expect("a run of the preset");
@@ -79,16 +73,13 @@ fn a_copy_pushes_to_its_own_origin() {
         !url.contains(&leaf("tags", "repo")),
         "origin still names the template: {url}"
     );
-    // And it is a URL git can still fetch from, which the fetch
-    // below proves.
+    // And still a URL git can fetch from.
     git(&work, &["fetch", "origin"]);
 }
 
-/// A linked worktree stands on two files naming an absolute path — its
-/// own `.git`, and the `gitdir` pointing back at it — and git writes
-/// both in a spelling of its own (the profile's long name, where this
-/// process hands it the short one). A copy that kept either would have
-/// git answering about the template from inside the copy.
+/// A linked worktree's `.git` and the `gitdir` pointing back both name an
+/// absolute path, in git's own long spelling; a copy that kept either
+/// would have git answering about the template.
 #[test]
 fn a_copy_of_linked_worktrees_stands_on_its_own_paths() {
     let work = crate::demo::create("worktrees", None).expect("a run of the preset");
@@ -110,11 +101,8 @@ fn a_copy_of_linked_worktrees_stands_on_its_own_paths() {
     );
 }
 
-/// The rule that keeps a rebind honest: git's own files may name the
-/// directory the repository sits in, and rewriting a tracked one
-/// would leave the copy dirty where the template was clean. Every
-/// preset a template is made of has to pass it, so the check is that
-/// the presets under test hold nothing but metadata.
+/// These presets name their own directory only in git's metadata, so
+/// each gets a template rather than a per-run build (see `rebind`).
 #[test]
 fn only_gits_own_files_name_the_directory_they_were_built_in() {
     for preset in [
@@ -136,10 +124,8 @@ fn only_gits_own_files_name_the_directory_they_were_built_in() {
     }
 }
 
-/// A copy of a repository with something uncommitted in it answers the
-/// same `status` — the index it was copied with names files by the stat
-/// the copy has changed, and git has to be left to notice that for
-/// itself.
+/// The copied index records stats the copy changed; git has to notice
+/// that itself and still answer the same `status`.
 #[test]
 fn a_copy_of_an_unclean_tree_is_unclean_in_the_same_way() {
     let first = crate::demo::create("dirty", None).expect("a run of the preset");
@@ -147,16 +133,15 @@ fn a_copy_of_an_unclean_tree_is_unclean_in_the_same_way() {
     let status = git(&first, &["status", "--porcelain=v2"]);
     assert!(!status.is_empty(), "the preset is meant to be dirty");
     assert_eq!(status, git(&second, &["status", "--porcelain=v2"]));
-    // Asked twice, because the first status is the one that rewrites the
-    // index it found stale: a tree that only reads clean once reads as a
-    // change to whatever runs second.
+    // Asked twice: the first status rewrites the stale index, and a tree
+    // that reads the same only once would change under whatever runs
+    // second.
     assert_eq!(status, git(&second, &["status", "--porcelain=v2"]));
 }
 
-/// Runs start together and any number of them can find the template
-/// missing at once. Each builds its own, one rename wins, and every run
-/// ends up holding a copy of the same repository — which their commit
-/// names say and nothing else would.
+/// Runs that all find the template missing each build their own, one
+/// rename wins, and every run holds a copy of the same repository — which
+/// only their commit names can show.
 #[test]
 fn runs_started_together_are_handed_one_template() {
     let start = std::sync::Arc::new(std::sync::Barrier::new(8));
@@ -183,9 +168,8 @@ fn runs_started_together_are_handed_one_template() {
     assert_eq!(commits.len(), 1, "each run built its own repository");
 }
 
-/// `--at` names a directory anywhere on the machine, and a template's
-/// paths are under the one root the runs share — so a named root is
-/// built in, and comes out standing on itself.
+/// `--at` can name a directory outside the root templates share, so a
+/// named root is built in place.
 #[test]
 fn a_named_root_is_built_where_it_was_named() {
     let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-demo"), "named-root")
@@ -195,9 +179,6 @@ fn a_named_root_is_built_where_it_was_named() {
     assert!(git(&work, &["log", "--format=%H"]).len() >= 40);
 }
 
-/// A bare repository is git's own by what it holds; a directory whose
-/// name merely ends in `.git` is a directory a preset could commit, and
-/// what it holds is content.
 #[test]
 fn a_bare_repository_is_gits_own_and_a_name_ending_in_git_is_not() {
     let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-demo"), "metadata")
@@ -230,8 +211,8 @@ fn a_needle_is_found_where_it_is_and_nowhere_else() {
     assert!(!holds(b"basic-a", b"basic-ab"));
     assert!(!holds(b"", b"basic-ab"));
     assert!(!holds(b"basic-ab", b""));
-    // The false start that a byte-at-a-time search gets wrong: the first
-    // byte matches twice and only the second run is the needle.
+    // A false start: the first byte matches twice and only the second run
+    // is the needle.
     assert!(holds(b"bbasic-ab", b"basic-ab"));
 }
 
@@ -268,14 +249,11 @@ fn modules_named(text: &str) -> Vec<String> {
     named
 }
 
-/// The fingerprint reads every source a preset is built by, and the bytes
-/// it read are the ones on disk. **Held to the code, not to a directory**:
-/// the demo module's own sources whole (its tests aside), and of what they
-/// name outside it, the PNG writer the pictures come out of. Every other
-/// module they name places or sweeps the runs, or declares the verb, and
-/// says nothing about what a template holds — a new one is a question this
-/// asks out loud, since a source that shapes a template and is left off
-/// the list goes on handing out the templates built without it.
+/// Held to the code, not to a directory: the demo module's sources (tests
+/// aside) plus, of what they name outside it, the PNG writer. Any other
+/// module they name has to be justified in `PLACES_OR_DECLARES`, since a
+/// source that shapes a template but is left off the list keeps handing
+/// out templates built without it.
 #[test]
 fn the_fingerprint_reads_every_source_a_preset_is_built_by() {
     /// Named by the demo module, and shaping nothing a template holds:
@@ -328,8 +306,6 @@ fn the_fingerprint_reads_every_source_a_preset_is_built_by() {
     }
 }
 
-/// What a source names of the crate, read the way the fingerprint's test
-/// reads it: one path, a group, and a comment that is not read at all.
 #[test]
 fn a_source_names_the_modules_it_reaches() {
     let text = "use crate::command::{self, Where};\n\

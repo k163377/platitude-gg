@@ -95,8 +95,7 @@ fn matches_a_ledger_entry_only_at_a_path_boundary() {
 #[test]
 fn asks_nothing_of_a_ledgered_file_but_that_it_is_still_there() {
     let ledger = ledger_entries("- **`ui/Pane.qml` は割らない** — 理由\n");
-    // However long it has become: the entry is the standing, and the
-    // reason on it is what a reader weighs.
+    // However long it has become.
     let failures = check_ledger(&ledger, &[counted("crates/a/src/ui/Pane.qml", 4_000)]);
     assert!(failures.is_empty(), "{failures:?}");
 }
@@ -119,7 +118,6 @@ fn round_trips_a_baseline_through_the_file_it_writes() {
     ]);
     write_baseline(&path, &entries).unwrap();
     assert_eq!(read_baseline(&path).unwrap(), Some(entries));
-    // The header is comments, and the body is one file per line.
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(!text.contains('\r'), "baseline must stay LF: {text:?}");
     assert!(text.ends_with("501 crates/a/src/b.rs\n1200 crates/a/tests/it/c.rs\n"));

@@ -1,26 +1,16 @@
-//! `cargo xtask gate` — the pre-merge tests, chosen by machine.
+//! `cargo xtask gate` — the pre-merge tests, chosen by machine
+//! (internal-docs/反映前テストの機械化.md).
 //!
-//! What a branch owes main is read off its diff: the files it changed,
-//! everything that reads them ([`graph`]), and the tests *in* that reach
-//! — unit tests by module path, the integration binary by top-level
-//! module, the verify-ui verbs by the census of what each one shows
-//! ([`census`]) — plus the crate-wide checks (clippy, shipped, bare) for
-//! the crates the reach enters ([`plan`]). Each step is cached by the
-//! object ids of what it reads ([`stamp`]), so a second run of one commit
-//! runs nothing, and a rebase reruns only what main's move touched. A
-//! commit whose every owed step is green is stamped, and the
+//! The branch's diff, everything that reads it ([`graph`]) and the tests
+//! in that reach select the steps ([`plan`]; verbs by [`census`]). Each
+//! step is cached by the object ids of what it reads ([`stamp`]); a commit
+//! whose every owed step is green is stamped, and the
 //! `reference-transaction` hook lets `refs/heads/main` move onto stamped
-//! commits only ([`hooks`]). The host's verb runs rewrite their own
-//! census lines as they go, so the file follows the change that moved it;
-//! a gate that finds it rewritten stops before stamping, because the
-//! commit that passed has to be the one holding it.
+//! commits only ([`hooks`]).
 //!
-//! `--host-only` is the daily tier (CLAUDE.md 確認は 3 段: no container);
-//! its stamps are reused by the full run, which then owes the container
-//! side alone. `--all` counts every file as changed — stage 2 in full —
-//! and `--verb <line>` adds verify-ui lines to run (and record) besides
-//! the census's. The first red stops the run ([`halt`]) unless
-//! `--keep-going` — which `--all` implies — says to run the rest.
+//! `--host-only` is the daily tier (CLAUDE.md「確認は 3 段」), whose stamps
+//! the full run reuses. The first red stops the run ([`halt`]) unless
+//! `--keep-going`, which `--all` implies.
 
 mod census;
 mod deps;
@@ -54,8 +44,7 @@ pub(crate) use standing::standing;
 
 use crate::command::{self, Permission, Where};
 
-/// 段 2: what a branch owes main, chosen by machine. The tier `land`
-/// runs for itself, and the one a session runs before reporting.
+/// 段 2, which `land` runs for itself.
 pub(crate) static PREMERGE: command::Command = command::Command {
     id: "gate.premerge",
     call: "gate",
@@ -65,7 +54,7 @@ pub(crate) static PREMERGE: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
-/// 段 1: the same selection with no container behind it.
+/// 段 1.
 pub(crate) static DAILY: command::Command = command::Command {
     id: "gate.daily",
     call: "gate --host-only",
@@ -75,8 +64,7 @@ pub(crate) static DAILY: command::Command = command::Command {
     permission: Permission::Plain,
 };
 
-/// 段 3: every file counted as changed, and the stamps ignored. Without
-/// `--fresh` a stamped tree runs almost nothing.
+/// 段 3. Without `--fresh` a stamped tree runs almost nothing.
 pub(crate) static FULL: command::Command = command::Command {
     id: "gate.full",
     call: "gate --all --fresh",
@@ -115,9 +103,6 @@ pub(crate) static DEPS: command::Command = command::Command {
 
 pub(crate) static COMMANDS: &[&command::Command] =
     &[&PREMERGE, &DAILY, &FULL, &VERDICT, &INSTALL, &DEPS];
-// The census is read by the gate to choose verbs and by `verbs` to say
-// which verbs it never chooses, so the type and the file lister under it
-// stand where both can reach them.
 pub(crate) use census::Census;
 pub(crate) use census::{FILE as CENSUS_FILE, names_in, page_settled_in, record};
 pub(crate) use graph::qml_files;
@@ -128,18 +113,15 @@ pub(crate) use tiers::Tiers;
 /// What a gate whose every step was green left behind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Gated {
-    /// The commit is stamped.
     Stamped,
-    /// Nothing is: the host's verbs rewrote the census, so the tree that
-    /// passed is no longer the commit a stamp would name. The rewrite is
-    /// generated — commit it and gate again, which finds every step
-    /// cached.
+    /// Nothing is stamped: the host's verbs rewrote the census, so the tree
+    /// that passed is not the commit. Commit the rewrite and gate again,
+    /// which finds every step cached.
     CensusMoved,
 }
 
-/// What one side's steps stand on: the side's name, the tree, the
-/// stamps, the logs, and the runner copy its xtask steps start from
-/// (`None` under the tests' faked steps).
+/// What one side's steps stand on. `runner` is the copy its xtask steps
+/// start from (`None` under the tests' faked steps).
 #[derive(Clone, Copy)]
 struct Ground<'a> {
     name: &'a str,
@@ -155,18 +137,14 @@ struct Ground<'a> {
     /// `None` wherever `copy` is, and on a Linux host, where the verbs
     /// run where they stand (`linux::container::exec_in`).
     container: Option<&'a str>,
-    /// What this run is called where its red steps' logs are kept
-    /// (`evidence::keep`): a step's log is named by its index, so the
-    /// next gate in this tree writes over it.
+    /// The run's name for the kept copies of its red steps' logs
+    /// (`evidence::keep`).
     run: &'a str,
-    /// Where this side's units tally what they waited for room another
-    /// gate was holding — said in a line here and kept in the run's
-    /// record, beside the longest units, which are what a landing's
-    /// wait is made of.
+    /// Where this side's units tally their waits for room another gate
+    /// held, for the run's line and record.
     waited: &'a Waited,
-    /// When the sides started, which every unit's row is an offset from
-    /// — two rows of the ledger say whether they overlapped, and a side
-    /// says where in its own run the time went.
+    /// When the sides started: every unit's ledger row is an offset from
+    /// it, so rows of both sides compare.
     since: std::time::Instant,
     /// The machine's budget, which both sides and every seat draw on.
     pool: &'a crate::budget::Pool,

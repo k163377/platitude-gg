@@ -1,30 +1,24 @@
 //! `cargo xtask shots crop` — the piece of a screenshot a judgement is
-//! actually made on, cut out and magnified without smoothing.
+//! made on, cut out and magnified without smoothing.
 //!
-//! The board magnifies in a window, at whole ratios and without
-//! interpolating, which is how a person reads a shot. A session has no
-//! window: it reads the file. So the magnifying has to be in the file,
-//! and it has to be the same magnifying — whole ratios and nearest
-//! neighbour, because what is being judged is a pixel. A smoothed
+//! A session has no window to zoom, so the board's magnifying — whole
+//! ratios, nearest neighbour — has to be in the file: a smoothed
 //! enlargement invents the edge it was asked about, and a shrunk one
-//! drops the five-pixel bar sitting on top of a box (verify-ui skill
-//! §目視は等倍以上で).
+//! drops a five-pixel bar (verify-ui SKILL.md「目視は等倍以上で」).
 //!
-//! Written through `png::rgba`, which stores every pixel as it is, so
-//! a crop is about as many bytes as it has pixels.
+//! `png::rgba` stores every pixel as it is, so a crop is about as many
+//! bytes as it has pixels.
 
 use std::path::{Path, PathBuf};
 
 use super::board::shown;
 use crate::png;
 
-/// How many pixels a crop may come to. What reads one fits it to a
-/// window or a pane, and past this size it arrives shrunk — which is
-/// the magnifying undone, for a file of tens of megabytes.
+/// Past this many pixels, whatever reads a crop fits it to a window or a
+/// pane and shrinks it — the magnifying undone.
 const CEILING: u64 = 16 << 20;
 
-/// What a crop is magnified by when nobody says: the ratio the skill
-/// asks for before a picture is judged on.
+/// The ratio the skill asks for before a picture is judged on.
 const SCALE: u32 = 3;
 
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
@@ -35,9 +29,8 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let (wide, tall) = cut.at.measured(&image, cut.scale)?;
     let out = cut.out.unwrap_or_else(|| beside(&cut.source, &cut.at));
     let (left, top, scale) = (cut.at.x, cut.at.y, cut.scale);
-    // Nearest neighbour is the whole of the arithmetic: a whole ratio
-    // divides, so every source pixel becomes a square block of itself
-    // and no value is invented between two of them.
+    // Nearest neighbour at a whole ratio: every source pixel becomes a
+    // square block of itself.
     let png = png::rgba(wide, tall, |x, y| {
         image.pixel(left + x / scale, top + y / scale)
     });
@@ -51,7 +44,6 @@ pub(crate) fn run(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// One crop: what to cut it from, where, and how far to magnify it.
 struct Cut {
     source: PathBuf,
     at: Rect,
@@ -71,8 +63,7 @@ impl Rect {
         format!("{}:{}:{}:{}", self.x, self.y, self.width, self.height)
     }
 
-    /// How big the crop comes out, once it is known to be inside the
-    /// picture and small enough to be looked at.
+    /// The crop's size, once it is inside the picture and under `CEILING`.
     fn measured(&self, image: &png::Image, scale: u32) -> Result<(u32, u32), String> {
         let (right, bottom) = (
             u64::from(self.x) + u64::from(self.width),
@@ -90,8 +81,7 @@ impl Rect {
             u64::from(self.width) * u64::from(scale),
             u64::from(self.height) * u64::from(scale),
         );
-        // Saturating: --scale takes any number anyone types, and the
-        // product of two of those leaves a u64 behind.
+        // Saturating: --scale is whatever anyone types.
         if wide.saturating_mul(tall) > CEILING {
             return Err(format!(
                 "shots crop: {} at {scale}x comes to {wide}x{tall}, which is bigger than \
@@ -133,9 +123,7 @@ fn parse(args: &[String]) -> Result<Cut, String> {
     }
     Ok(Cut {
         source: source.ok_or_else(|| "shots crop: no picture to cut from".to_string())?,
-        // Required: a crop of everything is the picture, and the
-        // reason to make one is that the judgement is about somewhere
-        // in particular.
+        // Required: a crop of everything is just the picture.
         at: at.ok_or_else(|| "shots crop: --at wants x:y:width:height in pixels".to_string())?,
         scale,
         out,
@@ -169,9 +157,8 @@ fn rect(text: &str) -> Result<Rect, String> {
     })
 }
 
-/// A magnification. Whole numbers only: at a ratio with a fraction in
-/// it, nearest neighbour doubles some rows and not others, which is the
-/// picture answering a question about one pixel with a different one.
+/// Whole numbers only: at a fractional ratio, nearest neighbour doubles
+/// some rows and not others.
 fn whole(text: &str) -> Result<u32, String> {
     match text.parse::<u32>() {
         Ok(0) | Err(_) => Err(format!(
@@ -182,10 +169,8 @@ fn whole(text: &str) -> Result<u32, String> {
     }
 }
 
-/// Where a crop goes when nobody says: beside the picture it came from,
-/// named for the region. Two regions of one shot keep out of each
-/// other's way, and the same region cut again replaces itself — the way
-/// a retaken shot replaces the one it was taken to replace.
+/// Beside the picture, named for the region: two regions of one shot
+/// keep apart, and the same region cut again replaces itself.
 fn beside(source: &Path, at: &Rect) -> PathBuf {
     let stem = source.file_stem().map_or_else(
         || "shot".to_string(),

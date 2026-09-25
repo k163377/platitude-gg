@@ -20,8 +20,7 @@ pub(super) fn from_listing(listing: &[u8]) -> BTreeMap<String, String> {
         files.insert(path.to_string(), id.to_string());
         let mut parent = path;
         while let Some((dir, _)) = parent.rsplit_once('/') {
-            // Retain modes, names and gitlinks as a Git tree would. A
-            // directory containing only documents has no step input.
+            // Retain modes, names and gitlinks as a Git tree would.
             let contents = directories.entry(dir.to_string()).or_default();
             contents.push_str(&format!("{mode} {kind} {id}\t{path}\0"));
             parent = dir;

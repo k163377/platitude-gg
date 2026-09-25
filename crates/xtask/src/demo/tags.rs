@@ -4,10 +4,11 @@
 use super::basic::basic;
 use super::repo::{DemoRepo, file_url};
 
-/// Every state a tag can be in with respect to the remote, so the badge
-/// and the name colour can be read side by side (デザイン規約 §グラフ行の
-/// ダブルクリック). Nothing shows until a fetch: `ls-remote --tags` is what carries
-/// it, so run this preset with the `fetch` verb.
+/// Every state a tag can be in against the remote, so the badge and the
+/// name colour can be read side by side
+/// (デザイン規約 §グラフ行のダブルクリック). Nothing shows until a fetch
+/// has run `ls-remote --tags` — the one the window fires on opening, or
+/// the `fetch` verb's.
 ///
 /// | tag          | here          | on origin                    |
 /// |--------------|---------------|------------------------------|
@@ -16,9 +17,9 @@ use super::repo::{DemoRepo, file_url};
 /// | `v1.5`       | HEAD          | the second commit — a drift  |
 /// | `v0.9-theirs`| —             | a commit no branch there has |
 ///
-/// `v0.9-theirs` comes from the seeder on a branch deleted straight after,
-/// which is what keeps a fetch from quietly bringing the tag down with it
-/// (measured: auto-following only takes tags whose commits it downloads).
+/// `v0.9-theirs` is pushed by the seeder on a branch deleted straight
+/// after, so no fetch brings it down: auto-following only takes tags whose
+/// commits it downloads.
 pub(super) fn tags(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# tags\n", "docs: start the readme")?;
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
@@ -54,9 +55,8 @@ pub(super) fn tags(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// The same states read across **two** remotes, which is what a tag's row
-/// opens on: the name is one row however many of them carry it, and the
-/// lines under it are one to a remote (デザイン規約 §左メニューの所作).
+/// The same states across two remotes: a tag's row opens on one line per
+/// remote (デザイン規約 §左メニューの所作).
 ///
 /// | tag           | here          | on origin        | on fork       |
 /// |---------------|---------------|------------------|---------------|
@@ -65,15 +65,10 @@ pub(super) fn tags(repo: &mut DemoRepo) -> Result<(), String> {
 /// | `v2.0-local`  | HEAD          | nowhere          | nowhere       |
 /// | `v0.9-theirs` | —             | nowhere          | a commit no branch there has |
 ///
-/// **`v1.5` is why this preset exists**: its row is the one place where a
-/// carrier that agrees and a carrier that has the name somewhere else
-/// stand under one name, and the two lines have to be told apart there or
-/// nowhere. `--preset tags` has one remote, so every row of it is a list
-/// of one.
-///
-/// Nothing shows until a fetch — `ls-remote --tags` is the only carrier
-/// (core.md タグのリモート状態) — so the run that reads this preset asks
-/// for one first (PGG_AUTO_ACT=nav-open-tag).
+/// `v1.5` is why this preset exists: the one row where a remote that
+/// agrees and one that has the name elsewhere stand under one name. As
+/// with `tags`, nothing shows until a fetch, so its verb asks for one
+/// first (`nav-open-tag`).
 pub(super) fn tagremotes(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# tags\n", "docs: start the readme")?;
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;
@@ -83,8 +78,7 @@ pub(super) fn tagremotes(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["push", "--set-upstream", "origin", "main"])?;
     repo.git(&["push", "origin", "v1.0", "v1.5"])?;
 
-    // A second place with the same two names on it, so a row can open on
-    // more than one line.
+    // A second remote with the same two names on it.
     let fork = repo.root.join("fork.git");
     std::fs::create_dir_all(&fork).map_err(|e| e.to_string())?;
     repo.git_at(&fork.clone(), &["init", "--bare", "-b", "main"])?;
@@ -96,17 +90,14 @@ pub(super) fn tagremotes(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("src/app.txt", "app v2\n", "feat: rework the app")?;
     // Never sent anywhere…
     repo.git(&["tag", "v2.0-local"])?;
-    // …and one moved here after it was published, then sent on to one of
-    // the two: the name now stands on three commits' worth of opinion —
-    // here and on the fork it is HEAD, on origin it is where it was.
+    // …and one moved after it was published, then force-pushed to the fork
+    // only: HEAD here and on the fork, the old commit on origin.
     repo.git(&["tag", "-f", "v1.5"])?;
     repo.git(&["push", "fork", "main"])?;
     repo.git(&["push", "--force", "fork", "refs/tags/v1.5:refs/tags/v1.5"])?;
 
-    // A name only the fork has, on a branch deleted straight after — which
-    // is what keeps a fetch from quietly bringing the tag down with it
-    // (measured: auto-following only takes tags whose commits it
-    // downloads).
+    // A name only the fork has, on a branch deleted straight after, as in
+    // `tags`.
     let seeder = repo.root.join("seeder");
     let root = repo.root.clone();
     repo.git_at(&root, &["clone", &fork_url, "seeder"])?;
@@ -127,13 +118,12 @@ pub(super) fn tagremotes(repo: &mut DemoRepo) -> Result<(), String> {
 }
 
 /// How many tags `manytags` puts on: enough that TAGS cannot fit in the
-/// pane at any window height anybody works at.
+/// pane at any window height.
 const MANY_TAGS: usize = 2000;
 
-/// `basic`, buried in tags. What the folded rail does when a section has
-/// more rows than the pane is tall can only be read here: with a handful
-/// of tags the peek is content-sized and every placement rule looks alike
-/// (デザイン規約 §左メニューを畳む).
+/// `basic`, buried in tags: the only preset where a folded rail's section
+/// outgrows the pane — with a handful of tags the peek is content-sized
+/// and every placement rule looks alike (デザイン規約 §左メニューを畳む).
 pub(super) fn manytags(repo: &mut DemoRepo) -> Result<(), String> {
     basic(repo)?;
     let head = repo.git(&["rev-parse", "HEAD"])?;
@@ -151,21 +141,15 @@ pub(super) fn manytags(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// A commit no branch reaches, held by a tag alone.
+/// A commit no branch reaches, held by a tag alone: the one shape where
+/// hiding tags from the graph takes a row with them (`tags-eye`). A tag a
+/// branch also reaches keeps its row, and a picture of that looks exactly
+/// like a toggle that never answered.
 ///
-/// **The one shape in which taking the tags out of the graph takes a row
-/// with them**, which is what `tags-eye` is judged on: the walk reaches
-/// `v1.1-kept`'s commit through `refs/tags` and through nothing else, so
-/// its row goes on the press and comes back on the second one. A tag a
-/// branch also reaches keeps its row through both, and a picture of that
-/// frames exactly like a switch that never answered.
+/// `v1.0` is the control, a tag on the trunk whose row stays; annotated,
+/// so the name index peels one tag of each kind (`refs::REFS_FORMAT_ARG`).
 ///
-/// `v1.0` is the other half of that pair — a tag on the trunk, whose row
-/// stays — and it is annotated, so the name index has one tag of each
-/// kind to peel (`refs::REFS_FORMAT_ARG`).
-///
-/// No remote: nothing here is about one, and the fetch an opening fires
-/// would be the only write in a run that is about a graph.
+/// No remote, so opening fires no fetch — nothing here is about one.
 pub(super) fn tagonly(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# tags\n", "docs: start the readme")?;
     repo.commit("src/app.txt", "app v1\n", "feat: add the app")?;

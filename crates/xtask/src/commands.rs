@@ -1,7 +1,5 @@
 //! An index of owners — nothing is defined here. Each module declares
-//! the operations it runs beside the code that runs them
-//! (`crate::command`); the rule is .claude/rules-refs/structure.md
-//! §コマンドの正本.
+//! its operations beside the code that runs them (`crate::command`).
 
 use crate::command::Command;
 
@@ -52,17 +50,13 @@ pub(crate) fn repeated() -> Vec<&'static str> {
 mod tests {
     use super::{all, repeated};
 
-    /// An id is what every other place refers an operation by, so two
-    /// entries sharing one would make a reference mean either of them.
     #[test]
     fn no_id_is_declared_twice() {
         assert_eq!(repeated(), Vec::<&str>::new());
     }
 
-    /// Every entry carries a line a reader can type and a purpose that
-    /// says what typing it does: those two are what a reference to the
-    /// id is worth, and an entry short of either is a reference to
-    /// nothing.
+    /// A typable line and a purpose are what a reference to the id is
+    /// worth.
     #[test]
     fn every_entry_carries_a_line_and_a_purpose() {
         assert!(!all().is_empty());
@@ -88,8 +82,8 @@ mod tests {
         }
     }
 
-    /// Ids name the operation: a verb rename leaves every
-    /// one as it is, so nothing derives an id from a call.
+    /// Ids name the operation and survive a verb rename, so none is
+    /// derived from a call.
     #[test]
     fn an_id_is_not_derived_from_the_call() {
         for command in all() {
@@ -109,9 +103,8 @@ mod tests {
         }
     }
 
-    /// Several operations share a verb, and that is the shape the
-    /// catalogue is for: `seat`, `seat release` and `seat takeover` are
-    /// one verb and three things a session may be told to do.
+    /// Several operations may share a verb: `seat`, `seat release` and
+    /// `seat takeover` are three.
     #[test]
     fn one_verb_carries_as_many_operations_as_it_has() {
         let seat: Vec<&str> = all()

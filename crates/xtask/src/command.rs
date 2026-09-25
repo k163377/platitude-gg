@@ -1,37 +1,30 @@
-//! What one runner command is, so that the module running it can say so
-//! once and every other place can quote that.
+//! A runner command, declared once by the module that runs it and quoted
+//! everywhere else (.claude/rules-refs/structure.md §コマンドの正本).
 //!
-//! **Declaring a command here grants nothing.** What may run is the
-//! hooks' answer at the moment of the call (`hook::pre_shell`); this says
-//! which line to type and what has to be true first. The rule this serves
-//! is .claude/rules-refs/structure.md §コマンドの正本.
+//! Declaring grants nothing: what may run is the hooks' answer at the
+//! call (`hook::pre_shell`).
 
 /// One thing a session may be told to run, declared beside the code that
 /// runs it.
 pub(crate) struct Command {
-    /// What every other place calls this operation — stable, and not
-    /// derived from anything below.
+    /// What every other place calls this operation; stable, and not
+    /// derived from `call`.
     pub(crate) id: &'static str,
-    /// The verb and everything after it, as it is typed: no `cargo
-    /// xtask`, which [`Command::line`] writes, and no escape, which
-    /// [`Permission`] carries.
+    /// The verb and what follows, as typed — without `cargo xtask` or the
+    /// escape, which [`Command::line`] adds.
     pub(crate) call: &'static str,
     /// What the operation is for, in one line.
     pub(crate) purpose: &'static str,
-    /// Which tree it is run from.
     pub(crate) run_in: Where,
-    /// What this command itself refuses on, in the reader's order. A
-    /// rule written down somewhere else is not copied here —
-    /// [`Permission`] points at the judgement instead, so that the rule
-    /// moves in one place.
+    /// What this command itself refuses on. A rule written elsewhere is
+    /// not copied here; [`Permission`] points at it.
     pub(crate) needs: &'static [&'static str],
-    /// Who decides whether this session may run it.
     pub(crate) permission: Permission,
 }
 
 impl Command {
     /// The whole line, escape and runner included — what a document
-    /// quotes and what a deny sentence tells a reader to type.
+    /// quotes and a deny sentence tells a reader to type.
     pub(crate) fn line(&self) -> String {
         match self.permission {
             Permission::Escape(flag) => format!("{flag}=1 cargo xtask {}", self.call),
@@ -39,14 +32,13 @@ impl Command {
         }
     }
 
-    /// The runner verb this operation is spelled with — the first word
-    /// of the call, which is what `main.rs` dispatches on.
+    /// The first word of the call, which `main.rs` dispatches on.
     pub(crate) fn verb(&self) -> &'static str {
         self.call.split_whitespace().next().unwrap_or(self.call)
     }
 
-    /// The whole contract as one sentence, for a place that has to hand
-    /// a reader something runnable while refusing something else.
+    /// The whole contract as one sentence, for a refusal that hands the
+    /// reader something runnable instead.
     pub(crate) fn instruction(&self) -> String {
         let mut text = format!(
             "`{}` — {}, from {}",
@@ -91,8 +83,7 @@ impl Where {
     }
 }
 
-/// Who decides whether this session may run the command — by reference
-/// to where the condition stands.
+/// Who decides whether this session may run the command.
 pub(crate) enum Permission {
     /// Nothing beyond the pre-shell hook's ordinary reading of the line.
     Plain,

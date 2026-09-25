@@ -14,10 +14,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug)]
 pub(crate) struct ResourceClaim {
-    /// **Holding the handle is the claim.** The lock under it is the
-    /// operating system's, unlocked when this is dropped
-    /// ([`crate::locks`]) — and let go anyway when the process ends
-    /// without dropping anything, which is what a killed run does.
+    /// Holding the handle is the claim ([`crate::locks`]).
     _lock: crate::locks::Locked,
 }
 
@@ -25,11 +22,8 @@ pub(crate) struct ResourceClaim {
 /// Claims live outside the target, so a repository under test
 /// stays clean.
 ///
-/// **The operating system holds the claim.** A run that is killed
-/// leaves its file standing with no lock on it, so there is no dead
-/// claim to tell from a live one, and no pid to be wrong about when the
-/// machine hands the number out again. What the file says is a note for
-/// a person ([`note`]), read by nothing.
+/// The OS lock is the claim, so a killed run leaves no dead claim to
+/// tell from a live one and no pid to trust.
 pub(crate) fn claim_resource(
     target: &Path,
     kind: &str,
@@ -44,9 +38,9 @@ pub(crate) fn claim_resource(
     }
     std::fs::create_dir_all(&locks).map_err(|e| e.to_string())?;
 
-    // `truncate(false)` is the claim's: a file is emptied at open, which
-    // is before the lock, and the standing owner's note stays its
-    // owner's. Emptying it is [`note`]'s, under the lock.
+    // `truncate(false)`: truncating at open comes before the lock and
+    // would empty the standing owner's note. [`note`] empties it under
+    // the lock.
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
@@ -76,19 +70,16 @@ pub(crate) fn claim_resource(
     }))
 }
 
-/// Where the lock files live. **A claim leaves its file standing.**
-/// Unlinking a locked file is allowed on both platforms, and it hands
-/// one path to two runs: the next asker creates a fresh file under the
-/// name and locks that, while the first still holds the one that was
-/// unlinked. The sweep takes them, at a day old — which is longer than
-/// any claim lives, a run being minutes and its watchdog two — and a
-/// file still held is one whose note was written today.
+/// Where the lock files live. A claim leaves its file standing:
+/// unlinking a locked file (allowed on both platforms) would hand one
+/// path to two runs — the next asker locks a fresh file under the name
+/// while the first still holds the unlinked one. The sweep takes them at
+/// a day old, longer than any claim lives.
 const LOCKS: &str = "pgg-verify-locks";
 
-/// The file a claim on `canonical` is taken on, and the key by which a
-/// run tells the paths it already holds. One name per resolved path, and
-/// on Windows one per spelling of it: two cases of a directory are one
-/// resource.
+/// The lock file for `canonical`, and the key a run tells the paths it
+/// holds by. On Windows the key folds case: two spellings of a directory
+/// are one resource.
 fn lock_of(locks: &Path, canonical: &Path) -> (PathBuf, u64) {
     let mut identity = canonical.to_string_lossy().replace('\\', "/");
     if cfg!(windows) {
@@ -100,11 +91,9 @@ fn lock_of(locks: &Path, canonical: &Path) -> (PathBuf, u64) {
     (locks.join(format!("{key:016x}.lock")), key)
 }
 
-/// What run made this file, for the person looking at a directory of
-/// them. **A person's to read**, and a refusal cannot quote it:
-/// Windows refuses a read that overlaps a locked range, so what a claim
-/// says is legible only once the claim is let go — which is the moment
-/// it stops being about anybody.
+/// What run made this file, for a person. A refusal cannot quote it:
+/// Windows refuses a read that overlaps a locked range, so the note is
+/// legible only once the claim is let go.
 fn note(file: &mut std::fs::File, canonical: &Path) -> std::io::Result<()> {
     file.set_len(0)?;
     writeln!(
@@ -121,15 +110,11 @@ pub(super) fn fresh_shot_dir(verb: &str) -> Result<PathBuf, String> {
     claim_dir(&std::env::temp_dir().join("pgg-verify"), verb)
 }
 
-/// The directories under the system temp a run leaves something in.
-/// Five it claims its own directory in (`claim_dir`'s callers): a
-/// verb's pictures and settings, its demo repositories
-/// (`demo::claim_root`), a container run's mount
-/// (`keepsakes::keepsake_dir`), the roots the tests claim, and the
-/// trees the suite stands its files in ([`crate::yard`]) — which their
-/// own guards remove, so only a killed run leaves one here. And one it
-/// leaves a file in — [`LOCKS`], where a claim is taken and which
-/// nothing else ever clears.
+/// The bases under the system temp a run leaves something in: the
+/// directories `claim_dir` makes — pictures and settings, demo
+/// repositories (`demo::claim_root`), a container run's mount
+/// (`keepsakes::keepsake_dir`), test roots, and [`crate::yard`]'s trees —
+/// and [`LOCKS`], which nothing else clears.
 const RUN_BASES: [&str; 6] = [
     "pgg-verify",
     "pgg-demo",
@@ -139,28 +124,19 @@ const RUN_BASES: [&str; 6] = [
     LOCKS,
 ];
 
-/// How long a run's directory stands before it is litter. A run is
-/// minutes long — its watchdog is two, a cold build ten — and the
-/// pictures a person was shown are on the board (`shots`), so a day
-/// later what is left under these is nobody's evidence.
+/// How long a run's directory stands before it is litter: far longer
+/// than any run, and the pictures a person was shown are on the board
+/// (`shots`).
 const RUN_LITTER_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// The file that takes a directory out of every sweep, for good.
 const KEEP: &str = ".pgg-keep";
 
-/// Marks `root` as a tree a person asked for, which is the whole of
-/// what the sweep goes by.
-///
-/// **The mark is what can be asked.** A repository this application is
-/// showing is held by nothing — git is a subprocess per operation and
-/// no directory is watched — so a handle would answer "nobody's" for
-/// the tab that is on screen; a tree built to be looked at later is
-/// nobody's by definition; and under `pgg-linux` the only side that
-/// could hold one is across the mount.
-///
-/// A mark is forever: a floor of any length is a guess at how long a
-/// person keeps a tree, and nothing here can make that guess. Marked
-/// trees are the person's to remove.
+/// Marks `root` as a tree a person asked for; the sweeps go by this
+/// mark alone. A mark rather than a held handle: a repository the app is
+/// showing is held by nothing (git is a subprocess per operation), so a
+/// handle would call the open tab nobody's. The mark never expires —
+/// marked trees are the person's to remove.
 pub(crate) fn keep(root: &Path) -> Result<(), String> {
     std::fs::write(
         root.join(KEEP),
@@ -171,59 +147,34 @@ pub(crate) fn keep(root: &Path) -> Result<(), String> {
 }
 
 /// Takes away the demo roots **this run** claimed, now that it has
-/// passed. Answers how many went.
+/// passed, and answers how many went. Passing road only: a failed run's
+/// tree is the scene, and in a container the volume is the only place it
+/// survives. What failures leave is the sweeps' ([`sweep_yesterdays_runs`]
+/// on the host, the preparation step in the container).
 ///
-/// **A run that passed has nothing left to look at.** What a person
-/// reads off a run is its pictures and its report, which are elsewhere
-/// (`keepsakes`, the board); the repository it built is scaffolding. A
-/// run that *failed* is the opposite — the tree it stopped on is the
-/// scene, and the container it ran in is gone, so the volume is the only
-/// place that scene survives ([failed-run forensics]). So this is called
-/// on the passing road only, and the sweeps that collect what failures
-/// leave behind stay exactly as they were ([`sweep_yesterdays_runs`] on
-/// the host, the preparation step's floor in the container).
+/// What it never takes:
 ///
-/// **Four things it cannot reach**, and none of them by a guess about
-/// age or by reading the directory back:
-///
-/// * **Another run's roots.** The list is what *this process* claimed
-///   (`demo::claimed_roots`), and a claim is a `create_dir` that
-///   succeeded — so no name in it was ever anybody else's.
-/// * **A template.** Templates are built at a fixed name, not claimed,
-///   so they are not in the list at all.
-/// * **A tree somebody asked to keep.** [`KEEP`] is checked anyway: a
-///   root claimed by `demo-repo` is marked the moment it is built, and
-///   the rule reads better where the removing happens.
-/// * **A directory something is still writing into.** The app having
-///   exited says nothing about the git it spawned: on unix those are
-///   re-parented to init the instant it goes, and a directory with a
-///   file open in it is removed without complaint. So the question is
-///   asked outright — [`crate::reap::others_in_this_group`] — and
-///   **nothing is removed unless the answer is nobody**. On Windows the
-///   same question is answered by the removal itself, which an open
-///   handle refuses.
+/// * **Another run's roots** — the list is this process's successful
+///   `create_dir`s (`demo::claimed_roots`).
+/// * **A template** — built at a fixed name, never claimed.
+/// * **A tree marked [`KEEP`].**
+/// * **A directory something is still writing into.** The app's git
+///   children outlive it (on unix re-parented to init, and an open file
+///   does not stop the removal), so nothing is removed unless
+///   [`crate::reap::others_in_this_group`] answers nobody. On Windows an
+///   open handle refuses the removal itself.
 pub(super) fn give_back_claimed(before: Option<&[u32]>) -> usize {
     give_back(crate::demo::claimed_roots(), arrived_since(before))
 }
 
 /// Who is in this run's group now that was not there before the app
-/// started — which is the whole of what "the app left something
-/// running" can mean here.
+/// started. The group alone is the wrong question: in a container it
+/// also holds the wrapping shell and its children, and the removal would
+/// never happen.
 ///
-/// **The group alone is the wrong question.** It holds whatever else
-/// this runner was started inside: under a container, the shell the
-/// command is wrapped in and its own children (measured — the plain
-/// question said two processes were running after every passing run,
-/// and the removal never happened). Taking the group before the app
-/// and again after leaves only what the app added.
-///
-/// A number handed out again between the two looks would be read as
-/// having been there all along. The two looks are a run apart and
-/// Linux hands numbers out in order, so that is not a second this
-/// costs a thought; it is written down because it is the one way this
-/// answer can be wrong in the unsafe direction.
-///
-/// `None` either side is "could not be found out", which is not
+/// A pid handed out again between the two looks reads as "was there" —
+/// the one unsafe-direction error, unlikely since Linux hands pids out
+/// in order. `None` either side is "could not be found out", not
 /// "nobody".
 fn arrived_since(before: Option<&[u32]>) -> Option<Vec<u32>> {
     let before = before?;
@@ -235,9 +186,8 @@ fn arrived_since(before: Option<&[u32]>) -> Option<Vec<u32>> {
     )
 }
 
-/// [`give_back_claimed`] over what somebody hands in, which is the half
-/// a test can drive: the list the caller above reads is this process's
-/// own, and a test that emptied it would empty the other tests' too.
+/// [`give_back_claimed`] over roots handed in, so a test can drive it
+/// without emptying the process-wide list the other tests share.
 fn give_back(roots: Vec<PathBuf>, others: Option<Vec<u32>>) -> usize {
     match others {
         Some(others) if others.is_empty() => {}
@@ -265,16 +215,11 @@ fn give_back(roots: Vec<PathBuf>, others: Option<Vec<u32>>) -> usize {
     gone
 }
 
-/// Takes yesterday's run directories away, in the background. Nothing
-/// else ever does for the ones a failure left: every run claims a
-/// directory, the passing ones give theirs back
-/// ([`give_back_claimed`]), and the gate runs hundreds of them a day
-/// (measured: sixty thousand of them, six gigabytes, three days after
-/// the last sweep by hand). The gate
-/// calls this on its way in; the thread is left to itself — a plan is
-/// half a second and the temp directory is seconds of reading — and a
-/// directory that will not go, or a sweep the process ends first, is the
-/// next sweep's. Nothing is said: a gate's verdict is about its tests.
+/// Takes yesterday's run directories away on a background thread — the
+/// only thing that clears what failed runs leave (passing ones give
+/// theirs back, [`give_back_claimed`]). Callers do not wait: a directory
+/// that will not go, or a sweep the process ends first, is the next
+/// sweep's. Silent: a gate's verdict is about its tests.
 pub(crate) fn sweep_yesterdays_runs() {
     std::thread::spawn(|| {
         let temp = std::env::temp_dir();
@@ -287,9 +232,8 @@ pub(crate) fn sweep_yesterdays_runs() {
 
 /// Removes the entries of `base` last written `age` or longer before
 /// `now`, and answers how many went. An entry whose age cannot be read
-/// stays: a date nobody can read is no grounds for deleting. An entry
-/// carrying [`KEEP`] stays whatever its date: age makes a run's
-/// directory litter, and a marked tree is somebody's.
+/// stays — a date nobody can read is no grounds for deleting — and so
+/// does one carrying [`KEEP`], whatever its date.
 fn sweep_older_than(base: &Path, now: SystemTime, age: Duration) -> usize {
     let Ok(entries) = std::fs::read_dir(base) else {
         return 0;
@@ -306,8 +250,6 @@ fn sweep_older_than(base: &Path, now: SystemTime, age: Duration) -> usize {
             continue;
         }
         let path = entry.path();
-        // Only the old are asked, so the runs of a day pay nothing for
-        // the question and the marked pay one stat apiece.
         if path.join(KEEP).exists() {
             continue;
         }
@@ -325,13 +267,10 @@ fn sweep_older_than(base: &Path, now: SystemTime, age: Duration) -> usize {
 
 /// A directory under `base` that this call made and nobody else has.
 ///
-/// **`create_dir` is the ownership edge**; a timestamp alone only names a
-/// collision and lets concurrent runs silently share state, because
-/// `create_dir_all` answers the same for a directory it made and one that
-/// was already standing there. The pid and the serial are in the name for
-/// the two ways a clock alone repeats itself: every process on this
-/// machine reads the same one, and one process can ask twice inside a
-/// single tick of it.
+/// `create_dir` is the ownership edge: `create_dir_all` answers the same
+/// for a directory that was already standing, so a timestamp name alone
+/// lets concurrent runs silently share one. The pid and serial cover two
+/// processes, or one process twice, within one clock tick.
 pub(crate) fn claim_dir(base: &Path, stem: &str) -> Result<PathBuf, String> {
     std::fs::create_dir_all(base).map_err(|e| format!("could not make {}: {e}", base.display()))?;
     let nanos = SystemTime::now()
@@ -364,9 +303,8 @@ mod tests {
     use std::io::BufRead;
     use std::path::Path;
 
-    /// A day is what makes a run's directory litter, read off the clock
-    /// the sweep is handed: the same two entries stand when the sweep
-    /// runs now and go when it runs the day after tomorrow.
+    /// The age is read off the clock the sweep is handed, so the same
+    /// entries stand now and go two days on.
     #[test]
     fn a_sweep_takes_the_runs_of_a_day_ago_and_leaves_todays() {
         let base = super::claim_dir(&std::env::temp_dir().join("pgg-census"), "sweep")
@@ -386,9 +324,8 @@ mod tests {
         std::fs::remove_dir(&base).expect("the base, empty now");
     }
 
-    /// The mark is what the sweep goes by, and it does not expire: the
-    /// hand-built tree stands on the day its neighbour's run goes, and on
-    /// every day after.
+    /// The mark does not expire: the marked tree stands the day its
+    /// neighbour goes, and a month on.
     #[test]
     fn a_sweep_leaves_a_marked_tree_and_takes_the_run_beside_it() {
         let base = super::claim_dir(&std::env::temp_dir().join("pgg-census"), "sweep-keep")
@@ -403,8 +340,6 @@ mod tests {
         assert_eq!(super::sweep_older_than(&base, now + age * 2, age), 1);
         assert!(!run.exists(), "the run beside it went");
         assert!(kept.join("repo").is_file(), "the marked tree stands");
-        // Nothing is left for a later sweep to find: the mark has no
-        // floor to outlive, so a month buys the sweep no more than a day.
         assert_eq!(super::sweep_older_than(&base, now + age * 30, age), 0);
         assert!(kept.join("repo").is_file(), "and stands a month on");
         std::fs::remove_dir_all(&base).expect("the base and the tree it kept");
@@ -436,20 +371,15 @@ mod tests {
         }
     }
 
-    /// What turns a run of this test binary into the process that holds
-    /// a claim: the path to hold, and the line it says once it has it.
+    /// What turns a run of this test binary into the claim holder: the
+    /// path to hold, and the line it says once it holds it.
     const HELD_FOR: &str = "PGG_OWNERSHIP_HOLD";
     const HELD: &str = "claim held";
 
-    /// Names the holder to the run that starts it. A filter rather than
-    /// `--exact`: the module path is not this test's to know, and the
-    /// name is one binary's.
+    /// Passed as a filter rather than with `--exact`: the module path is
+    /// not this test's to know.
     const HOLDER: &str = "holds_a_claim_until_it_is_killed";
 
-    /// Holds a claim on the path it is handed until it is killed — the
-    /// second process of the test below, which starts it as another run
-    /// of this same binary. Ignored because nothing else hands it a
-    /// path, and without one there is nothing here to run.
     #[test]
     #[ignore = "the second process of a_claim_a_killed_run_held_is_taken_by_the_next"]
     fn holds_a_claim_until_it_is_killed() {
@@ -461,10 +391,8 @@ mod tests {
             .expect("the claim this run was started to take")
             .expect("new claim");
         println!("{HELD}");
-        // Held for as long as the run that started this one holds its
-        // end of the pipe: the read answers when that end closes, so a
-        // holder whose run is gone does not stand on — and one that is
-        // killed, as the test below kills it, never gets that far.
+        // Held until the starting run's end of the pipe closes, so a
+        // holder whose run died does not stand on.
         let mut word = String::new();
         std::io::stdin()
             .read_line(&mut word)
@@ -472,17 +400,13 @@ mod tests {
         drop(held);
     }
 
-    /// What a killed run leaves behind is a lock file with no lock on
-    /// it: the operating system lets go of what a process held however
-    /// that process ended, so the next run takes the path and has
-    /// nothing to clean up first. The claim is held from a process of
-    /// its own — a lock refuses across handles, so one thread cannot
-    /// play both runs.
+    /// A killed run leaves a lock file with no lock on it: the OS lets go
+    /// however the process ended, so the next run takes the path with
+    /// nothing to clean up. The holder is a second process because the
+    /// subject is a process being killed.
     #[test]
     fn a_claim_a_killed_run_held_is_taken_by_the_next() {
         let target = super::fresh_shot_dir("killed-claim").expect("target directory");
-        // Its stdin is a pipe this run holds the other end of: what the
-        // holder stands on, and what lets it go if this run dies first.
         let mut holder =
             std::process::Command::new(std::env::current_exe().expect("this test binary"))
                 .args([HOLDER, "--ignored", "--nocapture"])
@@ -509,17 +433,14 @@ mod tests {
         holder.kill().expect("the holder is ended");
         holder.wait().expect("the holder is reaped");
 
-        // The file the killed run locked stands: nothing but the sweep
-        // ever takes one. Asked before this run claims anything, so the
-        // file standing here is the dead run's own.
+        // Asked before this run claims anything, so the file standing
+        // here is the dead run's own.
         let canonical = std::fs::canonicalize(&target).expect("the resolved target");
         let (lock, _) = super::lock_of(&std::env::temp_dir().join(super::LOCKS), &canonical);
         assert!(lock.is_file(), "{} went with its owner", lock.display());
 
-        // When the operating system lets the lock go is the machine's
-        // own affair: the claim is tried under the suite's budget, every
-        // try the real claim, and a lock never let go fails by name with
-        // the last refusal in the message.
+        // When the OS lets the lock go is the machine's affair, so the
+        // real claim is retried under the suite's budget.
         let taken = crate::wait::until(
             "the killed run's claim let go",
             || {
@@ -553,9 +474,6 @@ mod tests {
         std::fs::remove_dir(target).expect("remove empty target directory");
     }
 
-    /// One resource, four runs asking in the same moment: the lock is
-    /// the resource's only owner, so exactly one of them is handed it
-    /// and the rest are told it is somebody's.
     #[test]
     fn one_run_of_several_racing_for_a_resource_takes_it() {
         let target = super::fresh_shot_dir("racing-claim").expect("target directory");
@@ -595,10 +513,8 @@ mod tests {
         std::fs::remove_dir(target).expect("remove empty target directory");
     }
 
-    /// **What a passing run gives back, and the one thing it does not.**
-    /// The roots are the run's own — a claim is a `create_dir` that
-    /// succeeded — so the only question left at the moment of removal is
-    /// whether somebody asked for one to be kept.
+    /// The roots handed in are the run's own, so what is left to ask at
+    /// removal is who is still running and whether a root is marked.
     #[test]
     fn a_passing_run_gives_back_its_roots_and_spares_a_marked_one() {
         let base = crate::yard::Yard::new("giveback");
@@ -615,10 +531,8 @@ mod tests {
 
         let roots = vec![scaffolding.clone(), another.clone(), marked.clone()];
 
-        // Something this run started is still going: nothing is taken.
         assert_eq!(super::give_back(roots.clone(), Some(vec![4242])), 0);
         assert!(scaffolding.exists(), "a root went while a process ran");
-        // And an answer nobody could read is not "nobody".
         assert_eq!(super::give_back(roots.clone(), None), 0);
         assert!(scaffolding.exists(), "a root went on an unread answer");
 
@@ -630,13 +544,10 @@ mod tests {
         assert!(marked.exists(), "a tree somebody asked to keep was taken");
     }
 
-    /// **A reading that failed reaches the removal as a refusal.** The
-    /// two answers the real path has to get right are arranged on a
-    /// `/proc` of the test's own, because neither can be arranged on
-    /// the machine's: a process that vanished between the listing and
-    /// the read is not running and is passed over, and a `stat` that
-    /// cannot be made sense of is not an empty answer — it takes the
-    /// whole reading with it, and nothing is removed.
+    /// On a `/proc` of the test's own, since the machine's cannot arrange
+    /// either case: a process gone between listing and read is passed
+    /// over, and an unreadable `stat` fails the whole reading, so nothing
+    /// is removed.
     #[test]
     #[cfg(target_os = "linux")]
     fn a_reading_that_failed_keeps_the_roots() {
@@ -666,7 +577,6 @@ mod tests {
             "nothing was in the way and the root stayed"
         );
 
-        // Now one that is there and says nothing this can read.
         std::fs::create_dir_all(&root).expect("the root again");
         stat_for(4243, "nonsense with no bracket\n");
         assert!(
@@ -681,11 +591,9 @@ mod tests {
         assert!(root.exists(), "a root went on a reading that had failed");
     }
 
-    /// **A process that outlives the app is seen.** This is the whole of
-    /// what the removal rests on where a removal cannot refuse itself:
-    /// unix answers by group, so a child started here — which is in this
-    /// runner's group, as a verified run's app and its git are — has to
-    /// show up in the list.
+    /// What the removal rests on where it cannot refuse itself (unix): a
+    /// child in this runner's group, as a run's app and its git are, has
+    /// to be in the list.
     #[test]
     #[cfg(target_os = "linux")]
     fn a_child_that_is_still_running_is_in_the_answer() {

@@ -1,24 +1,20 @@
-//! Presets at the size and shape the panes have to survive: the measured
-//! walls a ref and a path stop at, and a repository sprawling enough that
-//! nothing shows whole.
+//! Presets at the size and shape the panes have to survive: the walls a
+//! ref and a path stop at, and repositories too large to show whole.
 
 use super::repo::{DemoRepo, file_url};
 
-/// Bytes a ref's last component may have. Measured in throwaway
-/// repositories on both systems: a loose ref is the file `<name>.lock`
-/// against a 255-byte filename, so Linux stops at 250 — while NTFS counts
-/// UTF-16 units and took 100 kanji (301 bytes) without complaint. The
-/// smaller wall is the shared one, and a repository that holds a ref only
-/// Windows can spell is a repository Linux cannot check out.
+/// Bytes a ref's last component may have: a loose ref is written as
+/// `<name>.lock` against a 255-byte filename, so Linux stops at 250. NTFS
+/// allows more, but a ref only Windows can spell is one Linux cannot check
+/// out, so the smaller wall is the shared one.
 const REF_WALL: usize = 250;
-/// Bytes a path component may have: 255 on both, and the worktree path
-/// has to fit MAX_PATH under a temp directory, so files stay well inside.
+/// Bytes a file name here may have: the component limit is 255 on both,
+/// but the whole worktree path has to fit MAX_PATH under a temp directory.
 const PATH_ROOM: usize = 120;
 
-/// `head`, then kanji until the whole is exactly `bytes` long. The point
-/// is the last character: it ends *on* the wall, so anything that slices
-/// by byte index cuts it in half there — which is how this project lost
-/// its graph once (core.md, the co-author key).
+/// `head`, then kanji until the whole is exactly `bytes` long, so the last
+/// character ends on the wall and anything that slices by byte index cuts
+/// it in half (rules-refs/core.md「`&str` をバイト長で切らない」).
 fn to_the_byte(head: &str, bytes: usize) -> String {
     const FILL: [char; 5] = ['長', 'い', '名', '前', 'の'];
     let mut s = String::from(head);
@@ -33,10 +29,9 @@ fn to_the_byte(head: &str, bytes: usize) -> String {
     s
 }
 
-/// A paragraph somebody pasted, in both scripts, *at least* `bytes` long.
-/// git puts no wall in front of a subject, a body, an author name or a URL
-/// — it took a megabyte of each in the same measurement — so what stands in
-/// for "the limit" here is the worst thing a person plausibly does.
+/// A paragraph somebody pasted, in both scripts, at least `bytes` long.
+/// git puts no wall in front of a subject, a body, an author name or a
+/// URL, so "the limit" here is the worst thing a person plausibly does.
 pub(crate) fn pasted(bytes: usize) -> String {
     let unit = "この行は長い日本語の文章で、折り返しと省略の両方を試すために置いてある。 \
                 And an English clause rides along so the run of Latin text is measured too. ";
@@ -48,17 +43,11 @@ pub(crate) fn pasted(bytes: usize) -> String {
     s
 }
 
-/// The message a release actually gets written with: paragraphs, a list,
-/// and a note in Japanese. Long enough that no pane shows it whole —
-/// which is what the description box's grip is pulled for — and written
-/// out, because a wall of the same sentence tells you nothing about
-/// how a real message wraps
-/// (デザイン規約 §コミットメッセージの 2 つの枠).
-///
-/// Some paragraphs are wrapped at 72 columns and some are one long line,
-/// because both turn up in real repositories — one from an editor, the
-/// other pasted in — and they are the two things a box that wraps has to
-/// be looked at doing.
+/// A release message long enough that no pane shows it whole
+/// (デザイン規約 §コミットメッセージの 2 つの枠). Written out, not
+/// repeated: a repeated sentence says nothing about how a real message
+/// wraps, and real ones arrive both wrapped at 72 columns and as one long
+/// line.
 const LONG_MESSAGE: &str = "\
 refactor: move the whole store behind one interface
 
@@ -96,10 +85,8 @@ panes ask for a range has changed. Those are three separate arguments
 and this commit is already the wrong size for having any of them in it.
 ";
 
-/// Where the bulk of one commit lands, and how many files each
-/// place takes. Spread over real-looking directories: the file
-/// list is a tree first, and a tree of one folder is not a
-/// tree.
+/// Where the bulk of one commit lands, and how many files each place
+/// takes — several directories, since a tree of one folder is not a tree.
 const SPRAWL: [(&str, usize, &str); 6] = [
     ("src/core", 18, "rs"),
     ("src/ui", 14, "rs"),
@@ -109,23 +96,14 @@ const SPRAWL: [(&str, usize, &str); 6] = [
     ("assets/icons", 11, "svg"),
 ];
 
-/// How many commits `spread` writes, and how many files each of them
-/// touches. Both sides have to be past what a pane can hold: the point of
-/// the preset is a choice whose commits *and* whose files overflow at
-/// once, and either alone is already covered (`deep` has the commits,
-/// `long` has the files).
 const SPREAD_COMMITS: usize = 40;
 const SPREAD_FILES: usize = 3;
 
-/// A history where every commit is of its own handful of files — the one
-/// shape a choice can overflow in both directions at once
-/// (デザイン規約 §複数のコミットを選ぶ: the commits it lists and the files
-/// they changed are two lists sharing a pane).
-///
-/// **Only this preset answers it.** `deep` writes
-/// the same blob every time, so a choice of a thousand of its commits
-/// changed nothing at all; `long` puts eighty files in a single commit,
-/// so the list of commits is four rows.
+/// A history where every commit touches its own handful of files: the one
+/// shape in which a choice overflows both of the lists sharing its pane,
+/// commits and files (デザイン規約 §複数のコミットを選ぶ). `deep` cannot
+/// stand in (it writes the same blob every time, so its commits change
+/// nothing), nor can `long` (its files are in one commit).
 pub(super) fn spread(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# spread\n", "docs: start the readme")?;
     for n in 0..SPREAD_COMMITS {
@@ -143,12 +121,9 @@ pub(super) fn spread(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// A commit nobody can read at a glance, over a tree nobody can scroll at
-/// a glance, in a work tree of the same. Everything here is long on
-/// purpose: the message runs past any pane, the commit touches 80 files,
-/// and the working tree carries 60-odd changes of its own — which is the
-/// state the description box's grip, the CHANGES list and the WIP list
-/// are all hard to look at without.
+/// One commit whose message and file list both run past any pane, and a
+/// working tree with dozens of changes of its own: the state the
+/// description box's grip, the CHANGES list and the WIP list are read in.
 pub(super) fn long(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -162,11 +137,8 @@ pub(super) fn long(repo: &mut DemoRepo) -> Result<(), String> {
         "feat: add a pane that reads it",
     )?;
 
-    // A remote, and the ordinary history sent to it before the wall
-    // goes on top: a repository with nothing to fetch from reads as a
-    // broken window, and leaving the wall unpushed is what makes
-    // sending 80 files something that can be tried here, against a
-    // remote that answers.
+    // Pushed before the big commit goes on top, so a remote answers and
+    // sending the big commit can still be tried here.
     repo.add_origin()?;
     repo.git(&["push", "--set-upstream", "origin", "main"])?;
 
@@ -204,14 +176,12 @@ pub(super) fn long(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Lines the file carries, and how far apart the changes in it sit. The
-/// spacing is what makes them twenty hunks: git carries three lines of
-/// context either side, so two changes fewer than eight lines apart
-/// come out as one hunk with a gap in it.
+/// Lines the file carries, and how far apart its changes sit: git keeps
+/// three lines of context either side, so changes fewer than eight lines
+/// apart merge into one hunk.
 const HUNK_LINES: usize = 320;
 const HUNK_STEP: usize = 16;
 
-/// The file, before and after: 320 lines with 20 of them reworded.
 fn notes(changed: bool) -> String {
     let mut s = String::new();
     for i in 0..HUNK_LINES {
@@ -224,15 +194,13 @@ fn notes(changed: bool) -> String {
     s
 }
 
-/// One unstaged file with twenty hunks in it, which is the only shape in
-/// which a reader can have a place in a diff at all: a place exists where
-/// there is more diff than window, and it can only be seen kept if a
-/// partial write leaves enough behind to come back to (`keep-place`).
+/// One unstaged file with twenty hunks: more diff than window, so a reader
+/// has a place in it, and enough left after a partial write to come back
+/// to (`keep-place`).
 ///
-/// Plain text on purpose. The colours land after the rows and swap the
-/// whole list a second time (`colour-place`), and that swap under this
-/// one would take the view back to the top after the restore had put it
-/// right — a different story, told by its own verb over its own fixture.
+/// Plain text on purpose: colours would swap the rows a second time and
+/// take the view back to the top after the restore — that is
+/// `colour-place`'s own fixture (`coloured`).
 pub(super) fn manyhunks(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -244,19 +212,14 @@ pub(super) fn manyhunks(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// How wide the lines of the `widelines` fixture run. Past any pane on any
-/// screen this app is built for: the point of the preset is that the end of
-/// the line cannot be brought on screen by making the window bigger.
+/// How wide the lines of `widelines` run: past any pane at any window
+/// size.
 const WIDE_COLUMNS: usize = 400;
 
-/// One unstaged file whose lines run far past the pane they are shown in —
-/// the only shape in which the diff has anywhere sideways to go, and so
-/// the only one where the bar along its bottom edge and the hand that
-/// moves it can be seen at all (`code-send`).
-///
-/// Both sides are wide: a change with a short old side would let the
-/// reader send the new one out of the frame and leave the row half empty,
-/// which says nothing about how far the diff reaches.
+/// One unstaged file whose lines run far past the pane, so the diff has
+/// somewhere sideways to go (`code-send`). Both sides are wide: a short
+/// old side would leave its row half empty once the new one is sent out
+/// of frame.
 pub(super) fn widelines(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -268,14 +231,10 @@ pub(super) fn widelines(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// `HUNK_LINES` of `WIDE_COLUMNS`, one in every `HUNK_STEP` of them
-/// changed. The word that changes sits at the front, so the diff says what
-/// it is about without being sent anywhere — what is out past the edge is
-/// the rest of the line. ASCII throughout, so a column is a character.
-///
-/// As long as it is wide: the hand that sends the code sideways carries
-/// the rows up and down at the same time, and a file that fits its pane
-/// has no up or down to be carried through.
+/// The changed word sits at the front, so the diff is readable without
+/// being sent sideways. ASCII throughout, so a column is a character.
+/// As long as it is wide: the hand that sends the code sideways also
+/// carries the rows up and down.
 fn wide(word: &str) -> String {
     let mut out = String::new();
     for i in 0..HUNK_LINES {
@@ -299,21 +258,14 @@ fn wide(word: &str) -> String {
 ///
 /// `columns.txt` carries full-width glyphs: the row counts one as two
 /// columns (`encode::columns::step_of`), but a Latin-only mono family
-/// hands it to a fallback that advances one em instead (measured on
-/// Windows: charW 8px against 13px). Three short lines to say where the
-/// wash sits, because it takes three: one with nothing wide in it, one
-/// whose change stands behind wide glyphs, and one whose change is wide
-/// glyphs standing behind more of them. Then a block that runs far past
-/// the pane on wide glyphs alone, which is a different question — how far
-/// the diff reaches (`encode::widest_lines`), and the one thing
-/// `widelines` cannot ask because it is deliberately ASCII.
+/// hands it to a fallback that advances one em (Windows: charW 8px against
+/// 13px). Three short lines place the wash — nothing wide, a change behind
+/// wide glyphs, a wide change behind more — then a block past the pane on
+/// wide glyphs alone, for how far the diff reaches
+/// (`encode::widest_lines`), which ASCII-only `widelines` cannot ask.
 ///
-/// `marks.txt` carries the rest of them, one kind a line: a tab, spaces
-/// the file really ends on, a combining mark the font draws nothing extra
-/// for, an astral glyph the string holds as two units, and full-width
-/// glyphs again. **Short lines, so the blank right of each of them is
-/// inside the pane** — which is what `diff-blank` presses in, and what no
-/// count of characters can find the left edge of.
+/// `marks.txt` carries the other kinds, on lines short enough that the
+/// blank right of each is inside the pane (`diff-blank`).
 pub(super) fn widechars(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -340,14 +292,12 @@ pub(super) fn widechars(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Those lines. Every one of them ends well short of the pane, and every
-/// one of them ends somewhere a walk of columns puts in the wrong place:
-/// a tab is four columns and one character, a combining mark is a
-/// character and no advance at all, an astral glyph is one character and
-/// two of the units a place is counted in, and a full-width glyph is two
-/// columns and whatever the fallback carrying it advances. The last line
-/// is long enough that the pane has somewhere sideways to go, which is
-/// what lets one run ask the same questions after a send.
+/// Each line ends where a walk of columns misplaces it: a tab is four
+/// columns and one character, a combining mark a character with no
+/// advance, an astral glyph one character and two of the units a place is
+/// counted in, a full-width glyph two columns and whatever the fallback
+/// advances. The last line runs past the pane, so one run can ask the
+/// same questions after a send.
 fn marks(word: &str) -> String {
     format!(
         "plain {word} plain\n\
@@ -362,23 +312,17 @@ fn marks(word: &str) -> String {
     )
 }
 
-/// How many full-width glyphs the wide lines of `widechars` stand on, and
-/// how many of those lines there are. Past any pane on any screen this app
-/// is built for even where the fallback draws each glyph at one em — and
-/// deep enough that the hand carrying the rows has somewhere down to go,
-/// which is what `code-send` is judged on.
+/// Glyphs per wide line of `widechars`, and how many lines: past any pane
+/// even at one em a glyph, and deep enough that the rows have somewhere
+/// down to go (`code-send`).
 const WIDE_GLYPHS: usize = 300;
 const WIDE_ROWS: usize = 40;
-/// One line in every this many of them changed — often enough that the
-/// hunks run together into one block, so the rows on screen outnumber the
-/// pane and the hand has somewhere down to go.
+/// One line in every this many changed — often enough that the hunks run
+/// together into one block taller than the pane.
 const WIDE_TORN: usize = 4;
 
-/// Those lines: the word that changes, and the glyphs behind it. The word
-/// stands at the front, so the diff says what it is about without being
-/// sent anywhere — what is out past the edge is the glyphs (the shape
-/// `wide` uses, for the same reason). Both sides carry the same glyphs, so
-/// neither reaches further than the other.
+/// The changed word at the front, as in `wide`. Both sides carry the same
+/// glyphs, so neither reaches further than the other.
 fn wide_run(word: &str) -> String {
     let mut out = String::new();
     for i in 0..WIDE_ROWS {
@@ -397,23 +341,18 @@ fn wide_run(word: &str) -> String {
     out
 }
 
-/// How long the coloured file is and how often it changes. Long enough
-/// that the colours are a read behind the rows — that gap is the whole
-/// of what `colour-place` is about, both for the place being read and
-/// for the width it is read against — and that there is more diff than
-/// window for a place to be lost in.
+/// How long the coloured file is and how often it changes: long enough
+/// that the colours land a read behind the rows (the gap `colour-place`
+/// is about), with more diff than window.
 const COLOURED_LINES: usize = 1200;
 const COLOURED_STEP: usize = 20;
 
-/// One unstaged file the highlighter has rules for: the only shape in
-/// which the colours arrive after the rows and rewrite every one of them
-/// (`DiffModel::repaint_rows`), which is what `colour-place` reads a
-/// place and a width across.
-///
-/// A `.rs` file, and that is the whole point: text the set has no rules
-/// for is never repainted, so a run over it asks nothing. Every line
-/// carries a keyword, a string and a number, so the rows that come back
-/// are markup and not the same characters again.
+/// One unstaged file the highlighter has rules for, so the colours arrive
+/// after the rows and rewrite every one (`DiffModel::repaint_rows`) — what
+/// `colour-place` reads a place and a width across. It has to stay `.rs`:
+/// text with no rules is never repainted. Every line carries a keyword, a
+/// string and a number, so the repainted rows are markup, not the same
+/// characters.
 pub(super) fn coloured(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -425,8 +364,6 @@ pub(super) fn coloured(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Those lines. Demo-repo content only: the file is made up and stands in
-/// no checkout of this repository.
 fn steps(word: &str) -> String {
     let mut out = String::from("//! Steps, one per line, for the colours to be laid over.\n\n");
     for i in 0..COLOURED_LINES {
@@ -443,53 +380,42 @@ fn steps(word: &str) -> String {
     out
 }
 
-/// A letter and the mark that stands over it. Two characters and two
-/// columns to a walk of the text, one advance to the font — the one shape
-/// in which the model's ranking by column count and the width a row is
-/// drawn at disagree with no fallback font in between (a wide glyph does
-/// too, but offscreen sets those at exactly the two advances the walk
-/// counts, so the disagreement never shows in a headless run).
+/// A letter and a combining mark: two columns to a walk of the text, one
+/// advance to the font — a disagreement between the column ranking and
+/// the drawn width that survives a headless run (offscreen draws a wide
+/// glyph at exactly the two advances the walk counts).
 const OVER_COUNTED: &str = "e\u{0301}";
 
-/// The shape of `late.txt`: how many of its lines carry those marks and
-/// how many marks each, how wide the one line nothing picks runs, how
-/// long the file is and where that line sits in it.
+/// The shape of `late.txt`: marked lines and marks per line, the width of
+/// the one line nothing picks, the file's length and where that line sits.
 ///
-/// Eight marked lines is what fills the pick: the model hands over the
-/// longest eight lines by column count (`encode::columns`), and a changed
-/// line puts both of its sides in the running, so eight is sixteen
-/// candidates and the ninth-longest line is never among them.
+/// Eight marked lines fill the pick: the model hands over the longest
+/// eight lines by column count (`encode::columns`), and each changed line
+/// enters both of its sides, so the deep line is never among them.
 const LATE_MARKED_LINES: usize = 8;
 const LATE_MARKS: usize = 400;
 const LATE_COLUMNS: usize = 700;
 const LATE_LINES: usize = 180;
 const LATE_DEEP: usize = 176;
-/// One line in every this many of the rest changed: enough hunks between
-/// the marked lines and the deep one that the deep one is well past the
-/// foot of the pane when the file opens.
+/// One line in every this many of the rest changed: enough hunks that the
+/// deep line is well past the foot of the pane when the file opens.
 const LATE_STEP: usize = 8;
 
-/// Three unstaged files about where the width of a diff comes from, which
-/// is a different question from `widelines`' "is there anywhere to go at
-/// all".
+/// Three unstaged files about where a diff's width comes from.
 ///
-/// `late.txt` is the one the pick gets wrong: its eight widest lines *by
-/// column count* are made of combining pairs, so they fill the pick and
-/// are drawn at half what the walk counted, and the line that is really
-/// drawn furthest is plain ASCII sitting at the foot of the file — named
-/// by no record and laid out by no row until the reader goes down to it
+/// `late.txt` is the one the pick gets wrong: its eight widest lines by
+/// column count are combining pairs, drawn at half what the walk counted,
+/// and the line really drawn furthest is plain ASCII at the foot of the
+/// file — laid out by no row until the reader goes down to it
 /// (`code-grow`).
 ///
-/// `top.txt` is the same file read twice: one very wide line added at the
-/// head, where a partial write can reach it without a pointer
-/// (`DiffPane.firstChangedLine`), over lines wide enough that taking it
-/// away leaves somewhere to go (`code-shrink`).
+/// `top.txt` adds one very wide line at the head, where a partial write
+/// reaches it without a pointer (`DiffPane.firstChangedLine`), over lines
+/// wide enough that taking it away leaves somewhere to go (`code-shrink`).
 ///
-/// `plain.txt` is the file beside them in the list: narrower than either
-/// and still not narrow enough to fit, so a reader sent to the middle of
-/// one of the others and then over to this one is put back at its left
-/// edge because the place was dropped, with somewhere still to be
-/// (`code-swap`).
+/// `plain.txt` is narrower than both and still past the pane, so a reader
+/// moved over to it from the middle of another is put back at its left
+/// edge with somewhere still to go (`code-swap`).
 pub(super) fn widelate(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit(
         "README.md",
@@ -509,9 +435,6 @@ pub(super) fn widelate(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// The marked lines at the head, the plain wide one at the foot, and
-/// notes in between. The word that changes stands at the front of every
-/// line, so each hunk says what it is about without being sent anywhere.
 fn late(word: &str) -> String {
     let mut out = String::new();
     for i in 0..LATE_LINES {
@@ -535,21 +458,18 @@ fn late(word: &str) -> String {
     out
 }
 
-/// How wide `top.txt` runs, what the one line added over it runs to, and
-/// how long it is. The wide line is several times the rest so that taking
-/// it away is a change anything can see; the rest is wide enough that
-/// what is left still runs past the pane, which is what makes "the place
-/// was kept" a claim.
+/// Widths of `top.txt`'s lines and of the one added over them, and its
+/// length. The added line is several times the rest, so removing it is a
+/// visible change; the rest still runs past the pane, so "the place was
+/// kept" is a claim.
 const TOP_COLUMNS: usize = 600;
 const TOP_ADDED: usize = 1600;
 const TOP_LINES: usize = 60;
 const TOP_STEP: usize = 8;
 
-/// `top.txt`, with the added line at the head when it is the working
-/// tree's copy. Written as an insertion: a rewrite puts the removal
-/// ahead of the addition, and the row a partial write can be aimed at
-/// without a pointer is the first changed row of the first hunk,
-/// whichever kind it is.
+/// Written as an insertion, not a rewrite: a rewrite puts the removal
+/// first, and a partial write without a pointer aims at the first changed
+/// row of the first hunk.
 fn top(changed: bool) -> String {
     let mut out = String::new();
     if changed {
@@ -570,10 +490,9 @@ fn top(changed: bool) -> String {
 }
 
 /// How wide `plain.txt` runs and how long it is: far short of the other
-/// two, and still past the pane by a margin that survives the narrower
-/// advance the container's own mono font draws at (measured, `code-swap`:
-/// 746px of room left over on Windows against 427 in the container, off
-/// 200 columns — this is that number with the difference put back).
+/// two, yet past the pane even at the container mono font's narrower
+/// advance (at 200 columns `code-swap` left 746px spare on Windows but 427
+/// in the container; 280 puts the difference back).
 const PLAIN_COLUMNS: usize = 280;
 const PLAIN_LINES: usize = 40;
 const PLAIN_STEP: usize = 4;
@@ -591,17 +510,13 @@ fn plain(word: &str) -> String {
     out
 }
 
-/// One file under a path wider than any pane, committed and then changed
-/// again: the flat paths views (the commit's file list and the working
-/// tree's) each hold a row that middle-elides at any sane width, and the
-/// tree views compact the same directories into one folder-chain row
-/// that elides too — both the states the row's hover has to answer
-/// (PGG_AUTO_ACT=path-tip, with and without `-tree`). The dirty tree
-/// keeps the graph shape fixed: row 0 is the WIP row, row 1 the commit
-/// that holds the file.
+/// One file under a path wider than any pane, committed and then changed:
+/// the flat views middle-elide its row and the tree views elide the
+/// compacted folder chain — both states the row's hover answers
+/// (`path-tip`, with and without `-tree`). The dirty tree fixes the graph
+/// shape: row 0 is WIP, row 1 the commit holding the file.
 pub(super) fn longpaths(repo: &mut DemoRepo) -> Result<(), String> {
-    // Demo-repo content only: the path is made up and exists in no
-    // checkout of this repository.
+    // Made up: no such path exists in this repository.
     const FAR: &str =
         "crates/platitude-core/src/session/integration/support/fixtures/refs_join_snapshot.rs";
     repo.commit(
@@ -613,11 +528,9 @@ pub(super) fn longpaths(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
-/// Every string the UI shows, at both ends of what git allows, with
-/// Japanese in all of them. Two repositories in one: the short end is a
-/// single character everywhere (including a commit with *no* message,
-/// which git accepts and reads back empty), the long end sits on the
-/// measured wall.
+/// Every string the UI shows at both ends of what git allows, all with
+/// Japanese: one character everywhere, and the long end on the walls
+/// above.
 pub(super) fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     let wall_branch = to_the_byte("b", REF_WALL);
     let wall_tag = to_the_byte("t", REF_WALL);
@@ -635,10 +548,9 @@ pub(super) fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["commit", "--allow-empty", "--allow-empty-message", "-m", ""])?;
     repo.git(&["commit", "--allow-empty", "--author=日 <あ>", "-m", "一"])?;
 
-    // The body is longer than any pane is tall on purpose: the details
-    // pane's description box can be pulled open by its corner, and a body
-    // that runs out before the room does never reaches the bound that
-    // pull stops at (デザイン規約 §コミットメッセージの 2 つの枠).
+    // Longer than any pane is tall, so pulling the description box open
+    // reaches the bound the pull stops at
+    // (デザイン規約 §コミットメッセージの 2 つの枠).
     let long_subject = pasted(2000);
     let long_body = format!(
         "{}\n\n{}\n\nCo-authored-by: {} <{}@example.com>\n",
@@ -676,19 +588,13 @@ pub(super) fn edges(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["push", "--set-upstream", "origin", "main"])?;
     repo.git(&["push", "origin", "あ", "x"])?;
 
-    // The wall-length tag drifts away from the long-named remote's copy:
-    // push it, then move the local one.
-    //
-    // A drift, because a tag a fetch can reach is one auto-follow
-    // brings down: only a tag on a commit nobody here has stays away,
-    // and such a tag is on no row to hang a chip from
-    // (core.md, タグのリモート状態のデータ).
-    //
-    // And every remote here answers: `fetch --prune --all` walks
-    // every one of them, so a single absurd URL would turn every fetch
-    // in this repository into a failure and every fetch verb into a
-    // FAIL. The remote's name sits at the wall because a remote's name
-    // is a ref component too.
+    // The wall-length tag drifts from the long-named remote's copy: pushed,
+    // then moved here. A drift, because a remote-only tag is either
+    // brought down by auto-follow or on no row
+    // (デザイン規約 §グラフ行のダブルクリック「タグの在処もブランチと同じ 2 軸で読ませる」).
+    // The remote has to answer: `fetch --prune --all` walks every remote,
+    // so one unreachable URL fails every fetch verb here. Its name sits at
+    // the wall because a remote's name is a ref component too.
     let long_remote = to_the_byte("r", REF_WALL);
     let bare = repo.root.join("long.git");
     std::fs::create_dir_all(&bare).map_err(|e| e.to_string())?;

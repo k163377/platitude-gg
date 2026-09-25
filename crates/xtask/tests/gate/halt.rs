@@ -1,15 +1,13 @@
 //! A run's first red stops it (`gate::halt`): what was still running is
-//! ended, what had not started is not, and every one of them is filed as
-//! `halted` — so the books stay whole and the next run owes them again.
+//! ended, what had not started is not, and each is filed as `halted`, so
+//! the next run owes them again.
 
 use crate::support::{ALWAYS, Sandbox};
 
-/// The Linux side's step holds until the halt reaches it — the one moment
-/// a faked step cannot otherwise be caught in, faked steps ending as they
-/// start (`PGG_GATE_FAKE_HOLD`) — and the host's red waits for that step
-/// to have started (`PGG_GATE_FAKE_FAIL_AFTER`), so what is checked is a
-/// running step ended by the other side's red, and never one the halt
-/// met at its door.
+/// The Linux step holds until the halt reaches it (`PGG_GATE_FAKE_HOLD` —
+/// faked steps otherwise end as they start), and the host's red waits for
+/// it to start (`PGG_GATE_FAKE_FAIL_AFTER`): what is checked is a running
+/// step, never one the halt met at its door.
 #[test]
 fn the_first_red_ends_what_the_other_side_is_running() {
     let sb = Sandbox::new("halt-running");
@@ -45,15 +43,12 @@ fn the_first_red_ends_what_the_other_side_is_running() {
         first.contains("test platitude-core 1 linux"),
         "the held step had started before the red: {first:?}"
     );
-    // Nothing was stamped for it, so the run after owes it again.
     sb.gate_ok(&sb.seat, &[]);
     let again = sb.ran();
     assert!(again.contains("test platitude-core 1 linux"), "{again:?}");
 }
 
-/// A red always-step stops the run before either side starts, under
-/// `--keep-going` too: the Linux side runs none of its steps, and each of
-/// them has a row that says so.
+/// Under `--keep-going` too, and each Linux step has a row saying so.
 #[test]
 fn a_red_always_step_starts_neither_side() {
     let sb = Sandbox::new("halt-always");

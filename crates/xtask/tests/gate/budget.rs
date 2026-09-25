@@ -1,19 +1,12 @@
 //! The machine's budget between real processes: what one holds another
-//! waits for, whose turn comes first, and what a holder that is killed
-//! gives back.
+//! waits for, whose turn comes first, and what a killed holder gives back.
 //!
-//! Threads answer the rule (`budget::queue`) and the ledger's own files
-//! (`budget::tests`); what only processes can answer is the part the
-//! operating system owns — a lock released because a process died, which
-//! is `flock` on Linux and `LockFileEx` on Windows and is the whole of
-//! how a killed gate gives the machine back. So every holder here is a
-//! `cargo xtask budget hold` of its own, and the suite drives every one
-//! of its edges: it says one word when it has joined the queue
-//! (`--queued`), one when it is admitted (`--say`), and holds until a
-//! file appears (`--until`). No clock decides anything, and nothing here
-//! is read out of the ledger's own report: a holder says where it stands
-//! itself, so that letting a holder go can never happen while the one
-//! meant to take the room has not arrived ([`Holder::wait_queued`]).
+//! Only processes can answer the part the OS owns — the lock released when
+//! a holder dies (`flock` / `LockFileEx`); the rule and the ledger are
+//! `budget::queue` and `budget::tests`. Each holder is a
+//! `cargo xtask budget hold` driven by its own edges (`--queued`, `--say`,
+//! `--until`): no clock decides anything, and where a holder stands is
+//! never read out of the ledger's report ([`Holder::wait_queued`]).
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -21,9 +14,8 @@ use std::process::{Child, Command, Stdio};
 use crate::support::{EXE, Sandbox};
 use crate::wait::{Budget, LOOK_AGAIN, Wait};
 
-/// One holder: the process, the word it says when it has joined the
-/// queue, the word it says when it is admitted, and the word that lets
-/// it go.
+/// One holder process and its three words: joined the queue, admitted,
+/// let go.
 struct Holder {
     child: Child,
     queued: PathBuf,
@@ -33,22 +25,15 @@ struct Holder {
 }
 
 impl Holder {
-    /// Whether it has been admitted — the word it writes the instant it
-    /// has the machine.
     fn admitted(&self) -> bool {
         self.said.exists()
     }
 
-    /// Waits until this holder is standing in the queue — the word it
-    /// writes the instant its ticket is in the ledger.
-    ///
-    /// **Said by the holder.** A test that let a holder go while the
-    /// next one had not
-    /// arrived would watch the room go to whoever *had* — and then wait
-    /// out its own ceiling for the one it meant to admit, which is a
-    /// deadlock the report cannot be read for: it says "0 landing(s) in
-    /// line" on an empty ledger, so a word looked for in it answers
-    /// before anything has arrived (`budget::ledger::admit_arriving`).
+    /// Waits until this holder says its ticket is in the ledger. Letting
+    /// a holder go before the next has queued hands the room to whoever
+    /// had queued, and the test waits out its ceiling; the report cannot
+    /// stand in, as "0 landing(s) in line" is true before anything has
+    /// queued (`budget::ledger::admit_arriving`).
     fn wait_queued(&mut self) {
         self.wait_for(
             &self.queued.clone(),
@@ -57,7 +42,6 @@ impl Holder {
         );
     }
 
-    /// Waits until it has been admitted.
     fn wait_admitted(&mut self) {
         self.wait_for(
             &self.said.clone(),
@@ -66,8 +50,6 @@ impl Holder {
         );
     }
 
-    /// Waits for one of this holder's words, failing by name if the
-    /// holder ends without saying it.
     fn wait_for(&mut self, word: &Path, stage: &str, what_for: &str) {
         let mut wait = Wait::new(
             format!("the holder {}", self.what),
@@ -87,15 +69,13 @@ impl Holder {
         }
     }
 
-    /// Lets it go and waits for it to end.
     fn let_go(mut self) {
         std::fs::write(&self.release, b"go\n").expect("the word to let go");
         let status = self.child.wait().expect("the holder");
         assert!(status.success(), "the holder {} ended red", self.what);
     }
 
-    /// Ends it where it stands, holding its ticket: what a gate killed
-    /// mid-run leaves behind.
+    /// Kills it holding its ticket — what a gate killed mid-run leaves.
     fn killed(mut self) {
         self.child.kill().expect("kill the holder");
         self.child.wait().expect("the killed holder");
@@ -103,29 +83,25 @@ impl Holder {
 }
 
 impl Drop for Holder {
-    /// A holder whose word never came — a test that failed before it
-    /// said it — is not left on the machine: its own ceiling would keep
-    /// it there for half an hour, holding room every later run waits for.
+    /// A test that failed mid-way must not leave its holder on the
+    /// machine: its ceiling would keep it holding room later runs wait for.
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
 }
 
-/// A repository for the holders to share a budget beside. The sandbox's
-/// own, so the git configuration is the suite's.
 fn sandbox(name: &str) -> (Sandbox, PathBuf) {
     let sandbox = Sandbox::new(name);
     let repo = sandbox.repo.clone();
     (sandbox, repo)
 }
 
-/// Starts one holder against `repo`, its seat named after it.
 fn hold(sandbox: &Sandbox, repo: &Path, what: &str, args: &[&str]) -> Holder {
     held(sandbox, repo, what, &["--seat", what], args)
 }
 
-/// The same, for a test that puts several units in one seat.
+/// `hold` with the seat given, for several units in one seat.
 fn held(sandbox: &Sandbox, repo: &Path, what: &str, seat: &[&str], args: &[&str]) -> Holder {
     let beside = repo.parent().unwrap_or(repo);
     let (queued, said, release) = (
@@ -166,7 +142,7 @@ fn held(sandbox: &Sandbox, repo: &Path, what: &str, seat: &[&str], args: &[&str]
     }
 }
 
-/// What the machine says it is doing, as `cargo xtask budget` prints it.
+/// The report `cargo xtask budget` prints.
 fn standing(sandbox: &Sandbox, repo: &Path) -> String {
     let mut command = Command::new(EXE);
     command.arg("budget").arg("--dir").arg(repo);
@@ -175,8 +151,7 @@ fn standing(sandbox: &Sandbox, repo: &Path) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-/// The budget is one machine's: what the first holds,
-/// the second waits for, across processes that never met.
+/// The budget is the machine's, across processes that never met.
 #[test]
 fn a_second_process_waits_for_the_room_the_first_is_holding() {
     let (sandbox, repo) = sandbox("budget-two");
@@ -194,9 +169,7 @@ fn a_second_process_waits_for_the_room_the_first_is_holding() {
     second.let_go();
 }
 
-/// A landing is handed the room a gate's unit was already waiting for,
-/// and ordinary work is not admitted into what the landing has not
-/// finished with.
+/// Ordinary work stays out until the landing lets go.
 #[test]
 fn a_landing_takes_the_room_ahead_of_a_gate_that_was_waiting_first() {
     let (sandbox, repo) = sandbox("budget-landing");
@@ -228,8 +201,6 @@ fn a_landing_takes_the_room_ahead_of_a_gate_that_was_waiting_first() {
     ordinary.let_go();
 }
 
-/// The three ranks in one line, between processes: what moves main goes
-/// first, the window somebody is waiting at next, and the tests last.
 #[test]
 fn the_room_goes_to_the_landing_then_the_launch_then_the_test() {
     let (sandbox, repo) = sandbox("budget-ranks");
@@ -273,10 +244,8 @@ fn the_room_goes_to_the_landing_then_the_launch_then_the_test() {
     test.let_go();
 }
 
-/// A holder killed where it stands gives the machine back: the lock is
-/// the operating system's to release, and the ticket beside it is litter
-/// the next reader takes away. This is the shape a killed gate leaves,
-/// and the one place the two systems answer for themselves.
+/// The lock is the OS's to release, and the ticket beside it is litter
+/// the next reader takes away.
 #[test]
 fn a_holder_killed_where_it_stands_gives_the_machine_back() {
     let (sandbox, repo) = sandbox("budget-killed");
@@ -295,10 +264,8 @@ fn a_holder_killed_where_it_stands_gives_the_machine_back() {
     second.let_go();
 }
 
-/// Two seats, two units and one: a, then b, then a — and the middle
-/// step is the one that is easy to get wrong, because by then a's first
-/// unit has **finished** and there is nothing among the tickets to say a
-/// was served at all.
+/// a, then b, then a: by the middle step a's first unit has finished, so
+/// no ticket is left to say a was served.
 #[test]
 fn the_seats_take_turns_across_units_that_have_already_finished() {
     let (sandbox, repo) = sandbox("budget-turns-served");
@@ -316,8 +283,6 @@ fn the_seats_take_turns_across_units_that_have_already_finished() {
     holder.let_go();
     first.wait_admitted();
     assert!(!second.admitted() && !third.admitted(), "one at a time");
-    // a's first is not merely done with the room — it is gone, ticket
-    // and all. The next room is b's all the same.
     first.let_go();
     third.wait_admitted();
     assert!(
@@ -330,11 +295,9 @@ fn the_seats_take_turns_across_units_that_have_already_finished() {
     second.let_go();
 }
 
-/// A killed holder gives the machine back **only once what it started
-/// has ended**. Its own lock frees the instant it dies, but the cargo,
-/// the container or the app under it is still on the machine, and
-/// handing that room out is the over-subscription the whole budget is
-/// there to stop — with nobody left to notice it.
+/// Its lock frees the instant it dies, but the cargo, container or app
+/// under it still runs: handing that room out is the over-subscription
+/// the budget exists to stop.
 #[test]
 fn a_killed_holder_keeps_its_room_while_what_it_started_runs() {
     let (sandbox, repo) = sandbox("budget-leftover");
@@ -357,8 +320,7 @@ fn a_killed_holder_keeps_its_room_while_what_it_started_runs() {
     let mut second = hold(&sandbox, &repo, "after", &["--jobs", "1", "--weight", "6"]);
     second.wait_queued();
     first.killed();
-    // The ledger has to say what it is holding the room for, or nobody
-    // could act on it.
+    // The ledger has to name what it holds the room for.
     let mut wait = Wait::new("the ledger", Budget::SUITE, LOOK_AGAIN);
     loop {
         let seen = standing(&sandbox, &repo);
@@ -374,15 +336,12 @@ fn a_killed_holder_keeps_its_room_while_what_it_started_runs() {
         "the room came back while the killed holder's child was still running:\n{}",
         standing(&sandbox, &repo)
     );
-    // The child ends: now there is nothing left of that unit on the
-    // machine, and the room is everybody's again.
     std::fs::write(&goes, b"go\n").expect("the word to let the child go");
     second.wait_admitted();
     second.let_go();
 }
 
-/// Landings go one at a time, in the order they arrived, and a turn asks
-/// for none of the budget — the landing's own units do that.
+/// A turn asks for none of the budget — the landing's own units do.
 #[test]
 fn landings_take_their_turn_one_at_a_time() {
     let (sandbox, repo) = sandbox("budget-turns");
@@ -391,8 +350,6 @@ fn landings_take_their_turn_one_at_a_time() {
     let mut second = hold(&sandbox, &repo, "land-second", &["--turn"]);
     second.wait_queued();
     assert!(!second.admitted(), "two landings were under way at once");
-    // The turn holds none of the machine: a unit of the whole budget
-    // runs beside it.
     let mut beside = hold(
         &sandbox,
         &repo,
@@ -406,9 +363,7 @@ fn landings_take_their_turn_one_at_a_time() {
     second.let_go();
 }
 
-/// A child of an admitted unit runs under its parent's ticket: it is
-/// admitted though the machine is full, because the room its parent took
-/// is the room it is running in.
+/// The child runs in the room its parent took.
 #[test]
 fn a_child_under_its_parent_s_ticket_is_admitted_though_the_machine_is_full() {
     let (sandbox, repo) = sandbox("budget-carried");
@@ -437,8 +392,7 @@ fn a_child_under_its_parent_s_ticket_is_admitted_though_the_machine_is_full() {
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     sandbox.env(&mut command);
-    // After the sandbox's own environment, which clears this very mark:
-    // what is under test here is a child that carries it.
+    // After `sandbox.env`, which clears this mark.
     command.env("PGG_BUDGET_HELD", "1");
     let mut child = Holder {
         child: command.spawn().expect("spawn the child"),
@@ -447,8 +401,7 @@ fn a_child_under_its_parent_s_ticket_is_admitted_though_the_machine_is_full() {
         release,
         what: "child".to_string(),
     };
-    // A carried unit joins no queue, and says so all the same: its
-    // arrival is the decision that it needs no ticket.
+    // A carried unit joins no queue but still says it has arrived.
     child.wait_queued();
     child.wait_admitted();
     child.let_go();

@@ -4,9 +4,7 @@
 use super::PROCESS_STOP_APPROVAL_FLAG;
 use super::payload::string_field;
 
-/// PreToolUse(Bash|PowerShell): a kill aimed at the app by image name
-/// reaps every seat's runs and the user's own window in one line.
-/// Answers whether it refused, like `pre_git`.
+/// PreToolUse(Bash|PowerShell). Answers whether it refused, like `pre_git`.
 pub(super) fn pre_kill(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(false);
@@ -30,12 +28,10 @@ pub(super) fn pre_kill(input: &str) -> Result<bool, String> {
 }
 
 /// Whether a shell line kills the app without pinning the kill to one
-/// tree's processes. A verb counts only as a bare token — quoted, it is
-/// somebody's search pattern (a kill smuggled whole into
-/// `powershell -Command "..."` slips this net; the guard teaches).
-/// `$_.Path`-filtered pipelines are the one hand-written shape that is
-/// scoped; taskkill cannot filter by path at all, so it is held
-/// regardless.
+/// tree's processes. A quoted verb is a search pattern, not a kill (so a
+/// kill inside `powershell -Command "..."` slips through). A `$_.Path`
+/// filter is the one scoped hand-written shape; taskkill cannot filter by
+/// path, so it is always held.
 fn broad_kill(command: &str) -> bool {
     let line = command.to_lowercase();
     if !line.contains("platitude") {
@@ -87,8 +83,7 @@ mod tests {
             "cargo xtask kill",
             "kill -9 4321",
             "pkill -f some-other-tool",
-            // A search that names the verbs as quoted data is not a kill
-            // (a live false positive: this guard once held this grep).
+            // A search that names the verbs as quoted data is not a kill.
             "grep -n \"Kill()\\|Stop-Process\\|taskkill\" .claude/skills/verify-ui/SKILL.md",
             "rg 'taskkill' C:/x/platitude-gg",
         ] {

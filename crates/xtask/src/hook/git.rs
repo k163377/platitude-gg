@@ -7,11 +7,10 @@ use super::{MAIN_APPROVAL_FLAG, REBASE_APPROVAL_FLAG, permit};
 use crate::subprocess::common_git_dir;
 use crate::subprocess::git_query;
 
-/// PreToolUse(Bash|PowerShell): the git this repository holds until the
-/// user asks for it in so many words (CLAUDE.md Git 運用) — putting a
-/// branch on main, rewriting a branch under the session, and committing
-/// anything at all from the primary checkout. Answers whether it refused,
-/// so the guard after it stays quiet when it did.
+/// PreToolUse(Bash|PowerShell): the git held until the user asks for it in
+/// so many words (CLAUDE.md Git 運用), and any commit from the primary
+/// checkout. Answers whether it refused, so the guard after it stays quiet
+/// when it did.
 pub(super) fn pre_git(input: &str) -> Result<bool, String> {
     let Some(command) = string_field(input, "command") else {
         return Ok(false);
@@ -23,19 +22,16 @@ pub(super) fn pre_git(input: &str) -> Result<bool, String> {
     if guarded_git_denied(input, &command, &cwd) {
         return Ok(true);
     }
-    // The commit guard's one exception rides the command: the user asked,
-    // in so many words, for a commit in the primary checkout.
+    // The user's own ask for a commit in the primary checkout rides the command.
     if !command.contains(MAIN_APPROVAL_FLAG) && primary_commit_denied(&command, &cwd) {
         return Ok(true);
     }
     Ok(false)
 }
 
-/// The two names that decide whether refs/heads/main answers to the gate
-/// at all: its manual skip flag, and the mark that tells a session's git from the
-/// user's. A session that spells either is stepping around the pre-merge
-/// tests, which is the one thing the gate exists to make impossible
-/// (internal-docs/反映前テストの機械化.md).
+/// The gate's skip flag and session mark decide whether refs/heads/main
+/// answers to the gate at all; a session spelling either is stepping
+/// around the pre-merge tests.
 fn gate_control_change_denied(command: &str) -> bool {
     let names = [crate::gate::SKIP, crate::gate::SESSION];
     let Some(name) = names.into_iter().find(|name| command.contains(name)) else {
@@ -53,11 +49,8 @@ fn gate_control_change_denied(command: &str) -> bool {
     true
 }
 
-/// Putting a branch on main and rewriting the branch under the session
-/// are both the user's call (CLAUDE.md Git 運用). The landing verb alone
-/// goes through, on the user's permit — whatever a session puts in
-/// front of a git line of its own. A rebase carries its own approval
-/// flag.
+/// The landing verb goes through on the user's permit alone, whatever a
+/// session puts in front of it; a rebase carries its own approval flag.
 fn guarded_git_denied(input: &str, command: &str, cwd: &str) -> bool {
     let Some(guarded) = guarded_call(command) else {
         return false;
@@ -76,10 +69,8 @@ fn guarded_git_denied(input: &str, command: &str, cwd: &str) -> bool {
         return true;
     }
     let dir = guarded.dir.unwrap_or(cwd);
-    // Any git that cannot answer is git we are not guarding: a throwaway
-    // repository (CLAUDE.md Rust 規約: measure git in one) is on main as
-    // often as not and rebases freely, and the command would fail here
-    // anyway if the path is not a repository at all.
+    // Only this repository: a throwaway one (.claude/rules/code.md:
+    // measure git in one) is on main as often as not and rebases freely.
     let (Some(session_repo), Some(target_repo)) = (common_git_dir(cwd), common_git_dir(dir)) else {
         return false;
     };
@@ -91,9 +82,8 @@ fn guarded_git_denied(input: &str, command: &str, cwd: &str) -> bool {
     {
         return false;
     }
-    // A repository that keeps no seats has no letters, whatever its
-    // branches are called: the throwaway a session measures git in may
-    // well carry a `worktree-c` of its own.
+    // A repository with no roster has no letters: a throwaway may carry a
+    // `worktree-c` of its own.
     if guarded.offence == Offence::DeletesASeatsBranch && !keeps_seats(dir) {
         return false;
     }
@@ -108,15 +98,13 @@ fn keeps_seats(dir: &str) -> bool {
     })
 }
 
-/// Whether the tree a worktree verb names is a seat of *this* roster.
-/// Only that is held back: the corpus copies, a topical tree and the
-/// throwaway repository a session measures git in are nobody's seat and
-/// go without a word, laid out the same way or not.
+/// Whether the tree a worktree verb names is a seat of *this* roster;
+/// corpus copies, topical trees and throwaways go through even when laid
+/// out the same way.
 ///
-/// Two paths are resolved, not one. `-C <dir>` and a `cd` before the git
-/// are as often relative as not — from a seat, the primary checkout is
-/// `../../..` — and a base left relative leaves the target relative
-/// after it, which names no seat at all and let every such line through.
+/// The base (`-C <dir>` / a `cd`) is resolved too: left relative, it
+/// leaves the target relative, which names no seat and lets the line
+/// through.
 fn names_a_seat(cwd: &str, dir: Option<&str>, target: Option<&String>) -> bool {
     let Some(target) = target else {
         return false;
@@ -132,16 +120,13 @@ fn names_a_seat(cwd: &str, dir: Option<&str>, target: Option<&String>) -> bool {
 }
 
 /// The path a worktree verb names: its first argument that is not an
-/// option, with the options that take a value of their own stepped over
-/// (`-b`, `-B` and `--reason`; `--orphan` takes none), and `--force` on
-/// either side. A value or a path the shell split on the spaces inside
-/// its quotes is put back together.
+/// option, stepping over the values of `-b`, `-B` and `--reason`
+/// (`--orphan` takes none). A value or a path the shell split on the
+/// spaces inside its quotes is put back together.
 fn worktree_path(arguments: &[&str]) -> Option<String> {
     let mut rest = arguments.iter().skip(1).copied();
     while let Some(argument) = rest.next() {
         if matches!(argument, "-b" | "-B" | "--reason") {
-            // The value this option takes, and the rest of it when the
-            // shell split it on the spaces inside its quotes.
             if let Some(value) = rest.next() {
                 quoted(value, &mut rest);
             }
@@ -154,8 +139,7 @@ fn worktree_path(arguments: &[&str]) -> Option<String> {
 
 /// One argument, with the tokens the shell split out of its quotes put
 /// back: everything up to the token that closes the quote this one
-/// opened. A token that is not quoted, or closes its own quote, is
-/// itself.
+/// opened.
 fn quoted<'a>(first: &'a str, rest: &mut impl Iterator<Item = &'a str>) -> String {
     let mut whole = first.to_string();
     let Some(quote) = first.chars().next().filter(|c| matches!(c, '"' | '\'')) else {
@@ -210,15 +194,9 @@ enum Offence {
     WritesMain { only_from_main: bool },
     /// Rewrites the branch it runs on, whichever branch that is.
     Rebase,
-    /// Makes, takes away, locks or unlocks a roster seat's tree by hand.
-    /// The seat verbs do all four behind the roster's rules; a hand
-    /// doing one is a session deciding what only the user decides — a
-    /// claim written or lifted by hand moves a letter without the user's
-    /// word, and a tree taken away strands its branch (`seats::grow_back`).
+    /// Acts on a roster seat's tree by hand, which only the seat verbs do.
     TouchesASeat,
-    /// Deletes a roster letter's branch: the commits the roster refuses
-    /// to hand the letter out over, and the ones a takeover grows the
-    /// tree back on.
+    /// Deletes a roster letter's branch.
     DeletesASeatsBranch,
 }
 
@@ -232,9 +210,8 @@ impl Offence {
         )
     }
 
-    /// The refusal for what a session may not run at all. The landing
-    /// verb's answer is the permit's, and the one here is what a
-    /// hand-written main would get in its place.
+    /// The refusal. The landing verb's real answer is the permit's; the
+    /// one here is a hand-written main's.
     fn reason(&self, what: &str) -> String {
         match self {
             Offence::WritesMain { .. } | Offence::Landing => format!(
@@ -285,14 +262,10 @@ impl Offence {
     }
 }
 
-/// The first guarded git invocation in `command`, if any: the verbs that
-/// write refs/heads/main, and rebase, which rewrites whichever branch it
-/// runs on. Git that names main as a source (`git log main`, `git switch
-/// main`) only reads it.
+/// The first guarded git invocation in `command`, if any. Git that names
+/// main as a source (`git log main`, `git switch main`) only reads it.
 fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
     let tokens: Vec<&str> = command.split_whitespace().collect();
-    // The sanctioned landing verb is a landing: the permit is what says
-    // the user asked for this one.
     if xtask_verb(&tokens, "land") {
         return Some(GuardedGit {
             dir: None,
@@ -313,9 +286,8 @@ fn guarded_call(command: &str) -> Option<GuardedGit<'_>> {
             index += 1;
             continue;
         }
-        // git's own options come before the subcommand; -C and -c take a
-        // separate value, so stepping one token at a time would read that
-        // value as the subcommand.
+        // -C and -c take a separate value, which one-token steps would read
+        // as the subcommand.
         let mut dir = None;
         index += 1;
         while let Some(option) = tokens.get(index).filter(|token| token.starts_with('-')) {
@@ -404,12 +376,9 @@ pub(super) fn unquote(token: &str) -> &str {
 }
 
 /// Whether the line invokes `cargo xtask <verb>` (or the unaliased
-/// `cargo run -p xtask -- <verb>`), anywhere in it: the verb is the first
-/// positional token after `xtask` when `cargo` stands right before it,
-/// or the token after the `--` that ends cargo's own options when `run`
-/// does. `cargo test -p xtask land` names a test filter.
-/// A quoted mention keeps its quote character on the token and does not
-/// match.
+/// `cargo run -p xtask -- <verb>`), anywhere in it. `cargo test -p xtask
+/// land` names a test filter, and a quoted mention keeps its quote on the
+/// token; neither matches.
 pub(super) fn xtask_verb(tokens: &[&str], verb: &str) -> bool {
     tokens
         .iter()
@@ -436,15 +405,9 @@ pub(super) fn xtask_verb(tokens: &[&str], verb: &str) -> bool {
 mod tests {
     use super::{Offence, guarded_call};
 
-    /// A worktree verb is read as far as the tree it names; whether that
-    /// tree is a roster seat is judged afterwards (`names_a_seat`), which
-    /// is what keeps the guard off the corpus copies and the throwaway
-    /// repositories.
-    ///
-    /// Reading the path is where this can go quietly wrong: an option's
-    /// value read as the path, or a quoted reason the shell split on its
-    /// spaces, and the guard measures the wrong thing and lets the line
-    /// through.
+    /// Only the path is read here (`names_a_seat` judges it). An option's
+    /// value or a split quoted reason read as the path lets the line
+    /// through quietly.
     #[test]
     fn reads_the_tree_a_worktree_verb_names_whichever_side_the_options_are_on() {
         for command in [
@@ -455,8 +418,7 @@ mod tests {
             "git worktree add .claude/worktrees/c worktree-c",
             "git worktree add -b worktree-c .claude/worktrees/c main",
             "git worktree add --lock --reason \"claude-seat x\" -B worktree-c .claude/worktrees/c main",
-            // --orphan takes no value of its own, so the path is the
-            // token right after it.
+            // --orphan takes no value of its own.
             "git worktree add --orphan .claude/worktrees/c",
             "git worktree lock --reason \"claude-seat x pid 1\" .claude/worktrees/c",
             "git worktree unlock .claude/worktrees/c",
@@ -533,8 +495,8 @@ mod tests {
             "git show HEAD:main",
             "git push origin worktree-labels",
             "git branch main-ish",
-            // How a merged seat starts over (CLAUDE.md ビルド・テスト): it
-            // writes the seat's own branch, and rewrites no history.
+            // How a merged seat starts over: it writes the seat's own
+            // branch, and rewrites no history.
             "git reset --hard main",
         ] {
             assert!(guarded_call(command).is_none(), "{command}");
@@ -561,8 +523,7 @@ mod tests {
         for command in ["git rebase --abort", "git rebase --quit"] {
             assert!(guarded_call(command).is_none(), "{command}");
         }
-        // The demo repositories rebase on purpose, through the task runner —
-        // no `git` token, so nothing here sees them.
+        // The demo repositories rebase through the task runner — no `git` token.
         for command in [
             "cargo xtask demo-repo rebase-conflict",
             "cargo xtask verify-ui rebase-stop --preset rebase-conflict",

@@ -1,9 +1,7 @@
-//! The roster measured and read: what each letter's tree holds right
-//! now (`cargo xtask seats`, and the greeting's survey), rendered one
-//! line per seat — and, when the roster has nothing left to give, what
-//! each letter is refusing on. Apart from the handing-out so that the
-//! module that moves claims and the one that describes seats stay
-//! under the length backstop each (.claude/rules/structure.md).
+//! The roster measured and read (`cargo xtask seats`, the greeting's
+//! survey): what each letter's tree holds now, one line per seat, and
+//! what each letter is refusing on when the roster has nothing left to
+//! give. Moving claims stays in `seats`.
 
 use std::time::{Duration, SystemTime};
 
@@ -15,51 +13,40 @@ use super::{
 /// One seat of the roster, surveyed.
 pub(crate) struct Seat {
     pub name: &'static str,
-    /// None for a letter with neither a tree nor a branch carrying work:
-    /// one nobody has used yet, which the roster makes when it comes to
-    /// it.
+    /// None for a letter with neither a tree nor a branch carrying work
+    /// (unused — the roster creates it when it comes to it).
     pub state: Option<SeatState>,
 }
 
-/// What a letter holds right now.
 pub(crate) struct SeatState {
-    /// Branch name, empty while HEAD is detached — a rebase in flight
-    /// detaches it, so an active session can read as branchless.
+    /// Empty while HEAD is detached — a rebase in flight does that, so an
+    /// active session can read as branchless.
     pub branch: String,
-    /// Whether the letter's tree is on disk. A tree can go away under a
-    /// branch — removed by a hand, or pruned once its directory went —
-    /// and what is left is a letter nothing can enter, land or read
-    /// until a takeover grows the tree back. Whose the letter is, that
-    /// takes nothing away from: the claim on the record stands.
+    /// False when the tree went away under its branch: nothing can enter,
+    /// land or read the letter until a takeover grows the tree back, and
+    /// the claim on the record still stands.
     pub on_disk: bool,
-    /// Whether `git worktree lock` holds it — a session's claim (the
-    /// entry hooks write one; manual locks land here too).
+    /// `git worktree lock` — a session's claim, or a manual lock.
     pub locked: bool,
-    /// The lock's reason, empty when unlocked or given none.
+    /// Empty when unlocked or given no reason.
     pub lock_reason: String,
-    /// Commits main does not have (`main..HEAD`); None when git could not
-    /// answer. Ranges run on HEAD, so a detached
-    /// seat still counts.
+    /// `main..HEAD` (so a detached seat still counts); None when git could
+    /// not answer.
     pub ahead: Option<u32>,
-    /// The reverse (`HEAD..main`); zero of each means HEAD is main's tip.
+    /// `HEAD..main`.
     pub behind: Option<u32>,
-    /// Lines of `status --porcelain`: every uncommitted change, untracked
-    /// files included. None when git could not answer.
+    /// Lines of `status --porcelain`, untracked included; None when git
+    /// could not answer.
     pub dirty: Option<usize>,
-    /// Time since the seat's own index was last written. Most git run in
-    /// the seat refreshes it, so a fresh age means hands on the seat
-    /// recently, whatever the counted columns say.
+    /// Since the seat's own index was last written. Most git run in the
+    /// seat refreshes it, so a fresh age means recent hands on the seat
+    /// whatever the other columns say.
     pub index_age: Option<Duration>,
 }
 
-/// What each letter is refusing on, for the refusal above.
-///
-/// A roster with nothing left to give is the one moment the user has to
-/// act on the letters themselves, and "every seat is held or carries
-/// work" says which of the two about none of them. The survey runs again
-/// here rather than being carried down the walk: this is the path that
-/// ends the session's turn, and what it reports should be the roster as
-/// it stands after the walk, not before it.
+/// What each letter is refusing on, for a full roster's refusal.
+/// Surveys again rather than reusing the walk's reading: the report
+/// should be the roster as it stands after the walk.
 pub(super) fn in_the_way(primary: &str) -> String {
     let Some(survey) = survey(primary) else {
         return "  (git could not read the roster — `cargo xtask seats`)".to_string();
@@ -71,7 +58,6 @@ pub(super) fn in_the_way(primary: &str) -> String {
         .join("\n")
 }
 
-/// One letter's line of that report.
 fn one_letter_refusing(seat: &Seat) -> String {
     let name = seat.name;
     let Some(state) = &seat.state else {
@@ -115,34 +101,28 @@ pub fn run(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Every roster seat, measured now. None when `git worktree list` itself
-/// fails (not a repository). The survey only reads: status runs under
-/// --no-optional-locks, because a plain status opportunistically rewrites
-/// the index it refreshed, and that write would stamp the very index
-/// mtimes this survey reports with the survey's own run.
+/// Every roster seat, measured now; None when `git worktree list` fails
+/// (not a repository). Reads only (`dirty_lines`).
 pub(crate) fn survey(cwd: &str) -> Option<Vec<Seat>> {
     let listing = crate::subprocess::git_query(cwd, &["worktree", "list", "--porcelain"])?;
     let entries = seat_entries(&listing);
     let now = SystemTime::now();
-    // One thread per seat: the greeting takes this survey on every session
-    // start, and six seats of sequential subprocess batches are the
-    // difference between a beat and a second.
+    // One thread per seat: every session start waits on this survey, and
+    // each seat is a batch of subprocesses.
     Some(std::thread::scope(|scope| {
         let handles = SEATS.map(|name| {
             let entry = entries.iter().find(|entry| entry.seat == name);
             scope.spawn(move || match entry {
                 Some(entry) if has_a_directory(&entry.tree.path) => Some(seat_state(entry, now)),
-                // A letter git still lists and the disk does not have.
-                // Its branch is asked after from the primary checkout,
-                // there being no tree to ask in.
+                // Listed by git but gone from disk: its branch is asked
+                // from the primary checkout.
                 Some(entry) => Some(without_a_tree(
                     Some(&entry.tree),
                     name,
                     commits_in(cwd, &format!("main..worktree-{name}")),
                 )),
-                // And one with no record left either, whose branch still
-                // carries work: a letter nobody can see is a letter
-                // nobody lands.
+                // No record either, but its branch carries work: shown,
+                // or nobody lands it.
                 None => {
                     stranded_work(cwd, name).map(|ahead| without_a_tree(None, name, Some(ahead)))
                 }
@@ -159,9 +139,8 @@ pub(crate) fn survey(cwd: &str) -> Option<Vec<Seat>> {
     }))
 }
 
-/// A letter whose tree is not on disk, read from what is left of it: the
-/// record the listing still carries — the branch it stood on and the
-/// claim it still holds — and what that branch has that main has not.
+/// A letter whose tree is not on disk, read from the listing's record
+/// (branch and claim) when git still has one.
 fn without_a_tree(record: Option<&WorktreeBlock>, name: &str, ahead: Option<u32>) -> SeatState {
     SeatState {
         branch: record.map_or_else(
@@ -180,18 +159,14 @@ fn without_a_tree(record: Option<&WorktreeBlock>, name: &str, ahead: Option<u32>
     }
 }
 
-/// What a letter with no tree still carries on its own branch.
-///
-/// A tree can go away under a branch — removed by a hand, or pruned once
-/// the directory went — and what is left is a letter the roster will not
-/// hand out and a reader cannot see: read as a letter nobody has used,
-/// the work on it sits there while the roster runs out of letters.
+/// What a letter with no tree (removed by hand, or pruned) still carries
+/// on its own branch. Read as unused, that work would sit unseen while
+/// the roster runs out of letters.
 pub(super) fn stranded_work(cwd: &str, seat: &str) -> Option<u32> {
     commits_in(cwd, &format!("main..worktree-{seat}")).filter(|ahead| *ahead > 0)
 }
 
-/// Measures one created seat. Each figure is None when its git call
-/// fails, and the callers print those as unknowns.
+/// Measures one seat whose tree is on disk.
 fn seat_state(entry: &SeatEntry, now: SystemTime) -> SeatState {
     let dir = entry.tree.path.as_str();
     SeatState {
@@ -206,11 +181,9 @@ fn seat_state(entry: &SeatEntry, now: SystemTime) -> SeatState {
     }
 }
 
-/// How long since the seat's own index was written. The path has to be
-/// asked for: a worktree's admin directory is named after the directory
-/// the tree was first created as — one seat here
-/// sits on .git/worktrees/skillcare — so .git/worktrees/<seat>/index is
-/// a guess that misses (measured).
+/// The index path is asked of git: a worktree's admin directory is named
+/// after the directory the tree was first created as, so
+/// `.git/worktrees/<seat>/index` can miss.
 fn index_age(dir: &str, now: SystemTime) -> Option<Duration> {
     let index = crate::subprocess::git_query(
         dir,
@@ -235,8 +208,7 @@ fn guide() -> String {
     )
 }
 
-/// The table: a header, one line per seat, and the reading. Pure so the
-/// tests can hand it seats git never made.
+/// Pure so the tests can hand it seats git never made.
 fn render(seats: &[Seat]) -> String {
     let mut rows = vec![[
         "seat".to_string(),
@@ -272,8 +244,7 @@ fn render(seats: &[Seat]) -> String {
     out
 }
 
-/// One seat's cells, and the note appended past the columns: whose the
-/// claim is, or how to reach a letter that lost its tree.
+/// One seat's cells, and the note printed past the columns.
 fn seat_row(seat: &Seat) -> ([String; 6], String) {
     let name = seat.name.to_string();
     let Some(state) = &seat.state else {
@@ -295,10 +266,9 @@ fn seat_row(seat: &Seat) -> ([String; 6], String) {
         state.branch.clone()
     };
     let count = |value: Option<u32>| value.map_or("?".to_string(), |value| value.to_string());
-    // A letter with no tree has no working copy to measure: the figures
-    // a tree would have answered for are absent, not unreadable, and the
-    // row that printed "(not created)" for one is how the work on two
-    // letters went unnoticed for days.
+    // A letter with no tree has no working copy: its figures are absent
+    // (`-`), not unreadable (`?`), and it must not read "(not created)",
+    // which hides its branch's work.
     let (at_main, dirty, age) = match state.on_disk {
         false => ("no".to_string(), "-".to_string(), "-".to_string()),
         true => (
@@ -335,8 +305,7 @@ fn seat_row(seat: &Seat) -> ([String; 6], String) {
     )
 }
 
-/// An age as the shortest round figure that still ranks seats: seconds
-/// under a minute, then minutes, hours, days.
+/// The shortest round figure that still ranks seats.
 pub(crate) fn format_age(age: Option<Duration>) -> String {
     let Some(age) = age else {
         return "?".to_string();
@@ -355,7 +324,6 @@ mod tests {
     use super::{Seat, SeatState, format_age, one_letter_refusing, render};
     use std::time::Duration;
 
-    /// A letter the survey measured, whatever it found.
     fn seat(name: &'static str, state: SeatState) -> Seat {
         Seat {
             name,
@@ -377,8 +345,7 @@ mod tests {
         }
     }
 
-    /// A letter whose tree went away under it, as the survey reads one
-    /// out of what git still lists.
+    /// A letter whose tree went away, as the survey reads it.
     fn treeless(name: &str, lock_reason: &str, ahead: u32) -> SeatState {
         SeatState {
             locked: !lock_reason.is_empty(),
@@ -444,8 +411,7 @@ mod tests {
         assert!(lines[3].contains('?'), "{table}");
         assert!(lines[4].contains("(not created)"), "{table}");
         // A letter that lost its tree says whose it still is, what its
-        // branch carries and how to get at it — a row reading
-        // "(not created)" would let the work go unnoticed.
+        // branch carries and how to get at it.
         assert!(
             lines[5].contains("worktree-e")
                 && lines[5].contains("17")
@@ -461,8 +427,6 @@ mod tests {
         assert!(lines[7].contains("no process is asked"), "{table}");
     }
 
-    /// The refusal a full roster ends on says, letter by letter, what the
-    /// user would have to act on.
     #[test]
     fn a_full_roster_says_what_each_letter_is_refusing_on() {
         assert_eq!(
@@ -480,9 +444,7 @@ mod tests {
             one_letter_refusing(&seat("c", surveyed("worktree-c", "", 0, 0)))
                 .contains("taken between"),
         );
-        // A letter whose tree went away says so, and says it while still
-        // naming whoever holds the letter: what went missing is the
-        // tree, not the word that says whose it is.
+        // A lost tree still names whoever holds the letter.
         assert_eq!(
             one_letter_refusing(&seat("d", treeless("d", "", 4))),
             "d: no tree on disk while worktree-d carries 4 commit(s) — a takeover grows the \
