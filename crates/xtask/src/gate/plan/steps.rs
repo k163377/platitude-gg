@@ -81,6 +81,10 @@ fn on_linux(id: &str, command: &[String], inputs: &[String]) -> Step {
 #[derive(Default)]
 struct Sorted {
     rust_in: BTreeMap<String, Vec<String>>,
+    /// The packages the change reaches as code (`Carried::Whole`): what
+    /// clippy is owed for. A package the product reaches only as data a
+    /// tool reads is in `rust_in` and not here — its code did not change.
+    rust_moved: BTreeSet<String>,
     unit_filters: BTreeMap<String, BTreeSet<String>>,
     unit_files: BTreeMap<String, Vec<String>>,
     integration: BTreeMap<(String, String), (BTreeSet<String>, Vec<String>)>,
@@ -108,7 +112,7 @@ fn sort(
 ) -> Sorted {
     let (_, qml_tests) = qml_dirs();
     let mut sorted = Sorted::default();
-    for file in reach.keys() {
+    for (file, carried) in reach {
         if file.ends_with(".qml") {
             // A QtTest file is no component: no census names it, so it
             // belongs to `qmltest_steps` alone.
@@ -126,6 +130,9 @@ fn sort(
             .entry(module.package.clone())
             .or_default()
             .push(file.clone());
+        if *carried == Carried::Whole {
+            sorted.rust_moved.insert(module.package.clone());
+        }
         match &module.test_binary {
             None if module.has_tests => {
                 let filter = if whole || module.path.is_empty() {
@@ -321,11 +328,14 @@ fn wedge_steps(reach: &Reach, whole: bool) -> Vec<Step> {
     vec![wedge]
 }
 
-/// clippy for every crate the reach enters, on both sides: the host's
-/// cannot answer for the names behind `cfg(not(windows))`.
+/// clippy for every crate the reach enters as code, on both sides: the
+/// host's cannot answer for the names behind `cfg(not(windows))`. clippy
+/// reads code alone, so a crate the product reaches only as data a tool
+/// reads (`graph::Carried`) owes none; its tests may read that data, so
+/// `unit_steps` / `it_steps` select them however the reach was handed.
 fn clippy_steps(sorted: &Sorted) -> Vec<Step> {
     let mut steps = Vec::new();
-    for package in sorted.rust_in.keys() {
+    for package in &sorted.rust_moved {
         let crate_dir = format!("crates/{package}");
         let mut clippy = words(&["cargo", "clippy", "--locked", "-p", package]);
         clippy.extend(words(&[
@@ -636,7 +646,55 @@ fn owed_lines(
 
 #[cfg(test)]
 mod tests {
-    use super::holds_periodic;
+    use std::collections::BTreeMap;
+
+    use super::{Carried, Graph, Reach, clippy_steps, holds_periodic, sort};
+    use crate::gate::graph::Module;
+
+    /// A crate the product reaches only as data a tool reads owes no
+    /// clippy; the crate the change is code of does. The same reach sorts
+    /// both into `rust_in`, which the tests select from.
+    #[test]
+    fn clippy_is_owed_by_a_crate_the_change_reaches_as_code_alone() {
+        let module = |package: &str, has_tests: bool| Module {
+            krate: package.replace('-', "_"),
+            path: vec!["probe".to_string()],
+            package: package.to_string(),
+            test_binary: None,
+            has_tests,
+        };
+        let mut g = Graph::default();
+        let core = format!("crates/{}/src/probe.rs", "platitude-core");
+        let tool = format!("crates/{}/src/probe_reader.rs", "xtask");
+        g.modules
+            .insert(core.clone(), module("platitude-core", false));
+        g.modules.insert(tool.clone(), module("xtask", true));
+        let reach: Reach = [
+            (core, Carried::Whole),
+            (tool.clone(), Carried::AsProductFile),
+        ]
+        .into_iter()
+        .collect();
+        let sorted = sort(&g, &reach, false, &BTreeMap::new());
+        assert!(sorted.rust_in.contains_key("xtask"));
+        assert_eq!(sorted.unit_files["xtask"], vec![tool]);
+        let ids: Vec<String> = clippy_steps(&sorted).into_iter().map(|s| s.id).collect();
+        assert_eq!(
+            ids,
+            ["clippy platitude-core", "clippy-linux platitude-core"]
+        );
+
+        // Handed whole by any path, the crate is owed again.
+        let both: Reach = reach
+            .into_keys()
+            .map(|file| (file, Carried::Whole))
+            .collect();
+        let ids: Vec<String> = clippy_steps(&sort(&g, &both, false, &BTreeMap::new()))
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        assert!(ids.contains(&"clippy xtask".to_string()), "{ids:?}");
+    }
 
     /// Inline and declared both count; a module that only starts with the
     /// word does not.

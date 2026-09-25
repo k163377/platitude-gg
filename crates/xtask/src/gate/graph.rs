@@ -79,7 +79,7 @@ pub(crate) struct Graph {
 /// `AsProductFile` did not change, so a step that file's name selects
 /// (the verbs through `verify` / `demo`, `qmltest` through its runner,
 /// the wedge through its record) is owed only by a file handed `Whole`,
-/// while the steps its code is built into (clippy, its own tests) are
+/// and so is clippy, which reads code alone; the tool's own tests are
 /// owed either way — a test of the tool may read the data.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Carried {

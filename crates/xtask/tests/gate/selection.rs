@@ -798,7 +798,8 @@ fn a_full_line_that_alone_shows_a_reached_component_is_owed_before_the_merge() {
 
 /// The path the real tree has: the QtTest runner reads the QtTest tree,
 /// and the harness is built with the runner. A QtTest change reaches the
-/// harness as data a tool reads, which is no change to the harness; a
+/// harness as data a tool reads, which is no change to the harness or to
+/// the code clippy reads; the runner's own tests may read the data. A
 /// change to code the harness is built with still owes every recorded
 /// line (`graph::Carried`).
 #[test]
@@ -812,7 +813,8 @@ fn a_qtest_change_reaches_the_harness_as_data_and_owes_no_verb() {
     sb.write(
         &sb.seat,
         "crates/xtask/src/qmltest.rs",
-        "pub fn run() -> &'static str { \"crates/platitude-app/tests/qml\" }\n",
+        "pub fn run() -> &'static str { \"crates/platitude-app/tests/qml\" }\n\
+         #[cfg(test)]\nmod tests {\n    #[test]\n    fn q() { assert!(!super::run().is_empty()) }\n}\n",
     );
     sb.write(
         &sb.seat,
@@ -844,15 +846,16 @@ fn a_qtest_change_reaches_the_harness_as_data_and_owes_no_verb() {
     sb.commit_all(&sb.seat, "test(app-ui): probe", &[]);
     sb.gate_ok(&sb.seat, &["--main", &base]);
     let ran = without_always(&sb.ran());
-    // The runner's crate is in reach as a reader of the data, so its
-    // clippy runs; no verb, and nothing the app is built for.
+    // The runner is in reach as a reader of the data: its own tests run,
+    // its crate's clippy does not (no code of it moved); no verb, and
+    // nothing the app is built for.
     assert_eq!(
         ran,
         set(&[
             "qmltest",
             "qmltest-linux",
-            "clippy xtask",
-            "clippy-linux xtask"
+            "test xtask 1",
+            "test xtask 1 linux",
         ]),
         "{ran:?}"
     );
@@ -865,13 +868,60 @@ fn a_qtest_change_reaches_the_harness_as_data_and_owes_no_verb() {
     sb.commit_all(&sb.seat, "fix(xtask): what the harness is built with", &[]);
     sb.gate_ok(&sb.seat, &["--main", &base]);
     let ran = without_always(&sb.ran());
+    // The branch's reach holds the runner's tests as well as the seat's.
     for owed in [
-        "test xtask 1",
+        "clippy xtask",
+        "test xtask 2",
         "verify stash --preset basic",
         "verify-linux stash --preset basic",
         "verify window",
     ] {
         assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
+    }
+}
+
+/// The other path the real tree has: a tool reads the app's source tree,
+/// so a core change reaches the tool as data through the app. The tool's
+/// own tests are owed (they may read the data); its crate's clippy is not
+/// planned at all, since no code of it moved (`graph::Carried`).
+#[test]
+fn a_product_change_reaching_a_tool_as_data_owes_its_tests_and_no_clippy() {
+    let sb = Sandbox::new("tool-as-data");
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/main.rs",
+        "mod qmltest;\nmod seats;\nfn main() { seats::seat(); }\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/seats.rs",
+        "pub fn seat() -> &'static str { \"crates/platitude-app/src\" }\n\
+         #[cfg(test)]\nmod tests {\n    #[test]\n    fn s() { assert!(!super::seat().is_empty()) }\n}\n",
+    );
+    let base = sb.commit_all(&sb.seat, "test: a tool that reads the app", &[]);
+    sb.write(
+        &sb.seat,
+        "crates/platitude-core/src/stash.rs",
+        "pub fn stash() { let _ = 1; }\n#[cfg(test)]\nmod tests {\n    use super::*;\n    #[test]\n    fn t() { stash() }\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(core): stash", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--main", &base, "--dry-run"]);
+    assert!(
+        text.contains("crates/xtask/src/seats.rs") && !text.contains("clippy xtask"),
+        "{text}"
+    );
+    sb.gate_ok(&sb.seat, &["--main", &base]);
+    let ran = without_always(&sb.ran());
+    for owed in [
+        "clippy platitude-core",
+        "clippy platitude-app",
+        "test xtask 1",
+        "test xtask 1 linux",
+    ] {
+        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
+    }
+    for spared in ["clippy xtask", "clippy-linux xtask"] {
+        assert!(!ran.contains(spared), "{spared} ran; ran: {ran:?}");
     }
 }
 
