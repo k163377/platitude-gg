@@ -10,7 +10,7 @@
 - **mod.rs から出す型の `pub(super)` は `pub(crate)` と書き写す** — session は crate 直下なので mod.rs の `pub(super)` = `pub(crate)`。移動先で `pub(super)` にすると session 内へ狭まる(逆に mod.rs で private だった型は移動先で `pub(super)` にすると元と同じ範囲)
 - **insta のスナップショットはソースファイル基準の `snapshots/` を見る** — `foo.rs` → `foo/bar.rs` へ動いたテストは置き場(`src/snapshots/` → `src/foo/snapshots/`)とファイル名(モジュールパス)の両方が変わる。中身は不変なので `INSTA_FORCE_UPDATE=1 cargo test` で `source:` 行だけ再生成する
 - **`mod tests` を専用ファイルへ持ち上げる時、複数行文字列リテラルの中身は字下げされていない** — 一律 dedent は fixture を壊す。宣言行だけ下げ、リテラルの行はそのまま移す(`parse/diff/testkit.rs` の `PATCH` が実例)
-- **xtask のディレクトリ化は file-parent(`perf.rs`+`perf/`・`linux.rs`+`linux/`)** — mod.rs 方式にすると run/dispatch の実装が mod.rs へ入り、「mod.rs は宣言だけ」を破る
+- **xtask も mod.rs 方式 — `run` / dispatch は子(`cli.rs` / `run.rs` 等)へ出す** — mod.rs に残るのは `mod`・re-export・共有型・`Command` の static(`budget` / `gate` / `shots` / `verify` / `waits`)。file-parent の `corpus` `docs` `land` `linux` `perf` `seats` `structure` `sweep` `usage` は触った時に寄せる
 - **外部クレートと同名のモジュールを作ったら親の `use` は `self::` で書く** — `settings/toml.rs` があると mod.rs の `use toml::…` は extern prelude と衝突して E0659。子ファイル側は素の `use toml::…` のままでよい
 - **移動だけのコミットは、移動先を決める前に「どの行がどこへ行くか」を機械で突き合わせる** — 元ファイルの全行が行き先ちょうど 1 つに入り、落ちるのは列挙した scaffolding(バナー・共有 `use`・`mod tests` の包み)だけ、と検証してから書き出す
 - **`include_bytes!` / `include_str!` はソースファイル基準** — 1 段深いディレクトリへ動かした項は `../` を足さないと別の場所を読みに行く。移動先に同名のディレクトリが在れば黙って別物を焼き込む
@@ -20,14 +20,13 @@
 - **`#![allow(dead_code)]` の下から実装を出したら、`pub use` の再輸出は呼ばれている名前だけ** — 再輸出は別 lint(`unused_imports`)なので `-D warnings` で赤くなる。呼ばれていない名前は module 越し(`support::wait::QUIET_BUDGET`)で届くから消してよい
 - **「可変ローカルを全分岐が触る」は fn 全体の話** — `parse_patch` は 6 本を 1 つの record(`Reading`)に束ねてから、行の種類ごとに method へ割った。**割る前に、既に在る兄弟の形を探す** — 片側だけが inline に残っていることがそのまま切れ目。`use super::*` のテストは道連れになる — 本体が名指さなくなった型はテスト側で import し直す
 - **`hook/mod.rs` は実装(`run` のディスパッチと `pre_shell` の連鎖)を持つ意図した例外** — 拒否は連鎖の順で最初の拒否が答え。この順序が 1 ファイルに見えていることが mod.rs 純度に勝つ。**`repeat` が最後なのは台帳の意味** — 前の誰かが拒否した行は走らないので、記録してよいのは連鎖を通り抜けた行だけ
-- **連鎖の末尾 2 つ(`repeat` / `dump`)は「以後の全呼び出しが読み直す量」で拒む** — **範囲読み(`sed -n 'a,bp'` / `head -n`)は見ていない** — 行数の上限では 1 件も捕まらない。捕まえるなら「出る byte の見積り」だが、それは判断待ち
+- **連鎖の末尾 2 つ(`repeat` / `dump`)は「以後の全呼び出しが読み直す量」で拒む** — `dump` が拒むのは 8KB を超えるファイルの丸読み(`cat` / `type` / `Get-Content` / `gc`)だけで、行数の上限は無い。**範囲読み(`sed -n 'a,bp'` / `head -n` / `Get-Content -TotalCount` 等)は拒まない**(ユーザー決定)— rules/app-ui.md はデザイン規約を「触る § だけを読み」と指示していて、8KB を超える § も珍しくないので、出る byte で拒むとその読み方が細切れか Grep になる
 - **guard が割に合うのは「呼び出しを消す」時か「1 回で大きく文脈を減らす」時だけ** — deny 1 回 = 撃ち直しの往復 1 回 = その時の文脈まるごと。新しい guard を足す前に、この 2 つのどちらに当たるかを数で見る
 - **Edit の広すぎる引用を deny する案は赤字で却下** — 引用を詰めた節約より deny 1 回の方が桁で高い。非ブロッキングの注意書きも常時ロードの 1 行も、足した側が全呼び出しに乗るので同じく赤字。**新しい実測なしに再提案しない**
 - **「同じセッションで自分が書いた所を書き直す」edit を機械で事前に見分ける手は無い** — 書く前に「これは考え直しだ」と判る条件が無い
 - **行を区切るのは `hook/shell::cut` の 1 本だけ**(`shell_segments` / `pipe_pieces`)。**新しい guard は自分で `split('|')` しない** — 引用符の中の区切りで切ると grep のパターンがプログラムとして拒否される
 - **セッションの事実は、それが起きた所で書き留める** — 席への入場(`seats::entry` / `.entered/<session>`)は `post_worktree` が書く。`cargo xtask seat` の報告はプロセスの cwd からは判断できないので、cwd は補助
 - **Windows の `python` は Microsoft Store のスタブ** — 何を渡しても exit 49。使い捨てスクリプトは `uv run --no-project python`(`hook::python` が綴りを教えて拒む)
-- **`models/repo_tab/qobject.rs` の本体は全て素の impl へ委譲済み** — 残るのは Qt に見せる面と 1〜3 行の転送だけなので、**縮め方はスロットを減らすことしか無い**(引数だけを読む純ルールの置き場は `GitFacts`)
 
 - **QML の「描かないホスト」は `anchors.fill: parent` を書く** — メニュー・ポップアップ・ダイアログは宣言された親アイテム越しに窓を測る(`AppMenu.ownerItem.Window.window` / `AppDialog` の `anchors.centerIn: parent` / `Popup.x` は親座標)。page 直下から寸法ゼロの Item の下へ移すと、行幅の上限もダイアログの中央も 0 になる。行カード・チップ一覧のようにシーン座標を受け取って置くものも同じ(`row.mapToItem(host, …)` が page 相当になるのは埋めた時だけ)
 - **`page.` を名乗る名前を子へ移したら、外から呼ぶ口だけは page に残す** — 窓の帯は `curPage.<名前>` で能動タブを読む(`TopBar`)ので、alias 再輸出か 1 行の転送を残さないとボタンが黙って死ぬ。自動化(`AutoActDriver`)側は逆に新しい持ち主を property で渡して呼ぶ
@@ -44,11 +43,9 @@
 - **`ListView.view` 直読を in-property 化しても、`ListView.onReused` だけはデリゲート root から動かせない** — attached `ListView` は root にしか生えない。切り出した子の再描画はデリゲートから子のメソッドを呼ぶ(`GraphLaneCell.loadFace` / `repaintLanes`)
 - **リスト自体を切り出す時は root をその `ListView` にする** — デリゲートが `ListView.view` 越しにしか読めない状態(`GraphList` の `namingOid` / `askOid` 等)はリストに載っているので、リストと一緒に動く。root がリストそのものなら `GraphPane.view` / `walk.view` / `ListView.view` 経由の外部参照は 1 つも書き換えずに済む。**`Keys.on*Pressed` は attached property なので使用側に残せる** — 中へ持って行くと、キーが呼ぶ先(`GraphRowWalk`)を property で受け直すことになり、`walk.view` と相互参照になる
 - **手を持つ部品と、その手が上げる線は同じファイルに入らない** — QML の重なりは親の 1 つの `z` でまとまるので、線をリストの下(`z` 既定)に、当たり判定をリストの上(`z: 2`)に置くことは 1 つの子アイテムでは両立しない。`GraphColumnDividers` は手だけを持ち、線は `GraphPane` に残して状態を property で読む(包みには元の `ColumnDivider` と同じ `z: 2` を書く — 書かないと `lanePan`(z:1)・`laneBar`(z:2)との前後が入れ替わる)
-- **切り出した非表示のホストは `Item` にする** — `QtObject` は子を置く場所を持たないので、`Component` / `Timer` を連れて出た瞬間に `Cannot assign to non-existent property "data"` で**その型ごと unavailable になり、Main.qml が丸ごとロードに失敗する**(窓は出ず、verify-ui は watchdog まで無言)
+- **切り出した非表示のホストは `Item` にする**(子を持つ物の話)— `QtObject` は子を置く場所(default property)を持たないので、`Component` / `Timer` を連れて出た瞬間に `Cannot assign to non-existent default property` で**その型ごと unavailable になり、Main.qml が丸ごとロードに失敗する**(窓は出ず、verify-ui は watchdog まで無言)。子を持たず property と関数だけの物(`PageLayout` / `CommitMenuState` / `CommandsOwner`)は `QtObject` で足りる。子にメニュー・ポップアップ・ダイアログが来るなら上の「描かないホスト」も要る
 - **ペインの「下に貼り付いた塊」は、その塊の Flickable を root にして出せる** — `WipCommitBlock` は `WipPane` の一覧の下に居た surface そのもので、`contentY` を触る `rollBlock` は塊の側へ行く。代わりに増えるのは読み戻しの口 — ペインが名指していた子が alias 1 段深くなる。**書ける口は関数で出す**(`readonly property alias amendChecked` へ代入はできない — `setAmendChecked(on)`)。ペインが子の座標を要る所(EOL カードをボタンの上に置く)はそのアイテム自身を alias で渡す(`commitSeat`)
 - **`ListView` の `delegate:` を独立ファイルへ出す時、モデルのロールに依存する「使用側の式」は使用側に書ける** — 宣言した id 経由でその行自身の required property を読める。行が持つ状態(選択集合)をペイン側に残したまま行を純表示に保てる
-- **`ui/GraphPane.qml` は出せる部品を全部出してある** — 残っているのは**席の宣言と、ページ⇄子の転送**そのもので、更に切り出せば転送が 1 段増えて全体では長くなる。席を持つ側は 1 つに居なければならない: 上端の 2 本のバーとリストは互いの `bottom` に繋がっており、hover を測る `HoverHandler` はペイン自身に置く決まり(app-ui.md)
-- **`ui/WipPane.qml` の残りは選択・ステージ・EOL 指しの機構** — 部品化済み(`MessageEditor` / `OpExitCard` / `TreeViewToggle` / 一覧の下の塊 = `WipCommitBlock`)の外に残る全員が `wipList.itemAtIndex` 走査とデリゲート再利用前提の鍵(`<bucket>:<path>`)を共有し、`RepoPage` と自動化がその API を直接叩く — **これ以上は list と鍵の渡し直し配線だけが増える**。EOL のカードと閉じ待ち(`eolAsked` / `eolKeep`)も同じ側: 席は `rowFor(path)` の行とペイン自身の座標で決まる
 
 ## コマンドの正本(`cargo xtask docs` が読む。規約本体は rules/structure.md §共通化)
 

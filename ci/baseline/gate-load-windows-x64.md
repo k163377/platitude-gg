@@ -72,6 +72,21 @@ gate が何に時間を払っているかの実測。**出典は gate 自身の�
   34〜36s、重なった gate を含む台帳(重い gate 120 本)では中央値 131s で、走っている間 host の動詞 1 本が中央値で
   1.89 倍になる
 
+## 割り込みを妨げる単位
+
+反映前の gate 1 本(席 a・466 ステップ・予算待ち 0、2026-09-25)の長い単位の上位 5 本 = land が待たされる上限の候補
+(反映前テストの機械化.md §割り込みを妨げる単位):
+
+| 単位 | 長さ | 内訳 |
+|---|---|---|
+| `test it (all)` | 65s | コンパイル 33s + 実行 32s |
+| `test xtask (all) linux` | 53s | |
+| `wedge-check` | 48s | |
+| `test it (all) linux` | 48s | コンパイル 36s + 実行 8s |
+| `test xtask (all)` | 43s | |
+
+- `test it (all)` は host のサイドの 156〜221s に走り、サイドの終わりは 299s(末尾を決める単位ではない)
+
 ## Defender
 
 gate 1 本(`gate --fresh`・16 分・全 preset の雛形を組んだ回)の `New-MpPerformanceRecording`:
