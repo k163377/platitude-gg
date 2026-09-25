@@ -94,7 +94,7 @@ pub fn launch(args: &[String]) -> Result<(), String> {
     for (pid, exe) in reap_under(&root)? {
         println!("reaped this tree's stale run first: {pid} ({exe})");
     }
-    let exe = stand_from_a_copy(&root, &crate::tree::app_exe(&root, &path, build, &[])?)?;
+    let exe = stand_from_a_copy(&root, &crate::app_build::app_exe(&root, &path, build, &[])?)?;
     let mut command = Command::new(&exe);
     command
         .current_dir(&root)
@@ -139,7 +139,7 @@ const APP_NAME: &str = "platitude-gg";
 fn standing_copy(root: &Path) -> PathBuf {
     root.join("target")
         .join("window")
-        .join(crate::tree::exe_name())
+        .join(crate::app_build::exe_name())
 }
 
 /// [`standing_copy`], refreshed from `built` every launch.
@@ -161,7 +161,7 @@ fn stand_from_a_copy(root: &Path, built: &Path) -> Result<PathBuf, String> {
 
 /// Every app process whose executable sits under `root`: what
 /// [`reap_under`] kills, and what a red release build names as possibly
-/// holding the file it was linking (`crate::tree::app_exe`).
+/// holding the file it was linking (`crate::app_build::app_exe`).
 pub(crate) fn standing_under(root: &Path) -> Result<Vec<(u32, String)>, String> {
     Ok(app_processes()?
         .into_iter()
@@ -290,11 +290,11 @@ mod tests {
             copy,
             seat.join("target")
                 .join("release")
-                .join(crate::tree::exe_name())
+                .join(crate::app_build::exe_name())
         );
         assert_eq!(
             copy.file_name(),
-            Some(std::ffi::OsStr::new(crate::tree::exe_name()))
+            Some(std::ffi::OsStr::new(crate::app_build::exe_name()))
         );
         assert!(is_under(&copy.to_string_lossy(), &seat));
     }

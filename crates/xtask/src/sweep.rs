@@ -73,7 +73,7 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&SWEEP, &DRY, &IF_MOVED];
 /// §hook は自前の build directory で動く).
 const PROFILES: [&str; 3] = ["debug", "release", "shipped"];
 
-/// The harness feature (`crate::tree::HARNESS_FEATURE`) and the shipped
+/// The harness feature (`crate::app_build::HARNESS_FEATURE`) and the shipped
 /// profile (Cargo.toml), spelled here rather than read off them: what
 /// this replays is the command line.
 const HARNESS: &str = "automation";
@@ -237,7 +237,7 @@ const CANONICAL: &[Line] = &[
         packages: no_package,
     },
     // The release every verify-ui run and every window drives
-    // (`tree::app_exe`). Alone in this profile: a release without the
+    // (`app_build::app_exe`). Alone in this profile: a release without the
     // harness would write the same bin, and the product is `shipped`.
     Line {
         host_only: false,

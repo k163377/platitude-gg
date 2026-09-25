@@ -239,13 +239,13 @@ fn build_in(
     opts: &Options,
 ) -> Result<std::path::PathBuf, String> {
     if !opts.harness {
-        return crate::tree::shipped_exe(tree, path, build);
+        return crate::app_build::shipped_exe(tree, path, build);
     }
     let mut extra = vec!["-p", "platitude-app"];
     if opts.breakdown {
         extra.extend(["--features", "memprobe"]);
     }
-    crate::tree::app_exe(tree, path, build, &extra)
+    crate::app_build::app_exe(tree, path, build, &extra)
 }
 
 /// The scenario the runs drive, as the warm note keys it: what a stage

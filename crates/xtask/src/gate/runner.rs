@@ -467,7 +467,7 @@ fn launched(
 }
 
 /// Whether a red verb's log says the app itself did not build — cargo's
-/// own line, or the runner's when it reports the build (`tree::app_exe`).
+/// own line, or the runner's when it reports the build (`app_build::app_exe`).
 pub(super) fn app_did_not_build(log: &Path) -> bool {
     let text = String::from_utf8_lossy(&std::fs::read(log).unwrap_or_default()).into_owned();
     text.contains("could not compile") || text.contains("cargo build --release failed")

@@ -4,7 +4,7 @@
 //! A shipped build carries no `platitude.auto`, and a static type
 //! reference resolves at load time, so a product line naming a harness
 //! type leaves the shipped build with no window. Every xtask builds the
-//! app with the feature (`crate::tree::HARNESS_FEATURE`), so nothing else
+//! app with the feature (`crate::app_build::HARNESS_FEATURE`), so nothing else
 //! here notices.
 //!
 //! Naming a type is what QML resolves: an object declaration

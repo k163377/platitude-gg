@@ -1,5 +1,6 @@
 //! Development task runner (`cargo xtask <command>`).
 
+mod app_build;
 mod app_env;
 mod app_out;
 mod budget;

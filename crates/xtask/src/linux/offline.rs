@@ -26,7 +26,7 @@ pub(super) fn offline(root: &Path) -> Result<(), String> {
         "-p",
         "platitude-app",
         "--features",
-        crate::tree::HARNESS_FEATURE,
+        crate::app_build::HARNESS_FEATURE,
     ]
     .map(String::from);
     in_container(root, &app, &build, false, None, None)?;

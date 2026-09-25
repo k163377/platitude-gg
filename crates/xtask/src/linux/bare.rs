@@ -23,7 +23,7 @@ pub(super) fn bare(root: &Path, discover: bool) -> Result<(), String> {
         "build",
         "--release",
         "--features",
-        crate::tree::HARNESS_FEATURE,
+        crate::app_build::HARNESS_FEATURE,
     ]
     .map(String::from);
     in_container(root, &app, &build, false, None, None)?;

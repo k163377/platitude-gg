@@ -1,7 +1,7 @@
 //! `cargo xtask shipped` — the one run of the build nobody else here makes.
 //!
 //! Every other command builds with the verification harness
-//! (`crate::tree::HARNESS_FEATURE`). A QML file in `platitude.ui` that
+//! (`crate::app_build::HARNESS_FEATURE`). A QML file in `platitude.ui` that
 //! names a type from `platitude.auto` resolves in a harness build and
 //! fails to load `Main.qml` in this one — no window at all.
 //! `cargo xtask structure` catches that statically ([`crate::structure`]
@@ -63,7 +63,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "shipped",
     )?;
     let path = crate::qt::path_with_qt()?;
-    let exe = crate::tree::shipped_exe(&root, &path, build)?;
+    let exe = crate::app_build::shipped_exe(&root, &path, build)?;
 
     // Its own directory, never the settings of the person at this machine.
     let config = crate::keepsakes::keepsake_dir("shipped")?;

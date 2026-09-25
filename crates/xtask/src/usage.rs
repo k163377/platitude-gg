@@ -419,7 +419,7 @@ const TAIL: &str = "  shipped [--no-build]
   still
       Whether a measurement is holding the machine still, and which
       builds are under way. `perf` holds the machine for the length of
-      its runs; every app build here (`tree::app_exe`), every cargo step
+      its runs; every app build here (`app_build::app_exe`), every cargo step
       of check and gate, the linux container, verify-ui and a corpus
       being made announce themselves and wait for a hold to lift before
       they begin, and a hold waits for the builds already announced — a

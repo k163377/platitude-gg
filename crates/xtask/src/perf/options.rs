@@ -92,7 +92,7 @@ impl Options {
     pub(super) fn features(&self) -> String {
         let mut features = Vec::new();
         if self.harness {
-            features.push(crate::tree::HARNESS_FEATURE);
+            features.push(crate::app_build::HARNESS_FEATURE);
         }
         if self.breakdown {
             features.push("memprobe");

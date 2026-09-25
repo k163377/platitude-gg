@@ -75,7 +75,7 @@ pub(super) fn build_at(
     let (primary, trees) = primary_checkout(&here)?;
     let rig = rig_path(&primary);
     let set = opts.feature_slug();
-    let exe = shelf(Path::new(&rig), &commit, &set).join(crate::tree::exe_name());
+    let exe = shelf(Path::new(&rig), &commit, &set).join(crate::app_build::exe_name());
     if exe.is_file() {
         println!(
             "rig: {} ({set}) is on the shelf — nothing to build",
@@ -251,7 +251,7 @@ fn stale_builds(shelf: &Path, keep: usize) -> Vec<PathBuf> {
         .filter_map(Result::ok)
         .filter(|entry| entry.path().is_dir())
         .map(|entry| {
-            let shelved = std::fs::metadata(entry.path().join(crate::tree::exe_name()))
+            let shelved = std::fs::metadata(entry.path().join(crate::app_build::exe_name()))
                 .and_then(|meta| meta.modified())
                 .unwrap_or(SystemTime::UNIX_EPOCH);
             (shelved, entry.path())
@@ -302,7 +302,7 @@ mod tests {
             std::fs::create_dir_all(&build).expect("a shelf entry");
             // waits(measured): the clock is what the shelf's ages are written against, and the shelf reads no other
             let shelved = std::time::SystemTime::now() - std::time::Duration::from_secs(age);
-            std::fs::File::create(build.join(crate::tree::exe_name()))
+            std::fs::File::create(build.join(crate::app_build::exe_name()))
                 .and_then(|file| file.set_modified(shelved))
                 .expect("a shelved exe");
         }
