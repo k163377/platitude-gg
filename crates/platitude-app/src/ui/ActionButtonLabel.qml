@@ -20,23 +20,17 @@ Item {
     /// The wording the box is measured for, and whether it is a command (the two families measure differently).
     property string widestText: ""
     property bool widestCode: false
-    /// The room the button's cell left this word (`ActionButton.wordRoom`); -1 is unbounded.
-    property real cap: -1
     /// The button is down to its mark (`ActionButton.folded`). The cell keeps its height: the state group beside it
     /// borrows this box (規約 §ウィンドウの縁).
     property bool folded: false
     readonly property int wordCeiling: 240
-    /// The width wanted before any cap, off a hidden label of the whole wording with typed dashes: the drawn parts
-    /// depend on `capped`, so reading them back closes a ring.
+    /// The whole wording's width, off a hidden label with typed dashes — what a band-laid button folds against
+    /// (`ActionButton.foldWidth`): a word there is drawn whole or not at all (規約 §操作パネル).
     readonly property real wantWidth: btnLabel.phrased ? phraseRow.implicitWidth
         : Math.min(wanted.implicitWidth, btnLabel.wordCeiling)
-    readonly property bool capped: btnLabel.cap >= 0 && btnLabel.cap < btnLabel.wantWidth
-    /// What the chip is drawn round and the `!` stands past: the ink, once cut
-    /// (rules-refs/app-ui.md「チップの地はインクに引く」).
-    readonly property real inkWidth: btnLabel.capped
-        ? btnLabel.headRun + btnLabel.flagRoom : btnLabel.implicitWidth
-    /// The head's width, or once cut the ink it painted — the flag follows the letters, not the air a `…` left.
-    readonly property real headRun: btnLabel.capped ? headText.paintedWidth : headText.width
+    /// What the chip is drawn round and the `!` stands past: the ink.
+    readonly property real inkWidth: btnLabel.headRun + btnLabel.flagRoom
+    readonly property real headRun: headText.width
     /// The button's own `fg`.
     property color tint: Theme.textPrimary
     /// The last go at this button's action failed.
@@ -51,10 +45,10 @@ Item {
     // it stays put whatever rule the flag uses.
     readonly property real box: widest.implicitWidth
     /// A command's flag, set apart so its dashes can be drawn: a mono dash fills its cell, leaving the mark no room
-    /// past the widest wording (デザイン規約 §git 用語のコード表記). A cut keeps it whole (rules-refs/app-ui.md「旗は残す」).
+    /// past the widest wording (デザイン規約 §git 用語のコード表記).
     readonly property int flagAt: btnLabel.code ? btnLabel.text.indexOf(" -") : -1
     readonly property bool splitFlag: btnLabel.flagAt > 0
-    /// Gap and drawn rules included, off the flag's own row so a cut cannot move it.
+    /// Gap and drawn rules included, off the flag's own row.
     readonly property real flagRoom: btnLabel.splitFlag ? flagRow.implicitWidth : 0
     readonly property string head: btnLabel.splitFlag
         ? btnLabel.text.substring(0, btnLabel.flagAt) : btnLabel.text
@@ -289,11 +283,8 @@ Item {
             ? Math.floor((btnLabel.lineBox - lineRef.height) / 2 + lineRef.baselineOffset)
               - Math.floor((btnLabel.lineBox - headText.height) / 2 + headText.baselineOffset)
             : 0
-        // Not the cell's width, which comes from this (a loop). `cap` comes from the row's width for the button and
-        // nothing here.
-        width: Math.min(implicitWidth, btnLabel.wordCeiling,
-                        btnLabel.capped ? Math.max(0, btnLabel.cap - btnLabel.flagRoom)
-                                        : Number.POSITIVE_INFINITY)
+        // Not the cell's width, which comes from this (a loop).
+        width: Math.min(implicitWidth, btnLabel.wordCeiling)
         text: btnLabel.head
         color: btnLabel.tint
         font.family: btnLabel.code ? Theme.monoFamily : Theme.uiFamily

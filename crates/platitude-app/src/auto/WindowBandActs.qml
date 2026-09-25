@@ -203,7 +203,7 @@ Item {
             + " floor=" + Math.ceil(window.floorWidth)
             + " names=" + topBar.opsNames + " upstream=" + topBar.branchUpstream
             + " namesCut=" + topBar.opsNameCut
-            + " folded=" + topBar.actionsFolded + " cut=" + topBar.actionWordCut
+            + " folded=" + topBar.actionsFolded
             + " alert=" + topBar.actionAlertShown
             + " push=" + topBar.pushMode + " stash=" + topBar.stashMode
             + " badges=" + [topBar.opBadgeShown, topBar.conflictBadgeShown,
@@ -456,26 +456,25 @@ Item {
         // Never under the window's floor: less would photograph a window no hand can make.
         if (arg === "whole")
             return Math.max(topBar.actionsWholeAt, Math.ceil(window.floorWidth))
-        // The cut stretch can be empty for a four-letter command (Linux: `push` and `…` + two characters are both
-        // 27px); the last labelled cell exists on every machine, and `cut=` says whether this one had a cut.
+        // The last labelled cell: a pixel past it, the three give their words up.
         return topBar.actionsFoldAt + 1
     }
-    /// `cut=` and `folded=` are what the picture cannot answer: a wording ending in its own `…` reads as elided, and
-    /// one width says nothing of where the shape changes.
+    /// `folded=`, `even=` and `find=` are what the picture cannot answer: one width says nothing of where the shape
+    /// changes, and cells a pixel apart look alike.
     function reportBandActions() {
         Harness.report(
             "band_actions fits=" + (window.width >= Math.ceil(window.floorWidth))
-            // The five judged lead together: `must_say` catches only neighbours in one substring. `deep=` is the frames'
-            // depth, which a fold keeps (`TopBar.actionsDeep`).
+            // The six judged lead together: `must_say` catches only neighbours in one substring. `deep=` is the frames'
+            // depth, which a fold keeps (`TopBar.actionsDeep`); `even=` the four cells' one width (`actionsEven`);
+            // `find=` whether the find has given its word up, which it does before the three (`findFolded`).
             + " folded=" + topBar.actionsFolded
             + " deep=" + topBar.actionsDeep
-            + " cut=" + topBar.actionWordCut
+            + " even=" + topBar.actionsEven
+            + " find=" + topBar.findFolded
             + " alert=" + topBar.actionAlertShown
             + " cap=" + topBar.actionCapW
             + " natural=" + topBar.actionNaturalW
             + " foldAt=" + topBar.actionFoldW
-            // The cut stretch on this machine, against `foldAt=`; it can be empty (規約 §ウィンドウの縁「省略の段は短い」).
-            + " cutAt=" + topBar.actionCutW
             + " want=" + topBar.actionWantW
             + " cellW=" + topBar.actionCellW + " cellH=" + topBar.actionCellH
             + " wordW=" + topBar.actionWordW + " inkW=" + topBar.actionInkW

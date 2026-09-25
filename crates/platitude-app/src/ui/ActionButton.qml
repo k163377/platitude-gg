@@ -82,41 +82,36 @@ HoverToolButton {
     /// differently), so a button whose wording changes with its state does not move its neighbours.
     property string widestText: ""
     property bool widestCode: false
-    /// The narrowest this button draws its word before giving it up for the icon alone (`BandWidest.wordFloor`).
-    /// Zero, the default, is a button measured to its own content — every one outside the band; only a cell the band
-    /// lays out (`TopBar`) can be narrower than its word (規約 §ウィンドウの縁).
-    property real wordFloor: 0
+    /// A cell the operation panel lays out (`TopBar`), which can be narrower than its word. False, the default, is a
+    /// button measured to its own content — every one outside the panel.
+    property bool laidByBand: false
     /// Told from outside that the operation panel has reached the width where the words go, whether or not this cell
     /// is short of room yet (`TopBar.actionsFolded` / `findFolded`). The button also gives up on its own when the cell
-    /// it was handed cannot hold the floor.
+    /// it was handed cannot hold its word whole.
     property bool foldRequested: false
     /// The room the word gets in this cell once the marks and the air either side are paid for. Read off the style's
     /// fixed `padding`: `leftPadding` / `rightPadding` are answered from here (through `slack`), and reading them back
     /// would close a loop.
     readonly property real wordRoom:
-        actionBtn.wordFloor <= 0 ? btnLabel.box
+        !actionBtn.laidByBand ? btnLabel.box
         : Math.max(0, actionBtn.width - 2 * actionBtn.padding - seat.implicitWidth - btnRow.spacing)
-    /// Down to the icon: nothing left to say the word in, or the band has said so.
-    readonly property bool folded: actionBtn.wordFloor > 0
-        && (actionBtn.foldRequested || actionBtn.wordRoom < actionBtn.wordFloor)
-    /// The widest this button is ever drawn, and the narrowest it is drawn with a word still on it. Neither moves with
-    /// the shape the button is in — the row lays the cell out from these, so giving the word up cannot change the
-    /// width that decides whether to give it up (`TopBar`).
+    /// Down to the icon: the word no longer fits whole — it is never cut to a `…` (規約 §操作パネル) — or the panel
+    /// has said so.
+    readonly property bool folded: actionBtn.laidByBand
+        && (actionBtn.foldRequested || actionBtn.wordRoom < btnLabel.wantWidth)
+    /// The widest this button is ever drawn, and the narrowest it is drawn with its word on it. Neither moves with
+    /// whether the word is shown — the row lays the cell out from these, so giving the word up cannot change the width
+    /// that decides whether to give it up (`TopBar`).
     readonly property real naturalWidth:
         2 * actionBtn.padding + seat.implicitWidth + btnRow.spacing + btnLabel.box
-    /// The flag is counted into the floor because it never gives (`ActionButtonLabel.flagRoom`): without it `push -f`
-    /// is cut to a `…` and one letter before the fold. The set folds on the widest of its floors (`TopBar.actionFold`).
+    /// The wording this state says, whole, with the air around it. The set folds on the widest of the three
+    /// (`TopBar.actionFold`).
     readonly property real foldWidth:
-        2 * actionBtn.padding + seat.implicitWidth + btnRow.spacing
-        + actionBtn.wordFloor + btnLabel.flagRoom
-    /// Automation: the ink left after a cut, and whether there was one — a picture cannot tell a wording's own `…`
-    /// from an elision (`PGG_AUTO_ACT=band-actions`).
+        2 * actionBtn.padding + seat.implicitWidth + btnRow.spacing + btnLabel.wantWidth
+    /// Automation: the ink the word takes (`PGG_AUTO_ACT=band-actions`).
     readonly property real wordInk: btnLabel.inkWidth
-    readonly property bool wordCut: btnLabel.capped
-    /// …the width this state's wording wants, and the box the set was measured for: a run aiming between the two
-    /// shapes needs both, since the cell that starts cutting is the wording plus `naturalWidth - wordBox`.
+    /// …and the width this state's wording wants, whole: what the set folds against (`foldWidth`).
     readonly property real wordWant: btnLabel.wantWidth
-    readonly property real wordBox: btnLabel.box
     /// Icon and word centred as a pair, for a button told to fill a pane's width — packed from the left, the word
     /// would sit adrift from its icon.
     property bool centred: false
@@ -124,7 +119,7 @@ HoverToolButton {
     /// two ends with the phrase moving whole: all of it behind the word stretches the wash, the frame and the fill past
     /// the last letter, and centring the word alone would open the icon-to-word step (デザイン規約 §余白).
     ///
-    /// A cell narrower than the box has no slack — its word elides (`ActionButtonLabel.cap`). Measured against the
+    /// A cell narrower than the box has no slack, and one narrower than its word folds (`folded`). Measured against the
     /// *wanted* width: the painted width is what this arithmetic produces.
     readonly property real slack:
         actionBtn.folded ? 0
@@ -316,7 +311,7 @@ HoverToolButton {
         target: actionBtn
         property: "implicitWidth"
         value: actionBtn.naturalWidth
-        when: actionBtn.wordFloor > 0
+        when: actionBtn.laidByBand
     }
 
     contentItem: Item {
@@ -363,8 +358,6 @@ HoverToolButton {
                 wordWeight: actionBtn.wordWeight
                 widestText: actionBtn.widestText
                 widestCode: actionBtn.widestCode
-                // -1 is "as much as it wants": every button the band does not lay out.
-                cap: actionBtn.wordFloor > 0 ? actionBtn.wordRoom : -1
                 folded: actionBtn.folded
                 tint: actionBtn.fg
                 alert: actionBtn.alert
@@ -421,7 +414,6 @@ HoverToolButton {
                 wordWeight: actionBtn.wordWeight
                 widestText: actionBtn.widestText
                 widestCode: actionBtn.widestCode
-                cap: actionBtn.wordFloor > 0 ? actionBtn.wordRoom : -1
                 folded: actionBtn.folded
                 tint: actionBtn.fg
                 alert: actionBtn.alert

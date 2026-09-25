@@ -13,12 +13,6 @@ Item {
     readonly property alias pushCodeWidest: pushCodeWidest
     readonly property alias stashCodeWidest: stashCodeWidest
 
-    /// The narrowest a wording is drawn before the button gives it up: two characters and a cut's `…`, in the command
-    /// family whichever wording wins the box (規約 §ウィンドウの縁). Drawn, as a wording is: a family's average
-    /// character runs wide (a floor above the box on Linux), and a sum of advances comes out under the laid-out run
-    /// (`p…`).
-    readonly property real wordFloor: floorWidest.implicitWidth
-
     component Widest: Label {
         visible: false
         property bool code: false
@@ -44,10 +38,5 @@ Item {
         id: stashCodeWidest
         code: true
         text: "stash"
-    }
-    Widest {
-        id: floorWidest
-        code: true
-        text: "nn…"
     }
 }

@@ -192,11 +192,11 @@ Rectangle {
     readonly property real floorWidth:
         Math.max(bandRow.Layout.minimumWidth + bandRow.anchors.rightMargin,
                  topBar.picksFloor + Theme.spaceLg + topBar.actionsFoldedWidth
-                 + topBar.opsRightMargin)
-    /// What the three actions come to once every one is a mark in an end cell — the panel's half of the floor above
-    /// (規約 §窓の床「fetch / push / stash も畳んだ姿で数える」).
+                 + topBar.opsRightAir)
+    /// What the three actions and the find come to once every one is a mark in an end cell — the panel's half of the
+    /// floor above (規約 §窓の床「fetch / push / stash も畳んだ姿で数える」).
     readonly property real actionsFoldedWidth:
-        actionSeat.children.length * Theme.railWidth
+        topBar.actionCells * Theme.railWidth
         + (actionSeat.children.length - 1) * actionSeat.spacing
 
     /// Keeps the two actions' waiting visual up past the operation that raised it, for a picture of the wait: a fast
@@ -290,33 +290,33 @@ Rectangle {
     property bool widestActionCode: false
 
     // ---- how the three give way as the panel runs short ----------------
-    /// The floor a wording is cut down to — two characters of the family this band says its wordings in
-    /// (`BandWidest.wordFloor`).
-    readonly property real actionWordFloor: widest.wordFloor
-    /// The narrowest cell that still holds a word, for the **set**: the widest of the three floors, since a cell that
-    /// only fits the shortest wording's floor cuts the longest one past its own (`ActionButton.foldWidth`).
+    /// The narrowest cell that still holds a word, for the **set**: the widest of the three wordings said now, whole —
+    /// the moment one of them no longer fits, all three give their words up at once (規約 §操作パネル;
+    /// `ActionButton.foldWidth`).
     readonly property real actionFold: Math.max(fetchButton.foldWidth,
                                                 pushButton.foldWidth,
                                                 stashButton.foldWidth)
-    /// What the panel holds around the three before any width goes to a wording: the names **at their whole width**
-    /// (the buttons' words go before a letter of a name does — 規約 §操作パネル の譲る順), the step between the two
-    /// halves, the right end (`opsRightMargin`), and the seat's own spacing.
+    /// The cells that share one width: the three and the find, **folded or not** (規約 §操作パネル).
+    readonly property int actionCells: actionSeat.children.length + 1
+    /// What the panel holds around the four cells before any width goes to a wording: the names **at their whole
+    /// width** (the buttons' words go before a letter of a name does — 規約 §操作パネル の譲る順), the step between
+    /// the two halves, the air at the right end (`opsRightAir`), and the seat's own spacing.
     readonly property real actionsBox:
-        topBar.picksWant + Theme.spaceLg + topBar.opsRightMargin
+        topBar.picksWant + Theme.spaceLg + topBar.opsRightAir
         + (actionSeat.children.length - 1) * actionSeat.spacing
-    /// The widest a button may be drawn at the panel's width now; under a whole wording each elides into it
-    /// (`ActionButtonLabel.cap`).
+    /// The widest a button may be drawn at the panel's width now; a cell short of its wording gives the word up
+    /// (`ActionButton.folded`).
     readonly property real actionCap:
         Math.max(Theme.railWidth,
                  Math.min(fetchButton.naturalWidth,
-                          (topBar.width - topBar.actionsBox) / actionSeat.children.length))
+                          (topBar.width - topBar.actionsBox) / topBar.actionCells))
     /// The two widths the shapes change at, for a run to put the window on: the narrowest panel that still says every
     /// wording whole, and the widest that has given all three up. Read off the cap's own arithmetic, so a driver never
     /// writes a second copy of it (`WindowBandActs`).
     readonly property int actionsWholeAt:
-        Math.ceil(topBar.actionsBox + actionSeat.children.length * fetchButton.naturalWidth)
+        Math.ceil(topBar.actionsBox + topBar.actionCells * fetchButton.naturalWidth)
     readonly property int actionsFoldAt:
-        Math.ceil(topBar.actionsBox + actionSeat.children.length * topBar.actionFold) - 1
+        Math.ceil(topBar.actionsBox + topBar.actionCells * topBar.actionFold) - 1
     /// Where the words go. Said once for the set: three cells the row rounded differently must not come out in two
     /// different shapes.
     readonly property bool actionsFolded: topBar.actionCap < topBar.actionFold
@@ -326,25 +326,17 @@ Rectangle {
     readonly property int actionNaturalW: Math.round(fetchButton.naturalWidth)
     readonly property int actionFoldW: Math.round(topBar.actionFold)
     readonly property int actionCapW: Math.round(topBar.actionCap)
-    readonly property int actionWordFloorW: Math.round(topBar.actionWordFloor)
-    /// The widest wording actually **on** the panel now: the box holds every state's wording, and the run that has to
-    /// land between "cut" and "given up" has to aim at the one being said (`band-actions`).
+    /// The widest wording actually **on** the panel now: the box holds every state's wording, and where the words go
+    /// is set by the one being said (`band-actions`).
     readonly property int actionWantW: Math.round(Math.max(fetchButton.wordWant,
                                                            pushButton.wordWant,
                                                            stashButton.wordWant))
-    /// The cell width at which that wording starts being cut: itself, plus everything the cell holds around a word.
-    readonly property int actionCutW:
-        Math.round(fetchButton.naturalWidth - fetchButton.wordBox + topBar.actionWantW)
     /// …and what one button came out as. Read off push — the one that says the longest wording and wears the frame,
     /// the `!` and the hold when its branch has diverged (`BandPushButton`).
     readonly property int actionCellW: Math.round(pushButton.width)
     readonly property int actionCellH: Math.round(pushButton.height)
     readonly property int actionWordW: Math.round(pushButton.wordRoom)
     readonly property int actionInkW: Math.round(pushButton.wordInk)
-    /// Whether any of the three had to cut its wording — asked of the set, since which one says the widest wording
-    /// depends on the fonts.
-    readonly property bool actionWordCut:
-        fetchButton.wordCut || pushButton.wordCut || stashButton.wordCut
     /// Whether either of the two that can wear a `!` is wearing one. Asked of the pair: `band-actions-alert` stages the
     /// refused push, and the run that stages one without a network is the fetch that cannot reach its remote
     /// (`band-actions-stopped`).
@@ -413,6 +405,9 @@ Rectangle {
     /// in a picture like any other box, and only its neighbours' say it shrank.
     readonly property bool actionsDeep: [fetchButton, pushButton, stashButton, findButton].every(
         button => !button.visible || Math.abs(button.height - 2 * button.frameInset - branchPick.pairHeight) < 0.5)
+    /// …and whether the four are one width, the find's word given up or not (規約 §操作パネル).
+    readonly property bool actionsEven: [pushButton, stashButton, findButton].every(
+        button => Math.abs(button.width - fetchButton.width) < 0.5)
     /// …and whether the line between the three and the find stands clear of both frames and ends where the frame on
     /// its other side does — a pixel off reads in a picture as that frame's own edge or a line that missed. Held
     /// against the stash's frame because the line is measured off the find's.
@@ -439,22 +434,15 @@ Rectangle {
     /// …taken from the two in the order above. Each gives what it can and passes the rest on.
     readonly property real opsRepoCut: Math.min(topBar.opsOver, repoPick.slack)
     readonly property real opsBranchCut: Math.min(topBar.opsOver - topBar.opsRepoCut, branchPick.slack)
-    /// What the panel keeps clear at its right end: the find button at its drawn width, the band's step in from the
-    /// window edge, and a step before the actions, which are a set and would otherwise read as four.
-    readonly property real opsRightMargin:
-        topBar.findCap + bandRow.anchors.rightMargin + Theme.spaceMd
+    /// The air at the panel's right end: the band's step in from the window edge, and a step before the find, since the
+    /// three are a set and would otherwise read as four.
+    readonly property real opsRightAir: bandRow.anchors.rightMargin + Theme.spaceMd
+    /// …and with the find in it, at the width the four share.
+    readonly property real opsRightMargin: topBar.actionCap + topBar.opsRightAir
     /// The panel gives up its words in 規約 §操作パネル の譲る順 — **the buttons' before any name's, because a button
-    /// that has given its word up is still read by its mark**, and a name has nothing to fall back to.
-    ///
-    /// What every wording standing whole costs: the width the first of them (the find's) starts giving way under.
-    readonly property real chromeWholeWidth:
-        topBar.picksWant + Theme.spaceLg
-        + actionSeat.children.length * fetchButton.naturalWidth
-        + (actionSeat.children.length - 1) * actionSeat.spacing
-        + Theme.spaceMd + fetchButton.naturalWidth + bandRow.anchors.rightMargin
-    readonly property bool findFolded: topBar.width < topBar.chromeWholeWidth
-    readonly property real findCap:
-        topBar.findFolded ? Theme.railWidth : fetchButton.naturalWidth
+    /// that has given its word up is still read by its mark**, and a name has nothing to fall back to. The find's goes
+    /// first, the moment the four are short of their whole width; its cell keeps the width the three have.
+    readonly property bool findFolded: topBar.actionCap < fetchButton.naturalWidth
 
     implicitHeight: Theme.toolbarHeight + Theme.opsBarHeight
     color: Theme.bgElevated
@@ -830,7 +818,7 @@ Rectangle {
                 busyLatched: topBar.holdFetchBusy
                 widestText: topBar.widestAction
                 widestCode: topBar.widestActionCode
-                wordFloor: topBar.actionWordFloor
+                laidByBand: true
                 foldRequested: topBar.actionsFolded
                 // **The three ask for the same two numbers** — the box the set shares and the cap the panel's width
                 // settles — and neither moves with a button's shape, so giving the word up cannot change the width
@@ -850,7 +838,7 @@ Rectangle {
                 busyLatched: topBar.holdPushBusy
                 widestText: topBar.widestAction
                 widestCode: topBar.widestActionCode
-                wordFloor: topBar.actionWordFloor
+                laidByBand: true
                 foldRequested: topBar.actionsFolded
                 width: topBar.actionCap
                 height: pushButton.folded ? opsBand.height : branchPick.pairHeight
@@ -863,7 +851,7 @@ Rectangle {
                 curPage: topBar.curPage
                 widestText: topBar.widestAction
                 widestCode: topBar.widestActionCode
-                wordFloor: topBar.actionWordFloor
+                laidByBand: true
                 foldRequested: topBar.actionsFolded
                 width: topBar.actionCap
                 height: stashButton.folded ? opsBand.height : branchPick.pairHeight
@@ -900,15 +888,14 @@ Rectangle {
             // less ink down than the mono one a command is set in.
             wordWeight: Font.DemiBold
             // Measured for the three's longest wording and laid out at its width, so the ink lands at the same two
-            // ends theirs does (`ActionButton.slack`). **The natural width, not the share** — the share is what is left
-            // once this button is paid for, so reading it here would close that ring.
+            // ends theirs does (`ActionButton.slack`).
             widestText: topBar.widestAction
             widestCode: topBar.widestActionCode
-            // **The first word the panel gives up** (規約 §操作パネル の譲る順): folded, the button is an end cell
-            // with its mark in it, like the three.
+            // **The first word the panel gives up** (規約 §操作パネル の譲る順); the cell keeps **the three's width**
+            // either way, so the four stand as one set of cells.
             foldRequested: topBar.findFolded
-            wordFloor: topBar.actionWordFloor
-            width: topBar.findCap
+            laidByBand: true
+            width: topBar.actionCap
             height: findButton.folded ? opsBand.height : branchPick.pairHeight
             foldedDepth: branchPick.pairHeight
             frameColor: Theme.borderStrong
