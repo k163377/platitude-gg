@@ -15,48 +15,38 @@ pub struct RebaseOptions {
     /// Which branch to rebase; HEAD when `None`.
     pub branch: Option<String>,
     /// Move refs that pointed into the rewritten range along with it
-    /// (git 2.38+; the minimum supported version is well past that).
+    /// (git 2.38+, inside the minimum version).
     pub update_refs: bool,
-    /// `--root`: replay from the first commit, which has no parent to name
-    /// as upstream. The `upstream` argument is left off entirely — editing
-    /// the very first commit is impossible otherwise.
+    /// `--root`: replay from the first commit; `upstream` is left off, as
+    /// the first commit has no parent to name.
     pub root: bool,
 }
 
-/// What a rebase did — the plain one here and the driven one in
-/// [`crate::sequencer`] answer alike, because git refuses both over a
-/// dirty working tree in the very same words (measured).
+/// What a rebase did; the plain one and the driven one in
+/// [`crate::sequencer`] answer alike (git refuses both over a dirty tree in
+/// the same words).
 #[derive(Debug)]
 pub enum RebaseOutcome {
     /// git took the rebase through to the end.
     Done,
-    /// git refused before touching anything, because uncommitted work is
-    /// in the way, so the repository is exactly as it was. Carries the
-    /// refusal itself: the caller goes round again through a stash
-    /// (`RepoSession`'s carry), and a second refusal — the tree is empty
-    /// by then, so something git cannot see past is holding it — has to
-    /// say why it gave up, in git's own words.
+    /// git refused before touching anything because uncommitted work is in
+    /// the way. Carries the refusal: the caller retries through a stash
+    /// (`RepoSession`'s carry), and a second refusal has to say why in
+    /// git's own words.
     Blocked(GitError),
-    /// git stopped part-way and left the rebase standing. Not a failure:
-    /// the badge, the exit card and the conflicted rows are the whole of
-    /// what happened, and the carried work waits in the stash until the
-    /// operation is over (デザイン規約 §未コミット変更がある状態で履歴を
-    /// 書き換える, by design).
-    ///
-    /// [`super::Landing`] is what this becomes once the carry is behind
-    /// it (`session::build::rewrite_carrying`) — a refusal cannot reach
-    /// the screen, because going round through a stash is the answer to
-    /// one.
+    /// git stopped part-way and left the rebase standing — not a failure;
+    /// the carried work waits in the stash until the operation is over
+    /// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
+    /// Becomes [`super::Landing`] after the carry
+    /// (`session::build::rewrite_carrying`).
     Stopped,
 }
 
 /// `git rebase <upstream>`.
 ///
-/// A dirty tree is answered, and the caller carries the work across
-/// itself (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
-/// `--autostash` restores with a plain `stash apply`, so everything
-/// that was staged comes back unstaged, and no flag turns that
-/// off.
+/// A dirty tree is answered and the caller carries the work across itself:
+/// `--autostash` restores staged work as unstaged
+/// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
 pub async fn rebase(
     executor: &GitExecutor,
     workdir: &Path,
@@ -64,9 +54,8 @@ pub async fn rebase(
     options: &RebaseOptions,
     cancel: &CancellationToken,
 ) -> Result<RebaseOutcome, GitError> {
-    // Exit 1 is this command answering. Only 0 and 1 are answers, so
-    // the 128 a name git does not know exits with still reads as the
-    // failure it is (規約 §終了コードで答える問い合わせ).
+    // Exit 1 is an answer; 128 stays a failure
+    // (rules/core.md「終了コードで答える問い合わせは」).
     let cmd = rebase_command(workdir, upstream, options, None).answers_by_code(1);
     let result = executor.run(cmd, cancel).await.map(drop);
     landed(executor, workdir, result, cancel).await
@@ -75,29 +64,15 @@ pub async fn rebase(
 /// Sorts a rebase's result into [`RebaseOutcome`], shared by the plain
 /// rebase above and the driven one in [`crate::sequencer`].
 ///
-/// **Exit 1 is the whole of what this command answers with**, and both
-/// answers wear it: the refusal a stash gets past, and the stop that
-/// leaves the rebase standing. The two are told apart by what is on
-/// disk — a refusal touched nothing, a stop left `rebase-merge` behind
-/// (measured, 2.55).
+/// Exit 1 is both the refusal a stash gets past (told by its wording) and
+/// the stop (told by `rebase-merge` left standing). The code is read as
+/// well as the marker: a rebase asked for while another is in progress
+/// exits 128 with `rebase-merge` there, and the marker alone would hide
+/// git's reason. A read that fails answers "not a stop", so git's own
+/// words reach the screen.
 ///
-/// **The code has to be read as well as the marker.** The one failure
-/// that leaves `rebase-merge` standing is a rebase asked for while
-/// another is already in progress, and git spends 128 on it (measured, 2.55)
-/// — asking the repository alone would report that as a stop and hide
-/// the sentence telling the person what is actually there. Every other
-/// failure exits 128 with nothing standing.
-///
-/// A read that fails answers "not a stop", so git's own words are what
-/// reaches the screen: this is a question *about* that failure, and
-/// letting it replace the answer would report a `rev-parse` where git
-/// said why it would not rebase.
-///
-/// **Exit 0 is not the whole of Done either.** The `edit` stop is the one
-/// stop git exits 0 on — the pause was asked for, so git does not count
-/// it against the command (measured, 2.55 —
-/// `an_edit_stop_says_so_and_names_the_commit_it_sits_on`). The marker
-/// left standing is what tells it from a rebase that ran out the end.
+/// Exit 0 is not always Done: an `edit` stop exits 0 with the marker
+/// standing (`an_edit_stop_says_so_and_names_the_commit_it_sits_on`).
 pub(crate) async fn landed(
     executor: &GitExecutor,
     workdir: &Path,
@@ -105,13 +80,9 @@ pub(crate) async fn landed(
     cancel: &CancellationToken,
 ) -> Result<RebaseOutcome, GitError> {
     let Err(error) = result else {
-        // The probe's own failure travels, asymmetrically from the exit-1
-        // branch below: there git's words are the answer and stand
-        // over a failed read, while here "Done" has consequences of its
-        // own — the caller sweeps the reword message files a standing
-        // rebase's todo still reads — so a stop is always loud.
-        // A loud error costs a red line; the next status poll
-        // still finds the standing rebase and raises the exit card.
+        // Unlike the exit-1 branch, a failed probe travels: "Done" makes
+        // the caller sweep the reword message files a standing rebase's
+        // todo still reads.
         return match opstate::detect(executor, workdir, cancel).await {
             Ok(state) if state.rebasing => Ok(RebaseOutcome::Stopped),
             Ok(_) => Ok(RebaseOutcome::Done),
@@ -150,19 +121,12 @@ pub(crate) async fn landed(
 /// Whether git's refusal is the "commit or stash them" one it gives
 /// before touching anything, which a stash gets past.
 ///
-/// Classifying human-facing output is otherwise off limits here, and this
-/// earns the same exception [`crate::branch`] takes for `switch`: git
-/// offers no machine-readable answer to "why will you not rebase", and
-/// the answer decides whether the rebase is worth a second attempt. Every
-/// invocation runs under `LC_ALL=C`, so the C-locale wording arrives.
-///
-/// The two wordings are the halves of git's own clean-tree check —
-/// "cannot rebase: You have unstaged changes." and "cannot rebase: Your
-/// index contains uncommitted changes." — and a plain rebase and an
-/// interactive one word them identically (measured 2.55, both in
-/// `integrate_integration`). Untracked files are not in the way at all: a
-/// rebase over a tree holding only those goes straight through, so
-/// nothing is stashed for them.
+/// Reads human-facing output under the same exception [`crate::branch`]
+/// takes for `switch`: git has no machine-readable "why will you not
+/// rebase", and the answer decides whether a retry is worth it (`LC_ALL=C`
+/// pins the wording). The two wordings are the halves of git's clean-tree
+/// check, identical for plain and interactive rebases. Untracked files are
+/// not in the way, so nothing is stashed for them.
 ///
 /// Anything unrecognised is `false` and travels on as an ordinary error:
 /// a reworded message costs the retry only.
@@ -172,42 +136,33 @@ fn work_is_in_the_way(text: &str) -> bool {
         && (text.contains("unstaged changes") || text.contains("uncommitted changes"))
 }
 
-/// Why a standing rebase is standing, where git wrote it down.
-///
-/// A stop at an `edit` step leaves the tree as clean as a stop over an
-/// emptied commit, so the tree cannot tell the two apart — this read is
-/// what can (P3-確認事項 §A). Default everywhere nothing is standing.
+/// Why a standing rebase is standing: an `edit` stop leaves the tree as
+/// clean as a stop over an emptied commit, and only this read tells them
+/// apart (デザイン規約 §フル interactive rebase). Default where nothing is
+/// standing.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RebaseStop {
-    /// The rebase stopped on purpose at an `edit` step: the commit is
-    /// applied, HEAD sits on it, and amending it is what the stop is for.
-    /// git says so by leaving `rebase-merge/amend` behind — the file its
-    /// own `--continue` reads to know the commit may have been amended.
+    /// Stopped on purpose at an `edit` step (HEAD on the applied commit, to
+    /// be amended); git marks it by leaving `rebase-merge/amend`.
     pub editing: bool,
-    /// The commit the stop left HEAD on, full hex — the amend marker's own
-    /// contents, which is what git wrote HEAD as when it stopped
-    /// (`intend_to_amend`). Empty where the file could not be read.
+    /// The commit the stop left HEAD on, full hex — the amend marker's
+    /// contents (git's `intend_to_amend`). Empty where the file could not
+    /// be read.
     ///
-    /// **`rebase-merge/stopped-sha` names the *todo's* commit** — the id
-    /// the row had before the replay. They are the same commit
-    /// only when everything ahead of the `edit` step fast-forwarded: put a
-    /// reword, a squash or a reorder in front of it and the stop sits on a
-    /// commit with a new id, while `stopped-sha` still names one that is no
-    /// longer in the history. Measured by
-    /// `an_edit_stop_after_a_reword_names_the_replayed_commit_not_the_todos`.
+    /// Not `rebase-merge/stopped-sha`: that names the todo's commit, which
+    /// a reword, squash or reorder ahead of the `edit` step leaves out of
+    /// the history
+    /// (`an_edit_stop_after_a_reword_names_the_replayed_commit_not_the_todos`).
     pub oid: String,
 }
 
-/// Reads why the standing rebase stopped, and how far it got, in one
-/// process. Only worth asking while [`opstate::detect`] says one is
-/// standing; with none, everything here comes back default — and the
-/// caller pays the spawn once per status tick for the life of a stop,
-/// which is why the two questions share it.
+/// Reads why the standing rebase stopped and how far it got, in one
+/// process — it runs once per status tick for the life of a stop. Only
+/// worth asking while [`opstate::detect`] says one is standing; with none,
+/// everything comes back default.
 ///
-/// Progress reads both backends (the merge backend counts in
-/// `rebase-merge/msgnum`, the apply backend in `rebase-apply/next`); the
-/// stop's reason reads only the merge side — the apply backend has no
-/// `edit` to stop at, and a conflicted stop is already told by the tree.
+/// Progress reads both backends; the stop's reason reads only the merge
+/// side — the apply backend has no `edit` to stop at.
 pub async fn rebase_standing(
     executor: &GitExecutor,
     workdir: &Path,
@@ -225,8 +180,8 @@ pub async fn rebase_standing(
     }
     let out = executor.run(cmd, cancel).await?;
     let text = out.stdout_utf8();
-    // `--git-path` prints paths relative to the cwd (the workdir) or
-    // absolute ones; joining handles both (the shape `opstate::detect` uses).
+    // `--git-path` prints paths relative to the workdir or absolute;
+    // joining handles both.
     let paths: Vec<std::path::PathBuf> = text
         .lines()
         .map(|rel| workdir.join(rel.trim_end()))
@@ -247,10 +202,8 @@ pub async fn rebase_standing(
             break;
         }
     }
-    // One file answers both halves: that it is there is the `edit` stop,
-    // and what it says is the commit the stop put HEAD on. A marker there
-    // but unreadable still says `editing` — the answer `skip_is_free`
-    // needs, and the one that errs toward holding the `--skip` back.
+    // A marker there but unreadable still says `editing` — it errs toward
+    // holding `--skip` back (`skip_is_free`).
     let amend = paths.get(4);
     let editing = amend.is_some_and(|p| p.exists());
     let oid = amend
@@ -260,21 +213,14 @@ pub async fn rebase_standing(
     Ok((progress, RebaseStop { editing, oid }))
 }
 
-/// The same count, read without a process.
+/// The same count as [`rebase_standing`], read without a process — for a
+/// replay still running, whose number the screen counts out several times
+/// a second. `git_dir` is the work tree's own git directory as `repo::open`
+/// resolved it (linked worktrees included), which is where its rebase
+/// state lives.
 ///
-/// [`rebase_standing`] spends a `rev-parse` to learn where the four files
-/// are, because it is also asking two questions that only make sense
-/// together and it runs once per status tick. **A replay that is still
-/// running is the other case**: the number moves every few milliseconds
-/// and the screen is meant to count it out, so the read has to be cheap
-/// enough to repeat several times a second — and it is, because the one
-/// thing `rev-parse` was answering is already known. `repo::open` resolves
-/// the git directory once, linked worktrees included, and the rebase state
-/// of a work tree lives under that work tree's own git directory.
-///
-/// Both backends again, and `None` for "no rebase is standing" as well as
-/// for one whose files cannot be read: the caller is asking about a write
-/// it started, and either answer means there is nothing to count yet.
+/// `None` both for no standing rebase and for unreadable files: either way
+/// there is nothing to count yet.
 #[must_use]
 pub fn rebase_progress(git_dir: &Path) -> Option<crate::conflict::Progress> {
     let count = |rel: &str| -> Option<u32> {
@@ -310,17 +256,12 @@ pub(crate) fn rebase_command(
         cmd = cmd.arg("--update-refs");
     }
     if let Some(editor) = todo_editor {
-        // `--no-rebase-merges` pins off `rebase.rebaseMerges`, the config
-        // that decides the shape of the todo git writes: with it standing
-        // the list opens with `label onto` / `reset onto` ahead of the
-        // picks. **The editor keeps the lines git put in** — that is what
-        // makes `--update-refs` work at all (`sequencer::merge_todo`) —
-        // so those labels would now travel into the plan and replay a
-        // shape nobody composed. The plan on screen is what git has to
-        // be asked for. The driven form only: a plain rebase has no
-        // plan to keep, so the config is the
-        // person's own (measurements and the rest of the decision in
-        // rules-refs/core.md).
+        // `--no-rebase-merges` pins off `rebase.rebaseMerges`: the editor
+        // keeps the lines git put in (`sequencer::merge_todo`), so its
+        // `label onto` / `reset onto` would travel into the plan and replay
+        // a shape nobody composed. Driven form only — a plain rebase leaves
+        // the config the person's own
+        // (rules-refs/core.md「駆動 rebase だけ `--no-rebase-merges` で釘付け」).
         cmd = cmd
             .args(["--interactive", "--no-rebase-merges"])
             .env("GIT_SEQUENCE_EDITOR", editor);
@@ -343,9 +284,8 @@ pub(crate) fn rebase_command(
 mod tests {
     use super::*;
 
-    /// Both halves of git's clean-tree check, word for word as 2.55 wrote
-    /// them; the integration tests run the real thing, against a plain
-    /// rebase and an interactive one alike.
+    /// Word for word as git writes them; `integrate_integration` runs both
+    /// for real, plain and interactive.
     #[test]
     fn the_two_refusals_a_stash_gets_past() {
         assert!(work_is_in_the_way(
@@ -375,11 +315,6 @@ mod tests {
         assert!(!work_is_in_the_way(""));
     }
 
-    /// The plan only stays whole because git is told to write its todo
-    /// this crate's way; `rebase.rebaseMerges` is the config that would
-    /// decide it otherwise. A plain rebase has no plan to keep, so that
-    /// config stays the person's own — the pin is on the driven form
-    /// alone.
     #[test]
     fn only_the_driven_rebase_pins_rebase_merges_off() {
         let options = RebaseOptions::default();

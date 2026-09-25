@@ -7,9 +7,8 @@ use crate::support::session::{opened, write_result};
 use platitude_core::OperationKind;
 use platitude_core::session::SessionEvent;
 
-/// A move that fails for a reason a stash cannot help with — a name git
-/// rejects — stops there: nothing is stashed, so the uncommitted work is
-/// still in the tree where its owner left it.
+/// A move that fails for a reason a stash cannot help with (a name git
+/// rejects) stops there: nothing is stashed.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_move_that_fails_outright_stashes_nothing() {
     let mut repo = TestRepo::init();
@@ -34,9 +33,8 @@ async fn a_move_that_fails_outright_stashes_nothing() {
     session.close();
 }
 
-/// A move still refused once the tree has been emptied: whatever is
-/// holding it is not something a stash gets past, so the work goes back
-/// where it was and git's refusal is what comes out.
+/// A move still refused once the tree has been emptied puts the work back,
+/// and git's first refusal is what comes out.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_move_nothing_can_unblock_puts_the_stashed_work_back() {
     let mut repo = TestRepo::init();
@@ -44,8 +42,7 @@ async fn a_move_nothing_can_unblock_puts_the_stashed_work_back() {
     repo.git(&["switch", "-c", "other"]);
     repo.commit_file("x.txt", "theirs\n", "other");
     repo.git(&["switch", "main"]);
-    // Hidden from status and from the stash, but still in the move's way:
-    // git will not write over what it was told to stop looking at.
+    // Hidden from status and the stash, yet git will not write over it.
     repo.write_file("x.txt", "mine\n");
     repo.git(&["update-index", "--skip-worktree", "--", "x.txt"]);
     repo.write_file("left.txt", "mine too\n");
@@ -83,9 +80,8 @@ fn colliding_branches() -> TestRepo {
     repo
 }
 
-/// The move git will not make itself is made the long way round instead,
-/// with nothing asked: stash, switch, put back — the sequence a person
-/// would type (デザイン規約 §未コミット変更がある状態での移動).
+/// A move git refuses is made the long way round, with nothing asked:
+/// stash, switch, put back (デザイン規約 §未コミット変更がある状態での移動).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_move_git_refuses_goes_round_through_a_stash() {
     let mut repo = TestRepo::init();
@@ -93,8 +89,8 @@ async fn a_move_git_refuses_goes_round_through_a_stash() {
     repo.git(&["switch", "-c", "other"]);
     repo.commit_file("both.txt", "l1-THEIRS\nl2\nl3\nl4\nl5\n", "other");
     repo.git(&["switch", "main"]);
-    // Collides with `other` (the file differs there), so the plain switch
-    // is refused — but on another line, so the restore merges it cleanly.
+    // Collides with `other`, so the plain switch is refused — but on
+    // another line, so the restore merges cleanly.
     repo.write_file("both.txt", "l1\nl2\nl3\nl4\nl5-MINE\n");
 
     let (sink, session) = opened(&repo).await;
@@ -150,10 +146,9 @@ async fn a_move_that_goes_round_keeps_what_was_staged_staged() {
     session.close();
 }
 
-/// The same move when the sides cannot be combined: git leaves the markers
-/// and keeps the stash, and both are the answer asked for — the work is
-/// across, waiting to be settled, and still recoverable from the stash.
-/// This is the display a person typing the three commands would land on.
+/// When the sides cannot be combined, git leaves the markers and keeps the
+/// stash, and both are the answer asked for: the work is across, waiting
+/// to be settled, and still recoverable from the stash.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_conflicting_carry_leaves_the_stash_as_the_way_back() {
     let mut repo = colliding_branches();
@@ -185,13 +180,11 @@ async fn a_conflicting_carry_leaves_the_stash_as_the_way_back() {
     session.close();
 }
 
-/// Somebody else's entry sits at `stash@{0}` when the move begins. The one
-/// this makes goes on top and is the only one it may put back — pop the
-/// wrong one and work nobody asked about lands in the tree.
+/// Somebody else's entry sits at `stash@{0}` when the move begins; the
+/// carry may put back only its own, or unasked-for work lands in the tree.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_carry_leaves_other_stashes_alone() {
     let mut repo = colliding_branches();
-    // Somebody's earlier work, parked before any of this.
     repo.write_file("both.txt", "parked work\n");
     repo.git(&["stash", "push", "-m", "parked"]);
     repo.write_file("both.txt", "mine\n");
@@ -211,9 +204,9 @@ async fn a_carry_leaves_other_stashes_alone() {
     session.close();
 }
 
-/// A restore that really cannot land still reports. The untracked file the
-/// target tracks has nowhere to go — but every tracked change travels
-/// anyway, and the entry stays as the way back to the one that did not.
+/// The untracked file the target tracks has nowhere to go, but every
+/// tracked change travels anyway, and the entry stays as the way back to
+/// the one that did not.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_carry_that_cannot_restore_reports_gits_message() {
     let mut repo = TestRepo::init();
@@ -247,9 +240,8 @@ async fn a_carry_that_cannot_restore_reports_gits_message() {
     session.close();
 }
 
-/// A pop whose restore conflicts lands exactly where an apply would have:
-/// git keeps the entry, and the conflict is the outcome that was
-/// asked for (デザイン規約 §変更を退避する).
+/// A conflicting pop lands where an apply would have: git keeps the entry
+/// (デザイン規約 §変更を退避する).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_conflicting_pop_keeps_the_entry_and_is_not_a_failure() {
     let mut repo = colliding_branches();
@@ -279,10 +271,9 @@ async fn a_conflicting_pop_keeps_the_entry_and_is_not_a_failure() {
     session.close();
 }
 
-/// The same reading still catches a pop that did nothing. git refuses
-/// to restore onto an index that already has unmerged paths, and the
-/// conflicts standing there afterwards are the old ones — so the tree
-/// alone cannot judge it, and what it was before decides.
+/// git refuses to restore onto an index that already has unmerged paths,
+/// and the conflicts left standing are the old ones — so the tree after
+/// cannot judge the pop; the tree before decides.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_pop_refused_by_a_conflicted_tree_is_still_a_failure() {
     let mut repo = colliding_branches();
@@ -291,7 +282,6 @@ async fn a_pop_refused_by_a_conflicted_tree_is_still_a_failure() {
     // An entry that has nothing to do with the conflict below.
     repo.write_file("spare.txt", "parked\n");
     repo.git(&["stash", "push", "-u"]);
-    // A conflicting merge exits 1, which is the point of it.
     repo.git_expect_failure(&["merge", "other"]);
     assert!(
         repo.git(&["status", "--porcelain=v2"]).contains("u UU"),
@@ -314,9 +304,7 @@ async fn a_pop_refused_by_a_conflicted_tree_is_still_a_failure() {
     session.close();
 }
 
-/// An apply whose restore conflicts is read the way a conflicting pop is:
-/// the work is across and waiting to be settled, and the entry was
-/// staying either way.
+/// Read the way a conflicting pop is; the entry was staying either way.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_conflicting_apply_is_not_a_failure_either() {
     let mut repo = colliding_branches();
@@ -342,14 +330,10 @@ async fn a_conflicting_apply_is_not_a_failure_either() {
     session.close();
 }
 
-/// Moving out of a stopped cherry-pick: the operation is put down, the
-/// tree it left goes into a stash, and the move lands — one write.
-///
-/// **Nothing is undone.** `--quit` keeps every commit an earlier step
-/// of the sequence already made, and the conflicted paths travel in
-/// the stash, which is what tells this apart from the `--abort` a
-/// reader can still choose on the exit card
-/// (デザイン規約 §進行中の操作から出る).
+/// Moving out of a stopped cherry-pick is one write: `--quit` puts the
+/// operation down keeping every commit an earlier step made, the tree
+/// goes into a stash, and the move lands. Nothing is undone — that is the
+/// `--abort` still on the exit card (デザイン規約 §進行中の操作から出る).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_move_out_of_a_stopped_pick_puts_it_in_a_stash() {
     let mut repo = colliding_branches();
@@ -389,12 +373,10 @@ async fn a_move_out_of_a_stopped_pick_puts_it_in_a_stash() {
     session.close();
 }
 
-/// The same move out of a stopped **rebase** aborts instead.
-///
-/// `git rebase --quit` is the one `--quit` that loses something: it
-/// leaves HEAD detached at the half-rewritten line, with every copy it
-/// already made unreferenced (measured, 2.55). `--abort` puts the branch back
-/// where it was, and a replay is not work in hand.
+/// The same move out of a stopped rebase aborts instead: `rebase --quit`
+/// leaves HEAD detached on the half-rewritten line with every copy made so
+/// far unreferenced, while `--abort` puts the branch back, and a replay is
+/// not work in hand.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_move_out_of_a_stopped_rebase_puts_the_branch_back() {
     let mut repo = colliding_branches();
@@ -421,9 +403,8 @@ async fn a_move_out_of_a_stopped_rebase_puts_the_branch_back() {
     session.close();
 }
 
-/// With no operation left standing, the unmerged index alone is what is
-/// in the way — the tree `cherry-pick --quit` leaves when a reader takes
-/// that row themselves — and the same two steps clear it.
+/// With no operation standing (a reader ran `cherry-pick --quit`), the
+/// unmerged index alone is in the way, and the same two steps clear it.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_move_out_of_unmerged_files_stashes_them_with_no_operation_to_put_down() {
     let mut repo = colliding_branches();
@@ -446,14 +427,12 @@ async fn a_move_out_of_unmerged_files_stashes_them_with_no_operation_to_put_down
     session.close();
 }
 
-/// And a clean tree with nothing standing over it is nobody's
-/// business: a move that reaches this by any other road leaves the
-/// tree the reader carried across where it is.
+/// With nothing standing and nothing colliding, git carries the work
+/// across itself.
 #[tokio::test(flavor = "multi_thread")]
 async fn nothing_in_the_way_means_nothing_is_put_aside() {
     let mut repo = colliding_branches();
-    // On neither branch, so nothing it could collide with: git carries it
-    // across itself and the carry never reaches for a stash either.
+    // On neither branch, so nothing it could collide with.
     repo.write_file("spare.txt", "uncommitted\n");
 
     let (sink, session) = opened(&repo).await;
@@ -475,14 +454,12 @@ async fn nothing_in_the_way_means_nothing_is_put_aside() {
     session.close();
 }
 
-/// The agreement is spent after the question about the move: a move
-/// that has to ask leaves the operation standing, so walking away
-/// from `Move here?` costs the cherry-pick nothing.
+/// Walking away from `Move here?` costs the cherry-pick nothing.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_move_that_has_to_ask_leaves_the_operation_standing() {
     let mut repo = colliding_branches();
     // `other` holds a commit `main` does not, so moving it onto `main`
-    // would put that one out of reach: the case the question exists for.
+    // would put that one out of reach: the case the question is for.
     repo.commit_file("both.txt", "ours\n", "main");
     repo.git_expect_failure(&["cherry-pick", "other"]);
 
@@ -503,22 +480,12 @@ async fn a_move_that_has_to_ask_leaves_the_operation_standing() {
     session.close();
 }
 
-/// **A carry whose session closes half-way finishes anyway**, so the
-/// work it emptied the tree of is put back.
+/// A carry whose session closes half-way finishes anyway, so the work it
+/// emptied the tree of is put back — read from the repository, since
+/// nobody is watching events (rules-refs/core.md「ローカル書き込みは走り切る」).
 ///
-/// The close cancels the reads and gives up the tree's place in the
-/// order, but a local write is not on the token it cancels
-/// (`session::write`: `Lane::Local` is run under one of its own) and
-/// the loop drains its queue after the cancellation. The tab that
-/// closes mid-write is the reachable way in, and the quit
-/// gate is the other end of the same rule (rules-refs/core.md §書き込み
-/// レーン) — this is that guarantee read from the repository, which is the
-/// only place it can be read from once nobody is watching the events.
-///
-/// Held at the stash on purpose: between it and the `switch` is the one
-/// stretch where a write that stopped would leave the work somewhere
-/// other than the tree (P3-確認事項 §core, logged there as a cancel
-/// window before the writes were let run on).
+/// Held at the stash: between it and the `switch` is the one stretch where
+/// a stopped write would leave the work somewhere other than the tree.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_carry_whose_session_closes_half_way_still_puts_the_work_back() {
     let mut repo = TestRepo::init();
@@ -540,11 +507,9 @@ async fn a_carry_whose_session_closes_half_way_still_puts_the_work_back() {
         events.iter().any(reached_the_stash).then_some(())
     })
     .await;
-    // The tab goes while the work is in the stash and the tree is empty.
     session.close();
     release.send(()).expect("the carry is released");
 
-    // The write runs on to its end and answers there, closed or not.
     assert_eq!(write_result(&sink, OperationKind::Checkout).await, None);
     assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "other");
     assert!(
@@ -564,17 +529,14 @@ fn reached_the_stash(event: &SessionEvent) -> bool {
         if display.starts_with("git stash push"))
 }
 
-/// **What the pre-merge run leaves out**: git refusing a plain move while a
-/// cherry-pick stands. The move is `switch` passed straight through, and
-/// the refusal and the untouched pick are git's; the one reading of ours
-/// in it — that this wording is not work a stash gets past — is held by
-/// `branch::tests::every_other_failure_stays_an_error`. So the full gate
-/// runs it (`-- --ignored ::periodic::`) rather than every change.
+/// Left out of the pre-merge run: the refusal and the untouched pick are
+/// git's, and the one reading of ours in it (this wording is not one a
+/// stash gets past) is held by `branch::tests::every_other_failure_stays_an_error`.
 mod periodic {
     use super::*;
 
-    /// The same move without that agreement is the refusal it always was:
-    /// core does not abort anything nobody asked it to.
+    /// A plain `checkout` (not `checkout_leaving_operation`) is still git's
+    /// refusal: core does not abort anything nobody asked it to.
     #[tokio::test(flavor = "multi_thread")]
     #[ignore = "git's own refusal of a move while a pick stands: not worth the pre-merge run"]
     async fn an_ordinary_move_still_refuses_while_a_pick_is_standing() {

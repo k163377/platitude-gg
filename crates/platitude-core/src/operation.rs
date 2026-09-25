@@ -3,52 +3,41 @@
 //! of write it is, and which lane serves it.
 //!
 //! **One id from the press to the last publish.** The queue hands the id
-//! back the moment it accepts the request (`RepoSession::write` and every
-//! entry point built on it — and nothing at all where it accepts none,
-//! since an id nobody will ever answer is worse than a refusal the
-//! caller can read), and everything said about that write
-//! afterwards carries it: its start, a stop git left it on, git's own
-//! answer (`SessionEvent::WriteFinished`), the end of the reads that
-//! followed (`SessionEvent::WriteSettled`), and every git command spawned
-//! under it (`SessionEvent::CommandStarted::operation` — a compound write
-//! is several commands under one id). A consumer waiting on its own write
-//! matches the id and reads nothing into the order answers arrive in or
-//! into what kind they say they are: two stash operations answer under
-//! the same label, and the one behind answers the moment the one in front
-//! does.
+//! back when it accepts the request (`RepoSession::write` and every entry
+//! point on it; none where it accepts none — an id nobody will answer is
+//! worse than a refusal), and everything said about that write carries
+//! it: its start, a stop, `SessionEvent::WriteFinished`,
+//! `SessionEvent::WriteSettled`, and every git command spawned under it
+//! (`SessionEvent::CommandStarted::operation`). A consumer waiting on its
+//! own write matches the id, never the order or the kind: two stash
+//! operations answer under the same label.
 //!
-//! **An ordering of its own.** The graph's generation, the
-//! details read's, and the numbered reports of HEAD (`head_seq`) each
-//! order something else — reads nobody asked for move them — and none of
-//! them is this id. A write's answer still names the `head_seq` a landing
-//! waits for, beside the id.
+//! The graph's and the details' generations and `head_seq` order other
+//! things (unasked reads move them) and are not this id.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Numbers every write this process accepts. Process-wide for the
-/// reason the reports of HEAD are (`session::standing`):
-/// a feed outlives the session that filled it, and a count starting again
-/// at 1 would let a closed session's id be answered by the next session's
-/// write.
+/// Process-wide, not per session: a feed outlives the session that
+/// filled it, and a count restarting at 1 would let the next session's
+/// write answer a closed session's id.
 static NEXT_OPERATION: AtomicU64 = AtomicU64::new(1);
 
 /// Names one write from the moment the queue accepted it.
 ///
-/// Compared by equality and nothing else. The queue runs writes in the
-/// order it accepted them, but a reader that needs its own answer
-/// asks for it by this id: what answered in between is somebody
+/// Compared by equality and nothing else: a reader asks for its own
+/// answer by this id, and whatever answered in between is somebody
 /// else's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OperationId(u64);
 
 impl OperationId {
-    /// The next id, taken at acceptance. Always positive, so a bridge
-    /// carries integers can use zero for "nothing was accepted".
+    /// The next id, taken at acceptance. Always positive, so an integer
+    /// bridge can use zero for "nothing was accepted".
     pub(crate) fn next() -> Self {
         Self(NEXT_OPERATION.fetch_add(1, Ordering::Relaxed))
     }
 
-    /// The number itself, for a bridge that carries integers.
+    /// The number itself, for an integer bridge.
     #[must_use]
     pub fn as_u64(self) -> u64 {
         self.0
@@ -57,17 +46,13 @@ impl OperationId {
 
 /// Which write it is.
 ///
-/// One type, and not a label read as a string, for the three things that
-/// ask which write it is — the queue's lane, the poll's gate under a
-/// replay, and the application's classification of the answer — so a kind
-/// added here has to be placed in each of them: the matches are
-/// exhaustive, and there is no default lane to fall into by omission.
+/// One type, not a label read as a string, for the queue's lane, the
+/// poll's gate under a replay and the application's classification: the
+/// matches are exhaustive, so a new kind has to be placed in each.
 ///
-/// The kinds are as coarse as the application reads them ([`Self::label`]):
-/// every stash operation is `Stash`, every branch write `Branch`. Which
-/// press an answer belongs to is the id's to say. The
-/// two compound deletes are their own kinds because the lane cannot be
-/// read off the label they answer under.
+/// As coarse as the application reads them ([`Self::label`]); which press
+/// an answer belongs to is the id's to say. The two compound deletes are
+/// their own kinds because their lane cannot be read off their label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OperationKind {
     Stage,
@@ -98,26 +83,22 @@ pub enum OperationKind {
     Config,
     Identity,
     /// A branch deleted here and on its remote as one write: answers as
-    /// a branch write, runs on the remote lane, since the second half is
-    /// a push.
+    /// a branch write, runs on the remote lane (the second half is a push).
     DeleteBranchEverywhere,
     /// The same pair for a tag.
     DeleteTagEverywhere,
     /// The fetch the interval fires.
     AutoFetch,
-    /// The fetch an opening fires. Told apart from the interval's because
-    /// the application answers it differently: the button turns for both,
-    /// and only this one leaves the command log where it was — a tab
-    /// opened on a machine that is offline opens quietly
-    /// (デザイン規約 §リモートから取り込む).
+    /// The fetch an opening fires. Apart from the interval's because only
+    /// this one leaves the command log where it was, so a tab opened
+    /// offline opens quietly (デザイン規約 §リモートから取り込む).
     OpenFetch,
 }
 
 impl OperationKind {
-    /// The word the write answers under — what the application classifies
+    /// The word the write answers under: what the application classifies
     /// the answer by and the log names the write with. Coarser than the
-    /// kind where the application reads two kinds alike: a branch deleted
-    /// here and on its remote answers as a branch write.
+    /// kind where the application reads two kinds alike.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
@@ -150,14 +131,9 @@ impl OperationKind {
         }
     }
 
-    /// Whether a person asked for a write of this kind, or it is one of
-    /// the fetches this application makes on its own — the interval's and
-    /// the one an opening fires.
-    ///
-    /// **Read off the lane**: the lane already names that set
-    /// ([`Lane::UnaskedFetch`]), and a second spelling would let the
-    /// two disagree about which writes have somebody waiting on
-    /// them.
+    /// Whether a person asked for a write of this kind, rather than the
+    /// application firing a fetch on its own. Read off the lane
+    /// ([`Lane::UnaskedFetch`]) so the two cannot disagree.
     #[must_use]
     pub fn asked_for(self) -> bool {
         self.lane() != Lane::UnaskedFetch
@@ -165,13 +141,11 @@ impl OperationKind {
 
     /// Which lane serves a write of this kind.
     ///
-    /// **The one place the sets are written.** The budget, the token and
-    /// the executor all follow from this answer (`session::write`), and a
-    /// second spelling of it would let them disagree about what is
-    /// running. Exhaustive on purpose: a kind whose task reaches the
-    /// network in *any* half goes on the remote lane, and the local lane
-    /// — waited out, uncancellable, holding the quit gate — is not a
-    /// default a new kind can fall into unnamed.
+    /// **The one place the sets are written**: the budget, the token and
+    /// the executor all follow from it (`session::write`). Exhaustive on
+    /// purpose: a kind that reaches the network in *any* half goes on the
+    /// remote lane, and the local lane — waited out, uncancellable,
+    /// holding the quit gate — is no default to fall into unnamed.
     #[must_use]
     pub fn lane(self) -> Lane {
         match self {
@@ -205,27 +179,16 @@ impl OperationKind {
         }
     }
 
-    /// Whether a write of this kind changes what this copy of the
-    /// repository holds — its index, its own refs, the operation left
-    /// standing in it.
+    /// Whether a write of this kind changes what this copy holds (its
+    /// index, its own refs, a standing operation), so the working tree's
+    /// order serves it in turn (`session::write_order`).
     ///
-    /// **A second question from [`Self::lane`], and not read off it.**
-    /// The lane says how a write is supervised: what budget it runs
-    /// under, whose token can stop it, whether a close waits it out.
-    /// This says whether the working tree's order has to serve it in
-    /// turn (`session::write_order`). The composite deletes are where
-    /// the two part company — their far half is paced by the network, so
-    /// they are supervised as remote writes, and their near half deletes
-    /// a ref here, so they stay behind a rename accepted before
-    /// them.
-    ///
-    /// `false` only where the whole effect is at the other end and on
-    /// the remote-tracking refs that mirror it: a push, and the three
-    /// fetches. Putting those in the order would leave a commit waiting
-    /// behind somebody else's round trip for nothing.
-    ///
-    /// Exhaustive for the same reason the lane is: a new kind has to be
-    /// placed by hand, and neither answer is a default to fall into.
+    /// **Not read off [`Self::lane`]**, which says how a write is
+    /// supervised: a pull and the composite deletes are paced by the
+    /// network but move a ref here, so they stay behind a rename accepted
+    /// before them. `false` only for a push and the three fetches, whose
+    /// effect is all at the other end — ordering them would hold a commit
+    /// behind a round trip for nothing. Exhaustive for the lane's reason.
     #[must_use]
     pub fn writes_here(self) -> bool {
         match self {
@@ -257,26 +220,16 @@ impl OperationKind {
         }
     }
 
-    /// Whether a write of this kind replays history a commit at
-    /// a time.
+    /// Whether a write of this kind replays history a commit at a time:
+    /// it pays per commit (ci/baseline/code-costs-windows-x64.md), and git
+    /// leaves a standing operation on disk while it runs. So the poll is
+    /// let through under these to count the steps
+    /// (`RepoSession::refresh_poll`), and the screen holds its write doors
+    /// down while one is out. A pull is in because it is a rebase or a
+    /// merge underneath (`pull.rebase`); the three one-commit edits
+    /// because each is a rebase (`sequencer::plan_edit` + `run_plan`).
     ///
-    /// These are the writes that can stand for tens of seconds — a replay
-    /// pays per commit (ci/baseline/code-costs-windows-x64.md), so a
-    /// range of a few hundred is seconds and the graph's own window is
-    /// far longer — and they are the ones git leaves a standing operation
-    /// on disk for while they run. Both halves of that matter: the poll
-    /// is let through under these so the badge can count the steps out
-    /// (`RepoSession::refresh_poll`), and the screen holds its write
-    /// doors down for as long as one is out. A pull is in the set because
-    /// it brings the far side in by one of the two already here —
-    /// `pull.rebase` makes it a rebase and anything else a merge — and
-    /// stops where they stop. The three one-commit edits
-    /// are in the set because each is a rebase underneath
-    /// (`sequencer::plan_edit` + `run_plan`), so a squash near the root
-    /// replays everything above it — the same wait under a shorter name.
-    ///
-    /// **The one place the set is written**, for the reason
-    /// [`Self::lane`] gives.
+    /// **The one place the set is written**, as with [`Self::lane`].
     #[must_use]
     pub fn replays_history(self) -> bool {
         matches!(
@@ -296,28 +249,22 @@ impl OperationKind {
 
 /// How the queue supervises a write: which executor runs it, what budget
 /// binds it, and what a close does to it. A pure function of the kind
-/// ([`OperationKind::lane`]), carried on the request so the queue reads
-/// the answer once.
+/// ([`OperationKind::lane`]), carried on the request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Lane {
-    /// A write that costs what the repository's own size makes it cost:
-    /// slowness is not a hang, so the queue waits it out to the end, with
-    /// no stock budget and no cancellation, even through a close. A kill
-    /// mid-write is the one way the queue can lose what the user asked
-    /// for (measured: a killed commit is simply gone), and a user's own
-    /// wedged hook is the user's to deal with — the screen shows busy
-    /// and the command log shows what is running.
+    /// Paced by the repository's own size: slowness is not a hang, so the
+    /// queue waits it out — no stock budget, no cancellation, even through
+    /// a close. A kill mid-write loses what the user asked for (a killed
+    /// commit is gone); a wedged hook shows as busy, with the command in
+    /// the log.
     Local,
-    /// Paced by the far end of a network connection — the fetches and
-    /// pushes, whose one real way to hang is a remote that stopped
-    /// answering. Keeps the stock time budget and dies with the session.
+    /// Paced by the far end of a network connection, whose one real way to
+    /// hang is a remote that stopped answering. Keeps the stock time
+    /// budget and dies with the session.
     Remote,
     /// The remote lane on a handle of its own, for the fetches nobody
-    /// asked for — the interval's and the one an opening fires: one that
-    /// lands leaves no row in the command log, and one git said no to
-    /// leaves its own (`process::Kept::UnaskedUnlessItFails`). Neither
-    /// raises the panel by being a row, so an offline laptop still gets
-    /// the one telling its first failure is entitled to.
+    /// asked for: one that lands leaves no command-log row, and one git
+    /// said no to leaves its own (`process::Kept::UnaskedUnlessItFails`).
     UnaskedFetch,
 }
 
@@ -325,9 +272,6 @@ pub enum Lane {
 mod tests {
     use super::{Lane, OperationKind};
 
-    /// The set is the writes that hand a range to git one commit at a
-    /// time; everything else touches the index once and comes back, and
-    /// the poll stays out under it the way it always has.
     #[test]
     fn the_writes_that_replay_are_the_ones_a_range_can_make_long() {
         for kind in [
@@ -371,9 +315,6 @@ mod tests {
         }
     }
 
-    /// The remote lane is the fetches and pushes and the two compound
-    /// deletes whose second half is a push; the unasked fetches have a
-    /// lane of their own; every other kind is local and waited out.
     #[test]
     fn the_lane_follows_the_kind_and_nothing_else() {
         for kind in [
@@ -423,9 +364,6 @@ mod tests {
         }
     }
 
-    /// The compound deletes answer under the label of the local write
-    /// they contain — what the application reads — while their lane is
-    /// the push's.
     #[test]
     fn a_compound_delete_answers_as_its_local_half_and_runs_as_its_remote_half() {
         assert_eq!(OperationKind::DeleteBranchEverywhere.label(), "branch");
@@ -434,10 +372,6 @@ mod tests {
         assert_eq!(OperationKind::DeleteBranchEverywhere.lane(), Lane::Remote);
     }
 
-    /// A pull is supervised by the far end and ordered by the working
-    /// tree: the one command whose two halves are on opposite sides of
-    /// that line, where the fetches are wholly on one and the merge
-    /// wholly on the other.
     #[test]
     fn a_pull_runs_on_the_remote_lane_and_takes_its_place_in_the_tree() {
         assert_eq!(OperationKind::Pull.lane(), Lane::Remote);
@@ -446,8 +380,6 @@ mod tests {
         assert_eq!(OperationKind::Merge.lane(), Lane::Local);
     }
 
-    /// Ids are handed out in acceptance order and never repeat within a
-    /// process, and none of them is zero.
     #[test]
     fn ids_are_distinct_and_never_zero() {
         let first = super::OperationId::next();

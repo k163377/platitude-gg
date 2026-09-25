@@ -1,19 +1,13 @@
-//! The merge-tool candidate read, and the promise its answer keeps.
+//! The merge-tool candidate read, and the promise its answer keeps: the
+//! settings pane shows a loading indicator from the accepted ask
+//! (`repo_tab::list_merge_tools`) until `MergeToolsLoaded`, so every road
+//! out of `ask_merge_tools` has to end in that event — including the two
+//! that never search (a session still opening, one whose opening failed).
 //!
-//! **A screen that asks for these marks itself loading and waits.** The
-//! settings pane puts a turning indicator up the instant the ask is
-//! accepted (`repo_tab::list_merge_tools`) and takes it down on
-//! `MergeToolsLoaded` and nothing else, so every road out of
-//! `ask_merge_tools` has to end in that event. The two roads that do not
-//! run the search at all — a session still opening, and one whose
-//! opening failed — are the ones these hold.
-//!
-//! **Where the read reaches the machine, the machine is the test's**
-//! (`conflict::mock_available_tools`): what is judged is the session's
-//! answer. The mock of a free function is one for the whole binary, so
-//! every test that sets it — or reads the real one — holds
-//! `#[mry::lock(conflict::available_tools)]`. The same ask against this
-//! machine's own tools is in [`periodic`].
+//! The machine's tools are mocked (`conflict::mock_available_tools`). The
+//! mock of a free function is one for the whole binary, so every test that
+//! sets it — or reads the real one — holds
+//! `#[mry::lock(conflict::available_tools)]`. The real read is in [`periodic`].
 
 use platitude_core::conflict;
 use platitude_core::session::{RepoSession, SessionEvent};
@@ -21,7 +15,7 @@ use platitude_core::session::{RepoSession, SessionEvent};
 use crate::support::session::CaptureSink;
 use crate::support::{exec, repo::TestRepo};
 
-/// The event, whatever it carries.
+/// The first settled answer, whatever it names.
 async fn settled_names(sink: &CaptureSink) -> Vec<String> {
     nth_settled(sink, 1).await
 }
@@ -53,12 +47,9 @@ fn nth_settled_in(evs: &[SessionEvent], nth: usize) -> Option<Vec<String>> {
     None
 }
 
-/// **The opening is over by the time this returns.** `settle` says the
-/// completion word with nothing awaited between this event and it, and
-/// this suite's runtime is single-threaded, so the task runs to its end
-/// before the test is scheduled again. That is what puts an ask made
-/// after this on the far side of the boundary — with, at that moment,
-/// nobody subscribed to it.
+/// The opening is over by the time this returns: `settle` says the
+/// completion word with nothing awaited after this event, and the runtime
+/// is single-threaded, so the task ends before the test runs again.
 async fn the_opening_gave_up(sink: &CaptureSink) {
     sink.wait_for("OpenFailed", |evs| {
         evs.iter()
@@ -68,15 +59,11 @@ async fn the_opening_gave_up(sink: &CaptureSink) {
     .await;
 }
 
-/// **An opening that never produced a working tree still answers.** A
-/// path that is not a repository leaves `workdir()` `None` for good, and
-/// a read that reads that as "give up" leaves the screen's indicator
-/// turning for the life of the window. Nothing to offer is an answer.
+/// A path that is not a repository leaves `workdir()` `None` for good, and
+/// nothing to offer is an answer.
 #[tokio::test]
 async fn a_session_whose_open_failed_answers_the_merge_tool_ask() {
-    // A directory with no repository above it either: one made inside a
-    // `TestRepo` would be opened as that repository, because git walks
-    // up (`support::repo`).
+    // Not inside a `TestRepo`: git walks up and would open that repository.
     let plain = tempfile::tempdir().expect("a plain directory");
 
     let sink = CaptureSink::new();
@@ -95,12 +82,9 @@ async fn a_session_whose_open_failed_answers_the_merge_tool_ask() {
     );
 }
 
-/// **An ask that arrives inside the opening gets the real answer.** This
-/// is the order the settings verb runs in — the screen is up before the
-/// repository has finished opening — and the read has to wait the
-/// opening out rather than give up on a working tree that is about to
-/// exist. What config names comes first, and a tool the machine has as
-/// well is named once.
+/// An ask inside the opening (the settings verb's order) waits the opening
+/// out rather than giving up on a working tree about to exist. What config
+/// names comes first, and a tool the machine also has is named once.
 #[tokio::test]
 #[mry::lock(conflict::available_tools)]
 async fn an_ask_inside_the_opening_names_the_configured_tool_first() {
@@ -125,16 +109,12 @@ async fn an_ask_inside_the_opening_names_the_configured_tool_first() {
     assert_eq!(settled_names(&sink).await, ["demo-editor", "meld"]);
 }
 
-/// **An ask made after the opening has already given up is answered
-/// too.** The completion word is said once, and on this road it is said
-/// with nothing subscribed to hear it — so the value it leaves behind is
-/// the only thing a later read can be answered from. A boundary that
-/// only reaches the readers already waiting is the same stall, one step
-/// further on.
+/// The completion word is said once, here with nobody subscribed, so the
+/// value it leaves behind is all a later ask can be answered from — a
+/// boundary that reaches only waiting readers stalls this ask.
 ///
-/// **This is an order, not a race**: the opening is over before the ask
-/// is made ([`the_opening_gave_up`]), and the ask is the only subscriber
-/// there has ever been.
+/// An order, not a race: the opening is over before the ask is made
+/// ([`the_opening_gave_up`]).
 #[tokio::test]
 async fn an_ask_made_after_the_opening_gave_up_is_answered() {
     let plain = tempfile::tempdir().expect("a plain directory");
@@ -156,12 +136,9 @@ async fn an_ask_made_after_the_opening_gave_up_is_answered() {
     );
 }
 
-/// **A cancelled opening settles as well, and stays settled.** Closing a
-/// page before its repository finished opening is the road that says the
-/// word with no event beside it, so the ask that follows has nothing to
-/// wait for but the boundary itself. The second ask is the part that
-/// reads the kept value: by then the opening is long over and its only
-/// reader — the first ask — has gone.
+/// A cancelled opening settles too, with no event beside the word, so the
+/// ask has only the boundary to wait for. The second ask reads the kept
+/// value, after the opening's only reader (the first ask) has gone.
 #[tokio::test]
 async fn a_session_closed_inside_its_opening_answers_every_ask() {
     let mut repo = TestRepo::init();
@@ -176,8 +153,8 @@ async fn a_session_closed_inside_its_opening_answers_every_ask() {
         sink.clone(),
         None,
     );
-    // Before anything is awaited, so the opening is cancelled where it
-    // stands: it never reaches a working tree, and it never says why.
+    // Before anything is awaited: cancelled short of a working tree, and
+    // silent about it.
     session.close();
 
     session.ask_merge_tools();
@@ -193,15 +170,13 @@ async fn a_session_closed_inside_its_opening_answers_every_ask() {
     );
 }
 
-/// **What the pre-merge run leaves out**: the same ask, answered from this
-/// machine's own installed tools. That read takes seconds on Windows and
-/// guards a screen seldom changed, so the full gate runs it
-/// (`-- --ignored ::periodic::`) rather than every change.
+/// Left out of the pre-merge run: the same ask against this machine's own
+/// tools, a read on the order of seconds guarding a screen seldom changed.
 mod periodic {
     use super::*;
 
-    /// **The configured tool survives the machine's own sweep** — the
-    /// settled answer names it next to whatever this machine has.
+    /// The settled answer names the configured tool next to whatever this
+    /// machine has.
     #[tokio::test]
     #[ignore = "this machine's merge tools: seconds on Windows, not worth the pre-merge run"]
     #[mry::lock(conflict::available_tools)]
@@ -221,13 +196,11 @@ mod periodic {
             sink.clone(),
             None,
         );
-        // Before anything is awaited: the opening is still out, so this is
-        // the ask the screen makes while `workdir()` is `None`.
+        // Inside the opening, as above.
         session.ask_merge_tools();
 
-        // Through the silence: this machine's read says nothing until it
-        // ends, and a busy machine stretches it past the silence budget
-        // with nothing wrong.
+        // The machine's read says nothing until it ends, and load can
+        // stretch it past the silence budget.
         let names = sink
             .wait_through_silence("MergeToolsLoaded settled #1", |evs| nth_settled_in(evs, 1))
             .await;

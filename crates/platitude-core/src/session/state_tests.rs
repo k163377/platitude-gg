@@ -1,20 +1,14 @@
-//! Tests of [`super::state`]'s derived reads and the sharing they do,
-//! in a file of their own (structure.md §分割: テストだけ巨大なら同ディレクトリの専用ファイルへ).
+//! Tests of [`super::state`]'s derived reads, in a file of their own
+//! (structure.md §分割).
 
-// `state` reads its `Arc` / `AtomicU64` / `Ordering` off the session's
-// shared prelude the same way (rules-refs/structure.md §分割の各論), so the
-// tests take both globs.
+// Both globs: `Arc` / `AtomicU64` / `Ordering` come off the session's
+// prelude, as in `state` (rules-refs/structure.md §分割の各論).
 use super::state::*;
 use super::*;
 
-/// Two callers miss at once: the second parks on the single-flight gate
-/// and is answered by the first's read.
-///
-/// The second caller is driven by hand to the point where it has to
-/// wait ([`crate::wait::poll_once`]) — past the fast-path miss and onto
-/// the gate the first holds — so the race is set up at the one point
-/// it can happen, whatever turn of the scheduler would otherwise
-/// have carried it there.
+/// Two callers miss at once: the second, driven by hand past the fast-path
+/// miss onto the gate the first holds ([`crate::wait::poll_once`]), is
+/// answered by the first's read.
 #[tokio::test]
 async fn concurrent_callers_share_one_derived_read() {
     let derived = Arc::new(Derived::<u32>::default());
@@ -112,11 +106,8 @@ async fn invalidation_during_a_derived_read_retries_before_publishing() {
     assert_eq!(held, Ok(2), "only the current generation was cached");
 }
 
-/// An answer invalidated on *every* read still comes back: the chase
-/// after a lost generation is one read long — a write
-/// lands an invalidation on its way out, so a chase held open until no
-/// write interferes spins git processes for as long as writes keep
-/// coming, with every waiter parked behind the single-flight gate.
+/// The chase after a lost generation is one read long
+/// (`Derived::get_or_try_init`).
 #[tokio::test]
 async fn an_answer_invalidated_on_every_read_is_still_an_answer() {
     let derived = Derived::<u32>::default();

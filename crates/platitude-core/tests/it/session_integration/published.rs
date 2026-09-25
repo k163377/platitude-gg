@@ -1,11 +1,6 @@
-//! The published mark the graph rows carry, against what git says.
-//!
-//! The mark exists so a menu opening on a row has the answer in the same
-//! frame (`session::published`). What makes it usable is that it agrees
-//! with `git rev-list --not --remotes` — the same question asked the
-//! slow way, and the one [`platitude_core::publish`] asks everywhere
-//! else. So every row here is checked against what git
-//! answers.
+//! The published mark the graph rows carry (`session::published`), checked
+//! row by row against `git rev-list --not --remotes` — the same question
+//! [`platitude_core::publish`] asks everywhere else.
 
 use crate::support::remote::origin_and_clone;
 use crate::support::session::{CaptureSink, open_unawaited};
@@ -60,8 +55,8 @@ async fn a_row_is_marked_exactly_when_a_remote_reaches_it() {
         );
     }
 
-    // ...and the fixture is the shape the assertion above needs to mean
-    // anything: some rows marked, some not.
+    // The fixture must mix marked and unmarked rows for the loop to mean
+    // anything.
     let marked: Vec<&str> = rows
         .iter()
         .filter(|r| r.published)
@@ -76,10 +71,9 @@ async fn a_row_is_marked_exactly_when_a_remote_reaches_it() {
     assert!(rows.iter().any(|r| r.oid_hex == pushed && r.published));
 }
 
-/// A push run outside the application moves `refs/remotes/...` here, and
-/// the poll that notices reads the refs and rebuilds the graph. The marks
-/// have to come back with it — otherwise the warnings would keep saying
-/// what was true before somebody else's terminal.
+/// A push from a terminal moves `refs/remotes/...`; the rebuild the refs
+/// read triggers must bring the marks with it, or the warnings keep saying
+/// what was true before.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_push_from_outside_publishes_the_rows_it_reached() {
     let (_bare, mut work) = origin_and_clone();

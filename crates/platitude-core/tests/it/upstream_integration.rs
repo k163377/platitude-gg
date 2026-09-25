@@ -1,8 +1,7 @@
 //! What a branch follows: the tracking branch a checkout of a remote ref
 //! creates, the upstream a move onto a remote ref leaves alone, and the
-//! upstream written for a branch, push or no push. What git measures a
-//! delete against, and a held branch taking an upstream, are git's own
-//! rules and are in [`periodic`].
+//! upstream written for a branch, push or no push. git's own rules around
+//! an upstream are in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -66,15 +65,8 @@ async fn checkout_of_a_remote_branch_creates_a_tracking_branch() {
 }
 
 /// Moving a branch says nothing about what it reads, so the move must not
-/// re-point it.
-///
-/// **`switch --force-create` applies `branch.autoSetupMerge` to a
-/// remote-tracking start point, existing branch or not** (measured 2.55:
-/// `origin/topic` became `up/2.21`, and `checkout -B` does the same; plain
-/// `reset --hard` and `branch -f` leave it alone). All the reflog says is
-/// `branch: Reset to <start>`, so nothing on screen or in the log names
-/// the upstream that was thrown away — which is why `--no-track` is on the
-/// command and not left to the default.
+/// re-point it — without `--no-track` it silently would (rules-refs/core.md
+/// 「`switch --force-create` は start が remote-tracking だと upstream を書き換える」).
 #[tokio::test]
 async fn moving_a_branch_onto_a_remote_ref_leaves_its_upstream_alone() {
     let mut origin = TestRepo::init();
@@ -121,13 +113,10 @@ async fn moving_a_branch_onto_a_remote_ref_leaves_its_upstream_alone() {
     );
 }
 
-/// What `--set-upstream-to` is given has to be the full remote-tracking
-/// refname. The shorthand git prints is a rev-parse spelling, and a
-/// local branch of that exact name makes it **ambiguous** — git refuses
-/// the whole command (measured), which would leave the question
-/// answered on screen and nothing written. Pinned with the collision
-/// in place, since that is the only shape the two spellings disagree
-/// on.
+/// `--set-upstream-to` must get the full remote-tracking refname: a local
+/// branch named like the shorthand makes it ambiguous, and git refuses the
+/// whole command. Pinned with that collision in place — the only shape the
+/// two spellings disagree on.
 #[tokio::test]
 async fn the_upstream_is_named_by_the_one_spelling_that_reads_one_way() {
     let mut origin = TestRepo::init();
@@ -139,8 +128,6 @@ async fn the_upstream_is_named_by_the_one_spelling_that_reads_one_way() {
     clone.git(&["remote", "add", "origin", &url]);
     clone.git(&["fetch", "origin"]);
     clone.git(&["checkout", "-b", "topic", "origin/main"]);
-    // The collision: a local branch called exactly what the shorthand for
-    // the remote one is.
     clone.git(&["branch", "origin/feature/x", "origin/main"]);
     let (exec, cancel) = env();
 
@@ -155,17 +142,14 @@ async fn the_upstream_is_named_by_the_one_spelling_that_reads_one_way() {
     clone.git_expect_failure(&["branch", "--set-upstream-to=origin/feature/x", "topic"]);
 }
 
-/// **A name nothing here answers to is an answer all the same.** git's
-/// own command refuses one (`fatal: the requested upstream branch … does
-/// not exist`, measured — its hint points at `push -u` instead), so the
-/// two keys go down straight; the branch is then measured against a
-/// remote branch the next push makes (デザイン規約
-/// §ブランチが測られる相手を決める).
+/// A name with no tracking ref here is recorded all the same — git's own
+/// command refuses it, so the two keys are written directly (デザイン規約
+/// §ブランチが測られる相手を決める; rules-refs/core.md
+/// 「upstream の書き込みは 2 通りで、分かれ目は追跡 ref が手元に在るか」).
 ///
-/// The whole way through, because the halves prove nothing apart: the
-/// pair git reads back, the `[gone]` it reads it as until the far side
-/// exists, the destination the next push plans off those keys, and that
-/// the push makes the branch and starts the counts.
+/// End to end, because the halves prove nothing apart: the keys, `[gone]`
+/// until the far side exists, the push planned off them, and the counts
+/// starting once it lands.
 #[tokio::test]
 async fn an_upstream_the_next_push_has_to_make_is_recorded_all_the_same() {
     let mut origin = TestRepo::init();
@@ -224,15 +208,11 @@ async fn an_upstream_the_next_push_has_to_make_is_recorded_all_the_same() {
     );
 }
 
-/// **A refused push leaves the branch pointing where it belongs.** This is
-/// the whole reason the pair is written in this order rather than left to
-/// git's `push --set-upstream`, which records the keys only once the push
-/// has landed — measured below from git's own command, and then from the
-/// session op that exists to invert it
-/// (`RepoSession::point_upstream_and_push`, デザイン規約 §手元の改名の後のリモート).
-///
-/// The remote is a path with nothing at the end of it: no network, and
-/// the refusal is git's own (実装計画 §11.3).
+/// A refused push still leaves the upstream written — why
+/// `RepoSession::point_upstream_and_push` writes the pair first rather
+/// than use `push --set-upstream`, which records it only on a push that
+/// landed (デザイン規約 §手元の改名の後のリモート). The remote is a path to
+/// nothing: no network (実装計画 §11.3).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_push_the_far_side_turns_down_still_leaves_the_upstream_written() {
     let mut repo = TestRepo::init();
@@ -240,8 +220,7 @@ async fn a_push_the_far_side_turns_down_still_leaves_the_upstream_written() {
     let nowhere = repo.path.join("nowhere");
     repo.git(&["remote", "add", "origin", &nowhere.display().to_string()]);
 
-    // git's own pair, for contrast: the push fails and the keys are not
-    // written, which is the behaviour this op exists to turn around.
+    // git's own pair, for contrast.
     repo.git_expect_failure(&["push", "--set-upstream", "origin", "main"]);
     assert_eq!(
         upstream_of(&mut repo, "main"),
@@ -282,25 +261,19 @@ fn track_of(repo: &mut TestRepo, branch: &str) -> String {
     ])
 }
 
-/// **What the pre-merge run leaves out**: git's own rules around an upstream
-/// — what `branch --delete` measures "merged" against (the configured
-/// upstream, a local one, HEAD where the upstream names nothing), and that
-/// a branch another working copy holds still takes an upstream. They
-/// record git behind fixed command lines; the reads of ours they meet are
-/// held before every merge (`is_merged_into`'s two answers in
+/// What the pre-merge run leaves out: git's own rules around an upstream —
+/// what `branch --delete` measures "merged" against, and that a branch
+/// another working copy holds still takes an upstream. The reads of ours
+/// they meet are held pre-merge (`is_merged_into`'s two answers in
 /// `branch_integration::unmerged_branch_needs_the_forced_delete` and
-/// `session_integration::query`, `set_upstream`'s command line above). So
-/// the full gate runs them (`-- --ignored ::periodic::`) rather than every
-/// change.
+/// `session_integration::query`, `set_upstream`'s command line above).
 mod periodic {
     use super::*;
 
-    /// The reference point `branch --delete` measures "merged" against: the
-    /// configured upstream where there is one, HEAD otherwise. `upstream_of`
-    /// resolves the first half; the pairing pinned here is the side git's
-    /// own refusal takes — a branch merged into HEAD but ahead of its
-    /// upstream still reads as unmerged (measured; the delete row's early
-    /// `-D` rides on this composition).
+    /// `branch --delete` measures "merged" against the configured upstream
+    /// where there is one, HEAD otherwise: a branch merged into HEAD but
+    /// ahead of its upstream is refused (the delete row's early `-D` rides
+    /// on this).
     #[tokio::test]
     #[ignore = "what git measures a delete against: not worth the pre-merge run"]
     async fn the_upstream_is_the_delete_reference_point() {
@@ -311,8 +284,6 @@ mod periodic {
         let url = origin.file_url();
         clone.git(&["remote", "add", "origin", &url]);
         clone.git(&["fetch", "origin"]);
-        // Starting from the remote ref configures its upstream; starting the
-        // second branch from a local commit leaves none.
         clone.git(&["checkout", "-b", "topic", "origin/main"]);
         clone.commit_file("b.txt", "two\n", "ahead of the upstream");
         clone.git(&["checkout", "-b", "keeper"]);
@@ -353,12 +324,10 @@ mod periodic {
         assert!(err.to_string().contains("not fully merged"), "{err}");
     }
 
-    /// The other half of the reference point: an upstream that is a local
-    /// branch (`remote = .`). `%(upstream)` spells it as a `refs/heads/`
-    /// name, which is the key the refs listing joins it on
+    /// An upstream that is a local branch (`remote = .`): `%(upstream)`
+    /// spells it `refs/heads/…`, the key the listing joins on
     /// (`BranchItem::upstream_oid`), and git measures the delete against it
-    /// just the same — a tip HEAD does not reach goes once that branch does
-    /// (measured; what git prints about HEAD is a warning).
+    /// just the same (what it prints about HEAD is only a warning).
     #[tokio::test]
     #[ignore = "what git measures a delete against: not worth the pre-merge run"]
     async fn a_local_upstream_is_the_reference_point_too() {
@@ -389,11 +358,9 @@ mod periodic {
         assert!(!repo.git(&["branch", "--list", "topic"]).contains("topic"));
     }
 
-    /// An upstream that names nothing — here one whose branch was deleted
-    /// after being set — is still configured (`%(upstream)` prints the
-    /// name), but it is not the measure: git falls back to HEAD (measured).
-    /// The listing join answers the same way by looking the name up, so
-    /// the delete row reads HEAD there too.
+    /// An upstream that names nothing is still configured (`%(upstream)`
+    /// prints the name) but is not the measure: git falls back to HEAD, and
+    /// so does the listing join, which looks the name up.
     #[tokio::test]
     #[ignore = "what git measures a delete against: not worth the pre-merge run"]
     async fn an_upstream_that_names_nothing_leaves_head_as_the_reference_point() {
@@ -424,10 +391,9 @@ mod periodic {
         assert!(!repo.git(&["branch", "--list", "topic"]).contains("topic"));
     }
 
-    /// Configuration about a branch: **the branch another working copy has
-    /// checked out takes it** (measured), where the same row's delete is
-    /// refused outright. Which rows that leaves is `offers::ref_menu`'s
-    /// answer; this is the half of it git owns.
+    /// A branch another working copy has checked out still takes an
+    /// upstream, though its delete is refused; which rows that leaves is
+    /// `offers::ref_menu`'s answer.
     #[tokio::test]
     #[ignore = "git letting a held branch take an upstream: not worth the pre-merge run"]
     async fn a_branch_another_working_copy_holds_still_takes_an_upstream() {

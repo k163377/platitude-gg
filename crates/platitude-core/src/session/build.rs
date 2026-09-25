@@ -1,26 +1,21 @@
-//! Free helpers of the session: the carry-across moves and rewrites.
-//!
-//! What both of them do about a working tree in the way is one module
-//! down ([`super::stash_round`]); what is here is the two things being
-//! carried, and the order their steps go in.
+//! The carry-across moves and rewrites: the order their steps go in. The
+//! stash round both share is [`super::stash_round`].
 
 use super::stash_round::{
     STASH_TOP, pop_back_after_failure, pop_back_split_first, stash_everything,
 };
 use super::*;
 
-/// Everything one `git rebase --interactive` needs, held together so the
-/// two attempts a carry makes are the same command twice over — the tip
-/// the todo was written for included ([`Replay::run`]).
+/// Everything one `git rebase --interactive` needs, so the carry's two
+/// attempts are the same command, tip check included ([`Replay::run`]).
 pub(super) struct Replay<'a> {
     upstream: &'a str,
     steps: &'a [sequencer::RebaseStep],
     options: integrate::RebaseOptions,
-    /// The tip `steps` was written against, full hex. **Every replay
-    /// carries one**, so anything else refuses
-    /// ([`Replay::tip_still_stands`]).
+    /// The tip `steps` was written against, full hex. There is no
+    /// unpinned replay: an empty one refuses ([`Replay::tip_still_stands`]).
     expect_head: &'a str,
-    /// The todo-editor binary shipped beside the application.
+    /// The todo-editor binary.
     helper: PathBuf,
 }
 
@@ -65,25 +60,14 @@ impl Replay<'_> {
     }
 
     /// Refuses the replay when HEAD is no longer the commit the todo was
-    /// written for.
+    /// written for: the helper replaces git's todo whole, so a commit that
+    /// landed since is not in it, and a rebase silently drops what the todo
+    /// leaves out.
     ///
-    /// **`steps` is a fixed list of ids.** git writes its own todo from
-    /// `upstream..HEAD` and the helper replaces it whole, so a commit that
-    /// landed after the plan was composed is not in the list — and a
-    /// rebase drops what the todo leaves out, without a word. That is the
-    /// whole of what this is against.
-    ///
-    /// **Which is why it sits inside the replay itself.** The carry
-    /// runs this command twice: the first attempt is refused over the
-    /// dirty tree, and the second comes after a `detect` and a stash —
-    /// three more spawns, and a process each — with the tree emptied and
-    /// nothing looking at the tip again. A check made once before the
-    /// first spawn leaves that whole stretch open, and the commit typed
-    /// into it is the one that goes.
-    ///
-    /// It narrows the window to the gap nothing can be put inside: git
-    /// takes a todo but not the tip it was written for, so what is left
-    /// between the two is this read and the spawn after it.
+    /// Inside the replay, so before each spawn: the carry runs it twice,
+    /// with a `detect` and a stash between, and a check before the first
+    /// alone leaves that stretch open. The window only narrows — git takes
+    /// a todo but not the tip it was written for.
     async fn tip_still_stands(
         &self,
         executor: &GitExecutor,
@@ -98,10 +82,8 @@ impl Replay<'_> {
     }
 }
 
-/// The two shapes of history rewrite this application runs, held together
-/// because git refuses both over a dirty working tree in the very same
-/// words — so both go round through the same stash, and the person who
-/// staged half of their work gets it back staged either way
+/// The two history rewrites, which git refuses over a dirty tree in the
+/// same words, so both go round through the same stash
 /// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
 pub(super) enum Rewrite<'a> {
     /// `git rebase <upstream>`: a whole branch onto a new base.
@@ -130,17 +112,9 @@ impl Rewrite<'_> {
     }
 }
 
-/// Replays a one-commit edit plan through `git rebase --interactive`.
-///
-/// Pinned to the tip the plan was read against, as the plan composed on
-/// screen is ([`Replay::tip_still_stands`]). The pin rides on the plan
-/// (`EditPlan::tip`): the rows the todo is made of already end at HEAD,
-/// so nothing is spawned for it and the response path of the three
-/// edits people click most is untouched.
-///
-/// **The window is narrowed** — git takes a todo but not the tip it was
-/// written for, so what is left between the read and the spawn is the
-/// same gap nothing can be put inside.
+/// Replays a one-commit edit plan through `git rebase --interactive`,
+/// pinned to `EditPlan::tip` ([`Replay::tip_still_stands`]): the rows the
+/// todo is made of already end at HEAD, so the pin costs no spawn.
 pub(super) async fn run_plan(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -154,11 +128,8 @@ pub(super) async fn run_plan(
 /// Runs `rewrite`, going round through a stash when the working tree is
 /// in the way (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
 ///
-/// Answers a [`Landing`](integrate::Landing): the refusal is
-/// what the carry is *for*, so it never reaches a caller, and
-/// what is left is the two answers every other operation
-/// gives — git got through it, or git stopped and left it
-/// standing.
+/// Answers a [`Landing`](integrate::Landing): the dirty-tree refusal is
+/// what the carry handles, so it never reaches a caller.
 pub(super) async fn rewrite_carrying(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -175,22 +146,18 @@ pub(super) async fn rewrite_carrying(
     }
 }
 
-/// Stash, rewrite, put back — the same three steps [`carry_across`]
-/// takes around a move, with the rewrite in the middle. Two measured
-/// facts about `--autostash`: it restores with a plain `stash apply`,
-/// so **everything that was staged comes back unstaged**, and when the
-/// rebase stops part-way it parks the work in
-/// `.git/rebase-merge/autostash`, where `stash list` cannot see it and
-/// neither can the graph.
+/// Stash, rewrite, put back — [`carry_across`]'s three steps with the
+/// rewrite in the middle. Not `--autostash`: it restores with a plain
+/// `stash apply` (everything staged comes back unstaged), and a stopped
+/// rebase parks the work in `.git/rebase-merge/autostash`, out of
+/// `stash list` and the graph.
 ///
-/// The restore is skipped when the rebase stopped part-way, and that is
-/// the whole difference from a move: git will not write into an index
-/// that already holds unmerged paths, so a `pop` there does nothing at
-/// all while reporting the conflict it walked into (measured — 規約 §`stash
-/// pop` の非ゼロを conflict と読んでよいのは). The entry stays in the
-/// stash list, drawn as its own row in the graph, and the person settling
-/// the conflict puts it back when the operation is over — which is where
-/// the same three commands typed by hand would leave it.
+/// Unlike a move, the restore is skipped when the rebase stops part-way:
+/// git will not write into an index holding unmerged paths, so a `pop`
+/// does nothing while reporting the conflict it walked into
+/// (rules-refs/core.md「`stash pop` の非ゼロを conflict と読めるのは」).
+/// The entry stays in the stash list for the person settling the
+/// conflict, where the same commands typed by hand would leave it.
 async fn carry_across_rewrite(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -198,34 +165,16 @@ async fn carry_across_rewrite(
     refusal: GitError,
     cancel: &CancellationToken,
 ) -> Result<integrate::Landing, GitError> {
-    // **A dirty-tree refusal can be a standing operation.** A rebase
-    // asked for while a merge / cherry-pick / revert stands is refused in
-    // exactly the wording [`work_is_in_the_way`] reads as one — "cannot
-    // rebase: Your index contains uncommitted changes." — because that is
-    // all git sees: the operation's own staged result. It never names the
-    // operation (measured, 2.55).
-    //
-    // A standing operation ends the carry here. `git stash push`
-    // succeeds over a resolved-and-staged conflict and **takes the
-    // operation's marker down with it** — `MERGE_HEAD`,
-    // `CHERRY_PICK_HEAD`, `REVERT_HEAD` are all gone afterwards — so the
-    // carry would empty the tree, replay history over the wreckage, and
-    // put the resolution back as an ordinary staged edit with the merge's
-    // second parent lost. The write reported success (measured).
-    //
-    // A bisect carries as any other dirty tree does: it
-    // survives a stash untouched (measured). A standing rebase
-    // never reaches here — git refuses a second one with
-    // `already a rebase-merge directory`, which no classifier
-    // reads as work in the way.
+    // A standing merge / cherry-pick / revert gets the same dirty-tree
+    // refusal, and `git stash push` would take its marker (`MERGE_HEAD` …)
+    // down with it, so it ends the carry here; a bisect carries
+    // (rules-refs/core.md「立っている操作の上への rewrite は断る」).
     let state = opstate::detect(executor, &repo.workdir, cancel).await?;
     if integrate::InProgress::from_state(&state).is_some() {
         return Err(report::rewrite_while_standing(standing_name(&state)));
     }
     if !stash_everything(executor, repo, cancel).await? {
-        // The tree was cleaned between the refusal and now, so there is
-        // nothing of ours to carry and nothing of anybody else's to
-        // touch: the rebase that was refused goes through as it stands.
+        // Cleaned since the refusal: nothing to carry, so just rerun.
         return match rewrite.run(executor, repo, cancel).await? {
             integrate::RebaseOutcome::Done => Ok(integrate::Landing::Done),
             integrate::RebaseOutcome::Stopped => Ok(integrate::Landing::Stopped),
@@ -234,29 +183,19 @@ async fn carry_across_rewrite(
     }
     match rewrite.run(executor, repo, cancel).await {
         Ok(integrate::RebaseOutcome::Done) => {}
-        // The work stays in the stash until the operation is over: git
-        // will not write into an index that already holds unmerged
-        // paths, so a `pop` here would do nothing while reporting the
-        // conflict it walked into. The stash list and the graph's own
-        // row are what say where it is
-        // (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
+        // No pop: the work stays in the stash (see above,
+        // デザイン規約 §未コミット変更がある状態で履歴を書き換える).
         Ok(integrate::RebaseOutcome::Stopped) => return Ok(integrate::Landing::Stopped),
         Ok(integrate::RebaseOutcome::Blocked(_)) => {
-            // Nothing should stand in the way of a tree that was just
-            // emptied, so whatever is holding this one is not something a
-            // stash gets past. Put the work back and let git's first
-            // refusal say why — a failure to put it back is the more
-            // urgent news and goes through instead.
+            // Not something a stash gets past: put the work back and
+            // report git's first refusal, unless the pop fails.
             stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await?;
             return Err(refusal);
         }
         Err(error) => {
-            // A failure that left something standing is holding the tree
-            // — a rebase asked for while another was in progress is the
-            // one measured (measured, 2.55) — so the work stays in the stash
-            // until whatever that is has been dealt with. One that
-            // failed without starting leaves the emptied tree, and then
-            // the stash was only the room it needed.
+            // A failure that left an operation standing keeps the work in
+            // the stash until that is dealt with; one that failed without
+            // starting gets it back.
             if !opstate::detect(executor, &repo.workdir, cancel)
                 .await?
                 .any()
@@ -271,10 +210,9 @@ async fn carry_across_rewrite(
     Ok(integrate::Landing::Done)
 }
 
-/// What to call the operation standing in a refusal's sentence. Git's own
-/// verb where [`integrate::InProgress`] knows one, and bisect otherwise —
-/// which is the only thing left that `OpState::any` counts and
-/// `from_state` does not.
+/// The standing operation's name for a refusal: git's verb where
+/// [`integrate::InProgress`] knows one, else bisect — the only thing
+/// `OpState::any` counts and `from_state` does not.
 pub(super) fn standing_name(state: &OpState) -> &'static str {
     integrate::InProgress::from_state(state)
         .map(integrate::InProgress::command)
@@ -282,36 +220,22 @@ pub(super) fn standing_name(state: &OpState) -> &'static str {
 }
 
 /// Puts the operation standing in a move's way down, and the tree it left
-/// behind with it, so `git switch` has nothing left to refuse.
+/// behind with it, so `git switch` has nothing left to refuse (git refuses
+/// every move while a merge / rebase / cherry-pick / revert stands,
+/// whatever the tree).
 ///
-/// **git refuses every move while a merge / rebase / cherry-pick / revert
-/// stands** — clean tree, conflicted tree and resolved-and-staged tree all
-/// get the same `cannot switch branch while …` (measured, 2.55). What it takes
-/// to clear the way differs across the four:
+/// - **cherry-pick / revert / merge**: `--quit`, which keeps what earlier
+///   steps committed. The unmerged index it leaves cannot be stashed
+///   (`error: could not write index`), so conflicted paths are marked
+///   resolved first (markers become content, as `Mark all resolved`
+///   does), and the tree goes into a stash that **stays there**: markers
+///   belong to the branch they were made on.
+/// - **rebase**: `--abort` — `--quit` would leave HEAD detached on the
+///   half-rewritten line with its copies unreferenced.
 ///
-/// - **cherry-pick / revert / merge**: `--quit` puts the operation down
-///   and keeps everything it has already done — the commits an earlier
-///   step of the sequence made stay on the branch (measured: a two-commit
-///   pick whose second step conflicts keeps the first). What is left is
-///   an unmerged index, which **`git stash push` cannot write at all**
-///   (`error: could not write index`), so the conflicted paths are marked
-///   resolved first — the markers become the content, which is what the
-///   working-tree pane's own `Mark all resolved` does. The whole tree
-///   then goes into a stash and **stays there**: nothing is popped at the
-///   far end, because markers belong to the branch they were made on.
-/// - **rebase**: `--quit` is the one that loses something — it leaves
-///   HEAD detached at the half-rewritten line and every copy it
-///   already made unreferenced (measured, 2.55). `--abort` puts the
-///   branch back exactly where it was, and what it undoes is a
-///   replay.
-///
-/// **With nothing standing, the unmerged index alone is the thing in the
-/// way** — what the exit card's own `--quit` row leaves behind — and the
-/// two steps after the quit clear it on their own.
-///
-/// A clean tree stashes nothing and says so by exiting 0 (measured), so an
-/// operation that stopped over nothing — a rebase on an emptied commit —
-/// leaves no entry behind.
+/// With nothing standing, an unmerged index alone (what the exit card's
+/// `--quit` row leaves) is cleared by the same two steps. A clean tree
+/// stashes nothing (exit 0), so no entry is left behind.
 pub(super) async fn leave_operation(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -339,17 +263,14 @@ pub(super) async fn leave_operation(
         )
         .await?;
     }
-    // Read here: the set is whatever is unmerged at the moment the
-    // command runs, which is the only moment it is true of.
+    // Read here, not handed in: the unmerged set is only true now.
     let paths: Vec<String> = status::load(executor, &repo.workdir, cancel)
         .await?
         .conflicted()
         .map(|item| item.path().to_string())
         .collect();
-    // **Something standing or unmerged is what this is for.** The
-    // screen only sends a move here when something is in the way, and
-    // stashing a tree nobody asked about would take work away from a
-    // reader who was only switching branches.
+    // Nothing in the way: stashing a tree nobody asked about would take
+    // work from a reader only switching branches.
     if standing.is_none() && paths.is_empty() {
         return Ok(());
     }
@@ -374,16 +295,12 @@ pub(super) async fn move_carrying(
     }
 }
 
-/// Stash, move, put back — what a person would type when git will not
-/// carry the work itself. `refusal` is what git said the first time, kept
-/// for the dead ends that have nothing better to report.
+/// Stash, move, put back. `refusal` is what git said first, kept for the
+/// dead ends with nothing better to report.
 ///
-/// The restore is a merge, so the changes land on top of what the target
-/// has and only the parts git cannot combine need settling. Going through
-/// a stash buys two things — **the staged/unstaged split
-/// survives** (`--index`), and a conflict **keeps the stash
-/// entry**, so the work still exists somewhere other than a
-/// marked-up file.
+/// Through a stash, the staged/unstaged split survives (`--index`) and a
+/// conflict keeps the stash entry, so the work exists somewhere other
+/// than a marked-up file.
 async fn carry_across(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -392,9 +309,7 @@ async fn carry_across(
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     if !stash_everything(executor, repo, cancel).await? {
-        // The tree was cleaned between the refusal and now, so there is
-        // nothing of ours to carry and nothing of anybody else's to
-        // touch: the move that was refused goes through as it stands.
+        // Cleaned since the refusal: nothing to carry, so just rerun.
         return match branch::checkout(executor, &repo.workdir, target, cancel).await? {
             branch::CheckoutOutcome::Moved => Ok(()),
             branch::CheckoutOutcome::Blocked(again) => Err(again),
@@ -408,11 +323,9 @@ async fn carry_across(
         }
     };
     if let branch::CheckoutOutcome::Blocked(_) = outcome {
-        // Nothing should stand in the way of a tree that was just
-        // emptied, so whatever is holding this one is not something a
-        // stash gets past (a `--skip-worktree` file, say). Put the work
-        // back and let git's first refusal say why — a failure to put it
-        // back is the more urgent news and goes through instead.
+        // Not something a stash gets past (a `--skip-worktree` file, say):
+        // put the work back and report git's first refusal, unless the
+        // pop fails.
         stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await?;
         return Err(refusal);
     }

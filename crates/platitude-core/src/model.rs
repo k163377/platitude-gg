@@ -5,26 +5,16 @@ use std::sync::Arc;
 
 use crate::oid::Oid;
 
-/// A short string that lives inline when it fits, and on the heap when it
-/// does not.
+/// A short string that lives inline when it fits (24 bytes, which a typical
+/// ref name does), and on the heap when it does not — resident data is
+/// mostly names, and a `String` is one allocation each.
 ///
-/// **What it is for.** The resident data of a large repository is mostly
-/// names — one per ref, one per chip — and a `String` puts every one of
-/// them in its own allocation, twenty-odd bytes of payload behind an
-/// allocator header of comparable size. A ref name averages about twenty
-/// characters (measured on the baseline repository) — inside the 24 this
-/// type keeps inline, so hundreds of thousands of allocations fold away.
-///
-/// **It stays out of the consumer's way.** Reading one needs no mention of
-/// the type (`as_str`, `==` against `&str`, `Display`), so the bridge side
-/// never names it and core's API is still swappable — which is what the
-/// pure-Rust-types rule is for (.claude/rules/core.md). Named as
-/// `crate::Name` everywhere through the root's re-export.
+/// Readers use only `as_str`, `==` against `&str` and `Display`
+/// (.claude/rules/core.md §セッション・実装の決定事項). Named as
+/// `crate::Name` everywhere.
 pub type Name = compact_str::CompactString;
 
-/// Interning pool for strings that repeat heavily (author names).
-///
-/// Keeps per-commit metadata compact for very large repositories: commits
+/// Interning pool for strings that repeat heavily (author names): commits
 /// store a `u32` id.
 #[derive(Debug, Default)]
 pub struct StrPool {
@@ -66,7 +56,7 @@ impl StrPool {
 /// Metadata of one commit as parsed from `git log`.
 ///
 /// Sized for 100k+ commit repositories: fixed-size id, interned author,
-/// boxed subject. Message bodies and diffs are fetched lazily elsewhere.
+/// boxed text. Diffs are fetched lazily elsewhere.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitMeta {
     pub oid: Oid,
@@ -74,9 +64,8 @@ pub struct CommitMeta {
     pub parents: Box<[Oid]>,
     /// Author name id in the session's [`StrPool`].
     pub author: u32,
-    /// Author address id in the same pool, lowercased. What a locally
-    /// assigned picture is filed under — a name is what people change and
-    /// what two people share.
+    /// Author address id in the same pool, lowercased — the key a locally
+    /// assigned picture is filed under (names change and collide).
     pub author_email: u32,
     /// `Co-authored-by` trailers as (name, address) pool ids, in message
     /// order. Not mailmapped — a trailer is message text, so the same

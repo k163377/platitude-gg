@@ -1,12 +1,9 @@
 //! Commit-graph lane assignment (gitk-style greedy allocation).
 //!
 //! Consumes commits in `--date-order` (children before parents) and emits,
-//! per row, everything the UI needs to draw that row in isolation: the node
-//! position/color plus straight and curved lane segments. QML only draws;
-//! no layout decisions happen on the UI side (実装計画 §2).
-//!
-//! The engine is incremental: rows stream out while `git log` is still
-//! running, so the first chunk can be painted immediately.
+//! per row, everything needed to draw that row in isolation; QML makes no
+//! layout decisions (実装計画 §2). Rows stream out while `git log` is still
+//! running.
 
 mod builder;
 
@@ -21,26 +18,18 @@ mod testkit;
 
 pub use builder::GraphBuilder;
 
-/// Nominal number of distinct chain colors; must match the `graphLane`
-/// palette in the design tokens (internal-docs/デザイン規約.md). The engine
-/// only hands out palette indices.
+/// Number of chain colors; must match the length of the `graphLane`
+/// palette (デザイン規約).
 pub const GRAPH_PALETTE_SIZE: u32 = 8;
 
 /// Whether a status leaves the synthetic working-tree row standing at the
-/// head of the graph.
+/// head of the graph. The one place the rule is written: every reader asks
+/// here, so the window cannot drift from the rows the walk builds.
 ///
-/// **The one place the rule is written.** The walk asks it of the record a
-/// status read left behind (`session::RepoSession::pending_commit`), and a
-/// reader that has the status in hand asks it here — a second reader
-/// spelling out "dirty, or an operation with a card" would be a rule that
-/// can drift from the one the rows are actually built by.
-///
-/// The row stands while the tree is dirty *or* an operation is: the `edit`
-/// stop and the emptied-commit stop both leave the tree clean while the
-/// exit card waits under the row. "An operation" is one with an exit card
-/// to land — a bisect also flips `OpState::any()`, and it has no card and
-/// changes nothing about the tree
-/// (デザイン規約 §進行中の操作から出る「着地は WIP 行」).
+/// The row stands while the tree is dirty or an operation with an exit card
+/// is in progress (the `edit` and emptied-commit stops leave the tree clean
+/// with the card under the row). A bisect flips `OpState::any()` but has no
+/// card, so it does not count (デザイン規約 §進行中の操作から出る「出口は WIP ペインに立つ」).
 pub fn wip_row_stands(
     status: &crate::status::WorkTreeStatus,
     op: &crate::opstate::OpState,
@@ -66,8 +55,8 @@ pub struct Segment {
     pub lane: u16,
     /// Palette index (< [`GRAPH_PALETTE_SIZE`]).
     pub color: u8,
-    /// Drawn with a dashed stroke (a synthetic leash: WIP → HEAD or
-    /// stash → base). Real history always draws solid.
+    /// A synthetic leash (WIP → HEAD, stash → base); real history is
+    /// always solid.
     pub dashed: bool,
 }
 

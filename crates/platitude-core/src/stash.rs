@@ -1,11 +1,9 @@
 //! Stash listing and stash operations.
 //!
 //! Selectors (`stash@{0}`) come from a listing and are passed straight
-//! back — the numbering shifts under every push and drop, so a selector
-//! this module invents could name someone else's entry. The one place
-//! that must invent one is [`rename`], whose own `store` pushed the list
-//! down by one; it shifts the selector and then proves it still names
-//! the same commit (by oid) before dropping anything.
+//! back: the numbering shifts under every push and drop, so an invented
+//! one could name someone else's entry. The one exception is [`rename`],
+//! which checks its shifted selector by oid before dropping.
 
 use std::path::Path;
 
@@ -19,9 +17,9 @@ mod rename;
 
 pub use rename::rename;
 
-/// `--format=` for `stash list`; fields: reflog selector, commit id,
-/// committer time, reflog subject. Records are NUL-terminated via `-z`
-/// (stash list forwards options to `git log`).
+/// `--format=` for `stash list`: selector, commit, committer time,
+/// subject. `-z` NUL-terminates records (stash list forwards options to
+/// `git log`).
 pub const STASH_FORMAT_ARG: &str = "--format=%gd%x00%H%x00%ct%x00%gs";
 
 const STASH_FIELDS: usize = 4;
@@ -37,11 +35,8 @@ pub struct StashEntry {
     pub message: String,
 }
 
-/// What the working tree lets a stash do. Every refusal here is git's
-/// own, measured (rules-refs/app-ui.md §stash): before the first
-/// commit git turns the write down flat however dirty the folder is;
-/// with a file unmerged it refuses the whole write, not the unmerged
-/// path.
+/// What the working tree lets a stash do. Every refusal is git's own
+/// (デザイン規約 §退避できるかどうかを、押す前に出す).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StashStanding {
     /// No commit yet ("You do not have the initial commit yet").
@@ -66,9 +61,8 @@ impl StashStanding {
     }
 }
 
-/// The standing itself, off a status already in hand — no git runs.
-/// `head_missing` is "the repository has no commit yet"
-/// (`WorkTreeStatus::branch_oid` is `None`).
+/// The standing, off a status already in hand (no git runs).
+/// `head_missing`: no commit yet (`WorkTreeStatus::branch_oid` is `None`).
 pub fn standing(head_missing: bool, counts: &crate::status::Counts) -> StashStanding {
     if head_missing {
         return StashStanding::Unborn;
@@ -89,8 +83,7 @@ pub struct StashParseError;
 /// Parses `stash list` output produced with [`STASH_FORMAT_ARG`] + `-z`.
 pub fn parse_stashes(bytes: &[u8]) -> Result<Vec<StashEntry>, StashParseError> {
     let tokens: Vec<&[u8]> = bytes.split(|b| *b == 0).collect();
-    // Trailing empty token after the final NUL (or a single empty token
-    // for empty output).
+    // The empty token after the final NUL (the only one, for no output).
     let tokens = match tokens.split_last() {
         Some((last, rest)) if last.iter().all(|b| b.is_ascii_whitespace()) => rest,
         _ => &tokens[..],
@@ -121,7 +114,6 @@ pub fn parse_stashes(bytes: &[u8]) -> Result<Vec<StashEntry>, StashParseError> {
     Ok(out)
 }
 
-/// Loads the stash list.
 pub async fn load(
     executor: &GitExecutor,
     workdir: &Path,
@@ -137,30 +129,23 @@ pub async fn load(
     })
 }
 
-/// Knobs of `git stash push`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PushOptions {
-    /// Stash untracked files too (`--include-untracked`).
     pub include_untracked: bool,
-    /// Leave the index as it is (`--keep-index`).
     pub keep_index: bool,
-    /// Stash only what is staged (`--staged`).
     pub staged_only: bool,
 }
 
 /// Commit `refs/stash` points at, or `None` with no stash at all.
 ///
-/// Taken before and after a [`push`] to tell whether an entry was really
-/// made: on a clean tree `git stash push` exits 0 having created nothing,
-/// and `stash@{0}` then names whatever entry was already there.
+/// Compared before and after a [`push`]: on a clean tree `git stash push`
+/// exits 0 having created nothing, and `stash@{0}` is the older entry.
 pub async fn tip(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<Option<String>, GitError> {
-    // Exit 1 is the answer "there is no stash here", which every
-    // repository that has never had one gives. Left unmarked it reads as
-    // a failed command and raises the log over a question nobody asked.
+    // Exit 1 is the answer "no stash here".
     let cmd = GitCommand::new().cwd(workdir).answers_by_code(1).args([
         "rev-parse",
         "--verify",
@@ -175,7 +160,6 @@ pub async fn tip(
     Ok((!text.is_empty()).then_some(text))
 }
 
-/// `git stash push`: saves the working tree, optionally limited to `paths`.
 pub async fn push(
     executor: &GitExecutor,
     workdir: &Path,
@@ -207,11 +191,9 @@ pub async fn push(
 
 /// `git stash pop <selector>`: restores and removes the entry.
 ///
-/// Answers by code for the same reason [`pop_with_index`] does: exit 1
-/// covers both a restore that landed conflicted and one that did
-/// nothing, so it is data for the caller to weigh against the working
-/// tree. Whether it turns out to be a failure is said by the write it
-/// belongs to.
+/// Answers by code: exit 1 covers both a conflicted restore and a no-op,
+/// so the caller weighs it against the working tree, and the write it
+/// belongs to says whether it failed.
 pub async fn pop(
     executor: &GitExecutor,
     workdir: &Path,
@@ -228,11 +210,9 @@ pub async fn pop(
 /// `git stash pop --index`: restores the entry *and* the split between
 /// what was staged in it and what was not.
 ///
-/// Exit 1 covers a conflict and a no-op alike. When the restore
-/// conflicts git gives up on the index part ("Index was not unstashed"),
-/// leaves the markers in the files and **keeps the entry** — which is
-/// what leaves a way back. Callers decide what that is worth by looking
-/// at the working tree afterwards.
+/// Exit 1 as in [`pop`]. On a conflict git gives up on the index part
+/// ("Index was not unstashed"), leaves the markers and keeps the entry,
+/// which is the way back.
 pub async fn pop_with_index(
     executor: &GitExecutor,
     workdir: &Path,
@@ -246,12 +226,8 @@ pub async fn pop_with_index(
     executor.run(cmd, cancel).await.map(|_| ())
 }
 
-/// `git stash apply <selector>`: restores and keeps the entry.
-///
-/// Answers by code for the same reason [`pop`] does: exit 1 covers both
-/// a restore that landed conflicted and one that did nothing, so it is
-/// data for the caller to weigh against the working tree as it stands
-/// afterwards.
+/// `git stash apply <selector>`: restores and keeps the entry. Exit 1 as
+/// in [`pop`].
 pub async fn apply(
     executor: &GitExecutor,
     workdir: &Path,
@@ -265,34 +241,26 @@ pub async fn apply(
     executor.run(cmd, cancel).await.map(|_| ())
 }
 
-/// Whether a string can be a stash's label.
-///
-/// A stash is named by its reflog subject, which is free text, so the
-/// only rules are the reflog's own: one line of it, and something
-/// on that line.
+/// Whether a string can be a stash's label. The reflog subject is free
+/// text, so the only rules are the reflog's: one line (no control
+/// characters), not blank.
 pub fn is_valid_message(message: &str) -> bool {
     !message.trim().is_empty() && !message.chars().any(|c| c.is_control())
 }
 
-/// The label somebody gave a stash, out of the reflog subject a listing
-/// carries — empty where git wrote the whole subject itself.
+/// The label somebody gave a stash, out of its reflog subject; empty
+/// where git wrote the whole subject itself.
 ///
-/// git leaves three shapes on the reflog (measured):
-/// - `WIP on <branch>: <abbrev> <subject>` — its own, for an entry pushed
-///   with no message. That names the commit the work was standing on, not
-///   the work, so nobody gave this one a label and it answers empty.
-/// - `On <branch>: <label>` — an entry pushed with `--message`. The prefix
-///   is cut at the first `": "`, since a detached HEAD puts
-///   `(no branch)` in that slot.
-/// - `<label>` — an entry put on the reflog by `stash store`, which is
-///   what [`rename`] is built out of; there is no branch for it to name.
+/// git leaves three shapes:
+/// - `WIP on <branch>: <abbrev> <subject>` — pushed with no message. It
+///   names the commit the work stood on, not the work, so it answers empty.
+/// - `On <branch>: <label>` — pushed with `--message`. Cut at the first
+///   `": "`, since a detached HEAD puts `(no branch)` in that slot.
+/// - `<label>` — put there by `stash store` ([`rename`]).
 ///
-/// The reflog holds one line with nothing marking where a prefix ends, so
-/// git cannot tell a label that opens like one of its own from the prefix
-/// it writes, and neither can this: `On second thought: …` loses its first
-/// words, and a label opening `WIP on ` answers empty. Both are recorded
-/// as they stand — the caller reads an empty answer as "nobody named
-/// this one", which is what an entry pushed without a message is.
+/// Nothing marks where a prefix ends, so a label that opens like one is
+/// misread: `On second thought: …` loses its first words, and one opening
+/// `WIP on ` answers empty (read by the caller as unnamed). Accepted.
 #[must_use]
 pub fn label_in(message: &str) -> &str {
     if message.starts_with("WIP on ") {
@@ -307,8 +275,8 @@ pub fn label_in(message: &str) -> &str {
     message
 }
 
-/// `git stash drop <selector>`: discards the entry. Destructive — the
-/// caller confirms first.
+/// `git stash drop <selector>`: discards the entry. The caller confirms
+/// first.
 pub async fn drop(
     executor: &GitExecutor,
     workdir: &Path,

@@ -1,13 +1,9 @@
 //! Rewrites fired while another operation stands: refused whole, with
-//! nothing spawned and nothing stashed.
+//! nothing rewritten and nothing stashed.
 //!
-//! The trap these are against is measured in
-//! `integrate_integration::standing_op` — git refuses a rebase under a
-//! standing merge in the words of a dirty tree, and the stash the carry
-//! would take next puts the merge down. Before the guards, a plan run over
-//! a settled-but-uncommitted merge went **through**: the merge marker
-//! gone, the history replayed on top, the resolution handed back as an
-//! ordinary staged edit, and the write reported as a success.
+//! The trap (measured in `integrate_integration::standing_op`): git refuses
+//! a rebase under a standing merge in the words of a dirty tree, and the
+//! carry's stash would then put the merge down and report a success.
 
 use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, install_todo_editor, opened, write_result};
@@ -37,7 +33,7 @@ fn standing_merge() -> TestRepo {
     repo
 }
 
-/// Whether any git command that writes was spawned at all.
+/// Every writing git command the session spawned.
 fn wrote_anything(sink: &CaptureSink) -> Vec<String> {
     sink.events
         .lock()
@@ -62,9 +58,8 @@ fn wrote_anything(sink: &CaptureSink) -> Vec<String> {
         .collect()
 }
 
-/// Which report the write of `kind` carried, or `None` where it carried
-/// none — the half of the answer the notice bar is written from, which
-/// the error string alone cannot say.
+/// The report the write of `kind` carried — what the notice bar is written
+/// from, which the error string alone cannot say.
 async fn report_kind(
     sink: &CaptureSink,
     kind: OperationKind,
@@ -84,9 +79,8 @@ fn merge_stands(repo: &TestRepo) -> bool {
     repo.path.join(".git").join("MERGE_HEAD").exists()
 }
 
-/// **The plan's own premise check.** The tip has not moved, so the pin
-/// the plan carries says nothing is wrong; the operation standing is what
-/// the run is refused on, before a single command is spawned.
+/// The plan's premise check: the pin agrees (the tip has not moved), so the
+/// standing operation is what refuses the run, before anything spawns.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_plan_run_under_a_standing_merge_is_refused_before_anything_is_spawned() {
     install_todo_editor();
@@ -105,7 +99,7 @@ async fn a_plan_run_under_a_standing_merge_is_refused_before_anything_is_spawned
             message: None,
         }],
         platitude_core::integrate::RebaseOptions::default(),
-        // The very tip the plan was composed against: the pin agrees.
+        // The very tip the plan was composed against.
         head.clone(),
     );
     let refusal = write_result(&sink, OperationKind::Rebase)
@@ -115,10 +109,8 @@ async fn a_plan_run_under_a_standing_merge_is_refused_before_anything_is_spawned
         refusal.contains("merge") && refusal.contains("nothing was rewritten"),
         "the refusal names what is standing: {refusal}"
     );
-    // **And it reaches the reader.** Nothing ran, so there is no row
-    // in the command log for the panel to raise over — the report is
-    // what puts the sentence on the notice bar
-    // (デザイン規約 §答えの要らない報せ).
+    // Nothing ran, so no command-log row raises the panel: the report is
+    // what reaches the notice bar (デザイン規約 §答えの要らない報せ).
     assert_eq!(
         report_kind(&sink, OperationKind::Rebase).await,
         Some(platitude_core::report::ReportKind::RewriteWhileStanding)
@@ -143,10 +135,8 @@ async fn a_plan_run_under_a_standing_merge_is_refused_before_anything_is_spawned
     session.close();
 }
 
-/// **The carry's own guard**, reached by the rewrites that have no plan
-/// in front of them: git refuses in the words of a dirty tree, and the
-/// stash that would follow is what would take the merge down. One
-/// spawn — git's refusal — and then nothing.
+/// The carry's own guard, for rewrites with no plan in front: one spawn —
+/// git's refusal — and no stash after it.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_squash_under_a_standing_merge_stops_at_the_carry() {
     install_todo_editor();
@@ -163,9 +153,8 @@ async fn a_squash_under_a_standing_merge_stops_at_the_carry() {
         "the refusal names what is standing rather than repeating git's \
          advice to commit or stash: {refusal}"
     );
-    // The carry's own guard says it the same way the plan's does: git
-    // *did* run here, and refused in the words a dirty tree is refused
-    // in, so the sentence the reader gets is this end's either way.
+    // The same report as the plan's guard, though git did run here and
+    // refused in a dirty tree's words.
     assert_eq!(
         report_kind(&sink, OperationKind::Squash).await,
         Some(platitude_core::report::ReportKind::RewriteWhileStanding)
@@ -190,9 +179,7 @@ async fn a_squash_under_a_standing_merge_stops_at_the_carry() {
     session.close();
 }
 
-/// The same guard on the plain `rebase <upstream>` route, and under a
-/// cherry-pick this time — the trap is the operation, whichever menu
-/// row was clicked.
+/// The same guard on plain `rebase <upstream>`, under a cherry-pick.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_rebase_onto_under_a_standing_cherry_pick_stops_at_the_carry() {
     let mut repo = diverged();
@@ -229,10 +216,8 @@ async fn a_rebase_onto_under_a_standing_cherry_pick_stops_at_the_carry() {
     session.close();
 }
 
-/// And a bisect **stands aside**: a stash leaves it running
-/// (measured), so the work carries across as it does anywhere else.
-/// The guard reads the four operations a stash puts down, and those
-/// alone.
+/// A bisect stands aside: a stash leaves it running, so the work carries as
+/// usual. The guard reads only the four operations a stash puts down.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_dirty_tree_under_a_bisect_still_carries() {
     let mut repo = TestRepo::init();
@@ -245,8 +230,8 @@ async fn a_dirty_tree_under_a_bisect_still_carries() {
     repo.git(&["bisect", "start"]);
     repo.git(&["bisect", "bad", "topic"]);
     repo.git(&["bisect", "good", "main~1"]);
-    // The bisect leaves HEAD detached at its midpoint; the rewrite runs
-    // from there, and what is being proved is only that the carry ran.
+    // HEAD is detached at the bisect's midpoint; what is proved is only that
+    // the carry ran.
     repo.write_file("a.txt", "uncommitted\n");
 
     let (sink, session) = opened(&repo).await;

@@ -2,10 +2,8 @@
 //! rebase stopped, how far a stepped operation has got, and the two
 //! sides it is between.
 //!
-//! Refreshed on the same pass as the status it is read beside
-//! ([`super::refresh`]), and told apart from it here because what it
-//! costs is the several extra reads a stopped operation needs and an
-//! untouched repository does not.
+//! Read on the status pass ([`super::refresh`]); kept apart because its
+//! extra reads are paid only while something is stopped.
 
 use super::joins::status_key;
 use super::*;
@@ -26,19 +24,13 @@ impl RepoSession {
     /// Publishes what operation is standing and how far it has got, and
     /// nothing else.
     ///
-    /// **The whole of it is a handful of file reads** — no process, no
-    /// lock, no snapshot ([`opstate::detect_at`] /
-    /// [`integrate::rebase_progress`]) — which is what lets the screen
-    /// count the steps out: a replay moves the number about every eleven
-    /// milliseconds, and the periodic re-read around it is ten seconds
-    /// apart because it carries a whole `git status`
-    /// (`ci/baseline/poll-cost-windows-x64.md`). Asking that one faster
-    /// would have the reads competing with the replay they are about;
-    /// asking this one faster costs nothing measurable.
+    /// Only file reads — no process, no lock, no snapshot
+    /// ([`opstate::detect_at`] / [`integrate::rebase_progress`]) — so it
+    /// can be ticked fast enough to count a replay's steps out, which the
+    /// `git status` poll cannot (`ci/baseline/poll-cost-windows-x64.md`).
     ///
-    /// Open to every caller: it is ticked while a write that replays is
-    /// out, and a repository with nothing standing answers exactly
-    /// that.
+    /// Open to every caller: a repository with nothing standing answers
+    /// exactly that.
     pub fn refresh_op_progress(self: &Arc<Self>) {
         let Some(git_dir) = self.git_dir() else {
             return;
@@ -49,20 +41,13 @@ impl RepoSession {
         });
     }
 
-    /// Loads status + op state and publishes them, returning whether the
-    /// synthetic WIP row moved: the working tree turned dirty or clean, or
-    /// a standing merge changed what it is bringing in.
-    ///
     /// What the badge and the exit card read of a standing rebase — the
     /// counter and the stop — or the resting pair where none is standing.
     ///
-    /// A read that could not tell keeps the stop it had, the way the
-    /// merge's sides and the merge tool do: the tick that answered
-    /// `editing: false` in the middle of an `edit` stop would hand the
-    /// exit card's `--skip` back its plain click, and that click is not
-    /// one the reader gets to take back (`Standing`). The counter goes
-    /// with the read — a stale N/M would be read as progress that
-    /// happened, and the badge losing it for one tick costs nothing.
+    /// A read that could not tell keeps the stop it had: a tick answering
+    /// `editing: false` mid-`edit` stop would hand the exit card's `--skip`
+    /// back its plain click, which cannot be taken back (`Standing`). The
+    /// counter is not kept — a stale N/M reads as progress that happened.
     async fn rebase_standing_held(
         &self,
         workdir: &std::path::Path,
@@ -83,11 +68,9 @@ impl RepoSession {
         }
     }
 
-    /// What a standing operation adds to a status. All three are the rare
-    /// case, read only while something is stopped: the two sides only
-    /// have names then, and only a stopped merge — the one operation
-    /// finished from the commit box — has a message waiting to go in it
-    /// and sides the pending commit will have as parents.
+    /// Read only while something is stopped; the message and the parents
+    /// only for a stopped merge, the one operation finished from the
+    /// commit box.
     async fn read_standing_op(
         &self,
         workdir: &std::path::Path,
@@ -124,36 +107,33 @@ impl RepoSession {
         }
     }
 
+    /// Loads status + op state and publishes them. Answers whether the WIP
+    /// row moved — the tree turned dirty or clean, or a standing merge
+    /// changed what it brings in — or that nothing was published at all.
+    ///
     /// The rebuild is the caller's: after a write it knows whether one is
     /// needed anyway, and rebuilding on both counts would do it twice.
-    /// Answers whether the WIP row flipped — or that nothing was
-    /// published at all.
     pub(super) async fn publish_status(self: &Arc<Self>) -> Reread {
         let Some(workdir) = self.workdir() else {
             return Reread::Failed;
         };
-        // Stamped before git is spawned, the way the refs read is: what
-        // this status saw of HEAD is offered to the one record under it
-        // (`Standing`).
+        // Stamped before git is spawned, as in the refs read (`Standing`).
         let looked = self.standing.stamp();
         let cancel = self.root_cancel.clone();
         let status = status::load(&self.executor, &workdir, &cancel).await;
         let op = opstate::detect(&self.executor, &workdir, &cancel).await;
         match (status, op) {
             (Ok(status), Ok(op_state)) => {
-                // A read that looked before a write ended has nothing to
-                // say for the repository after it — and nothing more to
-                // spend on it either. Read again: the write behind it
-                // re-reads the tree only where it moved the refs, so a
-                // status a fetch that brought nothing fenced would
-                // otherwise wait for the next tick.
+                // Fenced by a write that ended after this looked: read
+                // again, since the write re-reads the tree only where it
+                // moved refs (a fetch that brought nothing would leave this
+                // to the next tick).
                 if !self.standing.current(looked) {
                     self.read_status_from(self.status_read.stamp());
                     return Reread::Same;
                 }
-                // Only a standing rebase has a counter to read or a stop
-                // to explain, and the two ride one spawn — this runs every
-                // tick for the life of a stop (`integrate::rebase_standing`).
+                // Counter and stop ride one spawn: this runs every tick for
+                // the life of a stop (`integrate::rebase_standing`).
                 let (progress, stop) = self
                     .rebase_standing_held(&workdir, op_state.rebasing, &cancel)
                     .await;
@@ -164,10 +144,8 @@ impl RepoSession {
                 } = self
                     .read_standing_op(&workdir, &status, &op_state, &cancel)
                     .await;
-                // The tool is only worth naming where there is
-                // something to open with it, so a clean tree pays nothing
-                // — unless the settings field asked, which it does once
-                // per opening.
+                // Named only where there is a conflict to open, or the
+                // settings field asked (once per opening).
                 let asked = self.merge_tool_wanted.swap(false, Ordering::SeqCst);
                 let merge_tool = if asked || status.conflicted().next().is_some() {
                     let read = conflict::configured_tool(&self.executor, &workdir, &cancel)
@@ -178,25 +156,15 @@ impl RepoSession {
                     self.standing.set_merge_tool(read.clone());
                     read
                 } else {
-                    // Not read this time, so repeat the last answer: a
-                    // settings dialog left open would otherwise watch its
-                    // value evaporate on the next tick, and a conflict
-                    // resolved by the tool takes the name out of the pane
-                    // it was just used in.
+                    // Repeat the last answer, or a settings dialog left
+                    // open would watch its value vanish on the next tick.
                     self.standing.merge_tool()
                 };
-                // Where the marks send a push — the branch's own, with the
-                // repository's riding the same read. One short local `git
-                // config` per tick, and only where there is a branch to
-                // ask about — a detached HEAD marks nothing and has
-                // nothing to push. The branch is the one gate: the toolbar
-                // names its destination by these, so a mark moved
-                // from a terminal turns up on the following tick.
-                // The branch's half rides this status
-                // event; the repository's is answered by the refs
-                // snapshot, so one that moved sends the refs out to
-                // say it again
-                // ([`RepoSession::note_push_default`]).
+                // Where a push goes, read every tick so a mark moved from a
+                // terminal shows on the next one; a detached HEAD has
+                // nothing to push. The branch's mark rides this event, the
+                // repository's the refs snapshot, so a moved default sends
+                // the refs out again ([`RepoSession::note_push_default`]).
                 let push_remote = match &status.branch_head {
                     Some(branch) => {
                         match remote::push_marks(&self.executor, &workdir, branch, &cancel).await {
@@ -213,38 +181,26 @@ impl RepoSession {
                     self.read_status_from(self.status_read.stamp());
                     return Reread::Same;
                 }
-                // What this status saw of HEAD, into the one record every
-                // consumer reads it from — before anything below is sent,
-                // so the counts never arrive ahead of the branch they are
-                // about. The number the record then stands at names the
-                // report these counts belong beside.
+                // Into the HEAD record before anything below is sent, so the
+                // counts never arrive ahead of their branch; `head_seq`
+                // names the report they belong beside.
                 self.observe_head(looked, &status.head());
                 let head_seq = self.standing.head_seq();
-                // Whether the working-tree row stands, asked of the one
-                // place that rule is written (`graph::wip_row_stands`):
-                // the reader showing this status asks the same question of
-                // the same function, so what the rows hold and what the
-                // window expects them to hold cannot drift apart.
+                // The reader showing this status asks the same function, so
+                // what the rows hold and what the window expects agree.
                 let dirty = crate::graph::wip_row_stands(&status, &op_state);
-                // Both halves are recorded whatever the other says: they
-                // are what the next read compares against, and a `||` that
-                // skipped the second would leave it behind.
+                // Both halves are recorded whatever the other says: a `||`
+                // would skip the second and leave its baseline behind.
                 let dirt_flipped = self.standing.set_wip_dirty(dirty);
-                // A read that could not tell keeps the sides it had: taking
-                // them away would say the merge ended, and the graph would
-                // be rebuilt without its dotted edges only to be rebuilt
-                // again with them on the next tick.
+                // A read that could not tell keeps the sides it had; taking
+                // them away would rebuild the graph without its dotted edges
+                // for one tick.
                 let merge_moved =
                     incoming.is_some_and(|sides| self.standing.set_merge_incoming(sides));
                 let flipped = dirt_flipped || merge_moved;
-                // Reading the pending diffs is the one part of this that
-                // scales with the change, so it does not run on every tick
-                // — only where the answer can have moved. **What status
-                // reports is the test**: the index cannot change without
-                // status changing, including when it is another git outside
-                // this window that changes it, and the index is what a
-                // commit carries. A tick that reads the same status reads
-                // no diffs.
+                // The pending diffs scale with the change, so they are read
+                // only when status moved (the index cannot change without
+                // status changing, whoever changes it) or were marked stale.
                 let stale = self.eol_marks_stale.swap(false, Ordering::SeqCst);
                 let key = status_key(&status);
                 let moved = relock(&self.status_key).replace(key) != Some(key);

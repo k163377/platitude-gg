@@ -21,11 +21,9 @@ pub struct Remote {
     pub push_url: String,
 }
 
-/// What the configuration says about remotes: the ones written down, and
-/// the one this repository calls origin ([`OriginMarks`]).
-///
-/// Read together because they live in one file and are dropped by one
-/// stat of it (`RepoSession::remotes`).
+/// The configured remotes and the origin marks ([`OriginMarks`]), read
+/// together because one stat of the one config file drops both
+/// (`RepoSession::remotes`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Remotes {
     pub list: Vec<Remote>,
@@ -51,10 +49,8 @@ pub async fn read(
     })
 }
 
-/// Lists configured remotes.
-///
-/// Reads config keys: `git remote -v` prints two lines per remote, a
-/// shape meant for humans.
+/// Lists configured remotes from config keys, not `git remote -v`'s
+/// human-facing output.
 pub async fn list(
     executor: &GitExecutor,
     workdir: &Path,
@@ -78,8 +74,7 @@ fn parse_remote_config(bytes: &[u8]) -> Vec<Remote> {
         let Some(value) = record.value() else {
             continue;
         };
-        // `remote.<name>.url` — the name itself may contain dots, so take
-        // the first and last segments and treat the middle as the name.
+        // A remote name may contain dots: the field is the last segment.
         let Some(rest) = record.key().strip_prefix("remote.") else {
             continue;
         };
@@ -117,13 +112,9 @@ fn parse_remote_config(bytes: &[u8]) -> Vec<Remote> {
 
 /// `git remote add <name> <url>`.
 ///
-/// Nothing is contacted: git records the URL and reports success even for a
-/// host that does not exist, so a bad URL is only found out by the push that
-/// follows (measured). The remote survives that failure, which is why the UI
-/// offers a way to correct the URL.
-///
-/// Names are git's to judge — it refuses `bad name` (exit 128) and a name it
-/// already has (exit 3), and both refusals arrive as their own text.
+/// Nothing is contacted: a bad URL is found only by the next push, and the
+/// remote survives it (hence [`set_url`]). Names are git's to judge; its
+/// refusals arrive as its own text.
 pub async fn add(
     executor: &GitExecutor,
     workdir: &Path,
@@ -162,8 +153,7 @@ pub(super) async fn current_branch(
 ) -> Result<String, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        // Exit 1 is the answer "detached" — the error below reports it,
-        // and the command log lets it pass.
+        // Exit 1: detached, reported by the error below.
         .answers_by_code(1)
         .args(["symbolic-ref", "-q", "--short", "HEAD"]);
     let out = executor.run_unchecked(cmd, cancel).await?;
@@ -186,7 +176,7 @@ pub(super) async fn config_value(
 ) -> Result<Option<String>, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        // The key not being set answers with code 1, which is an answer.
+        // Exit 1: the key is unset.
         .answers_by_code(1)
         .args(["config", "--get", "--", key]);
     let out = executor.run_unchecked(cmd, cancel).await?;
@@ -195,10 +185,9 @@ pub(super) async fn config_value(
             let value = out.stdout_utf8().trim().to_string();
             Ok((!value.is_empty()).then_some(value))
         }
-        // 1 is git's "no such key" — a valid empty answer. Anything else
-        // (128 on an unreadable config) is a failure: a push planned on
-        // the misreading "unset" rewrites upstreams (measured: a bad
-        // config line makes `git config --get` exit 128, not 1).
+        // Only 1 is "unset"; anything else (128 on an unreadable config)
+        // is a failure: a push planned on a misread "unset" rewrites
+        // upstreams.
         1 => Ok(None),
         code => Err(GitError::Failed {
             command: format!("git config --get -- {key}"),

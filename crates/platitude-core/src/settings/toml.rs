@@ -8,22 +8,18 @@ use toml::{Table, Value};
 use super::{AUTO_WIDTH, StoreError};
 
 /// The name a repository is filed under: separators the way git writes
-/// them, and no trailing one. Its path is the only name the application
-/// has for it, so a repository that moves is a different one.
-///
-/// Every path either file holds goes through this, so the same repository
-/// reads the same wherever it is written down, and so nothing in either
-/// file ever needs a backslash escape.
+/// them, and no trailing one. Every path either file holds goes through
+/// this, so the same repository reads the same wherever it is written
+/// down and nothing needs a backslash escape.
 pub fn repo_key(path: &str) -> String {
-    // `\\?\` and `\\.\` mean the backslashes to Windows itself: the prefix
-    // is what turns off path parsing, and rewriting it addresses somewhere
-    // else. Nothing else in a path cares which separator it gets.
+    // The `\\?\` / `\\.\` prefix turns off Windows path parsing; rewriting
+    // it addresses somewhere else.
     if path.starts_with(r"\\?\") || path.starts_with(r"\\.\") {
         return path.to_string();
     }
     let key = path.replace('\\', "/");
     let trimmed = key.trim_end_matches('/');
-    // A drive root and the filesystem root are the slash.
+    // A drive root and the filesystem root keep their slash.
     if trimmed.is_empty() || trimmed.ends_with(':') {
         key
     } else {
@@ -32,7 +28,7 @@ pub fn repo_key(path: &str) -> String {
 }
 
 /// Whatever could be parsed. Missing, unreadable and malformed all read as
-/// an empty table, which sends every key to its default.
+/// an empty table.
 pub(super) fn read_table(path: Option<&Path>) -> Table {
     let Some(path) = path else {
         return Table::new();
@@ -55,10 +51,8 @@ pub(super) fn read_table(path: Option<&Path>) -> Table {
 }
 
 /// Writes through a neighbouring temporary file and renames over the
-/// target. A write cut short does not leave a file that fails to parse —
-/// it leaves one that parses into *different values* (a truncated `180`
-/// reads as `18`, measured), and no amount of per-key tolerance catches
-/// that. The rename is what makes the old file survive a crash instead.
+/// target: a write cut short parses into different values (a truncated
+/// `180` reads as `18`), which per-key tolerance cannot catch.
 pub(super) fn write_atomically(path: &Path, text: &str) -> Result<(), StoreError> {
     let failed = |source: std::io::Error| StoreError::Write {
         path: path.to_path_buf(),
@@ -81,10 +75,9 @@ pub(super) fn write_atomically(path: &Path, text: &str) -> Result<(), StoreError
         return Err(failed(error));
     }
 
-    // Replaces the target on every platform this ships to. If it does not
-    // (on Windows something else may be holding the file open), the old
-    // file is still there and intact — losing the newest layout beats
-    // losing the file.
+    // If this fails (on Windows something else may hold the file open),
+    // the old file stays intact — losing the newest layout beats losing
+    // the file.
     if let Err(error) = std::fs::rename(&tmp, path) {
         remove_leftover(&tmp);
         return Err(failed(error));
@@ -92,8 +85,6 @@ pub(super) fn write_atomically(path: &Path, text: &str) -> Result<(), StoreError
     Ok(())
 }
 
-/// Cleans up the temp file behind a failed write. Its own failure changes
-/// nothing about the write having failed, so it is only logged.
 fn remove_leftover(tmp: &Path) {
     if let Err(error) = std::fs::remove_file(tmp) {
         tracing::debug!(path = %tmp.display(), %error, "settings temp file not removed");
@@ -125,12 +116,10 @@ pub(super) fn int_in(
 }
 
 /// A column width inside the graph: `AUTO_WIDTH` for "nobody moved this
-/// one", or a width wide enough to be one. Everything between the two —
-/// a stored 3, a stored 0 — is as unusable as a string would be, and
-/// falls back the same way (rules-refs/core.md §読みは `toml::Table` からキーごとに取る).
+/// one", or a width wide enough to be one. Anything between falls back
+/// like a wrong type.
 pub(super) fn width_or_auto(table: &Table, key: &str) -> i32 {
-    /// Narrower than this and the column cannot hold what it is for: one
-    /// lane, or a chip clipped to nothing.
+    /// Narrower than this and the column cannot hold one lane or a chip.
     const NARROWEST: i64 = 24;
     table
         .get(key)
@@ -150,17 +139,15 @@ pub(super) fn coord(table: &Table, key: &str) -> Option<i32> {
         .and_then(|v| i32::try_from(v).ok())
 }
 
-/// An interval in minutes. Anything that is not one — a negative number,
-/// a string — falls back like every other key here; a number past the
-/// ceiling is one, and `session::auto_fetch_minutes` is what says so, so
-/// the file and the settings screen cannot decide it differently.
+/// An interval in minutes. A number past the ceiling is clamped by
+/// `session::auto_fetch_minutes`, so the file and the settings screen
+/// cannot decide it differently.
 pub(super) fn minutes(table: &Table, key: &str) -> Option<u32> {
     table
         .get(key)
         .and_then(Value::as_integer)
         .filter(|v| *v >= 0)
-        // Saturating: a number past `u32` is still "past the ceiling",
-        // and falling back to the default here would answer the most
+        // Saturating: falling back to the default would answer the most
         // aggressive interval to the value that asked for the least.
         .map(|v| u32::try_from(v).unwrap_or(u32::MAX))
         .map(crate::session::auto_fetch_minutes)
@@ -169,11 +156,9 @@ pub(super) fn minutes(table: &Table, key: &str) -> Option<u32> {
 /// The commits a graph opens with: `0` is the whole history, and anything
 /// else is at least the floor `session::log_limit` puts under it.
 ///
-/// **Two layers of `Option` because two different things are missing.**
-/// The outer one is this file's usual "the key said nothing usable", which
-/// sends the value to its default; the inner one is an answer — the reader
-/// who wants no window at all. Flattening them would make a hand-written
-/// `initial_commits = 0` mean 2,000.
+/// The outer `Option` is "the key said nothing usable" (→ default), the
+/// inner one the answer "no window at all". Flattened, a hand-written
+/// `initial_commits = 0` would mean the default.
 pub(super) fn initial_commits(table: &Table, key: &str) -> Option<Option<u32>> {
     table
         .get(key)
@@ -182,21 +167,14 @@ pub(super) fn initial_commits(table: &Table, key: &str) -> Option<Option<u32>> {
         .map(|v| match u32::try_from(v) {
             Ok(0) => None,
             Ok(count) => Some(crate::session::log_limit(count)),
-            // Saturating past `u32`, like `minutes`: a number that
-            // large is still a count of commits, and the largest one
-            // there is is nearer to what it asked for than the default
-            // is.
+            // Saturating, like `minutes`: the largest count is nearer to
+            // what was asked than the default is.
             Err(_) => Some(u32::MAX),
         })
 }
 
-/// A written-down path, with the air around it taken off.
-///
-/// **An empty string is an answer.** It is how the settings screen says
-/// "whatever `PATH` resolves", so it has to survive the read — a
-/// fallback here would put a value back that the reader had just
-/// cleared. Only a key that is not a string at all falls back
-/// (rules-refs/core.md §読みは `toml::Table` からキーごとに取る).
+/// A written-down path, trimmed. An empty string is an answer ("whatever
+/// `PATH` resolves") and survives the read; only a non-string falls back.
 pub(super) fn text(table: &Table, key: &str) -> Option<String> {
     table
         .get(key)
@@ -204,10 +182,8 @@ pub(super) fn text(table: &Table, key: &str) -> Option<String> {
         .map(|s| s.trim().to_string())
 }
 
-/// How many git processes run at once. Anything that is not a count
-/// falls back like every other key here; a number outside the range is
-/// the nearest end of it, and `process::concurrency` is what says so, so
-/// the file and the settings screen cannot decide it differently.
+/// How many git processes run at once. A number outside the range is
+/// clamped by `process::concurrency`, like `minutes`.
 pub(super) fn concurrency(table: &Table, key: &str) -> Option<u32> {
     table
         .get(key)
@@ -217,10 +193,9 @@ pub(super) fn concurrency(table: &Table, key: &str) -> Option<u32> {
         .map(crate::process::concurrency)
 }
 
-/// Seconds between passes over the other working copies: `0` is off, and
-/// anything else sits between the floor and the ceiling
-/// `session::copies_interval_secs` puts around it — the one place the
-/// range is decided, for the reason `minutes` has one.
+/// Seconds between passes over the other working copies: `0` is off,
+/// anything else clamped by `session::copies_interval_secs`, like
+/// `minutes`.
 pub(super) fn copies_interval(table: &Table, key: &str) -> Option<u32> {
     table
         .get(key)
@@ -290,11 +265,9 @@ mod tests {
         );
     }
 
-    /// Saving normalises paths, so a value built with native separators is
-    /// not what comes back. Callers hand over [`repo_key`] output for that
-    /// reason; this pins the one round trip it takes to settle, so nothing
-    /// downstream can start comparing a held state against the file and
-    /// find a difference every time.
+    /// Saving normalises paths, so callers hand over [`repo_key`] output.
+    /// Pins that one round trip settles a raw path, so a held state
+    /// compared against the file does not differ every time.
     #[test]
     fn a_raw_path_settles_after_one_round_trip() {
         let dir = tempfile::tempdir().expect("tempdir");

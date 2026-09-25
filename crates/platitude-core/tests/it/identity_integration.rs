@@ -1,10 +1,9 @@
 //! Author identity and commit signing on real repositories.
 //!
-//! Signing is exercised with SSH keys: `ssh-keygen` ships with git on
-//! every supported platform, and a passphrase-less test key needs no
-//! agent. What is proven here is that the application's fixed
-//! environment does not get in git's way — the passphrase path itself is
-//! gpg-agent's / ssh-agent's business and never touches this process.
+//! Signing uses SSH keys: `ssh-keygen` ships with git on every supported
+//! platform, and a passphrase-less key needs no agent. Proven here: the
+//! fixed environment does not get in git's way. The passphrase path is the
+//! agent's and never touches this process.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -19,8 +18,7 @@ use platitude_core::identity::{self, ConfigScope, SignatureFormat, SignatureStat
 use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor, Kept};
 use tokio_util::sync::CancellationToken;
 
-/// Records what was spawned, so a test can count the processes a
-/// reading actually spends.
+/// Records what was spawned, to count the processes a reading spends.
 #[derive(Default)]
 struct Spawns(Mutex<Vec<String>>);
 
@@ -60,8 +58,8 @@ impl CommandObserver for Spawns {
 
 fn counted() -> (GitExecutor, Arc<Spawns>, CancellationToken) {
     let spawns = Arc::new(Spawns::default());
-    // `false`: these are the reads a session makes on its own, and
-    // what the test counts is that they are spawned.
+    // `Kept::Unasked`: the reads a session makes on its own; `records`
+    // keeps them all, since the count is the point.
     let (exec, cancel) = observed_env(spawns.clone(), Kept::Unasked);
     (exec, spawns, cancel)
 }
@@ -72,16 +70,10 @@ fn config_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
-/// An identity is two `git config` calls, and the second one can fail on
-/// its own — the lock on the configuration file is taken and released per
-/// call, so another process can hold it for the second and not the first.
-/// The half that landed has to say which half it was: both halves
-/// are set, so `is_complete()` says yes while the address belongs to the
-/// identity the user was replacing.
-///
-/// A `user.email` with two values in the file refuses a plain set the same
-/// way (measured: exit 5, `cannot overwrite multiple values`) and refuses
-/// it every time, which is what makes it the shape to test against.
+/// An identity is two `git config` calls, each taking the file lock, so
+/// the second can fail alone — and then `is_complete()` says yes while the
+/// address is the one being replaced. A multi-valued `user.email` refuses
+/// a plain set every time, which makes it the shape to test against.
 #[tokio::test]
 async fn a_write_that_only_half_lands_says_which_half() {
     let mut repo = TestRepo::init();
@@ -107,8 +99,7 @@ async fn a_write_that_only_half_lands_says_which_half() {
     assert!(!written.email_saved, "the second one did not");
     assert!(!written.message.is_empty(), "git's own message comes back");
 
-    // What is reported is what git now holds: the name moved, the
-    // address stayed.
+    // What is reported is what git now holds.
     assert_eq!(written.identity.name.as_deref(), Some("Work Name"));
     assert_ne!(
         written.identity.email.as_deref(),
@@ -121,9 +112,6 @@ async fn a_write_that_only_half_lands_says_which_half() {
     );
 }
 
-/// A configuration file already locked by somebody else takes neither
-/// half. Nothing changes, and the answer says nothing changed, which
-/// is what the screen reads.
 #[tokio::test]
 async fn a_locked_configuration_takes_neither_half() {
     let mut repo = TestRepo::init();
@@ -150,7 +138,6 @@ async fn a_locked_configuration_takes_neither_half() {
     assert_eq!(written.identity.email.as_deref(), Some("test@example.com"));
 }
 
-/// A value starting with a dash is stored as the value.
 /// `git config <key> -- <value>` stores "--", so no separator.
 #[tokio::test]
 async fn a_dash_leading_identity_is_stored_verbatim() {
@@ -177,7 +164,6 @@ async fn a_dash_leading_identity_is_stored_verbatim() {
     assert_eq!(config.identity.email.as_deref(), Some("-dash@example.com"));
 }
 
-/// Signing configuration is detected so the UI can say what is in force.
 #[tokio::test]
 async fn detects_signing_configuration() {
     let mut repo = TestRepo::init();
@@ -201,16 +187,11 @@ async fn detects_signing_configuration() {
     assert!(config.signing.is_active());
 }
 
-/// The whole signing path: a repository configured to sign produces signed
-/// commits through this application's commit API, and the signature
-/// verifies once the key is trusted.
 #[tokio::test]
 async fn commits_are_signed_and_verify_against_a_trusted_key() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
 
-    // A passphrase-less test key; a real one is unlocked by ssh-agent,
-    // which this process never talks to.
     let key = repo.path.join("id_test");
     let out = std::process::Command::new("ssh-keygen")
         .args(["-t", "ed25519", "-N", "", "-C", "test@example.com", "-f"])
@@ -231,8 +212,8 @@ async fn commits_are_signed_and_verify_against_a_trusted_key() {
         &config_path(&key.with_extension("pub")),
     ]);
     repo.git(&["config", "commit.gpgsign", "true"]);
-    // ssh-keygen wants the key file readable by its owner alone; that
-    // is the platform's business and holds by default here.
+    // ssh-keygen wants the key readable by its owner alone, which holds by
+    // default here.
 
     let (exec, cancel) = env();
     let repo_info = info(&repo).await;
@@ -248,10 +229,8 @@ async fn commits_are_signed_and_verify_against_a_trusted_key() {
     .await
     .expect("signing commit succeeded under the fixed environment");
 
-    // Without an allowed-signers file git reports `%G?` as `N` — the same
-    // code as an unsigned commit. Reading the object itself keeps a signed
-    // commit from being shown as unsigned; "cannot check" reads as
-    // signed but untrusted.
+    // Without allowed signers `%G?` is `N`, as for an unsigned commit;
+    // reading the object's header keeps this from showing as unsigned.
     let signature = identity::verify_commit(&exec, &repo.path, "HEAD", &cancel)
         .await
         .expect("verify");
@@ -263,7 +242,6 @@ async fn commits_are_signed_and_verify_against_a_trusted_key() {
     assert!(signature.status.is_signed());
     assert!(!signature.status.is_trusted());
 
-    // Trust the key, and the same commit verifies.
     let allowed = repo.path.join("allowed_signers");
     std::fs::write(&allowed, format!("test@example.com {public}")).expect("write allowed signers");
     repo.git(&[
@@ -279,7 +257,6 @@ async fn commits_are_signed_and_verify_against_a_trusted_key() {
     assert!(signature.status.is_trusted());
     assert_eq!(signature.signer, "test@example.com");
 
-    // An unsigned commit is reported as such.
     repo.git(&["config", "commit.gpgsign", "false"]);
     repo.write_file("c.txt", "three\n");
     repo.git(&["add", "--", "c.txt"]);
@@ -299,9 +276,8 @@ async fn commits_are_signed_and_verify_against_a_trusted_key() {
     assert!(!signature.status.is_signed());
 }
 
-/// A commit carrying no signature is answered by the object alone. Every
-/// selected row asks this question, so the common case paying for a
-/// verification run that has nothing to verify is a process per click.
+/// Every selected row asks this, so an unsigned commit must not pay for a
+/// verification run.
 #[tokio::test]
 async fn an_unsigned_commit_is_answered_without_asking_git_to_verify() {
     let mut repo = TestRepo::init();
@@ -318,8 +294,6 @@ async fn an_unsigned_commit_is_answered_without_asking_git_to_verify() {
     assert!(seen[0].starts_with("git cat-file commit"), "{seen:?}");
 }
 
-/// A signed one costs the second process, and it is the verification —
-/// the order only spares the case that had nothing to verify.
 #[tokio::test]
 async fn a_signed_commit_still_costs_the_verification() {
     let mut repo = TestRepo::init();
@@ -345,8 +319,6 @@ async fn a_signed_commit_still_costs_the_verification() {
     let signature = identity::verify_commit(&exec, &repo.path, "HEAD", &cancel)
         .await
         .expect("verify");
-    // No allowed-signers file, so git cannot judge it — and the header is
-    // what keeps that from reading as "unsigned".
     assert_eq!(signature.status, SignatureStatus::CannotCheck);
     let seen = spawns.seen();
     assert_eq!(seen.len(), 2, "{seen:?}");
@@ -355,20 +327,17 @@ async fn a_signed_commit_still_costs_the_verification() {
 
 // ---- what one repository sets for itself -----------------------------
 //
-// The screen these answer for offers a repository from the tab strip and
-// two boxes standing empty for "not written here", so what has to hold is
-// that the two levels are told apart at all: an inherited value has to
-// arrive as inherited, and an emptied box must take the key out of one
-// file without reaching the other.
+// The screen's two boxes stand empty for "not written here", so the levels
+// must be told apart: an inherited value arrives as inherited, and an
+// emptied box takes the key out of one file only.
 
-/// A repository that writes nothing of its own inherits — and the two
-/// reads say so differently, which is the whole reason there are two.
+/// It inherits, and the two reads say so differently: the reason there are
+/// two.
 #[tokio::test]
 async fn a_repository_that_sets_nothing_of_its_own_reads_as_empty() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
-    // `TestRepo` writes the identity into the repository's own file, which
-    // is the very thing being taken away here.
+    // `TestRepo` writes the identity into the repository's own file.
     repo.git(&["config", "--local", "--unset", "user.name"]);
     repo.git(&["config", "--local", "--unset", "user.email"]);
     repo.git(&["config", "--global", "user.name", "Ada Lovelace"]);
@@ -393,27 +362,16 @@ async fn a_repository_that_sets_nothing_of_its_own_reads_as_empty() {
     assert_eq!(effective.email.as_deref(), Some("ada@example.com"));
 }
 
-/// What actually goes out to git is the list the decision made, key for
-/// key and value for value — and nothing else goes out at all.
-///
-/// **The combinations are a unit test** (`identity::local::keys_to_write`):
-/// two keys, each held or not and wanted or not, is a table, and asking it
-/// through a repository costs a git process per answer. What is left for a
-/// real git is this — that the list reaches it as written, at `--local`,
-/// and that a decision to write nothing is nothing spawned.
-///
-/// That last part is why the decision exists: `git config --unset` fails
-/// when there was nothing to unset, and it fails with the same exit code
-/// as its refusal to touch a key written twice (measured, git 2.55: both
-/// are 5), so a pass that unset blindly would report a failure for a save
-/// that had nothing to do.
+/// The combinations are a unit test (`identity::local::keys_to_write`).
+/// Here: the list reaches git as written, at `--local`, and writing
+/// nothing spawns nothing — `--unset` of an absent key exits 5 like a real
+/// refusal, so a blind unset would fail a save that had nothing to do.
 #[tokio::test]
 async fn the_keys_the_decision_names_are_the_ones_git_is_asked_for() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     let (exec, spawns, cancel) = counted();
 
-    // One key moves and the other is already what was asked for.
     let written =
         identity::set_local_identity(&exec, &repo.path, "Test User", "work@example.com", &cancel)
             .await
@@ -425,7 +383,7 @@ async fn the_keys_the_decision_names_are_the_ones_git_is_asked_for() {
         "the name was already this, so nothing was spawned for it"
     );
 
-    // Both emptied: two keys are really held here, so both come out.
+    // Both emptied while both are held: both come out.
     let (exec, spawns, cancel) = counted();
     let written = identity::set_local_identity(&exec, &repo.path, "", "", &cancel)
         .await
@@ -440,8 +398,8 @@ async fn the_keys_the_decision_names_are_the_ones_git_is_asked_for() {
         ]
     );
 
-    // And again, over a file that now holds neither — the `--unset` git
-    // would refuse is the one this must not send.
+    // Again, over a file that holds neither: the `--unset` git would
+    // refuse must not be sent.
     let (exec, spawns, cancel) = counted();
     let written = identity::set_local_identity(&exec, &repo.path, "", "", &cancel)
         .await
@@ -462,15 +420,10 @@ fn writes(spawns: &Spawns) -> Vec<String> {
         .collect()
 }
 
-/// **What the pre-merge run leaves out**: what git itself makes of an identity
-/// it was handed — a newline escaped when it writes the config file, `<`,
-/// `>` and surrounding spaces dropped from the author line, an author
-/// assembled out of two files where a repository overrides one key and
-/// inherits the other, and a `--local --unset` that leaves the user's own
-/// file alone. What this end writes and reads back is held before every merge above,
-/// and the refusal of an empty name is a unit test beside `set_identity`;
-/// the rest moves only with git, so the full gate
-/// (`-- --ignored ::periodic::`) runs it rather than every change.
+/// What git makes of an identity it was handed. What this end writes and
+/// reads back is held above, and the empty-name refusal is a unit test
+/// beside `set_identity`; the rest moves only with git, so the full gate
+/// (`-- --ignored ::periodic::`) runs it, not every change.
 mod periodic {
     use super::*;
 
@@ -502,7 +455,6 @@ mod periodic {
         assert_eq!(config.identity.name.as_deref(), Some("山田 太郎"));
         assert_eq!(config.identity.email.as_deref(), Some("taro@example.com"));
 
-        // A commit now works and carries what was set.
         let repo_info = info(&repo).await;
         repo.write_file("b.txt", "two\n");
         repo.git(&["add", "--", "b.txt"]);
@@ -520,8 +472,8 @@ mod periodic {
             "山田 太郎 <taro@example.com>"
         );
 
-        // A newline cannot smuggle in another setting: git escapes it as `\n`
-        // when it writes the config file. Nothing has to guard against it.
+        // git escapes a newline as `\n` in the config file, so nothing here
+        // guards against a smuggled setting.
         let injection = "Evil\n[core]\n\tpager = touch /tmp/pwned";
         identity::set_identity(
             &exec,
@@ -536,8 +488,7 @@ mod periodic {
         assert_eq!(repo.git(&["config", "--get", "user.name"]), injection);
         repo.git_expect_failure(&["config", "--get", "core.pager"]);
 
-        // What git dislikes it drops itself: `<` and `>` never reach an author
-        // line, and neither do surrounding spaces.
+        // git drops `<`, `>` and surrounding spaces from the author line.
         identity::set_identity(
             &exec,
             &repo.path,
@@ -569,7 +520,7 @@ mod periodic {
             "Ada Lovelace <adaatexample.com>"
         );
 
-        // The one thing git does refuse, refused before commit time (where it
+        // The one thing git refuses, refused before commit time (where it
         // would surface as "Author identity unknown").
         let err = identity::set_identity(
             &exec,
@@ -584,8 +535,8 @@ mod periodic {
         assert!(err.to_string().contains("must not be empty"), "{err}");
     }
 
-    /// The errand the whole thing exists for: another address for this
-    /// project, under the name the person already goes by everywhere else.
+    /// The errand this exists for: another address for this project, under
+    /// the everyday name.
     #[tokio::test]
     #[ignore = "git assembling an author out of two files: not worth the pre-merge run"]
     async fn one_key_is_overridden_while_the_other_stays_inherited() {
@@ -618,7 +569,6 @@ mod periodic {
         );
         assert_eq!(effective.email.as_deref(), Some("work@example.com"));
 
-        // A commit carries the pair git assembled out of the two files.
         let repo_info = info(&repo).await;
         repo.write_file("b.txt", "two\n");
         repo.git(&["add", "--", "b.txt"]);
@@ -637,9 +587,6 @@ mod periodic {
         );
     }
 
-    /// Emptying a box takes the key out of this repository's file, and out of
-    /// that one only: what the person has set for themselves is still there
-    /// to fall back to.
     #[tokio::test]
     #[ignore = "git's --local unset leaving the global file alone: not worth the pre-merge run"]
     async fn an_emptied_box_takes_the_override_out_and_leaves_the_global_alone() {

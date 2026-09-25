@@ -1,10 +1,8 @@
 //! Short-lived files handed to git by path (patches, commit messages).
 //!
-//! They live under `<git_dir>/platitude/`: same filesystem as the
-//! repository, owner-private like the rest of the git dir, and
-//! self-evident when one is ever left behind. Everything reaches git by
-//! path — the process layer keeps stdin closed so a misbehaving command
-//! can never wait on it.
+//! They live under `<git_dir>/platitude/` (same filesystem, owner-private,
+//! recognisable if left behind) and go by path because the process layer
+//! keeps stdin closed.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -37,10 +35,9 @@ impl ScratchFile {
         &self.path
     }
 
-    /// Leaves the file behind: the handle stops owning it and nothing is
-    /// removed. For a reader that outlives this process — a stopped
-    /// rebase's remaining `exec` lines read their message files from a
-    /// later `--continue`. [`Self::sweep`] collects what nobody came back
+    /// Leaves the file behind for a reader that outlives the handle (a
+    /// stopped rebase's remaining `exec` lines read their message files on a
+    /// later `--continue`). [`Self::sweep`] collects what nobody came back
     /// for.
     pub fn keep(self) -> PathBuf {
         let path = self.path.clone();
@@ -48,9 +45,8 @@ impl ScratchFile {
         path
     }
 
-    /// Removes every leftover file carrying `tag` — ones a [`Self::keep`]
-    /// left for a reader that has since finished. Callers pick a moment
-    /// when no reader can be standing.
+    /// Removes every leftover file carrying `tag`. Call only when no reader
+    /// of a [`Self::keep`] can be standing.
     pub fn sweep(git_dir: &Path, tag: &str) {
         let Ok(entries) = std::fs::read_dir(git_dir.join(DIR_NAME)) else {
             return;

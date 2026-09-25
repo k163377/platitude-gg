@@ -1,11 +1,7 @@
-//! The stash out and back that both carries go through.
-//!
-//! A move and a rewrite are refused over a dirty working tree in different
-//! words, but what gets them past it is the same three steps — empty the
-//! tree, do the thing, put the work back — and these are the steps
-//! ([`super::build`] is what puts them in order). They are one place
-//! because the hard parts are shared: which entry is ours
-//! to touch, and what a non-zero `pop` actually did.
+//! The stash out and back that both carries (a move, a rewrite over a
+//! dirty tree) go through; [`super::build`] puts the steps in order. One
+//! place because the hard parts are shared: which entry is ours to touch,
+//! and what a non-zero `pop` actually did.
 
 use super::*;
 
@@ -13,13 +9,12 @@ use super::*;
 /// back.
 pub(super) const STASH_TOP: &str = "stash@{0}";
 
-/// Stashes the whole working tree out of a move's way, and answers whether
+/// Stashes the whole working tree out of a move's way, answering whether
 /// an entry of ours was really made.
 ///
-/// A clean tree stashes nothing while exiting 0 — the refusal that raised
-/// the question can go stale when the tree is cleaned from a terminal in
-/// between. With no entry of ours, [`STASH_TOP`] names somebody else's
-/// work and is left alone.
+/// A clean tree (cleaned from a terminal since the refusal) stashes
+/// nothing while exiting 0; then [`STASH_TOP`] names somebody else's work
+/// and is left alone.
 pub(super) async fn stash_everything(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -36,16 +31,13 @@ pub(super) async fn stash_everything(
 }
 
 /// Puts the carried work back once the move or the rewrite has landed,
-/// keeping the staged/unstaged split for as long as git will take it. The
-/// last step of both carries, and the only one they share.
+/// keeping the staged/unstaged split for as long as git will take it.
 ///
-/// A conflicting restore exits non-zero while having done exactly what was
-/// asked, so the exit code alone cannot judge it: the working tree decides.
-/// Unmerged paths mean the merge landed and is waiting to be settled; a
-/// clean tree means the restore did nothing, and then the split has to be
-/// given up on (see below) or git's message goes through. Nothing was
-/// unmerged when the carry began — the stash emptied the tree — so what is
-/// found afterwards can only have come from the restore.
+/// A non-zero exit is judged by the working tree ([`conflicts_now`]):
+/// unmerged paths mean the restore landed and awaits settling; otherwise
+/// it did nothing, and the split is given up on (below) or git's message
+/// goes through. The stash emptied the tree, so any unmerged path came
+/// from the restore.
 pub(super) async fn pop_back_split_first(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -55,11 +47,10 @@ pub(super) async fn pop_back_split_first(
     if kept_index.is_ok() || conflicts_now(executor, repo, cancel).await? {
         return Ok(());
     }
-    // git refuses `--index` outright when the staged half is what collides
-    // ("conflicts in index. Try without --index.") and leaves everything
-    // where it was. Its own advice is the fallback: restore without the
-    // index, which brings the changes across merged and gives up only on
-    // the staged/unstaged split.
+    // git refuses `--index` outright when the staged half collides
+    // ("conflicts in index. Try without --index.") and leaves everything in
+    // place; its advice is the fallback, losing only the staged/unstaged
+    // split.
     match stash::pop(executor, &repo.workdir, STASH_TOP, cancel).await {
         Ok(()) => Ok(()),
         Err(error) => {
@@ -72,13 +63,11 @@ pub(super) async fn pop_back_split_first(
     }
 }
 
-/// Best-effort restore after a move or a replay that failed outright (an
-/// `Err` — a refusal git words in a way the
-/// classifiers do not know arrives here). It did nothing, so the stash
-/// was only the room it needed: put the work back before the caller
-/// surfaces git's own error. If even the pop fails, that is logged and
-/// the entry stays in the stash list, where the work is still
-/// recoverable — the original error is the one worth showing.
+/// Best-effort restore after a move or replay that failed outright (an
+/// `Err`, including refusals the classifiers do not know), before the
+/// caller surfaces git's error. If the pop fails too it is logged and the
+/// entry stays in the stash list: the original error is the one worth
+/// showing.
 pub(super) async fn pop_back_after_failure(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -93,11 +82,8 @@ pub(super) async fn pop_back_after_failure(
     }
 }
 
-/// Whether the working tree has unmerged paths right now.
-///
-/// What a restore leaves behind is the only honest answer to "did that
-/// non-zero exit do anything": `git stash pop` reports a conflict and a
-/// refusal the same way.
+/// Whether the working tree has unmerged paths right now — what tells a
+/// conflicting `stash pop` from a refusal, which exit alike.
 pub(super) async fn conflicts_now(
     executor: &GitExecutor,
     repo: &RepoInfo,

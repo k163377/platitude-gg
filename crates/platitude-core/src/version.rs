@@ -1,9 +1,6 @@
-//! Detection of the installed git version, and how it stands against the
-//! supported minimum.
-//!
-//! Below that minimum is a fact reported: what the app does about it is
-//! the app's to decide, and it keeps working while saying so
-//! (規約 §ウィンドウの縁 の 4 つ目のバッジ).
+//! The installed git version against the supported minimum. Below it is a
+//! fact reported, not an error: the app keeps working and says so
+//! (デザイン規約 §git が無い時・古い時).
 
 use std::time::Duration;
 
@@ -13,8 +10,7 @@ use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
 /// Minimum supported git version (source of truth:
-/// internal-docs/git最低バージョン整合.md — Ubuntu 24.04 LTS
-/// ships this; modern features like `rebase --update-refs` are assumed).
+/// internal-docs/git最低バージョン整合.md).
 pub const MINIMUM_GIT: (u32, u32) = (2, 43);
 
 /// [`MINIMUM_GIT`] as the "2.43" the UI and error messages print.
@@ -22,7 +18,6 @@ pub fn minimum_string() -> String {
     format!("{}.{}", MINIMUM_GIT.0, MINIMUM_GIT.1)
 }
 
-/// Parsed `git --version` output.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitVersion {
     pub major: u32,
@@ -59,14 +54,10 @@ fn leading_number(part: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-/// What one candidate git answered when it was asked its version.
-///
-/// **Four answers**, because two of them are not failures: a git below the
-/// minimum runs the app all the same (§git が
-/// 無い時・古い時), and the difference between "nothing to run there" and
-/// "it ran and said something else" is the whole of what a reader needs
-/// to fix a path they typed. The words are the caller's — this says which
-/// of the four it is, and carries only what git or the OS said itself.
+/// What one candidate git answered when asked its version. An old git
+/// still runs the app, and `Missing` vs `Failed` is what a reader needs to
+/// fix a typed path. The wording is the caller's; this carries only what
+/// git or the OS said.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Probe {
     /// It ran, and named a version at or above [`MINIMUM_GIT`].
@@ -96,11 +87,8 @@ impl Probe {
 }
 
 /// Asks one git binary for its version, on an executor of its own,
-/// leaving the running one alone.
-///
-/// `program` is a path, or empty for whichever git `PATH` resolves — the
-/// same vocabulary [`crate::settings::Defaults::git_path`] holds, because
-/// this is what reads it.
+/// leaving the running one alone. `program` is a path, or empty for
+/// `PATH`'s git — as [`crate::settings::Defaults::git_path`] holds it.
 pub async fn probe(program: &str, cancel: &CancellationToken) -> Probe {
     let executor = if program.is_empty() {
         GitExecutor::new()
@@ -117,7 +105,6 @@ pub async fn probe(program: &str, cancel: &CancellationToken) -> Probe {
     }
 }
 
-/// Runs `git --version` and parses the result.
 pub async fn detect(
     executor: &GitExecutor,
     cancel: &CancellationToken,

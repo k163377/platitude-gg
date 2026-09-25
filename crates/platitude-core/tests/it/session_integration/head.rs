@@ -45,21 +45,16 @@ fn published_of(events: &[SessionEvent], oid: &str) -> Option<bool> {
     })
 }
 
-/// The refs read and the status read both see HEAD, and the consumer
-/// hears about it once: the first to report says where it is, the second
-/// finds it already there. A commit made in a terminal moves it, and the
-/// poll's reads say so — once again, whichever of the two lands first.
-///
-/// The walk answers the other question off its own rows: the opening
-/// commit was pushed, the one made afterwards was not.
+/// The refs read and the status read both see HEAD, and the consumer hears
+/// about it once — at opening, and again after a terminal commit moves it.
+/// The walk answers from its own rows whether a remote has it.
 #[tokio::test(flavor = "multi_thread")]
 async fn head_is_reported_once_and_the_walk_says_whether_a_remote_has_it() {
     let (_bare, mut work) = origin_and_clone();
     let root = work.git(&["rev-parse", "HEAD"]);
     let (sink, session) = open_unawaited(&work);
-    // The opening's own passes have to be over before the tick below is
-    // asked to walk: a tag-inclusive pass still running would draw the
-    // commit first, and the tick would find nothing left to change.
+    // The opening's passes must be over first: a tag-inclusive pass still
+    // running would draw the commit, leaving the tick below nothing to change.
     sink.opened_graph(&session, 1).await;
 
     let heads = heads_of(&sink.events.lock().unwrap());
@@ -104,11 +99,10 @@ async fn head_is_reported_once_and_the_walk_says_whether_a_remote_has_it() {
     session.close();
 }
 
-/// A write that leaves HEAD where it was is still answered: the first
-/// read to land after it reports HEAD again, unmoved, under a number at
-/// or above the one the write's own answer named — which is what a
-/// consumer waiting on "the repository as the write left it" arms on,
-/// and the status read behind the write stands beside that report.
+/// The first read after a write reports HEAD even unmoved, under a number
+/// at or above the one the write's answer named — what a consumer waiting
+/// for "the repository as the write left it" waits on — with the status
+/// read beside it.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_read_after_a_write_reports_head_even_where_it_stayed() {
     let mut repo = TestRepo::init();
@@ -152,8 +146,7 @@ async fn the_read_after_a_write_reports_head_even_where_it_stayed() {
     session.close();
 }
 
-/// A tick that finds nothing moved says nothing of HEAD: the record is
-/// unchanged, and a consumer woken for it would be woken for nothing.
+/// A consumer woken for an unchanged record would be woken for nothing.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_quiet_tick_reports_nothing_of_head() {
     let mut repo = TestRepo::init();
@@ -172,9 +165,8 @@ async fn a_quiet_tick_reports_nothing_of_head() {
     session.close();
 }
 
-/// A plan opens with the count of what a remote already has of its
-/// range — read beside its rows — and the same count answers again on
-/// request, echoing the range it is about.
+/// Read beside the plan's rows, and again on request, echoing the range it
+/// is about.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_plan_opens_with_the_count_a_remote_already_has() {
     let (_bare, mut work) = origin_and_clone();

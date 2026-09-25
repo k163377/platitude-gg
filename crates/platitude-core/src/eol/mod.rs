@@ -1,53 +1,34 @@
 //! Line-ending notices, read from the bytes git printed.
 //!
-//! Nothing in this module converts anything: what lands in the index is
-//! git's decision (`core.autocrlf`, `core.eol`, `.gitattributes`), and the
-//! notices only say what that decision did.
+//! Nothing here converts anything: what lands in the index is git's
+//! decision (`core.autocrlf`, `core.eol`, `.gitattributes`), and the notices
+//! only say what it did. [`setting`] is the settings screen's alone; the
+//! notices never offer a fix (デザイン規約 §改行コードの警告, which also
+//! defines cases (a)–(d), see [`Reading`]).
 //!
-//! **The one setting this app writes lives here too** ([`setting`]), and it
-//! belongs to the settings screen alone — a reader who goes there went to
-//! change it. The notices only report: an offer to fix itself,
-//! attached to a warning, is where every other GUI's line-ending
-//! accident starts (デザイン規約 §改行コードの警告).
-//!
-//! Four cases produce a notice (デザイン規約 §改行コードの警告):
-//!
-//! | | case | decided by |
-//! |---|---|---|
-//! | (a) | an existing file's endings flip | the patch bytes — exact |
-//! | (b) | the change makes a file mixed, or more mixed | the patch bytes — exact |
-//! | (c) | a new file does not match its neighbours | a sample — an estimate |
-//! | (d) | a file that had no ending gains its first | a sample — an estimate |
-//!
-//! (a) and (b) are settled here by [`read`]. (c) and (d) need to know what
-//! the files around this one look like, which the patch cannot say; [`read`]
-//! reports the shape it found and the caller pairs it with a baseline.
+//! (a) and (b) are exact and settled here by [`read`]. (c) and (d) need to
+//! know what the files around this one look like, which the patch cannot
+//! say; [`read`] reports the shape and the caller pairs it with a baseline.
 //!
 //! # Why the patch bytes and not `ls-files --eol`
 //!
-//! `ls-files --eol` answers "what does this file look like now", which is
-//! not the question. A file that was already mixed before anyone touched it
-//! is not this change's fault and gets no notice; the same file gets one the
-//! moment the change adds a line that disagrees with it. Only the diff knows
-//! which lines are new.
+//! A file that was already mixed before this change gets no notice; it
+//! gets one the moment the change adds a line that disagrees with it. Only
+//! the diff knows which lines are new.
 //!
-//! # What git hands over (measured, git 2.55)
+//! # What git hands over
 //!
 //! - The terminator is part of the content line: a CRLF line prints as
-//!   `+one\r\n`, so the `\r` sits immediately before the `\n`.
-//! - A whole-file flip prints every line as `-` then `+` with no context —
-//!   which is what makes "the endings changed" distinguishable from "some
-//!   lines changed".
+//!   `+one\r\n`.
+//! - A whole-file flip prints every line as `-` then `+` with no context,
+//!   which is what tells it apart from "some lines changed".
 //! - `\ No newline at end of file` follows the line it is about and belongs
-//!   to whichever side that line was on. It appears for the old side, the
-//!   new side, or both.
-//! - Under `core.autocrlf=true` a worktree turned to CRLF produces an
-//!   **empty** diff (git compares in index space) while status still calls
-//!   the file modified, and an untracked CRLF file renders through
-//!   `--no-index` with its CRs already normalised away. So on that setting
-//!   these cases mostly cannot arise — correctly, because git is converting
-//!   and there is nothing to warn about. The exception is an index blob that
-//!   already holds CRs, where git converts nothing and the CRs are real data.
+//!   to that line's side — old, new, or both.
+//! - Under `core.autocrlf=true` a worktree turned to CRLF diffs empty (git
+//!   compares in index space) and an untracked CRLF file renders through
+//!   `--no-index` already normalised, so these cases mostly cannot arise —
+//!   correctly. The exception is an index blob that already holds CRs:
+//!   git converts nothing and the CRs are real data.
 
 mod attrs;
 mod notice;
@@ -77,9 +58,8 @@ pub enum Eol {
 }
 
 impl Eol {
-    /// Display spelling. **Plain text** — chips are lowercase
-    /// monospace, which an all-caps abbreviation does not fit
-    /// (デザイン規約 §git 用語のコード表記).
+    /// Display spelling, as plain text — not a chip
+    /// (デザイン規約 §改行コードの警告).
     pub fn as_str(self) -> &'static str {
         match self {
             Eol::Lf => "LF",
@@ -107,9 +87,8 @@ pub enum Reading {
 impl Reading {
     /// Whether this reading was decided by the patch bytes alone.
     ///
-    /// History diffs show only these: (c) and (d) would need the files
-    /// **around** the changed one as they stood at that commit, which is a
-    /// different tree from the one on disk.
+    /// History diffs show only these: (c) and (d) would need the neighbours
+    /// as they stood at that commit, not the tree on disk.
     pub fn is_exact(self) -> bool {
         matches!(self, Reading::Flipped { .. } | Reading::Mixed { .. })
     }

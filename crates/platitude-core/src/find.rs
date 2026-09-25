@@ -1,47 +1,14 @@
 //! What one typed line matches, over the commits already on screen.
 //!
-//! The search runs no git: it reads the rows the graph window already
-//! holds, so the answer arrives inside a keystroke and the walk is left
-//! alone. What that buys, and what it costs, is written down where the
-//! walk is (`session::DEFAULT_LOG_LIMIT`): nothing outside the loaded
-//! window can be found here, and the bar says so.
+//! Runs no git: it reads the rows the graph window already holds, so
+//! nothing outside the loaded window is found (`session::DEFAULT_LOG_LIMIT`),
+//! and the bar says so.
 //!
-//! **One line, taken literally.** `fix the parser` looks for exactly
-//! that run of characters. Splitting on spaces would have to decide
-//! whether the parts are ANDed across fields ("this author AND that
-//! word"), and the answer differs per pair; naming the field is what
-//! the advanced search is for.
-//!
-//! **The rule is per field.** A single blank cannot be a
-//! refname or an address because neither can hold one, and
-//! four hex characters are read as the start of an object
-//! name. Each field below says which shape of query it can
-//! answer, so a query that answers none of them lights
-//! nothing.
-//!
-//! **What is searched is what the row is.** Three things are
-//! deliberately out:
-//!
-//! - **The description** (everything after the subject). Searching it
-//!   multiplies the hits several-fold for ordinary words (measured), and
-//!   the description is not on the row, so every extra row is lit for a
-//!   reason nothing on screen gives. Both complaints — too many, and no
-//!   reason — are the same field.
-//! - **The domain half of an address.** Everybody in one repository tends
-//!   to share it, so any part of it lights every row. Addresses match
-//!   from the start, which is how somebody pastes one.
-//! - **A stash's reflog selector** (`stash@{n}`). Nothing that names a
-//!   row spells it: the row and its entry in the list are the message,
-//!   and the details pane's band names itself `STASH`. Only the command
-//!   log carries it, after a `stash apply` has already been run — which
-//!   is a record of what was done, not a name for a row. So a row lit
-//!   for it is lit for a reason the rows do not give, which is the
-//!   description's fault read on a second field. It is not a name the
-//!   reader carries either: the number shifts down the moment the next
-//!   stash is pushed in front of this one.
-//!
-//! The first two come back by name in the advanced search (P3-確認事項),
-//! where asking for them is the point.
+//! The line is taken literally (never split on spaces), and each field
+//! answers only the query shapes it can hold. Deliberately out: the
+//! description and a stash's `stash@{n}`, which would light a row for a
+//! reason nothing on it shows, and the domain half of an address, which
+//! would light every row (デザイン規約 §コミットを探す).
 
 /// One typed line, ready to be asked of a row.
 ///
@@ -49,53 +16,37 @@
 /// here so that the per-row work is comparisons only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Query {
-    /// The line as typed, ASCII-folded. Whitespace is kept exactly:
-    /// `fix ` is a search for `fix ` (the trailing space is how somebody
-    /// asks for the word and not the prefix).
+    /// The line as typed, ASCII-folded, whitespace kept exactly (`fix ` asks
+    /// for the word, not the prefix).
     needle: String,
-    /// The line could be the start of an object name: hex only, and long
-    /// enough that git itself would resolve it (`--abbrev` floors at 4).
-    /// Shorter than that, one in sixteen rows would light up per
-    /// character and the light would mean nothing.
+    /// The line could be the start of an object name.
     oid_prefix: bool,
 }
 
-/// The fields of one row a search can look at — all of them already in
-/// memory, none of them needing git.
+/// The fields of one row a search can look at, all already in memory.
 ///
-/// Three groups, three rules: **short prose** is searched anywhere
-/// inside, **identifiers** only from their start (a shared tail is what
-/// makes them useless to search from the middle), and **names** anywhere
-/// inside again, since a refname is short and few rows carry one.
+/// Prose and names are searched anywhere inside, identifiers only from
+/// their start.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Row<'a> {
     /// Full object name in lowercase hex. Empty for a row that is not a
     /// commit (the working-tree row), which matches nothing at all.
     pub oid_hex: &'a str,
-    /// The first line of the message — the whole of what the row shows of
-    /// it. The rest is the description, and it is not searched (see the
-    /// module note).
+    /// The first line of the message; the description is not searched
+    /// (module note).
     pub subject: &'a str,
-    /// Everyone the row names — the author, then whoever the message
-    /// credits. Prose: a name holds spaces, and people search for them.
+    /// The author, then whoever the message credits. Prose.
     pub people: &'a [&'a str],
-    /// Their addresses. Identifiers: matched from the start.
+    /// Their addresses. Identifiers.
     pub addresses: &'a [&'a str],
-    /// The names standing on this row: branches, tags and the HEAD
-    /// marker — the ones the row draws as chips. Searched anywhere
-    /// inside, but a query with whitespace can never land here — git
-    /// refuses a refname with any in it (`check-ref-format`).
+    /// Branches, tags and the HEAD marker — the row's chips. Names.
     pub tokens: &'a [&'a str],
 }
 
 impl Query {
     /// Reads a typed line. `None` when there is nothing to search for:
-    /// empty, or whitespace only.
-    ///
-    /// Whitespace alone is not a search. Taken literally it would match
-    /// the space in nearly every subject — every row lit, which is the
-    /// same picture as no search at all but with the count claiming
-    /// otherwise.
+    /// empty, or whitespace only — taken literally, whitespace would light
+    /// nearly every row.
     pub fn new(text: &str) -> Option<Self> {
         if text.chars().all(char::is_whitespace) {
             return None;
@@ -113,9 +64,8 @@ impl Query {
 
     /// Whether this row is one of the answers.
     pub fn matches(&self, row: &Row<'_>) -> bool {
-        // A row that is not a commit has none of these fields and must
-        // not be caught by the object name either: the working-tree row
-        // carries all-zero id, which `0000` would otherwise light.
+        // The caller blanks a non-commit's id (`Row::oid_hex`): the
+        // working-tree row's all-zero id would otherwise answer `0000`.
         if row.oid_hex.is_empty() {
             return false;
         }
@@ -126,51 +76,34 @@ impl Query {
             || row.tokens.iter().any(|t| self.inside(t))
     }
 
-    /// From the start, ignoring case. What an address takes: one
-    /// repository's addresses share a domain, so anywhere-inside answers
-    /// every row to any part of it, while the way somebody actually
-    /// searches for a person is by pasting or typing the front.
+    /// From the start, ignoring case.
     fn starts(&self, hay: &str) -> bool {
         hay.as_bytes()
             .get(..self.needle.len())
             .is_some_and(|head| head.eq_ignore_ascii_case(self.needle.as_bytes()))
     }
 
-    /// Anywhere inside, ignoring case.
-    ///
-    /// Folding is ASCII only, which is the whole of it: the scripts that
-    /// have no case (the CJK a subject is as likely to be written in)
-    /// fold to themselves, and the ones that do case beyond ASCII are not
-    /// worth a Unicode table on a path that runs on every keystroke.
+    /// Anywhere inside, ignoring ASCII case only — a Unicode table is not
+    /// worth it on a per-keystroke path, and CJK has no case.
     fn inside(&self, hay: &str) -> bool {
         contains_folded(hay, &self.needle)
     }
 
-    /// From the start only, and only when the line could be an object
-    /// name at all. Anywhere-inside would be meaningless: forty random
-    /// hex characters contain every short run of them, so `abc` would
-    /// light a fifth of any history for no reason a reader could see.
-    /// Git resolves abbreviations the same way — from the front.
+    /// From the start only, as git resolves abbreviations, and only when
+    /// the line could be an object name at all. Inside random hex a short
+    /// run would light rows for no reason a reader could see.
     fn at_start_of(&self, oid_hex: &str) -> bool {
         self.oid_prefix && oid_hex.starts_with(&self.needle)
     }
 }
 
-/// Shortest run of hex read as an object name, because it is the
-/// shortest git itself will deal in (2.55, measured): `rev-parse
-/// --short=1`, `=2` and `=3` all come back four characters long, and
-/// `rev-parse <three hex>` answers `Not a valid object name`. Going to
-/// three would find commits by an id that cannot then be pasted into any
-/// git command — and would light one unexplained row every other search
-/// for an ordinary word that happens to be spellable in hex (`bad`,
-/// `ace`, `fee`): 1/4096 across a 2,000-row window, against 1/65536 here.
+/// Shortest run of hex read as an object name — the shortest git resolves
+/// (`rev-parse --short` floors at 4). Three would find commits by an id no
+/// git command accepts.
 const MIN_OID_PREFIX: usize = 4;
 
-/// Case-folded substring test over bytes.
-///
-/// Bytes: a needle in valid UTF-8 can never start at a continuation
-/// byte (those are 0x80..=0xBF and no leading byte is), so a
-/// byte-level hit is always a real substring hit.
+/// Case-folded substring test over bytes: valid UTF-8 never starts with a
+/// continuation byte, so a byte-level hit is always a real substring hit.
 fn contains_folded(hay: &str, needle_folded: &str) -> bool {
     let (h, n) = (hay.as_bytes(), needle_folded.as_bytes());
     if n.is_empty() {
@@ -216,8 +149,6 @@ mod tests {
         assert!(Query::new("").is_none());
         assert!(Query::new(" ").is_none());
         assert!(Query::new("\t \n").is_none());
-        // A blank alone would otherwise match the space in almost every
-        // subject there is.
         assert!(Query::new("　").is_none(), "an ideographic space too");
     }
 
@@ -265,8 +196,6 @@ mod tests {
         assert!(hits("ada", &r));
         assert!(hits("ada@example.com", &r), "however it was pasted");
         assert!(hits("ADA@Example.com", &r));
-        // The domain is shared by everybody in one repository, so from
-        // the middle it would answer every row.
         assert!(!hits("example.com", &r));
         assert!(!hits("gmail", &row("", &[], &["someone@gmail.com"], &[])));
         // An address cannot hold whitespace either way.
@@ -305,10 +234,8 @@ mod tests {
 
     #[test]
     fn a_stash_is_found_by_the_message_the_row_shows() {
-        // Which fields reach here is the caller's (`GraphModel::hits`),
-        // and that the selector is not one of them is tested where that
-        // choice is made — a row with no tokens could not answer to one
-        // whatever this module did.
+        // Keeping the selector out is the caller's (`GraphModel::hits`)
+        // and tested there.
         let r = row("On main: the login refactor", &[], &[], &[]);
         assert!(hits("login refactor", &r));
     }
@@ -324,16 +251,13 @@ mod tests {
 
     #[test]
     fn short_hex_is_not_an_object_name() {
-        // Three characters would light one row in every 4096 for no
-        // reason the reader could see; git will not resolve them either.
         assert!(!hits("3f2", &plain("")));
         assert!(hits("3f2", &plain("commit 3f2 was the one")), "as prose");
     }
 
     #[test]
     fn a_word_that_happens_to_be_hex_still_searches_the_message() {
-        // "added" is all hex digits. Reading it as an object name as well
-        // can only add rows.
+        // "added" is all hex; reading it as an object name can only add rows.
         let r = plain("feat: added the thing");
         assert!(hits("added", &r));
     }
@@ -359,9 +283,7 @@ mod tests {
 
     #[test]
     fn a_needle_never_lands_mid_character() {
-        // The second byte of 直 (E7 9B B4) is 0x9B; nothing whose first
-        // byte is a continuation byte can be a needle, so no hit can
-        // start inside a character.
+        // 直 is E7 9B B4: its second byte is a continuation byte.
         let r = plain("直す");
         assert!(hits("直", &r));
         assert!(!hits("す直", &r));

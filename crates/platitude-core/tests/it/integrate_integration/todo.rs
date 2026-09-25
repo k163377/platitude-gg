@@ -1,7 +1,5 @@
 //! Interactive rebase: the todo the helper writes, and the refs that
-//! follow it. What git does with the flags the driven form passes — the
-//! config `--no-rebase-merges` countermands, the refs an abort puts back —
-//! is recorded in [`periodic`].
+//! follow it.
 
 use std::path::Path;
 
@@ -11,8 +9,6 @@ use crate::support::info;
 use crate::support::integrate::{current_op, helper};
 use platitude_core::integrate::{self, Continuation, InProgress, RebaseOptions};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
-
-// --- interactive rebase -------------------------------------------------
 
 #[tokio::test]
 async fn interactive_rebase_reorders_and_drops_commits() {
@@ -124,8 +120,8 @@ async fn the_helper_refuses_a_malformed_invocation() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("unknown argument"));
 }
 
-/// The lookup the application uses at runtime, pointed at the directory
-/// Cargo puts binaries in — the same arrangement packaging must keep.
+/// The runtime lookup, pointed at Cargo's binary directory: packaging must
+/// keep the helper beside the other binaries.
 #[tokio::test]
 async fn the_helper_is_found_beside_the_other_binaries() {
     let built = helper();
@@ -134,17 +130,12 @@ async fn the_helper_is_found_beside_the_other_binaries() {
     assert!(Path::new(&built).is_file());
 }
 
-/// **`--update-refs` works because git's own todo is kept.**
-///
-/// git writes an `update-ref` line after the commit each local branch
-/// inside the range stands on, and decides that set itself: no line for a
-/// tag, none for a branch outside the range, and **none for a branch
-/// another working copy has checked out** — that one it says so about in
-/// a comment. A helper that writes the plan over the whole file takes
-/// every one of those lines with it, and the flag moves nothing (measured,
-/// 2.55; P3-確認事項 §A). Working the set out here instead would be a
-/// second implementation of a rule git already applies, and the two would
-/// disagree exactly where it costs most.
+/// `--update-refs` works because git's own todo is kept: git writes the
+/// `update-ref` lines itself, none for a tag, a branch outside the range, or
+/// one another working copy has checked out. A helper that overwrote the
+/// whole file would drop them and the flag would move nothing
+/// (デザイン規約 §フル interactive rebase); working the set out here would be
+/// a second copy of git's rule.
 #[tokio::test]
 async fn update_refs_moves_the_branches_git_named_and_no_others() {
     let mut repo = TestRepo::init();
@@ -171,8 +162,7 @@ async fn update_refs_moves_the_branches_git_named_and_no_others() {
     let mut steps = sequencer::plan_for(&exec, &repo.path, "HEAD~3", &cancel)
         .await
         .expect("plan");
-    // A reword of the oldest commit in the range, so every id after it
-    // has to change — which is the whole of what a ref has to follow.
+    // Reword the oldest, so every id after it changes.
     steps[0].action = TodoAction::Reword;
     steps[0].message = Some("c2 said again".into());
     let options = RebaseOptions {
@@ -226,30 +216,16 @@ async fn update_refs_moves_the_branches_git_named_and_no_others() {
     );
 }
 
-/// **What the pre-merge run leaves out**: git's own side of two flags this
-/// crate passes — `--no-rebase-merges` countermanding the config, and an
-/// abort putting back the refs `--update-refs` had only promised. That the
-/// flags are passed is held by `integrate::rebase`'s unit tests and by
-/// `update_refs_moves_the_branches_git_named_and_no_others` above. Run by
-/// the full gate (`-- --ignored ::periodic::`) rather than by every change.
+/// git's own side of two flags this crate passes; that they are passed is
+/// held by `integrate::rebase`'s unit tests and the `--update-refs` test
+/// above (rules-refs/core.md `periodic`).
 mod periodic {
     use super::*;
 
-    /// `rebase.rebaseMerges` is the person's own config, and it decides the
-    /// shape of the todo git writes: with it standing the list opens with
-    /// `label onto` / `reset onto` ahead of the picks (measured on 2.55).
-    /// The helper replaces that file, so the driven rebase says
-    /// `--no-rebase-merges` and the plan is the whole of what git is asked
-    /// for.
-    ///
-    /// Two things are being held here, and neither is the history's shape —
-    /// the replaced todo makes the outcome the same either way today. First,
-    /// the flag has to work on the minimum git, which the run in that
-    /// container measures
-    /// (`cargo xtask linux test -p platitude-core --test it -- --ignored ::periodic::`).
-    /// Second, git has to take the config and the flag standing
-    /// together — the manual says the flag countermands the config, and this
-    /// is that sentence run.
+    /// Why the flag is passed: rules-refs/core.md
+    /// 「駆動 rebase だけ `--no-rebase-merges` で釘付け」. The history comes out
+    /// the same either way today; what is held is that the minimum git (the
+    /// Linux container) takes the flag with the config standing.
     #[tokio::test]
     #[ignore = "git taking --no-rebase-merges over its config: not worth the pre-merge run"]
     async fn a_plan_runs_whole_with_rebase_merges_set_in_the_config() {
@@ -299,9 +275,6 @@ mod periodic {
         assert!(!repo.path.join("b.txt").exists());
     }
 
-    /// The refs are put back with everything else when the replay is called
-    /// off part-way, so a plan abandoned over a conflict leaves nothing
-    /// half-moved.
     #[tokio::test]
     #[ignore = "git's abort putting refs back: not worth the pre-merge run"]
     async fn an_aborted_replay_puts_the_refs_it_would_have_moved_back() {

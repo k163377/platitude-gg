@@ -1,7 +1,7 @@
 //! Refs listing (`for-each-ref`) and HEAD state.
 //!
-//! Record separator is newline (refnames cannot contain newlines), field
-//! separator is NUL via `%00`.
+//! Records are newline-separated (refnames cannot contain newlines), fields
+//! NUL-separated via `%00`.
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -13,8 +13,6 @@ use crate::oid::Oid;
 use crate::process::{GitCommand, GitExecutor};
 
 /// `--format=` for `for-each-ref`; keep in sync with [`parse_refs`].
-/// Fields: refname, objecttype, objectname, peeled objectname, upstream,
-/// HEAD marker, creator date (unix), upstream tracking.
 pub const REFS_FORMAT_ARG: &str = "--format=%(refname)%00%(objecttype)%00%(objectname)%00%(*objectname)%00%(upstream)%00%(HEAD)%00%(creatordate:unix)%00%(upstream:track)";
 
 const REFS_FIELDS: usize = 8;
@@ -46,12 +44,10 @@ pub struct RefEntry {
     /// Creator date (unix seconds); tag date for annotated tags, commit
     /// date otherwise.
     pub created_unix: i64,
-    /// Commits this branch has that its upstream has not, as of the last
-    /// fetch, and the other way round. **Both zero wherever there is
-    /// nothing to count**: level with the upstream, no upstream at all,
-    /// or one whose remote ref is gone. Which of the three it is comes
-    /// off `upstream` and [`RemoteBranches::has_counterpart`] — the
-    /// counts do not tell them apart.
+    /// Commits ahead of / behind the upstream as of the last fetch. Both
+    /// zero when level, with no upstream, or with the remote ref gone —
+    /// tell those apart by `upstream` and
+    /// [`RemoteBranches::has_counterpart`].
     pub ahead: u32,
     pub behind: u32,
 }
@@ -63,8 +59,7 @@ impl RefEntry {
     }
 }
 
-/// Non-fatal parse problem: malformed entries are skipped with a warning
-/// (the sidebar keeps every other ref).
+/// Non-fatal: a malformed entry is skipped with a warning, the rest kept.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("malformed for-each-ref line: {0}")]
 pub struct RefsParseError(pub String);
@@ -141,15 +136,9 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
     }))
 }
 
-/// Reads `%(upstream:track)`: `[ahead 2]`, `[behind 1]`,
-/// `[ahead 1, behind 1]`, `[gone]`, or empty where the branch is level
-/// with its upstream or has none. **git omits the leg that counts zero**,
-/// so a missing half is a zero.
-///
-/// **The words are safe to read because `for-each-ref` is plumbing**: it
-/// leaves ref-filter's messages at their untranslated literals, and only
-/// the porcelains (`git branch -vv`) swap in the localized ones — those
-/// are not parseable this way whatever the locale is pinned to.
+/// Reads `%(upstream:track)`; git omits a zero leg. Parsing the words is
+/// safe only because `for-each-ref` is plumbing and never localizes them
+/// (rules-refs/core.md「ahead / behind は listing に同乗する」).
 fn parse_track(field: &[u8]) -> (u32, u32) {
     let Some(inside) = field
         .strip_prefix(b"[")
@@ -172,10 +161,8 @@ fn parse_track(field: &[u8]) -> (u32, u32) {
 
 /// The remote branches, by the refname an upstream names.
 ///
-/// Built once per listing because the question is asked once per local
-/// branch, and answering it by scanning the listing makes the two a
-/// product — on a repository carrying thousands of remote branches
-/// (`JetBrains/kotlin`: 7,831) that is the whole cost of the join.
+/// Built once per listing: the question is asked once per local branch,
+/// and scanning the listing instead makes the join a product of the two.
 pub struct RemoteBranches<'a> {
     by_refname: HashMap<&'a str, &'a RefEntry>,
 }
@@ -191,46 +178,29 @@ impl<'a> RemoteBranches<'a> {
     }
 
     /// The remote branch a local one speaks for, wherever the two stand:
-    /// **its configured upstream**.
-    ///
-    /// A remote branch that happens to carry the same name is a different
-    /// branch (デザイン規約 §ref の種別). git answers this question the
-    /// same way and declines to guess when it has no answer — `status`,
-    /// `branch -vv` and `pull` all read `branch.<name>.merge` and report
-    /// nothing from a matching name — so inferring one here would be this
-    /// application saying something about a repository that git does not
-    /// (CLAUDE.md 絶対制約). Setting the upstream is a row on the branch's
-    /// own menu, which is where a reader who wants the two joined says so.
+    /// its configured upstream only. A same-named remote branch is a
+    /// different branch, as git reads it (デザイン規約 §グラフ行のダブルクリック).
     pub fn spoken_for(&self, local: &RefEntry) -> Option<&'a RefEntry> {
         let up = local.upstream.as_deref()?;
         self.by_refname.get(up).copied()
     }
 
-    /// Whether this local branch verifiably has a remote counterpart
-    /// **right now**: the configured upstream still exists. Everything
-    /// else is "local only" — a branch whose upstream has been pruned
-    /// away included.
+    /// Whether the configured upstream still exists; anything else, a
+    /// pruned upstream included, is "local only".
     pub fn has_counterpart(&self, local: &RefEntry) -> bool {
         self.spoken_for(local).is_some()
     }
 
-    /// The remote this branch speaks for **when it is standing on the same
-    /// commit**: the one the row folds into its chip, and the one the
-    /// graph's cloud is about.
-    ///
-    /// One answer for the two, so a chip cannot fold a remote away without
-    /// saying that it did, and cannot claim a remote is on the row when
-    /// the graph is drawing it on another (デザイン規約 §ref の種別).
-    /// Drifted, the remote keeps a row of its own and neither row wears
-    /// the badge — folding never hides a divergence.
+    /// The remote this branch speaks for when both stand on the same
+    /// commit (デザイン規約 §グラフ行のダブルクリック). One answer for the
+    /// chip's fold and the graph's cloud, so the two cannot disagree.
     pub fn folded_counterpart(&self, local: &RefEntry) -> Option<&'a RefEntry> {
         self.spoken_for(local)
             .filter(|remote| remote.commit_oid() == local.commit_oid())
     }
 
-    /// Remote branches a local branch on the **same commit** already
-    /// speaks for. Listing one again in the row's chip says twice what the
-    /// badge says once, so the row folds it away (デザイン規約 §グラフ行のダブルクリック).
+    /// Remote branches folded into a local branch's chip
+    /// ([`Self::folded_counterpart`]).
     pub fn folded_into_local(&self, refs: &'a [RefEntry]) -> HashSet<&'a str> {
         refs.iter()
             .filter(|r| r.kind == RefKind::LocalBranch)
@@ -250,10 +220,8 @@ pub struct HeadState {
 }
 
 impl HeadState {
-    /// Where HEAD stands, from what a read found of it: the branch it is
-    /// on, and the commit — a commit with no branch being the one shape
-    /// that is detached. The one spelling of that, for the reads that
-    /// report into one record and are compared there
+    /// From a read's branch and commit; detached is a commit with no
+    /// branch. The single constructor for the reads compared in one record
     /// (`session::standing`).
     pub fn of(branch: Option<String>, oid: Option<Oid>) -> Self {
         Self {
@@ -264,10 +232,8 @@ impl HeadState {
     }
 }
 
-/// Reads HEAD out of a listing that already has it, sparing
-/// [`head_state`]'s two processes. `None` means the listing cannot say —
-/// HEAD is detached, or on a branch with no commits yet, and neither has
-/// a marked ref to be found — so ask git.
+/// Reads HEAD out of a listing, sparing [`head_state`]'s two processes.
+/// `None` (detached or unborn: no ref is marked) means ask git.
 pub fn head_in(refs: &[RefEntry]) -> Option<HeadState> {
     let on = refs.iter().find(|r| r.is_head)?;
     Some(HeadState {
@@ -295,11 +261,9 @@ pub async fn load(
 
 /// Just the commits the remote-tracking branches stand on.
 ///
-/// A listing of its own: this is asked by the graph pass, which runs
-/// before the refs read has landed and answers on its own — and it
-/// is the narrow half, so it stays cheap where the whole listing is
-/// not (`JetBrains/kotlin`: 7,823 remote branches out of 54,286
-/// refs).
+/// A listing of its own because the graph pass asks it before the refs
+/// read has landed, and the narrow listing stays cheap where the whole
+/// one is not.
 pub async fn remote_tips(
     executor: &GitExecutor,
     workdir: &Path,
@@ -318,16 +282,12 @@ pub async fn remote_tips(
         .collect())
 }
 
-/// Just the commit HEAD stands on — the half [`head_state`] spends its
-/// second process on, for a caller with no use for the branch.
+/// Just the commit HEAD stands on: [`head_state`] without the branch, in
+/// one process for the walk before any refs read has landed
+/// (`session::walk`) — on Windows the launch is most of a read's cost
+/// (ci/baseline/code-costs-windows-x64.md §git のプロセス代).
 ///
-/// **One process, where two stood in front of the first chunk.** The
-/// walk asks this when no refs read has landed yet (`session::walk`),
-/// and the branch is not in the walk's command at all; on Windows the
-/// launch is most of what a read costs
-/// (ci/baseline/code-costs-windows-x64.md).
-///
-/// `None` is an unborn HEAD, which git answers here with exit 1.
+/// `None` is an unborn HEAD.
 pub async fn head_tip(
     executor: &GitExecutor,
     workdir: &Path,
@@ -337,7 +297,7 @@ pub async fn head_tip(
         .run_unchecked(
             GitCommand::new()
                 .cwd(workdir)
-                // Exit 1 is the answer "HEAD is unborn".
+                // Exit 1: HEAD is unborn.
                 .answers_by_code(1)
                 .args(["rev-parse", "--verify", "-q", "HEAD"]),
             cancel,
@@ -354,25 +314,19 @@ pub async fn head_tip(
         })
 }
 
-/// Where HEAD is: the branch it is on, if any, and the commit it stands
-/// on.
-///
-/// **The two reads go out together.** They ask git different questions
-/// and neither answer feeds the other, so one after the other is a
-/// second process launch nobody is served by.
+/// Where HEAD is: the branch it is on, if any, and its commit. The two
+/// reads run concurrently; neither feeds the other.
 pub async fn head_state(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<HeadState, GitError> {
-    // The full name, cut here: `--short` shortens to whatever reads back
-    // unambiguously, so a tag of the same name would spell the branch
-    // `heads/x` while the status spells it `x`, and the one record would
-    // take the two for two HEADs.
+    // Full name, cut here: with a same-named tag `--short` answers
+    // `heads/x` while status says `x`, and the record would see two HEADs.
     let symbolic = executor.run_unchecked(
         GitCommand::new()
             .cwd(workdir)
-            // Exit 1 is the answer "HEAD is detached".
+            // Exit 1: HEAD is detached.
             .answers_by_code(1)
             .args(["symbolic-ref", "-q", "HEAD"]),
         cancel,
@@ -411,11 +365,9 @@ pub fn split_remote_ref<'a>(
 }
 
 /// [`split_remote_ref`], falling back to the first slash when no
-/// configured remote owns the ref: the list may still be loading, or the
-/// remote may be gone from configuration while its refs remain (git-svn
-/// trees, hand-written `refs/remotes/*`). A gesture that acts on the
-/// fallback lets git answer loudly, where refusing to split would turn
-/// the press into a silent no-op.
+/// configured remote owns the ref (list still loading, or refs left
+/// without a remote). Acting on the fallback lets git answer loudly;
+/// refusing to split would make the press a silent no-op.
 pub fn split_remote_ref_or_first_slash<'a>(
     full: &'a str,
     remotes: impl IntoIterator<Item = &'a str>,

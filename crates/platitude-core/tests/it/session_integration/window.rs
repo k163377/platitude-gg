@@ -14,20 +14,15 @@ async fn tag_only_commits_follow_the_include_tags_option() {
     repo.commit_file("g.txt", "t\n", "tag only work");
     repo.git(&["tag", "islet"]);
     repo.git(&["checkout", "main"]);
-    // And one the walk cannot take away: main reaches this commit with or
-    // without the tags, so its chip is the half the option has to answer
-    // for on its own.
+    // And a tag on main: the walk keeps its commit either way, so its chip
+    // is what the option alone answers for.
     repo.git(&["tag", "onmain"]);
 
     let (sink, session) = open_unawaited(&repo);
 
-    // Tags are walked by default, so the settled opening has two rows —
-    // the tag-only commit included. The chips ride the refs snapshot:
-    // a pass that beats the opening refs read lands its rows
-    // bare, and the chips catch up as a `LabelsChanged` diff onto the
-    // same generation. So what "is drawn" is the union of the two
-    // (`drawn_at`), read off the settled opening, where the refs are in
-    // whichever half carried them.
+    // Tags are walked by default: two rows. A pass that beats the refs read
+    // lands bare and the chips catch up as a `LabelsChanged` diff onto the
+    // same generation, so what is drawn is the union (`drawn_at`).
     let base = sink.opened_graph(&session, 2).await;
     let drawn = drawn_at(&sink.events.lock().unwrap(), base.generation);
     assert!(
@@ -38,9 +33,8 @@ async fn tag_only_commits_follow_the_include_tags_option() {
     session.set_include_tags(false);
     let off = sink.pass_after("the tag-less graph", base.generation).await;
     assert_eq!(off.total, 1, "the tag-only commit left the walk");
-    // The row main still holds keeps its branch chip and loses its tag:
-    // taking the tags out of the walk is not the whole of taking them out
-    // of the graph, and this is the row where the difference shows.
+    // The row main holds keeps its branch chip and loses its tag: out of the
+    // walk is not out of the graph.
     {
         let left = drawn_at(&sink.events.lock().unwrap(), off.generation);
         assert!(
@@ -53,12 +47,9 @@ async fn tag_only_commits_follow_the_include_tags_option() {
         );
     }
 
-    // Two-phase streaming, deterministically this time. The lookback at
-    // the top could only assert the fast pass's order — during an opening,
-    // a rebuild may swallow it wordlessly. Here the opening is settled and
-    // no other ask is outstanding, so nothing can take the log token from
-    // the toggle's own two passes: the fast tag-less pass must land, in
-    // full, before the tag-inclusive swap.
+    // Two-phase streaming after a settled baseline: nothing can take the log
+    // token from the toggle's two passes, so the fast tag-less pass must
+    // land whole before the tag-inclusive swap.
     let base = sink.opened_graph(&session, 1).await;
     session.set_include_tags(true);
     let swap = sink
@@ -86,7 +77,6 @@ async fn tag_only_commits_follow_the_include_tags_option() {
     session.close();
 }
 
-/// Every chip a batch of rows carries, by kind.
 fn chips_of(rows: &[platitude_core::session::LogRow]) -> Vec<LabelKind> {
     rows.iter()
         .flat_map(|row| row.labels.iter().map(|label| label.kind))
@@ -120,20 +110,13 @@ fn drawn_at(events: &[SessionEvent], generation: u64) -> Vec<LabelKind> {
         .collect()
 }
 
-/// The walk does not wait for the refs read: a rebuild draws only the
-/// chips the session has already read, and a ref it has not is invisible
-/// to it however many passes run. The refs read is what carries the
-/// chips — as a `LabelsChanged` diff onto the very generation on screen,
-/// with no pass in between — and the diff is mirrored into the
-/// delivered-rows record so the next rebuild does not swap an identical
-/// graph over it (`apply_refs`).
+/// A rebuild draws only chips the session has already read. The refs read
+/// carries a new ref's chips as a `LabelsChanged` diff onto the generation
+/// on screen, mirrored into the delivered-rows record so the next rebuild
+/// has nothing to swap (`apply_refs`).
 ///
-/// The opening runs this same exchange with the scheduler picking the
-/// order, and the losing order — a pass landing before the opening refs
-/// read — turned up as a full-suite flake (a bare 2-row swap read as
-/// "no tags drawn"). Here the order is held by construction:
-/// the ref arrives while nothing is in flight, and each half lands
-/// behind its own completion boundary.
+/// The order is held by construction: the ref arrives while nothing is in
+/// flight, and each half lands behind its own completion boundary.
 #[tokio::test(flavor = "multi_thread")]
 async fn chips_catch_up_when_the_refs_read_lands_last() {
     let mut repo = TestRepo::init();
@@ -146,9 +129,8 @@ async fn chips_catch_up_when_the_refs_read_lands_last() {
     // map has never heard of it.
     repo.git(&["tag", "fresh"]);
 
-    // The rebuild walks the same commit and draws the same chips: this is
-    // the half that lands bare under the opening race, said without a
-    // scheduler — no repaint carries a ref the session has not read.
+    // The rebuild walks the same commit and draws the same chips: no
+    // repaint carries a ref the session has not read.
     let outcome = crate::support::wait::bounded(
         "the rebuild before the refs read",
         session.refresh_log_tracked().outcome(),
@@ -186,13 +168,8 @@ async fn chips_catch_up_when_the_refs_read_lands_last() {
         "the diff carries the row's whole chip set: {chips:?}"
     );
 
-    // The catch-up also patched the delivered-rows record: the next
-    // rebuild finds the picture it would draw already on screen, and
-    // has an identical graph to leave alone.
-    // The flight boundary first: the refs reader asks for a rebuild of
-    // its own right after the diff — from inside its pass, so that this
-    // boundary covers the ask — and the tracked one below is the one
-    // that supersedes.
+    // The refs reader asks for a rebuild of its own from inside its pass, so
+    // the flight boundary covers it; the tracked one below supersedes it.
     crate::support::wait::bounded("the refs read flight", session.wait_for_snapshot_reads()).await;
     let outcome = crate::support::wait::bounded(
         "the rebuild after the catch-up",
@@ -217,8 +194,6 @@ async fn log_limit_truncates_the_window() {
 
     let (sink, session) = open_unawaited(&repo);
 
-    // The opening pass, whichever shape landed it — and the footer read
-    // off the very pass the rest of the test anchors on.
     let full = sink.opened_graph(&session, 3).await;
     assert!(!full.truncated, "3 commits fit in the default window");
     let first_gen = full.generation;
@@ -246,8 +221,7 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
 
     let (sink, session) = open_unawaited(&repo);
 
-    // Full pass first: stash row + three commits, nothing truncated —
-    // whichever shape landed it.
+    // Stash row + three commits, nothing truncated.
     let full = sink.opened_graph(&session, 4).await;
     assert!(!full.truncated);
     let first_gen = full.generation;
@@ -263,19 +237,12 @@ async fn truncation_follows_the_walk_not_the_shown_rows() {
     session.close();
 }
 
-/// The synthetic WIP row is shown but never walked: a window that
-/// holds the whole history says so, whatever the WIP row does to the
-/// shown count.
+/// The synthetic WIP row is shown but never walked: a window that holds the
+/// whole history says so, whatever the WIP row adds to the shown count.
 ///
-/// Reached by widening a window that really was cut. Both that and
-/// opening the wide one straight away say the same thing about the
-/// WIP row, but only the widening changes the graph — and a change is
-/// what makes the answer arrive at all. Going straight to the wide window
-/// leaves the rows *and the footer* exactly as the opening pass left them
-/// (the default window holds this history whole either way), so a rebuild
-/// that overtakes the stream (this repository opens dirty, and the status
-/// read that notices it asks for one) finds nothing to swap and says
-/// nothing, and the test waits for an event that was never sent.
+/// Reached by widening a window that really was cut: going straight to the
+/// wide window changes nothing, so an overtaking rebuild says nothing and
+/// the wait never ends.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_wip_row_does_not_trigger_truncation() {
     let mut repo = TestRepo::init();
@@ -285,8 +252,7 @@ async fn the_wip_row_does_not_trigger_truncation() {
 
     let (sink, session) = open_unawaited(&repo);
 
-    // Wait until the dirty state is reflected and the stream settles, so
-    // the next pass is the reaction to the limit change.
+    // Settled with the WIP row, so the next pass reacts to the limit change.
     let first_gen = sink.opened_graph(&session, 3).await.generation;
 
     // One commit through a window of one: cut, and the WIP row rides on
@@ -308,20 +274,15 @@ async fn the_wip_row_does_not_trigger_truncation() {
     session.close();
 }
 
-/// A window change asks for a stream, but only until somebody else asks
-/// for the graph: the stream drops without a word when a background
-/// rebuild supersedes it, and that rebuild — reading the options the
-/// change just wrote — lands the new window as an atomic replacement
-/// instead. The two are the same answer, and which one arrives is a
-/// scheduling accident, so waiting for one shape is waiting on a race.
+/// A window change's stream drops silently when a background rebuild
+/// supersedes it, and that rebuild — reading the options the change just
+/// wrote — lands the new window as a replacement instead. Which one
+/// arrives is a scheduling accident, so waiting for one shape is waiting
+/// on a race.
 ///
-/// Held in the swap that adds the WIP row, the interleaving is exact: the
-/// stream cannot reach its cancel check until the rebuild behind it has
-/// taken its place. Left to the scheduler it is rare — it turned up
-/// as a flake on a machine running three other builds.
-// `worker_threads = 2` is the test's own premise: the hook below parks a
-// worker on a blocking `recv`, and a pool inherited from the host can be
-// one thread on a small runner — the parked hook then owns it all.
+/// Held in the swap that adds the WIP row, the stream cannot reach its
+/// cancel check until the rebuild behind it has taken its place.
+// `worker_threads = 2`: the hook below parks a worker (`CaptureSink::hook_once`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
     let mut repo = TestRepo::init();
@@ -349,12 +310,9 @@ async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
             .then_some(())
     })
     .await;
-    // The sink records before it runs the hook, so the graph the change
-    // is measured against is already readable from where it is parked.
+    // The sink records before the hook runs, so the parked graph is readable.
     let wip_gen = sink.settled_pass(3).await.generation;
 
-    // The change's stream is stopped at that door; the rebuild asked for
-    // behind it takes its place before the stream gets through.
     session.set_log_limit(Some(1));
     session.refresh_log();
     release.send(()).expect("let the rebuild finish");
@@ -375,16 +333,11 @@ async fn a_window_change_a_rebuild_overtakes_still_lands_the_new_window() {
     session.close();
 }
 
-/// The same interleaving over a window change that moves nothing but the
-/// footer: two commits through a window of two are reported cut (the walk
-/// stopped on the limit, which is all truncation can mean), and widening
-/// to three leaves every row exactly where it was. The rebuild that
-/// overtakes the stream carries the new window, so it is the only thing
-/// that can say the history is no longer cut — and a comparison that only
-/// looks at rows finds nothing to do, leaving the notice claiming history
-/// the user just asked to see.
-// `worker_threads = 2`: the parked hook needs a worker to spare
-// (see the sibling above).
+/// The same interleaving over a change only the footer notices: two commits
+/// through a window of two are cut, and widening to three moves no row. The
+/// overtaking rebuild is the only thing that can say so — a comparison over
+/// rows alone leaves the footer claiming hidden history.
+// `worker_threads = 2`: the hook below parks a worker (`CaptureSink::hook_once`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_window_change_only_the_footer_notices_still_lands() {
     let mut repo = TestRepo::init();
@@ -394,8 +347,8 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
     let (sink, session) = open_unawaited(&repo);
     let first_gen = sink.opened_graph(&session, 2).await.generation;
 
-    // A window exactly as wide as the history: every commit is shown, and
-    // the walk stopping on the limit is what makes it cut all the same.
+    // A window exactly as wide as the history is still cut: the walk
+    // stopped on the limit.
     session.set_log_limit(Some(2));
     let cut = sink.pass_after("the window on the limit", first_gen).await;
     assert_eq!(cut.total, 2, "both commits fit");
@@ -423,10 +376,8 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
     let wip = sink.settled_pass(3).await;
     assert!(wip.truncated, "the window is still sitting on the limit");
 
-    // Widen past the end of the history. The stream this asks for is
-    // stopped at the door and dropped; the rebuild behind it walks the
-    // same two commits, draws the same three rows, and carries the only
-    // thing that did change.
+    // Widen past the history: the stream is dropped at the door, and the
+    // rebuild behind it carries the only change, the footer.
     session.set_log_limit(Some(3));
     session.refresh_log();
     release.send(()).expect("let the rebuild finish");
@@ -438,11 +389,9 @@ async fn a_window_change_only_the_footer_notices_still_lands() {
     session.close();
 }
 
-/// Growing the window is what the graph's tail offers, and it lands
-/// **as a replacement**: the press is made at the bottom of a graph
-/// somebody is reading, and a restart clears the rows and sends them
-/// back to the top (`run_direct_pass`). So the wider walk is spliced
-/// in under what is already drawn.
+/// Growing the window lands as a replacement: the press is made at the
+/// bottom of a graph somebody is reading, and a restart would clear the
+/// rows and send the reader back to the top (`run_direct_pass`).
 #[tokio::test(flavor = "multi_thread")]
 async fn growing_the_window_walks_further_without_starting_over() {
     let mut repo = TestRepo::init();
@@ -493,11 +442,10 @@ async fn the_step_stays_a_quarter_of_the_window_the_graph_opened_with() {
         "the default window's own quarter"
     );
 
-    // The door the setting for the initial count comes through
-    // (`settings::Defaults::initial_commits`). Under the floor the
-    // settings screen offers, because the floor is applied on the way
-    // in — what this pins is that the step follows whatever number
-    // arrives.
+    // The door the initial-count setting comes through
+    // (`settings::Defaults::initial_commits`). 400 is under the settings
+    // screen's floor, which is applied on the way in: the step follows
+    // whatever arrives.
     session.set_log_limit(Some(400));
     assert_eq!(session.log_window_step(), 100);
 
@@ -509,10 +457,9 @@ async fn the_step_stays_a_quarter_of_the_window_the_graph_opened_with() {
     assert_eq!(session.log_options().limit, Some(600));
     assert_eq!(session.log_window_step(), 100);
 
-    // A window widened to the whole history has no next step, and the
-    // press that would ask for one is not offered — but the call stays
-    // reachable from a graph that finished loading while a hand was on
-    // its way down, so it answers by leaving the window where it is.
+    // A whole-history window has no next step. The press is not offered,
+    // but can still arrive from a graph that finished loading mid-reach, so
+    // it leaves the window where it is.
     session.set_log_limit(None);
     session.grow_log_window();
     assert_eq!(

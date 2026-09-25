@@ -11,27 +11,19 @@ tokio.workspace = true
 toml.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
-# Reading and rewriting the pictures a person assigns to an author
-# (`picture`). Pure Rust and no build script that wants a C compiler, so
-# the three-OS build and the offline job stay as they are. What would
-# pull one in sits a level down, in flate2: the backends under its
-# `any_c_zlib` (`zlib`, `zlib-ng`, `cloudflare_zlib`) link a C zlib
-# through libz-sys or libz-ng-sys. png's `zlib-rs` feature picks
-# flate2's Rust port.
+# Author pictures (`picture`). Pure Rust, no build script wanting a C
+# compiler; flate2's `any_c_zlib` backends would link a C zlib (png's
+# `zlib-rs` feature picks the Rust port).
 png = "0.18"
 zune-jpeg = "0.5"
 zune-core = "0.5"
 compact_str = { version = "0.10.0", default-features = false, features = ["std"] }
 smallvec = { version = "1.15.2", features = ["union"] }
-# Syntax colours, the fast path (`highlight::grammar`): tree-sitter and
-# one grammar crate per language. Licenses surveyed on crates.io
-# 2026-08-23: every grammar below is MIT except Elixir (Apache-2.0) —
-# both in the allowed set. These carry C build scripts — a user-approved
-# exception: the toolchain already demands a C++ compiler for Qt, the
-# parsers ship as generated C inside the crates (offline-friendly), and
-# the measured order-of-magnitude win over the regex lexer is what makes
-# the first paint immediate. syntect below stays as the fallback for
-# languages with no grammar crate.
+# Syntax colours, the fast path (`highlight::grammar`), an order of
+# magnitude over the regex lexer: tree-sitter and a grammar crate per
+# language. Their C build scripts are a user-approved exception (Qt
+# already demands a C++ compiler; the parsers ship as generated C).
+# syntect below covers languages with no grammar crate.
 tree-sitter = "0.27"
 tree-sitter-highlight = "0.27"
 tree-sitter-bash = "0.25"
@@ -48,9 +40,8 @@ tree-sitter-html = "0.23"
 tree-sitter-java = "0.23"
 tree-sitter-javascript = "0.25"
 tree-sitter-json = "0.24"
-# Its crate ships the parser but no highlight query (and fwcd's crate,
-# which has one upstream, drags in a second tree-sitter C runtime —
-# LNK1169), so the query is hand-written in `highlight/queries/`.
+# No highlight query shipped, so ours is in `highlight/queries/`. fwcd's
+# crate has one but links a second tree-sitter C runtime (LNK1169).
 tree-sitter-kotlin-ng = "1.1"
 tree-sitter-lua = "0.5"
 tree-sitter-md = "0.5"
@@ -72,10 +63,8 @@ tree-sitter-typescript = "0.23"
 tree-sitter-xml = "0.7"
 tree-sitter-yaml = "0.7"
 tree-sitter-zig = "1.1"
-# The regex-based fallback (`highlight` outside `grammar`), for
-# languages with no grammar crate above. fancy-regex: syntect's default
-# Oniguruma has a Regex that is not Send, so it could not leave the
-# UI's runtime at all.
+# The regex fallback. `regex-fancy`: the default Oniguruma's Regex is not
+# Send, so it could not leave the UI's runtime.
 syntect = { version = "5.3", default-features = false, features = [
     "parsing",
     "regex-fancy",
@@ -86,23 +75,16 @@ syntect = { version = "5.3", default-features = false, features = [
 two-face = { version = "0.5", default-features = false, features = [
     "syntect-fancy",
 ] }
-# Mocks for the pre-merge tests: an attribute on a read that asks the machine
-# rather than the repository (`conflict::available_tools`), so a test
-# stands its own machine in for it without a seam in the code. The mock
-# half is built into debug builds only; a release carries the function as
-# written. Licenses surveyed on crates.io 2026-09-23: mry, mry_macros and
-# the rest are MIT OR Apache-2.0 except darling / strsim (MIT) and
-# unicode-ident ((MIT OR Apache-2.0) AND Unicode-3.0) — all in the
-# allowed set.
+# Test mocks as an attribute on a read that asks the machine
+# (`conflict::available_tools`), with no seam in the code. The mock half
+# is in debug builds only.
 mry = "0.14"
 
 [dev-dependencies]
 insta = "1"
 tempfile = "3"
-# The paused clock the auto-fetch timer's tests judge the interval on
-# (`session::auto_fetch`). A feature of the tokio already depended on —
-# no crate of its own and no license to weigh — and a dev-dependency's
-# features do not reach a build that is not a test.
+# The paused clock for `session::auto_fetch`'s interval tests. No new
+# crate, and a dev-dependency's features stay out of non-test builds.
 tokio = { workspace = true, features = ["test-util"] }
 
 [lints]

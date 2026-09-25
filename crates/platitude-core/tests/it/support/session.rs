@@ -25,23 +25,10 @@ pub struct Pass {
     pub truncated: bool,
 }
 
-/// Reads a landed pass out of the one event that ends it.
-///
-/// A stream (`LogStarted` → chunks → `LogFinished`) and an atomic
-/// replacement (`LogReplaced`) are two shapes of the same thing, and
-/// which one carries a given ask is a scheduling accident. `restart_log`
-/// asks for a stream, but that pass drops without a word the moment a
-/// background rebuild is asked for over it — `run_direct_pass` returns on
-/// a cancelled token, and a walk cancelled mid-stream reports neither
-/// `LogFinished` nor `LogFailed` — and the rebuild behind it replaces
-/// instead, carrying the very options the ask just changed (both entry
-/// points read them after taking the token, so the winner is always the
-/// one holding the new ones).
-///
-/// A test that waits for one shape is waiting on that race. measured: a
-/// window change on a loaded machine landed as `LogReplaced { generation:
-/// 4 }` — the open sequence's dirty-flip `refresh_log` overtook the
-/// stream at generation 3 — and the wait sat out its whole budget.
+/// Reads a landed pass out of the one event that ends it: a stream's
+/// `LogFinished` or a rebuild's `LogReplaced`. Which shape carries a given
+/// ask is a scheduling accident, so a wait must accept both
+/// (rules-refs/core.md「`restart_log` の着地はストリームとは限らない」).
 pub fn pass_of(event: &SessionEvent) -> Option<Pass> {
     match event {
         SessionEvent::LogFinished {
@@ -90,40 +77,20 @@ impl CaptureSink {
 
     /// Runs `run` once, from inside the sink call that delivers the first
     /// event `when` accepts — the only place a test can stand in the
-    /// middle of a read. Everything the session sends comes through here,
-    /// so a hook that parks holds the reader there while the test drives
-    /// the rest.
+    /// middle of a read: a hook that parks holds the reader there while
+    /// the test drives the rest.
     ///
-    /// A parked hook blocks the thread it runs on, and the runtime is
-    /// told so: the delivery runs the hook under `block_in_place`, which
-    /// hands the worker's core — its queue and its turn at the I/O driver
-    /// — to another thread for as long as the hook stands. **Without that
-    /// the park takes the driver's attendant with it.** The worker that
-    /// polled the driver and woke only this reader runs the reader itself
-    /// and tells nobody; the other workers sleep until a task is scheduled
-    /// from outside the runtime, and on Linux nothing ever is — child
-    /// exits (pidfd), pipe output and the suite's own `Patience` timers all
-    /// wait in an epoll nobody calls, so the binary sits at 0% CPU until
-    /// the CI kill. Windows survives the same park because a child's exit
-    /// arrives from a thread of its own and wakes a sleeper (measured in
-    /// the container: three git zombies under the test binary, every
-    /// worker on the condvar, and one wake from a plain thread let the
-    /// test run to green).
-    ///
-    /// The sink records before it runs the hook, so a wait phrased over
-    /// recorded events sees the event that parked. The hook itself is
-    /// synchronous: it runs inside a sink call, on a thread the
-    /// runtime has been told to forget.
+    /// The hook runs under `block_in_place`; a bare park stalls the runtime
+    /// on Linux (rules-refs/core.md
+    /// 「hook で reader を停める配信は `block_in_place` の下で走らせる」).
+    /// The sink records before it runs the hook, so a wait over recorded
+    /// events sees the event that parked.
     pub fn hook_once(
         &self,
         when: impl Fn(&SessionEvent) -> bool + Send + 'static,
         run: impl FnOnce() + Send + 'static,
     ) {
-        // `block_in_place` refuses a current-thread runtime, and a hook
-        // that parks needs a second thread to carry the session anyway:
-        // asserted where the hook is armed, so the failure has a name.
-        // The default worker count is the machine's — a test may
-        // declare its own (`worker_threads = 2`).
+        // Asserted where the hook is armed, so the failure has a name.
         let workers = tokio::runtime::Handle::current().metrics().num_workers();
         assert!(
             workers >= 2,
@@ -142,12 +109,9 @@ impl CaptureSink {
             .count()
     }
 
-    /// Waits for a pass ending with `total` rows (a `LogFinished`, or a
-    /// `LogReplaced`) and returns it — the newest, when several landed
-    /// that way, so the footer read off it belongs to the same pass the
-    /// generation anchors. Callers that need a baseline must additionally
-    /// await the operation that owns it; a quiet interval cannot establish
-    /// that no later opening work exists.
+    /// Waits for a pass ending with `total` rows and returns the newest
+    /// such, so its footer and generation belong to the same pass. A
+    /// baseline also needs the operation that owns it awaited.
     pub async fn settled_pass(&self, total: u32) -> Pass {
         self.wait_for(&format!("a {total}-row graph pass"), |evs| {
             evs.iter()
@@ -158,12 +122,8 @@ impl CaptureSink {
         .await
     }
 
-    /// Establishes an opening graph baseline without a quiet window.
-    ///
-    /// The tracked poll owns current refs and status reads and includes the
-    /// graph refresh either requested. The matching pass then proves that
-    /// the expected graph is actually installed, irrespective of which
-    /// opening task won the scheduler race.
+    /// Establishes the opening graph baseline by causal waits, in the order
+    /// rules-refs/core.md「baseline は開始条件を列挙して待つ」 gives.
     pub async fn opened_graph(&self, session: &Arc<RepoSession>, total: u32) -> Pass {
         self.opening_settled(session).await;
         let outcome = crate::support::wait::bounded(
@@ -179,12 +139,6 @@ impl CaptureSink {
             ),
             "the opening graph was available: {outcome:?}"
         );
-        // The ask above took the stream over, and taking it over
-        // cancels the pass that had it: the opening's tag-inclusive
-        // pass stops when it next looks. A baseline read before that
-        // is one the opening is still adding to — a walk it spawns
-        // afterwards lands past the count and reads as work the
-        // test's own subject asked for.
         crate::support::wait::bounded(
             "the graph passes the baseline displaced",
             session.wait_for_graph_passes(),
@@ -193,12 +147,10 @@ impl CaptureSink {
         self.settled_pass(total).await
     }
 
-    /// Closes the opening baseline: both opening snapshots have landed
-    /// *and* their readers have left the single flight. The snapshot
-    /// events are sent from inside the readers, which then ask for the
-    /// rebuild those answers imply, so the events alone leave the flight
-    /// occupied and a count taken then still sees opening work
-    /// (`wait_for_snapshot_reads` is the boundary).
+    /// Waits until both opening snapshots have landed *and* their readers
+    /// have left the single flight — the events are sent from inside the
+    /// readers, which then ask for a rebuild, so the events alone are not
+    /// the boundary.
     pub async fn opening_settled(&self, session: &Arc<RepoSession>) {
         self.opening_snapshots().await;
         crate::support::wait::bounded(
@@ -208,10 +160,8 @@ impl CaptureSink {
         .await;
     }
 
-    /// Waits until the two repository snapshots started by `open` have
-    /// landed. `Opened` only means the path was accepted; refs and status
-    /// are deliberately started after that event, so it is not a safe
-    /// baseline for a test that counts their work.
+    /// Waits until the refs and status snapshots `open` starts have landed
+    /// (`Opened` only means the path was accepted).
     pub async fn opening_snapshots(&self) {
         self.wait_for("the opening snapshots", |events| {
             let refs = events
@@ -225,22 +175,15 @@ impl CaptureSink {
         .await;
     }
 
-    /// Waits for the first graph pass after generation `after` to land,
-    /// in whichever shape it landed in (see [`pass_of`]).
+    /// Waits for the first graph pass after generation `after` to land, in
+    /// either shape ([`pass_of`]). A pass that finds rows and footer
+    /// unchanged says nothing (`run_swap_pass`), so the first one after is
+    /// the reaction to the test's last ask, even when `after` is older than
+    /// the newest pass.
     ///
-    /// "The first one after" is the reaction to whatever the test asked
-    /// for last, and nothing else: a pass that finds the graph unchanged
-    /// swaps nothing and says nothing (`run_swap_pass`), so the only
-    /// passes that speak are the ones an ask produced. That also makes it
-    /// safe for `after` to be older than the newest settled pass — a
-    /// duplicate of a graph already on screen could not have spoken.
-    ///
-    /// Which means the caller owes one thing: **ask for something the
-    /// graph on screen differs from** — in its rows, or in the footer
-    /// under them (`run_swap_pass` compares both, so a window that only
-    /// moves `walked`/`truncated` does speak). A change that leaves the
-    /// two exactly as they are has nothing to announce if a rebuild
-    /// overtakes the stream, and no wait can conjure an event nobody sent.
+    /// The caller must ask for something the graph on screen differs from,
+    /// in rows or footer: an unchanged ask overtaken by a rebuild announces
+    /// nothing.
     pub async fn pass_after(&self, what: &str, after: u64) -> Pass {
         self.wait_for(what, |evs| {
             evs.iter()
@@ -250,8 +193,8 @@ impl CaptureSink {
         .await
     }
 
-    /// Waits for `pred` over the event list. Event delivery wakes this
-    /// waiter directly; the timeout budget remains only a failure backstop.
+    /// Waits for `pred` over the event list; each delivery wakes it, and
+    /// the budget is only a failure backstop.
     pub async fn wait_for<T>(&self, what: &str, pred: impl Fn(&[SessionEvent]) -> Option<T>) -> T {
         let mut patience = Patience::new();
         let mut changed = self.changed.subscribe();
@@ -273,11 +216,9 @@ impl CaptureSink {
         }
     }
 
-    /// [`Self::wait_for`] for an answer that comes after one long silent
-    /// step the test means to take — a `periodic` test's read of this
-    /// machine, which says nothing until it ends and lasts as long as the
-    /// load makes it. The silence budget would call that a hang, so only
-    /// the overall one stands under this ([`bounded`]).
+    /// [`Self::wait_for`] across one long silent step the test means to
+    /// take (a `periodic` test's read of this machine): the silence budget
+    /// would call it a hang, so only the overall one stands ([`bounded`]).
     pub async fn wait_through_silence<T>(
         &self,
         what: &str,
@@ -309,18 +250,15 @@ impl SessionSink for CaptureSink {
         self.events.lock().unwrap().push(event);
         self.changed
             .send_modify(|generation| *generation = generation.wrapping_add(1));
-        // Outside both locks: the recording stays open while a hook
-        // parks, or the events it is waiting on could never be written.
-        // And under `block_in_place`, so the worker this thread was gives
-        // its core to another thread instead of taking the I/O driver's
-        // attendance down with it (`hook_once`).
+        // Outside both locks, or a parked hook blocks the events it waits
+        // on; under `block_in_place` (`hook_once`).
         if let Some(run) = run {
             tokio::task::block_in_place(run);
         }
     }
 }
 
-/// main: root ─ a ─ merge ← side, tag v1 on merge target, one stash.
+/// main: root ─ main work ─ merge ← side work; tag v1 on the merge, one stash.
 pub fn scenario() -> (TestRepo, String) {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "0\n", "root");
@@ -372,9 +310,7 @@ pub async fn opened_with(
     (sink, session)
 }
 
-/// Opens `repo` on `exec`, watched by a fresh sink. `None` for the doors
-/// is the shape the application opens in, and the one every test not
-/// about the passes themselves opens in too.
+/// `None` doors is how the application opens.
 fn start(
     repo: &TestRepo,
     exec: platitude_core::process::GitExecutor,
@@ -391,9 +327,8 @@ fn start(
     (sink, session)
 }
 
-/// The two doors into a graph pass the tests drive one through, let in
-/// by the seam the session is opened with ([`PassHooks`]) —
-/// [`open_with_doors`] hands them over.
+/// The two doors into a graph pass ([`PassHooks`]) that tests drive one
+/// through; [`open_with_doors`] hands them over.
 #[derive(Default)]
 pub struct PassDoors {
     /// What the next pass to reach a given step runs there.
@@ -403,29 +338,23 @@ pub struct PassDoors {
 }
 
 impl PassDoors {
-    /// Leaves `run` for the next graph pass to reach `at`, to be run
-    /// there, on that pass's own task, once — the door a test ends a
-    /// pass through (`PassHooks::before`). Taken by the pass that runs
-    /// it, so exactly one falls over; a pass reaching a step nobody left
-    /// anything at is a lock and a look.
+    /// Runs `run` once, on the task of the next graph pass to reach `at`
+    /// (`PassHooks::before`) — how a test ends a pass. Taken by that pass,
+    /// so exactly one falls over.
     pub fn run_inside_next_pass(&self, at: PassStep, run: impl FnOnce() + Send + 'static) {
         *self.step.lock().unwrap() = Some((at, Box::new(run)));
     }
 
-    /// Every graph pass that reaches `at` from here on fails there, in
-    /// place of the walk it would have made — the door a screen is driven
-    /// through (`PassHooks::fault`), held here so the arm it reaches the
-    /// walk by is proved from this side too.
+    /// Every graph pass that reaches `at` from here on fails there instead
+    /// of walking — the app harness's screen door (`PassHooks::fault`),
+    /// proved from this side too.
     pub fn fail_every_pass(&self, at: PassStep) {
         *self.fault.lock().unwrap() = Some(at);
     }
 }
 
 impl PassHooks for PassDoors {
-    /// Taken out under the lock and run outside it: what it is here to do
-    /// is unwind, and a guard held across that would poison the lock —
-    /// which the pass behind this one would then take, run, and unwind
-    /// through in turn.
+    /// Taken out under the lock and run outside it, as the trait requires.
     fn before(&self, at: PassStep) {
         let run = {
             let mut left = self.step.lock().unwrap();
@@ -454,9 +383,7 @@ impl PassHooks for PassDoors {
 /// Whether the session said this write came to rest on a stop
 /// ([`SessionEvent::WriteStopped`]).
 ///
-/// Read after [`write_result`], which is what does the waiting: the stop
-/// is published between the write's start and its answer, so by the time
-/// the answer has arrived this is settled.
+/// Read after [`write_result`]: the stop is published before the answer.
 pub fn write_stopped(sink: &CaptureSink, kind: OperationKind) -> bool {
     sink.events
         .lock()
@@ -466,9 +393,8 @@ pub fn write_stopped(sink: &CaptureSink, kind: OperationKind) -> bool {
 }
 
 /// Waits for the first write of `kind` to finish and returns git's error,
-/// if any. By kind, for a test that made one write of it; a test whose
-/// writes look alike waits by the id the session handed back
-/// ([`write_answer`]).
+/// if any — for a test that made one write of it; writes that look alike
+/// wait by id ([`write_answer`]).
 pub async fn write_result(sink: &CaptureSink, kind: OperationKind) -> Option<String> {
     sink.wait_for(kind.label(), |evs| {
         evs.iter().find_map(|e| match e {
@@ -482,8 +408,7 @@ pub async fn write_result(sink: &CaptureSink, kind: OperationKind) -> Option<Str
 }
 
 /// Waits for the write accepted under `id` to finish and returns git's
-/// error, if any — found by the id the acceptance handed back, whatever
-/// else answered before or after it.
+/// error, if any.
 pub async fn write_answer(sink: &CaptureSink, id: OperationId) -> Option<String> {
     sink.wait_for("the write's own answer", |evs| {
         evs.iter().find_map(|e| match e {
@@ -510,22 +435,15 @@ pub async fn write_settled(sink: &CaptureSink, id: OperationId) -> Vec<FollowUp>
 }
 
 /// Puts the todo-editor helper where the session looks for it — beside the
-/// running executable, which for a test is the test binary's own directory.
-/// Packaging carries the same obligation for the application.
+/// running executable, here the test binary's directory.
 ///
-/// Once per process, and the file is published by `rename`. Both
-/// halves are about the same thing: on Linux a file somebody holds
-/// open for writing cannot be executed at all (`ETXTBSY`), and all
-/// five replaying tests call this and then hand the path to git.
-/// Copying straight onto it put one test's write fd under another's
-/// exec — `pgg-todo-editor: Text file busy`, reported by the `sh`
-/// git runs `GIT_SEQUENCE_EDITOR` through, on 6 runs out of 8 with a thread
-/// per core (measured, 24 cores; 規約 §テストが差し込む実行ファイルは rename で置く).
+/// Once per process and published by `rename`: copying straight onto the
+/// path puts one test's write fd under another's exec (`ETXTBSY` on Linux
+/// — rules-refs/core.md「テストが差し込む実行ファイルは rename で置く」).
 pub fn install_todo_editor() {
     static INSTALLED: std::sync::Once = std::sync::Once::new();
-    // Every caller waits for the one copy, so no test reaches git while it
-    // is in flight; the rename covers the rest — another process sharing
-    // this `target/` never sees a partly-written helper either.
+    // Every caller waits for the one copy; the rename covers other
+    // processes sharing this `target/`.
     INSTALLED.call_once(|| {
         let built = std::path::PathBuf::from(env!("CARGO_BIN_EXE_pgg-todo-editor"));
         let Some(dir) = std::env::current_exe()
@@ -534,9 +452,8 @@ pub fn install_todo_editor() {
         else {
             return;
         };
-        // A refused install must fail here, by name — swallowing it would
-        // run whatever helper is already there under this build's
-        // assertions, and the tests would fail somewhere unrelated later.
+        // A refused install fails here, by name, not as an unrelated
+        // failure later (`publish_helper`).
         publish_helper(&built, &dir).expect("publish the todo editor beside the test binary");
     });
 }
@@ -557,19 +474,15 @@ pub fn publish_helper(
     if beside == built {
         return Ok(beside);
     }
-    // One staging name per process is enough: `INSTALLED` means one copy
-    // runs at a time, and a second process gets a name of its own.
+    // One staging name per process: `INSTALLED` runs one copy at a time.
     let staged = dir.join(format!("{name}.{}.staged", std::process::id()));
     let published = std::fs::copy(built, &staged).and_then(|_| std::fs::rename(&staged, &beside));
     if let Err(error) = published {
-        // Windows locks a running executable, so the rename can lose to a
-        // helper another run left behind. One holding this build's bytes
-        // will do; anything else would run yesterday's helper under
-        // today's assertions, and stopping here is what keeps that from
-        // surfacing as an unrelated failure later. (A running exe stays
-        // readable on Windows — only writing and renaming are refused.)
-        // The refusal names its own condition: the raw rename error alone
-        // reads as an unrelated permission problem.
+        // Windows locks a running executable (still readable), so the
+        // rename can lose to a helper another run left behind. Only one
+        // holding this build's bytes will do. The refusal names its
+        // condition: the raw rename error reads as an unrelated permission
+        // problem.
         let _ = std::fs::remove_file(&staged);
         let refused = match (std::fs::read(built), std::fs::read(&beside)) {
             (Ok(want), Ok(have)) if have == want => None,

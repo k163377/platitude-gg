@@ -1,14 +1,10 @@
 //! Latest-request ownership for the reads that answer one question at a
 //! time: a new ask cancels the one still out.
 //!
-//! Two shapes of consumer. The commit details and the rebase plan pick
-//! their answer by a number taken beside the token
-//! ([`Latest::begin_numbered`]), because the answer they show is whichever
-//! arrived under the largest number. The reads addressed by what they were
-//! asked about — the commit whose signature, the branch whose remote
-//! reading, the HEAD whose off-window mark — already tell a late answer
-//! apart, and all the session has to do is stop spending a process on it
-//! ([`Latest::begin`]).
+//! Consumers that pick their answer by number (details, rebase plan) use
+//! [`Latest::begin_numbered`]. Reads addressed by what they asked about
+//! already tell a late answer apart and use [`Latest::begin`], which only
+//! stops spending a process on it.
 
 use super::*;
 
@@ -18,10 +14,9 @@ pub(super) struct Latest {
 }
 
 impl Latest {
-    /// A token for the ask about to go out, with whatever ask held the
-    /// slot before it cancelled. Called before the task is spawned, so the
-    /// order is the order the asks were made, whichever turn they
-    /// are scheduled in.
+    /// A token for the ask about to go out, cancelling the one before it.
+    /// Call before spawning the task, so the order is the order the asks
+    /// were made.
     pub(super) fn begin(&self, parent: &CancellationToken) -> CancellationToken {
         let cancel = parent.child_token();
         if let Some(previous) = relock(&self.cancel).replace(cancel.clone()) {
@@ -30,10 +25,10 @@ impl Latest {
         cancel
     }
 
-    /// [`Self::begin`] with a number for the ask off `counter`, taken
-    /// under the same lock as the slot: of two asks racing here, the
-    /// larger number outlives the smaller, else the consumer picking
-    /// by number waits on an answer that was cancelled.
+    /// [`Self::begin`] with a number off `counter`, taken under the slot's
+    /// lock so of two racing asks the larger number is the one left
+    /// running — else the consumer picking by number waits on a cancelled
+    /// answer.
     pub(super) fn begin_numbered(
         &self,
         parent: &CancellationToken,

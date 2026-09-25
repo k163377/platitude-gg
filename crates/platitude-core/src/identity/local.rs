@@ -1,36 +1,23 @@
-//! The identity one repository sets for itself.
+//! The identity one repository sets for itself, written to and read back
+//! from that repository's own configuration file — git's copy, not a
+//! second one (実装計画.md §7「設定はマシン単位で持つ」).
 //!
-//! git already keeps this per repository, so nothing here is a second
-//! copy of it (実装計画.md §設定はマシン単位で持つ): a name or an
-//! address written through this module goes into that repository's own
-//! configuration file and is read back out of the same one.
-//!
-//! **Empty means "not written here"**, and the two keys are independent —
-//! which is the whole errand. The common case is one address for work and
-//! the name unchanged, so a repository overrides one key and inherits the
-//! other, and the screen has to be able to say both.
+//! Empty means "not written here", and the two keys are independent: the
+//! common case overrides the address and inherits the name.
 
 use super::*;
 
-/// Keys this level is asked about.
-///
-/// The signing keys are not among them: what a repository overrides is
-/// whom its commits are from, and a key that cannot be edited here has no
-/// business arriving as though it could.
+/// Keys this level is asked about — not the signing keys, which cannot be
+/// edited here.
 const LOCAL_PATTERN: &str = r"^user\.(name|email)$";
 
-/// What this repository's own configuration file sets, and nothing else.
+/// What this repository's own configuration file sets, and nothing else —
+/// not [`load`], where an inherited value looks exactly like one written
+/// here (rules-refs/core.md「`--local` でしか読めない」).
 ///
-/// Not [`load`], which answers with what git would use here: a value that
-/// is only inherited from the user's own file arrives there spelled
-/// exactly like one this repository wrote down, and telling those two
-/// apart is the question this module exists to answer.
-///
-/// A key written with an empty value reads as unset, the same as
-/// everywhere else the identity is parsed. git does not treat the two
-/// alike — an empty `user.email` puts `<>` on the author line — but
-/// nothing in this app can write that, and a box that showed it would
-/// be a box whose empty state meant two different things.
+/// A key written with an empty value reads as unset. git would put `<>`
+/// on the author line for an empty `user.email`, but this app never
+/// writes one, and an empty box must mean one thing.
 pub async fn load_local(
     executor: &GitExecutor,
     workdir: &Path,
@@ -48,19 +35,13 @@ pub async fn load_local(
     Ok(parse_config(&out).identity)
 }
 
-/// Records `user.name` / `user.email` in this repository's own file,
-/// where **an empty value asks for the key to be taken
-/// out**.
+/// Records `user.name` / `user.email` in this repository's own file; an
+/// empty value takes the key out. Answers what that file holds afterwards
+/// ([`load_local`]), not what git would use.
 ///
-/// What comes back is what that file holds afterwards ([`load_local`]),
-/// not what git would use — the question the screen asked was which of
-/// the two keys this repository sets for itself, and the answer to that
-/// cannot be read at the effective level.
-///
-/// Contention is settled the way [`set_identity`] settles it, and for the
-/// same reason: two keys are two invocations, the lock is taken and
-/// released per invocation, so the write reads itself back and goes again
-/// once when what came out is not what was asked for.
+/// Contention is settled as in [`set_identity`]: two keys are two
+/// invocations, so the write reads itself back and goes again once when
+/// it differs.
 pub async fn set_local_identity(
     executor: &GitExecutor,
     workdir: &Path,
@@ -78,21 +59,12 @@ pub async fn set_local_identity(
 }
 
 /// Which of the two keys a pass has to touch, and with what — the whole
-/// of the decision, with no git in it.
+/// of the decision, with no git in it, so its combinations are unit tests.
 ///
-/// **What the file already says is read first**, and a key that already
-/// says it is left alone. Not an optimisation: `git config --unset` fails
-/// when there was nothing to unset, and it fails with the *same* exit code
-/// as its refusal to touch a key written more than once (measured git 2.55:
-/// both are 5). Asking first is what keeps those two apart — after it, a
-/// failed unset is a real one and is reported as such.
-///
-/// Separate from the pass that runs it because the combinations are
-/// where the rule lives — two keys, each of them held or not and wanted
-/// or not — and every one of them costs a repository and up to three git
-/// processes to ask through. What the pass around it still owes a real
-/// git is the other half: that this list is what actually goes out, and
-/// what happens when one of them is refused.
+/// A key the file already holds as wanted is left alone. Not an
+/// optimisation: `--unset` of an absent key exits 5 like a refused
+/// multi-valued one, so only after this filter is a failed unset real
+/// (rules-refs/core.md「今の値を先に読んで、違うキーだけ撃つ」).
 fn keys_to_write<'a>(
     held: &Identity,
     name: &'a str,
@@ -120,9 +92,8 @@ async fn write_local_pair(
     let held = load_local(executor, workdir, cancel).await?;
     let mut message = String::new();
     for (key, wanted) in keys_to_write(&held, name, email) {
-        // Stops at the first that fails, the way the global write does:
-        // the second would be writing into a file this pass has just been
-        // told it cannot change.
+        // Stops at the first that fails: the second would write into a
+        // file this pass was just told it cannot change.
         if let Err(e) = write_local_key(executor, workdir, key, wanted, cancel).await {
             // Shutting down is not a write that failed; it is no write.
             if e.is_cancelled() {
@@ -141,13 +112,9 @@ async fn write_local_pair(
     })
 }
 
-/// One key, written or taken out.
-///
-/// `--local` is spelled out on both, though git already writes there by
-/// default (measured git 2.55: a bare `--unset` of a key held only in the
-/// user's own file exits 5 and leaves that file alone). The level a value
-/// is read back from and the level it is written at are then named by the
-/// same word, which is what stops the two from drifting apart later.
+/// One key, written or taken out. `--local` is spelled out though it is
+/// git's default, so the level read back and the level written are named
+/// by the same word.
 async fn write_local_key(
     executor: &GitExecutor,
     workdir: &Path,
@@ -159,8 +126,7 @@ async fn write_local_key(
     let cmd = if value.is_empty() {
         cmd.args(["config", "--local", "--unset", key])
     } else {
-        // No `--` separator: `git config <key> -- <value>` stores "--" as
-        // the value (the trap `set_identity` documents).
+        // No `--`: git would store it as the value (see `set_identity`).
         cmd.args(["config", "--local", key, value])
     };
     executor.run(cmd, cancel).await.map(drop)
@@ -170,8 +136,8 @@ async fn write_local_key(
 mod tests {
     use super::{Identity, keys_to_write};
 
-    /// What one repository's own file holds, in the shape the read hands
-    /// back: an absent key is a key nobody wrote here.
+    /// What one repository's own file holds; `None` is a key nobody wrote
+    /// here.
     fn held(name: Option<&str>, email: Option<&str>) -> Identity {
         Identity {
             name: name.map(str::to_string),
@@ -180,10 +146,8 @@ mod tests {
     }
 
     /// A save that asks for what the file already says asks git for
-    /// nothing. Both halves of it: a value that matches, and the blank
-    /// box over a key nobody wrote — the second is the one that would
-    /// otherwise reach a `--unset` git refuses, with the exit code it
-    /// refuses a twice-written key with.
+    /// nothing — including a blank box over a key nobody wrote, which
+    /// would otherwise reach a failing `--unset`.
     #[test]
     fn a_save_that_changes_nothing_writes_nothing() {
         assert!(
@@ -201,10 +165,8 @@ mod tests {
         );
     }
 
-    /// One key at a time, which is the errand the whole level exists for:
-    /// another address for this project under the name the person already
-    /// goes by. The other key is not touched — not written, and not taken
-    /// out either.
+    /// One key at a time, the errand this level exists for; the other key
+    /// is neither written nor taken out.
     #[test]
     fn one_key_moves_without_the_other() {
         assert_eq!(

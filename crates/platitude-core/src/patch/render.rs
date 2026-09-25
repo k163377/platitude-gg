@@ -1,19 +1,16 @@
-//! Writing one hunk out again: which of its lines go, what each of them
-//! costs the two sides, and the header that has to add up afterwards.
+//! Writing one hunk out again, and the header that has to add up afterwards.
 //!
 //! Recounting follows git's own partial-staging rule: a forward patch keeps
-//! every old-side line (an unselected deletion becomes context), so its
-//! `old` range is unchanged and only the `new` range is recomputed. The
-//! reverse case (unstaging, applied with `git apply -R`) is the mirror
-//! image.
+//! every old-side line (an unselected deletion becomes context), so only
+//! the `new` range is recomputed; the reverse case (`git apply -R`) is the
+//! mirror image.
 
 use std::borrow::Cow;
 
 use super::{Body, HunkSelect, PatchSide, RawHunk, classify, push_line};
 
-/// A body line of the source hunk with the `\ No newline` marker that
-/// followed it. The marker describes the line above it, so it travels with
-/// that line.
+/// A body line of the source hunk, carrying the `\ No newline` marker that
+/// followed it (the marker describes the line above it).
 struct SourceLine<'a> {
     bytes: &'a [u8],
     kind: Body,
@@ -32,16 +29,15 @@ struct Emitted<'a> {
     marker: Option<&'a [u8]>,
 }
 
-/// Reads a hunk body into indexed lines, folding each `\ No newline` marker
-/// into the line it describes. Marker lines still consume an index so that
-/// selections stay aligned with [`crate::parse::diff`].
+/// Marker lines are folded into the line above but still consume an index,
+/// so selections stay aligned with [`crate::parse::diff`].
 fn source_lines<'a>(hunk: &RawHunk<'a>, select: &HunkSelect) -> Vec<SourceLine<'a>> {
     let mut out: Vec<SourceLine<'a>> = Vec::new();
     let mut index = 0usize;
     for &line in &hunk.body {
         let Some(kind) = classify(line) else {
-            // Unclassifiable lines are skipped by the parser too, so the
-            // index stays aligned by not counting them.
+            // The parser skips these too; not counting them keeps the
+            // index aligned.
             continue;
         };
         let this = index;
@@ -87,21 +83,19 @@ fn demote_line<'a>(src: &SourceLine<'a>) -> Emitted<'a> {
 
 /// Emits one run of changed lines.
 ///
-/// The side being applied to owns the lines that survive unselected: a
-/// forward patch keeps every old-side line (an unselected deletion becomes
-/// context), a reverse patch keeps every new-side line. A kept line now
-/// belongs to both sides, so where it sits decides the order of the result
-/// — left in the source's own place it would sort ahead of the lines that
-/// replace the lines above it. Pairing each selected kept line with a
-/// selected counterpart puts it back where the reader expects it.
+/// An unselected line of the applied side's kind (`kept`) is demoted to
+/// context and belongs to both sides; left in the source's place it would
+/// sort ahead of the lines replacing the ones above it. Pairing each
+/// selected `kept` line with a selected counterpart puts it back where the
+/// reader expects it.
 fn render_block<'a>(block: &[SourceLine<'a>], side: PatchSide, out: &mut Vec<Emitted<'a>>) {
     let (kept, counterpart) = match side {
         PatchSide::Forward => (Body::Deletion, Body::Addition),
         PatchSide::Reverse => (Body::Addition, Body::Deletion),
     };
 
-    // With nothing demoted, every line keeps its marker byte and the source
-    // order already holds, so the run goes out byte for byte.
+    // Nothing demoted: the source order holds, so the run goes out byte for
+    // byte.
     if !block.iter().any(|l| l.kind == kept && !l.selected) {
         out.extend(block.iter().filter(|l| l.selected).map(keep_line));
         return;
@@ -121,8 +115,7 @@ fn render_block<'a>(block: &[SourceLine<'a>], side: PatchSide, out: &mut Vec<Emi
             body.push(demote_line(line));
             continue;
         }
-        // One counterpart per selected line, and whatever is left over on
-        // the last of them.
+        // One counterpart per selected line; the last takes the rest.
         let take = if Some(i) == last_selected {
             mates.len() - taken
         } else {
@@ -146,8 +139,7 @@ fn render_block<'a>(block: &[SourceLine<'a>], side: PatchSide, out: &mut Vec<Emi
     }
 
     if last_selected.is_none() {
-        // Nothing to pair with: the counterparts keep the source's own
-        // order against the run.
+        // Nothing to pair with: the counterparts keep the source's order.
         let rest = mates.iter().copied().map(keep_line);
         match side {
             PatchSide::Forward => {
@@ -201,10 +193,9 @@ pub(super) fn render_hunk(
         old_count += u32::from(line.old);
         new_count += u32::from(line.new);
         changes += usize::from(line.changed);
-        // The marker describes the line above it. It holds on a line
-        // written with its original marker byte, and on a demoted line only
-        // while nothing follows: a line after it would contradict the claim
-        // that the content ends here.
+        // The marker holds on a verbatim line, and on a demoted one only
+        // while nothing follows: a line after it would contradict "the
+        // content ends here".
         if let Some(marker) = line.marker
             && (line.verbatim || i == last)
         {
@@ -216,8 +207,6 @@ pub(super) fn render_hunk(
         return None;
     }
 
-    // The side the patch is applied to keeps its original numbering; the
-    // other side is renumbered against the hunks actually emitted.
     let (old_start, new_start) = match side {
         PatchSide::Forward => (old_start, (old_start as i64 + *offset).max(0) as u32),
         PatchSide::Reverse => ((new_start as i64 + *offset).max(0) as u32, new_start),

@@ -9,7 +9,7 @@ use crate::oid::Oid;
 use super::{GRAPH_PALETTE_SIZE, GraphRow, Segment, SegmentKind};
 
 /// Occupied-lane state. The id a lane waits for lives only in
-/// [`GraphBuilder::expects`] (single source of truth).
+/// [`GraphBuilder::expects`].
 #[derive(Debug, Clone)]
 struct LaneState {
     color: u8,
@@ -26,14 +26,9 @@ pub struct GraphBuilder {
     expects: HashMap<Oid, Vec<u16>>,
     /// Emitted commit id → row index (also serves the out-of-order guard).
     ///
-    /// **Commits only** — a synthetic row is not filed here, and hands in
-    /// no id to be filed under. Its id is the all-zero one, which is
-    /// git's own spelling for "there is no object here": an id that says
-    /// a row has none is no address, and more than one row may honestly
-    /// carry it. Neither reader asks for one — the guard is only ever
-    /// asked about a *parent*, and a synthetic row is nobody's parent
-    /// (its edges are leashes), while `row_of` is asked about the commits
-    /// a ref points at.
+    /// Commits only: a synthetic row's all-zero id is no address — more
+    /// than one row may carry it — and neither reader asks for one (the
+    /// guard asks about parents, `row_of` about ref targets).
     rows: HashMap<Oid, u32>,
     next_row: u32,
     next_color: u32,
@@ -90,14 +85,9 @@ impl GraphBuilder {
         self.push_ids(&commit.oid, &commit.parents, dashed_edge)
     }
 
-    /// The same row from the two things the lanes are actually made of:
-    /// the commit's id and its parents'.
-    ///
-    /// **What lets a graph be laid out again without asking git.** A row
-    /// already drawn carries both (`LogRow::parents`), so a pass that
-    /// walked with one answer about the synthetic rows can be laid out
-    /// again with another — no process, and no metadata kept beyond what
-    /// the rows already hold (`session::relay`).
+    /// The same row from what the lanes are made of: the commit's id and
+    /// its parents'. A drawn row carries both (`LogRow::parents`), so a
+    /// graph can be laid out again without asking git (`session::relay`).
     pub fn push_ids(&mut self, oid: &Oid, parents: &[Oid], dashed_edge: bool) -> GraphRow {
         let row = self.next_row;
         self.next_row += 1;
@@ -232,33 +222,23 @@ impl GraphBuilder {
         }
     }
 
-    /// Like [`GraphBuilder::push_virtual`], but the row also reaches the
+    /// Like [`GraphBuilder::push_virtual`], but the row also leashes the
     /// sides a standing merge is bringing in (`MERGE_HEAD` — more than
-    /// one of them for an octopus).
+    /// one for an octopus): the fork the commit will have.
     ///
-    /// The commit this row is about to become has those parents, so the
-    /// row draws them: the same fork the graph will show once it is
-    /// committed, on leashes, because nothing here is a commit yet.
-    ///
-    /// Same feeding rule as [`GraphBuilder::push_virtual`] — first, before
-    /// any real commit — so HEAD keeps lane 0 and each incoming side takes
-    /// the lane beside it that its own tip will arrive on.
+    /// Same feeding rule as [`GraphBuilder::push_virtual`], so HEAD keeps
+    /// lane 0 and each incoming side takes the lane its own tip will
+    /// arrive on.
     pub fn push_virtual_merging(&mut self, parent: &Oid, incoming: &[Oid]) -> GraphRow {
         let row = self.next_row;
         self.next_row += 1;
         let lane = self.find_free_lane();
-        // **A row drawn here may not spend a palette slot that reaches
-        // nobody.** Where a lane is already waiting for the commit this
-        // one leashes to — another copy standing where this window
-        // stands, a stash taken on the same commit — the commit comes out
-        // in that lane's colour whatever this row takes, so a fresh one
-        // would be handed to no chain at all and move every chain opened
-        // after it one step along the palette (`take_color` is a round
-        // robin). Measured against the demo's own shape: a second row on
-        // HEAD moved two chains under it (`leash_tests`). Where nothing
-        // waits yet, the commit is a tip and this row is taking the
-        // colour that tip would have taken, which is what it then
-        // inherits — the shape this window's own row has always had.
+        // Where a lane already waits for `parent` (another copy's row, a
+        // stash on the same commit), the commit comes out in that lane's
+        // colour anyway: a fresh one from the round robin would reach no
+        // chain and shift every later chain along the palette
+        // (`leash_tests`). Where nothing waits, this row takes the colour
+        // the tip would have, and the tip inherits it.
         let color = match self.color_waiting_for(parent) {
             Some(borrowed) => borrowed,
             None => self.take_color(),
@@ -323,12 +303,9 @@ impl GraphBuilder {
     /// Lane a fork edge to `parent` merges into: the lane already waiting
     /// for it that sits nearest to `near` (ties prefer the left side).
     ///
-    /// A real edge passing a leash lane opens its own, and both arrive at
-    /// the parent as separate curves. Sharing the leash lane would draw
-    /// solid over its whole run down to the shared parent, leaving the
-    /// stash (or WIP) hanging from a line that reads as committed — which
-    /// is what happens whenever the stash's base is also a merge's second
-    /// parent.
+    /// Leash lanes are skipped: sharing one would draw it solid down to
+    /// the parent, leaving the stash (or WIP) hanging from a line that
+    /// reads as committed.
     fn waiting_lane(&self, parent: &Oid, near: u16) -> Option<u16> {
         self.expects
             .get(parent)?
@@ -338,14 +315,8 @@ impl GraphBuilder {
             .copied()
     }
 
-    /// Whether a lane carries a synthetic leash.
-    /// The colour the commit a row lands on will come out in, where a
-    /// lane is already waiting for that commit.
-    ///
-    /// A commit takes the lowest lane that was waiting for it
-    /// ([`Self::push_with_edge_style`]), so that lane's colour is the one
-    /// it will be drawn in — and a leash that borrows it is drawn
-    /// beside its own chain.
+    /// The colour `parent` will be drawn in, where a lane already waits for
+    /// it: a commit takes the lowest waiting lane ([`Self::push_ids`]).
     fn color_waiting_for(&self, parent: &Oid) -> Option<u8> {
         let lane = self.expects.get(parent)?.iter().min()?;
         Some(self.lane_color(*lane))
@@ -373,9 +344,8 @@ impl GraphBuilder {
     }
 
     /// Free lane nearest to `near` (ties prefer the left side); appending
-    /// a rightmost lane competes under the same distance rule. Keeping a
-    /// fork's target lane close to its node shortens the horizontal run,
-    /// which is the main source of avoidable edge crossings.
+    /// a rightmost lane competes under the same distance rule. A short
+    /// horizontal run avoids edge crossings.
     fn find_free_lane_near(&self, near: u16) -> u16 {
         let mut best: Option<(u16, u16)> = None; // (distance, lane)
         for (i, s) in self.lanes.iter().enumerate() {

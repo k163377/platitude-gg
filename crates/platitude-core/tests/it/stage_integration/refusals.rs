@@ -1,10 +1,8 @@
 //! What staging refuses once git has been asked: vanished selections,
 //! stale fingerprints, a conflicted file's combined diff.
 //!
-//! The targets that never reach git at all — a diff of history, a side
-//! with no working tree of its own — are refused off the target alone,
-//! and are pinned where that decision is made (`stage::partial`), with
-//! no repository to build.
+//! Targets refused off the target alone (a diff of history, a side with
+//! no working tree) are pinned where that is decided (`stage::partial`).
 
 use crate::support::exec::env;
 use crate::support::stage::{buckets, fp};
@@ -15,8 +13,7 @@ use platitude_core::report::ReportKind;
 use platitude_core::{stage, status};
 
 /// A fresh `git init` has no HEAD and an empty index; emptying that index
-/// is a no-op (measured, without --ignore-unmatch,
-/// `git rm --cached -r -- .` exits 128 on "did not match any files").
+/// is a no-op (without `--ignore-unmatch`, `git rm --cached -r -- .` exits 128).
 #[tokio::test]
 async fn unstage_all_on_an_unborn_empty_index_succeeds() {
     let repo = TestRepo::init();
@@ -27,9 +24,8 @@ async fn unstage_all_on_an_unborn_empty_index_succeeds() {
 }
 
 /// A selection that indexes a diff the file no longer produces is a
-/// refusal: the graph refresh after a "successful" no-op would show
-/// the user nothing happened, with no words saying
-/// why.
+/// refusal: a "successful" no-op would show nothing happened, with no
+/// words saying why.
 #[tokio::test]
 async fn a_vanished_selection_is_an_error_not_a_silent_success() {
     let mut repo = TestRepo::init();
@@ -97,11 +93,9 @@ async fn a_failed_untracked_partial_stage_leaves_the_file_untracked() {
     assert_eq!(untracked, vec!["new.txt"], "back in the untracked bucket");
 }
 /// A selection carried from an older diff is refused once the file
-/// changes: the fingerprint the UI saw no longer matches the re-run
-/// bytes — on both the staging and the discarding side. This is the
-/// formatter-on-save case: the file moves on after the diff was read
-/// but before the queued write runs, and positional indices would land
-/// on the wrong hunk.
+/// changes, on both the staging and the discarding side: a formatter on
+/// save moves the file before the queued write runs, and positional
+/// indices would land on the wrong hunk.
 #[tokio::test]
 async fn a_selection_from_a_stale_diff_is_refused() {
     let mut repo = TestRepo::init();
@@ -126,8 +120,8 @@ async fn a_selection_from_a_stale_diff_is_refused() {
     )
     .await
     .expect_err("stale fingerprint is refused");
-    // **The direction is what the heading turns on**, so it is what the
-    // refusal has to carry: this one was staging (デザイン規約 §答えの要らない報せ).
+    // The heading turns on the direction, so the refusal carries it
+    // (デザイン規約 §答えの要らない報せ).
     assert_eq!(
         err.report().map(|r| r.kind),
         Some(ReportKind::StaleStage),
@@ -158,8 +152,7 @@ async fn a_selection_from_a_stale_diff_is_refused() {
     assert!(staged.is_empty(), "nothing was staged: {staged:?}");
     assert_eq!(unstaged, vec!["a.txt"], "nothing was discarded");
 
-    // And the other direction: a part taken off the staged side is being
-    // unstaged, which is a third thing not happening.
+    // Off the staged side, the refusal is an unstage.
     repo.git(&["add", "--", "a.txt"]);
     let staged_side = DiffTarget::Staged {
         path: "a.txt".into(),
@@ -225,10 +218,8 @@ async fn a_stale_untracked_selection_is_refused_before_the_mark() {
 }
 
 /// A conflicted file's diff is the combined form, which has no single old
-/// side for a rebuilt patch to sit on — `git apply` refuses the shape
-/// outright. The pane withholds the pieces there, so nothing should ask;
-/// this is the floor under that, and it says so in this app's own
-/// words.
+/// side for a rebuilt patch (`git apply` refuses it). The pane withholds
+/// the pieces there; this is the floor under that, in this app's words.
 #[tokio::test]
 async fn no_part_of_a_conflicted_file_can_be_taken_or_thrown_away() {
     let mut repo = TestRepo::init();
@@ -280,7 +271,6 @@ async fn no_part_of_a_conflicted_file_can_be_taken_or_thrown_away() {
         "{err}"
     );
 
-    // Refused: the path is still exactly as git left it.
     let s = status::load(&exec, &repo.path, &cancel)
         .await
         .expect("status");

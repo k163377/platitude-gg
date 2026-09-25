@@ -17,10 +17,9 @@ async fn open_streams_the_full_pipeline() {
     })
     .await;
 
-    // Root + side + main + merge + stash row, in whichever shape the
-    // passes landed them — `replay_rows` keeps the generation rules, so
-    // a superseded pass's rows cannot bleed into the tally. The stash
-    // (newest child of the merge) leads, the head commit right under it.
+    // Root + side + main + merge + stash row; `replay_rows` keeps a
+    // superseded pass's rows out of the tally. The stash (newest child of
+    // the merge) leads.
     let rows = sink
         .wait_for("all five rows", |evs| {
             let rows = crate::support::replay_rows(evs);
@@ -38,8 +37,7 @@ async fn open_streams_the_full_pipeline() {
     assert!(rows.values().all(|r| !r.subject.is_empty()));
     assert!(rows.values().all(|r| r.author == "Test User"));
 
-    // Labels: the head row must end up carrying main (+ v1 tag), either
-    // inline or via a LabelsChanged update.
+    // The head row ends up carrying main + v1, inline or via `LabelsChanged`.
     sink.wait_for("labels on head row", |evs| {
         let seen = crate::support::replay_graph(evs);
         let latest: Vec<&str> = seen
@@ -98,13 +96,9 @@ async fn restart_log_delivers_a_new_generation() {
     let (repo, _) = scenario();
     let (sink, session) = open_unawaited(&repo);
 
-    // The restart must answer for itself, so the opening settles first:
-    // an opening rebuild still in flight could supersede the restarted
-    // stream without a word (nothing changed) — hanging the wait — or
-    // land its own pass where the restart's is expected, passing the
-    // test with the restart broken. After the baseline, nothing else can
-    // take the log token, and the restart's first pass is a direct
-    // stream that always speaks.
+    // The opening settles first: a rebuild of it still in flight could
+    // silently supersede the restart (hanging the wait) or land its pass in
+    // the restart's place (passing with the restart broken).
     let first_gen = sink.opened_graph(&session, 5).await.generation;
 
     session.restart_log();
@@ -112,8 +106,7 @@ async fn restart_log_delivers_a_new_generation() {
     let second = sink.pass_after("the restarted pass", first_gen).await;
     let second_gen = second.generation;
 
-    // The restarted pass re-delivers all rows under the new generation
-    // (4 commits + the stash row), in whichever shape carried it.
+    // All rows again under the new generation (4 commits + the stash row).
     sink.wait_for("second-generation rows", move |evs| {
         let count: usize = evs
             .iter()
@@ -154,15 +147,9 @@ async fn unborn_repository_finishes_with_zero_rows() {
     session.close();
 }
 
-/// A `gh-pages`-shaped ref: a parentless commit that only a
-/// remote-tracking ref names, sharing no history with anything else.
-///
-/// The walk offers it either way — `--remotes` names it — but the row it
-/// lands on is the whole point. `--topo-order` refuses to intermix
-/// independent lines of history, so it emits every commit of the main
-/// chain before starting this one and the newest commit in the repository
-/// arrives dead last. `--date-order` keeps the same parents-after-children
-/// guarantee the graph builder needs and puts it where its timestamp says.
+/// A `gh-pages`-shaped ref: a parentless commit only a remote-tracking ref
+/// names. `--topo-order` would emit the whole main chain before it, burying
+/// it at the bottom; `--date-order` puts it where its date says.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_independent_history_sits_where_its_date_puts_it() {
     let mut repo = TestRepo::init();
@@ -176,24 +163,21 @@ async fn an_independent_history_sits_where_its_date_puts_it() {
     repo.git(&["add", "index.html"]);
     repo.git(&["commit", "-m", "docs: api documentation"]);
     let orphan = repo.git(&["rev-parse", "HEAD"]);
-    // Only the remote-tracking ref keeps it: no local branch, and nothing
-    // reaches it from HEAD.
+    // Only the remote-tracking ref keeps it.
     repo.git(&["update-ref", "refs/remotes/origin/gh-pages", &orphan]);
     repo.git(&["checkout", "-f", "main"]);
     repo.git(&["branch", "-D", "gh-pages"]);
     repo.git(&["clean", "-fd"]);
-    // One more on main *after* the orphan: it is now neither the newest
-    // commit nor the oldest, which is what buries it. A tip that is newest
-    // of all gets emitted first under either ordering, so a repository
-    // shaped that way proves nothing.
+    // One more on main after the orphan: a newest-of-all tip comes first
+    // under either ordering and proves nothing.
     repo.commit_file("f.txt", "3\n", "fourth");
 
     let (sink, session) = open_unawaited(&repo);
     let pass = sink.pass_after("the opening pass", 0).await;
     assert_eq!(pass.total, 5, "four on main plus the orphan");
 
-    // Chips are what make a row unreachable from every branch findable at
-    // all, so the row number and the chip are asserted together.
+    // The chip is what makes a row no branch reaches findable, so the row
+    // number and the chip are asserted together.
     let seen = sink
         .wait_for("its chip", |evs| {
             let rows = crate::support::replay_graph(evs);
@@ -216,12 +200,10 @@ async fn an_independent_history_sits_where_its_date_puts_it() {
     session.close();
 }
 
-/// A working copy standing on no branch, with a commit made in it. **The
-/// walk cannot find that commit on its own**: `git log` reads the HEAD of
-/// the tree it is run in and no other, and no branch, tag or remote
-/// points here — so the row is in the graph only because the worktree
-/// read names it (`note_worktree_holders` → `walk_command`), and the chip
-/// on it is the only thing that says whose it is (デザイン規約 §ref の種別).
+/// A commit made in a detached working copy: `git log` reads only its own
+/// tree's HEAD and no ref points here, so the row exists only because the
+/// worktree read names it (`note_worktree_holders` → `walk_command`), and
+/// its chip is all that says whose it is (デザイン規約 §ref の種別).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_commit_only_a_detached_copy_holds_is_a_row_with_its_own_chip() {
     let mut repo = TestRepo::init();
@@ -235,9 +217,8 @@ async fn a_commit_only_a_detached_copy_holds_is_a_row_with_its_own_chip() {
     let only_theirs = repo.git_in(&spike, &["rev-parse", "HEAD"]);
 
     let (sink, session) = open_unawaited(&repo);
-    // **The worktree read's walk is where this lands.** That read
-    // comes in behind the first walk, so what is being waited for is
-    // the walk it asked for.
+    // The worktree read comes in behind the first walk; this waits for the
+    // walk it asks for.
     let seen = sink
         .wait_for("the row the copy is standing on", |evs| {
             let rows = crate::support::replay_graph(evs);
@@ -264,11 +245,9 @@ async fn a_commit_only_a_detached_copy_holds_is_a_row_with_its_own_chip() {
     session.close();
 }
 
-/// A merge whose conflicts are all resolved as ours: `git status` comes
-/// back empty with `MERGE_HEAD` still standing, and committing there still
-/// writes a merge (measured, 2.55). The row is the commit about to be written,
-/// so a clean tree does not take it away — nothing else on screen would
-/// say the next commit has two parents.
+/// Conflicts all resolved as ours: `status` is empty with `MERGE_HEAD`
+/// standing, and committing still writes a merge — so the row stays on a
+/// clean tree; nothing else says the next commit has two parents.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_merge_resolved_as_ours_keeps_the_row_a_clean_tree_would_not() {
     let mut repo = crate::support::integrate::conflicting_branches();
@@ -313,11 +292,9 @@ async fn a_merge_resolved_as_ours_keeps_the_row_a_clean_tree_would_not() {
     session.close();
 }
 
-/// The same clean tree, with the side reachable by nothing but
-/// `MERGE_HEAD`. The walk starts there for one reason — the row above it
-/// has a dotted edge to land — so the two are one decision: whatever
-/// reaches the graph this way arrives leashed, with an edge from the
-/// row above it.
+/// The same clean tree, with the side reachable only by `MERGE_HEAD`: the
+/// walk starts there only for the row's dotted edge, so whatever arrives
+/// this way arrives leashed.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_side_only_merge_head_names_is_never_on_screen_unleashed() {
     let mut repo = crate::support::integrate::conflicting_branches();
@@ -350,11 +327,9 @@ async fn a_side_only_merge_head_names_is_never_on_screen_unleashed() {
     session.close();
 }
 
-/// A side no ref names — `git merge <sha>`, or the `FETCH_HEAD` of a
-/// one-off fetch — is still a parent of the commit being written, so the
-/// walk is told to start there. Nothing else would offer it, and a dotted
-/// edge to a commit the graph does not hold runs off the bottom of the
-/// window instead of landing.
+/// A side no ref names (`git merge <sha>`, a one-off fetch's `FETCH_HEAD`)
+/// is still a parent of the commit being written, so the walk starts there
+/// — or its dotted edge runs off the bottom of the window.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_side_no_ref_names_still_joins_the_walk() {
     let mut repo = crate::support::integrate::conflicting_branches();
@@ -384,15 +359,13 @@ async fn a_side_no_ref_names_still_joins_the_walk() {
     session.close();
 }
 
-/// Aborting the merge takes the second dotted edge away again — the row
-/// stands for whatever the next commit will be, and that is no longer a
-/// merge.
+/// Aborting the merge takes the second dotted edge away: the next commit is
+/// no longer a merge.
 #[tokio::test(flavor = "multi_thread")]
 async fn aborting_the_merge_takes_the_second_dotted_edge_away() {
     let mut repo = crate::support::integrate::conflicting_branches();
     repo.git_expect_failure(&["merge", "side"]);
-    // Something uncommitted has to outlive the abort, or the row it draws
-    // goes with the merge and there is nothing left to assert on.
+    // Something uncommitted outlives the abort, or the row goes with the merge.
     repo.write_file("untracked.txt", "keep\n");
 
     let (sink, session) = crate::support::session::opened(&repo).await;

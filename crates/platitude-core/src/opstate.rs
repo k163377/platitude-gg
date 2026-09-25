@@ -1,8 +1,6 @@
 //! Detection of in-progress repository operations (rebase / merge /
-//! cherry-pick / revert / bisect).
-//!
-//! Uses `git rev-parse --git-path <name>` to resolve marker paths (correct
-//! for worktrees and split git dirs) and checks their existence.
+//! cherry-pick / revert / bisect) by marker files, resolved with
+//! `rev-parse --git-path` (correct for worktrees and split git dirs).
 
 use std::path::Path;
 
@@ -40,14 +38,9 @@ impl OpState {
 /// Whether a cherry-pick / revert sequence still has commits left to
 /// replay.
 ///
-/// A different question from [`detect`]: the markers there say "an
-/// operation is standing here for someone to finish", while the todo
-/// list says "git has more commits to get through". They usually arrive
-/// together — but a revert that turns out to record nothing leaves the
-/// second without the first, because git refuses the commit it was
-/// about to write before any `REVERT_HEAD` exists, and the sequence
-/// stands there with its remaining steps (measured 2.55,
-/// `integrate_integration`).
+/// Not [`detect`]'s question: a revert that records nothing stops with
+/// its remaining steps before any `REVERT_HEAD` exists
+/// (`integrate_integration`).
 pub async fn sequence_pending(
     executor: &GitExecutor,
     workdir: &Path,
@@ -60,20 +53,14 @@ pub async fn sequence_pending(
     Ok(workdir.join(out.stdout_utf8().trim_end()).exists())
 }
 
-/// The commits a standing merge is bringing in, as `MERGE_HEAD` lists
-/// them — one id per line, so an octopus comes back with all of its
-/// sides.
+/// The commits a standing merge is bringing in, one per `MERGE_HEAD` line
+/// (an octopus has several).
 ///
-/// `None` when the file offered nothing to read: gone, unreadable, or
-/// holding no id this could parse. **A silence of its own**, where an
-/// empty list would say "the merge is over" — the read that failed
-/// once would drop the graph's dotted edges, and the next one put them
-/// back, walking the whole history twice over a file that never changed.
-/// A caller that cannot tell keeps what it had.
-///
-/// Only the ids: what the sides are *called* is [`crate::conflict::sides`],
-/// and the two are wanted in different places (a name goes in a sentence,
-/// an id joins the graph).
+/// `None` when the file offered nothing to read (gone, unreadable, no
+/// parseable id) — not an empty list, which would say "the merge is over"
+/// and make one failed read rebuild the graph twice. A caller that cannot
+/// tell keeps what it had. What the sides are *called* is
+/// [`crate::conflict::sides`].
 pub async fn merge_heads(
     executor: &GitExecutor,
     workdir: &Path,
@@ -88,16 +75,10 @@ pub async fn merge_heads(
     (!heads.is_empty()).then_some(heads)
 }
 
-/// Detects in-progress operations, without a process, for a caller that
-/// already knows where the git directory is.
-///
-/// [`detect`] spends a `rev-parse` on resolving the marker names, and
-/// then does exactly this — the markers are files, and whether one exists
-/// is the whole of the question. The resolving is what `repo::open`
-/// already answered, linked worktrees included, so a caller holding a
-/// [`crate::repo::RepoInfo`] can ask as often as it likes
-/// (`RepoSession::refresh_op_progress` asks several times a second while
-/// a replay is running).
+/// Detects in-progress operations without a process, for a caller holding
+/// the git directory `repo::open` resolved ([`crate::repo::RepoInfo`],
+/// linked worktrees included) — cheap enough for
+/// `RepoSession::refresh_op_progress` to ask several times a second.
 #[must_use]
 pub fn detect_at(git_dir: &Path) -> OpState {
     let has = |marker: &str| git_dir.join(marker).exists();

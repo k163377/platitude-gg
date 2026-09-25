@@ -5,58 +5,31 @@ use super::*;
 use crate::repo;
 
 /// What the opening's first graph pass does about whatever is already
-/// drawn.
-///
-/// Settled when the session is created, for the reason [`Recording`] is:
-/// the opening spawns that pass itself, so a caller flipping this
-/// afterwards would be racing it.
+/// drawn. Fixed at creation: the opening spawns that pass itself, so
+/// flipping it later would race it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum FirstPass {
-    /// Nothing is on screen, so the walk is streamed in chunks and the
-    /// first rows are drawn as they arrive — the shortest way to a graph
-    /// somebody can read (CLAUDE.md §性能予算).
+    /// Nothing is on screen: stream in chunks, drawing the first rows as
+    /// they arrive.
     #[default]
     Streamed,
-    /// The consumer is already showing this repository's graph, read
-    /// from another working copy of it (`Hub::restand_tab`). Linked
-    /// copies share refs and objects, so what is drawn is this walk's
-    /// answer but for where HEAD stands and what is uncommitted: the
-    /// pass is built off-screen and swapped in whole, and the reader
-    /// keeps a graph — with their place in it — throughout.
+    /// The consumer already shows this repository's graph, read from
+    /// another working copy that shares its refs and objects
+    /// (`Hub::restand_tab`): build off-screen and swap in whole, so the
+    /// reader keeps their place.
     Swapped,
 }
 
-/// The record of the graph a consumer is showing, moved from the
-/// session that drew it to the one taking its place
-/// ([`RepoSession::take_drawn_graph`]).
-///
-/// **The graph outlives the session, so the record of it does too.** A
-/// page that keeps its rows while the copy under it changes leaves the
-/// next session two questions it cannot answer for itself: whether a
-/// pass it walks arrives at the picture already on screen — a print per
-/// row is what that is read against, and one that starts empty calls
-/// every picture new — and which chips those rows are already wearing,
-/// which is what a refs read diffs against. Both are the *consumer's*
-/// state rather than the repository's, and neither is re-derivable
-/// without redrawing the graph to find out.
-///
-/// **Moved, not copied**: the session it comes from is being closed, and
-/// what is inside is what that close would throw away
-/// (`RepoSession::close`).
-///
-/// **The rows themselves are not in it.** The session keeps a hash per
-/// row and not the row (`RowPrint`: sixteen bytes against 822), so a
-/// walk is still what makes rows — 120–147ms of the opening on a
-/// repository of `JetBrains/kotlin`'s size
-/// (ci/baseline/perf-windows-x64.md). What this saves is the redraw:
-/// two copies whose picture agrees swap nothing at all.
+/// The record of the graph a consumer is showing — the row prints and the
+/// chips they wear — moved from the session that drew it to the one taking
+/// its place ([`RepoSession::take_drawn_graph`];
+/// rules-refs/core.md「画面に出ているグラフの記録はセッションより長生きする」).
+/// Without it the next session calls every picture new and redraws. The
+/// rows are not in it: the walk still runs.
 pub struct DrawnGraph(Shared);
 
-/// What an opening is settled with, all of it decided before the first
-/// git command is spawned and none of it movable afterwards: how much
-/// of the opening the command log keeps ([`Recording`]), what its first
-/// graph pass does about a graph already on screen ([`FirstPass`]), and
-/// the record of that graph ([`DrawnGraph`]).
+/// What an opening is settled with, all decided before the first git
+/// command is spawned.
 struct Opening {
     recording: Recording,
     first_pass: FirstPass,
@@ -65,15 +38,10 @@ struct Opening {
 
 impl RepoSession {
     /// Creates the session and starts opening `path` in the background.
-    /// On success everything loads: log stream, refs, status, stashes.
-    ///
-    /// The command log holds what the user asks for and nothing else;
-    /// [`RepoSession::open_recording`] is the door for an opening whose
-    /// own reads are to be kept as well.
-    ///
-    /// `pass_hooks` is what the graph passes let the outside in with
-    /// ([`PassHooks`]) — `None` for a session nobody drives, which then
-    /// holds nothing for it.
+    /// The command log keeps only what the user asks for
+    /// ([`RepoSession::open_recording`] keeps the opening's own reads too).
+    /// `pass_hooks` lets the outside into the graph passes ([`PassHooks`]);
+    /// `None` for a session nobody drives.
     pub fn open(
         executor: GitExecutor,
         runtime: tokio::runtime::Handle,
@@ -91,12 +59,9 @@ impl RepoSession {
         )
     }
 
-    /// [`RepoSession::open`], for a consumer already showing this
-    /// repository's graph read from another of its working copies —
-    /// the door a tab changes the copy it stands in through
-    /// ([`FirstPass::Swapped`]).
-    ///
-    /// `drawn` is the record of that graph, from the session being
+    /// [`RepoSession::open`] for a consumer already showing this
+    /// repository's graph from another working copy
+    /// ([`FirstPass::Swapped`]); `drawn` comes from the session being
     /// closed ([`DrawnGraph`]).
     pub fn open_standing_in(
         executor: GitExecutor,
@@ -121,19 +86,14 @@ impl RepoSession {
     }
 
     /// Takes the record of the graph on screen out of this session, for
-    /// the one taking its place over the same consumer ([`DrawnGraph`]).
-    ///
-    /// **Before the close**, which is what throws it away
-    /// (`RepoSession::close`). What is left behind is what a closed
-    /// session keeps of the graph either way: nothing.
+    /// the one taking its place ([`DrawnGraph`]). Call before
+    /// `RepoSession::close`, which throws it away.
     pub fn take_drawn_graph(&self) -> DrawnGraph {
         DrawnGraph(std::mem::take(&mut *self.lock_shared()))
     }
 
-    /// [`RepoSession::open`], with what the command log keeps decided
-    /// before the first git command is spawned — which is the only way
-    /// to be sure of how much of an opening it holds (see
-    /// [`Recording`]).
+    /// [`RepoSession::open`], with what the command log keeps fixed before
+    /// the first git command is spawned (see [`Recording`]).
     pub fn open_recording(
         executor: GitExecutor,
         runtime: tokio::runtime::Handle,
@@ -156,8 +116,7 @@ impl RepoSession {
         )
     }
 
-    /// The constructor the doors above name their difference by
-    /// ([`Opening`]).
+    /// The constructor the doors above share ([`Opening`]).
     fn open_as(
         executor: GitExecutor,
         runtime: tokio::runtime::Handle,
@@ -171,11 +130,8 @@ impl RepoSession {
             first_pass,
             drawn,
         } = opening;
-        // The consumer's graph, where one is being kept ([`DrawnGraph`]).
-        // **The pass number comes with it**: the record and the rows on
-        // screen are numbered by the session that drew them, and a
-        // counter starting over would have this session's first pass
-        // refused as one the consumer has already seen
+        // The pass number comes with a kept graph: a counter starting over
+        // would have this session's first pass refused as already seen
         // (`GraphModel::take_chunk`).
         let shared = drawn.map_or_else(Shared::default, |carried| carried.0);
         let passes = shared.generation;
@@ -255,9 +211,7 @@ impl RepoSession {
             open_fetch: Mutex::new(OpenFetchState::Unasked),
             opened: tokio::sync::watch::channel(false).0,
         });
-        // The handle is kept: the application's shutdown joins the loop
-        // so a local write in flight ends before the runtime does
-        // (`RepoSession::take_write_join`).
+        // Kept for the shutdown to join (`RepoSession::take_write_join`).
         let write_loop = runtime.spawn(Arc::clone(&session).write_loop(write_rx));
         *relock(&session.write_join) = Some(write_loop);
 
@@ -266,60 +220,39 @@ impl RepoSession {
     }
 }
 
-/// The opening itself, once the session exists: what git answers, what
-/// that lets the session do, and — on every road, the cancelled one
-/// included — the word that the opening is over.
-///
-/// **That last word is a completion boundary, not bookkeeping.** Until
-/// it is said, `workdir()` answering `None` means *not yet*; after it,
-/// the same `None` means *never*. A read that cannot tell those apart
-/// either gives up on an answer that was coming or waits for one that
-/// is not (`RepoSession::workdir_when_open`).
+/// The opening itself, ending on every road — the cancelled one included —
+/// with the word that the opening is over. That word is a completion
+/// boundary: before it, `workdir()` answering `None` means *not yet*;
+/// after it, *never* (`RepoSession::workdir_when_open`).
 async fn settle(s: Arc<RepoSession>, path: PathBuf) {
     let cancel = s.root_cancel.clone();
     match repo::open(&s.executor, &path, &cancel).await {
         Ok(info) => {
             let workdir = info.workdir.clone();
             s.set_info(info.clone());
-            // Before the event that lets a write be asked for: the tree
-            // this session shares its writes with is only known now, and
-            // a write accepted with no order installed would take no
-            // place in it (`session::write_order`).
+            // Before the event that lets a write be asked for: a write
+            // accepted before the order is installed would take no place
+            // in it (`session::write_order`).
             s.join_write_order(&info);
             s.sink.event(SessionEvent::Opened { info });
-            // Before anything else: a missing identity turns the first
-            // commit into a wall of git text, and the UI can ask for one
-            // instead.
+            // First, so the UI can ask for a missing identity before the
+            // first commit fails on it.
             s.refresh_author();
-            // The one place the two openings differ: a graph nobody is
-            // showing is streamed, and one that is already drawn is
-            // rebuilt behind it and swapped in whole ([`FirstPass`]).
+            // The one place the two openings differ ([`FirstPass`]).
             match s.first_pass {
                 FirstPass::Streamed => s.restart_log(),
                 FirstPass::Swapped => s.refresh_log(),
             }
             s.refresh_quick();
-            // **The reads are asked for first, and the network is asked
-            // for beside them.** Deciding whether to fetch reads the
-            // remote list, and awaiting that here put a whole process
-            // launch in front of the graph's own reads — two of them on
-            // a repository whose remotes had not been read yet, which is
-            // most of what such a read costs
-            // (ci/baseline/code-costs-windows-x64.md).
-            //
-            // It holds nothing up on the way out either: the reads do
-            // not wait on the write queue, and what the fetch brings
-            // down is published by its own refresh (`AfterWrite::Graph`).
+            // The fetch decision is spawned beside the reads, not awaited
+            // before them (rules-refs/core.md「開いたら 1 回 fetch する」).
             let opening = Arc::clone(&s);
             s.runtime.spawn(async move {
                 let fetching = opening.take_open_fetch(&workdir).await;
-                // A fetch reads what the remotes carry under `refs/tags/`
-                // on its way out, so only an opening without one has
-                // anything to ask. Asked here: `set_auto_fetch`, which
-                // the application calls the instant this session is
-                // handed over, has no workdir to read from until the
-                // lines above, and the interval it installs is what
-                // grants permission to look at all.
+                // A fetch reads the remotes' tags on its way out, so only
+                // an opening without one asks. Asked here, not by
+                // `set_auto_fetch` (whose interval grants the permission):
+                // that runs before there is a workdir.
                 if !fetching {
                     opening.catch_up_remote_tags();
                 }
@@ -336,26 +269,18 @@ async fn settle(s: Arc<RepoSession>, path: PathBuf) {
 
 /// Says the opening is over — to whoever asks, now or later.
 ///
-/// **`send` is the wrong verb here.** A `watch` sender whose receivers
-/// have all gone refuses the send *and leaves the value as it was*, and
-/// this channel starts with none: the receiver made with it is dropped
-/// on the spot, and one exists only while some read is inside
-/// [`RepoSession::workdir_when_open`]. So an opening that finished
-/// before anybody subscribed would go on reading as *not yet*, and the
-/// next read to ask would wait for a word already said — the same
-/// turning indicator this boundary exists to prevent, moved one step
-/// later. `send_replace` keeps the value whether or not anybody is
-/// listening, which is what a completion boundary has to do.
+/// Not `send`: a `watch` sender with no receivers refuses the send and
+/// keeps the old value, and this channel has a receiver only while a read
+/// is inside [`RepoSession::workdir_when_open`] — so a later read would
+/// wait for a word already said.
 fn publish_opened(opened: &tokio::sync::watch::Sender<bool>) {
     opened.send_replace(true);
 }
 
 #[cfg(test)]
 mod tests {
-    /// The defect this boundary had: measured, not reasoned about —
-    /// `send` returns an error and keeps the old value when nothing is
-    /// subscribed, and every road out of an opening can reach that line
-    /// with no reader in sight.
+    /// Pins `send_replace`: with nothing subscribed, `send` keeps the old
+    /// value, and every road out of an opening can get here with no reader.
     #[test]
     fn a_completion_nobody_waited_for_is_still_kept() {
         let opened = tokio::sync::watch::channel(false).0;

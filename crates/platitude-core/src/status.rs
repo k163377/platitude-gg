@@ -48,10 +48,9 @@ pub struct WorkTreeStatus {
     /// Current branch name; `None` when detached.
     pub branch_head: Option<String>,
     pub upstream: Option<String>,
-    /// Whether git could compare against the upstream at all. False when the
-    /// branch names one that has no remote-tracking ref yet (never fetched,
-    /// or the remote branch is gone): `ahead` / `behind` then say nothing,
-    /// and the branch still has somewhere to be published.
+    /// Whether git could compare against the upstream. False when it has no
+    /// remote-tracking ref (never fetched, or gone): `ahead` / `behind` then
+    /// say nothing, though the upstream is still configured.
     pub upstream_tracked: bool,
     pub ahead: i32,
     pub behind: i32,
@@ -59,9 +58,8 @@ pub struct WorkTreeStatus {
 }
 
 impl WorkTreeStatus {
-    /// Where this read saw HEAD — the branch, or detached the commit
-    /// alone, or neither on a branch with no commits yet. What the read
-    /// offers the session's one record of HEAD (`session::standing`).
+    /// Where this read saw HEAD, for the session's one record of it
+    /// (`session::standing`).
     pub fn head(&self) -> crate::refs::HeadState {
         crate::refs::HeadState::of(self.branch_head.clone(), self.branch_oid)
     }
@@ -84,9 +82,8 @@ impl WorkTreeStatus {
     /// tree (`MM` and friends).
     ///
     /// `git stash push --staged` cannot take these apart: it writes the
-    /// stash entry and then fails to remove the staged half from the
-    /// working tree, leaving the entry behind with nothing else changed.
-    /// Knowing they are there is what lets the UI refuse first.
+    /// entry, then fails to remove the staged half, leaving the entry
+    /// behind. The UI refuses first on these.
     pub fn partially_staged(&self) -> impl Iterator<Item = &StatusItem> {
         self.items.iter().filter(|i| {
             matches!(i, StatusItem::Tracked { staged, unstaged, .. }
@@ -115,19 +112,17 @@ impl WorkTreeStatus {
     }
 }
 
-/// How many entries fall into each bucket, counted in one pass.
-///
-/// The headline shows all five at once, and `-uall` lists every untracked
-/// file individually — so the list is as long as the working tree is
-/// dirty, and walking it once per number is five walks for one answer.
+/// How many entries fall into each bucket, counted in one pass: the
+/// headline shows all five, and `-uall` makes the list as long as the
+/// tree is dirty.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Counts {
     pub staged: usize,
     pub unstaged: usize,
     pub untracked: usize,
     pub conflicted: usize,
-    /// Entries whose change is split across the index and the working
-    /// tree — a subset of both `staged` and `unstaged`.
+    /// Split across index and working tree; also counted in both `staged`
+    /// and `unstaged`.
     pub partially_staged: usize,
 }
 
@@ -150,32 +145,22 @@ impl Counts {
         counts
     }
 
-    /// How many files a `reset --hard` takes back with it: every tracked
-    /// path the index or the working tree has changed, **counted once**
-    /// however many sides it changed on, plus the unmerged ones.
-    ///
-    /// **Only what the index names.** A hard reset writes those paths,
-    /// and a file git was never told about is not one of them
-    /// (measured). A path *staged* as an addition is — it is in the
-    /// index, so the reset removes it — which is why this counts the
-    /// index side as well as what differs from HEAD on disk.
+    /// How many files a `reset --hard` takes with it: each changed tracked
+    /// path once, whichever sides changed, plus the unmerged ones.
+    /// Untracked files survive; a staged addition does not (it is in the
+    /// index, so the reset removes it).
     pub fn hard_reset_takes(&self) -> usize {
         (self.staged + self.unstaged).saturating_sub(self.partially_staged) + self.conflicted
     }
 }
 
-/// How many rows of each change kind the working-tree list holds.
-///
-/// **Counted the way the list that row leads to is built** — which is two
-/// different ways, because there are two lists. This window's own pane
-/// splits a path into the sides it changed on, so [`Kinds::of`] counts
-/// rows: one file changed on both sides is listed twice, once under the
-/// index and once under the working tree. Another copy's pane cannot move
-/// that index and so does not split it, and [`Kinds::folded`] counts one
-/// per path to match. Either way the row's tally and the list agree by
-/// construction. The kinds are the same letters the file rows carry, read
-/// the same way (`models::nav` builds a row per side; `ChangeIcon` reads
-/// the letter).
+/// How many rows of each change kind a working-tree list holds, counted
+/// the way that list is built so the tally and the list agree:
+/// [`Kinds::of`] for this window's pane, which lists a path once per side
+/// it changed on, and [`Kinds::folded`] for another copy's pane, which
+/// cannot move that index and lists one row per path. The kinds are the
+/// file rows' letters (`models::nav` builds a row per side; `ChangeIcon`
+/// reads the letter).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Kinds {
     pub added: usize,
@@ -191,11 +176,9 @@ impl Kinds {
         let mut kinds = Self::default();
         for item in &status.items {
             match item {
-                // A conflict is one row whatever the two stage letters
-                // say — the pane lists it in its own bucket.
+                // One row whatever the stage letters say: the pane lists
+                // conflicts in their own bucket.
                 StatusItem::Unmerged { .. } => kinds.conflicted += 1,
-                // Nothing of it is in the index yet, so the whole file is
-                // what it adds.
                 StatusItem::Untracked { .. } => kinds.added += 1,
                 StatusItem::Tracked {
                     staged, unstaged, ..
@@ -208,25 +191,16 @@ impl Kinds {
         kinds
     }
 
-    /// The same six counted **once per path**, for a list that shows one
-    /// row per path.
-    ///
-    /// **A tally counts what its own list shows.** The pane this feeds is
-    /// another working copy's, where the split into sides is the index's
-    /// and the index is not this window's to move, so its list folds the
-    /// two letters into one row ([`Kinds::of`] counts the rows of the
-    /// pane that does not). A row whose tally disagreed with the list it
-    /// leads to would be the graph saying one thing and the pane another
-    /// about the same tree.
+    /// The same six counted once per path, for another copy's pane
+    /// ([`Kinds`]).
     pub fn folded(status: &WorkTreeStatus) -> Self {
         let mut kinds = Self::default();
         for item in &status.items {
             match item {
                 StatusItem::Unmerged { .. } => kinds.conflicted += 1,
                 StatusItem::Untracked { .. } => kinds.added += 1,
-                // The index's letter where it has one: a file added to it
-                // and then edited again is an addition, because that is
-                // what this copy has that its last commit has not.
+                // The index's letter wins: added then edited is still an
+                // addition against HEAD.
                 StatusItem::Tracked {
                     staged, unstaged, ..
                 } => kinds.take(match *staged == '.' {
@@ -238,8 +212,7 @@ impl Kinds {
         kinds
     }
 
-    /// One side's letter. `.` is "this side did nothing" and has no row;
-    /// `M` and `T` are both edits (a type change is still the same path
+    /// One side's letter. `.` has no row; `T` is an edit (the same path
     /// holding something else).
     fn take(&mut self, code: char) {
         match code {
@@ -316,9 +289,8 @@ pub fn parse_status(bytes: &[u8]) -> Result<WorkTreeStatus, StatusParseError> {
             "?" => status.items.push(StatusItem::Untracked {
                 path: rest.to_string(),
             }),
-            // Only `--ignored` produces `!` lines and nothing here passes
-            // it; they are skipped, so a caller that ever does still
-            // gets its listing.
+            // Only `--ignored` emits `!`; skipped so a caller passing it
+            // still parses.
             "!" => {}
             _ => return Err(StatusParseError(token.clone())),
         }
@@ -384,14 +356,10 @@ pub async fn load(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<WorkTreeStatus, GitError> {
-    // `-uall` pins untracked listing against user config and expands a new
-    // directory into its files; `-unormal` would collapse it to one `dir/`
-    // entry, which has no per-file diff to stage hunks or lines from.
-    //
-    // **A repository of its own inside the working copy stays one `dir/`
-    // entry** whatever is asked here: its files are that repository's, and
-    // git stops at the boundary (`status_integration`). A reader that cuts
-    // paths on `/` meets the trailing one there and nowhere else.
+    // `-uall` pins the untracked listing against user config and lists a
+    // new directory's files; `-unormal` would give one `dir/` entry with no
+    // per-file diff to stage from. A nested repository still stays one
+    // `dir/` entry (rules-refs/core.md「`status` の答えの中で末尾が `/` の path」).
     let cmd = GitCommand::new().cwd(workdir).args([
         "status",
         "--porcelain=v2",

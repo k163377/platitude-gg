@@ -22,8 +22,6 @@ fn four_commits() -> (TestRepo, Vec<String>) {
     (repo, ids)
 }
 
-// --- the preview ---------------------------------------------------------
-
 #[tokio::test]
 async fn a_preview_lists_the_range_oldest_first_with_its_onto_row() {
     let (mut repo, ids) = four_commits();
@@ -135,8 +133,7 @@ async fn a_folder_that_is_not_a_repository_fails_instead_of_planning_from_the_ro
     let (exec, cancel) = env();
     let dir = tempfile::tempdir().expect("tempdir");
 
-    // git exits 128 without reading anything, and only the 1 it exits for a
-    // revision it looked for and did not find is an answer (measured on 2.55).
+    // git exits 128 here; only 1 (a revision looked for and not found) is an answer.
     let error = rebase_plan::preview(&exec, dir.path(), &"0".repeat(40), &cancel)
         .await
         .expect_err("nothing here to read");
@@ -149,9 +146,8 @@ async fn a_folder_that_is_not_a_repository_fails_instead_of_planning_from_the_ro
 #[tokio::test]
 async fn the_onto_name_is_the_one_the_graph_would_lead_with() {
     let (mut repo, ids) = four_commits();
-    // Created out of order, and one of them nests — the graph sorts chips
-    // by name once kind and HEAD have had their say, and the base cannot
-    // be HEAD (the range above it is what makes it a base).
+    // Created out of order, one nested: the graph sorts chips by name after
+    // kind and HEAD, and the base cannot be HEAD.
     for name in ["zulu", "feature/x", "alpha", "main-ish"] {
         repo.git(&["branch", name, &ids[0]]);
     }
@@ -165,9 +161,8 @@ async fn the_onto_name_is_the_one_the_graph_would_lead_with() {
     };
     assert_eq!(plan.onto_ref, "alpha");
 
-    // Where no branch stands there the name is left empty, and the screen
-    // writes the base's short id instead (デザイン規約 §フル interactive
-    // rebase). Nothing about the plan itself turns on it.
+    // No branch there: the name is empty and the screen writes the short id
+    // (デザイン規約 §フル interactive rebase).
     let answer = rebase_plan::preview(&exec, &repo.path, &ids[2], &cancel)
         .await
         .expect("preview");
@@ -194,8 +189,6 @@ async fn a_click_on_another_branches_commit_is_refused() {
         .expect("preview");
     assert_eq!(answer, PlanAnswer::Refused(PlanRefusal::OffBranch));
 }
-
-// --- why the rebase stopped ----------------------------------------------
 
 #[tokio::test]
 async fn an_edit_stop_says_so_and_names_the_commit_it_sits_on() {
@@ -239,7 +232,6 @@ async fn an_edit_stop_says_so_and_names_the_commit_it_sits_on() {
         "HEAD sits on the commit, which is what makes the amend box the tool"
     );
 
-    // The way on is the exit card's own `--continue`.
     integrate::resolve_current(
         &exec,
         &repo.path,
@@ -251,11 +243,9 @@ async fn an_edit_stop_says_so_and_names_the_commit_it_sits_on() {
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "fourth");
 }
 
-/// The marker has to name a commit that is *in* the history the reader is
-/// looking at. `rebase-merge/stopped-sha` does not once anything ahead of
-/// the `edit` step rewrote a commit: it keeps naming the todo's own id,
-/// which the replay has already replaced. The amend marker's contents is
-/// the stop's HEAD, and that is what the card names and the boxes amend.
+/// `rebase-merge/stopped-sha` keeps the todo's own id after an earlier step
+/// rewrote it, naming a commit the graph is not drawing. The amend marker
+/// holds the stop's HEAD, which the card names and the boxes amend.
 #[tokio::test]
 async fn an_edit_stop_after_a_reword_names_the_replayed_commit_not_the_todos() {
     let (mut repo, ids) = four_commits();
@@ -292,17 +282,12 @@ async fn an_edit_stop_after_a_reword_names_the_replayed_commit_not_the_todos() {
         stop.oid, head,
         "the stop names the commit HEAD sits on, not the todo's own id"
     );
-    // What the old key read, kept here as the reason the new one exists:
-    // git still writes the pre-replay id, and nothing resolves it to a
-    // commit the graph is drawing.
     let stopped_sha = std::fs::read_to_string(repo.path.join(".git/rebase-merge/stopped-sha"))
         .expect("stopped-sha");
     assert_eq!(stopped_sha.trim(), ids[3]);
 
-    // The boxes take the amend, and take the one after it: a typo in the
-    // first is exactly when the second is wanted. git moves HEAD off the
-    // id it stopped on and updates none of its own markers to match, so
-    // nothing here may key on HEAD still being that id.
+    // A second amend must work too: git moves HEAD off the stopped id and
+    // updates none of its markers, so nothing may key on HEAD being that id.
     repo.git(&["commit", "--amend", "-m", "fourth amended"]);
     let amended = repo.git(&["rev-parse", "HEAD"]).trim().to_string();
     assert_ne!(amended, head);

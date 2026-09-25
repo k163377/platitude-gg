@@ -21,10 +21,9 @@ use super::refusal::refusal;
 pub enum PushForce {
     /// Fast-forward only; git refuses anything else.
     None,
-    /// `--force-with-lease`. `expect` pins the remote commit the user
-    /// actually saw. Without it the lease is checked against the local
-    /// remote-tracking ref, which a background fetch can advance behind the
-    /// user's back — turning the safety net into a plain force.
+    /// `--force-with-lease`. `expect` pins the remote commit the user saw;
+    /// without it the lease checks the remote-tracking ref, which a
+    /// background fetch can advance, turning it into a plain force.
     WithLease { expect: Option<String> },
     /// `--force`: unconditional. The UI confirms before choosing this.
     Force,
@@ -45,24 +44,17 @@ pub struct PushSpec {
 
 /// Works out where the branch that is checked out should be pushed.
 ///
-/// **Where a push goes is its own question.** git decides it in this
-/// order (git-config(5)): the branch's own `pushRemote`, then the
-/// repository's `remote.pushDefault`, then whatever the branch tracks —
-/// and only if none of those is set does `fallback_remote` come into it.
-/// Reading just the last of the three sends a fork workflow's pushes to the
-/// repository it forked from, while the same `git push` in a terminal goes
-/// to the fork (measured, 2.55).
+/// git's order (git-config(5)): the branch's `pushRemote`, then
+/// `remote.pushDefault`, then what the branch tracks, and only then
+/// `fallback_remote`. Reading only the last sends a fork workflow's pushes
+/// to the repository it forked from.
 ///
-/// The branch is pushed under **its own name** wherever it is not going to
-/// the remote it tracks: an upstream names a branch on one remote and says
-/// nothing about any other (measured: the refspec git builds for a triangular
-/// push is `<branch>:<branch>`).
+/// The branch goes under its own name wherever it is not going to the
+/// remote it tracks, as git's triangular-push refspec does. A detached
+/// HEAD is an error.
 ///
-/// A detached HEAD has no branch to push, and says so.
-///
-/// The upstream is read from configuration: a remote may be named
-/// `my/fork`, and a branch name may contain slashes, so splitting
-/// `origin/main` cannot be done reliably.
+/// The upstream is read from configuration: `origin/main` cannot be split
+/// reliably (remote names and branch names may both hold slashes).
 pub async fn plan_current_push(
     executor: &GitExecutor,
     workdir: &Path,
@@ -80,24 +72,19 @@ pub async fn plan_current_push(
     .await?;
     let merge = config_value(executor, workdir, &format!("branch.{branch}.merge"), cancel).await?;
 
-    // Read here: a push must go where git would send it now, and the
-    // marks can be moved from a terminal between two of this
-    // application's reads. One short local `git config` in front of a
-    // command that reaches the network — the same read the status tick
-    // makes, so the two cannot drift apart.
+    // Read fresh: the marks can move in a terminal between two of this
+    // application's reads. The same read as the status tick, so the two
+    // cannot drift apart.
     let marks = push_marks(executor, workdir, &branch, cancel).await?;
 
     decide_push(&branch, tracks, merge, marks, fallback_remote, force)
 }
 
-/// What the four reads above come to, with nothing left to ask git: the
-/// destination, the name the branch goes under there, and whether this
-/// push is the one that records an upstream.
+/// What the four reads above come to: the destination, the name the
+/// branch goes under there, and whether this push records an upstream.
 ///
-/// Pure, and asked of every arrangement of the three keys in this
-/// module's own tests — the order is the half of [`plan_current_push`]
-/// that has ever been wrong, and walking it through git costs a clone,
-/// two bare repositories and a `config` write per arrangement.
+/// Pure so this module's tests can walk every arrangement of the three
+/// keys; through git each would cost a clone and two bare repositories.
 fn decide_push(
     branch: &str,
     tracks: Option<String>,
@@ -129,12 +116,9 @@ fn decide_push(
         _ => branch.to_string(),
     };
 
-    // Recorded only where the branch tracks nothing at all, which is what
-    // makes the *next* push need no decision. A branch that already tracks
-    // something keeps tracking it: `--set-upstream` to another remote
-    // rewrites `branch.<name>.remote`, and that is where the branch fetches
-    // from (measured — it is the whole of what a mark on a second remote is
-    // for).
+    // Recorded only where the branch tracks nothing. A branch that already
+    // tracks something keeps it: `--set-upstream` to another remote
+    // rewrites `branch.<name>.remote`, where the branch fetches from.
     let set_upstream = tracks.is_none() || merge.is_none();
 
     Ok(PushSpec {
@@ -150,10 +134,9 @@ fn decide_push(
 /// said so.
 ///
 /// `expect` is the commit the question showed as being over there. Empty
-/// sends the push fast-forward only; a commit turns it into the same
-/// leased overwrite the toolbar offers a diverged branch — and the lease
-/// is pinned to what was on screen, so a remote that moved since is
-/// refused (§相手の履歴を置き換える).
+/// pushes fast-forward only; a commit makes it a lease pinned to what was
+/// on screen, so a remote that moved since is refused
+/// (デザイン規約 §相手の履歴を置き換える).
 pub async fn plan_publish(
     executor: &GitExecutor,
     workdir: &Path,
@@ -181,8 +164,7 @@ pub async fn plan_publish(
 /// `git push` for one branch.
 ///
 /// A refusal that a fetch would answer comes back as
-/// [`ReportKind::Outdated`], so the caller can go and find out what the
-/// remote actually holds.
+/// [`crate::ReportKind::Outdated`].
 pub async fn push(
     executor: &GitExecutor,
     workdir: &Path,
@@ -190,9 +172,8 @@ pub async fn push(
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    // `--porcelain` puts a fixed per-ref result on stdout. Which kind of
-    // refusal this was has to be read from somewhere, and the sentence that
-    // says so on stderr is prose written for a terminal.
+    // `--porcelain` puts a fixed per-ref result on stdout; the refusal's
+    // kind is not parseable from stderr's prose.
     let mut cmd = GitCommand::new()
         .cwd(workdir)
         .args(["push", "--porcelain"])
@@ -234,9 +215,7 @@ mod tests {
 
     const REMOTES: [&str; 2] = ["fork", "origin"];
 
-    /// The four reads, spelled the way git answers them: what the branch
-    /// tracks, the ref it merges with, and the two marks. Empty stands
-    /// for a key that is not set.
+    /// Empty stands for a key that is not set.
     fn decide(
         branch: &str,
         tracks: &str,
@@ -272,12 +251,6 @@ mod tests {
         )
     }
 
-    /// git's own order, every step of it: the branch's own `pushRemote`
-    /// beats the repository's `remote.pushDefault`, which beats whatever
-    /// the branch tracks, and only with none of the three set does the
-    /// caller's fallback come into it (git-config(5); measured 2.55).
-    /// **Reading just the last of them** is how a fork workflow's pushes
-    /// go to the repository it forked from.
     #[test]
     fn a_push_goes_where_git_would_send_it() {
         assert_eq!(
@@ -306,10 +279,6 @@ mod tests {
         );
     }
 
-    /// **The upstream names a branch on one remote and says nothing about
-    /// any other.** Going to the remote it tracks keeps that name; going
-    /// anywhere else it goes under the branch's own, which is the refspec
-    /// git builds for a triangular push (measured).
     #[test]
     fn a_branch_keeps_its_upstreams_name_only_on_its_upstreams_remote() {
         let tracked = decide("topic", "origin", "refs/heads/elsewhere", "", "");
@@ -331,10 +300,6 @@ mod tests {
         );
     }
 
-    /// Recorded only where the branch tracks nothing at all — a branch
-    /// that already tracks something goes on tracking it, because
-    /// `--set-upstream` to another remote rewrites where the branch
-    /// *fetches* from (measured).
     #[test]
     fn only_a_branch_that_tracks_nothing_records_where_it_went() {
         assert!(decide("topic", "", "", "", "fork").set_upstream);
@@ -349,8 +314,7 @@ mod tests {
         );
     }
 
-    /// A repository with no remote at all has nowhere to send anything,
-    /// and says so rather than building a refspec against an empty name.
+    /// An error rather than a refspec against an empty name.
     #[test]
     fn a_repository_with_no_remote_has_nowhere_to_send() {
         let err = plan("main", "", "", "", "", "").expect_err("nowhere to push");
@@ -361,13 +325,9 @@ mod tests {
         );
     }
 
-    /// **The label and the send must name the same remote.** The toolbar
-    /// says where a push is going from configuration the snapshot carries
-    /// ([`push_target`]); the send works it out again from the keys git
-    /// answers with. Two spellings of one order is how the first came to
-    /// read `remote.pushDefault` while the second read the branch's own
-    /// mark first — so this walks every arrangement of the three keys and
-    /// holds the two answers against each other.
+    /// The toolbar label ([`push_target`], from the snapshot) and the send
+    /// ([`decide_push`], from git's keys) spell one order twice, so this
+    /// walks every arrangement of the three keys against both.
     #[test]
     fn the_label_names_the_remote_the_send_uses() {
         // (branch.main.pushRemote, remote.pushDefault, what the branch tracks)

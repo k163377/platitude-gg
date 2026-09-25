@@ -10,8 +10,7 @@ use super::joins::{RefJoins, WorktreeHolders, build_label_map, build_snapshot};
 use super::*;
 use crate::remote::RemoteTag;
 
-/// The everyday repository: one working copy, so no branch is held
-/// anywhere else. The join that reads this has a test of its own below.
+/// One working copy: no branch is held anywhere else.
 fn held_by_nobody() -> WorktreeHolders {
     WorktreeHolders::default()
 }
@@ -58,9 +57,6 @@ fn head_at(commit: Oid) -> HeadState {
     }
 }
 
-/// Shared, because that is how the snapshot takes it: the rows are asked
-/// about the carriers of a name long after the join, off the one index
-/// (`RefsSnapshot::remote_tags`).
 fn index_of(remote: &str, tags: Vec<RemoteTag>) -> std::sync::Arc<RemoteTagIndex> {
     std::sync::Arc::new(RemoteTagIndex::build(
         tags.into_iter()
@@ -68,11 +64,8 @@ fn index_of(remote: &str, tags: Vec<RemoteTag>) -> std::sync::Arc<RemoteTagIndex
     ))
 }
 
-/// The row carries whether the reading it speaks for is standing where
-/// the branch is. A pair that has drifted is two rows on the graph, and
-/// the menu's rows that reach the remote read this to say why
-/// (デザイン規約 §左メニューの所作
-/// の削除の表).
+/// A drifted pair is two rows on the graph, and the menu's rows that
+/// reach the remote read this to say why (デザイン規約 §左メニューの所作 の削除の表).
 #[test]
 fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
     let tracking = |commit: Oid| RefEntry {
@@ -108,13 +101,10 @@ fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
     assert!(snapshot.locals[0].upstream_drifted);
 }
 
-/// The same setting read from the other end: a remote-tracking row
-/// carries the branch measured against it and that branch's counts,
-/// which is what its opened lines name (デザイン規約 §左メニューの所作).
-///
-/// **A name alone joins nothing** — git declines to guess a pairing from
-/// matching names (`refs::RemoteBranches::spoken_for`) and so does this:
-/// the reading a branch never named answers with nothing on both fields.
+/// The upstream setting read from the other end: a remote-tracking row
+/// carries the branch measured against it and its counts, for its opened
+/// lines (デザイン規約 §左メニューの所作). A matching name alone joins
+/// nothing, as in git (`refs::RemoteBranches::spoken_for`).
 #[test]
 fn a_reading_carries_the_branch_that_is_measured_against_it() {
     let tracking = |short: &str| RefEntry {
@@ -133,8 +123,7 @@ fn a_reading_carries_the_branch_that_is_measured_against_it() {
     main.upstream = Some(crate::Name::from("refs/remotes/origin/main"));
     main.ahead = 2;
     main.behind = 1;
-    // Named the same on both sides and joined by nothing: this one is a
-    // different branch, and the row says so by saying nothing.
+    // Matches `fork/side` by name only: a different branch.
     let stray = branch("side", oid(2));
 
     let refs = vec![main, stray, tracking("origin/main"), tracking("fork/side")];
@@ -166,14 +155,10 @@ fn a_reading_carries_the_branch_that_is_measured_against_it() {
     );
 }
 
-/// A branch measured against a reading that is not here: the far side
-/// deleted the ref and a prune took the tracking copy with it, while the
-/// configuration goes on naming it — git's own `[gone]`. **The name has
-/// to survive the join**, because it is the whole of what the row can say
-/// about a branch it can no longer measure (デザイン規約 §左メニューの所作).
-///
-/// An upstream configured `remote = .` is the other half: the ref it
-/// names is a branch here, so nothing is gone and the field stays empty.
+/// An upstream pruned away while the configuration still names it (git's
+/// `[gone]`): the name must survive the join, as it is all the row can
+/// say (デザイン規約 §左メニューの所作). An upstream configured
+/// `remote = .` names a branch here, so nothing is gone.
 #[test]
 fn a_branch_keeps_the_name_of_an_upstream_that_is_not_here() {
     let remote_tags = index_of("origin", Vec::new());
@@ -202,13 +187,9 @@ fn a_branch_keeps_the_name_of_an_upstream_that_is_not_here() {
     );
 }
 
-/// The graph's cloud follows the fold: it is on the chip exactly while the
-/// remote it is about is folded into that chip (デザイン規約 §ref の種別).
-/// Drifted, the remote keeps a row of its own and neither row wears one —
-/// the two rows are the whole of the signal. The sidebar keeps the wider
-/// reading of the drift: the branch does have a remote, wherever it is.
-/// An upstream is the only thing that makes a remote branch this
-/// branch's.
+/// The cloud is on a chip exactly while its remote is folded into it
+/// (デザイン規約 §ref の種別); drifted, neither row wears one, while the
+/// sidebar still says the branch has a remote.
 #[test]
 fn the_graph_cloud_on_a_branch_follows_the_fold() {
     let tracking = |remote: &str, commit: Oid| RefEntry {
@@ -249,9 +230,8 @@ fn the_graph_cloud_on_a_branch_follows_the_fold() {
         "the sidebar answers the wider question: the name is out there"
     );
 
-    // No upstream: a remote of the same name, on the very same commit, is
-    // still a different branch. Nothing folds, nothing is badged, and the
-    // remote says who it is with a chip of its own.
+    // No upstream: a same-named remote on the same commit is still a
+    // different branch — nothing folds or is badged.
     let mut loose = branch("main", oid(1));
     loose.upstream = None;
     let untracked = vec![loose, tracking("origin", oid(1))];
@@ -270,10 +250,8 @@ fn the_graph_cloud_on_a_branch_follows_the_fold() {
     );
 }
 
-/// A branch another working copy has out is marked on **both** halves of
-/// the join — the sidebar row and the graph chip read one bit between
-/// them, and a chip that offered a move the row refused would be two
-/// answers to one question.
+/// One bit for both halves: a chip offering a move the row refused would
+/// be two answers to one question.
 #[test]
 fn a_branch_another_copy_holds_is_marked_on_the_row_and_the_chip() {
     let refs = vec![branch("main", oid(1)), branch("feature/topic-a", oid(2))];
@@ -307,9 +285,8 @@ fn a_branch_another_copy_holds_is_marked_on_the_row_and_the_chip() {
     );
 }
 
-/// And the lock on the copy holding it rides with the mark: one lookup
-/// answers both, so a chip cannot say a branch is somewhere else and
-/// lose which copy that was (デザイン規約 §ref の種別).
+/// The lock rides with the held mark: one lookup answers both
+/// (デザイン規約 §ref の種別).
 #[test]
 fn a_locked_copy_puts_the_padlock_on_the_branch_it_holds() {
     let refs = vec![branch("main", oid(1)), branch("hotfix/urgent", oid(2))];
@@ -321,14 +298,11 @@ fn a_locked_copy_puts_the_padlock_on_the_branch_it_holds() {
     let map = build_label_map(&refs, &head_at(oid(1)), &remote_tags, &joins);
     let chip = &map.labels_of(&oid(2), true)[0];
     assert!(chip.held_elsewhere && chip.locked);
-    // The branch nobody holds carries neither half.
     let here = &map.labels_of(&oid(1), true)[0];
     assert!(!here.held_elsewhere && !here.locked);
 }
 
-/// A working copy standing on no branch is on the graph as a chip of its
-/// own — nothing else on the row can say it, since there is no ref there
-/// to carry the mark a held branch's chip wears.
+/// No ref there could carry the mark a held branch's chip wears.
 #[test]
 fn a_copy_standing_on_no_branch_gets_a_chip_of_its_own() {
     let refs = vec![branch("main", oid(1)), tag("v1", oid(2), false)];
@@ -353,15 +327,13 @@ fn a_copy_standing_on_no_branch_gets_a_chip_of_its_own() {
         copy.locked,
         "the padlock is the copy's, whether or not it has a branch out"
     );
-    // The commit a copy is not standing on carries no such chip.
     assert!(
         !map.labels_of(&oid(1), true)
             .iter()
             .any(|l| l.kind == LabelKind::Worktree)
     );
-    // **Tags stay the tail of the run**, which is what lets the TAGS eye
-    // cut them off with a shorter slice: a chip sorted past them would go
-    // out with the tags it was never part of.
+    // Tags stay the tail of the run: the TAGS eye cuts them off with a
+    // shorter slice, and a chip sorted past them would go with them.
     assert!(
         map.labels_of(&oid(2), false)
             .iter()
@@ -370,9 +342,8 @@ fn a_copy_standing_on_no_branch_gets_a_chip_of_its_own() {
     );
 }
 
-/// `set-url` moves no ref, so the URL's only road to the screen is the
-/// snapshot — the join key has to move for it, or the held snapshot is
-/// resent with the old URL on it.
+/// `set-url` moves no ref, so the join key must move for it or the held
+/// snapshot is resent with the old URL.
 #[test]
 fn a_changed_remote_url_moves_the_join_key() {
     let remotes = |url: &str| crate::remote::Remotes {
@@ -390,9 +361,8 @@ fn a_changed_remote_url_moves_the_join_key() {
     );
 }
 
-/// Finishing a half-set origin mark changes `checkout.defaultRemote` alone
-/// — the push's key already names the remote — and that change is the
-/// whole of what takes away the row offering it.
+/// Finishing a half-set origin mark changes `checkout.defaultRemote`
+/// alone, and that change must take away the row offering it.
 #[test]
 fn a_moved_checkout_mark_moves_the_join_key() {
     let remotes = |checkout: Option<&str>| crate::remote::Remotes {
@@ -406,8 +376,7 @@ fn a_moved_checkout_mark_moves_the_join_key() {
     );
 }
 
-/// A tag both sides agree on is one tag: the local label carries the
-/// cloud and the remote's reading adds no second chip.
+/// The local label carries the cloud; the remote's reading adds no chip.
 #[test]
 fn an_agreed_tag_gets_one_label() {
     let refs = vec![tag("v1", oid(1), false)];
@@ -432,8 +401,7 @@ fn an_agreed_tag_gets_one_label() {
     assert!(snapshot.tags[0].here && snapshot.tags[0].has_remote);
 }
 
-/// A tag the remote puts somewhere else stands on both rows, and the
-/// one that is not here says whose reading it is.
+/// The row that is not here says whose reading it is.
 #[test]
 fn a_drifted_tag_stands_on_both_rows() {
     let refs = vec![tag("v1", oid(1), false)];
@@ -469,10 +437,8 @@ fn a_drifted_tag_stands_on_both_rows() {
     );
 }
 
-/// With the tags out of the graph, the chips lose them too — on the rows
-/// that stay as well as the rows that go. A tag standing on a commit a
-/// branch also reaches is the one the walk cannot take away, and leaving
-/// its chip behind is the whole of what the switch would have missed.
+/// On the rows that stay too: a tag on a commit a branch also reaches is
+/// the chip the walk cannot take away.
 #[test]
 fn the_chips_lose_their_tags_with_the_graph() {
     let refs = vec![
@@ -527,19 +493,14 @@ fn a_tag_only_a_remote_has_is_listed_and_marked() {
     assert_eq!(v9.created_unix, 0, "an advertisement carries no date");
 }
 
-/// Which remotes carry a name is what its row opens on, and the snapshot
-/// answers it off the index it was built with rather than out of the rows
-/// (デザイン規約 §左メニューの所作).
+/// What a tag row opens on, answered off the index rather than the rows
+/// (デザイン規約 §左メニューの所作). One row per name however many remotes
+/// have it, so four shapes: two carriers agreeing, one carrier elsewhere
+/// than here, no carrier, and a name only a remote has.
 ///
-/// **A name is one row however many remotes have it**, on however many
-/// commits, so all four shapes are asked here: held by two that agree,
-/// held by one somewhere else than here, held by nobody, and a name this
-/// repository does not have at all.
-///
-/// **The readings are read against one of themselves** — the remote this
-/// repository's tag rows act on — and never against the local tag: which
-/// of the readings is the one is not a question the commits answer, and
-/// the copy here is one opinion among them.
+/// The readings are weighed against the reference remote (the one tag
+/// rows act on), never the local tag — the copy here is one opinion among
+/// them.
 #[test]
 fn the_snapshot_says_which_remotes_carry_a_tag() {
     let refs = vec![
@@ -552,8 +513,7 @@ fn the_snapshot_says_which_remotes_carry_a_tag() {
         [
             ("v1", oid(1), "origin"),
             ("v1", oid(1), "fork"),
-            // The same name, standing where this repository does not have
-            // it: a carrier all the same.
+            // Elsewhere than here: a carrier all the same.
             ("v2", oid(5), "fork"),
             ("v9", oid(9), "origin"),
         ]
@@ -592,9 +552,7 @@ fn the_snapshot_says_which_remotes_carry_a_tag() {
     );
     assert!(snapshot.tag_remotes("never", "origin").is_empty());
 
-    // The same name read against the other carrier: the one that answers
-    // is the reference, and it is the reading the rest are weighed
-    // against — the local tag has no say in it.
+    // With the other carrier as reference; the local tag has no say.
     assert_eq!(
         snapshot.tag_remotes("v2", "fork"),
         vec![("fork", false)],
@@ -602,8 +560,7 @@ fn the_snapshot_says_which_remotes_carry_a_tag() {
     );
 }
 
-/// A name three remotes disagree about: the reference is one of them, and
-/// **every other reading is apart** whether or not it is the one this
+/// Every reading but the reference's is apart, including the one this
 /// repository has.
 #[test]
 fn the_carriers_of_a_tag_stand_apart_from_the_reference_alone() {
@@ -635,12 +592,8 @@ fn the_carriers_of_a_tag_stand_apart_from_the_reference_alone() {
     );
 }
 
-/// Ignored: it needs a repository worth measuring. Run it with
-/// `PGG_PERF_REPO=<path> cargo test -p platitude-core --release
-/// refs_join_at_scale -- --ignored --nocapture`.
-///
-/// What it times is one `publish_refs` join — the work every poll tick
-/// does on top of the two git reads. Recorded in
+/// Times one `publish_refs` join — what every poll tick does on top of
+/// the two git reads. How to run it and the record:
 /// `ci/baseline/refs-join-windows-x64.md`.
 #[test]
 #[ignore = "needs PGG_PERF_REPO pointed at a large repository"]

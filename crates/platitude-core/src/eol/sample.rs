@@ -18,13 +18,9 @@ const SAMPLES: usize = 3;
 /// be unusable are replaced, but not forever.
 const READS: usize = 9;
 
-/// What the files around `path` look like, or `None` for "unknown" — in
-/// which case nothing is shown.
-///
-/// Unknown deliberately covers several cases: git already deciding the
-/// endings, too few readable neighbours, and a sample with no majority all
-/// come back the same way, because in each the app has no basis for naming
-/// a house style.
+/// What the files around `path` look like, or `None` — nothing is shown —
+/// wherever the app has no basis for naming a house style: git decides the
+/// endings, too few readable neighbours, or no majority.
 pub async fn baseline(
     executor: &GitExecutor,
     workdir: &Path,
@@ -46,8 +42,8 @@ async fn sample(
 ) -> Result<Option<Baseline>, GitError> {
     let (dir, ext) = split_dir_ext(path);
 
-    // Same extension in the same directory first: a repository with a house
-    // style usually has it per directory, and this listing is the cheapest.
+    // Same extension in the same directory first: a house style is usually
+    // per directory, and this listing is the cheapest.
     let mut picked: Vec<(String, Group)> = if ext.is_empty() {
         Vec::new()
     } else {
@@ -67,11 +63,9 @@ async fn sample(
         );
     }
 
-    // Reading a file is the expensive part, so the ones that cannot be read
-    // usefully are dropped before git is asked. The group travels
+    // Unreadable files are dropped before git is asked. The group travels
     // with the path so dropping one cannot shift what the rest claim.
     picked.retain(|(p, _)| readable(workdir, p));
-    // Nothing to ask git about: too few to answer from is the answer.
     if picked.len() < SAMPLES {
         return Ok(None);
     }
@@ -94,8 +88,7 @@ fn nearby(path: &str, dir: &str, ext: &str, here: &[String]) -> Vec<(String, Gro
 }
 
 /// Makes `picked` up to [`READS`] out of the whole index: the same extension
-/// anywhere first, then anything at all. Each widening is a group of its own,
-/// because the scope a notice may claim is the widest it had to reach.
+/// anywhere first, then anything at all, each a [`Group`] of its own.
 fn widen(path: &str, ext: &str, all: &[String], picked: &mut Vec<(String, Group)>) {
     let held = |picked: &[(String, Group)], p: &String| picked.iter().any(|(q, _)| q == p);
     if !ext.is_empty() {
@@ -119,14 +112,11 @@ fn widen(path: &str, ext: &str, all: &[String], picked: &mut Vec<(String, Group)
 /// What the readings come to: a majority of the first [`SAMPLES`] that
 /// answered, and the scope every one of those voters came from.
 ///
-/// `read` is indexed into `picked`, and holds only the paths git gave a
-/// single ending for — a file of mixed endings or none at all has no vote
-/// to cast, which is why the ones that were picked are read rather than
-/// counted.
+/// `read` holds indices into `picked`, only for paths git gave a single
+/// ending for — a mixed or ending-less file casts no vote.
 fn settle(picked: &[(String, Group)], read: &[(usize, Eol)], ext: &str) -> Option<Baseline> {
     let mut votes = Tally::default();
     let mut counted = 0usize;
-    // The notice may only claim the range every voter actually came from.
     let mut widest = Group::Here;
     for (index, eol) in read {
         if counted == SAMPLES {
@@ -160,9 +150,8 @@ enum Group {
 }
 
 /// Index paths, optionally under one directory. The index only — asking for
-/// endings here would read every worktree file in the repository, which on
-/// a hundred thousand of them is tens of seconds against one process for
-/// the handful of settled paths (ci/baseline/code-costs-windows-x64.md).
+/// endings here would read every worktree file in the repository, where the
+/// picked few cost one process (ci/baseline/code-costs-windows-x64.md).
 async fn list(
     executor: &GitExecutor,
     workdir: &Path,
@@ -170,8 +159,7 @@ async fn list(
     cancel: &CancellationToken,
 ) -> Result<Vec<String>, GitError> {
     let mut cmd = GitCommand::new().cwd(workdir).args(["ls-files", "-z"]);
-    // A literal directory pathspec matches its whole subtree, which is
-    // narrower than the index and needs no glob escaping.
+    // A literal directory pathspec matches its subtree with no glob escaping.
     if let Some(dir) = dir.filter(|d| !d.is_empty()) {
         cmd = cmd.arg("--").arg(literal_pathspec(dir));
     }
@@ -184,9 +172,8 @@ async fn list(
         .collect())
 }
 
-/// Takes up to `want` entries spread across the list: index order is
-/// alphabetical, so the head is all one directory. The stride keeps
-/// the pick deterministic.
+/// Takes up to `want` entries spread across the list by a fixed stride:
+/// index order is alphabetical, so the head is all one directory.
 fn take_spread(from: &[String], want: usize, group: Group, into: &mut Vec<(String, Group)>) {
     if want == 0 || from.is_empty() {
         return;
@@ -308,9 +295,6 @@ mod tests {
 
     #[test]
     fn more_neighbours_than_may_be_read_are_taken_across_the_listing() {
-        // Index order is alphabetical, so the head of a long listing is all
-        // one directory: taking the first nine would read one corner of the
-        // repository and call it the repository.
         let many: Vec<String> = (0..27).map(|i| format!("src/f{i:02}.kt")).collect();
         let picked = nearby("src/new.kt", "src", "kt", &many);
         assert_eq!(picked.len(), READS);
@@ -364,8 +348,6 @@ mod tests {
 
     #[test]
     fn a_reading_past_the_count_is_not_weighed() {
-        // Nine are picked because some will not answer; the answer is the
-        // first three that do, so a fourth file cannot outvote them.
         let picked = vec![("a.kt".to_string(), Group::Here); 4];
         let read = vec![(0, Eol::Lf), (1, Eol::Lf), (2, Eol::Lf), (3, Eol::Crlf)];
         assert_eq!(

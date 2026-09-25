@@ -5,9 +5,8 @@ use toml::{Table, Value};
 use super::SCHEMA_VERSION;
 use super::toml::{coord, flag, int_in, repo_key, sub_table, width_or_auto};
 
-/// Where the window was left. Position is optional because "never saved"
-/// has to stay distinguishable from "saved at 0,0" — the first lets the
-/// window manager place the window, the second names the corner.
+/// Where the window was left. Position is optional: "never saved" lets
+/// the window manager place the window, "saved at 0,0" names the corner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WindowState {
     pub x: Option<i32>,
@@ -51,31 +50,26 @@ impl Default for Sections {
     }
 }
 
-/// One set for the whole application. Persisting per tab would make the
-/// layout jump on every tab switch and then keep doing it across
-/// restarts; what is worth remembering is the layout that was last
-/// settled on.
+/// One set for the whole application: per tab, the layout would jump on
+/// every tab switch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LayoutState {
     pub sidebar_width: i32,
     pub sidebar_collapsed: bool,
     pub details_width: i32,
     /// Chip and lane columns inside the graph, or [`AUTO_WIDTH`] while
-    /// nobody has moved that divider — which is worth keeping apart from
-    /// a number, because a session that never touched it goes on
-    /// following the pane's default even when that default changes.
+    /// nobody has moved that divider, so an untouched one goes on
+    /// following the pane's default when that default changes.
     pub graph_labels_width: i32,
     pub graph_lanes_width: i32,
-    /// How tall the log stands: the log is where a command's answer is
-    /// read, so a session that left it up has no claim on the next
-    /// one's screen.
+    /// How tall the log stands. Whether it is up is not kept: a session
+    /// that left it up has no claim on the next one's screen.
     pub commands_height: i32,
     pub tags_shown: bool,
     pub wip_tree: bool,
     pub details_tree: bool,
-    /// Whether a diff is read side by side — the old side on the left,
-    /// the new on the right — rather than as one column. A way of
-    /// reading, so the machine's (デザイン規約 §diff を 2 列で読む).
+    /// Whether a diff is read side by side. A way of reading, so the
+    /// machine's (デザイン規約 §diff を 2 列で読む).
     pub diff_split: bool,
     pub sections: Sections,
 }
@@ -101,8 +95,8 @@ impl Default for LayoutState {
 /// "No width was chosen here" — see [`LayoutState::graph_labels_width`].
 pub const AUTO_WIDTH: i32 = -1;
 
-/// A cap on the tab list, so a file that has been hand-edited into
-/// something enormous cannot make startup crawl.
+/// So a tab list hand-edited into something enormous cannot make startup
+/// crawl.
 const MAX_TABS: usize = 64;
 
 /// One tab as the last run left it.
@@ -110,21 +104,16 @@ const MAX_TABS: usize = 64;
 pub struct TabRecord {
     /// The working copy the tab stood in — the folder opened again.
     pub path: String,
-    /// The repository that copy belongs to, which is what the tab is
-    /// named after (`repo::Place::repo`). **Both are written**: a tab
-    /// standing in a linked copy is named after neither the folder it
-    /// opens nor anything the strip can work out without asking git,
-    /// and a restored tab is not opened until it is looked at.
-    ///
-    /// The copy's own path where the file does not say — every tab of a
-    /// file written before a tab could stand anywhere else stood in the
-    /// repository's own copy.
+    /// The repository that copy belongs to, which names the tab
+    /// (`repo::Place::repo`). Written beside the path: for a linked copy
+    /// the strip cannot work it out without asking git, and a restored
+    /// tab is not opened until it is looked at. The copy's own path where
+    /// the file does not say.
     pub repo: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TabsState {
-    /// The tabs, in the order they sat in.
     pub tabs: Vec<TabRecord>,
     /// Index into `tabs`. Always in range once loaded.
     pub active: usize,
@@ -192,9 +181,8 @@ impl State {
                     })
                     .unwrap_or_default()
             };
-            // Paired by position, and the pairing is what the empty ones
-            // are dropped after: a blank in either list would otherwise
-            // shift every repository one tab along.
+            // Paired by position before the empty ones are dropped: a
+            // blank would otherwise shift every repository one tab along.
             let repos = strings("repos");
             let tabs: Vec<TabRecord> = strings("paths")
                 .into_iter()
@@ -333,9 +321,8 @@ colour = "midnight"
         assert_eq!(state.layout.details_width, 640);
     }
 
-    /// The graph's two columns carry a value below every real width that
-    /// still means something: nobody has moved this divider. It has to
-    /// survive the same range check that throws out a stored 3.
+    /// [`AUTO_WIDTH`] has to survive the same range check that throws out
+    /// a stored 3.
     #[test]
     fn an_untouched_graph_divider_is_not_a_width() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -388,9 +375,8 @@ graph_lanes_width = 3
         assert_eq!(tabs.active, 0);
     }
 
-    /// A tab standing in a linked working copy comes back standing in it,
-    /// and still named after its repository. The two lists are read by
-    /// position, so a blank in the paths takes its repository with it.
+    /// The two lists are read by position, so a blank in the paths takes
+    /// its repository with it.
     #[test]
     fn a_tab_keeps_the_repository_its_copy_hangs_off() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -410,8 +396,6 @@ graph_lanes_width = 3
         );
     }
 
-    /// A file written before a tab could stand anywhere else: every tab
-    /// stood in its repository's own copy, and says so.
     #[test]
     fn a_file_with_no_repositories_names_each_tab_after_its_own_copy() {
         let dir = tempfile::tempdir().expect("tempdir");

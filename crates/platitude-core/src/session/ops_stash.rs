@@ -1,13 +1,10 @@
 //! The four writes that move work onto and off the stash, and the
-//! rename git has no command for.
+//! rename git has no command for. The round trip a switch makes
+//! *through* the stash is [`super::stash_round`].
 //!
-//! Beside [`super::stash_round`], which is the round trip a switch makes
-//! *through* the stash — this is the stash asked for on its own.
-//!
-//! Every one answers under the same kind ([`OperationKind::Stash`]), so
-//! which press an answer belongs to is the id's to say: an apply pressed
-//! just before a pop answers first, and a consumer that counted answers
-//! by turn would take it for the pop's ([`crate::operation`]).
+//! All answer under [`OperationKind::Stash`], so only the id says which
+//! press an answer belongs to — an apply pressed just before a pop
+//! answers first ([`crate::operation`]).
 
 use super::stash_round::conflicts_now;
 use super::*;
@@ -47,17 +44,12 @@ impl RepoSession {
 
     /// `git stash pop <selector>` (drops the stash on success).
     ///
-    /// A restore that conflicts is a success: the work is across,
-    /// waiting to be settled, and git keeps the entry in that case — so a
-    /// conflicting pop lands exactly where an apply would have, and the
-    /// way back is still in the list (デザイン規約 §変更を退避する).
-    /// The exit code cannot tell that apart from a refusal that did
-    /// nothing, so the working tree decides (`conflicts_now`).
-    ///
-    /// Only when the tree was settled to begin with, though: git will not
-    /// restore onto an index that already has unmerged paths — it refuses
-    /// outright and changes nothing (measured) — and the conflicts still
-    /// standing there afterwards are the old ones.
+    /// A restore that conflicts is a success: git keeps the entry, so it
+    /// lands where an apply would (デザイン規約 §変更を退避する). The exit
+    /// code cannot tell that from a refusal that did nothing, so the
+    /// working tree decides (`conflicts_now`) — only if it was settled
+    /// beforehand: git refuses outright onto unmerged paths, and the
+    /// conflicts standing afterwards are the old ones.
     pub fn stash_pop(self: &Arc<Self>, selector: String) -> Option<OperationId> {
         self.write(
             OperationKind::Stash,
@@ -81,9 +73,7 @@ impl RepoSession {
     /// `git stash apply <selector>` (keeps the stash).
     ///
     /// A restore that conflicts is read the way [`Self::stash_pop`] reads
-    /// one: the work is across and waiting to be settled, so the working
-    /// tree decides whether the non-zero exit was that or a refusal that
-    /// did nothing.
+    /// one.
     pub fn stash_apply(self: &Arc<Self>, selector: String) -> Option<OperationId> {
         self.write(
             OperationKind::Stash,

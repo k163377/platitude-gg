@@ -11,8 +11,7 @@ use platitude_core::Oid;
 use platitude_core::details::{self, DiffTarget};
 use platitude_core::preview::{self, PreviewFiles};
 
-/// A tiny valid PNG (1x1 RGBA). Contains NUL bytes, so git classifies the
-/// file as binary; the exact pixels are irrelevant here.
+/// A 1x1 RGBA PNG; its NUL bytes make git classify it as binary.
 const TINY_PNG: &[u8] = &[
     0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, b'I', b'H', b'D', b'R',
     0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
@@ -32,30 +31,21 @@ fn write_bytes(repo: &TestRepo, rel: &str, bytes: &[u8]) {
     std::fs::write(repo.path.join(rel), bytes).unwrap();
 }
 
-/// Somewhere of this test's own for the blob sides to be written to. The
-/// temp dir has to outlive the files — dropping them removes their own
-/// directory, and the assertions below read what is left.
+/// The temp dir has to outlive the files — dropping them removes their own
+/// directory, and the assertions read what is left.
 fn files() -> (tempfile::TempDir, PreviewFiles) {
     let dir = tempfile::tempdir().unwrap();
     let files = PreviewFiles::at(dir.path().join("s"));
     (dir, files)
 }
 
-/// What a side's file holds, read back off the disk the pane would read
-/// it from.
 fn bytes_of(side: &preview::PreviewSide) -> Vec<u8> {
     std::fs::read(side.file.as_ref().expect("a file to read")).unwrap()
 }
 
-/// One repository, four targets where one side simply is not there: an
-/// untracked file, a staged addition (no HEAD side), a staged deletion
-/// (no index side), and a root commit (no parent).
-///
-/// The staged addition also stands for the unborn-HEAD shape:
-/// `HEAD:<path>` not resolving means "no old side" whether the path is
-/// missing from HEAD or HEAD does not exist yet — the probe answers and
-/// no cat-file runs (`preview::blob_is_there`; what the log then holds is
-/// pinned in `answer_reads.rs`).
+/// The staged addition also stands for an unborn HEAD: `HEAD:<path>` not
+/// resolving means "no old side" either way, and the probe answers without
+/// a cat-file (`preview::blob_is_there`; the log side is in `answer_reads.rs`).
 #[tokio::test]
 async fn a_side_that_is_not_there_previews_as_absent() {
     let mut repo = TestRepo::init();
@@ -75,9 +65,8 @@ async fn a_side_that_is_not_there_previews_as_absent() {
     let (executor, cancel) = env();
     let (_dir, files) = files();
 
-    // Untracked: new side only, and it is the working-tree file itself —
-    // and the all-additions text diff of an untracked binary is flagged
-    // binary.
+    // Untracked: new side only, the working-tree file itself; its
+    // all-additions text diff is still flagged binary.
     let target = DiffTarget::Untracked {
         path: "stray.png".to_string(),
     };
@@ -97,8 +86,7 @@ async fn a_side_that_is_not_there_previews_as_absent() {
         Some(repo.path.join("stray.png").as_path())
     );
 
-    // Staged addition: the index blob is written out; there is no HEAD
-    // side.
+    // Staged addition: the index blob is written out.
     let p = preview::file_preview(
         &executor,
         &repo.path,
@@ -220,11 +208,9 @@ async fn committed_image_previews_parent_and_commit_blobs() {
     assert_ne!(old.file, new.file, "two sides, two files");
 }
 
-/// The colours are read against the side the commit has, and the probe in
-/// front of that read has to say yes to it. Nothing announces a probe that
-/// wrongly says no — the rows arrive uncoloured and no error is raised —
-/// so the side that is there is pinned as tightly as the side that is not
-/// (`preview::source_text`, and `answer_reads.rs` for the missing side).
+/// A probe that wrongly says no raises nothing — the rows just arrive
+/// uncoloured — so the present side is pinned as the missing one is in
+/// `answer_reads.rs` (`preview::source_text`).
 #[tokio::test]
 async fn source_text_reads_the_side_the_commit_has() {
     let mut repo = TestRepo::init();
@@ -315,12 +301,10 @@ async fn non_image_binary_reports_sizes_without_files() {
     );
 }
 
-/// A picture whose blob cannot be written out still reports its size —
-/// and says what stopped it, which is the only place that survives. Told
-/// apart from a side no file was ever wanted from
-/// (`non_image_binary_reports_sizes_without_files`) by exactly this: the
-/// two look the same otherwise, and a pane quietly missing its picture
-/// is what a reader is left to diagnose.
+/// The reason is the only trace that survives: without it this looks
+/// exactly like a side no file was wanted from
+/// (`non_image_binary_reports_sizes_without_files`), a pane quietly missing
+/// its picture.
 #[tokio::test]
 async fn a_side_that_could_not_be_written_says_what_stopped_it() {
     let mut repo = TestRepo::init();
@@ -329,8 +313,8 @@ async fn a_side_that_could_not_be_written_says_what_stopped_it() {
     repo.git(&["commit", "-m", "v1"]);
     write_bytes(&repo, "logo.png", &tiny_png_v2());
 
-    // A file where the session's directory would go: nothing can be made
-    // under it, whatever the platform calls that.
+    // A file where the directory would go: nothing can be made under it on
+    // any platform.
     let dir = tempfile::tempdir().unwrap();
     let wall = dir.path().join("not-a-directory");
     std::fs::write(&wall, b"x").unwrap();
@@ -357,8 +341,7 @@ async fn a_side_that_could_not_be_written_says_what_stopped_it() {
         why.contains("could not be made") && why.contains(&wall.join("s").display().to_string()),
         "the step and the path it fell over on: {why}"
     );
-    // The working-tree side is the file itself, so nothing was written
-    // for it and there is nothing to explain.
+    // The working-tree side is the file itself: nothing written, nothing to explain.
     let new = p.new.unwrap();
     assert!(new.file.is_some());
     assert!(new.unwritten.is_none());
@@ -376,12 +359,10 @@ async fn svg_gets_an_image_preview_alongside_its_text_diff() {
     let target = DiffTarget::Untracked {
         path: "icon.svg".to_string(),
     };
-    // Text diff exists (SVG is text) …
     let patches = details::file_diff(&executor, &repo.path, &target, &cancel)
         .await
         .unwrap();
     assert!(!patches[0].is_binary);
-    // … and the preview is still offered for rendering.
     let p = preview::file_preview(
         &executor,
         &repo.path,
@@ -396,21 +377,17 @@ async fn svg_gets_an_image_preview_alongside_its_text_diff() {
     assert_eq!(bytes_of(&p.new.unwrap()), svg.as_bytes());
 }
 
-/// No cap on either side: a picture past what a data URL could have
-/// carried is the working-tree file on one side and a blob streamed out
-/// whole on the other, byte for byte, across every chunk the pipe hands
-/// over.
+/// No cap on either side; a blob streams out whole, byte for byte, across
+/// every chunk the pipe hands over.
 #[tokio::test]
 async fn a_large_image_is_handed_over_whole() {
     let mut repo = TestRepo::init();
     repo.commit_file("base.txt", "x\n", "base");
-    // Well past what a data URL would carry, in the tree only: no git
-    // object, and the file is the preview.
+    // Large and in the tree only: no git object, the file is the preview.
     let huge_len = 17 * 1024 * 1024 + 1;
     let big = vec![0u8; huge_len];
     write_bytes(&repo, "huge.png", &big);
-    // And a blob of some size, so the stream out of `cat-file` runs over
-    // many chunks: what lands has to be exactly what went in.
+    // A blob big enough that `cat-file` streams it over many chunks.
     let staged: Vec<u8> = (0..3 * 1024 * 1024u32).map(|i| (i % 251) as u8).collect();
     write_bytes(&repo, "staged.png", &staged);
     repo.git(&["add", "--", "staged.png"]);
@@ -454,9 +431,6 @@ async fn a_large_image_is_handed_over_whole() {
     assert_eq!(bytes_of(&new), staged);
 }
 
-/// The files of one read go when the next read is published, and the
-/// rest when the pane closes — and a read whose target is no picture at
-/// all still sweeps, since the pane has moved on all the same.
 #[tokio::test]
 async fn the_next_read_sweeps_the_files_of_the_one_before_it() {
     let mut repo = TestRepo::init();
@@ -484,8 +458,6 @@ async fn the_next_read_sweeps_the_files_of_the_one_before_it() {
     let first_old = first.old.unwrap().file.unwrap();
     assert!(first_old.exists());
 
-    // The same file read again: the pane is handed a new file under a
-    // new name, and the one before it goes.
     let second = preview::file_preview(
         &executor,
         &repo.path,
@@ -505,7 +477,7 @@ async fn the_next_read_sweeps_the_files_of_the_one_before_it() {
     assert!(!first_old.exists(), "swept by the read after it");
     assert!(second_old.exists());
 
-    // A read of something no picture stands in for sweeps just the same.
+    // A read with no picture sweeps too: the pane has moved on all the same.
     let text = DiffTarget::Untracked {
         path: "notes.txt".to_string(),
     };

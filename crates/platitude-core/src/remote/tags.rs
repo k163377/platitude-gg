@@ -13,18 +13,12 @@ use crate::process::{GitCommand, GitExecutor};
 /// What a remote carries under `refs/tags/`: each tag name and the commit
 /// it designates over there.
 ///
-/// Nothing local records this. A branch on a remote leaves `refs/remotes/`
-/// behind, so its badge survives going offline; a fetched tag lands in
-/// `refs/tags/` next to the ones made here and the two become
-/// indistinguishable. Asking the remote is the only way to tell them apart,
-/// which is why this is on the fetch path: it is the one place the user
-/// has already agreed to pay for the network.
+/// Nothing local records this (a fetched tag lands in `refs/tags/` beside
+/// the ones made here), so it runs on the fetch path, where the user has
+/// already agreed to pay for the network.
 ///
-/// An annotated tag is advertised twice — the tag object, then the commit
-/// it peels to under a `^{}` suffix — and it is the commit that has to line
-/// up with what the local listing peels to, so the peeled line wins wherever
-/// both appear. `--refs` cannot do that filtering: it drops the peeled line
-/// and keeps the tag object, which compares equal to nothing (measured).
+/// Do not add `--refs`: it drops the peeled `^{}` line and keeps the tag
+/// object, which compares equal to no local commit.
 pub async fn list_tags(
     executor: &GitExecutor,
     workdir: &Path,
@@ -43,24 +37,15 @@ pub async fn list_tags(
 
 /// Sends one tag to one remote.
 ///
-/// `expect` turns the push into a leased overwrite pinned to the commit
-/// the remote was last seen holding this tag on — empty sends it plain,
-/// which git refuses outright where the name is already over there on
-/// something else.
+/// `expect` makes it a leased overwrite pinned to the commit the remote was
+/// last seen holding this tag on; empty sends it plain, which git refuses
+/// where the name already stands on something else over there.
 ///
-/// **A refusal here is not the one a fetch answers.** A branch that is
-/// turned down for being behind is put right by fetching; a tag is not —
-/// `--prune` leaves the local tag where it is and `--prune-tags` exits 1
-/// (measured) — so no refusal here is ever read as outdated and nothing is
-/// queued behind one. `git push` for branches is [`super::push::push`];
-/// the two share no refspec, since a tag's is `refs/tags/` on both sides.
-///
-/// **What the far side turned down under a rule of its own reads the
-/// same as it does for a branch** (`super::refusal::refused`): a forge that
-/// protects its release tags, a `pre-receive` hook that keeps them, both
-/// reach this end as the same `[remote rejected]`, and a report is what
-/// they are (デザイン規約 §答えの要らない報せ). `--porcelain` is what makes that
-/// readable, and it is the reason this asks for it.
+/// No refusal here is read as outdated or queues anything behind it: unlike
+/// a branch, a tag is not put right by fetching (`--prune` keeps the local
+/// tag, `--prune-tags` exits 1). A far-side rule (`[remote rejected]`)
+/// reads as a report, as for a branch (`super::refusal::refused`,
+/// デザイン規約 §答えの要らない報せ) — `--porcelain` is what makes it readable.
 pub async fn push_tag(
     executor: &GitExecutor,
     workdir: &Path,
@@ -90,23 +75,11 @@ pub async fn push_tag(
 
 /// Takes one tag off one remote. Nothing here is touched.
 ///
-/// **The name is fully qualified, and it has to be.** A bare `--delete
-/// <name>` is resolved against everything the remote carries, so a name
-/// that is a branch over there as well is refused outright — `error: dst
-/// refspec dup matches more than one`, with neither of the two deleted
-/// (measured, git 2.55). `refs/tags/<name>` names the one ref meant, and the
-/// branch beside it is left alone.
-///
-/// **A name the remote has not got is not an error in this spelling.**
-/// The qualified form needs no resolution over there, so git answers
-/// `warning: deleting a non-existent ref` and exits 0 (measured) — where the
-/// bare form would have failed. Whether there is anything to delete is
-/// therefore the caller's to know before it asks (`offers::TagSides`);
-/// git will not be the one to say.
-///
-/// **The far side may still keep it**, and says so the same way it does
-/// over a branch — so this asks in `--porcelain` and reads the answer
-/// through the same classifier ([`push_tag`]).
+/// The name must stay qualified as `refs/tags/<name>`: a bare name that is
+/// also a branch over there is refused and neither is deleted. The
+/// qualified form exits 0 on a name the remote lacks, so whether there is
+/// anything to delete is the caller's to know (`offers::TagSides`).
+/// A far-side refusal is read as in [`push_tag`], hence `--porcelain`.
 pub async fn delete_remote_tag(
     executor: &GitExecutor,
     workdir: &Path,
@@ -135,25 +108,18 @@ pub async fn delete_remote_tag(
     Err(super::refusal::refused(command, &out, remote, tag, true))
 }
 
-/// Replaces a tag on a remote with one under a new name: the composition
-/// git has no command for, the tag's counterpart to
-/// [`super::replace_remote_branch`].
+/// Replaces a tag on a remote with one under a new name — no git command
+/// does this; the tag's counterpart to [`super::replace_remote_branch`].
 ///
-/// The new name goes up from the copy here. A tag has no tracking ref to
-/// push from — nothing local records what a remote carries under
-/// `refs/tags/` ([`list_tags`]) — and the name here already points at the
-/// object the old one marked, because the local rename that comes first
-/// moves the name and never the object ([`crate::tag::rename`]). Whether
-/// the remote's copy stands on that same object is the caller's to know
-/// before it asks: a drifted one would change its object **as well as**
-/// its name under this pair (`offers::TagSides`, デザイン規約 §手元の改名の後のリモート).
+/// The new name goes up from the local copy (a tag has no tracking ref),
+/// which the local rename left on the old object ([`crate::tag::rename`]).
+/// Whether the remote's copy stands on that same object is the caller's to
+/// know: a drifted one would change object as well as name
+/// (`offers::TagSides`, デザイン規約 §手元の改名の後のリモート).
 ///
-/// The push goes first, for the reason it does on a branch: a name the
-/// remote refuses leaves the old one standing and nothing lost.
-///
-/// The far side sees a tag created and a tag deleted, so whatever hung
-/// off the old name — a release built from it — stays behind on the name
-/// that went. The UI warns about this before it runs.
+/// The push goes first so a refused name leaves the old one standing.
+/// Whatever hung off the old name over there (a release) stays behind on
+/// it; the UI warns before this runs.
 pub async fn replace_remote_tag(
     executor: &GitExecutor,
     workdir: &Path,
@@ -171,25 +137,21 @@ pub async fn replace_remote_tag(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteTag {
     pub name: crate::Name,
-    /// The commit it designates, annotated tags peeled — the same thing
-    /// [`crate::refs::RefEntry::commit_oid`] answers for a local one, so
-    /// the two can be compared directly.
+    /// The commit it designates, annotated tags peeled — comparable with
+    /// [`crate::refs::RefEntry::commit_oid`].
     pub commit: Oid,
     /// True when the remote advertised a tag object to peel.
     pub annotated: bool,
 }
 
-/// Parses `git ls-remote --tags`: `<oid>\t<refname>` lines, sorted by name.
+/// Parses `git ls-remote --tags` (`<oid>\t<refname>` lines), sorted by name.
 ///
-/// The `From <url>` banner goes to stderr, so stdout is only ref lines.
-/// Anything outside `refs/tags/` and any unreadable oid is skipped, so
-/// one odd advertisement leaves every other tag with its badge and the
-/// listing stands.
+/// Lines outside `refs/tags/` or with an unreadable oid are skipped, so one
+/// odd advertisement does not cost every other tag its badge.
 pub fn parse_ls_remote_tags(bytes: &[u8]) -> Vec<RemoteTag> {
     let mut out: Vec<RemoteTag> = Vec::new();
-    // Pairing by scanning `out` would square the listing (the baseline
-    // repository advertises 45k tags, most of them twice); the index keeps
-    // the pairing O(1) without leaning on the advertised order.
+    // Pairing by scanning `out` would be quadratic over tens of thousands of
+    // tags.
     let mut by_name: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
     for line in bytes.split(|b| *b == b'\n') {
         let Some((oid, refname)) = split_ls_remote_line(line) else {
@@ -203,9 +165,8 @@ pub fn parse_ls_remote_tags(bytes: &[u8]) -> Vec<RemoteTag> {
             None => (name, false),
         };
         match by_name.get(name) {
-            // Two lines for one name means an annotated tag: the pair is
-            // the tag object and the commit under it. Only the peeled line
-            // carries the commit, so it wins whichever side it arrives on.
+            // A second line for a name is an annotated tag's pair. Only the
+            // peeled line carries the commit, so it wins whichever comes first.
             Some(&seen) if !out[seen].annotated => {
                 out[seen].commit = oid;
                 out[seen].annotated = peeled;
@@ -235,9 +196,8 @@ pub(super) fn split_ls_remote_line(line: &[u8]) -> Option<(Oid, &str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    /// Recorded from git 2.51 running `ls-remote --tags` against a local
-    /// repository holding one annotated tag (`ann-1`, advertised twice) and
-    /// three lightweight ones. Byte for byte as git wrote it to stdout.
+    /// Real `ls-remote --tags` stdout (git 2.51): one annotated tag
+    /// (`ann-1`, advertised twice) and three lightweight ones.
     const LS_REMOTE_TAGS: &[u8] = b"\
 a56decf8286d58887d4e0bf7bda73adb7a7ec957\trefs/tags/ann-1\n\
 4b85e9d7b2bc03f629f3331705f5049e4522ce31\trefs/tags/ann-1^{}\n\
@@ -264,8 +224,7 @@ b132edc248d8082a5019061b53fc2e3de31cc085\trefs/tags/only-remote\n";
 
     #[test]
     fn the_peeled_line_wins_whichever_side_it_arrives_on() {
-        // git advertises the tag object first, but nothing in the protocol
-        // promises the order, and a reversed pair must read the same.
+        // Nothing in the protocol promises the tag object comes first.
         let reversed = b"\
 4b85e9d7b2bc03f629f3331705f5049e4522ce31\trefs/tags/ann-1^{}\n\
 a56decf8286d58887d4e0bf7bda73adb7a7ec957\trefs/tags/ann-1\n";
@@ -280,7 +239,7 @@ a56decf8286d58887d4e0bf7bda73adb7a7ec957\trefs/tags/ann-1\n";
 
     #[test]
     fn a_remote_with_no_tags_lists_none() {
-        // Measured: git prints nothing at all and exits 0.
+        // git prints nothing and exits 0.
         assert!(parse_ls_remote_tags(b"").is_empty());
     }
 

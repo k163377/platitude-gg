@@ -20,7 +20,7 @@ pub enum SignatureStatus {
     GoodRevokedKey,
     /// The key is missing, or no allowed-signers file is configured.
     CannotCheck,
-    /// Not signed at all — the ordinary case.
+    /// Not signed.
     Absent,
 }
 
@@ -57,8 +57,7 @@ impl SignatureStatus {
         self != SignatureStatus::Absent
     }
 
-    /// True when the signature verifies against a trusted key. Anything
-    /// else — including "cannot check" — is false here.
+    /// True only for `Good` — "cannot check" is false too.
     pub fn is_trusted(self) -> bool {
         self == SignatureStatus::Good
     }
@@ -75,23 +74,14 @@ pub struct Signature {
 
 /// Verifies one commit's signature.
 ///
-/// Deliberately not part of [`crate::details`]: verification runs gpg or
-/// ssh-keygen, and the details pane has a 100ms budget. The UI asks for
-/// this only where it shows the result.
+/// Not part of [`crate::details`]: verification runs gpg or ssh-keygen,
+/// outside the details pane's 100ms budget.
 ///
-/// **The object is read first, and for an unsigned commit it is the only
-/// thing read.** `%G?` cannot be trusted on its own — an SSH-signed commit
-/// in a repository with no `gpg.ssh.allowedSignersFile` reports `N`, the
-/// same code as an unsigned one, and measured on git 2.55 so does every
-/// other placeholder git has for the question (`%GS` `%GK` `%GG` `%GF`
-/// `%GP` are all empty for both, `%GT` is `undefined` for both). So the
-/// header is what says whether a signature exists at all, and asking
-/// for it first means a commit that carries none costs one process,
-/// leaving gpg and ssh-keygen out where there is nothing to
-/// check.
-///
-/// With a header present, `N` no longer reads as "unsigned": it means git
-/// could not judge what is there, which is its own answer.
+/// The object's `gpgsig` header is read first and an unsigned commit stops
+/// there, in one process: no `%G?`-family placeholder tells an unsigned
+/// commit from an SSH-signed one without `gpg.ssh.allowedSignersFile`
+/// (rules-refs/core.md「署名の有無は」). With a header present, `N` means
+/// git could not judge it.
 pub async fn verify_commit(
     executor: &GitExecutor,
     workdir: &Path,
@@ -105,9 +95,7 @@ pub async fn verify_commit(
             key: String::new(),
         });
     }
-    // Paced by gpg or ssh-keygen and whatever agent they reach for:
-    // the slot it sits in is an elsewhere slot
-    // (`process::Pace`).
+    // Paced by gpg / ssh-keygen and their agent (`process::Pace`).
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["log", "-1", "-z", "--format=%G?%x00%GS%x00%GK", rev])
@@ -139,8 +127,8 @@ async fn has_signature_header(
     Ok(header_has_signature(&out.stdout))
 }
 
-/// Scans a raw commit object's headers, which end at the first blank line.
-/// Stopping there matters: a message body may say anything at all.
+/// Scans only the headers (up to the first blank line) — a message body may
+/// say anything.
 fn header_has_signature(object: &[u8]) -> bool {
     for line in object.split(|b| *b == b'\n') {
         if line.is_empty() {
@@ -198,7 +186,6 @@ gpgsig -----BEGIN SSH SIGNATURE-----\n -----END SSH SIGNATURE-----\n\nsubject\n"
         let unsigned = b"tree abc\nauthor A <a@x> 1 +0000\n\nsubject\n";
         assert!(!header_has_signature(unsigned));
 
-        // A body that talks about signing is still unsigned.
         let liar = b"tree abc\nauthor A <a@x> 1 +0000\n\ngpgsig is not here\n";
         assert!(!header_has_signature(liar));
     }

@@ -11,17 +11,13 @@ use crate::process::{GitCommand, GitExecutor};
 /// `git clone <url> <into>`, where `into` is the folder the working
 /// copy becomes.
 ///
-/// **The destination is always named.** Left to itself git works one out
-/// of the URL and prints it, and the caller would have to read that line
-/// back to know where the repository landed — a message written for
-/// people, which nothing here parses (規約 §git が言ったことを読む場所).
-/// Naming it makes the answer the caller's own: the folder it asked for
-/// is the folder to open.
+/// The destination is always named, or the caller would have to parse
+/// git's human-facing `Cloning into '…'`
+/// (rules-refs/core.md「`remote::clone` は行き先を必ず名指しする」).
 ///
-/// The parent is the working directory, so git's own refusals name the
-/// destination the way the dialog spells it. git makes the leading
-/// folders it is short of, and refuses a destination that already holds
-/// anything — that refusal is git's to make and comes back untouched in
+/// The parent is the working directory, so git's refusals name the
+/// destination as the dialog spells it. git makes missing leading folders
+/// and refuses a non-empty destination; that comes back untouched in
 /// [`GitError::Failed`].
 pub async fn clone(
     executor: &GitExecutor,
@@ -36,9 +32,8 @@ pub async fn clone(
         .arg(into)
         .timeout(timeout)
         .paced_elsewhere();
-    // Only where there is one to stand in: a destination at a root has
-    // none, and a working directory that is not there fails the spawn
-    // before git can say anything about the clone.
+    // Only an existing parent: a missing working directory fails the
+    // spawn before git can say anything.
     let cmd = match into.parent().filter(|parent| parent.is_dir()) {
         Some(parent) => cmd.cwd(parent),
         None => cmd,
@@ -49,20 +44,12 @@ pub async fn clone(
 /// What to call the folder a clone of `url` would go into — the name the
 /// dialog offers before anybody types one.
 ///
-/// **A suggestion for the box.** git has a rule of its own for the
-/// destination it picks when none is given (`guess_dir_name`), and this
-/// one stands apart from it: the clone always names its destination
-/// ([`clone`]), so what this returns is only what stands in
-/// the box until it is edited. The shapes it has to read are the ones
-/// people paste — `https://host/you/repo.git`, `git@host:you/repo.git`,
-/// `file:///srv/repo`, a plain path — and the answer is the last segment
-/// with one `.git` taken off the end.
-///
-/// `""` where nothing in the URL reads as a name, which leaves the box
-/// empty and the accept button refusing: a folder has to be named.
+/// Only a prefill, not a second `guess_dir_name`: [`clone`] always names
+/// its destination. The answer is the last segment with one `.git` taken
+/// off. `""` where nothing reads as a name, which leaves the box empty
+/// and the accept button refusing.
 pub fn folder_name_for(url: &str) -> String {
-    // A pasted URL often carries the line's own whitespace, and a URL
-    // typed with a trailing separator names the same repository.
+    // A trailing separator names the same repository.
     let trimmed = url.trim().trim_end_matches(['/', '\\']);
     // `:` ends the host of the scp-like form (`git@host:repo.git`), where
     // no slash separates host from path at all.
@@ -99,8 +86,7 @@ mod tests {
         }
     }
 
-    /// The box stays empty: that is what refuses the accept button, and
-    /// a name guessed out of a URL that carries none would be one
+    /// The empty box is what refuses accept; a guessed name would be one
     /// somebody has to notice and delete.
     #[test]
     fn a_url_with_no_name_in_it_offers_none() {

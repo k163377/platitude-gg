@@ -1,18 +1,14 @@
 //! Whether commits about to be rewritten are already on a remote.
 //!
-//! Rewriting published history is legal and sometimes right, so this only
-//! answers the question — the warning and the decision belong to the UI
-//! (デザイン規約「push 済みの範囲は言うだけ」).
+//! This only answers; the warning and the decision are the UI's
+//! (デザイン規約「ローカルの履歴書き換えはクリック」).
 //!
-//! "Published" means reachable from some remote-tracking ref, which is only
-//! as fresh as the last fetch. A repository with no remotes has nothing
-//! published, so nothing to warn about.
+//! "Published" means reachable from some remote-tracking ref — only as
+//! fresh as the last fetch.
 //!
-//! **Two ways to the same answer, and which one a caller takes is about
-//! *when* it needs it.** [`state_of`] asks git and counts, which is a
-//! process away; [`range_rewrites_published`] reads it off the rows the
-//! walk already marked (`session::published`), which a menu opening on a
-//! row has in the same frame (デザイン規約 §行が読む答えはどこから来るか).
+//! [`state_of`] asks git (a process away); [`range_rewrites_published`]
+//! reads the rows the walk already marked (`session::published`), in the
+//! frame a menu opens in (デザイン規約 §行が読む答えはどこから来るか).
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -49,8 +45,8 @@ pub fn only(rev: &str) -> String {
     format!("{rev}^!")
 }
 
-/// One walked row, as the range question reads it: its id, the parents
-/// the walk sifted, and the mark that walk left (`session::LogRow`).
+/// One walked row (`session::LogRow`): parents as the walk sifted them,
+/// and the walk's published mark.
 #[derive(Debug, Clone, Copy)]
 pub struct WalkedRow<'a> {
     pub oid: Oid,
@@ -62,41 +58,27 @@ pub struct WalkedRow<'a> {
 /// `rewrites pushed commits` note on a `rebase` row, answered off rows
 /// already on screen.
 ///
-/// `rows` is the walk's own order, **children before every parent**
-/// (`--date-order`). That is what makes one pass enough: by the time a
-/// row is reached, every commit that could have carried a side's colour
-/// down to it has been through here, so its two answers are final and
-/// the first hit can return.
+/// `rows` must be in walk order, **children before every parent**
+/// (`--date-order`), so one pass settles each row and the first hit can
+/// return. The whole range is walked: a merge brings in a side whose mark
+/// says nothing about the first parent's.
 ///
-/// **The whole range is walked.** `published` is closed under
-/// ancestors, so for a range with no merge in it the answer is the
-/// oldest row's mark — but a merge brings in a side whose mark says
-/// nothing about the first parent's, and the range is then a set of
-/// commits.
-///
-/// **The window is the answer**, the same stance the row marks take
-/// (`session::published`) — and the two ends fall out of it differently.
-/// A `head` no row carries colours nothing, so nothing is in the range:
-/// `false`. An `onto` no row carries colours nothing either, which
-/// leaves the whole of `head`'s reach in the range — and that is the
-/// true answer for the shape it happens in, a name older than the window
-/// (`--date-order` emits no parent before its children, so a commit the
-/// walk stopped short of has none of its ancestors drawn either).
+/// **The window is the answer** (as for `session::published`): a `head` on
+/// no row puts nothing in the range (`false`); an `onto` on no row leaves
+/// all of `head`'s reach in it — the right answer for a base older than
+/// the window.
 pub fn range_rewrites_published<'a>(
     rows: impl IntoIterator<Item = WalkedRow<'a>>,
     head: Oid,
     onto: Oid,
 ) -> bool {
-    // Ids waiting for the walk to reach them, one set per side —
-    // bounded by the open lanes, the way the walk's own marking is
-    // (`session::published::PublishMarks`).
+    // Ids waiting to be reached, per side — bounded by the open lanes.
     let mut from_head: HashSet<Oid> = HashSet::from([head]);
     let mut from_onto: HashSet<Oid> = HashSet::from([onto]);
     for row in rows {
         let in_head = from_head.remove(&row.oid);
-        // Both sides are asked, and both carry on down: a commit the
-        // rebase would leave alone is one `onto` reaches, however many
-        // ways `head` also reaches it.
+        // Both sides carry on down: what `onto` reaches is left alone
+        // however `head` also reaches it.
         let in_onto = from_onto.remove(&row.oid);
         if in_head {
             from_head.extend(row.parents.iter().copied());
@@ -112,33 +94,23 @@ pub fn range_rewrites_published<'a>(
 }
 
 /// Which commit `branch --delete` measures a branch's tip against —
-/// git's `branch_merged`: the branch's upstream where that resolves, and
-/// HEAD otherwise (measured: `upstream_integration`). `None` where
-/// neither is known, which leaves the question unanswered.
+/// git's `branch_merged`: the upstream where it resolves, else HEAD
+/// (pinned by `upstream_integration`).
 pub fn delete_reference(upstream: Option<Oid>, head: Option<Oid>) -> Option<Oid> {
     upstream.or(head)
 }
 
-/// Whether `from` reaches `to` — whether `to` is an ancestor of `from`,
-/// or `from` itself — answered off rows already on screen, the way
-/// [`range_rewrites_published`] answers its range. What `branch --delete`
-/// asks of its reference point ([`delete_reference`];
-/// `merge-base --is-ancestor <branch> <reference>`), read here so the
-/// delete row can wear `-D` in the frame the menu opens in
-/// ([`crate::branch::is_merged_into`] is the same question asked the slow
-/// way).
+/// Whether `from` reaches `to` (`to` is `from` or its ancestor), off rows
+/// already on screen so the delete row can wear `-D` in the frame the menu
+/// opens in: `branch --delete` asks it of [`delete_reference`], and
+/// [`crate::branch::is_merged_into`] asks it the slow way.
 ///
-/// `rows` is the walk's own order, children before every parent, so one
-/// pass down from `from` is enough: by the time `to`'s row is reached,
-/// every path from `from` that could have carried the colour down to it
-/// has been through here.
+/// `rows` must be in walk order, children before every parent, so one
+/// pass down from `from` is enough.
 ///
-/// **`None` where the window cannot say.** `to` on no row is a commit the
-/// walk stopped short of, and so is a `from` on none; `Some(false)` is
-/// given only where `from` is drawn and `to` was reached without the
-/// colour — either `from` was emitted earlier and none of its ancestors
-/// in between is `to`, or `from` is emitted later, which the order says
-/// is not a descendant.
+/// **`None` where the window cannot say** — `from` or `to` on no row.
+/// `Some(false)` only when both are drawn and `to` was reached without
+/// the colour (a `from` drawn after `to` cannot be above it).
 pub fn reaches<'a>(
     rows: impl IntoIterator<Item = WalkedRow<'a>>,
     from: Oid,
@@ -156,9 +128,8 @@ pub fn reaches<'a>(
             if pending.contains(&to) {
                 return Some(true);
             }
-            // `from` still ahead in the order, if it is drawn at all, is
-            // not above `to`; the answer then waits only on whether it is
-            // drawn.
+            // A `from` later in the order is not above `to`: what is left
+            // is whether it is drawn.
             if from_drawn {
                 return Some(false);
             }
@@ -220,9 +191,6 @@ async fn count(
 mod tests {
     use super::*;
 
-    /// git's `branch_merged`, as `upstream_integration` measures it: the
-    /// upstream where there is one, HEAD otherwise, and no answer where
-    /// neither is known.
     #[test]
     fn the_delete_measures_against_the_upstream_where_there_is_one() {
         let one = Oid::from_hex_str(&"1".repeat(40)).expect("test oid");
@@ -261,12 +229,10 @@ mod tests {
 
     fn oid(n: u8) -> Oid {
         let hex = format!("{n:02x}").repeat(20);
-        // Test-only helper; the input is always valid hex.
         Oid::from_hex_str(&hex).unwrap()
     }
 
-    /// A window of rows in walk order — `(id, parents, published)`, newest
-    /// first, the shape the graph hands over.
+    /// `(id, parents, published)` rows in walk order, newest first.
     struct Window(Vec<(u8, Vec<u8>, bool)>);
 
     impl Window {
@@ -294,9 +260,7 @@ mod tests {
         }
     }
 
-    /// Local commits on top of what a remote has: rebasing onto the
-    /// commit they sit on rewrites none of them, rebasing onto anything
-    /// below it rewrites the pushed ones.
+    /// Local 1 and 2 on top of pushed 3 and 4.
     fn a_local_stretch() -> Window {
         Window(vec![
             (1, vec![2], false),
@@ -318,8 +282,7 @@ mod tests {
 
     #[test]
     fn a_range_that_is_empty_rewrites_nothing() {
-        // Onto the very commit HEAD is on, and onto one that already has
-        // it: both leave nothing to replay.
+        // Onto HEAD itself, and onto a descendant: nothing to replay.
         assert!(!a_local_stretch().asked(1, 1));
         assert!(!a_local_stretch().asked(3, 1));
     }
@@ -335,9 +298,8 @@ mod tests {
         ])
     }
 
-    /// The case a single row's mark cannot answer: the oldest row of the
-    /// range down the first parent (6) is local, and the range still
-    /// holds a commit the remote has (7).
+    /// The oldest first-parent row of the range (6) is local, yet the
+    /// range holds pushed 7: no single row's mark answers this.
     #[test]
     fn a_merged_in_side_counts_even_where_the_first_parent_is_local() {
         assert!(a_merged_side().asked(5, 8));
@@ -349,10 +311,6 @@ mod tests {
         assert!(!a_merged_side().asked(5, 7));
     }
 
-    /// The two ends of a name the window does not draw. A HEAD off the
-    /// window puts nothing in the range; a base off it leaves everything
-    /// above in — which is what rebasing onto a name older than the
-    /// window does.
     #[test]
     fn a_name_no_row_carries_falls_out_of_the_window() {
         assert!(!a_local_stretch().asked(9, 4));
@@ -394,8 +352,6 @@ mod tests {
         }
     }
 
-    /// A branch merged into its reference point is one the reference
-    /// reaches — down the first parent or through a merge's other side.
     #[test]
     fn a_reference_reaches_the_commits_behind_it() {
         let stretch = a_local_stretch();
@@ -419,8 +375,7 @@ mod tests {
         );
     }
 
-    /// Two branches side by side, neither reaching the other, are told
-    /// apart from the window not saying — both are drawn.
+    /// Both drawn, so `Some(false)` rather than the window's `None`.
     #[test]
     fn two_drawn_commits_neither_above_the_other_answer_no() {
         let window = Window(vec![
@@ -432,8 +387,6 @@ mod tests {
         assert_eq!(window.reaches(2, 1), Some(false));
     }
 
-    /// A commit the window does not draw cannot be answered for either
-    /// way: the answer is git's to give.
     #[test]
     fn a_commit_off_the_window_leaves_the_question_open() {
         let stretch = a_local_stretch();

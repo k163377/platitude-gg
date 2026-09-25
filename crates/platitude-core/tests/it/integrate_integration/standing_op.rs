@@ -1,11 +1,6 @@
 //! What git says when a rewrite is fired while another operation stands,
-//! and what a stash does to the operation standing there.
-//!
-//! Both halves of the trap the session's guards are for: git's refusal is
-//! worded as a dirty tree and never names the operation, and the stash the
-//! carry would take next puts that operation down. All of it is git's own
-//! behaviour, recorded in [`periodic`]; the guards themselves are held
-//! before every merge by `session_integration::standing_op`.
+//! and what a stash does to that operation — the trap the session's guards
+//! are for (held pre-merge by `session_integration::standing_op`).
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
@@ -15,11 +10,7 @@ use platitude_core::error::GitError;
 use platitude_core::integrate::{RebaseOptions, RebaseOutcome};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 
-/// **What the pre-merge run leaves out**: all of this module — git's refusal
-/// text and its stash, observed with no decision of this crate's between
-/// the command and the answer. The session guards that act on these
-/// observations are what the pre-merge run holds. Run by the full gate
-/// (`-- --ignored ::periodic::`) rather than by every change.
+/// All of it git's own behaviour (rules-refs/core.md `periodic`).
 mod periodic {
     use super::*;
 
@@ -36,21 +27,14 @@ mod periodic {
         repo
     }
 
-    /// Settles the conflict the way a person at a terminal would: write the
-    /// file, stage it, and leave the operation standing for the commit.
+    /// Stages a resolution and leaves the operation standing, uncommitted.
     fn resolve_and_stage(repo: &mut TestRepo) {
         repo.write_file("f.txt", "resolved by hand\n");
         repo.git(&["add", "f.txt"]);
     }
 
-    /// git's own words in the `Blocked` refusal, or a panic naming what came
-    /// instead — `Blocked` is the classifier's own verdict, so reaching it
-    /// *is* the observation.
-    ///
-    /// The `stderr` field alone: the rendered error puts the command line
-    /// in front of git's message, and the flags this crate passes are not
-    /// what is being read here (`--no-rebase-merges` carries the word
-    /// `merge` through every one of them).
+    /// The `stderr` field alone: the rendered error leads with the command
+    /// line, whose `--no-rebase-merges` carries the word `merge`.
     async fn blocked_stderr(repo: &TestRepo, interactive: bool) -> String {
         let (exec, cancel) = env();
         let outcome = if interactive {
@@ -60,8 +44,7 @@ mod periodic {
                 subject: "unused".into(),
                 message: None,
             }];
-            // The todo is never reached: git refuses before it opens an
-            // editor, which is the whole point of the observation.
+            // Never read: git refuses before it opens an editor.
             sequencer::rebase_interactive(
                 &exec,
                 &info(repo).await,
@@ -91,12 +74,9 @@ mod periodic {
         }
     }
 
-    /// **The refusal a standing operation earns is worded as a dirty tree.**
-    /// git sees the operation's own staged result in the index and says so;
-    /// it never names the operation, and both the plain and the interactive
-    /// rebase word it identically. The classifier therefore calls it work in
-    /// the way and the carry would go round through a stash — which is why
-    /// the session guards on the operation itself
+    /// git reads the operation's staged result as a dirty index and never
+    /// names the operation, in both rebases alike. The classifier would carry
+    /// it through a stash, so the session guards on the operation itself
     /// (`session::build::carry_across_rewrite`).
     #[tokio::test]
     #[ignore = "git's refusal text under a standing operation: not worth the pre-merge run"]
@@ -124,10 +104,8 @@ mod periodic {
         }
     }
 
-    /// Still conflicted, the same refusal arrives with the unstaged half
-    /// named as well — the stash that would follow is the only reason this
-    /// case has never lost anything, and it is an accident of the index
-    /// being unmerged.
+    /// Still conflicted, the refusal also names the unstaged half. That
+    /// nothing was lost here is an accident of the index being unmerged.
     #[tokio::test]
     #[ignore = "git's refusal text under an unmerged index: not worth the pre-merge run"]
     async fn an_unsettled_conflict_earns_the_same_refusal() {
@@ -140,10 +118,9 @@ mod periodic {
         );
     }
 
-    /// **A stash puts a standing operation down.** `git stash push` writes
-    /// the resolved index away and the marker goes with it, so a carry that
-    /// stashed here would leave the merge's second parent unrecoverable and
-    /// the resolution looking like an ordinary staged edit.
+    /// `git stash push` takes the marker with the resolved index: a carry
+    /// that stashed would lose the merge's second parent and leave the
+    /// resolution an ordinary staged edit.
     #[test]
     #[ignore = "what git's stash does to a standing operation: not worth the pre-merge run"]
     fn a_stash_takes_a_standing_operation_down_with_it() {

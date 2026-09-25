@@ -30,8 +30,7 @@ fn context_lines_are_taken_apart() {
 
 #[test]
 fn changed_lines_are_taken_apart_too() {
-    // Both sides wear the theme (デザイン規約 §シンタックスハイライト): what names a
-    // changed line is its background and weight.
+    // Both sides wear the theme (デザイン規約 §シンタックスハイライト).
     let colors = colors(&patches(RUST), None);
     assert!(colors.line(0, 0, 1).spans.len() > 1, "deleted line");
     assert!(colors.line(0, 0, 2).spans.len() > 1, "added line");
@@ -54,9 +53,8 @@ diff --git a/src/new.rs b/src/new.rs
 
 #[test]
 fn a_deletion_does_not_bleed_into_the_added_lines() {
-    // The deleted line opens a comment. Fed through one shared walk,
-    // everything after it comes out painted as the inside of a comment
-    // that is not in the file; the fork keeps the sides apart.
+    // The deleted line opens a comment; the fork keeps it out of the
+    // added line and the context after it.
     let patch = "\
 diff --git a/src/a.rs b/src/a.rs
 --- a/src/a.rs
@@ -85,9 +83,7 @@ diff --git a/src/a.rs b/src/a.rs
 }
 
 /// A hunk in the middle of a block comment: read from the top of the
-/// file its context line is a comment, read cold it is code. The line
-/// the diff shows is the same line either way — only the walk that
-/// reached it differs.
+/// file its context line is a comment, read cold it is code.
 const INSIDE_A_COMMENT: &str = "\
 diff --git a/src/a.rs b/src/a.rs
 --- a/src/a.rs
@@ -112,9 +108,7 @@ fn the_file_is_walked_into_the_hunk() {
 
 #[test]
 fn without_the_file_a_hunk_starts_cold() {
-    // The same patch, and the difference is the whole point of
-    // fetching the file: cold, the lexer has no idea it is inside
-    // anything and reads a statement.
+    // Cold, the lexer has no idea it is inside a comment.
     let colors = colors(&patches(INSIDE_A_COMMENT), None);
     assert!(colors.line(0, 0, 0).spans.len() > 1);
 }
@@ -122,8 +116,7 @@ fn without_the_file_a_hunk_starts_cold() {
 #[test]
 fn a_file_that_disagrees_with_the_hunk_is_not_used() {
     // Saved between the diff and the read: line 2 is not what the
-    // hunk says is there, so walking it would place the reading
-    // somewhere the diff never was.
+    // hunk says is there.
     let elsewhere = "/* an old idea:\nsomething else entirely\n*/\nfn main() {}\n";
     let colors = colors(&patches(INSIDE_A_COMMENT), Some(elsewhere));
     assert!(
@@ -135,8 +128,7 @@ fn a_file_that_disagrees_with_the_hunk_is_not_used() {
 #[test]
 fn the_walk_carries_across_hunks() {
     // A comment opened above the first hunk is still open in the
-    // second: the state the second hunk starts from came down the
-    // whole file, changed lines included.
+    // second.
     let patch = "\
 diff --git a/src/a.rs b/src/a.rs
 --- a/src/a.rs
@@ -164,9 +156,8 @@ diff --git a/src/a.rs b/src/a.rs
 
 #[test]
 fn the_budget_bounds_what_one_patch_may_spend() {
-    // A rewrite that keeps one context line at each edge. Colouring
-    // the far one would mean lexing everything between them, so past
-    // the budget it goes out plain instead.
+    // A rewrite that keeps one context line at each edge; the far one
+    // is past the budget.
     let mut patch = String::from("diff --git a/big.rs b/big.rs\n--- a/big.rs\n+++ b/big.rs\n");
     let n = 30usize;
     patch.push_str(&format!("@@ -1,{0} +1,{0} @@\n", n + 2));
@@ -193,10 +184,8 @@ fn the_budget_bounds_what_one_patch_may_spend() {
 
 #[test]
 fn only_a_costly_diff_is_deep() {
-    // Three rows at the top of a file are answered inside one pass.
     assert!(!deep(&patches(RUST)));
-    // A hunk two thousand lines down a fallback-lexer language is a
-    // walk somebody would wait for, so it is worth a quick pass first.
+    // A hunk two thousand lines down a fallback-lexer language.
     let far = "\
 diff --git a/big.groovy b/big.groovy
 --- a/big.groovy
@@ -207,9 +196,7 @@ diff --git a/big.groovy b/big.groovy
 +    def x = 2
 ";
     assert!(deep(&patches(far)));
-    // The same depth in a language a grammar claims is not deep at all:
-    // the whole side parses in milliseconds, so nothing is worth
-    // sending ahead of the full answer.
+    // The same depth in a language a grammar claims is not deep.
     let far_rs = far.replace("big.groovy", "big.rs");
     assert!(!deep(&patches(&far_rs)));
 }
@@ -223,9 +210,9 @@ fn the_quick_pass_answers_now() {
 #[test]
 fn a_cached_reading_answers_the_same_colours() {
     // A fallback-lexer language (no grammar claims `.groovy`), with a
-    // hunk deep enough that the walk to it crosses checkpoints. The
-    // whole head of the file is one block comment, so a resumed walk
-    // that lost its place would colour the hunk as code from nowhere.
+    // hunk deep enough that the walk crosses checkpoints. The head of
+    // the file is one block comment, so a resumed walk that lost its
+    // place would colour the hunk wrong.
     let mut source = String::from("/* opened\n");
     for i in 0..600 {
         source.push_str(&format!("filler {i}\n"));
@@ -307,10 +294,9 @@ diff --git a/notes.md b/notes.md
 
 #[test]
 fn qml_agrees_with_itself_wherever_the_hunk_is() {
-    // The problem the regex walk existed for (measured): QML's
-    // `readonly property` reads as storage keywords at file scope and
-    // as plain identifiers inside an `Item {}`. A grammar parses the
-    // whole file, so a hunk anywhere reads in its real context.
+    // QML's `readonly property` lexes differently at file scope and
+    // inside an `Item {}`; a grammar parses the whole file, so a hunk
+    // anywhere reads in its real context.
     let source = "\
 Item {
     readonly property int a: 1
@@ -336,9 +322,8 @@ diff --git a/A.qml b/A.qml
 
 #[test]
 fn qml_colours_its_javascript_body_not_just_its_own_words() {
-    // The qmljs crate's query is a delta over the JS/TS base queries:
-    // alone it knows `property` and friends, and a real file came out
-    // plain end to end (DetailsPane.qml at 8382160e).
+    // The qmljs query is a delta over the JS/TS base queries: alone it
+    // knows only `property` and friends.
     let patch = "\
 diff --git a/A.qml b/A.qml
 --- a/A.qml
@@ -369,13 +354,8 @@ diff --git a/A.qml b/A.qml
 #[test]
 fn a_file_its_grammar_has_not_learned_reads_through_the_lexer() {
     // Kotlin's `when` guards (`is Field if it.static ->`) postdate the
-    // pinned grammar. The parse breaks, and past the break the
-    // recovery left the added and context rows plain while deletions
-    // kept their colours through the fragment (measured on a real
-    // compiler file: rows 161..285 were one ERROR node with not a
-    // capture inside). A source the grammar cannot parse reads through
-    // the regex lexer instead, which reads line by line and does not
-    // care what the whole of it means.
+    // pinned grammar, whose recovery past the break can leave the rows
+    // below plain; such a source reads through the regex lexer instead.
     let source = "\
 // note
 class Loader {
@@ -424,10 +404,8 @@ diff --git a/A.kt b/A.kt
 
 #[test]
 fn without_a_real_fallback_a_broken_file_keeps_its_grammar() {
-    // A `.plist` is the XML grammar's, and syntect's set has nothing
-    // for the extension — `syntax_for` answers `None`. However badly
-    // the parse of one goes, the grammar's partial answer beats the
-    // nothing the lexer road would say here.
+    // A `.plist` is the XML grammar's and syntect's set has nothing for
+    // it, so a broken parse keeps the grammar's partial answer.
     let source = "\
 <!-- note -->
 <plist>

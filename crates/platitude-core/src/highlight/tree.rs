@@ -1,11 +1,6 @@
 //! One text highlighted whole by its grammar, cut into the per-row runs
-//! the diff pane draws — the fast path of `highlight`.
-//!
-//! Where the regex lexer walks a file line by line carrying state, a
-//! grammar parses the whole text at once (measured 11x faster), so
-//! there is no walk to budget, no checkpoint to resume from and no
-//! quick pass to send first: every row of the diff gets its colour from
-//! one parse of the side it lives on.
+//! the diff pane draws — the fast path of `highlight`. One parse per
+//! side, so no walk to budget, no checkpoint and no quick pass.
 
 use tree_sitter_highlight::{HighlightEvent, Highlighter};
 
@@ -22,8 +17,7 @@ use super::{LineColors, PatchColors, Rgb, Span};
 /// error recovery reads a fragment the way a reader does.
 pub(super) fn patch_colors(lang: &Lang, patch: &FilePatch, source: Option<&str>) -> PatchColors {
     let new_side = patch.new_path.is_some();
-    // One highlighter for the whole patch: it wraps a parser, and a
-    // fresh one per fragment would be a parser per hunk per side.
+    // One highlighter for the whole patch: it wraps a parser.
     let mut highlighter = Highlighter::new();
     let file: Option<Vec<Vec<Span>>> = source.and_then(|s| line_spans(lang, &mut highlighter, s));
     let source_lines: Vec<&str> = source.map(|s| s.lines().collect()).unwrap_or_default();
@@ -51,10 +45,10 @@ fn hunk_colors(
     file: Option<&[Vec<Span>]>,
     source_lines: &[&str],
 ) -> Vec<LineColors> {
-    // The rows of this side, stitched into one fragment — what the other
-    // side's rows always read from, and what this side's fall back to
-    // when the file is missing or has drifted. Built at most once, and
-    // indexed by each side's own running count of its rows.
+    // Each side's rows stitched into a fragment, built on first use and
+    // indexed by that side's running row count: the other side always
+    // reads from its fragment, this side only where the file is missing
+    // or has drifted.
     let mut this_fragment: Option<Vec<Vec<Span>>> = None;
     let mut other_fragment: Option<Vec<Vec<Span>>> = None;
     let mut this_at = 0usize;
@@ -68,8 +62,7 @@ fn hunk_colors(
         let spans = if line.kind.on_side(new_side) {
             let at = this_at;
             this_at += 1;
-            // A context line is in the other side too, so it holds a
-            // place in that fragment as well.
+            // A context line holds a place in the other side's fragment too.
             if line.kind == DiffLineKind::Context {
                 other_at += 1;
             }
@@ -158,13 +151,10 @@ fn fragment_line(
 }
 
 /// Whether the grammar reads this text as its own language: a parse
-/// with no error node in it. A grammar can predate the language it
-/// reads — Kotlin's `when` guards and square-bracket destructuring did
-/// (measured: three of them turned rows 161..285 of a real compiler
-/// file into one ERROR node with not a capture inside) — and past the
-/// break its recovery can leave every row plain. The caller sends such
-/// a file to the regex lexer, which reads line by line and does not
-/// care what the whole of it means.
+/// with no error node in it. A grammar can predate syntax in the file
+/// (Kotlin's `when` guards), and past the break its recovery can leave
+/// every row plain; the caller then sends the file to the line-by-line
+/// regex lexer.
 pub(super) fn reads(lang: &Lang, text: &str) -> bool {
     let mut parser = tree_sitter::Parser::new();
     if parser.set_language(&lang.config.language).is_err() {

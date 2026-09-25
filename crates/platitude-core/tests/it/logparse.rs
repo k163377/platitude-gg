@@ -1,24 +1,17 @@
-//! What `git log` makes of `.mailmap` under [`LOG_FORMAT_ARG`], recorded
-//! in [`periodic`]. The pre-merge run holds the rest elsewhere: the format's
-//! fields are pinned by `parse::log`'s unit tests, and every graph test
-//! streams real `git log` output through the parser.
+//! What `git log` makes of `.mailmap` under [`LOG_FORMAT_ARG`]. The format's
+//! fields are pinned by `parse::log`'s unit tests and every graph test
+//! streams real `git log` through the parser; the mailmap fold is git's,
+//! so it is [`periodic`].
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::GitCommand;
 use platitude_core::parse::log::{LOG_FORMAT_ARG, LogParser};
 
-/// **What the pre-merge run leaves out**: git's mailmap fold of the authors
-/// the log reads. The format asks for it (`%aN` / `%aE`, pinned in
-/// `parse::log`'s unit tests) and the parser's own case folding is
-/// unit-held; the mailmap fold is git's, so the full gate runs it
-/// (`-- --ignored ::periodic::`) rather than every change.
 mod periodic {
     use super::*;
 
-    /// Runs the log through the parser and hands back what came out.
-    // The `allow-*-in-tests` clippy options only reach `#[test]` functions, and
-    // a helper that cannot read the log it was asked for is the test failing.
+    // The `allow-*-in-tests` clippy options only reach `#[test]` functions.
     #[expect(
         clippy::unwrap_used,
         reason = "test helper; panicking on setup failure is the point"
@@ -39,20 +32,15 @@ mod periodic {
         (commits, parser)
     }
 
-    /// What `.mailmap` is for, and the reason the format asks for `%aN` /
-    /// `%aE`: one person with two addresses comes back as one person, and
-    /// the answer is git's. The second address is spelled loudly so
-    /// the map has to match it the way git matches — without regard
-    /// to case.
+    /// The second address is spelled loudly so the map has to match it as
+    /// git does — without regard to case.
     #[tokio::test]
     #[ignore = "git's own mailmap fold: not worth the pre-merge run"]
     async fn the_log_reads_the_authors_through_mailmap() {
         let mut repo = TestRepo::init();
         repo.commit_file("f.txt", "0\n", "before");
-        // `--author`: the harness pins GIT_AUTHOR_EMAIL for reproducible
-        // ids, and that beats configuration — a commit made through
-        // `-c user.email` would quietly carry the harness's address and
-        // leave this test agreeing with itself.
+        // `--author`, not `-c user.email`: the harness's GIT_AUTHOR_EMAIL
+        // beats config, so the commit would carry the harness's address.
         repo.git(&[
             "commit",
             "--allow-empty",
@@ -67,10 +55,8 @@ mod periodic {
         repo.git(&["add", "--", ".mailmap"]);
         repo.git(&["commit", "-m", "add mailmap"]);
 
-        // `%ae` is the raw address whether a mailmap matches it or not, so
-        // this pins what the parser receives: git keeps the commit's own
-        // spelling. Lowercasing is the parser's to do, pinned in its unit
-        // tests.
+        // `%ae` is raw even under a mailmap: git keeps the commit's spelling,
+        // and lowercasing is the parser's (unit-pinned).
         let raw = repo.git(&["log", "--format=%ae", "-1", "HEAD^"]);
         assert_eq!(raw, "OTHER@Example.COM", "git keeps the spelling");
 
@@ -91,8 +77,7 @@ mod periodic {
             emails.iter().all(|e| *e == "test@example.com"),
             "and under the one address: {emails:?}"
         );
-        // One address, one pool entry — which is what makes it usable as the
-        // key a picture is filed under.
+        // One pool entry: the key an avatar is filed under.
         assert_eq!(commits[0].author_email, commits[1].author_email);
     }
 }

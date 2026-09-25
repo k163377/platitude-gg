@@ -1,6 +1,5 @@
-//! Commit and amend on real repositories: what git records, what it
-//! refuses, and what a hook that says no comes back as. What an amend
-//! does to HEAD is git's own, and is in [`periodic`].
+//! Commit and amend on real repositories. What an amend does to HEAD is
+//! git's own, and is in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -41,11 +40,9 @@ async fn commits_staged_content_with_a_multiline_message() {
     );
 }
 
-/// A commit is one git command, and that command's exit code is the whole
-/// answer. Reading HEAD back would put a second command behind the reply
-/// which can fail on its own — an unreadable object, a lock another git
-/// holds — and the write queue would then report a commit that landed as
-/// one that did not, with the editor still holding the message.
+/// Reading HEAD back would put a second command behind the reply that can
+/// fail on its own, and the write queue would report a commit that landed
+/// as one that did not.
 #[tokio::test]
 async fn a_commit_asks_git_once_and_reads_nothing_back() {
     let mut repo = TestRepo::init();
@@ -134,8 +131,8 @@ async fn head_message_and_merge_detection() {
         .expect("head commit")
         .expect("HEAD exists");
     assert_eq!(head.message, "subject\n\nbody line");
-    // Author and message come out of one command, NUL-separated: a
-    // multi-line message may not be told apart by anything printable.
+    // Author and message come out of one command, NUL-separated: nothing
+    // printable delimits a multi-line message.
     assert_eq!(head.author_name, "Test User");
     assert_eq!(head.author_email, "test@example.com");
     assert!(
@@ -156,9 +153,8 @@ async fn head_message_and_merge_detection() {
     );
 }
 
-/// An unborn branch answers `None`: there is nothing to amend, and the
-/// blank prefill must be distinguishable from a read that failed (a
-/// failure would blank a real message).
+/// A failed read must stay distinguishable from the blank prefill, or a
+/// failure would blank a real message.
 #[tokio::test]
 async fn head_commit_on_an_unborn_branch_is_no_commit_not_an_error() {
     let repo = TestRepo::init();
@@ -186,8 +182,6 @@ async fn amending_keeps_the_author_until_reset_author_is_asked_for() {
     let (exec, cancel) = env();
     let info = info(&repo).await;
 
-    // A plain amend records this machine as the committer and leaves the
-    // author where it was — which is why taking over has to be asked for.
     commit::commit(
         &exec,
         &info,
@@ -228,14 +222,10 @@ async fn amending_keeps_the_author_until_reset_author_is_asked_for() {
     assert_eq!(head.author_email, "test@example.com");
 }
 
-/// A hook that says no comes back as a report: nothing was half written,
-/// and `--no-verify` stays off, so there is no next move here either
-/// (デザイン規約 §答えの要らない報せ).
-///
-/// **The hook's own words are what goes under the heading, from both
-/// streams.** A linter wrapped in a hook writes its complaint to stdout
-/// and its own noise to stderr, so reading stderr alone quotes the wrapper
-/// and drops the complaint.
+/// A report: nothing was half written and `--no-verify` stays off, so
+/// there is no next move (デザイン規約 §答えの要らない報せ). The reason reads
+/// both streams — a linter in a hook complains on stdout, so stderr alone
+/// drops the complaint.
 #[tokio::test]
 async fn a_commit_a_hook_declines_comes_back_as_a_report_in_the_hooks_words() {
     let mut repo = TestRepo::init();
@@ -284,10 +274,8 @@ async fn a_commit_a_hook_declines_comes_back_as_a_report_in_the_hooks_words() {
     );
 }
 
-/// A name git will not take is a report: nothing moved, and the box the
-/// name was typed into is still open to take the answer
-/// (デザイン規約 §答えの要らない報せ). The name it carries is the one the row
-/// still has, since the rename is exactly what did not happen.
+/// A report: nothing moved, and the box the name was typed into stays open
+/// for the answer (デザイン規約 §答えの要らない報せ).
 #[tokio::test]
 async fn a_rename_to_a_name_that_is_taken_is_reported_under_the_old_name() {
     let mut repo = TestRepo::init();
@@ -319,14 +307,9 @@ async fn a_rename_to_a_name_that_is_taken_is_reported_under_the_old_name() {
     );
 }
 
-/// **What the pre-merge run leaves out**: what an amend does to HEAD — a new
-/// commit in the old one's place, with the staged content folded in. That
-/// is git's, behind a fixed `--amend`: the flag is on the command line in
-/// `amend_without_a_message_keeps_the_old_one` and
-/// `amending_keeps_the_author_until_reset_author_is_asked_for`, and the
-/// message file in `commits_staged_content_with_a_multiline_message`. So
-/// the full gate runs it (`-- --ignored ::periodic::`) rather than every
-/// change.
+/// What an amend does to HEAD is git's, behind the fixed `--amend` the
+/// tests above already pass — so the full gate runs it
+/// (`-- --ignored ::periodic::`), not every change.
 mod periodic {
     use super::*;
 

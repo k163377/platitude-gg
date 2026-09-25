@@ -24,10 +24,8 @@ pub const HELPER_NAME: &str = "pgg-todo-editor";
 /// Scratch tag of the message files reword `exec` lines read.
 const REWORD_MSG_TAG: &str = "REWORD_MSG";
 
-/// Locates the helper next to the running executable.
-///
-/// Packaging must keep the two together; without the helper, interactive
-/// rebase is the one operation that cannot work.
+/// Locates the helper next to the running executable (packaging must keep
+/// the two together).
 pub fn helper_path() -> std::io::Result<PathBuf> {
     let exe = std::env::current_exe()?;
     let dir = exe.parent().ok_or_else(|| {
@@ -66,11 +64,8 @@ pub async fn rebase_interactive(
     if steps.is_empty() {
         return Ok(RebaseOutcome::Done);
     }
-    // A plan of nothing but drops is ordinary as long as it has ground to
-    // land on: git moves the branch to the upstream and says so. `--root`
-    // is the one with none — it replays onto a placeholder commit git
-    // makes up, and with every line dropped that placeholder is what the
-    // branch is left pointing at: an empty tree with no message (measured).
+    // All drops is fine onto an upstream; under `--root` git would leave the
+    // branch on its made-up placeholder (empty tree, no message).
     if options.root && steps.iter().all(|s| s.action == TodoAction::Drop) {
         return Err(report::drop_all_commits());
     }
@@ -80,11 +75,9 @@ pub async fn rebase_interactive(
         source,
     };
 
-    // Message files must outlive the rebase: the `exec` lines read them
-    // while git is replaying — and a replay that stops part-way keeps the
-    // rest of the todo, so a later `--continue` reads them from another
-    // process entirely. They are only dropped once the rebase is known
-    // not to be standing.
+    // Message files must outlive a stopped replay (a later `--continue`
+    // runs the remaining `exec` lines); they go only once the rebase is
+    // known not to be standing.
     let mut message_files: Vec<ScratchFile> = Vec::new();
     let mut lines: Vec<TodoLine> = Vec::new();
     for step in steps {
@@ -96,10 +89,8 @@ pub async fn rebase_interactive(
         if step.action != TodoAction::Reword {
             continue;
         }
-        // The log alone: the box a message is typed into will not save
-        // an empty one (`DetailsPane.canSave`), so nothing on screen can
-        // reach here to be told about. A backstop for a plan built by
-        // hand, and the log is where a backstop belongs.
+        // A backstop for the log alone: the message box will not save an
+        // empty one (`MessageActionsRow.canSave`).
         let Some(message) = step.message.as_deref().filter(|m| !m.trim().is_empty()) else {
             return Err(GitError::Rejected {
                 message: format!("reword of {} has no message", step.oid),
@@ -123,12 +114,9 @@ pub async fn rebase_interactive(
     let plan = ScratchFile::create(&repo.git_dir, "rebase-todo", render_todo(&lines).as_bytes())
         .map_err(io_error)?;
     let editor = sequence_editor_command(helper, plan.path());
-    // Exit 1 is this command answering, and both answers have a landing
-    // of their own on screen: "your work is in the way" sends the caller
-    // round through a stash, and a replay that stopped part-way raises
-    // the badge and the exit card. Only 0 and 1 are answers, so the 128
-    // a name git does not know exits with still reads as the failure it
-    // is (規約 §終了コードで答える問い合わせ).
+    // Exit 1 answers (work in the way, or a stopped replay), each with its
+    // own landing on screen; a 128 stays a failure
+    // (.claude/rules/core.md「終了コードで答える問い合わせ」).
     let cmd = rebase_command(&repo.workdir, upstream, options, Some(&editor)).answers_by_code(1);
     let result = executor.run(cmd, cancel).await;
     // The todo is installed (or refused) by now; only the message files
@@ -136,15 +124,10 @@ pub async fn rebase_interactive(
     drop(plan);
     let outcome = crate::integrate::landed(executor, &repo.workdir, result.map(drop), cancel).await;
     match &outcome {
-        // The remaining todo still points at them; they wait for the
-        // `--continue`. Whatever an abort strands is swept below, on the
-        // next rebase that runs to the end — a moment when nothing can be
-        // standing.
-        //
-        // **An error keeps them too**: `landed`'s probe can fail over a
-        // rebase that is in fact standing, and files dropped there would
-        // break the todo's own `exec` lines. A stray file costs the sweep
-        // one more entry; a missing one breaks a `--continue`.
+        // Kept for the `--continue`; what an abort strands is swept on the
+        // next rebase that runs to the end. An error keeps them too:
+        // `landed`'s probe can fail over a rebase that is in fact standing,
+        // and a missing file breaks a `--continue`.
         Ok(RebaseOutcome::Stopped) | Err(_) => {
             for file in message_files {
                 file.keep();
@@ -161,9 +144,8 @@ pub async fn rebase_interactive(
 
 /// The `GIT_SEQUENCE_EDITOR` value that installs `plan` as the todo list.
 ///
-/// git runs this through a shell, so the words are shell-quoted and the
-/// path separators normalized — a Windows path full of backslashes would
-/// otherwise be read as escape sequences.
+/// git runs this through a shell, so the words are quoted and separators
+/// made forward — backslashes would read as escapes.
 pub fn sequence_editor_command(helper: &Path, plan: &Path) -> String {
     format!(
         "{} {TODO_EDITOR_FLAG} {}",
@@ -172,10 +154,9 @@ pub fn sequence_editor_command(helper: &Path, plan: &Path) -> String {
     )
 }
 
-/// Todo-editor mode: write the prepared plan over git's todo file,
-/// **keeping the lines git put in it** ([`super::merge_todo`]).
-///
-/// Answers what had to be left out, for the helper to say on stderr.
+/// Todo-editor mode: writes the plan over git's todo file, keeping the
+/// lines git put in it ([`super::merge_todo`]). Returns what had to be
+/// left out, for the helper to name on stderr.
 pub fn apply_plan(plan_path: &Path, todo_path: &Path) -> std::io::Result<Vec<String>> {
     let plan = std::fs::read_to_string(plan_path)?;
     let generated = std::fs::read_to_string(todo_path)?;
@@ -213,10 +194,6 @@ mod tests {
         Path::new("no-such-helper-for-this-test")
     }
 
-    /// The one shape that has no ground to land on. `--root` replays onto
-    /// a placeholder git makes up, so dropping every line leaves that
-    /// placeholder behind as the branch tip: an empty tree with no message
-    /// (measured). Refusing says so before anything moves.
     #[tokio::test]
     async fn a_root_plan_of_nothing_but_drops_is_refused_before_git_runs() {
         let (exec, asked) = refusing::git();
@@ -240,9 +217,7 @@ mod tests {
         assert_eq!(asked.count(), 0, "nothing was asked of git");
     }
 
-    /// A reword carries its message in the `exec` line, so a step with
-    /// none — or with nothing but whitespace — is refused before the todo
-    /// is written.
+    /// Whitespace alone counts as no message.
     #[tokio::test]
     async fn a_reword_without_a_message_is_refused_before_git_runs() {
         let (exec, asked) = refusing::git();

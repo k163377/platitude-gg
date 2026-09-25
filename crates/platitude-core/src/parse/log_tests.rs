@@ -78,15 +78,13 @@ fn co_author_trailers_ride_along_in_the_record() {
     assert_eq!(parser.pool().get(mates[0].1), "noreply@anthropic.com");
     assert_eq!(parser.pool().get(mates[1].0), "Nameless");
     assert_eq!(parser.pool().get(mates[1].1), "");
-    // git hands the trailers back inside %b as well; the body the
-    // hover reads is the writing without them.
+    // %b carries the trailers too; the body is the writing without them.
     assert_eq!(&*commits[0].body, "Why it was done.");
 }
 
 #[test]
 fn a_co_authored_by_in_the_prose_stays_in_the_body() {
-    // git did not call it a trailer (field 5 is empty), so neither
-    // does the filter — it is a sentence somebody wrote.
+    // Field 5 is empty: git did not call it a trailer.
     let bytes = record_with_mates(
         A,
         "",
@@ -103,15 +101,10 @@ fn a_co_authored_by_in_the_prose_stays_in_the_body() {
 
 #[test]
 fn a_body_line_that_is_not_ascii_where_the_key_ends_is_kept() {
-    // The filter reads as many bytes as the key is long, so a line
-    // whose character *straddles* that byte is the one that matters
-    // — an em dash or a CJK character starting one or two bytes
-    // short of the end. Both are everyday writing (this repository's
-    // own history is full of the first), and slicing a `str` there
-    // took the whole walk down with it: the graph never left its
-    // loading ring (observed on platitude-gg itself).
-    // The guard below is what keeps these honest: hand-counted bytes
-    // stop reproducing the moment somebody rewords them.
+    // The filter reads as many bytes as the key is long, so what matters
+    // is a character *straddling* that byte (an em dash, a CJK character).
+    // The guard below keeps the fixtures honest: hand-counted bytes stop
+    // reproducing once reworded.
     let bodies = [
         "The reason is—said plainly",
         "The reason is 版で書いてある",
@@ -163,10 +156,7 @@ fn parses_multiple_records() {
     assert_eq!(commits[0].author, commits[2].author, "author interned");
 }
 
-/// The author fields are asked for through `.mailmap` (`%aN` / `%aE`):
-/// `%an` / `%ae` would hand over each commit's own spelling, and one
-/// person with two addresses would read as two. What git's fold makes of
-/// a real `.mailmap` is recorded in `logparse::periodic`.
+/// What git's fold makes of a real `.mailmap` is in `logparse::periodic`.
 #[test]
 fn the_author_fields_are_the_mailmap_spellings() {
     let fields: Vec<&str> = LOG_FORMAT_ARG
@@ -181,9 +171,7 @@ fn the_author_fields_are_the_mailmap_spellings() {
 
 #[test]
 fn the_address_is_lowercased_and_interned() {
-    // The same person, shouting on one commit and not the other. The
-    // key a picture is filed under has to come out the same either
-    // way, which is why case is dropped on the way in.
+    // The key a picture is filed under must not depend on case.
     let mut bytes = record_with_email(A, "", "Alice", "Alice@Example.COM", "1", "one");
     bytes.extend(record_with_email(
         B,
@@ -206,8 +194,7 @@ fn the_address_is_lowercased_and_interned() {
 
 #[test]
 fn an_empty_address_is_kept_as_one() {
-    // git writes `<>` for an author with no address, and `%aE` comes
-    // back empty. Nothing is a valid answer; it just matches no
+    // git writes `<>` for no address; empty is valid and matches no
     // picture.
     let bytes = record_with_email(A, "", "Nobody", "", "1", "one");
     let (commits, parser) = parse_all(&bytes, 7);

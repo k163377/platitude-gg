@@ -9,8 +9,8 @@ use std::time::{Duration, Instant};
 
 use platitude_core::session::SessionEvent;
 
-/// How long a wait puts up with the session saying nothing. Every
-/// event renews it, so what spends it is silence.
+/// How long a wait puts up with the session saying nothing; every event
+/// renews it.
 pub const QUIET_BUDGET: Duration = Duration::from_secs(120);
 
 /// The whole of a wait, as a backstop under [`QUIET_BUDGET`]: a session
@@ -18,15 +18,10 @@ pub const QUIET_BUDGET: Duration = Duration::from_secs(120);
 /// forever, and only a livelock reaches this one.
 pub const OVERALL_BUDGET: Duration = Duration::from_secs(900);
 
-/// Bounds an await the suite has no other backstop for.
-///
-/// The test executors run without a stock command timeout and their token
-/// is never cancelled, so an await on the executor itself — or on a
-/// session boundary like `wait_for_snapshot_reads` — has nothing under it:
-/// a wedged git would hang the binary until the CI kill, with no failing
-/// test named. This is that backstop. [`OVERALL_BUDGET`], a diagnosis:
-/// nothing correct takes this long, and a run that does is reported as
-/// the failure it is, under the caller's name for it.
+/// Bounds an await the suite has no other backstop for — a session
+/// boundary like `wait_for_snapshot_reads` sends no event [`Patience`]
+/// could count, so a wedged git would hang the binary until the CI kill
+/// with no test named. [`OVERALL_BUDGET`]: nothing correct takes this long.
 pub async fn bounded<T>(what: &str, wait: impl Future<Output = T>) -> T {
     match tokio::time::timeout(OVERALL_BUDGET, wait).await {
         Ok(answer) => answer,
@@ -34,39 +29,22 @@ pub async fn bounded<T>(what: &str, wait: impl Future<Output = T>) -> T {
     }
 }
 
-/// Polls `future` once, by hand: it runs to the first point where it has
-/// to wait and stops there. This is how a test puts a competitor exactly
-/// where a race is — parked on a gate, inside a read — without a
-/// `yield_now` and a guess about what the scheduler did with it. `Ready`
-/// is the answer; `Pending` says the future now waits on whatever it
-/// reached, and awaiting it afterwards carries it on from there. The
-/// twin of the crate's own (`platitude_core::wait`), which a test in this
-/// binary cannot reach.
+/// Polls `future` once, by hand, so it stops at its first wait point
+/// (rules/core.md「競合の相手は手で目的の地点まで進める」). `Pending` means it
+/// now waits there; awaiting it afterwards carries it on. The twin of the
+/// crate's own (`platitude_core::wait`), which this binary cannot reach.
 pub fn poll_once<F: Future + Unpin>(future: &mut F) -> Poll<F::Output> {
     let mut cx = Context::from_waker(Waker::noop());
     Pin::new(future).poll(&mut cx)
 }
 
-/// What a wait spends while it waits.
+/// What a wait spends while it waits: [`QUIET_BUDGET`] under
+/// [`OVERALL_BUDGET`] (rules/core.md「待ちの上限は失敗検出の backstop」).
 ///
-/// A wait is here to catch a session that stopped, and a budget counted
-/// from the first poll cannot tell that from one that is merely slow.
-/// `session_integration::concurrent_writes_are_serialized` puts its burst
-/// of writes through the queue one at a time, and under `cargo test
-/// --workspace` — hundreds of integration tests, a thread per core, all
-/// spawning git — one round trip inflates by more than an order of
-/// magnitude over its solo time (the reading is in
-/// ci/baseline/code-costs-windows-x64.md §テストとハーネス; the same
-/// measurement is behind `GitExecutor::without_stock_timeouts`). Raising
-/// the number until that fits would hand every other wait in the suite
-/// the same head start before it notices a hang.
-///
-/// Progress is what tells the two apart, so that is what the budget is
-/// counted against: every event renews it, and only a session gone quiet
-/// spends it. Same reading as 規約 §「もう起きない」は完了後の件数 —
-/// a stretch of clock is not a state. A hang still needs the same
-/// [`QUIET_BUDGET`] of nothing to be called one; it is only the waits that
-/// are demonstrably being answered that no longer pay for it.
+/// A budget counted from the first poll cannot tell a stopped session from
+/// a slow one — under load one git round trip grows by an order of
+/// magnitude (ci/baseline/code-costs-windows-x64.md §テストとハーネス) —
+/// and raising it until that fits delays every wait's hang verdict alike.
 pub struct Patience {
     started: Instant,
     quiet_since: Instant,
@@ -97,9 +75,7 @@ impl Patience {
         self.quiet_since.elapsed()
     }
 
-    /// Time until the next diagnostic backstop. It only wakes an
-    /// event-driven waiter when the event source has stopped
-    /// altogether.
+    /// Time until the next diagnostic backstop.
     pub fn remaining(&self) -> Duration {
         let quiet = QUIET_BUDGET.saturating_sub(self.quiet_since.elapsed());
         let whole = OVERALL_BUDGET.saturating_sub(self.started.elapsed());

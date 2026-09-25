@@ -21,14 +21,8 @@ pub struct EditPlan {
     pub root: bool,
     pub steps: Vec<RebaseStep>,
     /// The tip `steps` was read against — what the replay checks HEAD
-    /// against before it spawns ([`crate::session`]'s `Replay`).
-    ///
-    /// **Taken out of the rows.** The range always ends at HEAD
-    /// (`range_arg`) and `read_rows` reverses git's own order, so the
-    /// last step *is* the tip this plan was composed against: pinning it
-    /// costs no process at all, which is what kept it unpinned while the
-    /// pin was thought to need one on the response path of the three edits
-    /// people click most (CLAUDE.md §性能予算).
+    /// against before it spawns ([`crate::session`]'s `Replay`). Taken from
+    /// the last row (the range ends at HEAD), so pinning it costs no process.
     pub tip: String,
 }
 
@@ -54,15 +48,10 @@ pub enum Edit {
 }
 
 impl Edit {
-    /// How many commits before the target the plan has to start at.
-    ///
-    /// `squash` folds into the line above it, so the parent must be in the
-    /// plan as well; a reword and a drop only need the commit itself.
-    ///
-    /// Reaching one further than that costs: whatever sits below the
-    /// commit joins the range, and a merge down there is enough to refuse
-    /// the whole edit even though the replay would never have touched it
-    /// (measured — `a_merge_under_the_dropped_commit_is_left_alone`).
+    /// How far back from the target (itself = 1) the plan starts: `squash`
+    /// folds into the line above, so it needs the parent too. Reaching any
+    /// further pulls what lies below into the range, and a merge there
+    /// refuses the whole edit (`a_merge_under_the_dropped_commit_is_left_alone`).
     fn depth(&self) -> u32 {
         match self {
             Edit::SquashIntoParent => 2,
@@ -73,10 +62,8 @@ impl Edit {
 
 /// Builds the plan that applies `edit` to `oid`.
 ///
-/// Refuses a range containing a merge: a plain interactive rebase drops
-/// merge commits, so carrying on would silently flatten the history the
-/// user is looking at. `--rebase-merges` is a different operation, and the
-/// UI does not offer it here.
+/// Refuses a range containing a merge, which a plain interactive rebase
+/// would flatten (`--rebase-merges` is not offered here).
 pub async fn plan_edit(
     executor: &GitExecutor,
     workdir: &Path,
@@ -84,46 +71,31 @@ pub async fn plan_edit(
     edit: Edit,
     cancel: &CancellationToken,
 ) -> Result<EditPlan, GitError> {
-    // The oldest commit the plan takes in; what sits under *that* is the
-    // upstream. History shorter than the plan needs means the range starts
-    // at the very first commit, which has no parent to name as upstream.
+    // The oldest commit the plan takes in; what sits under it is the
+    // upstream.
     let bottom = match edit.depth() {
         1 => oid.to_string(),
         depth => format!("{oid}~{}", depth - 1),
     };
     let base = base_of(executor, workdir, &bottom, cancel).await?;
-    // Read here for the range to spell, and read again inside the
-    // decision — a base nothing can be replayed onto is the whole answer,
-    // so the range is never spelled and the second process is never
-    // spawned to reach it.
+    // `decide_edit` checks this again, but refusing here spares the range
+    // read.
     let Some((upstream, root)) = base.upstream() else {
         return Err(report::rewrite_unfetched_base());
     };
 
-    // One read answers both questions: the rows, and whether a merge sits
-    // among them (`%P` rides along — crate::rebase_plan::read_rows, the
-    // same parser the full plan's preview goes through).
+    // One read answers both the rows and whether a merge sits among them
+    // (`%P`).
     let read =
         crate::rebase_plan::read_rows(executor, workdir, &range_arg(&upstream, root), cancel)
             .await?;
     decide_edit(&base, &read, oid, edit)
 }
 
-/// What those two reads mean: the plan, or the refusal.
-///
-/// **The deciding half, with no git in it.** Four refusals and three
-/// edits over one range is a table, and every row of it costs a
-/// repository shaped to produce that answer — a merge under the target, a
-/// shallow clone, a commit on another branch. The order the four are
-/// decided in is the part that has ever been wrong (`plan_edit` reaches
-/// the range before it looks for the commit, so a merge answers before
-/// off-branch), and an order is exactly what a table can be read for.
-///
-/// The refusals are this application's own, decided before a rebase is
-/// ever spawned, and the screen states each of them in its own words:
-/// they are `report`'s to word, so the sentence the reader gets and the
-/// sentence the log keeps stay one decision
-/// (規約 §git が言ったことを読む場所).
+/// What those two reads mean: the plan, or the refusal. Kept free of git so
+/// the four refusals × three edits are unit-tested without shaped
+/// repositories. The order matters: the range is read before the commit is
+/// looked for, so a merge answers before off-branch.
 fn decide_edit(base: &Base, read: &RangeRead, oid: &str, edit: Edit) -> Result<EditPlan, GitError> {
     let Some((upstream, root)) = base.upstream() else {
         return Err(report::rewrite_unfetched_base());
@@ -139,11 +111,8 @@ fn decide_edit(base: &Base, read: &RangeRead, oid: &str, edit: Edit) -> Result<E
     let Some(index) = steps.iter().position(|s| s.oid == oid) else {
         return Err(report::rewrite_off_branch(short(oid)));
     };
-    // The last step is the tip: the range ends at HEAD either way
-    // (`range_arg`) and `read_rows` hands git's newest-first order back
-    // reversed. The position above says the list is not empty, and an
-    // empty tip would refuse the replay
-    // (`Replay::tip_still_stands`).
+    // The position above proves the list non-empty; an empty tip would
+    // refuse the replay (`Replay::tip_still_stands`).
     let tip = steps
         .last()
         .map(|step| step.oid.clone())
@@ -178,22 +147,20 @@ fn short(oid: &str) -> &str {
 pub(crate) enum Base {
     /// The commit under `bottom`, which the rebase names as upstream.
     Commit(String),
-    /// There is nothing under it: `bottom` is the history's first commit,
-    /// so the rebase needs `--root`. Also the answer where `bottom` is
-    /// itself not a commit this repository holds — the caller reaching one
-    /// further down than the history goes, which its own scan says better.
+    /// Nothing under it: `bottom` is the first commit, so the rebase needs
+    /// `--root`. Also the answer when `bottom` itself does not exist (the
+    /// caller reached past the first commit; its own scan says so better).
     Root,
-    /// There is something under it that this clone never fetched. Naming
-    /// it is impossible and `--root` would be a lie — the three-way answer
-    /// exists so neither entry point can take this for [`Base::Root`].
+    /// Something under it that this clone never fetched: it cannot be
+    /// named and `--root` would be wrong, so it must never read as
+    /// [`Base::Root`].
     Unfetched,
 }
 
 impl Base {
     /// The revision a rebase would name as upstream and whether it needs
     /// `--root` — `None` where there is nothing to replay onto at all.
-    /// One copy, because the range a plan is read over and the range it
-    /// is composed against have to be the same one.
+    /// One copy, so the range read and the range composed are the same.
     fn upstream(&self) -> Option<(String, bool)> {
         match self {
             Base::Commit(oid) => Some((oid.clone(), false)),
@@ -203,11 +170,8 @@ impl Base {
     }
 }
 
-/// Reads what sits under `bottom`, the oldest commit a plan takes in.
-///
-/// The extra reads go out only where git says there is nothing under it —
-/// the rarest answer, and the one worth asking about. Whatever the
-/// walk costs from there dwarfs them.
+/// Reads what sits under `bottom`, the oldest commit a plan takes in. The
+/// extra reads run only when git says nothing is under it.
 pub(crate) async fn base_of(
     executor: &GitExecutor,
     workdir: &Path,
@@ -217,10 +181,7 @@ pub(crate) async fn base_of(
     if let Some(oid) = resolve(executor, workdir, &format!("{bottom}~1"), cancel).await? {
         return Ok(Base::Commit(oid));
     }
-    // Nothing under it — but `bottom` may be the thing that is not there:
-    // a squash asked for at the very first commit names a range starting
-    // one below where the history goes. That is not this function's to
-    // answer; the caller's own scan has the better word for it.
+    // `bottom` may itself not exist (`Base::Root`).
     let Some(bottom) = resolve(executor, workdir, bottom, cancel).await? else {
         return Ok(Base::Root);
     };
@@ -241,23 +202,16 @@ async fn resolve(
         .cwd(workdir)
         .args(["rev-parse", "--verify", "--quiet", "--end-of-options"])
         .arg(format!("{rev}^{{commit}}"))
-        // "there is no such commit" is the answer here: a plan that
-        // reaches the very first commit asks for its parent and is
-        // told there is none. Left unmarked it counts as a failed command
-        // and the command log throws its panel open over a perfectly good
-        // squash or drop near the root (.claude/rules/core.md).
+        // Exit 1 = "no such commit", the answer at the first commit's
+        // parent (.claude/rules/core.md).
         .answers_by_code(1);
     let described = cmd.describe();
     let out = executor.run_unchecked(cmd, cancel).await?;
     match out.code {
         0 => {}
-        // Only the code the command named is the answer, exactly the line
-        // `answers_by_code` draws for the log: everything git can read the
-        // repository for and still not find exits 1 — a name that is not
-        // there, an id of the right shape that is no object, a tree asked
-        // for as a commit (measured 2.55). A 128 is git failing to read at
-        // all, and reading that as "there is no such commit" would turn a
-        // broken repository into a plan that rebases from the root.
+        // Only 1 is "not found" (a missing name, an unknown id, a
+        // non-commit). A 128 is git failing to read; taking it as "no such
+        // commit" would rebase a broken repository from the root.
         1 => return Ok(None),
         code => {
             return Err(GitError::Failed {
@@ -272,13 +226,9 @@ async fn resolve(
 }
 
 /// Whether `rev` has a parent this clone never fetched, as against being
-/// the history's own first commit.
-///
-/// A shallow clone answers the two the same way: at its edge `%P` comes
-/// back empty and `<edge>~1` exits 1, exactly as at the real first commit
-/// (measured 2.55). git grafts the edge as it parses and leaves the stored
-/// object alone, so the raw commit is the one place the two still differ —
-/// the edge keeps its `parent` header, the first commit never had one.
+/// the first commit. At a shallow edge `%P` is empty and `<edge>~1` exits
+/// 1, as at the real first commit; only the raw object still differs — the
+/// edge keeps its `parent` header.
 async fn parent_is_unfetched(
     executor: &GitExecutor,
     workdir: &Path,
@@ -293,12 +243,10 @@ async fn parent_is_unfetched(
     Ok(has_parent_header(&out.stdout))
 }
 
-/// Whether a raw commit object carries a `parent` header.
-///
-/// The headers run to the first empty line, so a message that opens with
-/// the word cannot be taken for one. git writes the object with LF even on
-/// Windows (measured), and a CR is stripped anyway: mistaking an edge for
-/// the root is the costly direction of this answer.
+/// Whether a raw commit object carries a `parent` header. Only the headers
+/// (up to the first empty line) are scanned, so a message cannot pass for
+/// one. A CR is stripped although git writes LF: mistaking an edge for the
+/// root is the costly direction.
 pub(crate) fn has_parent_header(object: &[u8]) -> bool {
     for line in object.split(|b| *b == b'\n') {
         let line = line.strip_suffix(b"\r").unwrap_or(line);
@@ -329,9 +277,8 @@ pub async fn plan_for(
         .collect())
 }
 
-/// The range a plan replays, spelled in one place for everyone who says
-/// it — the sequencer's own reads, the preview, and the rewrite warning
-/// the screen asks about (three sayers is past the tolerated two).
+/// The range a plan replays, spelled once for the sequencer's reads, the
+/// preview and the rewrite warning.
 pub(crate) fn range_arg(upstream: &str, root: bool) -> String {
     if root {
         "HEAD".to_string()
@@ -363,16 +310,13 @@ mod tests {
         }
     }
 
-    /// Which report a refusal carries, which is what the screen writes
-    /// both of its lines from — the sentence alone reads the same whatever
-    /// kind went back (`#[error("{message}")]`).
+    /// Compared by kind: the error's display is the sentence alone
+    /// (`#[error("{message}")]`).
     fn refusal(edit: Edit, base: &Base, read: &RangeRead, oid: &str) -> ReportKind {
         let err = decide_edit(base, read, oid, edit).expect_err("refused");
         err.report().expect("a refusal carries its report").kind
     }
 
-    /// A base this clone never fetched cannot be named and is not the
-    /// root, so nothing can be composed over it.
     #[test]
     fn a_base_that_was_never_fetched_is_refused() {
         assert_eq!(
@@ -381,8 +325,6 @@ mod tests {
         );
     }
 
-    /// A plain interactive rebase drops merge commits, so a range holding
-    /// one is refused rather than silently flattened.
     #[test]
     fn a_range_holding_a_merge_is_refused() {
         let read = RangeRead {
@@ -395,11 +337,7 @@ mod tests {
         );
     }
 
-    /// **And it is refused first.** The range is read before the commit is
-    /// looked for, so a click on a commit the branch cannot see, over a
-    /// history with a merge in it, is answered by the merge — the order
-    /// the screen's sentences come out in, and the one thing here that
-    /// has ever been wrong.
+    /// Pins the order `decide_edit` names: the merge answers first.
     #[test]
     fn the_merge_answers_before_the_commit_is_looked_for() {
         let read = RangeRead {
@@ -417,7 +355,6 @@ mod tests {
         );
     }
 
-    /// A commit the range does not hold is one this branch cannot see.
     #[test]
     fn a_commit_the_range_does_not_hold_is_refused() {
         assert_eq!(
@@ -431,9 +368,6 @@ mod tests {
         );
     }
 
-    /// The oldest commit in the range has nothing above it to fold into.
-    /// The other two edits reach only the commit itself, so they are fine
-    /// there.
     #[test]
     fn folding_the_oldest_commit_in_the_range_is_refused_and_the_others_are_not() {
         assert_eq!(
@@ -445,9 +379,7 @@ mod tests {
         }
     }
 
-    /// What a plan comes out as: every commit in the range picked, the one
-    /// asked for carrying the edit, and the tip taken off the last row —
-    /// which is what the replay checks HEAD against before it spawns.
+    /// The tip comes off the last row whatever the edit.
     #[test]
     fn a_plan_picks_the_whole_range_and_marks_the_one_commit() {
         let plan = decide_edit(&Base::Root, &three(), "bbb", Edit::SquashIntoParent)

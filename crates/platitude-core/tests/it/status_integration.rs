@@ -25,10 +25,8 @@ fn embedded_repo(repo: &mut TestRepo, rel: &str, commit: bool) {
 }
 
 /// What the row of a repository inside the working copy (one `dir/`
-/// entry, [`periodic`]) shows instead of a patch. A `git add` of the path
-/// writes one index entry pointing at the commit the repository there is
-/// on, so that commit is what the pane says — and there is no patch to ask
-/// for either: `--no-index` against a directory prints nothing.
+/// entry, [`periodic`]) shows instead of a patch: the commit a `git add`
+/// would point at, since `--no-index` against a directory prints nothing.
 #[tokio::test]
 async fn a_stage_of_an_embedded_repository_would_point_at_its_head() {
     let mut repo = TestRepo::init();
@@ -71,9 +69,9 @@ async fn an_embedded_repository_with_no_commit_has_nothing_to_point_at() {
     repo.git_expect_failure(&["add", "--", "vendor/nest"]);
 }
 
-/// The guard on the answer. `rev-parse` walks up, so a directory that is
-/// no repository of its own answers with the repository **above** it —
-/// whose HEAD has nothing to do with the row. Nothing is said then.
+/// `rev-parse` walks up, so a directory that is no repository of its own
+/// would answer with the HEAD of the repository above it. Nothing is said
+/// then.
 #[tokio::test]
 async fn a_directory_that_is_no_repository_of_its_own_says_nothing() {
     let mut repo = TestRepo::init();
@@ -85,8 +83,7 @@ async fn a_directory_that_is_no_repository_of_its_own_says_nothing() {
         details::embedded(&executor, &repo.path, "plain/", &cancel).await,
         None
     );
-    // And the outer HEAD is what it would have said: the walk-up
-    // is real.
+    // The walk-up is real: the outer HEAD is what it would have said.
     let outer = repo.git(&["rev-parse", "HEAD"]);
     assert_eq!(
         repo.git_in(&repo.path.join("plain"), &["rev-parse", "HEAD"]),
@@ -94,33 +91,26 @@ async fn a_directory_that_is_no_repository_of_its_own_says_nothing() {
     );
 }
 
-/// **What the pre-merge run leaves out**: how `status` lists a repository
-/// inside the working copy. `status::load` hands the entry over as git
-/// wrote it, and `-uall` opening an ordinary new directory into its files
-/// is held before every merge by the staging tests
-/// (`stage_integration::partial::stage_part_of_an_untracked_file`), so
-/// what is left is git's boundary — the full gate runs it
-/// (`-- --ignored ::periodic::`) rather than every change.
+/// Left out of the pre-merge run: how `status` lists a repository inside
+/// the working copy, which is git's boundary (`-uall` on a plain directory
+/// is held by `stage_integration::partial::stage_part_of_an_untracked_file`).
+/// Run by the full gate (`-- --ignored ::periodic::`).
 mod periodic {
     use super::*;
 
-    /// A repository sitting inside the working copy is a boundary git will
-    /// not cross. `-uall` opens every other new directory and lists the files
-    /// in it; this one comes back as the single entry `nest/`, trailing slash
-    /// and all, because the files under it are another repository's.
+    /// `-uall` opens every other new directory into its files; a repository
+    /// inside the working copy comes back as the single entry `nest/`,
+    /// trailing slash and all.
     ///
-    /// That slash is the only one a path from `status` ends with, and the
-    /// file lists cut paths on `/` to file a row under its directories
-    /// (`platitude_app::models::pathtree`) — so what git answers here decides
-    /// whether that row is a directory of its own or a folder with a nameless
-    /// row inside it.
+    /// That slash decides how `platitude_app::models::pathtree`, which cuts
+    /// on `/`, files the row: a directory of its own or a folder with a
+    /// nameless row inside it.
     #[tokio::test]
     #[ignore = "git's boundary at a nested repository: not worth the pre-merge run"]
     async fn a_repository_inside_the_working_copy_stays_one_entry() {
         let mut repo = TestRepo::init();
         repo.commit_file("a.txt", "1\n", "root");
-        // A new directory git does open, for the contrast: its files are
-        // listed one by one, and the directory itself is never an entry.
+        // For contrast: a plain new directory is listed file by file.
         repo.write_file("plain/loose.txt", "in the same repository\n");
         embedded_repo(&mut repo, "vendor/nest", false);
 

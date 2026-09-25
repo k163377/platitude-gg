@@ -56,7 +56,6 @@ async fn stage_a_single_hunk() {
         !staged_content.contains("line 2 EDITED"),
         "first hunk untouched: {staged_content}"
     );
-    // The file is now both staged and unstaged.
     let (staged, unstaged, _) = buckets(&repo).await;
     assert_eq!(staged, vec!["f.txt"]);
     assert_eq!(unstaged, vec!["f.txt"]);
@@ -258,7 +257,6 @@ async fn unstage_a_single_line() {
     .expect("unstage lines");
 
     assert_eq!(indexed(&mut repo, "f.txt"), "a\nb\nc\nD");
-    // The working tree is untouched by unstaging.
     assert_eq!(
         std::fs::read_to_string(repo.path.join("f.txt")).unwrap(),
         "a\nB\nc\nD\n"
@@ -266,9 +264,8 @@ async fn unstage_a_single_line() {
 }
 
 /// Partially staging an untracked file goes through intent-to-add. The
-/// file sits in a brand-new directory on purpose: `status -uall` names
-/// it per file, which is what gives it a diff to select
-/// from.
+/// file sits in a brand-new directory on purpose: `status -uall` names it
+/// per file, which gives it a diff to select from.
 #[tokio::test]
 async fn stage_part_of_an_untracked_file() {
     let mut repo = TestRepo::init();
@@ -324,20 +321,17 @@ async fn a_glob_shaped_filename_stages_only_itself() {
     assert_eq!(untracked, vec!["a.txt"], "the glob did not expand");
 }
 
-/// **What the pre-merge run leaves out**: a whole hunk handed back to git as
-/// git wrote it. The builder's verbatim path and the no-newline marker are
-/// pinned by `patch`'s unit tests, and the marker shape git has to accept
-/// from us runs before every merge (`stage_a_line_above_a_missing_trailing_newline`);
-/// what this records is git applying its own hunk, run by the full gate
-/// (`-- --ignored ::periodic::`) rather than by every change.
+/// Left out of the pre-merge run: the builder's verbatim path is pinned by
+/// `patch`'s unit tests and the marker shape git has to accept by
+/// `stage_a_line_above_a_missing_trailing_newline`. Run by the full gate
+/// (`-- --ignored ::periodic::`).
 mod periodic {
     use super::*;
 
     /// A file without a trailing newline: staging the whole hunk must keep
-    /// the missing newline. (Selecting only an addition after the unterminated
-    /// line is the one shape a partial patch cannot express — the line before
-    /// it would gain a newline — and the selection stands as asked:
-    /// P3-確認事項 触らないと決めたもの.)
+    /// the missing newline. (Selecting only an addition after the
+    /// unterminated line cannot be expressed as a partial patch; left as
+    /// asked: P3-確認事項 §触らないと決めたもの.)
     #[tokio::test]
     #[ignore = "duplicates whole_hunk_selection_keeps_the_hunk_verbatim: not worth the pre-merge run"]
     async fn stage_a_file_without_a_trailing_newline() {

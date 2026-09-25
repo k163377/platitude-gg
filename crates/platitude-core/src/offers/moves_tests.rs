@@ -30,8 +30,7 @@ fn switch_lands_where_the_kind_and_the_local_branch_say() {
         switch_action("remote", "main", "main", "", "abc123"),
         MoveBranch
     );
-    // A tag could only detach HEAD, and the two markers name no branch:
-    // none of them moves.
+    // A tag could only detach HEAD, and the two markers name no branch.
     assert_eq!(switch_action("tag", "v1.0", "main", "", ""), None);
     assert_eq!(switch_action("head", "", "main", "", ""), None);
     assert_eq!(switch_action("worktree", "rig", "main", "", ""), None);
@@ -44,13 +43,11 @@ fn switch_lands_where_the_kind_and_the_local_branch_say() {
 
 #[test]
 fn a_move_has_landed_only_once_head_and_the_listing_both_say_so() {
-    // The gap the guard exists for: the write has answered and the
-    // status behind it already has HEAD on the new branch, but the refs
-    // are still being read, so the listing has no commit for it yet.
+    // The gap the guard exists for: status has HEAD on the new branch,
+    // and the listing has no commit for it yet.
     assert!(!move_landed("feat", "feat", ""));
     assert!(!move_landed("feat", "main", "abc123"));
     assert!(move_landed("feat", "feat", "abc123"));
-    // Nothing is on its way, so nothing is waiting to arrive.
     assert!(!move_landed("", "", ""));
     assert!(!move_landed("", "main", "abc123"));
 }

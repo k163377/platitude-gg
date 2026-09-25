@@ -1,14 +1,9 @@
-//! `GIT_SEQUENCE_EDITOR` helper for interactive rebase.
+//! `GIT_SEQUENCE_EDITOR` helper for interactive rebase: stands in for the
+//! human editing the todo list. A separate executable because git runs it
+//! through a shell and reads its exit code, which a windowed application
+//! cannot serve.
 //!
-//! git invokes an editor to let a human write the todo list; there is no
-//! human here, so this stands in for one. It is a separate executable
-//! because git runs it through a shell, expects it to exit promptly, and
-//! reads its exit code — none of which sits well with a windowed
-//! application.
-//!
-//! Usage: `pgg-todo-editor --todo-editor <plan> <todo>`
-//! (the application supplies everything up to `<plan>`; git appends
-//! `<todo>`.)
+//! Usage: `pgg-todo-editor --todo-editor <plan> <todo>` (git appends `<todo>`).
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -28,10 +23,9 @@ fn main() -> ExitCode {
     }
     match apply_plan(&PathBuf::from(plan), &PathBuf::from(todo)) {
         Ok(orphaned) => {
-            // git wrote a line for a commit the plan has nothing to say
-            // about — a range that moved between the two. Said rather
-            // than carried: put anywhere else it would move a ref to a
-            // place nobody asked for, and git shows what its editor said.
+            // A line the plan does not cover (the range moved in between).
+            // Reported, not carried: placed anywhere it would move a ref
+            // nobody asked to move.
             for line in orphaned {
                 say(&format!("left out of the plan: {line}"));
             }
@@ -52,8 +46,6 @@ fn say(message: &str) {
 /// Reports on stderr, where git shows editor failures, and fails the
 /// rebase: a zero exit would run git's own todo list.
 fn fail(message: &str) -> ExitCode {
-    // Nothing left to report with if the write fails; the exit code still
-    // stops the rebase.
     say(message);
     ExitCode::FAILURE
 }

@@ -33,14 +33,10 @@ impl RepoSession {
     /// `git add` over every path git reports as unmerged: the whole
     /// conflicted bucket marked resolved in one command.
     ///
-    /// The set is read here, because it is read under the write lock —
-    /// the same place the command runs. A list gathered in the UI would
-    /// have been made before whatever writes are queued ahead of this
-    /// one, and a path that stopped being conflicted in between is a
-    /// path `git add` would stage for real.
-    ///
-    /// Only the unmerged paths: the unstaged bucket beside this one is
-    /// outside what was asked for.
+    /// The set is read under the write lock, where the command runs: a
+    /// list gathered in the UI predates the writes queued ahead, and a
+    /// path that stopped being conflicted in between would be staged for
+    /// real. The unstaged bucket beside it is not included.
     pub fn stage_conflicted(self: &Arc<Self>) -> Option<OperationId> {
         self.write(
             OperationKind::Stage,
@@ -51,9 +47,8 @@ impl RepoSession {
                     .conflicted()
                     .map(|item| item.path().to_string())
                     .collect();
-                // Nothing unmerged: the bucket emptied while the press was
-                // in the queue. `stage_paths` turns an empty set away, but
-                // saying so here keeps the reason with the read.
+                // An empty set (the bucket emptied while queued) is
+                // `stage_paths`'s to turn away.
                 stage::stage_paths(&exec, &repo.workdir, &paths, &cancel).await
             },
         )
@@ -81,10 +76,9 @@ impl RepoSession {
         )
     }
 
-    /// Discards a chosen set of rows as one queued write: unstaged edits,
-    /// untracked files and staged changes each go by their own command,
-    /// and a staged rename takes the name it came from with it — read
-    /// from status inside the write (see [`stage::discard_chosen`]).
+    /// Discards a chosen set of rows as one queued write; a staged rename
+    /// takes its source along, read from status inside the write
+    /// ([`stage::discard_chosen`]).
     pub fn discard_chosen(
         self: &Arc<Self>,
         choices: Vec<(String, stage::DiscardSide)>,
@@ -151,13 +145,10 @@ impl RepoSession {
     /// Moves HEAD, taking uncommitted work along (デザイン規約
     /// §未コミット変更がある状態での移動).
     ///
-    /// The everyday case is one command: git carries the changes wherever
-    /// they do not stand in the way. Where they do it refuses and touches
-    /// nothing, and this goes round the long way instead — stash, move,
-    /// put back — which is the sequence a person would type. Nothing is
-    /// asked first: the refusal itself proved the repository is untouched,
-    /// and every outcome of the long way is one the working tree can show
-    /// and the stash can undo.
+    /// One command where git carries the changes; where it refuses
+    /// (touching nothing), the long way — stash, move, put back. Nothing is
+    /// asked first: the refusal proved the repository untouched, and every
+    /// outcome of the long way is one the stash can undo.
     pub fn checkout(self: &Arc<Self>, target: CheckoutTarget) -> Option<OperationId> {
         self.write(
             OperationKind::Checkout,
@@ -168,15 +159,12 @@ impl RepoSession {
         )
     }
 
-    /// Puts the operation standing in the way down — see
-    /// [`leave_operation`](super::build::leave_operation) for what that
-    /// takes and why it differs by operation — and then moves.
+    /// Puts the operation standing in the way down
+    /// ([`leave_operation`](super::build::leave_operation)) and then moves.
     ///
-    /// One write, so nothing can start the move while the operation is
-    /// still being put down and nobody can answer the question twice.
-    /// Every command stands in the log under its own line, which is what
-    /// a reader who typed them would have in front of them
-    /// (デザイン規約 §進行中の操作から出る).
+    /// One write, so nothing can start the move mid-way and nobody can
+    /// answer the question twice. Each command stands in the log on its
+    /// own line (デザイン規約 §進行中の操作から出る).
     pub fn checkout_leaving_operation(
         self: &Arc<Self>,
         target: CheckoutTarget,
@@ -191,22 +179,14 @@ impl RepoSession {
         )
     }
 
-    /// Moves a local branch onto `start` and lands on it, asking first only
-    /// when there is something to ask about.
-    ///
-    /// Landing on a branch that has fallen behind is the everyday case and
-    /// loses nothing: every commit it has is already reachable from where
-    /// it is going, so the move is a fast-forward and simply happens. Only
-    /// where the branch holds commits `start` does not — the case the
-    /// question's own words describe — does this stop and emit
-    /// [`SessionEvent::MoveNeedsAsk`] without touching anything.
-    ///
-    /// The check is a read, so a refusal here has nothing to undo.
+    /// Moves a local branch onto `start` and lands on it. A branch that
+    /// fell behind is a fast-forward and simply moves; one holding commits
+    /// `start` does not stops with [`SessionEvent::MoveNeedsAsk`], nothing
+    /// touched.
     ///
     /// `leaving` is [`checkout_leaving_operation`](Self::checkout_leaving_operation)'s
-    /// agreement, and it is spent **after** the check: a move that has to
-    /// ask leaves the operation standing for the answer to that second
-    /// question to undo, so a reader who walks away from `Move here?`
+    /// agreement, spent **after** the check: a move that has to ask leaves
+    /// the operation standing, so a reader who walks away from `Move here?`
     /// still has their cherry-pick.
     pub fn checkout_moving_branch(
         self: &Arc<Self>,

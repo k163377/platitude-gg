@@ -16,9 +16,9 @@ pub enum Notice {
     FirstEnding { eol: Eol, baseline: Baseline },
 }
 
-/// Pairs a reading with a baseline. `None` means nothing is shown, and
-/// every unknown collapses to it: git ruling the path out, no baseline to
-/// compare against, or a file that agrees with its neighbours after all.
+/// Pairs a reading with a baseline. `None` means nothing is shown — also
+/// for every unknown: no baseline, or a file that agrees with its
+/// neighbours after all.
 pub fn settle(reading: Reading, baseline: Option<&Baseline>) -> Option<Notice> {
     match reading {
         Reading::Quiet => None,

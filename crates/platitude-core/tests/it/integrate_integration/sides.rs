@@ -6,14 +6,11 @@ use crate::support::integrate::conflicting_branches;
 use platitude_core::conflict;
 use platitude_core::integrate::{self, InProgress, MergeOptions, RebaseOptions};
 
-/// What `sides` makes of what each stopped operation leaves behind (the
-/// files [`periodic`] records) — including the reversal, which is the
-/// whole reason the names are read.
+/// The rebase's reversal of the two is the reason the names are read.
 #[tokio::test]
 async fn sides_names_each_side_by_what_it_actually_is() {
     let (exec, cancel) = env();
 
-    // A merge lands the other branch on this one.
     let repo = conflicting_branches();
     integrate::merge(&exec, &repo.path, "side", &MergeOptions::default(), &cancel)
         .await
@@ -24,8 +21,7 @@ async fn sides_names_each_side_by_what_it_actually_is() {
     assert_eq!(s.ours, "main", "the branch the status read HEAD on");
     assert_eq!(s.theirs, "side");
 
-    // A rebase swaps them: `side` is the one being replayed, so it is
-    // `theirs`, and `main` is what it is landing on.
+    // A rebase swaps them.
     let mut repo = conflicting_branches();
     repo.git(&["checkout", "side"]);
     integrate::rebase(
@@ -37,15 +33,13 @@ async fn sides_names_each_side_by_what_it_actually_is() {
     )
     .await
     .expect("a stop is an answer, not a failure");
-    // Handed the branch being replayed, which is what a status reads of
-    // HEAD mid-rebase; the side is git's own file.
+    // Handed what a status reads of HEAD mid-rebase: the branch replayed.
     let s = conflict::sides(&exec, &repo.path, InProgress::Rebase, Some("side"), &cancel)
         .await
         .expect("sides");
     assert_eq!(s.ours, "main", "the upstream being landed on");
     assert_eq!(s.theirs, "side", "the branch being replayed");
 
-    // A cherry-pick brings one commit onto the current branch.
     let repo = conflicting_branches();
     integrate::cherry_pick(&exec, &repo.path, &["side".into()], &cancel)
         .await
@@ -63,9 +57,7 @@ async fn sides_names_each_side_by_what_it_actually_is() {
     assert_eq!(s.theirs, "side");
 }
 
-/// Nothing to name a side by is answered with nothing: a commit no
-/// branch reaches comes back empty and the UI falls back to its own
-/// wording.
+/// Empty, so the UI falls back to its own wording.
 #[tokio::test]
 async fn a_side_no_branch_reaches_is_left_unnamed() {
     let mut repo = TestRepo::init();
@@ -74,7 +66,6 @@ async fn a_side_no_branch_reaches_is_left_unnamed() {
     let orphan = repo.commit_file_id("f.txt", "orphan\n", "off on its own");
     repo.git(&["checkout", "main"]);
     repo.commit_file("f.txt", "main\n", "main change");
-    // The branch goes; the commit stays reachable only by its hash.
     repo.git(&["branch", "-D", "gone"]);
     let (exec, cancel) = env();
 
@@ -88,18 +79,12 @@ async fn a_side_no_branch_reaches_is_left_unnamed() {
     assert_eq!(s.theirs, "", "git says `undefined`, which is not a name");
 }
 
-/// **What the pre-merge run leaves out**: the marker files each stopped
-/// operation writes, read straight off disk with no code of this crate's
-/// in the way — the ground `sides` stands on, which the tests above read
-/// through `sides` itself. Run by the full gate
-/// (`-- --ignored ::periodic::`) rather than by every change.
+/// The marker files `sides` stands on, read straight off disk
+/// (rules-refs/core.md `periodic`).
 mod periodic {
     use super::*;
 
-    /// What each stopped operation leaves behind to name its two sides by.
-    /// The UI calls them by branch name, and this is what there is to build
-    /// those names out of — measured, because the answer differs per
-    /// operation and per rebase backend.
+    /// The answer differs per operation and per rebase backend.
     #[tokio::test]
     #[ignore = "git's own marker files, no code of ours: not worth the pre-merge run"]
     async fn what_a_stopped_operation_says_about_its_two_sides() {
@@ -124,14 +109,12 @@ mod periodic {
         let mut repo = conflicting_branches();
         repo.git(&["checkout", "side"]);
         repo.git_expect_failure(&["rebase", "main"]);
-        // The branch being replayed, as a full ref — the one side that comes
-        // back already named.
+        // The only side that comes back already named (a full ref).
         assert_eq!(
             read_git_file(&mut repo, "rebase-merge/head-name"),
             "refs/heads/side"
         );
-        // The side being landed on is a bare object name, so it has to be
-        // asked for by name separately.
+        // `onto` is a bare object name, so it is named separately.
         let onto = read_git_file(&mut repo, "rebase-merge/onto");
         assert_eq!(onto.len(), 40, "a raw sha, not a ref: {onto}");
         assert_eq!(
@@ -161,7 +144,6 @@ mod periodic {
         );
     }
 
-    /// Reads a file in the git directory by the name git knows it by.
     fn read_git_file(repo: &mut TestRepo, rel: &str) -> String {
         let path = repo.git(&["rev-parse", "--git-path", rel]);
         std::fs::read_to_string(repo.path.join(path.trim()))

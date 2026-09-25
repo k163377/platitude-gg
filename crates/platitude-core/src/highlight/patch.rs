@@ -12,49 +12,34 @@ use super::theme::{Assets, assets, syntax_for};
 use super::walk::Walk;
 use super::{DiffColors, LexCache, LineColors, PatchColors};
 
-/// How many lines of lexing one ordinary patch may spend, everything
-/// counted — the walk down to each hunk, every row painted inside one,
-/// the other side's readings too. **Counted in lines, because lines are
-/// what the lexer spends** — the count is set from the rate it reads at,
-/// so that a reading stays inside what opening a diff can spend on colour
-/// (the rate and what this comes to in milliseconds:
-/// ci/baseline/code-costs-windows-x64.md §着色). Rows past it go out
-/// plain, which is what every file the set does not know looks like
-/// anyway.
-///
-/// One budget per patch: what it bounds is the whole cost of
-/// colouring one file, whatever shape its hunks take — unbounded, a
-/// whole-file rewrite reads an order of magnitude past that. It bounds
-/// each *reading*: a walk resumed from a [`LexCache`] checkpoint
-/// starts its budget from there.
+/// How many lines of lexing one patch may spend, everything counted — the
+/// walk down to each hunk, every row painted, the other side's readings
+/// too — so a reading stays inside what opening a diff can spend on colour
+/// (ci/baseline/code-costs-windows-x64.md §着色). Rows past it go out
+/// plain. It bounds each reading: a walk resumed from a [`LexCache`]
+/// checkpoint starts its budget from there.
 const LEX_LINE_BUDGET: usize = 5_000;
 
-/// How many lines apart a [`LexCache`]'s checkpoints stand. The price of
-/// one is a clone of the lexer's place (small); the saving is that a
-/// re-read of the same file walks at most this far to reach where it
-/// left off.
+/// How many lines apart a [`LexCache`]'s checkpoints stand: a re-read
+/// walks at most this far to reach where it left off.
 const CHECKPOINT_STRIDE: usize = 512;
 
-/// What [`colors_quick`] may spend: a fifth of [`LEX_LINE_BUDGET`], which
-/// at the same rate is what a pane can wear as "immediate".
+/// What [`colors_quick`] may spend — at the lexer's rate, what a pane can
+/// wear as immediate (ci/baseline/code-costs-windows-x64.md §着色).
 const QUICK_LINE_BUDGET: usize = 1_000;
 
-/// Whether the language set can say anything about this path at all —
-/// asked before the file behind a diff is fetched: reading it costs a
-/// process, and a file nothing will colour is not worth one. A grammar
-/// or the fallback set, either counts.
+/// Whether a grammar or the fallback set can colour this path — asked
+/// before fetching the file behind a diff, which costs a process.
 pub fn knows(path: &str) -> bool {
     super::grammar::claims(path) || super::theme::knows(path)
 }
 
-/// Whether colouring this diff in full would keep a reader waiting —
-/// the walk down to its deepest hunk plus every row of it, against the
-/// regex lexer's ~16,000 lines a second. Where it would, callers send
-/// [`colors_quick`]'s answer first. A path a grammar claims is never
-/// deep: the whole side parses in milliseconds, so the full answer is
-/// the quick one. (A file that outgrew its grammar reads through the
-/// lexer instead and its colours can arrive a beat late — telling it
-/// apart here would cost the very parse whose price is in question.)
+/// Whether colouring this diff in full would keep a reader waiting (the
+/// walk down to its deepest hunk plus every row, past
+/// [`QUICK_LINE_BUDGET`]); where it would, callers send [`colors_quick`]'s
+/// answer first. A path a grammar claims is never deep — the whole side
+/// parses at once. A file that outgrew its grammar counts as not deep
+/// too, since telling it apart would cost the very parse in question.
 pub fn deep(patches: &[FilePatch]) -> bool {
     let mut rows = 0usize;
     let mut deepest = 0usize;
@@ -73,11 +58,9 @@ pub fn deep(patches: &[FilePatch]) -> bool {
     deepest + rows > QUICK_LINE_BUDGET
 }
 
-/// The colours a diff can have *now*: no file walked, each hunk read
-/// from its own top, and no more than [`QUICK_LINE_BUDGET`] of it. What
-/// the pane shows while [`colors_cached`] walks the file — almost
-/// always the same answer, and the caller re-sends only where it turns
-/// out not to be.
+/// The colours a diff can have now: no file walked, each hunk read cold,
+/// at most [`QUICK_LINE_BUDGET`]. Shown while [`colors_cached`] walks the
+/// file; the caller re-sends only where the full answer differs.
 pub fn colors_quick(patches: &[FilePatch]) -> DiffColors {
     DiffColors {
         patches: patches
@@ -87,33 +70,26 @@ pub fn colors_quick(patches: &[FilePatch]) -> DiffColors {
     }
 }
 
-/// Reads every text line of `patches` and answers what colour each run of
-/// it is. Best effort throughout: a language that is not in the set, a
-/// binary patch, a regex that will not run — each of those is a diff that
-/// comes out the colour it always was — a full answer either way.
-///
-/// This is CPU work with no waiting in it. Callers on an async runtime
-/// should hand it to a blocking thread.
-/// `source` is the whole of the side the diff's line numbers count in
-/// ([`crate::preview::source_text`]); without it every hunk starts cold
-/// (see the module note).
+/// Colours every text line of `patches`. Best effort: an unknown
+/// language, a binary patch or a regex that will not run comes out
+/// uncoloured. CPU-bound — callers on an async runtime hand it to a
+/// blocking thread. `source` is the whole of the side the diff's line
+/// numbers count in ([`crate::preview::source_text`]); without it every
+/// hunk starts cold.
 pub fn colors(patches: &[FilePatch], source: Option<&str>) -> DiffColors {
     colors_cached(patches, source, None).0
 }
 
-/// [`colors`], starting from — and handing back — the lexer states a
-/// previous reading of the same source remembered ([`LexCache`]). The
-/// cache carries its own staleness check: one built over different text
-/// (its hash disagrees) is dropped and rebuilt, so callers keep the
-/// latest returned cache and nothing else.
+/// [`colors`], starting from — and handing back — a [`LexCache`] from a
+/// previous reading. One built over different text is dropped and
+/// rebuilt, so callers just keep the latest one returned.
 pub fn colors_cached(
     patches: &[FilePatch],
     source: Option<&str>,
     cache: Option<LexCache>,
 ) -> (DiffColors, Option<LexCache>) {
-    // Without the file there is nothing to remember states down — and
-    // nothing to invalidate either: the cache rides through untouched
-    // for the next read that does have one.
+    // Without the file the cache rides through untouched for the next
+    // read that has one.
     let Some(src) = source else {
         let colors = DiffColors {
             patches: patches
@@ -141,17 +117,9 @@ pub fn colors_cached(
     (colors, Some(store))
 }
 
-/// Whether a [`LexCache`] was walked down this same text.
-///
-/// **Deliberately not [`crate::details::fingerprint`]** (rules-refs/core.md
-/// holds the decision). That one hashes the bytes of a `git diff`, goes out
-/// to the pane as hex and comes back attached to a hunk selection, so a
-/// wrong "unchanged" there lets a partial write land on bytes that moved.
-/// This one hashes the file's text, stays inside the struct
-/// (`LexCache::source` is private and the type is neither `Clone` nor
-/// serialisable), and both sides of every comparison are made by the same
-/// binary in the same run — so a wrong answer costs a repaint, and
-/// `DefaultHasher`'s freedom to change between std releases cannot reach it.
+/// Whether a [`LexCache`] was walked down this same text. Deliberately not
+/// [`crate::details::fingerprint`]: a wrong answer here costs only a
+/// repaint (rules-refs/core.md「staleness のハッシュは問いごとに持つ」).
 fn source_hash(text: &str) -> u64 {
     let mut hasher = std::hash::DefaultHasher::new();
     text.hash(&mut hasher);
@@ -167,24 +135,18 @@ fn patch_colors(
     if patch.is_binary || patch.unmerged {
         return Vec::new();
     }
-    // A combined diff — the form git prints for a path it stopped on —
-    // has its markers read as structure, and its fences are read whether
-    // or not the language is one the set knows (see the module note).
+    // A combined diff goes first, grammar or not: its markers are read as
+    // structure (see the module note).
     if patch.is_combined {
         let assets = assets();
         let syntax = syntax_for(&assets.syntaxes, patch.path());
         return combined_colors(assets, patch, source, syntax);
     }
-    // The fast path: a grammar parses the whole side at once — no walk
-    // to budget, nothing for the cache to remember, and none of the
-    // fallback set's load time (`theme::assets`) spent.
+    // The fast path, without loading the fallback set (`theme::assets`).
     if let Some(lang) = super::grammar::for_path(patch.path()) {
-        // …unless the file has outgrown its grammar — syntax newer than
-        // the pinned parser, which past the first break can leave every
-        // row plain (`tree::reads`). Such a source goes to the lexer
-        // below, where the fallback set has a real syntax to read it
-        // with; where it has none, the grammar's partial answer is
-        // still the best there is.
+        // …unless the file has outgrown its grammar (`tree::reads`) and
+        // the fallback set has a real syntax for it; with none, the
+        // grammar's partial answer is still the best there is.
         let outgrown = source.is_some_and(|text| !super::tree::reads(lang, text))
             && super::theme::reads(patch.path());
         if !outgrown {
@@ -200,8 +162,7 @@ fn patch_colors(
 
 /// Colours for an ordinary unified diff: one walk down the side the
 /// diff's line numbers count in, forked once per hunk for the other
-/// side's rows. `budget` is [`LEX_LINE_BUDGET`], a parameter so a test
-/// does not need thousands of lines to reach the far side of it.
+/// side's rows.
 fn unified_colors(
     assets: &Assets,
     patch: &FilePatch,
@@ -210,8 +171,6 @@ fn unified_colors(
     mut budget: usize,
     mut cache: Option<&mut LexCache>,
 ) -> PatchColors {
-    // States are only worth resuming under the grammar that made them
-    // (`LexCache::syntax`); a cache walked with another one is cleared.
     if let Some(cache) = cache.as_deref_mut()
         && cache.syntax != syntax.name
     {
@@ -219,16 +178,10 @@ fn unified_colors(
         cache.states.clear();
     }
     let highlighter = Highlighter::new(&assets.theme);
-    // Which side the file we were handed is, and therefore which of the
-    // hunk's two line numbers counts in it. A deleted file has no new
-    // side and every row of its diff comes from the old one.
+    // Which of the hunk's two line numbers the file counts in — a
+    // deleted file has no new side.
     let new_side = patch.new_path.is_some();
     let lines: Vec<&str> = source.map(|s| s.lines().collect()).unwrap_or_default();
-    // The file itself, stepped to wherever the next hunk starts, then
-    // through the hunk's own rows — this side's rows are the file, so
-    // one walk serves both. The other side's rows read through a
-    // fork: they are what this file does not say, so that walk is
-    // its own ([`read_hunk`]).
     let mut file = Walk::new(assets, &highlighter, Some(syntax));
     let mut at = 0usize;
     let mut out = Vec::with_capacity(patch.hunks.len());
@@ -239,9 +192,6 @@ fn unified_colors(
             hunk.old_start
         };
         let start = (start.saturating_sub(1)) as usize;
-        // A remembered place at or below this hunk that is further than
-        // the walk has come is a jump: the lines between have been read
-        // before, over this same text.
         if let Some((ck, state)) = cache.as_ref().and_then(|c| c.jump(at, start)) {
             file = Walk::resume(assets, &highlighter, state.clone());
             at = *ck;
@@ -265,10 +215,8 @@ fn unified_colors(
             at += walked;
             out.push(hunk_colors);
         } else {
-            // Nothing to start from — no file, a hunk out of budget, or
-            // one the file no longer agrees with. This hunk reads cold
-            // from its own top; the file's walk stays where it was for
-            // the hunks after it.
+            // No file, out of budget, or the file disagrees: this hunk
+            // reads cold; the file's walk stays put for the hunks after it.
             let mut cold = Walk::new(assets, &highlighter, Some(syntax));
             out.push(read_hunk(&mut cold, hunk, new_side, &mut budget).0);
         }
@@ -276,19 +224,16 @@ fn unified_colors(
     out
 }
 
-/// Reads one hunk's rows: this side's — the context lines and its own
-/// changes — through `file`, and the other side's changes through a fork
-/// taken where the hunk begins. The fork steps over the context lines
-/// too (they are in both sides), so its own changes stay in context;
-/// what it never sees is this side's changes, which is exactly what the
-/// other side's file never says. Feeding both sides through one walk
-/// would let a deleted `/*` paint everything after it as the inside of
-/// a comment that is not there.
+/// Reads one hunk's rows: this side's (context and its own changes)
+/// through `file`, the other side's changes through a fork taken where
+/// the hunk begins that also steps over the context lines. One walk for
+/// both sides would let a deleted `/*` paint everything after it as a
+/// comment.
 ///
-/// Every reading spends one of `budget` — a context line costs two, one
-/// per side. Once it is gone the rest of the hunk goes out plain.
-/// Answers the colours and how many of this side's lines were consumed —
-/// spent or not, so the caller's place in the file stays true.
+/// Every reading spends one of `budget` (a context line costs two, one
+/// per side); past it the rest goes out plain. Answers the colours and
+/// how many of this side's lines were consumed, spent or not, so the
+/// caller's place in the file stays true.
 fn read_hunk(
     file: &mut Walk,
     hunk: &DiffHunk,
@@ -340,10 +285,8 @@ fn read_hunk(
     (out, walked)
 }
 
-/// Colours for the combined diff git prints for a path it stopped on:
-/// every row is read, the sides of each conflict region are stood
-/// beside each other, and the fences are read as structure
-/// ([`Walk`]).
+/// Colours for a combined diff: every row is read, conflict regions as
+/// structure ([`Walk`]).
 fn combined_colors(
     assets: &Assets,
     patch: &FilePatch,
@@ -353,10 +296,9 @@ fn combined_colors(
     let highlighter = Highlighter::new(&assets.theme);
     let new_side = patch.new_path.is_some();
     let lines: Vec<&str> = source.map(|s| s.lines().collect()).unwrap_or_default();
-    // The file itself, walked to wherever the next hunk starts. Kept
-    // apart from the walk that colours the rows: a hunk's rows are the
-    // sides interleaved, and feeding those back would leave the reading
-    // somewhere the file never goes.
+    // The file's own walk, kept apart from the one that colours the rows:
+    // a hunk's rows interleave the sides, and feeding them back would
+    // leave the reading somewhere the file never goes.
     let mut file = Walk::new(assets, &highlighter, syntax);
     let mut at = 0usize;
     let mut out = Vec::with_capacity(patch.hunks.len());
@@ -368,8 +310,7 @@ fn combined_colors(
         };
         let start = start.saturating_sub(1) as usize;
         let mut rows = None;
-        // A combined diff keeps the simpler bound — the budget here caps
-        // how deep a hunk the walk will reach for.
+        // Here the budget only caps how deep a hunk the walk reaches for.
         if !lines.is_empty() && start <= lines.len() && start <= LEX_LINE_BUDGET {
             while at < start {
                 file.paint(lines[at]);
@@ -379,8 +320,6 @@ fn combined_colors(
                 rows = Some(file.fork());
             }
         }
-        // Nothing to start from — no file, or one that does not say what
-        // this hunk says it does.
         let mut rows = rows.unwrap_or_else(|| Walk::new(assets, &highlighter, syntax));
         out.push(hunk.lines.iter().map(|line| rows.read(line)).collect());
         // Step the file over the lines this hunk covers, so the next one
@@ -396,10 +335,9 @@ fn combined_colors(
     out
 }
 
-/// Whether the file we were handed says at `start` what the hunk says is
-/// there. A diff and a file read a moment apart can disagree — someone
-/// saved between them — and a reading walked through the wrong text is
-/// worse than one that admits it does not know.
+/// Whether the file says at `start` what the hunk says is there. A save
+/// between reading the diff and the file makes them disagree, and a
+/// reading walked through the wrong text is worse than a cold one.
 fn hunk_agrees(hunk: &DiffHunk, lines: &[&str], start: usize, new_side: bool) -> bool {
     let first = hunk.lines.iter().find(|line| line.kind.on_side(new_side));
     first.is_none_or(|line| lines.get(start) == Some(&line.text.as_str()))

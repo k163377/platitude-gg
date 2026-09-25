@@ -1,16 +1,12 @@
 //! Interactive rebase driven from the GUI.
 //!
-//! git asks an editor to write the todo list; this module supplies that
-//! editor. The plan the user assembled is written to a file, and
-//! `GIT_SEQUENCE_EDITOR` is pointed at the `pgg-todo-editor` helper that
-//! ships beside the application, which copies the plan over git's todo
-//! file and exits (実装計画 §6, P3-確認事項 §残っている実装).
+//! The plan is written to a file and `GIT_SEQUENCE_EDITOR` points at the
+//! `pgg-todo-editor` helper, which installs it as git's todo
+//! (rules-refs/core.md の `pgg-todo-editor` の行).
 //!
-//! Rewording is expressed as `pick` plus an `exec git commit --amend
-//! --file`, not as a `reword` line. A `reword` would open `GIT_EDITOR`,
-//! which the process layer pins to `true` so nothing hangs — and the
-//! message would silently stay as it was. The `exec` form states the new
-//! message outright, so it either applies or fails loudly.
+//! Rewording is `pick` plus `exec git commit --amend --file`, not a
+//! `reword` line: `reword` opens `GIT_EDITOR`, pinned to `true`, so the
+//! message would silently stay as it was.
 
 mod plan;
 mod run;
@@ -25,8 +21,7 @@ pub use todo::{MergedTodo, RebaseStep, TodoAction, TodoLine, merge_todo, render_
 
 pub(crate) use plan::{Base, base_of, range_arg};
 
-// Reached only from `crate::sequencer_tests`, which pins the two pieces
-// of string work the modules above keep to themselves.
+// Reached only from `crate::sequencer_tests`.
 #[cfg(test)]
 pub(crate) use plan::has_parent_header;
 #[cfg(test)]

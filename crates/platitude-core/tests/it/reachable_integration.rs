@@ -1,10 +1,9 @@
 //! What still holds the branch tip once the branch moves off it, against
 //! real git.
 //!
-//! Every case here was measured before it was written: the walk answers
-//! "held" far too readily if its exclusion pattern is spelled the way the
-//! rest of the code spells refnames, and that failure is silent — it looks
-//! exactly like a repository where everything is safe.
+//! A misspelled exclusion (`reachable::command`) answers "held" too
+//! readily, and silently — it looks like a repository where everything is
+//! safe.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::expect_used)]
@@ -13,9 +12,8 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::reachable;
 
-/// Three commits on `main` and nothing else, plus `main`'s tip — the tests
-/// below move every ref but `main`, so the tip is the same commit at every
-/// ask.
+/// Three commits on `main`, plus its tip — the tests move every ref but
+/// `main`, so the tip is the same commit at every ask.
 fn scenario() -> (TestRepo, String) {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "1\n", "first");
@@ -31,12 +29,9 @@ async fn reached(repo: &TestRepo, tip: &str) -> bool {
         .expect("ask what holds the tip")
 }
 
-/// One history, the walk asked again after each move of a second branch.
-/// The opening ask is the exclusion's own case — left in the walk, the
-/// branch holds its own tip and every repository reads as safe — and
-/// doubles as the no-stash case: a repository that never stashed has no
-/// `refs/stash`, and the walk has to survive naming it anyway (that is why
-/// it is spelled `--glob=refs/stash*` — core.md).
+/// The opening ask is the exclusion's own case and doubles as the no-stash
+/// case: with no `refs/stash`, the walk has to survive naming it anyway
+/// (rules-refs/core.md「`--glob=<pattern>` は階層にしか当たらない」).
 #[tokio::test]
 async fn only_a_branch_at_or_beyond_the_tip_holds_it() {
     let (mut repo, tip) = scenario();
@@ -59,12 +54,8 @@ async fn only_a_branch_at_or_beyond_the_tip_holds_it() {
         "a branch further along holds the tip too"
     );
 
-    // A tag is not in the walk at all (they are the bulk of the refs on a
-    // large repository and the bulk of the cost). One sitting on the tip
-    // is caught by the refs listing instead — see
-    // `reachable::a_ref_sits_on_head` — and one strictly ahead of the tip
-    // is missed, which shows the mark on a row that could have been a
-    // click.
+    // Tags are not in the walk (`reachable`'s module doc): one on the tip is
+    // caught by `reachable::a_ref_sits_on_head`, one strictly ahead is missed.
     repo.git(&["tag", "v2", "keep"]);
     repo.git(&["branch", "-D", "keep"]);
     assert!(
@@ -73,9 +64,8 @@ async fn only_a_branch_at_or_beyond_the_tip_holds_it() {
     );
     repo.git(&["tag", "-d", "v2"]);
 
-    // The case that decides the whole rule: a branch part-way up the
-    // range saves what is below it and nothing above, so the tip is
-    // still lost.
+    // The case that decides the rule: a branch part-way up the range saves
+    // only what is below it.
     repo.git(&["branch", "keep", "HEAD~1"]);
     assert!(
         !reached(&repo, &tip).await,
@@ -83,7 +73,6 @@ async fn only_a_branch_at_or_beyond_the_tip_holds_it() {
     );
 }
 
-/// The other two kinds of ref in the walk, on the same one history.
 #[tokio::test]
 async fn remote_tracking_refs_and_the_stash_hold_the_tip_like_branches() {
     let (mut repo, tip) = scenario();

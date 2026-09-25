@@ -6,23 +6,15 @@ use super::*;
 /// What a session's command log holds: the commands the user asked for,
 /// or those and the reads the session makes on its own.
 ///
-/// Where a session starts is settled when it is created
-/// ([`RepoSession::open_recording`]). Opening spawns its own reads —
-/// refs, status, the walk, the author, an open fetch — as soon as the
-/// path is accepted, so a caller flipping this afterwards catches
-/// whichever of them the scheduler had not reached yet, and how much
-/// of an opening a command log holds becomes a scheduling
-/// accident.
-///
-/// Moving it later ([`RepoSession::set_recording`]) is still how the log
-/// panel's switch works, and is exact for everything the session is asked
-/// for from then on: the ask spawns its work after the store, so the
-/// spawn carries the store to it.
+/// Set at creation ([`RepoSession::open_recording`]): opening spawns its
+/// reads as soon as the path is accepted, so flipping this afterwards
+/// catches a scheduling-dependent share of them.
+/// [`RepoSession::set_recording`] (the log panel's switch) is exact for
+/// everything asked from then on, whose work is spawned after the store.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Recording {
-    /// The commands the user asked for, and nothing else. What the
-    /// application opens with: a poll tick runs five commands and would
-    /// bury the operations somebody actually performed.
+    /// The commands the user asked for, and nothing else. The default:
+    /// poll ticks would bury the operations somebody actually performed.
     #[default]
     UserOnly,
     /// Those and the session's own reads, from the opening's first
@@ -36,24 +28,18 @@ impl Recording {
     }
 }
 
-/// Turns invocations into session events, so the command log travels the
-/// same path as everything else the UI shows.
 pub(super) struct CommandFeed {
     sink: Arc<dyn SessionSink>,
     next_id: AtomicU64,
-    /// Whether the reads the session makes on its own are kept too (see
-    /// [`Recording`]).
     record_background: std::sync::atomic::AtomicBool,
-    /// The invocations that are worth a row only if git says no
-    /// ([`Kept::UnaskedUnlessItFails`]), held from the spawn until the
-    /// end that decides it. Emptied by every end, so what it holds is
-    /// what is running.
+    /// Invocations worth a row only if git says no
+    /// ([`Kept::UnaskedUnlessItFails`]), held from the spawn until the end
+    /// decides; every end removes its entry.
     held: Mutex<HashMap<u64, Held>>,
 }
 
-/// What a held invocation needs to become a row after the fact. The line
-/// cannot be rebuilt at the end — the command it describes is gone by
-/// then — and the clock is the spawn's.
+/// What a held invocation needs to become a row after the fact: the line
+/// cannot be rebuilt at the end, and the clock is the spawn's.
 struct Held {
     display: String,
     full: String,
@@ -61,9 +47,9 @@ struct Held {
     operation: Option<OperationId>,
 }
 
-/// Whether git itself said no, which is the only end a command nobody
-/// asked for leaves a row for. A cancelled read was stopped by this
-/// window, and a code the command named as an answer is an answer.
+/// Whether git itself said no — the only end that gives an unasked
+/// command a row. A cancel was this window's doing, and a code the
+/// command named as an answer is an answer.
 fn said_no(end: CommandEnd) -> bool {
     match end {
         CommandEnd::Exited(code) => code != 0,
@@ -143,8 +129,8 @@ impl crate::process::CommandObserver for CommandFeed {
             if !said_no(end) {
                 return;
             }
-            // The row lands whole: its start first, so whatever reads the
-            // log builds the same row it would have built at the spawn.
+            // Start first, so the log builds the row it would have built
+            // at the spawn.
             self.sink.event(SessionEvent::CommandStarted {
                 id,
                 display: held.display,

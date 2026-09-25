@@ -7,16 +7,14 @@ use super::*;
 
 impl RepoSession {
     /// Takes what a read saw of HEAD into the record (`Standing`) and
-    /// tells the consumer where it moved to — or, after a write, that it
-    /// stayed. `looked` is the stamp the read took before it spawned git:
-    /// a read that looked before a write ended is refused here, whichever
-    /// order the two landed in.
+    /// reports where it moved — or, after a write, that it stayed.
+    /// `looked` is the read's pre-spawn stamp: a read that looked before a
+    /// write ended is refused, whichever order the two landed in.
     pub(super) fn observe_head(&self, looked: u64, head: &HeadState) {
         let offer = self.standing.offer_head(looked, head);
         self.report_head(offer, head);
     }
 
-    /// Sends the report the record decided a read's HEAD was owed, if any.
     fn report_head(&self, offer: HeadOffer, head: &HeadState) {
         if let HeadOffer::Settled { seq } | HeadOffer::Moved { seq } = offer {
             self.sink.event(SessionEvent::HeadObserved {
@@ -26,21 +24,18 @@ impl RepoSession {
         }
     }
 
-    /// Records what the refs read just saw of the branch tip, including
-    /// the half of the reachability question the listing answers by
-    /// itself: some other ref sitting exactly on the tip.
+    /// Records what the refs read saw of the branch tip, including the
+    /// half of the reachability question the listing answers alone:
+    /// another ref sitting exactly on the tip.
     ///
-    /// That half is what makes tags count without paying for them. Tags
-    /// are left out of the walk — on a tag-heavy repository they are the
-    /// great majority of both the refs and the walk's own time
-    /// (ci/baseline/head-reach-windows-x64.md) — and
-    /// a tag on the tip is the shape that actually turns up; one strictly
-    /// ahead of it is missed, which costs a hold mark on a row that could
-    /// have been a click.
+    /// That half is how tags count without being walked (their cost scales
+    /// with the tag count — ci/baseline/head-reach-windows-x64.md). A tag
+    /// strictly ahead of the tip is missed, which costs a hold mark on a
+    /// row that could have been a click.
     pub(super) fn record_head_from_refs(&self, looked: u64, refs: &[RefEntry], head: &HeadState) {
-        // Offered first: a listing whose HEAD a later read has already
-        // moved past says nothing about the tip either, and a hold taken
-        // from it would have the reach walked from where HEAD no longer is.
+        // Offered first: a listing a later read has moved past says
+        // nothing about the tip, and a hold from it would walk the reach
+        // from where HEAD no longer is.
         let offer = self.standing.offer_head(looked, head);
         if offer == HeadOffer::Stale {
             return;
@@ -51,15 +46,13 @@ impl RepoSession {
             on_a_ref: reachable::a_ref_sits_on_head(refs, head),
         });
         self.standing.set_hold(hold);
-        // Beside the hold, and both are written before anything this
-        // read wakes can look.
+        // After the hold: both are in place before anything this read
+        // wakes can look.
         self.report_head(offer, head);
     }
 
-    /// Where the last read left HEAD, for a caller that would otherwise
-    /// spawn two processes to ask again.
-    ///
-    /// `None` means no read has landed and there is nothing to go on.
+    /// Where the last read left HEAD, saving a caller two processes.
+    /// `None`: no read has landed yet.
     pub(super) fn known_head_tip(&self) -> Option<Option<Oid>> {
         self.standing.head_tip()
     }
@@ -67,9 +60,9 @@ impl RepoSession {
     /// Answers whether the branch HEAD is on is the only thing holding its
     /// tip, and sends the answer if it moved.
     ///
-    /// Runs off the write queue and off the poll's two-process budget: it
-    /// is started where the graph is rebuilt, because it describes the
-    /// same picture — whether a rewrite here leaves the old commits drawn.
+    /// Off the write queue and the poll's budget, started where the graph
+    /// is rebuilt: it describes the same picture (whether a rewrite leaves
+    /// the old commits drawn).
     pub(super) fn settle_head_reach(self: &Arc<Self>) {
         let Some(workdir) = self.workdir() else {
             return;
@@ -120,22 +113,14 @@ impl RepoSession {
 
     /// Takes what a graph pass read off HEAD's row — whether a remote
     /// already has that commit — into the record, and sends it if it
-    /// moved. `head` is the commit the pass walked from (`None` on a
-    /// branch with no commits); `walked` is the mark on its row, or
-    /// `None` where the walk's window stopped short of HEAD.
-    ///
-    /// **Off the rows the pass already drew, and git only where it
-    /// cannot be.** Every emitted row is marked exactly
-    /// (`session::published`), and HEAD is a starting point of the walk,
-    /// so its row is in the window unless more than a window's worth of
-    /// commits is newer than it — a detached HEAD parked on an old commit.
-    /// Only that pass spends a read, and one at a time
-    /// (`head_published_read`): the answer is a state of the
-    /// repository.
+    /// moved. `head` is the commit the pass walked from (`None` when
+    /// unborn); `walked` is the mark on its row (exact —
+    /// `session::published`), or `None` where the window stopped short of
+    /// HEAD: a detached HEAD more than a window's worth of commits back.
+    /// Only then is git asked, one read at a time (`head_published_read`).
     pub(super) fn settle_head_published(self: &Arc<Self>, head: Option<Oid>, walked: Option<bool>) {
-        // A pass answers for the HEAD it walked from. Once the record has
-        // moved past it, that answer is about a commit nobody is asking
-        // about, and the walk the move started answers for where HEAD is.
+        // Once the record has moved past the HEAD this pass walked from,
+        // the walk the move started answers instead.
         if let Some(standing) = self.standing.head_tip()
             && standing != head
         {
@@ -155,9 +140,8 @@ impl RepoSession {
             });
             return;
         }
-        // Asked of git once per commit per refs listing: the listing is
-        // what a push or a fetch moves, and it moving is what walks again
-        // — the same commit under the same listing has the answer already.
+        // Once per commit per refs listing: only a push or fetch, which
+        // moves the listing, can change the answer.
         let refs = (*relock(&self.refs_key)).unwrap_or_default();
         if !self.standing.claim_published_ask(oid, refs) {
             return;

@@ -1,19 +1,12 @@
-//! The two files platitude-gg keeps for itself.
+//! The two files platitude-gg keeps for itself: `settings.toml` holds what
+//! a person decided, `state.toml` what the last session left behind.
+//! Separate because a state flush landing on the settings would eat an
+//! edit made in an editor while the app is running.
 //!
-//! `settings.toml` holds what a person decided. `state.toml` holds what the
-//! last session left behind. They are separate files because they are
-//! written at completely different rates: dragging a pane rewrites the
-//! state several times a minute, and one of those flushes landing on top of
-//! the settings would eat an edit made in an editor while the app is
-//! running. It also makes "delete `state.toml` to get the layout back"
-//! something that can be said without also throwing the settings away.
-//!
-//! Nothing in here can stop the application from starting. A file that is
-//! missing, unreadable, truncated or full of nonsense costs only the keys
-//! it got wrong: every value is pulled out of a parsed table one at a time
-//! and falls back on its own. A derived `Deserialize` cannot do that — one
-//! mistyped value gives up the whole document (measured), which would turn
-//! a stray keystroke in an editor into a reset of everything.
+//! Nothing in here can stop the application from starting. A bad file
+//! costs only the keys it got wrong: every value is pulled out of a parsed
+//! table one at a time and falls back on its own — a derived `Deserialize`
+//! gives up the whole document over one mistyped value.
 
 use std::path::PathBuf;
 
@@ -39,22 +32,17 @@ pub const DIR_NAME: &str = "platitude-gg";
 pub const SETTINGS_FILE: &str = "settings.toml";
 pub const STATE_FILE: &str = "state.toml";
 
-/// The file whose handle says which process is using these two.
-///
-/// A file of its own, and one nothing ever writes to. Locking a content
-/// file instead would come apart on the first flush: both are replaced by
-/// `rename` (`write_atomically`), and a lock held on a file that is then
-/// replaced guards an orphan. Measured on Windows — the rename succeeds
-/// over the open handle, and the next process locks the new file without a
-/// word; POSIX renames over open files as a matter of course, so it goes
-/// the same way there.
+/// The file whose handle says which process is using these two — one
+/// nothing ever writes to. A lock on a content file would guard an orphan
+/// after the first flush: both are replaced by `rename`
+/// (`write_atomically`), which succeeds over an open handle on Windows
+/// too.
 pub const LOCK_FILE: &str = "lock";
 
 const DEV_DIR: &str = "dev";
 
-/// Written at the top of both files. Every reader is per-key tolerant, so
-/// this is a marker: a later renaming of a key can tell an old file
-/// from a new one by it.
+/// Written at the top of both files. Only a marker (every reader is
+/// per-key tolerant): a later key rename can tell an old file by it.
 pub const SCHEMA_VERSION: i64 = 1;
 
 /// Points both files at one directory. Empty means "read nothing, write
@@ -64,20 +52,15 @@ pub const CONFIG_DIR_ENV: &str = "PGG_CONFIG_DIR";
 /// Automation knobs all share this prefix, and a person never sets one.
 const AUTOMATION_PREFIX: &str = "PGG_";
 
-/// `PGG_*` variables that say nothing about who is driving. Turning the
-/// logging up is something somebody does at their own window, and their
-/// settings survive it. `PGG_ALLOW_GUI` is the same shape from the other
-/// end: it is how somebody says "I asked for a window" to the
-/// pre-shell guard (CLAUDE.md ビルド・テスト), so it rides on the launch
-/// that most needs the person's own tabs to come back. `PGG_STEP` is the
-/// mark a gate's verb carries inside its container, on the app and on
-/// what the app starts — an address for a stop, not a driver (the task
-/// runner keeps the same list by hand: `xtask::app_env`).
+/// `PGG_*` variables that say nothing about who is driving: a person turns
+/// the logging up at their own window, `PGG_ALLOW_GUI` is a person asking
+/// for a window (CLAUDE.md ビルド・テスト), and `PGG_STEP` only addresses
+/// a stop inside a gate's container. Kept by hand in step with
+/// `xtask::app_env`.
 const NOT_AUTOMATION: [&str; 4] = [CONFIG_DIR_ENV, "PGG_LOG", "PGG_ALLOW_GUI", "PGG_STEP"];
 
-/// Failure to write. Reading has no error type: it cannot fail loudly
-/// enough to matter, and the caller has nothing to do about it but carry
-/// on with defaults.
+/// Failure to write. Reading has no error type: the caller could only
+/// carry on with defaults.
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
     #[error("could not write {}: {source}", path.display())]

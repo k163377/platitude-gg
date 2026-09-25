@@ -5,45 +5,34 @@ use super::*;
 /// One read of a snapshot at a time, answering every caller that asked
 /// before the pass it waited on started.
 ///
-/// Nothing coordinates the places that ask for a re-read: the periodic
-/// tick, a write settling behind itself, the window becoming active, a
-/// dialog that wants one field of the answer. Letting each start its own
-/// read spends every one of those processes for the one answer they end
-/// up agreeing on — and a `status --porcelain=v2 -uall` over the
-/// benchmark corpus is seconds of wall clock and nearly as much CPU
-/// (ci/baseline/code-costs-windows-x64.md), spent twice, exactly where
-/// the reader is waiting.
+/// Nothing coordinates the places that ask for a re-read (the tick, a
+/// write settling, the window activating, a dialog), and a
+/// `status --porcelain=v2 -uall` is a pass over every file of the tree
+/// (ci/baseline/code-costs-windows-x64.md) — run once per asker, it is
+/// spent twice exactly where the reader is waiting.
 ///
-/// **The ordering rides on the same gate**: a pass holds it from before
-/// it looks at the repository until after it has published, so there is
-/// no window in which an older answer can overtake a newer one and
-/// nothing downstream needs a generation of its own to throw one away.
+/// The ordering rides on the same gate: a pass holds it from before it
+/// looks until after it has published, so an older answer can never
+/// overtake a newer one and nothing downstream needs a generation.
 ///
 /// A caller that arrives while a pass is running waits for the gate,
 /// and then either
 ///
-/// * a pass **that started after it asked** has landed, so that pass
-///   looked at the repository the caller is asking about and its answer
-///   is the caller's answer — no process at all; or
+/// * a pass **that started after it asked** has landed, and its answer
+///   is the caller's — no process at all; or
 /// * it runs the next pass itself, and everyone who asked before that
 ///   pass began reads the answer it lands.
 ///
-/// So a burst collapses to one repeat, and no caller is ever answered by
-/// a read that looked before its reason existed. That second half is the
-/// one that cannot be traded away: a write settled by a pass older than
-/// itself would have the graph rebuilt from the repository as it was
-/// *before* the write, with the correction waiting on the next poll
-/// tick.
+/// No caller is ever answered by a read that looked before its reason
+/// existed: a write settled by an older pass would rebuild the graph
+/// from the repository as it was *before* the write.
 ///
-/// `A` is what a pass answers its callers with — what they act on, which
-/// each snapshot spells for itself (`Reread`, `WorktreeRead`); the
-/// listings that answer nothing but "published" use a `bool`.
+/// `A` is what a pass answers its callers with (`Reread`,
+/// `WorktreeRead`); listings that answer only "published" use a `bool`.
 pub(super) struct ReadFlight<A = bool> {
-    /// One pass at a time. An async mutex because what it guards is a
-    /// git subprocess; tokio hands it on in the order it was asked
-    /// for, which is what keeps a caller from being passed over while
-    /// others read. Which pass may answer whom is decided by the
-    /// stamps below.
+    /// One pass at a time. tokio hands it on in the order it was asked
+    /// for, so no caller is passed over; which pass answers whom is the
+    /// stamps' to decide.
     gate: tokio::sync::Mutex<()>,
     passes: Mutex<Passes<A>>,
     /// Callers that have taken a stamp and not yet left, the waiting ones
@@ -56,9 +45,8 @@ pub(super) struct ReadFlight<A = bool> {
 
 #[derive(Default)]
 struct Passes<A> {
-    /// How many passes have started. A caller reads this before it queues
-    /// and compares it with what landed: anything numbered above it began
-    /// after the caller had its reason.
+    /// Read by a caller before it queues: a landed pass numbered above it
+    /// began after the caller had its reason.
     started: u64,
     /// Which pass landed last, and what it answered.
     landed: u64,
@@ -77,14 +65,11 @@ impl<A: Default> Default for ReadFlight<A> {
     }
 }
 
-/// A caller's place in the flight, taken before it asks for the gate:
-/// the pass numbered above it is the one that started after the caller
-/// had its reason, and answers it. Taken apart from the run for the
-/// caller that asks **from inside a pass** — a read that found itself
-/// fenced (`Standing::current`) asks again while it still holds the
-/// gate, so its stamp is older than any pass the fence's own read
-/// starts, and that read answers it too. Counted as a caller from here
-/// until it is run.
+/// A caller's place in the flight, taken before it asks for the gate.
+/// Separate from the run for the caller that asks from inside a pass: a
+/// fenced read (`Standing::current`) stamps while it still holds the
+/// gate, so the next pass answers it instead of a third read. Counted
+/// as a caller from here until it is run.
 #[must_use = "a stamp is a caller until it is run"]
 pub(super) struct Stamp {
     /// Passes that had started when this caller asked.
@@ -94,10 +79,8 @@ pub(super) struct Stamp {
 impl<A> ReadFlight<A> {
     /// Takes a caller's place now, to be run later ([`Self::run_from`]).
     pub(super) fn stamp(&self) -> Stamp {
-        // One lock for both, so that a caller counted here is a caller
-        // whose stamp is already taken: what the count means is "asking
-        // for a pass no older than this one", and a caller registered
-        // before its stamp would not have chosen its pass yet.
+        // One lock for both: a caller counted in `live` has already
+        // chosen its pass.
         let asked = {
             let passes = relock(&self.passes);
             self.live.fetch_add(1, Ordering::SeqCst);
@@ -109,17 +92,12 @@ impl<A> ReadFlight<A> {
 
     /// Answers this caller, running the read only where no pass that
     /// started after it asked has already answered the same question.
-    ///
-    /// `read` reports whatever its callers act on — the working-tree row
-    /// that moved, the refs that moved, a read that failed.
     pub(super) async fn run<F, Fut>(&self, read: F) -> A
     where
         A: Copy,
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = A>,
     {
-        // The stamp is taken before the gate is asked for, so a pass
-        // numbered above it is known to have started afterwards.
         self.run_from(self.stamp(), read).await
     }
 
@@ -148,25 +126,21 @@ impl<A> ReadFlight<A> {
             passes.started
         };
         let answer = read().await;
-        // Recorded while the gate is still held, so the caller it goes to
-        // reads this pass. A pass that never reaches here — its task
-        // dropped with the runtime, or it unwound — leaves `started`
-        // ahead of `landed`, which costs the next caller a read of its
-        // own and never an answer.
+        // Recorded under the gate. A pass that never gets here (dropped
+        // or unwound) leaves `started` ahead of `landed`, which costs the
+        // next caller a read of its own, never its answer.
         let mut passes = relock(&self.passes);
         passes.landed = mine;
         passes.answer = answer;
         answer
     }
 
-    /// Waits until the callers that had taken a stamp when this was
-    /// called have left. A later one may arrive; this closes the work
-    /// already in flight.
+    /// Waits until no stamped caller is left — the boundary that closes
+    /// the work already in flight.
     pub(super) async fn wait_idle(&self) {
         self.wait_for_live(|live| live == 0).await;
     }
 
-    /// Waits until the count of stamped callers is what `settled` accepts.
     async fn wait_for_live(&self, settled: impl Fn(usize) -> bool) {
         let mut changed = self.changed.subscribe();
         while !settled(self.live.load(Ordering::SeqCst)) {
@@ -182,16 +156,11 @@ impl<A> ReadFlight<A> {
     }
 }
 
-/// One caller of [`ReadFlight::run_from`], from the stamp it was given
-/// to the answer it leaves with. The stamp counted the caller in; this
-/// counts it out.
-///
-/// Dropped by the caller itself, so one that unwound or went down with
-/// the runtime still reports that it has left, and the boundary can
-/// close.
+/// Counts a caller of [`ReadFlight::run_from`] out, as the stamp counted
+/// it in — on drop, so a caller that unwound or went down with the
+/// runtime still leaves and the boundary can close.
 struct Live<'a, A> {
     flight: &'a ReadFlight<A>,
-    /// Passes that had started when this caller asked.
     asked: u64,
 }
 
@@ -207,16 +176,14 @@ mod tests {
     use super::*;
 
     impl<A> ReadFlight<A> {
-        /// Callers that have taken a stamp and not yet left. A test waits
-        /// on this: a caller counted here has chosen the pass that must
-        /// answer it, so releasing the read in flight can no longer be
-        /// mistaken for the repeat.
+        /// Waits until `asking` callers hold a stamp: each has chosen the
+        /// pass that must answer it, so releasing the read in flight can
+        /// no longer be mistaken for the repeat.
         async fn wait_for_askers(&self, asking: usize) {
             self.wait_for_live(move |live| live >= asking).await;
         }
     }
 
-    /// What the passes of one flight did, as the reads themselves saw it.
     #[derive(Default)]
     struct Ran {
         passes: std::sync::atomic::AtomicUsize,
@@ -261,13 +228,9 @@ mod tests {
         assert_eq!(ran.passes(), 1);
     }
 
-    /// The reason the gate is here at all: however many callers pile up,
-    /// two reads of the same snapshot never run at once.
-    ///
-    /// The second caller is driven by hand onto the gate while the
-    /// first read stands open ([`crate::wait::poll_once`]), so the
-    /// overlap is asked for at the exact point it could
-    /// happen.
+    /// The second caller is polled onto the gate by hand while the first
+    /// read stands open ([`crate::wait::poll_once`]), so the overlap is
+    /// tried exactly where it could happen.
     #[tokio::test]
     async fn passes_of_one_flight_never_overlap() {
         let flight = ReadFlight::default();
@@ -301,8 +264,6 @@ mod tests {
         assert_eq!(ran.passes(), 2, "one read and one repeat");
     }
 
-    /// Everyone who asked while one pass was running is answered by the
-    /// single repeat behind it.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn callers_that_arrive_during_a_pass_share_one_repeat() {
         let flight = Arc::new(ReadFlight::default());
@@ -341,9 +302,8 @@ mod tests {
                     .await
             }));
         }
-        // All three have chosen the pass that must answer them before the
-        // read in flight is let go, so the repeat they share cannot be
-        // that read.
+        // All three have chosen their pass before the read in flight is
+        // let go, so the repeat they share cannot be that read.
         flight.wait_for_askers(4).await;
         let _ = release.send(());
 
@@ -357,11 +317,9 @@ mod tests {
         assert_eq!(ran.passes(), 2, "one read and one repeat, not one each");
     }
 
-    /// A read that finds itself fenced asks again from inside its own
-    /// pass: the stamp it takes there is older than the pass the fence's
-    /// own read runs next, so that pass answers it and no third read is
-    /// spent — where a stamp taken after the gate was let go would be
-    /// numbered past that pass and read again.
+    /// The fenced read's shape: a stamp taken inside a pass is answered by
+    /// the next pass, where one taken after the gate was let go would be
+    /// numbered past it and spend a third read.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_caller_stamped_inside_a_pass_shares_the_repeat_behind_it() {
         let flight = Arc::new(ReadFlight::default());
@@ -385,8 +343,6 @@ mod tests {
             })
         };
         started.await.expect("the first pass began");
-        // Taken while the first pass is still reading — what the fenced
-        // read does before it lets the gate go.
         let again = flight.stamp();
 
         let other = {
@@ -424,13 +380,11 @@ mod tests {
         );
     }
 
-    /// The distinction the whole thing is for: a caller is never handed
-    /// the answer of a read that looked before its reason existed.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_caller_is_not_answered_by_a_read_older_than_itself() {
         let flight = Arc::new(ReadFlight::default());
-        // What the repository says. The caller below changes it while the
-        // read in flight is holding the answer it took before that.
+        // The repository: changed below while the first read holds the
+        // answer it took before.
         let dirty = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let (reading, started) = tokio::sync::oneshot::channel();
         let (release, held) = tokio::sync::oneshot::channel();

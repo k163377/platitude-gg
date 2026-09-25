@@ -1,12 +1,11 @@
 //! Creating and amending commits.
 //!
-//! Messages travel in a scratch file (`-F`): argument length is bounded
-//! on Windows and a message is arbitrary user text. `--cleanup=whitespace`
-//! is pinned so a repository's `commit.cleanup` cannot silently rewrite
-//! what the editor showed — in particular, a line the user typed
-//! starting with `#` stays in the message.
+//! Messages travel in a scratch file (`--file`): Windows bounds argument
+//! length. `--cleanup=whitespace` is pinned so a repository's
+//! `commit.cleanup` cannot rewrite what the editor showed (a typed `#` line
+//! stays).
 //!
-//! Hooks are git's business and always run: `--no-verify` is never passed.
+//! Hooks always run: `--no-verify` is never passed.
 
 use std::path::Path;
 
@@ -29,11 +28,8 @@ pub struct CommitOptions {
     pub reset_author: bool,
 }
 
-/// Joins the two fields of a message editor into one commit message.
-///
-/// The convention lives here: a summary line, a blank line, then the
-/// description — the shape every git tool expects, and the shape
-/// [`split_message`] reads back.
+/// Joins the two fields of a message editor into one commit message:
+/// summary, blank line, description ([`split_message`] reads it back).
 pub fn join_message(subject: &str, body: &str) -> String {
     let subject = subject.trim();
     let body = body.trim();
@@ -46,10 +42,8 @@ pub fn join_message(subject: &str, body: &str) -> String {
     format!("{subject}\n\n{body}")
 }
 
-/// Splits a commit message back into the editor's two fields.
-///
-/// The summary is the first line; the description is what follows once the
-/// blank line separating them is gone.
+/// Splits a commit message back into the editor's two fields: the first
+/// line, and the rest without the separating blank line.
 pub fn split_message(message: &str) -> (String, String) {
     let message = message.replace("\r\n", "\n");
     let (subject, rest) = match message.split_once('\n') {
@@ -67,12 +61,9 @@ pub fn split_message(message: &str) -> (String, String) {
 /// An empty `message` is only valid together with [`CommitOptions::amend`],
 /// where it means "keep the existing message" (`--no-edit`).
 ///
-/// **Nothing is read back.** git either wrote the commit or it did not,
-/// and the answer is the exit code already in hand; a second command
-/// asking where HEAD landed can fail on its own, and this end would then
-/// have to report a commit that did not happen over one that did. What
-/// moved is read where every other mover of HEAD is read — the pass that
-/// follows the write.
+/// Nothing is read back: a second command asking where HEAD landed could
+/// fail on its own and report a made commit as failed. The refresh after
+/// the write reads it.
 pub async fn commit(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -125,26 +116,14 @@ pub async fn commit(
 /// A commit that was not made, as something to report
 /// (デザイン規約 §答えの要らない報せ).
 ///
-/// **Every refusal this end could answer has already been taken away**
-/// before the button can be pressed: an identity is asked for at the gate,
-/// an empty message is refused above, and nothing staged leaves nothing to
-/// press. So a non-zero `git commit` is always something outside this
-/// application saying no — a `pre-commit` or `commit-msg` hook, a signing
-/// key that would not sign, another git holding the index — and none of
-/// them leaves half a commit behind: git writes the object or it does not.
-/// There is no next move here either: hooks always run (this
-/// module's own rule).
+/// The kind is fixed whatever git said: refusals this end could answer
+/// are taken away before the button can be pressed, so a non-zero exit is
+/// something outside saying no (a hook, a signing key, another git holding
+/// the index), with no machine-readable line to tell them apart.
 ///
-/// **So the kind is fixed here, whatever git said.** A hook writes
-/// whatever its author wrote and git prints nothing of its own for one,
-/// so there is no machine-readable line to tell the reasons apart — and
-/// none of them would be shown differently if there were.
-///
-/// The words under the heading are **both streams**: git writes its own
-/// refusals to stderr, and a hook writes to whichever it likes (a linter
-/// wrapped in one usually writes its complaint to stdout and its own
-/// diagnostics to stderr, so taking stderr alone would quote the wrapper
-/// and drop the complaint).
+/// The words are both streams: a hook writes to whichever it likes (a
+/// wrapped linter often complains on stdout), so stderr alone would drop
+/// the complaint.
 fn refused(command: String, out: &crate::process::GitOutput) -> GitError {
     let stderr = out.stderr_utf8();
     let stdout = out.stdout_utf8();
@@ -179,18 +158,15 @@ pub struct HeadCommit {
 }
 
 /// Reads HEAD's message and author, for prefilling an amend editor.
-/// `None` on an unborn branch: nothing to amend is a state.
+/// `None` on an unborn branch.
 ///
-/// One command for both fields, NUL-separated: a message spans lines, so
-/// it has to come last and no printable separator would be safe in front
-/// of it.
+/// NUL-separated with the message last, since it spans lines.
 pub async fn head_commit(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<Option<HeadCommit>, GitError> {
-    // Exit 1 is the answer "no HEAD yet" (rules-refs: HEAD の読み). Asked
-    // first, so a failure of the log read below stays a failure.
+    // Asked first, so a failure of the log read below stays a failure.
     let probe = GitCommand::new().cwd(workdir).answers_by_code(1).args([
         "rev-parse",
         "--verify",
@@ -249,12 +225,8 @@ pub async fn head_oid(
 }
 
 /// Whether HEAD can reach `oid` — the commit is HEAD itself or something
-/// it was built on.
-///
-/// What history a rewrite may touch: only this line of commits can be
-/// amended or replayed from where the working tree stands. `--is-ancestor`
-/// answers by exit code — 0 and 1 are the two answers; anything else
-/// (an unreadable repository, a vanished object) is a failure.
+/// it was built on; only this line of commits can be rewritten from where
+/// the working tree stands.
 pub async fn is_in_head_history(
     executor: &GitExecutor,
     workdir: &Path,
@@ -279,12 +251,9 @@ pub async fn is_in_head_history(
     }
 }
 
-/// How many commits `oid` reaches that HEAD does not.
-///
-/// What an overwrite would take off the far side: those commits stay in the
-/// repository that holds them, but nothing on that branch points at them
-/// afterwards. Only asked when the commit is here to walk — the count is
-/// the one thing the question can put a number on (§相手の履歴を置き換える).
+/// How many commits `oid` reaches that HEAD does not — what a force push
+/// would take off the far side. Only asked when the commit is here to walk
+/// (デザイン規約 §相手の履歴を置き換える).
 pub async fn count_beyond_head(
     executor: &GitExecutor,
     workdir: &Path,
@@ -321,11 +290,8 @@ mod tests {
     use super::*;
     use crate::refusing;
 
-    /// **A new commit with nothing to say is refused here, ahead of git.**
-    /// Only an amend reads an empty message, as "keep the one there". The
-    /// executor cannot run anything and the repository is not there, so a
-    /// commit that reached for git would fail on the spawn rather than
-    /// come back as this refusal.
+    /// The executor cannot run anything, so a commit that reached for git
+    /// would fail on the spawn rather than come back as this refusal.
     #[tokio::test]
     async fn an_empty_message_is_refused_for_a_new_commit_without_asking_git() {
         let (exec, asked) = refusing::git();
@@ -368,7 +334,6 @@ mod tests {
             split_message("subject\r\n\r\nbody\r\n"),
             ("subject".to_string(), "body".to_string())
         );
-        // A message with no blank line keeps everything after line one.
         assert_eq!(
             split_message("subject\nrun-on"),
             ("subject".to_string(), "run-on".to_string())

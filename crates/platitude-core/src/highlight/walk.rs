@@ -1,9 +1,6 @@
-//! Where the reading of one hunk of a combined diff has got to, and how
-//! a conflict's two sides are stood beside each other. An ordinary
-//! diff reads elsewhere (a grammar in [`super::tree`], or the
-//! fallback walk `super::patch` drives); only a
-//! combined one — the form git prints for a path it stopped on — has
-//! its markers read as structure, and only it comes here.
+//! The regex lexer's walk down a file, which `super::patch` drives, and
+//! how a conflict's two sides are stood beside each other. Only a
+//! combined diff has its markers read as structure (`Walk::read`).
 
 use syntect::highlighting::{HighlightIterator, HighlightState, Highlighter};
 use syntect::parsing::{ParseState, ScopeStack, SyntaxReference};
@@ -17,16 +14,14 @@ use super::{LineColors, Rgb, Span};
 pub(super) struct Walk<'a> {
     assets: &'a Assets,
     highlighter: &'a Highlighter<'a>,
-    /// `None` for a language the set does not know — the fences are still
-    /// read, the words are simply left the colour they were.
+    /// `None` for a language the set does not know — fences are still
+    /// read, words stay uncoloured.
     state: Option<LineState>,
     region: Option<Region>,
 }
 
-/// A lexer's place between two lines. Cloned to stand a conflict's sides
-/// beside each other, and remembered down a file so the next reading
-/// of the same text can start near its hunks
-/// ([`super::LexCache`]).
+/// A lexer's place between two lines — cloned for a conflict's sides,
+/// remembered in a [`super::LexCache`].
 #[derive(Clone)]
 pub(super) struct LineState {
     parse: ParseState,
@@ -132,8 +127,6 @@ impl<'a> Walk<'a> {
 
     /// Moves the lexer over one of git's markers.
     fn cross(&mut self, marker: Marker) {
-        // Nothing to put back where no lexer is running — the fences of a
-        // language the set does not know are still fences.
         if self.state.is_none() {
             return;
         }
@@ -164,8 +157,6 @@ impl<'a> Walk<'a> {
     }
 
     pub(super) fn paint(&mut self, text: &str) -> Vec<Span> {
-        // Split so the lexer's own state can be borrowed apart from the
-        // set and the theme it reads against.
         let Walk {
             assets,
             highlighter,
@@ -175,15 +166,14 @@ impl<'a> Walk<'a> {
         let Some(state) = state.as_mut() else {
             return Vec::new();
         };
-        // syntect's default set is the one built for lines that still
-        // carry their terminator: several of its contexts close on `$`,
-        // and a line handed over without one holds them open.
+        // The set is built for lines that carry their terminator: contexts
+        // that close on `$` stay open on a line without one.
         let mut buf = String::with_capacity(text.len() + 1);
         buf.push_str(text);
         buf.push('\n');
         let Ok(ops) = state.parse.parse_line(&buf, &assets.syntaxes) else {
-            // A rule that would not run leaves the state where it was.
-            // One line goes out plain; the pane does not go out empty.
+            // A rule that would not run: this line goes out plain and the
+            // state stays where it was.
             return Vec::new();
         };
         let mut spans: Vec<Span> = Vec::new();
@@ -200,8 +190,7 @@ impl<'a> Walk<'a> {
                 b: style.foreground.b,
             };
             // Runs the theme paints alike are one run: the count is what
-            // the row's markup costs, and a line of plain prose comes
-            // back from the lexer in a dozen identical pieces.
+            // the row's markup costs.
             match spans.last_mut() {
                 Some(last) if last.color == color => last.len += len,
                 _ => spans.push(Span { len, color }),
@@ -211,13 +200,9 @@ impl<'a> Walk<'a> {
     }
 }
 
-/// Whether a line is one of git's conflict markers, matched exactly:
-/// seven of the character and no more, then the end of the line or a
-/// space before whatever label git put there.
-///
-/// Only ever asked inside a combined diff (see the module note), so the
-/// eight-character rule of `=` some file draws under a heading, and the
-/// seven-character one Markdown draws under a title, are both text.
+/// Whether a line is one of git's conflict markers: exactly seven of the
+/// character, then the end of the line or whitespace before a label.
+/// Only asked inside a combined diff (`super`'s module note).
 fn conflict_marker(line: &str) -> Option<Marker> {
     let bytes = line.as_bytes();
     let (marker, ch) = match bytes.first()? {
@@ -301,10 +286,8 @@ diff --cc src/main.rs
 
     #[test]
     fn the_line_after_a_conflict_goes_on_in_ours() {
-        // `ours` opens a comment and leaves it open, `theirs` does not.
-        // What follows the region belongs to the branch being worked on,
-        // so the closing brace is inside a comment here — one run, the
-        // comment's colour, and the same colour the `/* ours` line got.
+        // `ours` leaves a comment open and the file goes on in `ours`, so
+        // the closing brace is one run in the comment's colour.
         let colors = colors(&patches(CONFLICTED), None);
         let opened = colors.line(0, 0, 2);
         let after = colors.line(0, 0, 6);
@@ -351,10 +334,8 @@ diff --cc notes.qqq
 
     #[test]
     fn markers_outside_a_conflict_are_ordinary_text() {
-        // The same shapes in a unified diff — a file that merely writes
-        // about conflicts. Nothing here is structure. A fallback-lexer
-        // language on purpose: `.md` reads through its grammar, and
-        // this test is about the road that shares `Walk`'s module.
+        // The same shapes in a unified diff are text. A fallback-lexer
+        // language on purpose: this test is about the road through `Walk`.
         let patch = "\
 diff --git a/notes.groovy b/notes.groovy
 --- a/notes.groovy
@@ -368,8 +349,7 @@ diff --git a/notes.groovy b/notes.groovy
         let parsed = patches(patch);
         assert!(!parsed[0].is_combined);
         let colors = colors(&parsed, None);
-        // The context line whose text is exactly a marker's shape — seven
-        // `=` — which only a combined diff may read as one.
+        // The context line of exactly seven `=`.
         let line = colors.line(0, 0, 3);
         assert!(!line.fence, "nothing here is a fence");
         assert!(

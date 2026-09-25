@@ -5,23 +5,17 @@ use super::*;
 
 /// What the log stream walks.
 ///
-/// Tags are shown by default (product decision). On tag-heavy repositories
-/// they dominate the walk's frontier setup — tens of thousands of them
-/// hold the first byte back for a second and more even with a
-/// commit-graph (ci/baseline/code-costs-windows-x64.md) — which is why
-/// the toggle exists.
+/// Tags are shown by default (product decision); on tag-heavy repositories
+/// they dominate the walk's frontier setup, which is why the toggle exists
+/// (ci/baseline/code-costs-windows-x64.md §git のプロセス代).
 #[derive(Debug, Clone, Copy)]
 pub struct LogOptions {
     pub include_tags: bool,
     /// `None` walks the full history.
     pub limit: Option<u32>,
-    /// What one press of the graph's tail adds to `limit`
-    /// (`RepoSession::grow_log_window`).
-    ///
-    /// **Held**: the step is a quarter of the window the graph *opened*
-    /// with, so it stays the same size however deep the reader has gone
-    /// (`session::log_window_step`), while `limit` grows with every
-    /// press.
+    /// What one press of the graph's tail adds to `limit`. Held rather than
+    /// derived from `limit`: it is a quarter of the window the graph opened
+    /// with (`session::log_window_step`).
     pub step: u32,
 }
 
@@ -41,17 +35,12 @@ pub enum LabelKind {
     Head,
     LocalBranch,
     RemoteBranch,
-    /// Another working copy is standing on this commit with no branch out
-    /// — a synthetic chip like `Head`, and the only thing that says the
-    /// commit is anybody's checkout (デザイン規約 §ref の種別). A copy that
-    /// does have a branch out is said by that branch's own chip instead
-    /// (`RefLabel::held_elsewhere`), so no commit ever carries both about
-    /// one copy.
+    /// Another working copy standing on this commit with no branch out — a
+    /// synthetic chip like `Head`. A copy with a branch out is said by that
+    /// branch's chip instead (`RefLabel::held_elsewhere`).
     ///
-    /// **Before `Tag`.** The tags of a commit are the tail of its run,
-    /// which is what lets the TAGS eye cut them off with a shorter
-    /// slice ([`LabelIndex::cut`]); a kind sorted past `Tag` would go
-    /// out with them.
+    /// Before `Tag`: the tags must stay the tail of a commit's run for the
+    /// TAGS eye's cut ([`LabelIndex::cut`]).
     Worktree,
     Tag,
 }
@@ -61,51 +50,35 @@ pub enum LabelKind {
 pub struct RefLabel {
     pub text: crate::Name,
     pub kind: LabelKind,
-    /// Cloud badge: this name is on a remote as well. The PR dimension is
-    /// wired in Phase 4.
+    /// Cloud badge: this name is on a remote as well.
     pub has_remote: bool,
     /// True when HEAD is on this branch (bold chip).
     pub is_head: bool,
-    /// Whether this repository holds the ref — the whereabouts the chip
-    /// writes in the name's colour (デザイン規約 §ref の種別). False for a
-    /// remote branch, and for a tag that is only over there or that points
-    /// somewhere this one does not.
+    /// Whether this repository holds the ref — the name's colour
+    /// (デザイン規約 §ref の種別). False for a remote branch, and for a tag
+    /// that is only over there or drifted.
     pub here: bool,
-    /// Whose reading this is, when it is not this repository's: the remote
-    /// names carrying the tag, comma-separated. Empty for everything else.
-    ///
-    /// A remote branch says it in its own name (`origin/main`); a tag has
-    /// no such namespace to say it in, and a drifted one puts the same
-    /// bare name on two rows. The hover card is where those two meet, and
-    /// this is what tells them apart there.
+    /// For a tag read off the remotes: the remote names carrying it,
+    /// comma-separated; empty otherwise. A tag has no `origin/` namespace,
+    /// so this is what tells a drift's two same-named chips apart on the
+    /// hover card.
     pub remote: String,
-    /// Another working copy has this branch checked out — the same bit
-    /// the sidebar row reads (`BranchItem::held_elsewhere`), so the chip
-    /// and the row cannot disagree about where a branch can be gone to.
-    /// **The chip draws the green frame off this** (デザイン規約
-    /// §ref の種別): a working copy is standing here.
+    /// Another working copy has this branch checked out — the same bit as
+    /// `BranchItem::held_elsewhere`. The chip draws its green frame off
+    /// this (デザイン規約 §ref の種別).
     pub held_elsewhere: bool,
-    /// And `git worktree lock` is on the copy that is standing here —
-    /// the branch's holder, or the copy the `Worktree` marker is. False
-    /// on every chip no copy is standing on, so it is only ever read
-    /// beside one of the two above.
+    /// `git worktree lock` is on the copy standing here — the branch's
+    /// holder, or the `Worktree` marker's copy. False where no copy stands.
     pub locked: bool,
 }
 
 /// The chips every commit carries, as one sorted run.
 ///
-/// **A flat run.** A repository's refs are almost all singletons — one
-/// name on one commit — and `HashMap<Oid, Vec<RefLabel>>` charges twice
-/// for that shape: the table's power-of-two buckets, and a separate
-/// four-slot `Vec` for every commit, because a `Vec` grown by one `push`
-/// asks for four. On a repository with tens of thousands of labelled
-/// commits the table and its vectors together come to several times what
-/// the labels themselves hold
-/// (ci/baseline/code-costs-windows-x64.md §メモリの形).
-///
-/// Flat, the two questions asked of it stay as cheap. A streamed row looks
-/// its own commit up (binary search, once per shown row), and the refresh
-/// walks the whole thing in commit order.
+/// Flat rather than `HashMap<Oid, Vec<RefLabel>>`: refs are almost all one
+/// name on one commit, and the map's buckets plus a four-slot `Vec` per
+/// commit cost several times the labels themselves
+/// (ci/baseline/code-costs-windows-x64.md §メモリの形). A streamed row
+/// still looks its commit up by binary search.
 #[derive(Debug, Default)]
 pub(crate) struct LabelIndex {
     /// `(commit, first label, how many)`, sorted by commit.
@@ -115,10 +88,8 @@ pub(crate) struct LabelIndex {
 }
 
 impl LabelIndex {
-    /// Sorts loose `(commit, chip)` pairs into the run.
-    ///
-    /// The chips of one commit keep the order the row draws them in: the
-    /// current branch first, then by kind, then by name.
+    /// Sorts loose `(commit, chip)` pairs into the run, each commit's chips
+    /// in the order the row draws them.
     pub(crate) fn from_pairs(mut pairs: Vec<(Oid, RefLabel)>) -> Self {
         pairs.sort_by(|(left_oid, left), (right_oid, right)| {
             left_oid.cmp(right_oid).then_with(|| {
@@ -142,12 +113,8 @@ impl LabelIndex {
         Self { commits, labels }
     }
 
-    /// The chips on one commit; empty when it carries none.
-    ///
-    /// `tags` is whether the graph is drawing tags at all — the TAGS
-    /// band's eye. Off, a tag's chip goes with the rows the walk stopped
-    /// covering, so a tag standing on a commit a branch also reaches
-    /// stops being drawn.
+    /// The chips on one commit. `tags` is the TAGS band's eye: off, a
+    /// tag's chip goes too, even on a commit a branch reaches.
     pub(crate) fn labels_of(&self, oid: &Oid, tags: bool) -> &[RefLabel] {
         let Ok(at) = self.commits.binary_search_by(|(c, _, _)| c.cmp(oid)) else {
             return &[];
@@ -158,11 +125,9 @@ impl LabelIndex {
         }
     }
 
-    /// Every commit carrying chips, in commit order, with them.
-    ///
-    /// A commit whose only chips were tags carries none once they are cut,
-    /// and it is left out: what reads this tells "these chips" from "no
-    /// chips" by whether the commit is in it.
+    /// Every commit carrying chips, in commit order. A commit whose only
+    /// chips were cut tags is left out — readers take absence as "no
+    /// chips".
     pub(crate) fn commits(&self, tags: bool) -> impl Iterator<Item = (Oid, &[RefLabel])> {
         self.commits.iter().filter_map(move |(oid, first, count)| {
             let run = Self::cut(self.run(*first, *count), tags);
@@ -176,13 +141,8 @@ impl LabelIndex {
             .unwrap_or_default()
     }
 
-    /// One commit's chips with the tags taken off the end.
-    ///
-    /// **A cut**, because `from_pairs` has already left them there: it
-    /// sorts by `kind` after the current branch, and `Tag` is the last
-    /// kind there is. So the tags of a commit are the tail of its run,
-    /// and dropping them is a shorter slice of the same labels — no
-    /// second index, and nothing allocated to hide a chip.
+    /// One commit's chips with the tags taken off the end — a shorter
+    /// slice, since `from_pairs` sorts `Tag`, the last kind, to the tail.
     fn cut(run: &[RefLabel], tags: bool) -> &[RefLabel] {
         if tags {
             return run;
@@ -218,8 +178,7 @@ pub struct LogRow {
     pub short_sha: String,
     pub author: String,
     /// The author's address, lowercased and mailmapped — what a locally
-    /// assigned picture is filed under. Empty on the WIP row, which has
-    /// no author until it is committed.
+    /// assigned picture is filed under. Empty on the WIP row.
     pub author_email: String,
     /// Whoever the message credits alongside the author, in its order.
     /// Empty on the WIP and stash rows.
@@ -240,32 +199,17 @@ pub struct LogRow {
     pub stash_ref: String,
     /// Whether a remote-tracking branch already reaches this commit —
     /// what every "this rewrites published history" warning reads
-    /// (`session::published`). False on the WIP and stash rows, which no
-    /// remote has.
-    ///
-    /// **On the row.** The walk that drew the row already knows it,
-    /// so the row carries a `bool` and a menu has the answer the
-    /// moment it opens — a `git rev-list` would land later
-    /// (デザイン規約 §メニュー).
+    /// (`session::published`). False on the WIP and stash rows. Carried on
+    /// the row so a menu has it the moment it opens (デザイン規約 §メニュー).
     pub published: bool,
     /// The commit's parents as the walk sifted them — a stash keeps only
     /// the base it was built on (`rows::sift_batch`). Empty on the WIP
-    /// row, whose edges are drawn leashes.
-    ///
-    /// **The lanes are what is drawn** (`segments`). This is here so the
-    /// rows can be asked about a *range* — which is the other half of
-    /// what the warnings above read, and the half no single row's mark
-    /// can answer
+    /// row. Not for drawing (`segments` is): for asking about a range
     /// ([`crate::publish::range_rewrites_published`]).
     pub parents: Box<[Oid]>,
-    /// The other working copy this row is about, where it is not this
-    /// window's own. `None` on every commit, on a stash, and on this
-    /// window's own uncommitted row.
-    ///
-    /// **This is the row's identity.** Every uncommitted row carries the
-    /// all-zero id — git's own way of saying there is no object here,
-    /// which is true of all of them — so what tells two of them apart is
-    /// the copy each is about, and the one this window is open on is the
-    /// one with nothing here (`session::carried`).
+    /// The other working copy this uncommitted row is about; `None` on
+    /// commits, stashes and this window's own uncommitted row. This is the
+    /// row's identity, since every uncommitted row carries the all-zero id
+    /// (`session::carried`).
     pub carried: Option<super::Carried>,
 }

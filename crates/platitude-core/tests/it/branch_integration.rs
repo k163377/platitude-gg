@@ -1,7 +1,5 @@
-//! Local branch operations on real repositories: creating, switching,
-//! renaming and deleting. What git itself does behind a switch and a
-//! reset — leaving a detached HEAD, carrying or refusing uncommitted work,
-//! each reset mode's index and tree — is in [`periodic`].
+//! Local branch operations on real repositories. What git itself does
+//! behind a switch and a reset is in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -80,23 +78,17 @@ async fn unmerged_branch_needs_the_forced_delete() {
     assert!(!repo.git(&["branch", "--list"]).contains("wip"));
 }
 
-/// **What the pre-merge run leaves out**: what git does behind the fixed
-/// command lines of a switch and a reset. Leaving a detached HEAD,
-/// carrying work that is not in the way and refusing work that is are
-/// git's; the refusals' wording is read by `branch::tests`, and the
-/// session's carry acts before every merge on the move and on both refusals in
-/// `session_integration::carry_move`. What each reset mode does to the
-/// index and the tree is git's too; the command line each mode asks for
-/// is `branch::tests::a_reset_names_its_mode_and_the_revision_and_nothing_more`.
-/// So the full gate runs them (`-- --ignored ::periodic::`) rather than
-/// every change.
+/// What git does behind the fixed command lines of a switch and a reset,
+/// so the full gate runs it (`-- --ignored ::periodic::`), not every
+/// change. Our side is pinned elsewhere: the refusals' wording in
+/// `branch::tests`, the carry in `session_integration::carry_move`, each
+/// mode's command line in
+/// `branch::tests::a_reset_names_its_mode_and_the_revision_and_nothing_more`.
 mod periodic {
     use super::*;
 
-    /// Nothing offered here detaches HEAD, but git and the command line still
-    /// leave it detached — after a bisect, a `checkout <tag>`, an interrupted
-    /// rebase. That is a state to be worked from and left, and leaving it is
-    /// an ordinary switch.
+    /// Nothing here detaches HEAD, but git and the command line do (bisect,
+    /// `checkout <tag>`); leaving it is an ordinary switch.
     #[tokio::test]
     #[ignore = "git's switch off a detached HEAD: not worth the pre-merge run"]
     async fn a_detached_head_switches_back_onto_a_branch() {
@@ -120,8 +112,7 @@ mod periodic {
         assert_eq!(repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]), "main");
     }
 
-    /// Two commits on `main`; the returned id is the first of them, which is
-    /// where each reset takes the branch back to.
+    /// Two commits on `main`; returns the first, where each reset goes back to.
     fn one_commit_back() -> (TestRepo, String) {
         let mut repo = TestRepo::init();
         let root = repo.commit_file_id("a.txt", "one\n", "root");
@@ -129,8 +120,6 @@ mod periodic {
         (repo, root)
     }
 
-    /// The keeping-it-staged move: the branch goes back, the files stay,
-    /// and what the dropped commit wrote is ready to be committed again.
     #[tokio::test]
     #[ignore = "what git's reset modes do: not worth the pre-merge run"]
     async fn a_soft_reset_moves_the_branch_and_leaves_the_work_staged() {
@@ -155,8 +144,6 @@ mod periodic {
         );
     }
 
-    /// The same move with the index cleared: the content is still on disk,
-    /// but nothing of it is staged.
     #[tokio::test]
     #[ignore = "what git's reset modes do: not worth the pre-merge run"]
     async fn a_mixed_reset_moves_the_branch_and_unstages_the_work() {
@@ -180,8 +167,6 @@ mod periodic {
         );
     }
 
-    /// The discarding move — the one the UI asks about. Tracked work goes,
-    /// staged or not; untracked files are none of a reset's business.
     #[tokio::test]
     #[ignore = "what git's reset modes do: not worth the pre-merge run"]
     async fn a_hard_reset_throws_tracked_work_away_and_leaves_untracked_files() {
@@ -241,8 +226,7 @@ mod periodic {
         .expect("switch")
     }
 
-    /// The everyday case: work that is not in the way travels with the move,
-    /// and nothing has to be asked (デザイン規約 §未コミット変更がある状態での移動).
+    /// Nothing is asked (デザイン規約 §未コミット変更がある状態での移動).
     #[tokio::test]
     #[ignore = "what git's switch carries: not worth the pre-merge run"]
     async fn a_move_carries_uncommitted_work_along() {
@@ -258,8 +242,7 @@ mod periodic {
         );
     }
 
-    /// Work that *is* in the way stops the move dead — git changes nothing,
-    /// which is what makes it safe to go round the long way afterwards.
+    /// A refusal changes nothing, which is what makes the carry safe after it.
     #[tokio::test]
     #[ignore = "git's own refusal wording: not worth the pre-merge run"]
     async fn a_move_is_refused_when_the_changes_are_in_the_way() {
@@ -282,10 +265,9 @@ mod periodic {
         );
     }
 
-    /// Untracked files are refused in words of their own, and the session has
-    /// to recognise those too: they are the case a stash gets *most* of the
-    /// way past, carrying every tracked change while the untracked file stays
-    /// behind in the entry.
+    /// Untracked files are refused in words of their own, which the session
+    /// must recognise too: a stash carries the tracked changes past them but
+    /// leaves the untracked file behind in the entry.
     #[tokio::test]
     #[ignore = "git's own refusal wording: not worth the pre-merge run"]
     async fn untracked_files_in_the_way_are_a_refusal_too() {

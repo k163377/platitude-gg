@@ -115,14 +115,7 @@ fn branch_with_slash_in_name_keeps_full_short_name() {
     assert_eq!(refs[0].short, "feature/deep/name");
 }
 
-/// The five shapes `%(upstream:track)` takes, spelled as git wrote them
-/// for a branch two ahead, one behind, one of each, one whose upstream
-/// was deleted, and one level with it (measured, 2.55).
-///
-/// **git leaves out the leg that counts zero** — `[ahead 2]`, never
-/// `[ahead 2, behind 0]` — so the halves are read one at a time. A gone
-/// upstream and a level one both count nothing, which is why the
-/// upstream itself is what tells the two apart.
+/// The five `%(upstream:track)` shapes, spelled as git 2.55 writes them.
 #[test]
 fn a_branch_reads_how_far_it_stands_from_its_upstream() {
     let fixture = |short: &str, track: &str| {
@@ -166,9 +159,8 @@ fn entry(kind: RefKind, name: &str, short: &str, upstream: Option<&str>) -> RefE
     }
 }
 
-/// The upstream is the whole of the question. A remote branch of the same
-/// name is a different branch — git reads `branch.<name>.merge` and says
-/// nothing about a matching name, and so does this.
+/// A same-named remote branch is a different branch, as git reads
+/// `branch.<name>.merge`.
 #[test]
 fn remote_state_comes_from_the_upstream_and_nowhere_else() {
     let refs = vec![
@@ -303,9 +295,6 @@ fn keeps_a_second_remote_that_is_not_the_upstream() {
     assert!(!folded.contains("refs/remotes/fork/main"), "not the badge");
 }
 
-/// A branch with no upstream folds nothing, however many remotes carry
-/// its name: a same-named remote branch is a different branch, and it
-/// keeps the chip that says so.
 #[test]
 fn folds_nothing_without_an_upstream() {
     let alone = vec![
@@ -363,8 +352,7 @@ fn a_remote_ref_splits_at_the_remote_name_not_the_first_slash() {
         split_remote_ref("origin/feature/x", names),
         Some(("origin", "feature/x"))
     );
-    // The longest configured name wins: `my/fork/main` lives on the
-    // remote `my/fork`, whose name carries the slash.
+    // The longest configured name wins; `my/fork` carries a slash.
     assert_eq!(
         split_remote_ref("my/fork/main", names),
         Some(("my/fork", "main"))
@@ -389,8 +377,7 @@ fn the_first_slash_answers_where_no_configured_remote_does() {
         split_remote_ref_or_first_slash("my/fork/main", ["my", "my/fork"]),
         Some(("my/fork", "main"))
     );
-    // …and the ref's own first slash answers where it does not: a list
-    // still loading, or a remote gone from configuration.
+    // …and the first slash where it does not.
     assert_eq!(
         split_remote_ref_or_first_slash("fork/main", ["origin"]),
         Some(("fork", "main"))

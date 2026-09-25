@@ -2,24 +2,20 @@
 
 use super::*;
 
-/// What a background graph refresh established when it completed.
-///
-/// This is a completion boundary: consumers that need to
-/// act after a refresh wait for
-/// [`RefreshTask::outcome`].
+/// What a background graph refresh established when it completed — the
+/// completion boundary, awaited through [`RefreshTask::outcome`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefreshOutcome {
-    /// The operation was not started because the repository is not open.
+    /// Not started: the repository is not open.
     Unavailable,
-    /// The operation was not started because a write and its follow-up
-    /// refreshes still own the repository.
+    /// Not started: a write and its follow-up refreshes still own the
+    /// repository.
     WriteBusy,
-    /// The operation was not started because the previous poll still owns
-    /// the single-flight slot.
+    /// Not started: the previous poll still owns the single-flight slot.
     Busy,
-    /// The operation completed and the graph already showed its answer.
+    /// Completed; the graph already showed its answer.
     Unchanged,
-    /// The operation completed and installed a different graph.
+    /// Completed and installed a different graph.
     Changed,
     /// A newer graph request superseded this one, or the session closed.
     Cancelled,
@@ -30,46 +26,33 @@ pub enum RefreshOutcome {
 impl RefreshOutcome {
     /// Whether the graph on screen now answers for the repository.
     ///
-    /// **The ask that took over gives the answer.** A pass another ask
-    /// took over says nothing about the repository, so a caller that
-    /// has to know waits for that one first
-    /// ([`RepoSession::graph_answer`]). By the time a `Cancelled`
-    /// reaches such a caller it means nothing ever will: the session is
-    /// closing. Every other outcome here leaves the picture as it was,
-    /// which is what a write settling behind the rebuild reports under
-    /// its own id ([`super::FollowUp::Graph`]).
+    /// A pass another ask took over says nothing, so a caller that has to
+    /// know follows it to that ask first ([`RepoSession::graph_answer`]);
+    /// a `Cancelled` still reaching such a caller means the session is
+    /// closing. Every other outcome left the picture as it was, which a
+    /// settling write reports as [`super::FollowUp::Graph`].
     #[must_use]
     pub fn landed(self) -> bool {
         matches!(self, Self::Changed | Self::Unchanged)
     }
 }
 
-/// How many graph passes could still walk.
+/// How many graph passes could still walk, and what each ask came to.
 ///
-/// A pass registers here on the thread that is about to spawn it and
-/// stays registered until its task has ended. **Cancelling a pass is
-/// an ask**: the one a later request displaced is still on a
-/// worker somewhere, and until it comes back it can start the walk it
-/// was already on its way to. A caller that took the stream over and
-/// then reads what the session did is reading a count the displaced pass
-/// has not finished adding to — [`RepoSession::wait_for_graph_passes`]
-/// is the boundary that closes it.
-///
-/// It also numbers the asks and keeps what each came to, which is the
-/// other half of the same question: a pass that was taken over leaves
-/// its caller waiting on whoever took it over, and that is the ask this
-/// records ([`GraphRun`]).
+/// A pass registers on the thread about to spawn it and stays until its
+/// task ends. Cancelling a pass is only a request: a displaced pass can
+/// still start the walk it was on its way to, so a caller that took the
+/// stream over waits on [`RepoSession::wait_for_graph_passes`] before
+/// reading what the session did.
 pub(super) struct GraphPasses {
     live: std::sync::atomic::AtomicUsize,
     changed: tokio::sync::watch::Sender<u64>,
-    /// Numbers the asks for the graph, in the order the stream changed
-    /// hands ([`RepoSession::take_log_run`]): an ask that took a pass
-    /// over is numbered after the pass it displaced, so "newer than
-    /// mine" names exactly the passes that could answer in its place.
+    /// Numbers the asks in the order the stream changed hands
+    /// ([`RepoSession::take_log_run`]), so "newer than mine" names exactly
+    /// the passes that could answer in its place.
     asks: AtomicU64,
-    /// The newest ask that answered *for the graph*. What a
-    /// displaced pass's caller waits for
-    /// ([`RepoSession::graph_answer`]).
+    /// The newest ask that answered *for the graph* — what a displaced
+    /// pass's caller waits for ([`RepoSession::graph_answer`]).
     landed: tokio::sync::watch::Sender<Option<(u64, RefreshOutcome)>>,
 }
 
@@ -87,9 +70,9 @@ impl Default for GraphPasses {
 }
 
 impl GraphPasses {
-    /// Numbers one ask for the graph. Taken with the token that takes
-    /// the stream over ([`RepoSession::take_log_run`]) and on the same
-    /// thread, so the numbering is the order the asks were made.
+    /// Numbers one ask. Taken with the token that takes the stream over
+    /// ([`RepoSession::take_log_run`]), on the same thread, so the
+    /// numbering is the order the asks were made.
     pub(super) fn ask(self: &Arc<Self>) -> GraphRun {
         let ask = self.asks.fetch_add(1, Ordering::SeqCst) + 1;
         GraphRun {
@@ -99,14 +82,10 @@ impl GraphPasses {
         }
     }
 
-    /// Records what an ask came to.
-    ///
-    /// The ask that took a pass over is the answer for the graph, so
-    /// a pass that was taken over is left unrecorded and a caller
-    /// waiting behind one goes on waiting for the ask that displaced
-    /// it. Of the rest the newest stands: two passes can end in
-    /// either order, and the newer one's answer is the one that is
-    /// kept.
+    /// Records what an ask came to. A taken-over pass (`Cancelled`)
+    /// records nothing, so its caller goes on waiting for the ask that
+    /// displaced it; of the rest the newest ask stands, whichever order
+    /// the passes end in.
     fn answered(&self, ask: u64, outcome: RefreshOutcome) {
         if outcome == RefreshOutcome::Cancelled {
             return;
@@ -123,20 +102,14 @@ impl GraphPasses {
     /// Waits for an ask at or after `after` to answer for the graph —
     /// the answer a caller whose own pass was taken over is owed.
     ///
-    /// **This terminates because every ask answers.** Each one is
-    /// numbered before its pass is spawned and reports its outcome from
-    /// the task, or from [`GraphRun`]'s drop where the task never got
-    /// there; a chain of handovers ends at the ask nobody took over.
-    /// `None` where the session closed first — every pass under its
-    /// token is cancelled and nothing new will be asked for, so there is
-    /// no answer left to wait for.
+    /// Terminates because every ask answers: from its task, or from
+    /// [`GraphRun`]'s drop where the task never got there; a chain of
+    /// handovers ends at the ask nobody took over. `None` where the
+    /// session closed first.
     ///
-    /// **`after` itself counts**, and only the drop guard can put it
-    /// there: a pass that was taken over records nothing, so a record
-    /// under the caller's own number means that pass ended without
-    /// answering. Waiting past it would be waiting for a newer ask that
-    /// nothing is going to make — and the caller is a write's settling,
-    /// so the whole queue would wait with it.
+    /// `after` itself counts: a record under the caller's own number can
+    /// only be the drop guard's, and waiting past it would wait for an ask
+    /// nothing will make — with the whole write queue behind it.
     async fn landed_after(
         &self,
         after: u64,
@@ -158,20 +131,16 @@ impl GraphPasses {
         }
     }
 
-    /// Registers one pass. **Called before the pass is spawned**: a task
-    /// is not scheduled in the order the asks came in, and one that
-    /// registered itself from inside would leave the boundary reading
-    /// "idle" for the pass that has not started yet (see
-    /// [`RepoSession::take_log_run`], which is taken the same way and
-    /// for the same reason).
+    /// Registers one pass. Call before spawning it: registering from
+    /// inside the task would let the boundary read "idle" for a pass not
+    /// started yet (likewise [`RepoSession::take_log_run`]).
     pub(super) fn enter(self: &Arc<Self>) -> GraphPassHeld {
         self.live.fetch_add(1, Ordering::SeqCst);
         GraphPassHeld(Arc::clone(self))
     }
 
-    /// Waits until every pass registered when this was called has
-    /// stopped. A later one may register again; this closes the work
-    /// already in flight.
+    /// Waits until no pass is registered — every one in flight when called
+    /// included, and any registered meanwhile.
     async fn wait_idle(&self) {
         let mut changed = self.changed.subscribe();
         while self.live.load(Ordering::SeqCst) != 0 {
@@ -182,11 +151,9 @@ impl GraphPasses {
     }
 }
 
-/// What a pass carries for as long as it could still walk.
-///
-/// Dropped by the task itself, so a pass that unwound or went down with
-/// the runtime still reports that it has stopped, and the boundary can
-/// close.
+/// What a pass carries while it could still walk. Dropped by the task,
+/// so a pass that unwound or went down with the runtime still reports
+/// stopping.
 pub(super) struct GraphPassHeld(Arc<GraphPasses>);
 
 impl Drop for GraphPassHeld {
@@ -198,16 +165,13 @@ impl Drop for GraphPassHeld {
     }
 }
 
-/// One ask for the graph, from the moment it takes the stream over
-/// ([`RepoSession::take_log_run`]) to the answer it leaves behind.
+/// One ask for the graph, from taking the stream over
+/// ([`RepoSession::take_log_run`]) to the answer it leaves.
 ///
-/// **Answered by the task that runs the pass, and by this drop where
-/// the task never got there** — it unwound, or went down with the
-/// runtime. Somebody may be waiting behind this ask for it to say what
-/// became of the graph ([`RepoSession::graph_answer`]), and an ask that
-/// left no answer would leave them waiting for a pass nothing will ever
-/// run. [`super::PassWatch`] is the other guard on the same unwind and
-/// speaks to the screen; this one speaks to the queue behind it.
+/// Answered by the task that runs the pass, or by this drop where the
+/// task unwound or went down with the runtime — otherwise a waiter in
+/// [`RepoSession::graph_answer`] waits forever. [`super::PassWatch`]
+/// guards the same unwind for the screen; this one for the write queue.
 pub(super) struct GraphRun {
     passes: Arc<GraphPasses>,
     ask: u64,
@@ -221,9 +185,8 @@ impl GraphRun {
         self.ask
     }
 
-    /// What this ask came to. Called once, with the outcome the whole
-    /// task settled on: a restart runs two passes under one ask, and it
-    /// is the last of them that answers for the graph.
+    /// Called once, with the whole task's outcome: a restart runs two
+    /// passes under one ask, and the last one answers.
     pub(super) fn answer(&mut self, outcome: RefreshOutcome) {
         self.answered = true;
         self.passes.answered(self.ask, outcome);
@@ -240,11 +203,9 @@ impl Drop for GraphRun {
 
 /// Completion of one explicitly tracked background refresh.
 pub struct RefreshTask {
-    /// The ask this is the boundary of, where one was started — what
-    /// [`RepoSession::graph_answer`] follows when the pass behind it was
-    /// taken over. `None` for an answer that started no pass at all, and
-    /// for the poll, whose boundary nobody follows: a tick another ask
-    /// took over is that ask's to answer.
+    /// The ask behind this, which [`RepoSession::graph_answer`] follows
+    /// when its pass was taken over. `None` where no pass started, and for
+    /// the poll: a tick another ask took over is that ask's to answer.
     ask: Option<u64>,
     answer: tokio::sync::oneshot::Receiver<RefreshOutcome>,
 }
@@ -263,9 +224,8 @@ impl RefreshTask {
         task
     }
 
-    /// Waits for the operation itself to finish. A dropped runtime is the
-    /// same observable result as cancellation: no later answer from this
-    /// operation can arrive.
+    /// Waits for the operation to finish. A dropped runtime reads as
+    /// `Cancelled`: no later answer can arrive.
     pub async fn outcome(self) -> RefreshOutcome {
         self.answer.await.unwrap_or(RefreshOutcome::Cancelled)
     }
@@ -278,39 +238,24 @@ pub enum RemoteTagRefreshOutcome {
     Disabled,
     /// Tags are outside the graph, so their badges are not worth a read.
     Hidden,
-    /// Another remote-tag read already owns the single-flight slot, and
-    /// this request was dropped.
+    /// Another remote-tag read owns the single-flight slot, and this
+    /// request was dropped. Unlike a [`super::ReadFlight`], no repeat is
+    /// owed: no local operation moves what a remote carries under
+    /// `refs/tags/` (a push is branches only), and both askers (an
+    /// opening, installing the interval) ask the same question of the same
+    /// remotes — the read in flight is the answer.
     ///
-    /// A [`super::ReadFlight`] runs a repeat because its second caller can
-    /// know something the read in flight does not — a write that landed
-    /// after it started.
-    /// Nothing here does: no local operation moves what a remote carries
-    /// under `refs/tags/` (a push is branches only), and the two places
-    /// that ask (an opening, and installing the interval) ask the same
-    /// question of the same remotes. A request arriving while the interval
-    /// was off cannot see this either, since the permission it brings is
-    /// what lets a read run at all. So the read that made this `Busy` is
-    /// the answer, and it publishes one.
-    ///
-    /// **Said once that read has let the slot go.** The ask is dropped,
-    /// and its completion is booked behind the read in flight, so a
-    /// caller waiting on it knows the answer it was told to read has
-    /// been published, and an ask it makes next is not turned away by
-    /// the same read.
+    /// Said once that read has let the slot go, so the caller knows its
+    /// answer is published and its next ask is not turned away by the
+    /// same read.
     Busy,
     /// The repository is not open any more.
     Unavailable,
     /// A remote that was asked did not answer, so what is held is not
-    /// what the remotes carry.
-    ///
-    /// **The one answer that cannot be read off anything downstream.**
-    /// A read nothing answered publishes no snapshot, no badge and no
-    /// event — the same silence as a read that found nothing new — so a
-    /// caller waiting for the badge to change has nothing to fail on and
-    /// spends its whole budget on a machine whose git cannot reach the
-    /// remote at all. The failure itself is still nobody's to act on (a
-    /// badge is not worth failing a fetch for), and this says so to the
-    /// one caller that asked to be told.
+    /// what the remotes carry. Only this says so: such a read publishes
+    /// nothing (the same silence as finding nothing new), and a caller
+    /// waiting on the badge would spend its whole budget where git cannot
+    /// reach the remote. Not an error — a badge is not worth one.
     Unanswered,
     /// The remotes answered with the readings already held.
     Unchanged,
@@ -344,47 +289,35 @@ impl RemoteTagRefreshTask {
 }
 
 impl RepoSession {
-    /// Waits until the refs and status readers already in flight have left
-    /// their single flight.
-    ///
-    /// A snapshot event is delivered from inside the reader, before it can
-    /// request the graph refresh that answer implies. Coordinating code uses
-    /// this boundary after observing those events when that distinction
-    /// matters.
+    /// Waits until the refs and status reads in flight have left their
+    /// single flight. A snapshot event is sent from inside the reader,
+    /// before it requests the graph refresh the answer implies; wait here
+    /// after seeing one when that matters.
     pub async fn wait_for_snapshot_reads(&self) {
         tokio::join!(self.refs_read.wait_idle(), self.status_read.wait_idle());
     }
 
-    /// Waits until every graph pass that had been started when this was
-    /// called has stopped — the one this caller displaced included.
-    ///
-    /// [`RefreshTask::outcome`] answers for the pass it was taken
-    /// from and for no other. Asking for a rebuild also **cancels**
-    /// whichever pass held the stream, and that pass stops when it
-    /// next looks (see [`GraphPasses`]). Coordinating code that
-    /// counts what the session did takes this boundary as
-    /// well.
+    /// Waits until every graph pass started when this was called has
+    /// stopped, the one this caller displaced included:
+    /// [`RefreshTask::outcome`] covers only its own pass, and a cancelled
+    /// pass stops only when it next looks ([`GraphPasses`]). Code that
+    /// counts what the session did waits here too.
     pub async fn wait_for_graph_passes(&self) {
         self.graph_passes.wait_idle().await;
     }
 
     /// Rebuilds the graph off-screen and swaps it in only when it differs
-    /// from what the UI already shows (see [`RepoSession::run_swap_pass`]).
-    ///
-    /// Background triggers (auto fetch, a finished write, an external
-    /// dirty/clean flip) go through here: [`RepoSession::restart_log`]'s
-    /// reset-and-restream repaints the pane even when history did not
-    /// move, which reads as idle flicker once a periodic fetch is on.
+    /// from what the UI already shows ([`RepoSession::run_swap_pass`]).
+    /// Background triggers go through here: [`RepoSession::restart_log`]
+    /// repaints even when history did not move, which flickers under a
+    /// periodic fetch.
     pub fn refresh_log(self: &Arc<Self>) {
         drop(self.start_refresh_log());
     }
 
-    /// Starts the same background rebuild as [`Self::refresh_log`] and
-    /// returns its causal completion boundary.
-    ///
-    /// The ordinary UI path is fire-and-forget. Tests and coordinating
-    /// callers use this form when the distinction between "still running"
-    /// and "finished without an event" matters.
+    /// [`Self::refresh_log`], returning its completion boundary — for
+    /// callers that must tell "still running" from "finished without an
+    /// event".
     pub fn refresh_log_tracked(self: &Arc<Self>) -> RefreshTask {
         self.start_refresh_log()
     }
@@ -409,27 +342,23 @@ impl RepoSession {
         task
     }
 
-    /// Rebuilds the graph and waits for the answer the rebuild is owed,
-    /// following a pass another ask took over to the ask that took it
-    /// over ([`Self::graph_answer`]) — what a write's settling waits on.
+    /// Rebuilds the graph and waits for its answer, following a takeover
+    /// to the ask that took it over ([`Self::graph_answer`]) — what a
+    /// write's settling waits on.
     pub(super) async fn settle_graph(self: &Arc<Self>) -> RefreshOutcome {
         let task = self.refresh_log_tracked();
         self.graph_answer(task).await
     }
 
-    /// The answer `task` is owed, which may be another ask's.
+    /// The answer `task` is owed, which may be another ask's: where a
+    /// newer ask took the pass over, that ask says whether the repository
+    /// reached the screen. Taking the handover as the answer lets a write
+    /// report itself settled while its graph is still being walked, or
+    /// landed where the replacement then failed
+    /// (`session_integration::operations` pins both).
     ///
-    /// **The ask that took over is the one that answers.** Something
-    /// asked for a newer graph while this one was walking, and that ask
-    /// is the one that says whether the repository reached the screen,
-    /// so a caller that has to know waits for it. Read as an answer,
-    /// the handover lets a write report itself settled while the graph
-    /// it asked for is still being walked, and call the rebuild landed
-    /// even where the ask that replaced it then failed (measured —
-    /// `session_integration::operations`).
-    ///
-    /// The wait ends at the ask nobody took over, or at a session
-    /// closing under all of them ([`GraphPasses::landed_after`]).
+    /// Ends at the ask nobody took over, or when the session closes
+    /// ([`GraphPasses::landed_after`]).
     pub(super) async fn graph_answer(&self, task: RefreshTask) -> RefreshOutcome {
         let ask = task.ask;
         let outcome = task.outcome().await;
@@ -446,74 +375,52 @@ impl RepoSession {
             .unwrap_or(RefreshOutcome::Cancelled)
     }
 
-    /// The periodic re-read that runs while the repository is on screen:
-    /// refs and status only. Stashes and worktrees ride the focus and
-    /// post-write refreshes — two more processes every tick to
-    /// catch what a poll practically never sees move on its own.
+    /// The periodic re-read while the repository is on screen: refs and
+    /// status only. Stashes and worktrees ride the focus and post-write
+    /// refreshes — two more processes a tick for what rarely moves on its
+    /// own.
     ///
-    /// Skipped while a write runs (that repository is mid-operation,
-    /// and the write refreshes when it lands) and while the previous
-    /// poll is still going, so a slow repository polls less
-    /// often.
+    /// Skipped while the previous poll is still going (a slow repository
+    /// polls less often) and while any write of this working tree runs
+    /// ([`RepoSession::tree_write`]): a session reopened over a closed
+    /// tab's write would otherwise publish the tree mid-write. The session
+    /// finishing such a write calls this on the others.
     ///
-    /// **Any write of that working tree**
-    /// ([`RepoSession::tree_write`]). A tab closed mid-write keeps the
-    /// write running and a tab reopened over it is a new session on the
-    /// same index, which would otherwise read the tree between a
-    /// rebase's steps and publish it as where the repository stands. The
-    /// session that finishes such a write calls this on the others, so a
-    /// tick skipped for somebody else's write is taken the moment it
-    /// lands.
-    ///
-    /// **Except under a write that replays**
-    /// ([`OperationKind::replays_history`]).
-    /// Those stand for as long as the range is deep — seconds, and past
-    /// twenty on a window's worth of commits — and skipping the poll
-    /// through all of it leaves the window saying nothing at all: no
-    /// badge, no progress, no graph, for the whole of a rewrite the
-    /// reader asked for. git counts the steps out on disk as it goes
-    /// (`rebase-merge/msgnum`, read by [`crate::integrate::rebase_standing`]),
-    /// so the tick that runs under one has an answer to publish. The
-    /// snapshot reads coalesce with the write's own refresh
-    /// ([`super::ReadFlight`]), and a tick that cannot keep up with the
-    /// replay simply lands later — the picture may fall behind,
-    /// and goes on moving.
+    /// Not skipped under a write that replays
+    /// ([`OperationKind::replays_history`]): those can stand for tens of
+    /// seconds, and skipping would leave no badge, progress or graph for
+    /// the whole rewrite. git counts the steps out on disk
+    /// ([`crate::integrate::rebase_standing`]), the snapshot reads coalesce
+    /// with the write's own refresh ([`super::ReadFlight`]), and a tick
+    /// that cannot keep up just lands later.
     pub fn refresh_poll(self: &Arc<Self>) {
         drop(self.start_refresh_poll());
     }
 
     /// Reads the repository again because a write landed in it — from
-    /// this session or from another on the same working tree
+    /// this session or another on the same working tree
     /// ([`RepoSession::tell_the_tree`]).
     ///
-    /// **Owed.** A clock tick the single-flight slot turns away is no
-    /// loss: another comes. This one is news, and the read holding the
-    /// slot began before the write, so dropping it would leave the
-    /// session showing a repository that no longer exists until
-    /// something else happened to ask. Refused, it is written down and
-    /// taken by the reader in front as it hands the slot back.
+    /// Owed, unlike a clock tick: the read holding the slot began before
+    /// the write, so dropping this would leave a stale repository on
+    /// screen. Refused, it is noted and taken by that read as it hands the
+    /// slot back.
     pub(super) fn read_again(self: &Arc<Self>) {
         self.read_owed.store(true, Ordering::SeqCst);
         drop(self.start_refresh_poll());
     }
 
     /// Takes the read owed, if one is — called wherever the reason it was
-    /// refused has just gone: a poll handing the slot back, and a write of
-    /// this session's ending (`write::serve`).
+    /// refused has just gone: a poll handing the slot back, and this
+    /// session's write ending (`write::serve`).
     ///
-    /// **Both, because either can be the last one.** A read asked for
-    /// while this session was reading is refused for the slot and comes
-    /// back at the poll's tail; if a write of its own had started by
-    /// then, that try is refused too — and a write's own landing tells
-    /// the *other* sessions only, so without this the read would
-    /// have nowhere left to come from. A write that moved only the index
-    /// reads no refs behind it, so nothing else would notice either.
+    /// Both, because either can be last: the poll's retry is refused too
+    /// if a write of this session started meanwhile, and a write's landing
+    /// tells only the *other* sessions.
     ///
-    /// **A session that keeps nothing owes nothing.** One asked for
-    /// before its close still has the flag standing, and its parked write
-    /// ends after it ([`Hub::park_writes_of`]) — taking it there would
-    /// spend a refs read and a status read on a page that is gone, which
-    /// is the very pair the close stops paying for (`write::run_write`).
+    /// A closed session owes nothing: its parked write (the app's
+    /// `Hub::park_writes_of`) ends after the close, and a read then is
+    /// paid for a page that is gone (`write::run_write`).
     pub(super) fn take_the_read_owed(self: &Arc<Self>) {
         if self.read_owed.load(Ordering::SeqCst) && self.keeps_what_it_reads() {
             drop(self.start_refresh_poll());
@@ -538,30 +445,23 @@ impl RepoSession {
             tracing::trace!("poll skipped: the previous one has not finished");
             return RefreshTask::ready(RefreshOutcome::Busy);
         };
-        // The reads below start from here, so they answer for anything
-        // that landed before this moment — a write landing inside them
-        // owes another, and sets this again ([`Self::read_again`]).
+        // The reads below answer for anything that landed before this
+        // moment; a write landing inside them sets this again
+        // ([`Self::read_again`]).
         self.read_owed.store(false, Ordering::SeqCst);
         let held = self.graph_passes.enter();
         let s = Arc::clone(self);
-        // Nobody follows a tick that was taken over: a newer ask for the
-        // graph is that ask's to answer, and the tick has no caller
-        // waiting on the repository having reached the screen.
+        // Nobody follows a tick that was taken over (`RefreshTask::ask`).
         let (finished, task) = RefreshTask::pending(None);
         self.runtime.spawn(async move {
             let _held = held;
-            // The config stamp is settled before either read starts. The
-            // refs half invalidates what the config decides on its way in,
-            // and the status half consumes the line-ending staleness that
-            // leaves behind — ordered by completion inside the join, the
-            // status read can spend the mark before the refs read has set
-            // it, and a withdrawn notice then stands until something else
-            // happens to ask. Idempotent, so the refs read finding the
-            // stamp already current costs a stat and nothing else.
+            // Settled before either read starts: inside the join, the
+            // status read could consume the line-ending staleness before
+            // the refs read sets it, leaving a withdrawn notice standing.
+            // Idempotent — the refs read then pays only a stat.
             s.forget_what_the_config_decides();
-            // Both reads can call for a rebuild, but the graph is one
-            // picture: an external commit moves a ref *and* cleans the
-            // tree, and walking twice would throw one pass away.
+            // Both reads can call for a rebuild, but one walk serves both:
+            // an external commit moves a ref *and* cleans the tree.
             let (refs, tree) = tokio::join!(s.read_refs(), s.read_status());
             let outcome = if refs == Reread::Moved || tree == Reread::Moved {
                 let Some(workdir) = s.workdir() else {

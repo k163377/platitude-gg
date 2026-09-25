@@ -1,15 +1,6 @@
-//! What a write that did not happen has to say for itself.
-//!
-//! **A report is somebody else's no.** Something outside it said no under
-//! a rule of its own — a protected branch, a repository rule, a
-//! `pre-receive` hook over there, a `pre-commit` hook here, a signing key
-//! that would not sign — or git worked out from what this end holds that
-//! the write could not stand. Nothing was half done and there is nothing
-//! here to put right, so the screen states it as a report
-//! (デザイン規約 §答えの要らない報せ).
-//!
-//! Every failure that has one of these carries it beside git's whole
-//! message, which goes on being what the command log holds.
+//! What a write that did not happen has to say for itself, stated on the
+//! screen as a report (デザイン規約 §答えの要らない報せ). A failure that has
+//! one carries it beside git's whole message, which the command log holds.
 
 /// Which report this is — what the screen says in its own words is chosen
 /// from this alone (`Words.writeReported`).
@@ -20,96 +11,66 @@ pub enum ReportKind {
     /// The far side would not move a ref to what was sent.
     RemoteUpdate,
     /// git would not send at all: what this end holds about the remote is
-    /// older than the remote itself (`fetch first`, `stale info`,
-    /// `non-fast-forward`).
-    ///
-    /// **The one kind with a move behind it** — the fetch that shows what
-    /// the remote really holds is queued by the session
-    /// ([`crate::session::RepoSession::push`]), so by the time this is
-    /// read the answer is already on its way.
+    /// older than the remote (`fetch first`, `stale info`,
+    /// `non-fast-forward`). The session has already queued the fetch that
+    /// corrects it ([`crate::session::RepoSession::push`]).
     Outdated,
-    /// A commit that was not made. Everything a commit can be refused for
-    /// that this application could answer is taken away before the button
-    /// is pressed (an identity, a message, something staged), so what is
-    /// left is always something outside it saying no: a hook, a signing
-    /// key, another git holding the index.
+    /// A commit that was not made — always something outside saying no (a
+    /// hook, a signing key, another git holding the index): what this
+    /// application could answer is gated before the press.
     Commit,
 
-    /// A part of a file that was not taken, because the file is not the
-    /// one the selection was made on any more (デザイン規約 §答えの要らない報せ).
-    ///
-    /// **This end is the one that said no**, before git was asked: the
-    /// bytes carry a fingerprint and it did not match, or the hunk the
-    /// selection indexes is no longer in the diff. Nothing was written
-    /// either way, and the next move is already made — the pane reads the
-    /// file again on this answer — so it is a report like the rest.
-    ///
-    /// Three of them because the heading says what did not happen and
-    /// these are three different things not happening.
+    /// A part of a file that was not taken because the file changed since
+    /// the selection (fingerprint mismatch, or the hunk is gone) — refused
+    /// here before git was asked; the pane rereads the file on this answer.
+    /// One kind per verb, since the heading says what did not happen.
     StaleStage,
     StaleUnstage,
     StaleDiscard,
     /// A part of a conflicted file, which has more than one old side and
-    /// so cannot be cut into a patch that applies. The pane withholds the
-    /// pieces, so nothing should ask — this is what a write that got here
-    /// anyway says for itself.
+    /// cannot be cut into a patch. The pane withholds the pieces; this is
+    /// for a write that got here anyway.
     ConflictedPart,
-    /// A rename git would not make — most often because the new name is
-    /// already taken. **Nothing moved and the box is still open**, so the
-    /// reader is still in the middle of the gesture
-    /// (デザイン規約 §答えの要らない報せ の色の軸).
+    /// A rename git would not make (most often: the name is taken). Nothing
+    /// moved and the box stays open, so the gesture goes on
+    /// (デザイン規約 §答えの要らない報せ「下端の線は必ず状態色を着る」).
     RenameRefused,
     /// A rename that stopped between its two halves: the new name was
-    /// made and the old one is still there.
-    ///
-    /// **The reports about something half done**, which is why they wear
-    /// a state colour (デザイン規約 §状態 — 進行中で対処が要る).
+    /// made and the old one is still there. The one report about something
+    /// half done, hence its state colour (デザイン規約 §状態「進行中で対処が要る」).
     HalfRenamed,
 
-    /// The five shapes a history cannot be rewritten in, worked out from
-    /// the commits themselves before a rebase is ever spawned
-    /// ([`crate::sequencer::plan_edit`]). **git is never asked**, so
-    /// unlike every kind above there is no row in the log to read: what
-    /// the reader is told is the whole of what happened.
+    /// The five shapes a history cannot be rewritten in, found before a
+    /// rebase is spawned ([`crate::sequencer::plan_edit`]). git is never
+    /// asked, so there is no log row; one kind each because the reason is
+    /// the sentence the screen picks (`Words.writeReportedWhy`).
     ///
-    /// One kind each because the heading they share says only that
-    /// nothing was rewritten, and the reason is the part worth knowing —
-    /// five different reasons, five sentences the screen picks from
-    /// (`Words.writeReportedWhy`).
-    ///
-    /// A merge inside the range a rewrite would replay. A plain
-    /// interactive rebase drops merges, so it would come back flattened.
+    /// A merge inside the range: a plain interactive rebase would flatten it.
     RewriteAcrossMerge,
-    /// A commit the current branch cannot see. Its row is on screen — the
-    /// graph draws every branch — but a rebase only ever rewrites the one
-    /// the tree is standing on.
+    /// A commit the current branch cannot see — the graph draws every
+    /// branch, but a rebase rewrites only the current one.
     RewriteOffBranch,
     /// A fold with nothing to fold into: the commit is the first one.
     FoldFirstCommit,
-    /// The commit under the range is not in this clone — a shallow one,
-    /// where replaying from there would cut the branch off from the
-    /// history it was made on.
+    /// The commit under the range is not in this (shallow) clone; replaying
+    /// from there would cut the branch off its history.
     RewriteUnfetchedBase,
-    /// Every commit in the branch dropped at once. git replays what is
-    /// left onto a made-up empty commit, leaving the branch pointing at
-    /// an empty tree with no message (実測), so this end stops first.
+    /// Every commit in the branch dropped at once: git would leave the
+    /// branch on a made-up empty commit with no message, so this end stops
+    /// first.
     DropAllCommits,
 
-    /// **The two the outside world makes, after the plan was already
-    /// worked out.** Unlike the five above — which are about the commits
-    /// as they were read and so cannot come true between the press and
-    /// the spawn — these are the premise going while the write is on its
-    /// way, and a reader who did nothing wrong is the one who meets them
-    /// (P3-確認事項 §要判断 `GitError::Rejected`).
+    /// The two the outside world makes after the plan was worked out — the
+    /// premise going while the write is on its way
+    /// (rules-refs/core.md「`Withheld` へ寄せたのは画面から届く 3 つだけ」).
     ///
-    /// The branch moved after the plan was composed: the todo is a fixed
-    /// list of ids and a rebase drops what it leaves out without a word,
-    /// so the replay is refused with nothing touched.
+    /// The branch moved after the plan was composed: a rebase silently
+    /// drops what the fixed todo leaves out, so the replay is refused with
+    /// nothing touched.
     RewriteTipMoved,
     /// A merge, cherry-pick, revert, rebase or bisect was standing when
-    /// the rewrite reached git — started from a terminal, most often,
-    /// since the screen holds its own doors shut while one stands. The
-    /// operation is named on the band.
+    /// the rewrite reached git (typically started from a terminal). The
+    /// band names the operation.
     RewriteWhileStanding,
 }
 
@@ -121,34 +82,21 @@ pub struct WriteReport {
     /// The remote as the user named it (`origin`), where one was
     /// involved. Empty otherwise.
     pub remote: String,
-    /// The ref the write was about — a branch or a tag, spelled the way
-    /// the user's screen spells it. Empty where the write was about no
-    /// ref at all.
+    /// The ref the write was about, spelled as the screen spells it; empty
+    /// for none.
     pub name: String,
-    /// **Whoever said no, in their own words**, with the framing git puts
-    /// in front of them taken off (`remote:`, `hint:`). Written by
-    /// somebody else — a forge, a hook, git itself — so it is carried
-    /// across word for word: the screen quotes it under a sentence of
-    /// its own
-    /// (デザイン規約 §長さ「詳しい事情は git の出力(コマンドログ)が言う」).
+    /// Whoever said no, in their own words with git's framing (`remote:`,
+    /// `hint:`) taken off — carried word for word for the screen to quote.
     ///
-    /// Empty where nothing was said, which is a report of one line —
-    /// **and that is how the screen tells the two apart**: this end's own
-    /// refusals quote nobody, so the sentence under the heading is the
-    /// UI's to write (`Words.writeReportedWhy`, app-ui.md「Rust に文言を
-    /// 置かない」).
+    /// Empty when this end refused on its own: that is how the screen knows
+    /// the sentence is its own to write (`Words.writeReportedWhy`,
+    /// rules-refs/app-ui.md「Rust に文言を置かない」).
     pub reason: String,
 }
 
-/// A rename git would not make, said in git's own words.
-///
-/// Written in one place because both callers — a branch and a tag —
-/// read exactly the same way: the name is the one the row still
-/// carries, since nothing moved.
-///
-/// **git ran**, so the command is named and the log keeps its row under a
-/// red edge the way it does for any other refusal — what changes is only
-/// where the reader is told (デザイン規約 §git が言ったことを読む場所).
+/// A rename git would not make, in git's own words; `from` is the name the
+/// row still carries, since nothing moved. git ran, so the command is named
+/// and the log keeps its failed row (デザイン規約 §git が言ったことを読む場所).
 #[must_use]
 pub fn rename_refused(
     from: &str,
@@ -164,12 +112,9 @@ pub fn rename_refused(
     }
 }
 
-/// A rename that got as far as the new name and no further.
-///
-/// **Nothing here ran a command of its own** — what failed is one step of
-/// several, and its own error is what the log already holds — so the
-/// message carried for the log names the step ([`GitError::Reported`]'s
-/// display).
+/// A rename that got as far as the new name and no further. No command of
+/// its own ran, so the message carried for the log is the failed step's
+/// error ([`GitError::Reported`]'s display).
 #[must_use]
 pub fn half_renamed(name: &str, from: crate::error::GitError) -> crate::error::GitError {
     crate::error::GitError::Reported {
@@ -184,16 +129,10 @@ pub fn half_renamed(name: &str, from: crate::error::GitError) -> crate::error::G
     }
 }
 
-/// The five rewrites this end turns down for itself, in the words the log
-/// keeps.
-///
-/// **Nothing ran.** A plan is built out of what `rev-list` answered, and
-/// these are the shapes it cannot make a todo list out of, so there is no
-/// command to name and nobody else's words to quote: the report carries no
-/// reason and the screen writes both of its lines
-/// (`Words.writeReported` / `writeReportedWhy`, app-ui.md「Rust に文言を
-/// 置かない」). The sentence here is the record the log holds, and the one
-/// place these five are worded in this crate.
+/// The seven rewrites this end turns down before git runs. There is no
+/// command to name and no words to quote, so the report carries no reason
+/// and the screen writes both lines (rules-refs/app-ui.md「Rust に文言を
+/// 置かない」); `message` is only the log's record.
 fn withheld(kind: ReportKind, message: String) -> crate::error::GitError {
     crate::error::GitError::Withheld {
         message,
@@ -249,11 +188,6 @@ pub fn drop_all_commits() -> crate::error::GitError {
 }
 
 /// A replay whose branch moved after the plan was worked out.
-///
-/// **A report, because a reader can be standing right in front of it**:
-/// nothing here was pressed wrongly, and nothing ran that the command log
-/// could show a row for — the bar is the only surface that can say what
-/// happened (デザイン規約 §答えの要らない報せ).
 #[must_use]
 pub fn rewrite_tip_moved() -> crate::error::GitError {
     withheld(
@@ -296,8 +230,8 @@ impl WriteReport {
         }
     }
 
-    /// The same, about one ref of its own — a rename knows the name it
-    /// was about, and the heading is written from it.
+    /// The same, about one ref of its own; the heading is written from
+    /// `name`.
     #[must_use]
     pub fn about(kind: ReportKind, name: &str, reason: String) -> Self {
         Self {
@@ -313,11 +247,9 @@ impl WriteReport {
 mod tests {
     use super::*;
 
-    /// The half-done rename says what it is about and quotes nobody: what
-    /// failed is a step of this application's own making, and the sentence
-    /// under the heading belongs in the UI's language
-    /// (app-ui.md「Rust に文言を置かない」). What the step said goes to the log
-    /// instead, which is the one place it is any use.
+    /// The failed step is this application's own, so the screen writes the
+    /// sentence (rules-refs/app-ui.md「Rust に文言を置かない」) and the step's
+    /// words go only to the log.
     #[test]
     fn a_half_done_rename_names_the_ref_and_quotes_nobody() {
         let inner = crate::error::GitError::UnexpectedOutput {
@@ -336,9 +268,8 @@ mod tests {
         );
     }
 
-    /// A rewrite turned down before git was asked quotes nobody and names
-    /// no command: the log gets the sentence on its own, and the screen
-    /// writes both of its lines from the kind.
+    /// The screen writes both lines from the kind; the log gets the
+    /// sentence alone.
     #[test]
     fn a_withheld_rewrite_names_no_command_and_quotes_nobody() {
         let err = rewrite_off_branch("c74dfaf");

@@ -164,13 +164,9 @@ async fn stash_limited_to_one_path_leaves_the_rest_behind() {
     );
 }
 
-/// **What the pre-merge run leaves out**: git's `--keep-index` and `--staged`.
-/// `PushOptions` can ask for either, and nothing in the application does —
-/// every stash it makes sets both off — so these record what git does with
-/// them: the index kept, the index alone taken, and a file changed on both
-/// sides that `--staged` writes an entry for and then fails on. So the
-/// full gate runs them (`-- --ignored ::periodic::`) rather than every
-/// change.
+/// Left out of the pre-merge run: git's `--keep-index` and `--staged`, which
+/// `PushOptions` can ask for and the application never does. Run by the
+/// full gate (`-- --ignored ::periodic::`).
 mod periodic {
     use super::*;
 
@@ -231,9 +227,8 @@ mod periodic {
         assert_eq!(s.staged().count(), 0, "the index went");
         assert_eq!(s.unstaged().count(), 1, "the rest of the tree stayed");
 
-        // Changed on both sides: git writes the entry and then fails to take
-        // the staged half out of the tree, leaving the entry behind with
-        // nothing else done. The UI refuses before reaching this (measured).
+        // Changed on both sides: git writes the entry, then fails to take
+        // the staged half out of the tree and does nothing else.
         repo.git(&["add", "--", "b.txt"]);
         repo.write_file("b.txt", "unstaged again\n");
         let before = stash::load(&exec, &repo.path, &cancel).await.expect("list");

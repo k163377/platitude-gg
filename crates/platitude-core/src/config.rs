@@ -1,17 +1,8 @@
 //! The one shape of configuration read this app makes:
 //! `git config -z --get-regexp <pattern>`, and the records it answers with.
 //!
-//! Seven callers ask git for a group of keys this way — the identity and
-//! its signing keys, the remotes, what a branch tracks, `core.autocrlf`,
-//! the merge tools someone wrote a command for, the identity one
-//! repository sets for itself, and the line-ending setting one file sets
-//! for itself. What they do with the answer differs; how it is asked for
-//! and how it arrives does not.
-//!
-//! The word for **which of git's files** is here as well ([`ConfigScope`]),
-//! because a read narrowed to one of them and a write aimed at one of them
-//! are the same question asked twice — and two enums for it would be two
-//! spellings of `--global` to keep in step.
+//! [`ConfigScope`] lives here too: a narrowed read and a targeted write name
+//! the same files, and one enum keeps the flags in step.
 
 use std::borrow::Cow;
 use std::path::Path;
@@ -24,15 +15,10 @@ use crate::process::{GitCommand, GitExecutor};
 /// Reads every key matching `pattern` from the configuration as git would
 /// resolve it here, for [`parse_z_records`].
 ///
-/// **Nothing matching is an answer**: git exits 1 for it, every caller
-/// here asks about keys that are usually unset, and the empty output
-/// comes back as such. The command says so as well
-/// (`GitCommand::answers_by_code`), or the command log raises itself over
-/// every one of those answers (規約 core.md §終了コードで答える問い合わせ).
+/// Nothing matching (exit 1) is an answer: empty output.
 ///
-/// `named` is what the read is called if it does fail — that string is the
-/// one a UI error puts in front of the user, so each caller names the keys
-/// it was after.
+/// `named` is what a failure is called in the error the user sees, so each
+/// caller names the keys it was after.
 pub async fn get_regexp(
     executor: &GitExecutor,
     workdir: &Path,
@@ -43,14 +29,9 @@ pub async fn get_regexp(
     read(executor, workdir, None, pattern, named, cancel).await
 }
 
-/// The same read, narrowed to one of git's configuration files.
-///
-/// A door of its own, because the two answer different questions and
-/// every caller knows which one it came for. [`get_regexp`] cannot
-/// answer this one at all: a key set in two places arrives twice with
-/// no word for which file either record came out of, so a value that
-/// is only inherited reads there exactly like one the named file wrote
-/// down.
+/// The same read, narrowed to one of git's configuration files — the only
+/// way to tell a value that file wrote from an inherited one
+/// ([`get_regexp`] does not say which file a record came from).
 pub async fn get_regexp_at(
     executor: &GitExecutor,
     workdir: &Path,
@@ -65,20 +46,17 @@ pub async fn get_regexp_at(
 /// Which of git's configuration files a value is written to, and which one
 /// a narrowed read is answered from.
 ///
-/// `Local` and `Global` only — everything this app writes belongs to the
-/// person, and a level nobody can write is a level the screen cannot
-/// offer to give back.
+/// `Local` and `Global` only — the screen offers only levels the person
+/// can write.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigScope {
     /// This repository only.
     Local,
-    /// The user's global configuration — the right default for a first-run
-    /// prompt, since the answer is about the person.
+    /// The user's global configuration (the first-run prompt's default).
     Global,
 }
 
 impl ConfigScope {
-    /// The flag that names this file to `git config`.
     pub(crate) fn flag(self) -> &'static str {
         match self {
             Self::Local => "--local",
@@ -116,13 +94,9 @@ async fn read(
     }
 }
 
-/// `name` escaped to match itself inside a `--get-regexp` pattern.
-///
-/// The pattern is a POSIX ERE (the remotes read relies on `(url|pushurl)`
-/// grouping), and a branch name may hold characters it gives meaning to —
-/// `.` in any dotted name, `+`, braces. measured 2.55: asking for
-/// `branch.wip.v2+x.pushremote` unescaped answers with
-/// `branch.wipAv22x.pushremote`, another branch's mark.
+/// `name` escaped to match itself inside a `--get-regexp` pattern (a POSIX
+/// ERE): unescaped, `branch.wip.v2+x.pushremote` also matches another
+/// branch's `branch.wipAv22x.pushremote`.
 pub(crate) fn regexp_literal(name: &str) -> String {
     let mut out = String::with_capacity(name.len());
     for c in name.chars() {
@@ -137,14 +111,10 @@ pub(crate) fn regexp_literal(name: &str) -> String {
     out
 }
 
-/// The records of a `-z` read, in the order git printed them.
-///
-/// **That order is part of the answer.** git prints what every
-/// configuration level has to say, lowest level first, so a key set in more
-/// than one place arrives more than once and the *last* record is the
-/// effective value — which is why nothing here deduplicates or stops at a
-/// first match (`eol::attrs::normalises` documents what reading the first
-/// one does to Windows).
+/// The records of a `-z` read, in the order git printed them: lowest level
+/// first, so for a key set in several places the *last* record is the
+/// effective one. Nothing here deduplicates or stops at a first match
+/// (`eol::setting::effective` says what reading the first does on Windows).
 pub fn parse_z_records(bytes: &[u8]) -> impl Iterator<Item = ConfigRecord<'_>> {
     bytes
         .split(|b| *b == 0)
@@ -154,17 +124,14 @@ pub fn parse_z_records(bytes: &[u8]) -> impl Iterator<Item = ConfigRecord<'_>> {
         })
 }
 
-/// One `key\nvalue` record.
-///
-/// `-z` puts the separating newline *inside* the record, so a value holding
-/// newlines of its own cannot be mistaken for the next key.
+/// One `key\nvalue` record; only the first newline separates.
 pub struct ConfigRecord<'a> {
     text: Cow<'a, str>,
 }
 
 impl ConfigRecord<'_> {
-    /// The key, as git spells it — `--get-regexp` lower-cases it, so
-    /// `tag.gpgSign` arrives as `tag.gpgsign`.
+    /// The key, lower-cased by `--get-regexp` (`tag.gpgSign` arrives as
+    /// `tag.gpgsign`).
     pub fn key(&self) -> &str {
         match self.text.split_once('\n') {
             Some((key, _)) => key,
@@ -172,13 +139,9 @@ impl ConfigRecord<'_> {
         }
     }
 
-    /// The value, or `None` for a key written without one (a bare
-    /// `gpgsign` under `[commit]`), which git spells as a record with no
-    /// newline in it at all.
-    ///
-    /// What that absence means belongs to the caller: to git's boolean keys
-    /// it reads as true, and to a key that wanted a string there is nothing
-    /// there to take.
+    /// The value, or `None` for a key written without one (a bare `gpgsign`
+    /// under `[commit]`; git's boolean keys read it as true — the caller
+    /// decides).
     pub fn value(&self) -> Option<&str> {
         self.text.split_once('\n').map(|(_, value)| value)
     }
@@ -254,8 +217,6 @@ mod tests {
         assert!(split(b"").is_empty());
     }
 
-    /// Every ERE metacharacter a ref name can carry, spelled literally.
-    /// Names that carry none pass through untouched.
     #[test]
     fn a_regexp_literal_spells_a_name_as_itself() {
         assert_eq!(regexp_literal("wip.v2+x"), r"wip\.v2\+x");

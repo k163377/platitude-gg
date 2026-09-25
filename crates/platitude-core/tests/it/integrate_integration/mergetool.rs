@@ -17,13 +17,10 @@ async fn stopped_merge() -> TestRepo {
     repo
 }
 
-/// `--gui` decides which config key git reads, so the two keys name
-/// different tools and whichever runs writes its own mark into the file.
-///
-/// The listing is the other half: `mergetool.writeToTemp` defaults to
-/// false, which puts `_LOCAL_` / `_REMOTE_` / `_BASE_` / `_BACKUP_` beside
-/// the conflicted file for as long as the tool is open — every one of them
-/// untracked, and every one of them in the pane.
+/// The two keys name different tools, so the mark in the file says which
+/// key `--gui` reached. `mergetool.writeToTemp` defaults to false, which
+/// puts `_LOCAL_` / `_REMOTE_` / `_BASE_` / `_BACKUP_` beside the file,
+/// untracked and in the pane, while the tool is open.
 #[tokio::test]
 async fn mergetool_launches_the_gui_tool_and_keeps_its_scratch_out_of_the_tree() {
     let mut repo = stopped_merge().await;
@@ -31,8 +28,7 @@ async fn mergetool_launches_the_gui_tool_and_keeps_its_scratch_out_of_the_tree()
         let key = format!("mergetool.{name}.cmd");
         let cmd = format!("ls > listing.txt; printf {mark} > \"$MERGED\"");
         repo.git(&["config", &key, &cmd]);
-        // git only trusts a user-defined tool's exit code when told to.
-        // Left off, it compares mtimes instead — pinned separately below.
+        // Left off, git compares mtimes instead of the exit code (`periodic`).
         let trust = format!("mergetool.{name}.trustExitCode");
         repo.git(&["config", &trust, "true"]);
     }
@@ -72,8 +68,8 @@ async fn mergetool_refuses_when_no_tool_is_configured() {
         .expect_err("nothing to launch");
     assert!(err.to_string().contains("merge.guitool"), "{err}");
 
-    // Nothing ran: git would otherwise have guessed a tool and then asked
-    // on a stdin that is closed, reporting the file as failed.
+    // Nothing ran: git would have guessed a tool, asked on the closed
+    // stdin, and failed the file.
     let f = std::fs::read_to_string(repo.path.join("f.txt")).unwrap();
     assert!(f.contains("<<<<<<<"), "{f}");
     assert!(!repo.path.join("listing.txt").exists());
@@ -93,8 +89,8 @@ async fn user_defined_tools_come_from_their_keys() {
 
     repo.git(&["config", "mergetool.alpha.cmd", "true"]);
     repo.git(&["config", "mergetool.beta.cmd", "true"]);
-    // Neither of these names a tool: one is another setting on a tool that
-    // has no `cmd`, the other is git's own choice of which to launch.
+    // Neither names a tool: one is a non-`cmd` key on `alpha`, the other is
+    // git's own choice of which to launch.
     repo.git(&["config", "mergetool.alpha.trustExitCode", "true"]);
     repo.git(&["config", "merge.guitool", "alpha"]);
 
@@ -105,8 +101,6 @@ async fn user_defined_tools_come_from_their_keys() {
     assert_eq!(names, vec!["alpha".to_string(), "beta".to_string()]);
 }
 
-/// What the settings card writes lands on `merge.guitool`, and an empty
-/// field takes the key back out.
 #[tokio::test]
 async fn setting_the_tool_writes_the_gui_key_and_an_empty_one_clears_it() {
     let repo = TestRepo::init();
@@ -138,11 +132,8 @@ async fn setting_the_tool_writes_the_gui_key_and_an_empty_one_clears_it() {
     );
 }
 
-/// Clearing a tool nothing had set is the outcome that was asked for:
-/// `git config --unset` says "there was nothing to unset" with exit 5.
-/// Unmarked, that code is a failed row and the command panel opens
-/// itself over it — which is what closing the settings card did on a
-/// machine with no merge tool configured.
+/// `git config --unset` exits 5 when there was nothing to unset; unmarked,
+/// that is a failed row and the command panel opens over the settings card.
 #[tokio::test]
 async fn clearing_a_tool_that_was_never_set_answers_by_code() {
     let repo = TestRepo::init();
@@ -155,20 +146,13 @@ async fn clearing_a_tool_that_was_never_set_answers_by_code() {
     assert_eq!(log.ends_of(&["--unset"]), vec![CommandEnd::Answered(5)]);
 }
 
-/// **What the pre-merge run leaves out**: this machine's own answer, and git's
-/// own check on a tool that saved nothing — the launch it follows is the
-/// same command line the pre-merge launch test runs. Run by the full gate
-/// (`-- --ignored ::periodic::`) rather than by every change.
+/// This machine's tools, and git's own check on a tool that saved nothing
+/// after the launch the test above runs (rules-refs/core.md `periodic`).
 mod periodic {
     use super::*;
 
-    /// Closing the editor without saving comes back as a failed file, and
-    /// the markers are put back.
-    ///
-    /// git touches a backup before running an untrusted tool and compares
-    /// mtimes afterwards; a file that did not move makes it ask on stdin
-    /// whether the merge worked. stdin is closed here, so the question is
-    /// answered by failing. The wording reaches the person, so it is pinned.
+    /// For an untrusted tool git compares mtimes; an unmoved file makes it
+    /// ask on stdin, closed here, so the file fails and keeps its markers.
     #[tokio::test]
     #[ignore = "git's own mtime check on an untrusted tool: not worth the pre-merge run"]
     async fn a_tool_that_saves_nothing_fails_and_leaves_the_markers() {
@@ -185,16 +169,12 @@ mod periodic {
         assert!(f.contains("<<<<<<<"), "the conflict is still there: {f}");
     }
 
-    /// `--tool-help` sources every tool definition twice and probes the
-    /// registry for each. The parsing it feeds is covered by unit tests
-    /// against captured output; this only checks that the command still
-    /// answers in the shape they assume.
+    /// The parsing is unit-tested on captured output; this checks that the
+    /// real `--tool-help` still answers in that shape.
     #[tokio::test]
     #[ignore = "this machine's merge tools: seconds on Windows, not worth the pre-merge run"]
     #[mry::lock(conflict::available_tools)]
     async fn available_tools_never_offers_one_that_needs_a_terminal() {
-        // Held and told to call through, so no pre-merge test's machine can
-        // stand in for this one.
         conflict::mock_available_tools().calls_real_impl();
         let repo = TestRepo::init();
         let (exec, cancel) = env();

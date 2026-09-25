@@ -1,35 +1,19 @@
-//! The rename git does not have.
-//!
-//! There is no `git stash rename`, so the label a list shows is changed
-//! out of what git does have: `commit-tree` writes the entry's commit
-//! again with new text, `stash store` puts that on the reflog, and the
-//! entry it replaces is dropped. The order is what makes three commands
-//! look like one operation from outside — and what decides which of them
-//! is safe to have run alone if the next one does not.
+//! The stash rename git does not have: `commit-tree`, `stash store`, then
+//! drop the old entry. The order decides which step is safe to have run
+//! alone if the next one fails.
 
 use super::*;
 
-/// Renames a stash entry: the label the list shows.
+/// Renames a stash entry: the label the list shows. git has none, so the
+/// entry's commit is rewritten with the new message and nothing else
+/// (same tree, parents, identities and dates), which keeps the list and
+/// the commit saying the same thing. The entry moves to the top of the
+/// list (a reflog only grows at the front) and its commit id changes
+/// (nothing but the reflog points at a stash).
 ///
-/// git has no rename for one, so this is built from what it does
-/// have. The entry's commit is written again with the new message
-/// and nothing else changed (same tree, same parents, same
-/// identities and dates — `commit-tree` only replaces the text),
-/// `stash store` puts that on the reflog, and the old entry is
-/// dropped. Rewriting the commit is what keeps the two places a
-/// stash's message is read — the list and the commit itself —
-/// saying the same thing.
-///
-/// Two consequences to know about:
-/// - **the entry moves to the top of the list.** The list is a reflog, and
-///   a reflog only grows at the front; there is no writing into the middle
-///   of one.
-/// - **its commit id changes.** Nothing but the reflog points at a stash,
-///   so nothing is left dangling.
-///
-/// The old entry is dropped last and only after its identity is confirmed
-/// at the position the store pushed it to: a rename that ends up keeping
-/// both entries is a mess, but losing the work is worse.
+/// The old entry is dropped last, only after its oid is confirmed at the
+/// shifted position: keeping both entries is a mess, losing the work is
+/// worse.
 pub async fn rename(
     executor: &GitExecutor,
     workdir: &Path,
@@ -62,8 +46,7 @@ pub async fn rename(
             message: "git wrote no commit for the renamed stash".to_string(),
         });
     }
-    // The commit stands alone: `stash store` takes one commit and no
-    // pathspec; no separator in its usage.
+    // No separator: `stash store` takes one commit and no pathspec.
     let store = GitCommand::new()
         .cwd(workdir)
         .args(["stash", "store", "-m", message, &stored]);
@@ -82,9 +65,8 @@ pub async fn rename(
         .args(["rev-parse", "--verify", "--quiet", &shifted]);
     let found = executor.run_unchecked(at, cancel).await?;
     if found.stdout_utf8().trim() != entry.oid {
-        // A rename that got as far as the new entry and no further: the
-        // list moved under it, so which entry to take away is exactly what
-        // could not be worked out (デザイン規約 §答えの要らない報せ / §状態).
+        // Half done: the list moved, so which entry to drop cannot be
+        // worked out (デザイン規約 §答えの要らない報せ / §状態).
         return Err(crate::report::half_renamed(
             selector,
             GitError::UnexpectedOutput {
@@ -96,15 +78,13 @@ pub async fn rename(
     run_selector(executor, workdir, "drop", &shifted, cancel).await
 }
 
-/// `stash@{n}` → `stash@{n+1}`, which is where an entry stands once a new
-/// one has been pushed in front of it.
+/// `stash@{n}` → `stash@{n+1}`.
 fn shift_selector(selector: &str) -> Option<String> {
     let (head, index) = selector.rsplit_once("@{")?;
     let index = index.strip_suffix('}')?.parse::<u32>().ok()?;
     Some(format!("{head}@{{{}}}", index + 1))
 }
 
-/// One stash entry's commit, in the pieces a rewrite needs.
 struct StashCommit {
     oid: String,
     tree: String,

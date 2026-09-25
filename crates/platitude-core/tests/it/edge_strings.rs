@@ -1,13 +1,9 @@
 //! The longest strings git will hand over, with Japanese in all of them,
 //! carried end to end through the readers the UI feeds on. The short end
-//! (the table's last row) needs no walk: no parser has a minimum, and
-//! `parse::log`'s unit tests hold the empty subject and the empty address.
-//! A path of kanji and spaces read back through `status` is in
-//! [`periodic`].
+//! (the table's last row) needs no walk: no parser has a minimum. git's own
+//! side is in [`periodic`].
 //!
-//! The walls, measured in throwaway repositories on both systems rather
-//! than assumed (CLAUDE.md: measure before writing the test, or the test
-//! and the code agree on the same mistake):
+//! The walls, measured on both systems:
 //!
 //! | what | wall |
 //! |---|---|
@@ -16,9 +12,9 @@
 //! | subject, body, author name, address, URL | none. git took a megabyte of each |
 //! | the short end | one character of anything, an empty subject, and an empty address — but *not* an empty author name, which git alone refuses |
 //!
-//! The ref names below stand *on* that wall and end with a multi-byte
-//! character, because that is the byte a slice cuts in half; the walls
-//! git does not have are walked with long-but-arbitrary lengths instead.
+//! The ref names below stand on that wall and end with a multi-byte
+//! character, the byte a slice cuts in half; the walls git does not have
+//! are walked with long-but-arbitrary lengths.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::expect_used)]
@@ -110,8 +106,8 @@ async fn a_ref_whose_last_character_ends_on_the_wall_comes_back_whole() {
     assert!(found(RefKind::Tag, &tag), "and so does the tag");
 }
 
-/// A subject and a body of the size somebody pastes, with the credit
-/// trailer *after* the long body — the trailer scan has to reach the end.
+/// The credit trailer comes after the long body, so the trailer scan has
+/// to reach the end.
 #[tokio::test]
 async fn a_pasted_paragraph_survives_the_walk_and_the_trailer_after_it() {
     let mut repo = TestRepo::init();
@@ -139,22 +135,16 @@ async fn a_pasted_paragraph_survives_the_walk_and_the_trailer_after_it() {
     );
 }
 
-/// **What the pre-merge run leaves out**: a path of kanji and spaces read back
-/// through `status::load`, and the empty `%s` and `%aE` git writes for a
-/// commit with no message and an author with no address. Under `-z` git
-/// hands a path over as written and the status parser takes each token
-/// whole — real `-z` bytes with spaces and non-ASCII names are parsed before every merge
-/// from the committed fixture (`status_tests::committed_status_fixture_parses`)
-/// — and the log parser reads both empty fields from bytes written by hand
-/// (`log_tests::empty_subject_is_preserved`,
-/// `log_tests::an_empty_address_is_kept_as_one`). What is left is git's, and
-/// the full gate runs it (`-- --ignored ::periodic::`) rather than every
-/// change.
+/// git's side: a path of kanji and spaces through `status::load`, and the
+/// empty `%s` / `%aE`. Our parsers read those from the committed `-z`
+/// fixture (`status_tests::committed_status_fixture_parses`) and from
+/// hand-written bytes (`log_tests::empty_subject_is_preserved`,
+/// `log_tests::an_empty_address_is_kept_as_one`) before every merge, so
+/// the full gate runs these (`-- --ignored ::periodic::`), not every change.
 mod periodic {
     use super::*;
 
-    /// Kanji, a space and four levels of nesting in one path — the shapes a
-    /// status parser splits on.
+    /// Kanji, spaces and nesting: the shapes a status parser splits on.
     #[tokio::test]
     #[ignore = "duplicates committed_status_fixture_parses: not worth the pre-merge run"]
     async fn a_path_of_kanji_and_spaces_comes_back_as_it_was_written() {
@@ -175,8 +165,7 @@ mod periodic {
         assert!(paths.contains(&spaced), "untracked spaced path: {paths:?}");
     }
 
-    /// git takes `--allow-empty-message` and reads the subject back as the
-    /// empty string. Nothing downstream may treat that as "no commit".
+    /// Nothing downstream may treat the empty subject as "no commit".
     #[tokio::test]
     #[ignore = "the empty %s git writes for an empty message: not worth the pre-merge run"]
     async fn a_commit_with_no_message_at_all_reads_back_empty() {
@@ -190,8 +179,6 @@ mod periodic {
         assert!(commits[0].time > 0, "and the commit is otherwise ordinary");
     }
 
-    /// git refuses only an empty author *name*; an empty address is a commit
-    /// it will happily make, and `%aE` comes back as nothing at all.
     #[tokio::test]
     #[ignore = "the empty %aE git writes for an address nobody gave: not worth the pre-merge run"]
     async fn an_author_may_be_a_paragraph_and_an_address_may_be_nothing() {

@@ -108,37 +108,25 @@ pub fn render_todo(lines: &[TodoLine]) -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MergedTodo {
     pub text: String,
-    /// git's lines that were dropped, for the helper to name on stderr —
-    /// where git shows what its editor said.
+    /// git's lines that were dropped, for the helper to name on stderr
+    /// (where git shows what its editor said).
     pub orphaned: Vec<String>,
 }
 
 /// The plan, with the lines git wrote into its own todo carried over.
 ///
-/// **git decides which refs follow a rewrite, and this keeps its answer.**
-/// Under `--update-refs` git writes an `update-ref <ref>` line after the
-/// commit each local branch inside the range stands on — and writes none
-/// for a tag, none for a branch outside the range, and **none for a branch
-/// another working copy has checked out**, which it says so about in a
-/// comment instead (measured, 2.51: `# Ref refs/heads/held checked out at
-/// '<path>'`). Replacing the file wholesale threw all of that away, so the
-/// flag was passed and nothing followed; working the set out again here
-/// would be a second implementation of a rule git already applies, and the
-/// two would disagree exactly where it matters (P3-確認事項 §A).
-///
-/// So the plan's own command lines are what is written, and every other
-/// line git put in travels with the commit it came after: a step that was
-/// moved takes its ref with it, which is what a hand editing the file
-/// would leave behind. Comments go — git reads none of them.
+/// git decides which refs follow a rewrite (`update-ref` lines under
+/// `--update-refs`); working the set out again here would disagree with it
+/// exactly where it matters (rules-refs/core.md「helper は git の todo を書き換える」).
+/// So the plan's command lines are written and every other git line
+/// travels with the commit it came after — a moved step takes its ref with
+/// it. Comments go.
 ///
 /// Matched on the id, which git abbreviates and the plan spells whole.
 ///
-/// **Both files are walked once.** The plan is as long as the range, and
-/// the range can be the whole history: a scan of git's lines per plan line
-/// is quadratic, and so is closing the gap a taken line leaves behind —
-/// seconds against milliseconds by the tens of thousands of rows, and
-/// worst where the plan moved rows furthest (ci/baseline の
-/// code-costs-windows-x64.md §todo の突き合わせ).
+/// Both files are walked once: the range can be the whole history, and a
+/// per-line scan is quadratic (ci/baseline の code-costs-windows-x64.md
+/// §todo の突き合わせ).
 pub fn merge_todo(plan: &str, generated: &str) -> MergedTodo {
     let mut trailers = Trailers::default();
     for line in generated.lines() {
@@ -181,12 +169,9 @@ pub fn merge_todo(plan: &str, generated: &str) -> MergedTodo {
 }
 
 /// git's own lines, kept under the commit each followed and looked up by
-/// the whole id the plan spells.
-///
-/// **git abbreviates to one length per file**, so the index is on that
-/// length and the lookup is a hash of the plan id's first `len` bytes. A
-/// file that somehow carried two lengths is answered from the earliest
-/// line that matches, which is the order a scan would have found.
+/// the plan's whole id. git abbreviates to one length per file, so a lookup
+/// hashes the plan id's first `len` bytes; with several lengths the
+/// earliest matching line wins, as a scan would.
 #[derive(Default)]
 struct Trailers {
     /// One entry per command line git wrote, in file order; `None` once
@@ -226,8 +211,7 @@ impl Trailers {
         self.held.get_mut(*at)?.take()
     }
 
-    /// What the plan had no line for: a commit git wrote a ref after and
-    /// the plan does not carry, which is a range that moved under it.
+    /// What the plan had no line for — a range that moved under it.
     fn left_over(self) -> Vec<String> {
         self.held.into_iter().flatten().flatten().collect()
     }
@@ -258,10 +242,8 @@ fn command_oid(line: &str) -> Option<&str> {
     (!oid.is_empty()).then_some(oid)
 }
 
-/// Parses a todo file (git's own, or one we wrote). Comments, blank lines
-/// and commands this application does not model are skipped. Production
-/// only writes todos (render_todo → apply_plan), so the read half exists
-/// for the tests that pin the format.
+/// Parses a todo file, skipping comments, blank lines and commands this
+/// application does not model. Test-only: production only writes todos.
 #[cfg(test)]
 pub fn parse_todo(text: &str) -> Vec<TodoLine> {
     let mut out = Vec::new();

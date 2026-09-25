@@ -20,7 +20,6 @@ pub struct FileChange {
 #[error("malformed --name-status -z output near `{0}`")]
 pub struct NameStatusParseError(pub String);
 
-/// Parses `--name-status -z` byte output.
 pub fn parse_name_status(bytes: &[u8]) -> Result<Vec<FileChange>, NameStatusParseError> {
     let mut out = Vec::new();
     let mut tokens = bytes

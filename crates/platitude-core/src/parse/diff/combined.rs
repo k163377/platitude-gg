@@ -1,18 +1,18 @@
-//! One content line of a combined hunk: one marker column per
-//! parent, then the text (column semantics: the module note).
+//! Content lines of a combined hunk and their marker columns (column
+//! semantics: the `diff` module note).
 
 use super::{DiffHunk, DiffLine, DiffLineKind};
 
 /// One content line of a combined hunk: `parent_no.len()` marker columns
-/// followed by the text (column semantics: the module note).
+/// followed by the text.
 pub(super) fn read_combined_line(
     h: &mut DiffHunk,
     line: &str,
     parent_no: &mut [u32],
     new_no: &mut u32,
 ) {
-    // git never prints the no-newline note in this form (measured), but
-    // reading one costs nothing and losing the line would cost a row.
+    // git never prints the no-newline note in this form, but reading one
+    // costs nothing.
     if line.starts_with('\\') {
         h.lines.push(DiffLine {
             kind: DiffLineKind::NoNewline,
@@ -24,9 +24,7 @@ pub(super) fn read_combined_line(
         return;
     }
     let n = parent_no.len();
-    // Short lines are tolerated the way the unified reader tolerates an
-    // empty context line: the missing columns are the spaces some tool
-    // trimmed off the end.
+    // A short line's missing columns are spaces some tool trimmed off.
     let bytes = line.as_bytes();
     let markers: String = (0..n)
         .map(|i| bytes.get(i).map_or(' ', |b| *b as char))
@@ -75,11 +73,9 @@ pub(super) fn read_combined_line(
 /// Which side of a conflicted (two-parent) diff a row's marker columns
 /// name: `"ours"` / `"theirs"`, or `""` for a line both sides have, a
 /// line neither has (a fence git wrote, or one typed while resolving),
-/// and markers too short to say — a single-parent diff has none at all.
+/// and markers too short to say (a single-parent diff has none).
 ///
-/// The same reading [`read_combined_line`] gives the columns: on a
-/// removed line the side that has it is the one marked `-`; on a line
-/// that survived it is the one that is *not* marked `+`.
+/// Reads the columns the way [`read_combined_line`] does.
 pub fn side_of_markers(markers: &str) -> &'static str {
     let bytes = markers.as_bytes();
     let (Some(&ours), Some(&theirs)) = (bytes.first(), bytes.get(1)) else {
@@ -99,10 +95,8 @@ mod tests {
     use super::super::testkit::PATCH;
     use super::*;
 
-    // The constants below are real git output, taken off git 2.55 in
-    // throwaway repositories (probe scripts, observed) — from `git
-    // diff` unless a constant says otherwise, and trimmed where only the
-    // shape matters.
+    // The patches below are real `git diff` output (2.55), trimmed where
+    // only the shape matters.
 
     /// A `UU` conflict left as git wrote it: markers in the file, two
     /// parents, and one hunk that also carries a change neither side
@@ -125,10 +119,10 @@ index 804ce7b,ba44bb1..0000000
 + FIVE-theirs
 ";
 
-    /// The four marker shapes a resolved and an unresolved conflict put
-    /// on screen (measured, git 2.55): `- ` ours / ` -` theirs on a
-    /// resolved file, `+ ` / ` +` while the markers are still in the
-    /// tree, `--` both, `++` a line typed while resolving.
+    /// The marker shapes a resolved and an unresolved conflict put on
+    /// screen: `- ` ours / ` -` theirs on a resolved file, `+ ` / ` +`
+    /// while the markers are still in the tree, `--` both, `++` a line
+    /// typed while resolving.
     #[test]
     fn a_side_is_read_off_the_marker_columns() {
         assert_eq!(side_of_markers("- "), "ours");
@@ -138,7 +132,6 @@ index 804ce7b,ba44bb1..0000000
         assert_eq!(side_of_markers("--"), "");
         assert_eq!(side_of_markers("++"), "");
         assert_eq!(side_of_markers("  "), "");
-        // A single-parent diff has no marker columns at all.
         assert_eq!(side_of_markers(""), "");
         assert_eq!(side_of_markers("-"), "");
     }
@@ -161,8 +154,6 @@ index 804ce7b,ba44bb1..0000000
 
     #[test]
     fn combined_lines_are_coloured_the_way_git_colours_them() {
-        // Measured with `color.ui=always`: any `+` column makes the line
-        // an addition, any `-` a deletion, all-spaces context.
         let h = &parse_patch(CONFLICTED.as_bytes())[0].hunks[0];
         let seen: Vec<(&str, DiffLineKind)> = h
             .lines
@@ -212,8 +203,8 @@ index 804ce7b,ba44bb1..0000000
 
     #[test]
     fn a_line_both_parents_lost_is_still_one_deletion() {
-        // `--one`: both sides had it and the result does not. Emptying a
-        // conflicted file is the shortest way to produce one.
+        // `--one`: both sides had it and the result does not (an emptied
+        // conflicted file).
         let patch = "\
 diff --cc n.txt
 index 3e0f775,b81406d..0000000
@@ -269,9 +260,8 @@ Binary files differ
 
     #[test]
     fn an_unmerged_path_with_no_patch_is_still_a_file() {
-        // Deleted on one side: there is no second blob to compare, so git
-        // says only this. It arrives among ordinary patches and the
-        // one that follows survives it.
+        // Deleted on one side: git says only this, among ordinary patches,
+        // and the one that follows has to survive it.
         let patch = "\
 diff --cc add.txt
 --- a/add.txt
@@ -303,10 +293,8 @@ diff --git a/plain.txt b/plain.txt
     #[test]
     fn a_conflicted_file_that_matches_one_side_has_a_header_and_no_hunks() {
         // `--cc` prints only the hunks that differ from *every* parent, so
-        // resolving by taking one side wholesale empties the patch while
-        // the path stays unmerged. The file entry still has to exist —
-        // it is what says there is nothing left to
-        // decide.
+        // taking one side wholesale empties the patch while the path stays
+        // unmerged; the file entry still has to exist.
         let patch = "\
 diff --cc code.rs
 index 211b973,f7fe72f..0000000
@@ -331,9 +319,8 @@ index 211b973,f7fe72f..0000000
 
     #[test]
     fn three_parents_are_read_as_three_columns() {
-        // Not reachable from a conflicted working tree — git refuses to
-        // stop an octopus merge in one (measured) — but `diff-tree -c` on
-        // an octopus commit prints this, and the shape is the same one.
+        // Not from a conflicted tree (git will not stop an octopus merge),
+        // but `diff-tree -c` on an octopus commit prints this shape.
         let patch = "\
 diff --combined f.txt
 @@@@ -1,1 -1,1 -1,1 +1,2 @@@@

@@ -4,8 +4,6 @@ use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::publish;
 
-// --- published-history warning ------------------------------------------
-
 #[tokio::test]
 async fn publish_state_distinguishes_pushed_commits() {
     let mut origin = TestRepo::init();
@@ -20,7 +18,6 @@ async fn publish_state_distinguishes_pushed_commits() {
     work.commit_file("c.txt", "three\n", "local two");
     let (exec, cancel) = env();
 
-    // Nothing pushed yet: the whole range is local.
     let state = publish::state_of(&exec, &work.path, "origin/main..HEAD", &cancel)
         .await
         .expect("state");
@@ -30,8 +27,6 @@ async fn publish_state_distinguishes_pushed_commits() {
     work.git(&["push", "origin", "main"]);
     work.commit_file("d.txt", "four\n", "local three");
 
-    // One commit past the remote; rewriting the last three touches two
-    // commits the remote already has.
     let state = publish::state_of(&exec, &work.path, "HEAD~3..HEAD", &cancel)
         .await
         .expect("state");
@@ -40,7 +35,6 @@ async fn publish_state_distinguishes_pushed_commits() {
     assert_eq!(state.published(), 2);
     assert!(state.rewrites_published());
 
-    // Amending the tip alone is safe; amending its parent is not.
     let tip = publish::state_of(&exec, &work.path, &publish::only("HEAD"), &cancel)
         .await
         .expect("state");
@@ -51,11 +45,8 @@ async fn publish_state_distinguishes_pushed_commits() {
     assert!(parent.rewrites_published());
 }
 
-/// **What the pre-merge run leaves out**: the same two counts over a
-/// repository with no remote at all. `state_of` asks both the same way
-/// either way, so what differs is git's answer to `--not --remotes` when
-/// there is nothing for it to name. Run by the full gate
-/// (`-- --ignored ::periodic::`) rather than by every change.
+/// With no remote `state_of` asks the same way; only git's answer to
+/// `--not --remotes` naming nothing differs (rules-refs/core.md `periodic`).
 mod periodic {
     use super::*;
 

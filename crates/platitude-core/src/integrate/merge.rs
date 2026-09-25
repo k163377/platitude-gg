@@ -22,12 +22,10 @@ pub struct MergeOptions {
 
 /// `git merge <rev>`.
 ///
-/// **The exit code cannot sort the two landings on its own.** `git merge`
-/// spends 1 on both a conflict and a name it cannot merge, keeps 128 for
-/// a `--ff-only` it must refuse and 2 for a tree whose changes would be
-/// overwritten (measured, 2.55). So the answer is asked of the repository
-/// instead: a merge left standing is a stop, and anything else that
-/// exited non-zero is the failure it looks like.
+/// Exit 1 is both a conflict and a name git cannot merge
+/// (rules-refs/core.md「`git merge` の終了コードは 1 が両義」), so a merge
+/// left standing is the stop and any other non-zero exit is the failure it
+/// looks like.
 pub async fn merge(
     executor: &GitExecutor,
     workdir: &Path,
@@ -48,10 +46,8 @@ pub async fn merge(
     if let Some(message) = &options.message {
         cmd = cmd.args(["-m", message]);
     }
-    // Exit 1 is this command answering as often as failing, so the log
-    // keeps the row without raising itself over it; whether the operation
-    // failed is settled below and reported by the write's own answer
-    // (デザイン規約 §git が言ったことを読む場所).
+    // Exit 1 is as often an answer as a failure: the log keeps the row
+    // without raising itself (デザイン規約 §git が言ったことを読む場所).
     let cmd = cmd.args(["--", rev]).answers_by_code(1);
     match executor.run(cmd, cancel).await {
         Ok(_) => Ok(Landing::Done),
@@ -65,24 +61,12 @@ pub async fn merge(
 /// The message a stopped merge is going to record, with git's own
 /// comment lines taken out. Empty where there is nothing to read.
 ///
-/// **Both ways of finishing that merge write from this same file.**
 /// `git merge --continue` and a plain `git commit` record the identical
-/// commit — same tree, same two parents, same message, and the same four
-/// hooks (`pre-commit`, `prepare-commit-msg`, `commit-msg`,
-/// `post-commit`); `post-merge` and `pre-merge-commit` belong to a merge
-/// that never stopped and fire for neither. That holds even where the
-/// resolution records nothing at all: git writes the empty merge commit
-/// either way (measured, 2.55). So the application can put this in the box
-/// the commit will be made from, and the person sees the message before
-/// it is written
-/// (デザイン規約 §進行中の操作から出る).
-///
-/// The comment lines go because the box shows what will be recorded: git
-/// strips them on the way through an editor, and this application
-/// commits with `--cleanup=whitespace` (`commit::commit`), which would
-/// not. `#` is git's own default; a repository that has moved
-/// `core.commentChar` keeps its comment lines here, where they are at
-/// least visible and can be deleted.
+/// commit from this file (rules-refs/core.md「止まった merge を `git commit`
+/// で終わらせたもの」), so the commit box can show it before it is written
+/// (デザイン規約 §進行中の操作から出る). Comment lines go because
+/// `commit::commit` uses `--cleanup=whitespace`, which keeps them; a moved
+/// `core.commentChar` leaves them in the box, where they can be deleted.
 pub async fn stopped_message(
     executor: &GitExecutor,
     workdir: &Path,
@@ -96,28 +80,21 @@ pub async fn stopped_message(
 /// Whether a merge that exited non-zero left itself standing to be
 /// finished.
 ///
-/// `--squash` is the one stop this does not see: it writes `SQUASH_MSG`
-/// and no `MERGE_HEAD` (measured, 2.55), so git leaves no operation to
-/// continue and its conflicts arrive as the failure they read as. Nothing
-/// in the application asks for one — the option is here for completeness
-/// of the command.
+/// `--squash` is not seen: it writes `SQUASH_MSG` and no `MERGE_HEAD`, so
+/// its conflicts arrive as a failure (nothing in the application asks for
+/// one).
 ///
-/// A read that fails answers "no", so the merge's own words are what
-/// reaches the screen: this is a question *about* that failure, and
-/// letting it replace the answer would report a `rev-parse` where git
-/// said why it would not merge.
+/// A read that fails answers "no", so git's reason for not merging reaches
+/// the screen instead of a `rev-parse` error.
 async fn stopped_on_a_conflict(
     executor: &GitExecutor,
     workdir: &Path,
     error: &GitError,
     cancel: &CancellationToken,
 ) -> bool {
-    // **The code is read as well as the marker.** Exit 1 is what a
-    // conflict comes back as; a merge asked for while one is *already*
-    // standing exits 128 with `MERGE_HEAD` right there (measured 2.55, both
-    // wordings — unmerged files, and a resolved index that was never
-    // committed). Asking the repository alone would call that a stop and
-    // swallow the sentence saying what is really in the way.
+    // The code is read as well as the marker: a merge asked for while one
+    // is already standing exits 128 with `MERGE_HEAD` there, and the marker
+    // alone would call that a stop and swallow git's reason.
     if !matches!(error, GitError::Failed { code: 1, .. }) {
         return false;
     }

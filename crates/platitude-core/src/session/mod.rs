@@ -1,20 +1,12 @@
 //! RepoSession: one open repository = one session (実装計画 §2).
 //!
-//! Owns all git activity for a repository: the streaming log → graph
-//! pipeline, parallel snapshot refreshes (refs / status / stash) and
-//! on-demand queries (details, diffs). Everything runs on a tokio runtime;
-//! results are pushed to the UI through a [`SessionSink`], which must be
-//! cheap and non-blocking (the app bridge posts queued invocations to the
-//! Qt main thread).
+//! Owns all git activity for a repository on a tokio runtime; results go
+//! to the UI through a [`SessionSink`].
 //!
-//! Reads run concurrently; writes go through a single queue so two commands
-//! can never touch one repository's index or refs at the same time
-//! (実装計画 §2). A queue, because order is part of the contract:
-//! "stage this, now commit" runs in that order, and independently
-//! spawned tasks racing for a mutex give no such guarantee. Every write
-//! refreshes afterwards — including a failed one, because a command that
-//! stops halfway (a conflicted merge, an interrupted rebase) has still
-//! changed the repository.
+//! Reads run concurrently; writes go through one queue, since order is
+//! part of the contract (実装計画 §2). Every write refreshes afterwards —
+//! a failed one too, since a command that stops halfway (a conflicted
+//! merge) has still changed the repository.
 //!
 //! One repository can have more than one session at a time — a tab closed
 //! mid-write outlives its page, and the tab reopened over it is a second
@@ -148,54 +140,38 @@ use crate::operation::{Lane, OperationId, OperationKind};
 const FIRST_CHUNK_ROWS: usize = 512;
 const CHUNK_ROWS: usize = 4096;
 
-/// Longest auto-fetch interval there is, in minutes: past an hour the
-/// automatic fetch has no point left. The settings input offers up to
-/// this, and [`auto_fetch_minutes`] is what everything else goes through.
+/// Longest auto-fetch interval, in minutes — past an hour the automatic
+/// fetch has no point left. Applied through [`auto_fetch_minutes`].
 pub const AUTO_FETCH_MAX_MINUTES: u32 = 60;
 
 pub const AUTO_FETCH_DEFAULT_MINUTES: u32 = 1;
 
-/// The interval that will actually run, for a number a person asked for.
-/// Zero is off; past the ceiling, the ceiling is what a larger number
-/// means — nearer to what was asked for than the default is.
-///
-/// The one place the ceiling is applied. A number typed into the settings
-/// screen and a number written into `settings.toml` by hand reach the same
-/// field, so anything either door decides on its own is a difference
-/// nothing on screen would show.
+/// The interval that will actually run for a number a person asked for:
+/// zero is off, and past the ceiling the ceiling is meant. The one place
+/// it is applied — the settings screen and a hand-edited `settings.toml`
+/// both come through here (rules-refs/core.md「上限の適用点を 1 つ持ち」).
 #[must_use]
 pub fn auto_fetch_minutes(minutes: u32) -> u32 {
     minutes.min(AUTO_FETCH_MAX_MINUTES)
 }
 
-/// Default cap on the graph window (GitKraken-like initial view). Bounds
-/// memory and stream time on 100k+ commit repositories; the UI shows the
-/// cut, and offers the next step of history, when the cap is hit.
+/// Default cap on the graph window; bounds memory and stream time on 100k+
+/// commit repositories.
 pub const DEFAULT_LOG_LIMIT: u32 = 2000;
 
-/// Fewest commits a graph can be told to open with.
-///
-/// Below this the window stops being one worth having: the step a press
-/// adds is a quarter of it ([`log_window_step`]), so a floor any lower
-/// buys a graph that has to be pressed before it says anything.
+/// Fewest commits a graph can be told to open with. The step a press adds
+/// is a quarter of it ([`log_window_step`]), so any lower buys a graph
+/// that has to be pressed before it says anything.
 pub const MIN_LOG_LIMIT: u32 = 500;
 
-/// The window that will actually open, for a number a person asked for.
-/// Below the floor, the floor is what a smaller number means — nearer to
-/// what was asked for than the default is.
+/// The window that will actually open for a number a person asked for:
+/// below the floor, the floor is meant. The one place the floor is
+/// applied, as [`auto_fetch_minutes`] is for its ceiling.
 ///
-/// The one place the floor is applied, for the reason
-/// [`auto_fetch_minutes`] is the one place its ceiling is: the settings
-/// screen and a hand-written `settings.toml` write the same field, so
-/// anything either door decided on its own would be a difference nothing
-/// on screen would show.
-///
-/// **The type is the ceiling.** What a wider window costs is the walk,
-/// and the walk is nearly flat in the count (measured on the baseline
-/// repository: mostly fixed frontier setup, milliseconds per extra
-/// thousand commits), so a number typed on purpose is one this can
-/// afford to answer. Asking for no window at all is `None`, and does
-/// not come through here.
+/// No ceiling: the walk is nearly flat in the count (mostly fixed frontier
+/// setup; ci/baseline/code-costs-windows-x64.md §git のプロセス代), so a
+/// number typed on purpose is affordable. No window at all is `None` and
+/// does not come through here.
 #[must_use]
 pub const fn log_limit(limit: u32) -> u32 {
     if limit < MIN_LOG_LIMIT {
@@ -206,17 +182,8 @@ pub const fn log_limit(limit: u32) -> u32 {
 }
 
 /// What one press of the graph's tail adds, for a window that opened at
-/// `initial` commits: a quarter of it.
-///
-/// **A fraction of the initial window** — the initial count is a
-/// setting (`settings::Defaults::initial_commits`), and the step moves
-/// with it.
-///
-/// **What a press costs is the walk's frontier setup** (measured:
-/// mostly fixed, milliseconds per extra thousand), so the step is
-/// a question of how much a reader wants at once — and a quarter
-/// of the default window is still hundreds of
-/// commits.
+/// `initial` commits: a quarter of it, so the step follows the setting
+/// (`settings::Defaults::initial_commits`).
 #[must_use]
 pub const fn log_window_step(initial: u32) -> u32 {
     if initial < 4 { 1 } else { initial / 4 }
@@ -258,48 +225,21 @@ impl FollowUp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AfterWrite {
     /// The index and the working tree, and nothing else: staging,
-    /// unstaging, discarding, cleaning. No ref moves, no stash appears or
-    /// goes, no worktree is added or removed, and what is published is
-    /// what it was — so none of those are read again.
-    ///
-    /// The saving is per press: most of the invocations a full refresh
-    /// makes could not have changed (measured — on a repository with
-    /// tens of thousands of refs, `for-each-ref` alone is the whole of
-    /// the wait).
-    ///
-    /// **What it gives up**: a write does not double as a poll for ref
-    /// moves made outside this window. Those land on the next refresh
-    /// instead — and staging is done with the graph off screen, where
-    /// there is nothing for a poll to keep current.
+    /// unstaging, discarding, cleaning — so refs, stashes and worktrees
+    /// are not read again (on a large repository the refs listing is most
+    /// of a full refresh's wait). What it gives up: the write does not
+    /// double as a poll for ref moves made outside this window.
     Tree,
-    /// Refs and nothing else: a fetch moves `refs/remotes/*` and writes
-    /// `FETCH_HEAD`, and leaves the index and the working tree exactly
-    /// where they were.
-    ///
-    /// So this one reads the refs first and the status only where they
-    /// moved. Nothing else a status reports can have changed under such a
-    /// write — the file lists, the standing operation, the merge tool,
-    /// the line-ending marks — and the one thing that can, porcelain v2's
-    /// `# branch.ab`, moves only when the upstream's remote-tracking ref
-    /// does, which is the question the refs read already answers
-    /// (`joins::refs_key`).
-    ///
-    /// The saving is per tick, on the longest read in the app: automatic
-    /// fetching runs by the minute, almost every tick brings nothing
-    /// down, and one `git status -uall` walks every tracked and every
-    /// ignored path there is — on the synthetic corpus's hundred thousand
-    /// tracked and seventy-eight thousand ignored paths that is whole
-    /// seconds, spread over the preload-index threads
+    /// Refs and nothing else (a fetch): reads the refs first and the
+    /// status only where they moved — the one status field such a write
+    /// can move, `# branch.ab`, follows the upstream's remote-tracking ref
+    /// (`joins::refs_keys`). Saves a `git status -uall`, the longest read
+    /// in the app, on almost every auto-fetch tick
     /// (ci/baseline/code-costs-windows-x64.md §git のプロセス代).
     ///
-    /// **Only for a write that touches refs alone.** The status event
-    /// carries the push marks and the merge tool beside the files, and
-    /// those are `git config` reads that `refs_key` does not answer
-    /// for: a write that edited config without moving a ref would
-    /// have its mark go unread until the next poll. A commit, a
-    /// merge, a rebase, a switch move history and the tree together,
-    /// and read them together
-    /// ([`AfterWrite::Graph`]).
+    /// Only for a write that touches refs alone: the status event also
+    /// carries the push marks and the merge tool, `git config` reads the
+    /// refs key does not see.
     Refs,
     /// Working tree / index / stash only.
     Snapshots,
@@ -328,13 +268,11 @@ pub(crate) fn relock<T>(lock: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EolMark {
     pub path: String,
-    /// The whole statement, so the row that carries the mark can say the
-    /// same sentence the diff pane would.
+    /// The whole statement, so the row says the same sentence the diff
+    /// pane would.
     pub notice: crate::eol::Notice,
-    /// The **index** side is the one with something to say. A commit
-    /// carries the index and nothing else, so this is what decides whether
-    /// committing now would take the problem with it; a file marked only on
-    /// its working-tree side is a warning about the next
-    /// `git add`.
+    /// The index side is the one with something to say — whether
+    /// committing now takes the problem with it. Marked only on the
+    /// working-tree side, it warns about the next `git add`.
     pub staged: bool,
 }

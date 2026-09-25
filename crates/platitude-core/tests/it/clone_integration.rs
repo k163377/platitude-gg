@@ -1,6 +1,5 @@
-//! `git clone`, exercised entirely offline: the far side is a `file://`
-//! URL of a second local repository (実装計画 §11.3). git's own refusals
-//! of a clone are in [`periodic`].
+//! `git clone`, offline: the far side is a `file://` URL of a local
+//! repository (実装計画 §11.3). git's own refusals are in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -41,8 +40,7 @@ async fn a_clone_lands_in_the_folder_it_was_named() {
     );
 }
 
-/// git makes the folders it is short of, so a destination the picker has
-/// never been to is still a destination.
+/// A destination the picker has never been to is still a destination.
 #[tokio::test]
 async fn the_folders_above_the_destination_are_made() {
     let mut seed = TestRepo::init();
@@ -58,18 +56,14 @@ async fn the_folders_above_the_destination_are_made() {
     assert!(into.join("a.txt").is_file());
 }
 
-/// **What the pre-merge run leaves out**: git refusing a clone — into a
-/// destination that holds anything, and from a URL nothing answers. The
-/// command is handed to the executor and its failure comes back untouched,
-/// so what these record is git's answer rather than a decision of ours.
-/// So the full gate runs them (`-- --ignored ::periodic::`) rather than
-/// every change.
+/// git refusing a clone. The failure comes back untouched, so these record
+/// git's answer, not a decision of ours — the full gate runs them
+/// (`-- --ignored ::periodic::`), not every change.
 mod periodic {
     use super::*;
 
-    /// The destination is git's to judge: git refuses one that holds
-    /// anything, and its answer is what the dialog shows
-    /// (デザイン規約 §リポジトリを取り寄せる).
+    /// The destination is git's to judge; its refusal is what the dialog
+    /// shows (デザイン規約 §リポジトリを取り寄せる).
     #[tokio::test]
     #[ignore = "git's own refusal of a taken destination: not worth the pre-merge run"]
     async fn a_destination_that_is_taken_comes_back_as_gits_own_refusal() {
@@ -93,8 +87,7 @@ mod periodic {
         }
     }
 
-    /// A URL nothing answers is the same shape of answer — the one the dialog
-    /// stays open for.
+    /// The answer the dialog stays open for.
     #[tokio::test]
     #[ignore = "git's own failure on a URL nothing answers: not worth the pre-merge run"]
     async fn a_url_that_answers_nothing_comes_back_the_same_way() {

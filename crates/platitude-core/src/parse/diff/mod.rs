@@ -1,34 +1,31 @@
 //! Diff (patch) parser: unified, and the **combined** form git prints for
 //! a path with more than one side.
 //!
-//! Produces line-classified data with old/new line numbers so the UI can
-//! render a diff without interpreting anything itself. Tolerant of
-//! multi-file patches; commands are expected to run with `--no-ext-diff`
-//! and default `a/` `b/` prefixes (the diff runners pin these).
+//! Classifies and numbers every line so the UI interprets nothing.
+//! Commands must run with `--no-ext-diff` and the default `a/` `b/`
+//! prefixes (the diff runners pin these).
 //!
 //! # Combined diffs
 //!
 //! A conflicted path has no single old side, so `git diff` compares the
-//! working tree against **every** stage at once and prints one marker
-//! column per parent (`diff --cc` / `@@@ -1,5 -1,5 +1,9 @@@`).
+//! working tree against every stage at once and prints one marker column
+//! per parent (`diff --cc` / `@@@ -1,5 -1,5 +1,9 @@@`). git 2.55, every
+//! shape in the tests:
 //!
-//! Measured against git 2.55 (the shapes below are all in the tests):
-//!
-//! - The combined form appears only where **both** stages exist (`UU` and
-//!   `AA`). With one side gone git has nothing to compare and says so in
-//!   one line — `* Unmerged path <path>` — which parses to a [`FilePatch`]
-//!   carrying [`FilePatch::unmerged`] and nothing else.
+//! - The combined form appears only where both stages exist (`UU` and
+//!   `AA`). With one side gone git says only `* Unmerged path <path>`,
+//!   which parses to a [`FilePatch`] carrying [`FilePatch::unmerged`] and
+//!   nothing else.
 //! - A column holds `-` where that parent has the line and the result does
 //!   not, `+` where the result has it and that parent does not, and a
 //!   space otherwise. A line is therefore in the result unless some column
 //!   says `-`.
-//! - git's own colouring follows from that and this parser matches it: any
-//!   `+` makes the line an addition, any `-` a deletion, all-spaces
-//!   context.
-//! - `\ No newline at end of file` is **never printed** in this form, and
-//!   a binary one says `Binary files differ` without naming either side.
-//! - A combined patch is not applyable — `git apply` refuses it — so
-//!   nothing rebuilt from these bytes can be staged piece by piece.
+//! - As in git's own colouring, any `+` makes the line an addition, any
+//!   `-` a deletion, all-spaces context.
+//! - `\ No newline at end of file` is never printed in this form, and a
+//!   binary one says `Binary files differ` without naming either side.
+//! - `git apply` refuses a combined patch, so nothing rebuilt from these
+//!   bytes can be staged piece by piece.
 
 mod combined;
 mod header;
@@ -108,15 +105,13 @@ pub struct FilePatch {
     /// lines carry [`DiffLine::markers`] and none of it can be staged
     /// (see the module note).
     pub is_combined: bool,
-    /// git named the path as unmerged and printed no patch for it: one of
-    /// the two sides does not exist, so there is nothing to compare. The
-    /// entry carries the path and nothing else.
+    /// git named the path unmerged and printed no patch (one side does not
+    /// exist); the entry carries the path and nothing else.
     pub unmerged: bool,
-    /// Which commit this patch is of, as a line to put above it — empty
-    /// for every diff that is of one thing (a commit, the index, the
-    /// tree). Filled only where several patches of the same file stand
-    /// one after another and the reader has to be told where each came
-    /// from (`DiffTarget::Choice`, デザイン規約 §複数のコミットを選ぶ).
+    /// Which commit this patch is of, as a line to put above it: filled
+    /// only where several commits' patches of a file stand one after
+    /// another (`DiffTarget::Choice`, デザイン規約 §複数のコミットを選ぶ),
+    /// empty otherwise.
     pub from_commit: String,
     pub hunks: Vec<DiffHunk>,
 }

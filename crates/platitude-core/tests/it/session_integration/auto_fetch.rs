@@ -9,22 +9,15 @@ use crate::support::session::{CaptureSink, open_unawaited, opened, write_result}
 use platitude_core::OperationKind;
 use platitude_core::session::{AutoFetchTicker, OpenFetch, SessionEvent};
 
-/// One hand-stepped tick, under the suite's backstop.
-///
-/// The tick resolves when the timer task acts on it, and a timer task that
-/// is merely starved has nothing under it at all: no event goes to the
-/// sink, so no [`crate::support::Patience`] is counting, and the binary
-/// sits there until the CI kill with nothing named. measured, one
-/// copy running beside seven of its own and a Linux container did
-/// exactly that, and what was reported was a run that never
-/// ended.
+/// One hand-stepped tick, under the suite's backstop: a starved timer task
+/// sends the sink nothing, so no [`crate::support::Patience`] is counting
+/// and the binary would sit until the CI kill with nothing named.
 async fn stepped(ticker: &AutoFetchTicker, what: &str) -> bool {
     crate::support::wait::bounded(what, ticker.tick()).await
 }
 
 /// Waits for the `nth` automatic fetch to finish and returns git's error,
-/// if any. Telling them apart is the point: only the second one can be laid
-/// at the clock's door.
+/// if any.
 async fn auto_fetch_done(sink: &CaptureSink, nth: usize) -> Option<String> {
     sink.wait_for("an automatic fetch", |evs| {
         evs.iter()
@@ -41,15 +34,10 @@ async fn auto_fetch_done(sink: &CaptureSink, nth: usize) -> Option<String> {
     .await
 }
 
-/// The auto-fetch timer runs the fetch it promises, and turns off again.
-///
-/// Both halves are read off the timer — a tick it takes, a tick it
-/// refuses once stopped: a fetch queued a moment before the stop
-/// starts whenever the write queue reaches it, which on a loaded
-/// machine is long after any margin worth waiting, so no amount of
-/// silence tells "stopped" from "slow". Every tick here is stepped by
-/// hand; that the clock brings one round on its own is the timer's
-/// unit tests' to say (`session::auto_fetch`).
+/// Both halves are read off the timer — a tick taken, a tick refused once
+/// stopped — because a fetch queued just before the stop still starts
+/// later, so silence cannot tell "stopped" from "slow". That the clock
+/// brings ticks on its own is the timer's unit tests' (`session::auto_fetch`).
 #[tokio::test(flavor = "multi_thread")]
 async fn auto_fetch_runs_on_its_interval_and_stops() {
     let mut origin = TestRepo::init();
@@ -59,8 +47,7 @@ async fn auto_fetch_runs_on_its_interval_and_stops() {
     clone.git(&["remote", "add", "origin", &url]);
 
     let (sink, session) = opened(&clone).await;
-    // An hour, so nothing but the tick below can fire this one and the
-    // fetch that follows is that tick's doing and nothing else's.
+    // An hour, so only the hand-stepped tick fires.
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
     let hourly = session.auto_fetch_ticker().expect("auto fetch is on");
     assert!(
@@ -77,8 +64,6 @@ async fn auto_fetch_runs_on_its_interval_and_stops() {
         origin.git(&["rev-parse", "main"]),
     );
 
-    // Another interval replaces the hourly timer, so a second fetch can
-    // only be the new timer's.
     session.set_auto_fetch(Some(Duration::from_secs(1800)));
     assert!(
         !stepped(&hourly, "the replaced timer's refusal").await,
@@ -103,10 +88,8 @@ async fn auto_fetch_runs_on_its_interval_and_stops() {
     session.close();
 }
 
-/// The application sets the interval from the UI thread, which is no
-/// tokio context at all: the timer's clock has to be built on the
-/// runtime. Asked the way the app asks — from a thread of its own —
-/// and read off the timer that results.
+/// The application sets the interval from the UI thread, outside any tokio
+/// context, so the timer's clock has to be built on the runtime.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_interval_is_set_from_outside_the_runtime() {
     let mut repo = TestRepo::init();
@@ -129,10 +112,8 @@ async fn the_interval_is_set_from_outside_the_runtime() {
     session.close();
 }
 
-/// Suspending stops the timer without forgetting what it was set to, so
-/// resuming needs no one to say the interval again — and a repository that
-/// never had one says so, which is how the caller tells "stopped because it
-/// kept failing" from "never fetched on its own in the first place".
+/// Suspending keeps the interval for resuming, and says whether there was a
+/// timer — how the caller tells "stopped for failing" from "never on".
 #[tokio::test(flavor = "multi_thread")]
 async fn a_suspended_timer_comes_back_on_the_interval_it_had() {
     let mut origin = TestRepo::init();
@@ -145,7 +126,6 @@ async fn a_suspended_timer_comes_back_on_the_interval_it_had() {
         !session.suspend_auto_fetch(),
         "nothing to suspend before an interval is ever set"
     );
-    // Resuming what was never on leaves it off.
     session.resume_auto_fetch();
     assert!(
         session.auto_fetch_ticker().is_none(),
@@ -184,9 +164,8 @@ async fn a_suspended_timer_comes_back_on_the_interval_it_had() {
     session.close();
 }
 
-/// A push refused for looking at an older remote is followed by a fetch,
-/// so what the remote actually holds is on screen before anything else is
-/// decided. The push itself still fails and nothing is retried.
+/// The fetch puts what the remote holds on screen before anything else is
+/// decided; the push itself still fails and is not retried.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
     let mut origin = TestRepo::init();
@@ -200,7 +179,6 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
     clone.git(&["branch", "--set-upstream-to=origin/main", "main"]);
     let known = clone.git(&["rev-parse", "origin/main"]);
 
-    // Someone else pushes while this clone is not looking.
     let mut other = TestRepo::init();
     other.git(&["remote", "add", "origin", &origin.file_url()]);
     other.git(&["fetch", "origin"]);
@@ -208,7 +186,6 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
     other.commit_file("theirs.txt", "t\n", "their work");
     other.git(&["push", "origin", "main"]);
 
-    // Ours goes its own way, still believing the remote is where it was.
     clone.commit_file("mine.txt", "m\n", "my work");
 
     let (sink, session) = opened(&clone).await;
@@ -231,10 +208,8 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
         "the refusal is reported as it stands"
     );
 
-    // A fetch that failed ends the wait: one catch-up is queued per
-    // refusal, so a broken environment leaves nothing else coming and
-    // the whole patience budget would be spent on a timeout naming
-    // the wait instead of the failure inside it.
+    // A failed fetch ends the wait: one catch-up is queued per refusal, so
+    // a broken environment would otherwise time out naming the wait.
     sink.wait_for("the fetch that answers it", |evs| {
         evs.iter()
             .any(|e| match e {
@@ -264,9 +239,7 @@ async fn a_push_refused_as_out_of_date_fetches_what_it_was_missing() {
     session.close();
 }
 
-/// Opening a repository reaches the network itself: what a tab shows
-/// a moment after it opens is what the remote holds
-/// now.
+/// What a tab shows a moment after it opens is what the remote holds now.
 #[tokio::test(flavor = "multi_thread")]
 async fn opening_a_repository_fetches_without_being_asked() {
     let mut origin = TestRepo::init();
@@ -275,8 +248,8 @@ async fn opening_a_repository_fetches_without_being_asked() {
     clone.git(&["remote", "add", "origin", &origin.file_url()]);
 
     let (sink, session) = opened(&clone).await;
-    // The interval is the permission, and the application sets it before
-    // it asks. An hour out, so nothing here can be the clock's doing.
+    // The interval is the permission, set before the ask; an hour, so the
+    // clock does nothing here.
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
     assert_eq!(session.fetch_on_open(), OpenFetch::Started);
     assert_eq!(
@@ -297,22 +270,13 @@ async fn opening_a_repository_fetches_without_being_asked() {
     session.close();
 }
 
-/// The ask can arrive before the repository is open — the application
-/// makes it the instant it has handed the session its settings, and the
-/// opening runs on the runtime — so the session keeps it until there is
-/// something to fetch into.
+/// The application asks the instant it hands the session its settings,
+/// which can be before the repository is open, so the session keeps the ask.
 ///
-/// Which of the two arrives first is the scheduler's business in the
-/// application, and this test's to settle: the single-threaded runtime
-/// polls a spawned task only once the task that spawned it awaits, so
-/// the opening cannot have run by the line below however loaded the
-/// machine is, and the ask is the one that waits. Left to the
-/// multi-threaded runtime it is a race — a busy machine fits the whole
-/// opening into the two calls after `open` — and what is under test
-/// becomes the ask that arrives second, which
-/// `opening_a_repository_fetches_without_being_asked` owns already
-/// (measured, that is how the local-only sibling below failed, in
-/// a Linux container running beside a host build).
+/// Single-threaded on purpose: a spawned task is polled only once its
+/// spawner awaits, so the opening cannot have run by the ask. On the
+/// multi-threaded runtime a busy machine fits the whole opening in first,
+/// and the test becomes `opening_a_repository_fetches_without_being_asked`.
 #[tokio::test]
 async fn an_ask_that_beats_the_opening_is_kept_for_it() {
     let mut origin = TestRepo::init();
@@ -336,8 +300,6 @@ async fn an_ask_that_beats_the_opening_is_kept_for_it() {
     session.close();
 }
 
-/// With automatic fetching off, the network is reached only on
-/// request, opening a tab included.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_opening_reaches_nothing_where_automatic_fetching_is_off() {
     let mut origin = TestRepo::init();
@@ -357,36 +319,31 @@ async fn an_opening_reaches_nothing_where_automatic_fetching_is_off() {
     session.close();
 }
 
-/// A repository with no remote is not fetched from at all.
-///
-/// Nothing there fails — `fetch --prune --all` with no remote configured
-/// exits clean (measured, git 2.55) — so what an unasked one costs is a process
-/// an interval, and a fetch button that spins while it is saying it cannot
-/// be pressed. The list this reads is the one the refs listing keeps, which
-/// is also what greys that button out, so the two cannot disagree.
+/// `fetch --prune --all` with no remote exits clean, so an unasked one
+/// would cost a process per interval and a fetch button spinning while
+/// greyed out. The list read is the refs listing's, which also greys the
+/// button, so the two cannot disagree.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_repository_with_no_remote_is_not_fetched_from() {
     let mut only = TestRepo::init();
     only.commit_file("f.txt", "0\n", "root");
 
     let (sink, session) = opened(&only).await;
-    // The refs listing reads the remote list before it publishes, so this
-    // is where the answer below stops being a matter of timing.
+    // The refs listing reads the remote list before it publishes, so past
+    // here the answer below is not a matter of timing.
     sink.opening_snapshots().await;
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
     assert_eq!(session.fetch_on_open(), OpenFetch::NoRemote);
     session.close();
 }
 
-/// The same where the ask beats the opening, which is the shape the
-/// application makes: it asks the instant it has handed the session its
-/// settings, so the answer is read by the opening.
+/// The same where the ask beats the opening — the application's shape — so
+/// the opening reads the answer.
 ///
-/// On the single-threaded runtime for the reason
-/// `an_ask_that_beats_the_opening_is_kept_for_it` gives, and here it is
-/// the whole test: an ask that arrives after the opening instead reads a
-/// remote list that has not been read yet, which is deliberately not a
-/// "no" (`known_to_have_no_remote`), and fetches.
+/// Single-threaded for the reason `an_ask_that_beats_the_opening_is_kept_for_it`
+/// gives, and here it is the whole test: an ask arriving after the opening
+/// reads a remote list not yet read, which is deliberately not a "no"
+/// (`known_to_have_no_remote`), and fetches.
 #[tokio::test]
 async fn an_ask_held_for_a_local_only_repository_fires_nothing() {
     let mut only = TestRepo::init();
@@ -399,8 +356,8 @@ async fn an_ask_held_for_a_local_only_repository_fires_nothing() {
         OpenFetch::Held,
         "the repository is not open yet, so the session keeps the ask"
     );
-    // The opening settles the ask before it publishes anything, so a fetch
-    // pressed after this point is behind whatever it queued.
+    // The opening settles the ask before it publishes, so a fetch pressed
+    // after this is behind whatever it queued.
     sink.opening_snapshots().await;
     assert_eq!(
         session.fetch_on_open(),
@@ -423,13 +380,9 @@ async fn an_ask_held_for_a_local_only_repository_fires_nothing() {
     session.close();
 }
 
-/// And the timer says the same thing every interval without queueing a
-/// write to find it out.
-///
-/// Read off the queue: the tick is answered only once it has been
-/// acted on, and the queue is first in first out, so a fetch pressed
-/// by hand afterwards can only finish behind anything that tick
-/// queued.
+/// Read off the queue: the tick is answered only once acted on and the
+/// queue is first in first out, so a fetch pressed by hand afterwards
+/// finishes behind anything that tick queued.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_timer_queues_nothing_where_there_is_no_remote() {
     let mut only = TestRepo::init();
@@ -444,8 +397,7 @@ async fn the_timer_queues_nothing_where_there_is_no_remote() {
         "the timer took the tick and stayed on"
     );
 
-    // Asked for by hand, the same fetch runs: the gate is on what
-    // nobody asked for.
+    // By hand the same fetch runs: the gate is only on what nobody asked for.
     session.fetch(None);
     assert_eq!(write_result(&sink, OperationKind::Fetch).await, None);
     assert_eq!(
@@ -462,12 +414,8 @@ async fn the_timer_queues_nothing_where_there_is_no_remote() {
     session.close();
 }
 
-/// A remote added in a terminal is picked up by the poll, and the timer
-/// starts fetching from it.
-///
-/// `git remote add` moves no ref and lands no write in here, so nothing the
-/// session watches would have noticed it; what does is the config file
-/// having been written since the list was read (`RepoSession::remotes`).
+/// `git remote add` moves no ref and lands no write here; what notices it
+/// is the config file written since the list was read (`RepoSession::remotes`).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_remote_added_outside_the_app_is_picked_up_by_a_poll() {
     let mut origin = TestRepo::init();
@@ -519,17 +467,13 @@ async fn a_remote_added_outside_the_app_is_picked_up_by_a_poll() {
     session.close();
 }
 
-/// A fetch writes `refs/remotes/*` and `FETCH_HEAD` and gets no nearer
-/// the index or the working tree, so the refresh behind it reads the refs
-/// first and asks for a status only where they moved. A tick that brings
-/// nothing down — which on a quiet repository is nearly every one — spends
-/// no `git status` at all, and that is the longest read in the app.
+/// A fetch never touches the index or the working tree, so its refresh
+/// reads a status only where refs moved: a tick that brings nothing down —
+/// nearly every one — spends no `git status`, the longest read in the app.
 ///
-/// Counted between the writes' starts: `WriteFinished` is sent before
-/// the refreshes it triggers, so it is no boundary for them. The
-/// queue is serial and does not advance until a request's refreshes
-/// have landed, so the start of the write behind one is what closes
-/// its window.
+/// Counted between the writes' starts: `WriteFinished` precedes the
+/// refreshes it triggers, and the serial queue advances only once they have
+/// landed, so the next write's start closes the window.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_fetch_that_brings_nothing_down_reads_no_status() {
     let mut origin = TestRepo::init();
@@ -538,21 +482,15 @@ async fn a_fetch_that_brings_nothing_down_reads_no_status() {
     clone.git(&["remote", "add", "origin", &origin.file_url()]);
 
     let (sink, session) = opened(&clone).await;
-    // The flight boundary: a status read is published from inside its
-    // reader, and a caller waiting behind it runs a pass of its own —
-    // that second publication would land in the window counted
-    // below.
+    // A status read publishes from inside its reader, and a caller waiting
+    // behind it runs a pass of its own that would land in the counted window.
     sink.opening_settled(&session).await;
-    // An hour, so both fetches below are the hand-stepped ticks' doing and
-    // nothing else's.
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
     let hourly = session.auto_fetch_ticker().expect("auto fetch is on");
 
-    // The first tick has `origin/main` to bring down: its refs move, so
-    // the status behind them is read.
+    // The first tick brings `origin/main` down; the second finds nothing new.
     assert!(stepped(&hourly, "the first tick").await);
     assert_eq!(auto_fetch_done(&sink, 1).await, None);
-    // The second finds the remote exactly where the first left it.
     assert!(stepped(&hourly, "the second tick").await);
     assert_eq!(auto_fetch_done(&sink, 2).await, None);
 
@@ -608,18 +546,12 @@ async fn a_fetch_that_brings_nothing_down_reads_no_status() {
     session.close();
 }
 
-/// A fetch nobody asked for stays out of the command log while it lands,
-/// and leaves its row when git says no.
+/// The panel the first failure raises has to hold the command that raised
+/// it (デザイン規約 §git が言ったことを読む場所); without the row it shows whatever
+/// the reader last did, blaming a push for a fetch that could not reach its remote.
 ///
-/// The panel that the first failure of a run raises has to hold the
-/// command that raised it (デザイン規約 §git が言ったことを読む場所). With the
-/// row missing, what a reader finds when the panel comes up is whatever
-/// they last did — which is how a push came to be blamed for a fetch that
-/// could not reach its remote (reported).
-///
-/// **Both halves in one test**: a log that keeps every unasked fetch
-/// passes the second assertion on its own, and one that keeps none passes
-/// the first.
+/// Both halves in one test: a log that keeps every unasked fetch passes the
+/// second assertion alone, and one that keeps none passes the first.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_unasked_fetch_leaves_a_row_only_when_git_says_no() {
     let mut origin = TestRepo::init();
@@ -628,7 +560,6 @@ async fn an_unasked_fetch_leaves_a_row_only_when_git_says_no() {
     clone.git(&["remote", "add", "origin", &origin.file_url()]);
 
     let (sink, session) = opened(&clone).await;
-    // An hour, so both fetches below are the hand-stepped tick's doing.
     session.set_auto_fetch(Some(Duration::from_secs(3600)));
     let hourly = session.auto_fetch_ticker().expect("auto fetch is on");
     assert!(stepped(&hourly, "the tick that reaches the remote").await);
@@ -643,7 +574,6 @@ async fn an_unasked_fetch_leaves_a_row_only_when_git_says_no() {
         "a fetch that landed is nobody's doing, and leaves no row"
     );
 
-    // The same fetch, with the remote no longer where it was.
     let gone = format!("{}-gone", origin.file_url());
     clone.git(&["remote", "set-url", "origin", &gone]);
     assert!(stepped(&hourly, "the tick that cannot reach it").await);

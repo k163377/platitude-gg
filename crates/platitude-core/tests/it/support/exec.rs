@@ -54,32 +54,25 @@ fn isolated_env() -> Vec<(OsString, OsString)> {
 /// Git executor for integration tests. The raw `GitExecutor::new()` remains
 /// available for tests that intentionally exercise the host configuration.
 ///
-/// The stock wall-clock budget is raised to the suite's overall
-/// backstop: under a loaded suite one git round trip inflates by more
-/// than an order of magnitude (`wait.rs`), so the everyday cap would
-/// decide by load — and a *wedged* git must still fail the awaiting
-/// test by name. Session waits have `Patience` under this; a test
-/// that awaits the executor directly has nothing
-/// else.
+/// The stock budget is raised to the suite's overall backstop: the
+/// everyday cap would decide by load (`wait.rs`), and a wedged git must
+/// still fail a test that awaits the executor directly, with no `Patience`.
 pub fn isolated() -> GitExecutor {
     GitExecutor::new()
         .with_stock_timeout(super::wait::OVERALL_BUDGET)
         .with_env(isolated_env())
 }
 
-/// An executor and a token nothing ever cancels — what a test that only
-/// wants to run git needs, and the cancellation path has tests of its own.
+/// An executor and a token nothing ever cancels.
 pub fn env() -> (GitExecutor, CancellationToken) {
     (isolated(), CancellationToken::new())
 }
 
 /// The same pair, reporting every invocation to `observer`.
 ///
-/// `user` marks the commands the user asked for, and it is the caller's to
-/// say because the two sides of it are different questions: a test of the
-/// command log wants the user's half, a test that a background read stays
-/// out of the log wants the other. It also decides whether the observer is
-/// asked at all — `records()` runs against this flag.
+/// `kept` is the caller's to say: a test of the command log wants
+/// `Kept::Asked`, a test that a background read stays out of the log wants
+/// another. `records()` is asked against it.
 pub fn observed_env(
     observer: Arc<dyn CommandObserver>,
     kept: Kept,
@@ -139,19 +132,16 @@ impl CommandObserver for Log {
     }
 }
 
-/// [`observed_env`] watched by a fresh [`Log`], on the user handle — what
-/// a test of the command log wants.
+/// [`observed_env`] watched by a fresh [`Log`], with `Kept::Asked`.
 pub fn logged() -> (GitExecutor, Arc<Log>, CancellationToken) {
     let log = Arc::new(Log::default());
     let (exec, cancel) = observed_env(log.clone(), Kept::Asked);
     (exec, log, cancel)
 }
 
-/// [`isolated`] with `--global` pointed at a file of the caller's own —
-/// for the reads and writes that reach outside a repository
-/// (`TestRepo::global_config` is one such file per repository). The
-/// isolation [`isolated`] gives is a single file for the whole suite, and
-/// the suite runs in parallel.
+/// [`isolated`] with `--global` pointed at a file of the caller's own
+/// (`TestRepo::global_config`), for reads and writes that reach outside a
+/// repository: [`isolated`] shares one file across the parallel suite.
 pub fn isolated_global(global_config: &Path) -> GitExecutor {
     GitExecutor::new()
         .with_stock_timeout(super::wait::OVERALL_BUDGET)
@@ -168,7 +158,7 @@ pub fn isolated_global(global_config: &Path) -> GitExecutor {
         ])
 }
 
-/// [`isolated_global`] watched by a fresh [`Log`], on the user handle.
+/// [`isolated_global`] watched by a fresh [`Log`], with `Kept::Asked`.
 pub fn logged_global(global_config: &Path) -> (GitExecutor, Arc<Log>, CancellationToken) {
     let log = Arc::new(Log::default());
     let exec = isolated_global(global_config).observed(log.clone(), Kept::Asked);
@@ -218,10 +208,8 @@ impl CommandObserver for Ends {
 
 /// The same, keeping what git *said* with each end.
 ///
-/// The only way left to read the words of a stop that is an answer: it
-/// comes back as a landing, so nothing carries git's message to the
-/// caller and the command log is where a person reads it
-/// (デザイン規約 §git が言ったことを読む場所).
+/// A stop that is an answer comes back as a landing, so the command log is
+/// the only place its words reach (デザイン規約 §git が言ったことを読む場所).
 #[derive(Default)]
 pub struct Said(pub Mutex<Vec<(CommandEnd, String)>>);
 

@@ -7,8 +7,8 @@ use tokio::io::AsyncReadExt;
 use tokio::process::Child;
 use tokio_util::sync::CancellationToken;
 
-/// Keep at most this much stderr; git error messages are short, and a
-/// runaway process is capped here.
+/// Stderr kept at most: git's messages are short, and a runaway process
+/// is capped here.
 const STDERR_CAP: usize = 256 * 1024;
 
 const STDOUT_CHUNK: usize = 64 * 1024;
@@ -19,9 +19,7 @@ pub(super) enum ChildOutcome {
     Cancelled,
 }
 
-/// Drives a spawned child: pumps stdout into `on_stdout`, accumulates capped
-/// stderr, and races completion against the timeout and the cancel token.
-/// The child is killed and reaped when either fires.
+/// The child is killed and reaped when the timeout or the token fires.
 pub(super) async fn run_child(
     child: &mut Child,
     timeout: Option<Duration>,
@@ -77,9 +75,9 @@ pub(super) async fn run_child(
         })
     };
 
-    // `biased`: prefer cancellation over a simultaneously-completed process.
-    // When one branch wins, the losing futures are dropped before the arm
-    // body runs, releasing their borrow of `child` so it can be killed.
+    // `biased`: cancellation wins over a process completing at the same
+    // time. The losing futures are dropped before the arm body runs, which
+    // releases their borrow of `child` so it can be killed.
     tokio::select! {
         biased;
         _ = cancel.cancelled() => {

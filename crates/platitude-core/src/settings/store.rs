@@ -22,8 +22,7 @@ impl Store {
     }
 
     /// [`Store::discover`] with the platform and the environment handed
-    /// over, so that what a development build does on its first run can be
-    /// watched from a test.
+    /// over, for tests.
     fn open(platform: Platform, env: &Env, build: Build) -> Self {
         let store = Self::locate(platform, env, build);
         if build.is_dev() {
@@ -37,21 +36,10 @@ impl Store {
         store
     }
 
-    /// `PGG_CONFIG_DIR` wins: a path puts both files in it, and an empty
-    /// value asks for no files at all. With it unset, a build that says it
-    /// is being driven still gets no files — otherwise a screenshot run
-    /// would write its window geometry into the developer's real settings,
-    /// and the next run would start from it.
-    ///
-    /// The build says so ([`Build::driven`]): only a binary carrying a
-    /// verification harness can be driven at all, and what ships keeps
-    /// somebody's settings whatever `PGG_*` variable is left in their
-    /// shell.
-    ///
-    /// A named directory is a named directory, whichever build is asking:
-    /// two runs sharing one `--config-dir` are how the saved layout is
-    /// tested at all, and a build that quietly went somewhere else would
-    /// answer a different question than the one asked.
+    /// `PGG_CONFIG_DIR` wins: a path puts both files in it whichever build
+    /// asks (two runs sharing one `--config-dir` are how the saved layout
+    /// is tested), and an empty value asks for no files at all. With it
+    /// unset, a driven build ([`Build::driven`]) gets no files either.
     pub fn locate(platform: Platform, env: &Env, build: Build) -> Self {
         if let Some(dir) = env.get(CONFIG_DIR_ENV) {
             if dir.is_empty() {
@@ -88,9 +76,8 @@ impl Store {
         self.state_path.as_deref()
     }
 
-    /// Where assigned pictures are kept: beside `settings.toml`, since that
-    /// is the file that indexes them. A store with no settings file has
-    /// nowhere to put them either.
+    /// Where assigned pictures are kept: beside `settings.toml`, the file
+    /// that indexes them.
     pub fn avatars_dir(&self) -> Option<PathBuf> {
         self.settings_path
             .as_deref()
@@ -103,14 +90,10 @@ impl Store {
         self.settings_path.is_none() && self.state_path.is_none()
     }
 
-    /// Starts a development build off as a copy of the real files, so that
-    /// the first run of one opens on the tabs and the layout the person
-    /// was already in.
-    ///
-    /// Once only, and only into a store that holds neither file: after that
-    /// the copy is its own, and the two go their separate ways. Nothing
-    /// here can stop the application — an empty store of one's own is a
-    /// working store.
+    /// Starts a development build off as a copy of the real files, so its
+    /// first run opens on the tabs and layout the person was in. Once
+    /// only, into a store holding neither file. A failed copy is only
+    /// logged: a store of its own, however empty, still works.
     pub fn seed_from(&self, source: &Store) {
         let (Some(settings), Some(state)) = (self.settings_path(), self.state_path()) else {
             return;
@@ -139,10 +122,8 @@ impl Store {
             }
             std::fs::copy(from, to)?;
         }
-        // The pictures the settings index sit beside them (`avatar`), and
-        // an index whose files did not come along draws rows that never
-        // fill. One level: the directory holds files named for their own
-        // bytes and nothing else.
+        // An index whose pictures did not come along draws rows that never
+        // fill. One level: the directory holds only files.
         let (Some(from), Some(to)) = (source.avatars_dir(), self.avatars_dir()) else {
             return Ok(());
         };
@@ -286,9 +267,7 @@ mod tests {
             layout: LayoutState::default(),
             tabs: TabsState {
                 tabs: vec![
-                    // Standing in a linked working copy, which is the
-                    // one shape of a tab the file cannot work out for
-                    // itself (`TabRecord::repo`).
+                    // A linked working copy (`TabRecord::repo`).
                     TabRecord {
                         path: r"C:\Users\me\platitude-gg\.claude\worktrees\c".into(),
                         repo: r"C:\Users\me\platitude-gg".into(),

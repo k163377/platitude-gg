@@ -2,8 +2,8 @@
 //! ([`Latest::begin_numbered`]).
 use super::*;
 
-// Feeds can outlive a closed/reopened session. A new session's request
-// outranks whatever an old sink carries into the same consumer.
+// Process-wide: feeds can outlive a closed/reopened session, and a new
+// session's request must outrank what an old sink carries.
 static NEXT_REQUEST: AtomicU64 = AtomicU64::new(1);
 
 /// The task has finished, including delivery to its sink.
@@ -48,13 +48,10 @@ pub enum SelectionRead {
 
 impl RepoSession {
     /// Cancels the previous right-pane read and asks what this choice of
-    /// commits changed.
+    /// commits changed. `oids` come newest first, as the graph stands.
     ///
-    /// **The same slot the one-commit read uses.** The two answer the
-    /// same pane, so a choice has to cancel a commit read and a commit
-    /// read has to cancel a choice — two slots would let the slower of
-    /// them land last and describe something nobody is pointing at.
-    /// `oids` come newest first, the order the graph stands in.
+    /// Shares the one-commit read's slot: with two, the slower could land
+    /// last and describe what nobody is pointing at.
     pub fn load_selection(
         self: &Arc<Self>,
         oids: Vec<Oid>,
@@ -88,8 +85,7 @@ impl RepoSession {
             return DetailsOutcome::Cancelled;
         }
         let result = match mode {
-            // Oldest side first: the choice arrives newest first, and a
-            // comparison is read from the older of the two.
+            // The choice is newest first; a comparison reads from the older.
             SelectionRead::Compare => match (oids.last(), oids.first()) {
                 (Some(from), Some(to)) => {
                     details::compare_files(&self.executor, workdir, from, to, cancel).await
@@ -112,9 +108,8 @@ impl RepoSession {
             Err(error) => {
                 self.sink.event(SessionEvent::DetailsFailed {
                     generation,
-                    // Named by the newest of the choice, which is what
-                    // the reader last pressed. An empty choice reads
-                    // nothing and so cannot fail.
+                    // Named by the newest of the choice, as the app names
+                    // the request; an empty choice cannot fail.
                     oid: oids.first().copied().unwrap_or_else(Oid::zero_unsized),
                     error,
                 });
@@ -166,8 +161,8 @@ impl RepoSession {
                 DetailsOutcome::Sent
             }
             Err(error) => {
-                // The error travels with the generation too. A global OpFailed
-                // here could surface an old failure after a newer selection.
+                // With the generation: a global `OpFailed` could surface an
+                // old failure after a newer selection.
                 self.sink.event(SessionEvent::DetailsFailed {
                     generation,
                     oid,

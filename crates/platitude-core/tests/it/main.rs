@@ -1,10 +1,6 @@
-//! All real-git integration tests, deliberately in one binary: `cargo test`
-//! runs test binaries one after another, so separate files would serialize
-//! on the wall clock and each would pay its own link. One binary shares a
-//! single parallel test-thread pool across the whole suite.
-//!
-//! Run a subset by name (names are prefixed with the module):
-//! `cargo test -p platitude-core --test it session_integration`
+//! All real-git integration tests, in one binary: `cargo test` runs test
+//! binaries one after another, each with its own link. The rule and the
+//! subset command are in `.claude/rules/core.md`.
 
 mod support;
 

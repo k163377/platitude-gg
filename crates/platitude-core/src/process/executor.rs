@@ -22,18 +22,14 @@ use crate::operation::OperationId;
 #[path = "tests.rs"]
 mod tests;
 
-/// Default time budget for short-lived commands — which is to say, for
-/// reads: the streaming log walks and `mergetool` (open-ended,
-/// user-paced) opt out via [`GitCommand::no_timeout`], network commands
-/// set their own, longer budget instead (`remote`), and the write
-/// queue's local lane lifts the stock budget wholesale
-/// (`operation::Lane::Local`) — a local write is waited out to
-/// completion, because killing git mid-write loses what it was writing
-/// and a local git is only ever slow in proportion to the work.
+/// Default time budget, which is to say for reads: streaming log walks and
+/// `mergetool` opt out ([`GitCommand::no_timeout`]), network commands set
+/// their own, and the write queue's local lane lifts it
+/// (`operation::Lane::Local`) — killing git mid-write loses what it was
+/// writing.
 ///
-/// **Counted from the spawn**: the time a command spends waiting
-/// for a slot is the application's, and a budget that counted it
-/// would kill a healthy git for the queue in front of it.
+/// Counted from the spawn: a budget that counted the slot wait would kill
+/// a healthy git for the queue in front of it.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[cfg(windows)]
@@ -45,29 +41,14 @@ const FIXED_ARGS: [&str; 9] = [
     "color.ui=false",
     "-c",
     "core.quotepath=false",
-    // A repo with log.showSignature=true would interleave gpg output with
-    // machine-readable --format records; force it off.
+    // log.showSignature=true would interleave gpg output with --format
+    // records.
     "-c",
     "log.showSignature=false",
-    // **A `git diff` against the work tree writes the index unless this
-    // says not to**, and `--no-optional-locks` below does not stop it:
-    // `git status` asks that flag before it locks, `git diff` never asks
-    // (measured — a stat-dirty index is rewritten by a diff carrying the
-    // flag, and left alone by one carrying this). What it takes to do so
-    // is `.git/index.lock`, the same lock a write dies on, so a
-    // poll's diff landing on a commit's own lock kills the commit
-    // (`fatal: Unable to create ... index.lock: File exists`).
-    // No answer changes: the refresh is git's own cache of "this stat
-    // matched", and a file whose stat alone moved is compared by content
-    // either way — the patch, `--name-only` and `--quiet` all say the
-    // same with it off (measured). What it costs is that cache going
-    // unmaintained, since nothing this end refreshes the index:
-    // a work tree whose stats all moved without its contents changing is
-    // re-hashed by every read — which on such a tree is most of what
-    // a `status` costs
-    // (ci/baseline/code-costs-windows-x64.md). Ordinary editing leaves a
-    // handful of such entries; a tree copied in from outside git leaves
-    // all of them.
+    // A work-tree `git diff` refreshes the index under `.git/index.lock`
+    // unless this says not to (`--no-optional-locks` does not reach
+    // diff), and a poll's diff on that lock kills a concurrent commit.
+    // No answer changes (rules-refs/core.md の `diff.autoRefreshIndex` の行).
     "-c",
     "diff.autoRefreshIndex=false",
     "--no-optional-locks",
@@ -76,20 +57,15 @@ const FIXED_ARGS: [&str; 9] = [
 /// Environment applied to every invocation.
 ///
 /// - `LC_ALL=C`: stable, locale-independent messages and sorting
-/// - `GIT_TERMINAL_PROMPT=0`: a credential prompt fails at once (auth
-///   is delegated to credential helpers)
+/// - `GIT_TERMINAL_PROMPT=0`: a credential prompt fails at once
 /// - `GIT_OPTIONAL_LOCKS=0`: belt-and-suspenders with `--no-optional-locks`
-///   — and, like it, only over the commands that ask (`diff` does not, so
-///   the index lock it would take is turned off by the argument above)
-/// - `GIT_EDITOR=true`: an accidentally editor-spawning command exits
-///   immediately. Interactive rebase leaves it in
-///   place and adds `GIT_SEQUENCE_EDITOR` on top — rewords rely on the
-///   `true` (sequencer.rs)
+///   (neither reaches `diff`; see `diff.autoRefreshIndex`)
+/// - `GIT_EDITOR=true`: an editor-spawning command exits at once
 ///
-/// Deliberately absent: `GIT_LITERAL_PATHSPECS`. It disarms pathspec magic
-/// for git's *internal* use too — with it set, `git stash push -u` reports
-/// success and silently leaves untracked files in the working tree. Paths
-/// are quoted individually with [`super::literal_pathspec`] instead.
+/// Deliberately absent: `GIT_LITERAL_PATHSPECS` — it reaches git's
+/// internal pathspecs too, and `git stash push -u` then reports success
+/// while leaving untracked files behind. Paths are wrapped with
+/// [`super::literal_pathspec`] instead.
 const FIXED_ENV: [(&str, &str); 4] = [
     ("LC_ALL", "C"),
     ("GIT_TERMINAL_PROMPT", "0"),
@@ -97,44 +73,31 @@ const FIXED_ENV: [(&str, &str); 4] = [
     ("GIT_EDITOR", "true"),
 ];
 
-/// Spawns git subprocesses. Cheap to clone; shared across sessions.
-///
-/// **Every clone waits in the same slots** ([`Slots`], shared by
-/// `Arc`): the application makes one set and hands it to the handle it
-/// spawns everything through ([`GitExecutor::scheduled`]), and every
-/// session, screen and dialog clones that handle. A bare executor caps
-/// nothing, which is what a test wants of one.
+/// Spawns git subprocesses. Cheap to clone; every clone waits in the same
+/// [`Slots`] ([`GitExecutor::scheduled`]). A bare executor caps nothing,
+/// which is what a test wants of one.
 #[derive(Clone)]
 pub struct GitExecutor {
     program: Arc<OsString>,
-    /// Environment applied to every invocation from this executor. Kept on
-    /// the executor so a test harness can isolate Git without mutating the
-    /// process-global environment; command-level values override these.
+    /// Applied to every invocation, under the command's own: a test harness
+    /// isolates git here without touching the process environment.
     env: Arc<Vec<(OsString, OsString)>>,
     observer: Option<Arc<dyn CommandObserver>>,
-    /// What the command log makes of the invocations run through this
-    /// handle. Carried here so the callers stay unaware of it: the
-    /// session hands out a different handle for each
-    /// answer.
+    /// What the command log makes of this handle's invocations. Carried on
+    /// the handle so callers stay unaware: the session hands out one per
+    /// value.
     kept: Kept,
-    /// The write the commands run through this handle belong to, for the
-    /// log to say so ([`CommandObserver::started`]). Set by the write
-    /// queue on the handle it gives a task ([`GitExecutor::under`]);
-    /// `None` on every read.
+    /// The write this handle's commands belong to, for the log
+    /// ([`GitExecutor::under`]); `None` on every read.
     operation: Option<OperationId>,
-    /// What [`TimeBudget::Stock`] resolves to. `None` lifts the stock
-    /// budget entirely — the test harness's setting, where wall time is
-    /// load-dependent and correctness lives elsewhere
-    /// ([`GitExecutor::without_stock_timeouts`]); commands that named
-    /// their own budget keep it either way.
+    /// What [`TimeBudget::Stock`] resolves to; `None` lifts it
+    /// ([`GitExecutor::without_stock_timeouts`]). Commands that named their
+    /// own budget keep it either way.
     stock_timeout: Option<Duration>,
     /// Where every spawn waits its turn ([`super::slots`]).
     slots: Arc<Slots>,
-    /// Who is waiting on the commands run through this handle — what
-    /// the slots serve first, and what they cap ([`Priority`]). Carried
-    /// on the handle for the reason `kept` is: the session hands out a
-    /// handle for the reads nobody is waiting on
-    /// ([`GitExecutor::background`]), and the callers stay unaware.
+    /// Who is waiting on this handle's commands ([`Priority`]), carried
+    /// like `kept` ([`GitExecutor::background`]).
     priority: Priority,
 }
 
@@ -165,9 +128,8 @@ impl GitExecutor {
         Self::of(super::program::default_program())
     }
 
-    /// Uses an explicit git binary (a settings path, a portable install,
-    /// the tests' stand-ins). One thing is looked behind, as for PATH: the
-    /// launcher Git for Windows installs is spawned as the git behind it
+    /// Uses an explicit git binary. As for PATH, the Git for Windows
+    /// launcher is swapped for the git behind it
     /// ([`super::program::spawnable`]); every other path is taken as given.
     pub fn with_program(program: impl Into<OsString>) -> Self {
         let named = program.into();
@@ -187,18 +149,12 @@ impl GitExecutor {
         }
     }
 
-    /// Lifts the stock time budget from every command that did not set
-    /// one of its own: those commands are then bounded by cancellation
-    /// alone. Two callers. The session's write queue puts its local lane
-    /// on this — a local write is waited out
-    /// (`operation::Lane::Local`). And test harnesses lift the
-    /// budget from their whole executor — under a loaded suite a git
-    /// round trip inflates by more than an order of magnitude
-    /// (ci/baseline/code-costs-windows-x64.md §テストとハーネス), and a
-    /// wall-clock cap that generous decides by load; the
-    /// harness arms its own failure-detection backstops
-    /// (.claude/rules/core.md). The application's reads keep the stock
-    /// budget.
+    /// Lifts the stock time budget from every command that did not set one
+    /// of its own; they are then bounded by cancellation alone. For the
+    /// write queue's local lane (`operation::Lane::Local`) and for test
+    /// harnesses, where a wall-clock cap decides by load
+    /// (ci/baseline/code-costs-windows-x64.md §テストとハーネス). The
+    /// application's reads keep the stock budget.
     pub fn without_stock_timeouts(mut self) -> Self {
         self.stock_timeout = None;
         self
@@ -206,9 +162,8 @@ impl GitExecutor {
 
     /// Replaces the stock time budget for every command that did not set
     /// one of its own. The test harness raises it to its overall failure
-    /// backstop: a wedged git then fails the awaiting test by
-    /// name, ahead of the CI
-    /// kill.
+    /// backstop: a wedged git then fails the awaiting test by name, ahead
+    /// of the CI kill.
     pub fn with_stock_timeout(mut self, budget: Duration) -> Self {
         self.stock_timeout = Some(budget);
         self
@@ -237,23 +192,18 @@ impl GitExecutor {
         self
     }
 
-    /// Runs everything through `slots` — the application's one set,
-    /// installed on the handle before it is cloned into anything, so
-    /// there is no clone that waits elsewhere. A handle that was never
-    /// given one caps nothing.
+    /// Runs everything through `slots` — install before the handle is
+    /// cloned into anything, or a clone waits elsewhere.
     #[must_use]
     pub fn scheduled(mut self, slots: Arc<Slots>) -> Self {
         self.slots = slots;
         self
     }
 
-    /// A handle whose commands nobody is waiting on: the reads a session
-    /// makes on a timer of its own, served after the interactive ones
-    /// and kept out of the click's reserve ([`Priority::Background`]).
-    /// Buffered
-    /// runs through it that ask the same question over the same tree
-    /// share one process while the first is still queued
-    /// ([`super::slots`]).
+    /// A handle for the reads nobody is waiting on (a session's timer):
+    /// served after interactive ones, outside the click's reserve
+    /// ([`Priority::Background`]). Identical buffered runs through it share
+    /// one process while the first is still queued ([`super::slots`]).
     #[must_use]
     pub fn background(mut self) -> Self {
         self.priority = Priority::Background;
@@ -265,8 +215,7 @@ impl GitExecutor {
         self.priority
     }
 
-    /// The slots this handle waits in: for the application to move the
-    /// limits and read the report.
+    /// For the application to move the limits and read the report.
     #[must_use]
     pub fn slots(&self) -> &Arc<Slots> {
         &self.slots
@@ -288,17 +237,16 @@ impl GitExecutor {
     }
 
     /// Returns a handle whose every invocation is reported as part of
-    /// `operation` — what the write queue hands the task it runs, so a
-    /// compound write's commands stand in the log under the one id its
-    /// acceptance returned.
+    /// `operation`: the write queue hands it to the task, so a compound
+    /// write's commands stand in the log under one id.
     #[must_use]
     pub fn under(mut self, operation: OperationId) -> Self {
         self.operation = Some(operation);
         self
     }
 
-    /// The command as it would have to be typed to do the same thing:
-    /// the fixed environment and configuration are part of what ran.
+    /// The command as it would have to be typed to do the same thing,
+    /// fixed environment and configuration included.
     fn describe_full(&self, cmd: &GitCommand) -> String {
         let mut s = String::new();
         for (k, v) in FIXED_ENV {
@@ -346,11 +294,8 @@ impl GitExecutor {
         Ok(out)
     }
 
-    /// Runs to completion; the caller inspects the exit code itself.
-    ///
-    /// Through a background handle, an identical command still queued
-    /// for another caller answers this one too, and no second process
-    /// is spawned ([`GitExecutor::background`]).
+    /// Runs to completion; the caller inspects the exit code itself. Shared
+    /// on a background handle ([`GitExecutor::background`]).
     pub async fn run_unchecked(
         &self,
         cmd: GitCommand,
@@ -401,11 +346,9 @@ impl GitExecutor {
         Ok(out)
     }
 
-    /// The buffered run of a background handle: lead, or follow a
-    /// leader still queued with the same command. A follower whose
-    /// leader left without an answer — cancelled, or unwound — asks
-    /// again, and leads if nobody else is queued by then; its own token
-    /// ends the wait the way it ends any other.
+    /// Lead, or follow a leader still queued with the same command. A
+    /// follower whose leader left without an answer (cancelled, unwound)
+    /// asks again, and leads if nobody else is queued by then.
     async fn run_shared(
         &self,
         cmd: &GitCommand,
@@ -460,9 +403,7 @@ impl GitExecutor {
         }
     }
 
-    /// The process command for `cmd`: program, arguments, the layered
-    /// environment (fixed, executor, per-command — later layers win), and
-    /// the platform wiring.
+    /// Environment layers: fixed, executor, per-command — later layers win.
     fn assemble(&self, cmd: &GitCommand) -> Command {
         let mut command = Command::new(self.program.as_ref());
         command.args(FIXED_ARGS);
@@ -489,15 +430,12 @@ impl GitExecutor {
         command
     }
 
-    /// One command, from the ask to the reap: the wait for a slot, the
-    /// spawn, and the child's run. The observer hears of it at the ask —
-    /// a row is owed from the moment the reader pressed, whether or not
-    /// the queue in front of it is empty — and at the end, with the wait
-    /// and the run told apart.
+    /// One command, from the ask to the reap. The observer hears of it at
+    /// the ask, not the spawn: a row is owed from the moment the reader
+    /// pressed, queue or no queue.
     ///
-    /// `lead` is the group a background run answers for: told of the
-    /// spawn as it happens, which is the instant an identical ask stops
-    /// being able to share this run.
+    /// `lead` is told of the spawn as it happens — the instant an identical
+    /// ask stops being able to share this run.
     async fn execute(
         &self,
         cmd: &GitCommand,
@@ -531,9 +469,8 @@ impl GitExecutor {
             }
         };
 
-        // The wait is the token's to end, the same as the run: a
-        // selection that moved on or a screen that closed takes its
-        // queued command with it, and nothing is spawned for it.
+        // The token ends the wait as it ends the run: nothing is spawned
+        // for a selection that moved on.
         let slot = tokio::select! {
             biased;
             () = cancel.cancelled() => None,
@@ -574,9 +511,8 @@ impl GitExecutor {
                 }
             }
         })?;
-        // What starting the process cost on its own — the part of a
-        // round trip that is the machine's and not git's, and on Windows
-        // the larger part (ci/baseline/code-costs-windows-x64.md).
+        // The spawn's own cost: on Windows most of a round trip
+        // (ci/baseline/code-costs-windows-x64.md).
         let spawned = started.elapsed();
 
         let budget = match cmd.timeout {
@@ -607,9 +543,8 @@ impl GitExecutor {
         Self::ended(cmd, described, outcome, budget, clocks, &report)
     }
 
-    /// What the child's end comes to: the log line, the observer's
-    /// report with the wait and the run told apart, and the answer or
-    /// the error.
+    /// The child's end: the log line, the observer's report, and the
+    /// answer or the error.
     fn ended(
         cmd: &GitCommand,
         described: String,
@@ -670,9 +605,7 @@ impl GitExecutor {
     }
 }
 
-/// The three moments of one command the end is told against: what it
-/// waited for a slot, when it was spawned, and what the spawn itself
-/// took.
+/// What one command's end is reported against.
 struct Clocks {
     waited: Duration,
     started: Instant,

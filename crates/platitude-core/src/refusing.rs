@@ -9,9 +9,8 @@ use crate::operation::OperationId;
 use crate::process::{CommandEnd, CommandObserver, GitExecutor, Kept};
 use crate::repo::{ObjectFormat, RepoInfo};
 
-/// Every command asked for, as the command log would show it. The
-/// observer hears of a command at the ask — before the queue in front of
-/// it and before any spawn — so an empty list says no git was started.
+/// Every command asked for, as the command log shows it. Heard at the
+/// ask, before queueing or spawn, so an empty list means no git started.
 #[derive(Default)]
 pub(crate) struct Asked(Mutex<Vec<String>>);
 
@@ -56,10 +55,9 @@ impl CommandObserver for Asked {
     }
 }
 
-/// An executor whose program is not there, heard by a fresh [`Asked`].
-/// **The second witness**, beside the count: a call that slipped past its
-/// early answer fails on the spawn instead of passing against a working
-/// tree the test never made.
+/// An executor whose program is not there, heard by a fresh [`Asked`]: a
+/// call that slips past its early answer fails at spawn instead of
+/// passing against a working tree the test never made.
 pub(crate) fn git() -> (GitExecutor, Arc<Asked>) {
     let asked = Arc::new(Asked::default());
     let exec = GitExecutor::with_program("no-such-git-for-this-test")

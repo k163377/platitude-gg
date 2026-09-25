@@ -9,7 +9,6 @@ use platitude_core::ReportKind;
 use platitude_core::integrate::{RebaseOptions, RebaseOutcome};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 
-// --- one-commit edits (squash into parent / reword) ----------------------
 #[tokio::test]
 async fn squash_into_parent_folds_one_commit_and_keeps_the_rest() {
     let mut repo = TestRepo::init();
@@ -33,7 +32,6 @@ async fn squash_into_parent_folds_one_commit_and_keeps_the_rest() {
 
     assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "3");
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "after");
-    // The squashed pair kept both messages and both files.
     let folded = repo.git(&["log", "-1", "--format=%B", "HEAD~1"]);
     assert!(
         folded.contains("keep me") && folded.contains("fold me in"),
@@ -66,23 +64,16 @@ async fn squashing_the_second_commit_reaches_back_to_the_root() {
     assert!(repo.path.join("a.txt").exists() && repo.path.join("b.txt").exists());
 }
 
-/// What a shallow clone's edge answers, which is a question about git and
-/// nothing else: at the edge `%P` comes back empty and `<edge>~1` exits 1,
-/// exactly as at a real first commit, so the read has to reach past both
-/// to tell them apart (`sequencer::plan::base_of`).
-///
-/// **Which refusal that answer becomes is a unit test**
-/// (`sequencer::plan::decide_edit`): the four are a table over two reads,
-/// and every row of it here costs a source repository and a clone. What is
-/// left for a real git is this — that the edge comes back as an edge, and
-/// that the depth of the edit decides whether the range reaches it at all.
+/// At a shallow edge `%P` comes back empty and `<edge>~1` exits 1, as at a
+/// real first commit, so the read has to reach past both
+/// (`sequencer::plan::base_of`). Which refusal that becomes is a unit test
+/// (`sequencer::plan::decide_edit`); here only that the edge reads as an
+/// edge and that the edit's depth decides whether the range reaches it.
 #[tokio::test]
 async fn the_shallow_edge_is_read_as_an_edge_and_only_an_edit_that_reaches_it_is_refused() {
     let (_source, clone, held) = shallow_clone(6, 3);
     let (exec, cancel) = env();
 
-    // The oldest commit this clone holds: its parent is unfetched, so
-    // nothing can be composed under it whatever the edit.
     let err = sequencer::plan_edit(&exec, &clone, &held[0], sequencer::Edit::Drop, &cancel)
         .await
         .expect_err("the edge has no parent this clone can name");
@@ -92,9 +83,6 @@ async fn the_shallow_edge_is_read_as_an_edge_and_only_an_edit_that_reaches_it_is
     );
     assert!(err.report().is_some(), "{err}");
 
-    // Depth is what decides it: a squash folds into the line above it, so
-    // its range takes the parent in and bottoms out at the edge. A drop of
-    // the same commit reaches only itself and plans onto the edge fine.
     let err = sequencer::plan_edit(
         &exec,
         &clone,
@@ -143,17 +131,11 @@ async fn rewording_an_older_commit_replaces_only_its_message() {
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "after");
 }
 
-/// The two edits the very first commit can be asked for, which reach the
-/// base read by different roads (`sequencer::plan::base_of`).
-///
-/// A reword is one commit deep, so the revision under its range is the
-/// root itself and git resolves it. **A fold is two**, so the range it
-/// names starts at `root~1` — a revision this repository does not have,
-/// and the only way the read is ever handed one that does not resolve:
-/// every other caller asks about a commit that is there. That arm is
-/// the root as well, and the difference is not one a table can be asked
-/// for — read as a base nobody fetched, a reader holding a whole
-/// repository would be told to deepen it.
+/// A reword is one commit deep, so its range starts at the root, which
+/// resolves. A fold is two, so its range starts at `root~1`, which does not
+/// — the only way `sequencer::plan::base_of` is handed such a revision.
+/// That arm must read as the root: read as an unfetched base, a whole
+/// repository would be told to deepen.
 #[tokio::test]
 async fn the_root_commit_rewords_through_root_mode_and_has_nothing_to_fold_into() {
     let mut repo = TestRepo::init();
@@ -170,9 +152,8 @@ async fn the_root_commit_rewords_through_root_mode_and_has_nothing_to_fold_into(
     )
     .await
     .expect_err("there is nothing before the first commit to fold it into");
-    // Which refusal, not merely that there was one: the sentence and the
-    // heading a reader gets are picked off this kind and nothing else
-    // (`Words.rewriteRefusedWhy`).
+    // The kind, not just a refusal: the reader's sentence and heading are
+    // picked off it (`Words.rewriteRefusedWhy`).
     assert_eq!(
         err.report().map(|report| report.kind),
         Some(ReportKind::FoldFirstCommit),
@@ -198,16 +179,10 @@ async fn the_root_commit_rewords_through_root_mode_and_has_nothing_to_fold_into(
     );
 }
 
-/// **The range a plan is read over is this branch's history and no other.**
-///
-/// Which refusals the two reads become is a unit test
-/// (`sequencer::plan::decide_edit`) — but it is handed a range, and a range
-/// is only as good as the revisions it was spelled with. A plan read over
-/// `--all`, or over a range ending somewhere other than HEAD, would hold
-/// the commit on the side branch and compose a rebase that replays it: the
-/// table cannot see that, because the list it is given is the answer being
-/// questioned. So one repository asks git for it, with a commit either
-/// side of the branch point so the reading has to tell them apart rather
+/// The unit test (`sequencer::plan::decide_edit`) is handed a range and
+/// cannot see how it was spelled: read over `--all`, or ending anywhere but
+/// HEAD, it would hold the side branch's commit and replay it. A commit on
+/// either side of the branch point makes the read tell them apart rather
 /// than refuse everything.
 #[tokio::test]
 async fn the_range_read_is_this_branchs_history_and_not_another() {
@@ -229,13 +204,10 @@ async fn the_range_read_is_this_branchs_history_and_not_another() {
     .await
     .expect_err("not in this history");
     assert!(err.to_string().contains("not in the history"), "{err}");
-    // The refusal carries the report the screen says it with. Without this
-    // the sentence alone passes either way: `#[error("{message}")]` reads
-    // the same whether the kind went back to one that opens the log.
+    // The sentence alone passes either way: `#[error("{message}")]` reads
+    // the same if the kind regresses to one that opens the log.
     assert!(err.report().is_some(), "{err}");
 
-    // And the commit that *is* on this branch plans — the reading is not
-    // simply refusing whatever it is handed.
     let plan = sequencer::plan_edit(
         &exec,
         &repo.path,
@@ -253,10 +225,9 @@ async fn the_range_read_is_this_branchs_history_and_not_another() {
     );
 }
 
-/// A reword standing *behind* a conflicting step survives the stop: the
-/// remaining todo's `exec` line reads its message file from the later
-/// `--continue`, a different process entirely, so the file must still be
-/// there — and once a later rebase runs clean, the leftovers are gone.
+/// The remaining todo's `exec` line reads the reword's message file in the
+/// later `--continue` (another process), so the file must outlive the stop;
+/// a later clean rebase sweeps it.
 #[tokio::test]
 async fn a_reword_behind_a_conflict_survives_the_stop_and_continue() {
     let mut repo = TestRepo::init();
@@ -299,7 +270,6 @@ async fn a_reword_behind_a_conflict_survives_the_stop_and_continue() {
     repo.git(&["rebase", "--continue"]);
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "new words");
 
-    // A clean rebase over the settled history sweeps what the stop left.
     let head = repo.git(&["rev-parse", "HEAD"]);
     let outcome = sequencer::rebase_interactive(
         &exec,

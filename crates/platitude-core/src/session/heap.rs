@@ -3,12 +3,10 @@
 use super::*;
 
 impl RepoSession {
-    /// What this session is holding on to, part by part.
-    ///
-    /// Everything named here outlives the operation that filled it: it is
-    /// still there when the window is idle, which is what the memory budget
-    /// is about. `refs-snapshot` is an `Arc` the sidebar models hold too —
-    /// counted in full on both sides, and the app's report says so.
+    /// Part by part, only what outlives the operation that filled it (the
+    /// memory budget is about the idle window). `refs-snapshot` is an
+    /// `Arc` the sidebar models hold too — counted in full on both sides,
+    /// and the app's report says so.
     pub fn heap_report(&self) -> Vec<crate::mem::Part> {
         use crate::mem::{Footprint as _, Part};
         let shared = self.lock_shared();

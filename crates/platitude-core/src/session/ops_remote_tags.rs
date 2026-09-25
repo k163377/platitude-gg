@@ -1,11 +1,9 @@
 //! What each remote carries under `refs/tags/`, and the writes that move
-//! it: the reading nothing local records, and sending, replacing or
-//! taking away one tag.
+//! it: reading it, and sending, replacing or taking away one tag.
 //!
-//! Apart from [`super::ops_remote`] because a tag is the one ref whose
-//! whereabouts on a remote has to be asked for outright — every other row
-//! of the sidebar reads its answer off `refs/remotes/` — and every write
-//! here pays for that by reading again on its way out.
+//! Apart from [`super::ops_remote`] because a tag's whereabouts on a
+//! remote has to be asked for outright (every other sidebar row reads
+//! `refs/remotes/`), so every write here reads again on its way out.
 
 use super::*;
 
@@ -13,22 +11,18 @@ use super::*;
 #[derive(Debug, Default)]
 pub(super) struct RemoteTagsRead {
     /// Whether what the remotes carry moved — the caller's reason to
-    /// republish, and nobody else's business.
+    /// republish.
     pub moved: bool,
     /// What was asked and did not answer, named with what git said.
-    /// Empty where everything asked answered, including where there was
-    /// nothing to ask.
+    /// Empty when everything asked answered (or nothing was asked).
     pub unread: Vec<String>,
 }
 
 impl RepoSession {
-    /// The fetch, and then the one thing it cannot leave behind: where the
-    /// remotes keep their tags.
-    ///
-    /// A fetched tag lands in `refs/tags/` beside the ones made here, so
-    /// afterwards nothing local says which is which. Asking costs a second
-    /// round trip, and this is where it belongs — the user has already
-    /// agreed to reach the network.
+    /// The fetch, and then where the remotes keep their tags: a fetched
+    /// tag lands in `refs/tags/` beside the local ones, and afterwards
+    /// nothing local tells them apart. The second round trip belongs here
+    /// — the user has already agreed to reach the network.
     pub(super) async fn fetch_and_read_tags(
         self: &Arc<Self>,
         exec: &GitExecutor,
@@ -45,18 +39,12 @@ impl RepoSession {
 
     /// Records what each remote advertises under `refs/tags/`.
     ///
-    /// **Fails nothing.** A badge is not worth failing a fetch that
-    /// worked, and a remote that could not be reached keeps the answer
-    /// it last gave — which is what `refs/remotes/` does for branches on
-    /// its own.
-    ///
-    /// **It does say what it could not read, all the same**
-    /// ([`RemoteTagsRead::unread`]) — the two are told apart here, where
-    /// the difference is known, and the tracked catch-up carries it out
-    /// as the one answer no reader downstream can reach
-    /// ([`RemoteTagRefreshOutcome::Unanswered`], which is where that is
-    /// written). Nothing on the fire-and-forget path reads it, so the
-    /// silence upwards is unchanged.
+    /// **Fails nothing**: a badge is not worth failing a fetch that
+    /// worked, and an unreachable remote keeps its last answer, as
+    /// `refs/remotes/` does for branches. What could not be read is still
+    /// named ([`RemoteTagsRead::unread`]) for the tracked catch-up
+    /// ([`RemoteTagRefreshOutcome::Unanswered`]); the fire-and-forget path
+    /// ignores it.
     pub(super) async fn read_remote_tags(
         &self,
         exec: &GitExecutor,
@@ -75,9 +63,6 @@ impl RepoSession {
                 };
             }
         };
-        // Only the remotes that actually answered are replaced. One that
-        // could not be reached keeps the readings it last gave, which is
-        // what `refs/remotes/` does for branches on its own.
         let mut answered: Vec<crate::Name> = Vec::new();
         let mut unread: Vec<String> = Vec::new();
         let mut fresh: Vec<(crate::Name, Oid, bool, crate::Name)> = Vec::new();
@@ -94,8 +79,7 @@ impl RepoSession {
                             .map(|t| (t.name, t.commit, t.annotated, remote.clone())),
                     );
                 }
-                // Cancellation is the session going away: nobody is
-                // left to be told.
+                // The session is going away: nobody is left to be told.
                 Err(error) if error.is_cancelled() => return RemoteTagsRead::default(),
                 Err(error) => {
                     tracing::debug!(remote = %r.name, %error, "remote tags: unreadable");
@@ -111,10 +95,8 @@ impl RepoSession {
 
     /// Rebuilds the index with `fresh` in place of what `answered` said
     /// last, and says whether that changed anything. The only place the
-    /// index is built: everything downstream shares the one it leaves.
-    ///
-    /// Reads what it keeps out of the index itself, so the readings are
-    /// held once (see [`RemoteTagIndex::readings`]).
+    /// index is built. What it keeps comes out of the index itself, so the
+    /// readings are held once ([`RemoteTagIndex::readings`]).
     fn remerge_remote_tags(
         &self,
         configured: &[remote::Remote],
@@ -123,9 +105,6 @@ impl RepoSession {
     ) -> bool {
         let current = self.remote_tag_index();
         let kept = current.readings().filter(|(_, _, _, remote)| {
-            // A remote that is no longer configured stops answering
-            // for names, and one that just answered is replaced
-            // whole.
             configured.iter().any(|r| r.name == remote.as_str())
                 && !answered.iter().any(|a| a == remote)
         });
@@ -148,20 +127,15 @@ impl RepoSession {
     /// the commit that remote was last seen holding the tag on; empty
     /// sends it plain (see [`remote::push_tag`]).
     ///
-    /// **The badge is re-read before this write is done.** What the
-    /// remotes carry under `refs/tags/` has no local record, so nothing
-    /// else would notice that this push changed it — the refresh that
-    /// follows reads `refs/`, and this tag was already there. Inside the
-    /// write for the same reason [`Self::fetch_and_read_tags`] is: the
-    /// press has already agreed to reach the network
-    /// (core.md タグのリモート状態). Only the
-    /// remote that just moved is asked, and a push git refused moved
-    /// nothing, so a failure leaves the last answer standing.
+    /// **The badge is re-read inside the write**: what a remote carries
+    /// under `refs/tags/` has no local record, so the refs refresh after it
+    /// would not notice (rules-refs/core.md「タグのリモート状態」). Inside,
+    /// as in [`Self::fetch_and_read_tags`]: the press has already agreed to
+    /// reach the network. A refused push moved nothing and reads nothing.
     ///
-    /// **The refresh comes after the closure returns.**
-    /// `AfterWrite::Graph` reads the refs then, and a read asked for
-    /// from inside would be a second pass over every ref — the longest
-    /// read this application makes on a repository that has them.
+    /// **The refresh comes after the closure returns**: `AfterWrite::Graph`
+    /// reads the refs then, and asking for one inside would be a second
+    /// pass over every ref — the longest read this application makes.
     pub fn push_tag(
         self: &Arc<Self>,
         remote_name: String,
@@ -191,12 +165,8 @@ impl RepoSession {
         )
     }
 
-    /// Takes one tag off one remote, leaving whatever is here.
-    ///
-    /// Reads that remote's tags afterwards for the reason
-    /// [`Self::push_tag`] does: nothing local records what a remote
-    /// carries, so a delete that landed would otherwise keep its badge
-    /// until the next timer tick.
+    /// Takes one tag off one remote, leaving whatever is here. Reads that
+    /// remote's tags afterwards, as [`Self::push_tag`] does.
     pub fn delete_remote_tag(
         self: &Arc<Self>,
         remote_name: String,
@@ -226,12 +196,8 @@ impl RepoSession {
 
     /// Replaces a tag on a remote with one under a new name, which git
     /// does as a push and a delete (see [`remote::replace_remote_tag`]).
-    /// The UI asks first: the old name is destroyed.
-    ///
-    /// Reads that remote's tags afterwards for the reason
-    /// [`Self::push_tag`] does — and here both halves moved, so the badge
-    /// on the new name and the row the old one left behind both come off
-    /// this read.
+    /// The UI asks first: the old name is destroyed. Reads that remote's
+    /// tags afterwards, as [`Self::push_tag`] does.
     pub fn replace_remote_tag(
         self: &Arc<Self>,
         remote_name: String,
@@ -263,10 +229,9 @@ impl RepoSession {
 
     /// Deletes a tag here and on the remote as one queued write.
     ///
-    /// The local half goes first to match [`Self::delete_branch_everywhere`],
-    /// though nothing about a tag refuses: what that ordering buys here is
-    /// that a cancelled or failed pair never leaves the name gone from the
-    /// remote while it still stands in the sidebar.
+    /// Local half first, as in [`Self::delete_branch_everywhere`]: a
+    /// cancelled or failed pair never leaves the name gone from the remote
+    /// while it still stands in the sidebar.
     pub fn delete_tag_everywhere(
         self: &Arc<Self>,
         tag: String,
@@ -274,9 +239,8 @@ impl RepoSession {
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
-        // The far end paces the pair's second half and the read behind
-        // it, so the pair is a kind of its own: it answers as a tag write
-        // and runs on the remote lane ([`OperationKind::DeleteTagEverywhere`]).
+        // A kind of its own: it answers as a tag write but runs on the
+        // remote lane, since the far end paces the second half and the read.
         self.write(
             OperationKind::DeleteTagEverywhere,
             AfterWrite::Graph,

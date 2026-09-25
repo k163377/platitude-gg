@@ -1,15 +1,15 @@
-//! On-demand reads answered as events: publish state, history reach,
-//! signatures, commit details and file diffs.
+//! On-demand reads answered as events: a plan's publish state,
+//! signatures and file diffs.
 
 use super::*;
 use crate::eol;
 
 /// What one read of the diff on screen established.
 ///
-/// A completion boundary, because the ordinary answer is silence: a file
-/// nobody has touched sends no event at all, a read the pane has passed
-/// sends none either, and waiting cannot tell "none yet" from "none
-/// coming" (core.md §非同期・並行テスト).
+/// A completion boundary, because the ordinary answer is silence: an
+/// untouched file and a read the pane has passed both send nothing, and
+/// waiting cannot tell "none yet" from "none coming"
+/// (core.md §非同期・並行テスト).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiffReadOutcome {
     /// The repository is not open, so nothing was read.
@@ -46,9 +46,8 @@ impl DiffRefreshTask {
         task
     }
 
-    /// Waits for the re-read itself to finish. A dropped runtime is the
-    /// same observable result as cancellation: no later answer from this
-    /// read can arrive.
+    /// Waits for the re-read itself to finish; a dropped runtime reads as
+    /// cancellation (no later answer can arrive).
     pub async fn outcome(self) -> DiffReadOutcome {
         self.0.await.unwrap_or(DiffReadOutcome::Cancelled)
     }
@@ -56,14 +55,12 @@ impl DiffRefreshTask {
 
 impl RepoSession {
     /// Asks again how many commits of a plan's range a remote already has
-    /// — the count the plan's preview arrived with
-    /// (`rebase_plan::PlanPreview::published`), re-read after the refs
-    /// moved under the open plan. A read; the answer names the range, so
-    /// a plan that has since been put away drops it.
+    /// (`rebase_plan::PlanPreview::published`), after the refs moved under
+    /// the open plan. The answer names the range, so a plan since put away
+    /// drops it.
     ///
-    /// A range a plan asked about always starts from HEAD and HEAD has
-    /// commits, so — unlike the one-commit question the walk answers off
-    /// its rows — there is no unborn case to keep off git here.
+    /// A plan's range starts from HEAD, which has commits, so there is no
+    /// unborn case to keep off git here.
     pub fn check_plan_published(self: &Arc<Self>, range: String) {
         self.spawn_read("publish", |s, workdir, cancel| async move {
             let state = publish::state_of(&s.executor, &workdir, &range, &cancel).await?;
@@ -77,13 +74,9 @@ impl RepoSession {
     /// Asks whether `oid` carries a signature and what git makes of it.
     ///
     /// A read of its own: verifying runs gpg or ssh-keygen, and the
-    /// details pane has a 100ms budget. The answer arrives on its own,
-    /// after the commit is already on screen.
-    ///
-    /// One at a time: a selection that moves on cancels the verification
-    /// the last one started — the consumer already drops the answer
-    /// about the row left behind, and this spares it the process
-    /// (`session::latest`).
+    /// details pane has a 100ms budget, so the answer arrives after the
+    /// commit is on screen. One at a time (`session::latest`): a selection
+    /// that moves on cancels the last verification's process.
     pub fn check_signature(self: &Arc<Self>, oid: Oid) {
         self.spawn_read_latest(
             "signature",
@@ -107,21 +100,14 @@ impl RepoSession {
     /// The same read aimed at another working copy: one of the files the
     /// read-only pane is listing (`RepoSession::read_carried_status`).
     ///
-    /// **The same read.** Everything a diff is made of
-    /// is already asked of a working copy by path — the patch, the source
-    /// the colours are read against, the picture a binary side is shown
-    /// as, what git's settings there say about line endings — so the only
-    /// thing that made this window's own read its own was where it was
-    /// aimed. It shares the pane's epoch with the ordinary reads, which
-    /// is what settles the two against each other: a click onto this
-    /// window's own file passes a carried read still in flight, and the
-    /// reverse.
+    /// Everything a diff is made of is asked of a working copy by path,
+    /// so only the aim differs. It shares the pane's epoch with the
+    /// ordinary reads, so a click either way passes the read in flight.
     ///
-    /// Nothing here can be staged from. The pane the diff lands in has
-    /// every write control down while it is showing another copy, and
-    /// below that the fingerprint a partial stage is verified against is
-    /// recorded under the copy it was read from (`last_diff`), so a
-    /// selection carried over from here matches nothing in this tree.
+    /// Nothing here can be staged from: the pane has every write control
+    /// down while showing another copy, and the fingerprint a partial
+    /// stage is verified against is recorded under the copy it was read
+    /// from (`last_diff`), so a carried selection matches nothing here.
     pub fn load_carried_diff(self: &Arc<Self>, at: String, target: DiffTarget) {
         let s = Arc::clone(self);
         let workdir = PathBuf::from(at);
@@ -131,19 +117,17 @@ impl RepoSession {
         });
     }
 
-    /// The same read as a future the caller drives, which is both its
-    /// completion boundary and the only way to hold one open: the read
-    /// this returns is the pane's newest from the moment it is asked for,
-    /// so a test can stop it inside its git and let the next one pass it
-    /// (core.md §非同期・並行テスト).
+    /// The same read as a future the caller drives — its completion
+    /// boundary and the only way to hold one open: it is the pane's newest
+    /// from the moment it is asked for, so a test can stop it inside its
+    /// git and let the next one pass it (core.md §非同期・並行テスト).
     pub fn read_diff(
         self: &Arc<Self>,
         target: DiffTarget,
     ) -> impl Future<Output = DiffReadOutcome> + Send + 'static + use<> {
-        // Claimed here, so that asking for a read is what passes the one
-        // before it, whenever either of them runs — and only where there
-        // is something to read, so a repository nobody has opened passes
-        // nothing (see `diff_epoch`).
+        // Claimed at the ask, so asking is what passes the read before —
+        // and only with a working tree, so an unopened repository passes
+        // nothing (`diff_epoch`).
         let started = self
             .workdir()
             .map(|workdir| (workdir, self.claim_diff_epoch()));
@@ -159,16 +143,11 @@ impl RepoSession {
     /// Re-reads the diff the pane is holding and answers only if the bytes
     /// under it moved.
     ///
-    /// What the poll runs while a working-tree file is open, and the only
-    /// thing that notices a file changed outside this window without also
-    /// changing its status. A conflict is the shape that shows it: git
-    /// reports the same two stage letters whether or not the markers are
-    /// still in the file, so a conflict resolved in another tool left the
-    /// pane drawing the conflict it was opened on.
-    ///
-    /// One process on a tick that finds nothing moved — the raw diff, and
-    /// the fingerprint that says it is the one already on screen. Only a
-    /// file that really moved pays for the rest of a read.
+    /// Run by the poll while a working-tree file is open — the only thing
+    /// that notices a file changed outside this window with its status
+    /// unchanged (a conflict resolved in another tool keeps the same two
+    /// stage letters). A tick that finds nothing moved costs one process:
+    /// the raw diff and its fingerprint.
     pub fn refresh_diff(self: &Arc<Self>, target: DiffTarget) {
         drop(self.refresh_diff_tracked(target));
     }
@@ -208,10 +187,8 @@ impl RepoSession {
                     DiffReadOutcome::Unchanged
                 }
                 Ok(raw) => {
-                    // Claimed only now: a tick that found the file
-                    // where it left it leaves the epoch to the read a
-                    // click has in flight
-                    // (see `diff_epoch`).
+                    // Claimed only now: a tick that found nothing moved
+                    // leaves the epoch to a click's read in flight.
                     let epoch = s.claim_diff_epoch();
                     s.publish_diff(workdir, target, Some(raw), epoch).await
                 }
@@ -224,18 +201,14 @@ impl RepoSession {
     }
 
     /// Sends one diff and starts the colours behind it, answering how it
-    /// ended. `known` is the raw diff a caller has already read, so a
-    /// re-read that found it moved spends no second process on the same
-    /// bytes.
+    /// ended. `known` is the raw diff a caller already read, so a re-read
+    /// spends no second process on the same bytes.
     ///
-    /// **A read the pane has passed publishes nothing.** Two reads of one
-    /// file overlap wherever a write answers and the status behind it
-    /// lands — both ask the pane to re-read what it holds — and they need
-    /// not finish in the order they were asked. The older landing last
-    /// would leave the pane holding rows and a fingerprint taken from
-    /// bytes that are no longer there, and the next partial stage is
-    /// refused against exactly that fingerprint
-    /// (`stage::refusal::verify_fingerprint`).
+    /// **A read the pane has passed publishes nothing**: two reads of one
+    /// file overlap wherever a write answers and its status lands, and
+    /// need not finish in order. The older landing last would leave the
+    /// pane a fingerprint of bytes no longer there, and the next partial
+    /// stage is refused against it (`stage::refusal::verify_fingerprint`).
     async fn publish_diff(
         self: &Arc<Self>,
         workdir: PathBuf,
@@ -244,15 +217,10 @@ impl RepoSession {
         epoch: u64,
     ) -> DiffReadOutcome {
         let cancel = self.root_cancel.clone();
-        // What git's settings say, and the neighbours if they are the
-        // only answer, are read **beside** the diff: a notice that
-        // turns up a moment later is one the reader has already
-        // scrolled past.
-        // The file the diff is of, fetched beside it: the colours are
-        // read against it (`highlight`), and a second round trip would
-        // land after the rows are on screen. Only for a language
-        // something can be said about — otherwise it is a process
-        // spent on a file nobody will colour.
+        // Line-ending context is read **beside** the diff: a notice that
+        // turns up later is one the reader has already scrolled past. So
+        // is the source the colours are read against (`highlight`), but
+        // only for a language something can be said about.
         let wants_source = crate::highlight::knows(preview::target_path(&target));
         let (diff, endings, source, embedded) = tokio::join!(
             async {
@@ -270,11 +238,8 @@ impl RepoSession {
                     false => None,
                 }
             },
-            // A directory git would not open has no patch to wait for,
-            // and the commit a stage of it would point at is what the
-            // pane says in its place (`details::embedded`). Beside the
-            // others for the same reason they are: it is the whole of
-            // what that row has to show.
+            // A directory git would not open shows, in its patch's place,
+            // the commit a stage of it would point at (`details::embedded`).
             async {
                 match &target {
                     DiffTarget::Untracked { path } if path.ends_with('/') => {
@@ -286,10 +251,8 @@ impl RepoSession {
         );
         match diff {
             Ok(raw) => {
-                // Passed while the bytes were being read: everything below
-                // is spent for a pane that has moved — a picture written
-                // to disk, a file walked for its colours — and none of it
-                // is the read the pane is waiting for.
+                // Passed while reading: everything below (a picture written
+                // to disk, a colouring walk) would be spent for nobody.
                 if !self.diff_is_current(epoch) {
                     return DiffReadOutcome::Overtaken;
                 }
@@ -313,20 +276,17 @@ impl RepoSession {
                     &cancel,
                 )
                 .await;
-                // Asked again, because the picture above is read out of
-                // git and the pane can be moved on across it.
+                // Asked again: the pane can move on during the picture read.
                 if !self.diff_is_current(epoch) {
-                    // This read's own files go with the ones before it:
-                    // nothing will ever name them, and the read that
-                    // passed this one sweeps only below itself — which
-                    // it may already have done (`preview::PreviewFiles`).
+                    // This read's files go too: nothing will name them, and
+                    // the read that passed this one sweeps only below
+                    // itself, possibly already (`preview::PreviewFiles`).
                     self.preview_files.sweep_before(epoch + 1);
                     return DiffReadOutcome::Overtaken;
                 }
-                // The picture files of the reads before this one go now,
-                // whether or not this one wrote any: the pane is about
-                // to be handed this read, and what it still shows of the
-                // last it has already decoded (`preview::PreviewFiles`).
+                // Earlier reads' picture files go now, whether or not this
+                // one wrote any: what the pane still shows of them it has
+                // already decoded (`preview::PreviewFiles`).
                 self.preview_files.sweep_before(epoch);
                 // Noted before the event: what the next re-read compares
                 // against is what the pane was handed.
@@ -373,16 +333,11 @@ impl RepoSession {
     /// Works out the colours for a diff already on its way to the pane and
     /// sends them after it ([`SessionEvent::DiffColoured`]).
     ///
-    /// Two things keep this off the reader's path. It is the one part
-    /// of reading a diff that computes, so it goes to a blocking
-    /// thread; and it is skipped outright once the reader has moved
-    /// on, which is what stops a walk down a commit's file list from
-    /// leaving a colouring per row running behind
-    /// it.
-    ///
-    /// It is also somebody else's code. If it goes down, the diff does not
-    /// go with it — the rows are already gone out, and a panic here costs
-    /// the file its colours and nothing else.
+    /// The one part of reading a diff that computes, so it runs on a
+    /// blocking thread and is skipped once the reader has moved on (else a
+    /// walk down a file list would leave a colouring per row running). A panic
+    /// here costs the file its colours and nothing else — the rows are
+    /// already out.
     fn paint_diff(
         self: &Arc<Self>,
         target: DiffTarget,
@@ -395,11 +350,10 @@ impl RepoSession {
             if !s.diff_is_current(epoch) {
                 return;
             }
-            // Where the full reading will keep the reader waiting, a
-            // quick one goes out first: no file walked, a fraction of
-            // the budget, on screen in tens of milliseconds. Marked
-            // unsettled — the full answer follows it whatever it says,
-            // so whoever waits for "the colours" has a true to wait on.
+            // Where the full reading is slow, a quick one (no file walked)
+            // goes out first, marked unsettled: the full answer always
+            // follows, so whoever waits for "the colours" waits on
+            // `settled`.
             if source.is_some() && crate::highlight::deep(&patches) {
                 let p = Arc::clone(&patches);
                 match tokio::task::spawn_blocking(move || crate::highlight::colors_quick(&p)).await
@@ -433,10 +387,8 @@ impl RepoSession {
                     return;
                 }
             };
-            // Kept even where the answer is not wanted any more: the
-            // states are about the file, and the cache tells a stale
-            // source apart on its own. Not past the close, though —
-            // that gave this very cell back
+            // Kept even when the answer is no longer wanted (the cache
+            // tells a stale source apart itself), but not past the close
             // (`RepoSession::keeps_what_it_reads`).
             {
                 let mut slot = relock(&s.lex_cache);
@@ -444,8 +396,7 @@ impl RepoSession {
                     *slot = cache;
                 }
             }
-            // Asked again: a long colouring can be overtaken while it runs,
-            // and the pane would drop the answer anyway.
+            // Asked again: a long colouring can be overtaken.
             if !s.diff_is_current(epoch) {
                 return;
             }

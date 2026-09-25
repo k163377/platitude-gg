@@ -1,8 +1,7 @@
 //! Remote traffic, exercised entirely offline: the remote is a `file://`
 //! URL of a second local repository (実装計画 §11.3).
 //!
-//! What git alone decides about that traffic — behind a command line
-//! that is ours only in its spelling — is recorded in [`periodic`].
+//! What git alone decides about that traffic is in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -52,7 +51,6 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
     let (mut bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
 
-    // Someone else publishes first.
     let mut other = TestRepo::init();
     other.git(&["remote", "add", "origin", &bare.file_url()]);
     other.git(&["fetch", "origin"]);
@@ -60,7 +58,6 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
     other.commit_file("theirs.txt", "theirs\n", "their work");
     other.git(&["push", "origin", "main"]);
 
-    // Our own divergent history.
     work.git(&["commit", "--amend", "-m", "rewritten root"]);
     let spec = PushSpec {
         remote: "origin".into(),
@@ -81,8 +78,7 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
         "a refusal a fetch would answer is told apart from one it would not: {err}"
     );
 
-    // A lease pinned to a commit the remote has moved past also fails, and
-    // for the same reason: this window is looking at an older remote.
+    // A stale lease is outdated too: this window is looking at an older remote.
     let stale = work.git(&["rev-parse", "origin/main"]);
     let leased = PushSpec {
         force: PushForce::WithLease {
@@ -95,7 +91,6 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
         .expect_err("stale lease");
     assert!(err.is_outdated(), "{err}");
 
-    // Plain force wins.
     let forced = PushSpec {
         force: PushForce::Force,
         ..spec
@@ -109,8 +104,8 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
     );
 }
 
-/// The replace git has no command for: the name moves, what the branch
-/// pointed at stays, and the local branch that tracked it comes along.
+/// git has no command for this: the name moves, its commit stays, and the
+/// local branch that tracked it follows.
 #[tokio::test]
 async fn replacing_a_remote_branch_moves_the_name_and_the_tracking() {
     let (mut bare, mut work) = origin_and_clone();
@@ -159,8 +154,6 @@ async fn replacing_a_remote_branch_moves_the_name_and_the_tracking() {
     );
 }
 
-/// A push git turns down leaves the old name where it was: nothing is
-/// deleted on the strength of a half-finished replace.
 #[tokio::test]
 async fn a_replace_whose_push_fails_deletes_nothing() {
     let (mut bare, mut work) = origin_and_clone();
@@ -169,8 +162,7 @@ async fn a_replace_whose_push_fails_deletes_nothing() {
     work.git(&["switch", "-c", "billing"]);
     work.commit_file("b.txt", "b\n", "billing work");
     work.git(&["push", "-u", "origin", "billing"]);
-    // Somebody else's work already stands under the new name, on a line of
-    // its own, so the push cannot be a fast-forward.
+    // Unrelated work already under the new name: the push cannot fast-forward.
     work.git(&["switch", "-c", "someone-else", "main"]);
     work.commit_file("c.txt", "c\n", "not ours");
     work.git(&["push", "origin", "someone-else:billing-v2"]);
@@ -202,8 +194,6 @@ async fn a_replace_whose_push_fails_deletes_nothing() {
     );
 }
 
-/// The first push of a branch goes where the question said, and records it
-/// so the question is asked once.
 #[tokio::test]
 async fn publishing_sends_the_branch_and_records_the_upstream() {
     let (mut bare, mut work) = origin_and_clone();
@@ -232,8 +222,6 @@ async fn publishing_sends_the_branch_and_records_the_upstream() {
     assert_eq!(work.git(&["config", "branch.topic.remote"]), "origin");
 }
 
-/// The name over there is the question's to choose: it need not be the one
-/// the branch has here.
 #[tokio::test]
 async fn publishing_can_use_a_different_name_on_the_remote() {
     let (mut bare, mut work) = origin_and_clone();
@@ -260,9 +248,9 @@ async fn publishing_can_use_a_different_name_on_the_remote() {
     );
 }
 
-/// Why the UI has to ask before a first push lands on a name that is taken:
-/// git does not refuse it. Whenever the push fast-forwards, somebody else's
-/// branch quietly moves and we end up tracking it.
+/// Why the UI asks before a first push onto a taken name: git does not
+/// refuse a fast-forward, so somebody else's branch quietly moves and we
+/// end up tracking it.
 #[tokio::test]
 async fn a_first_push_onto_a_taken_name_is_not_refused_when_it_fast_forwards() {
     let (mut bare, mut work) = origin_and_clone();
@@ -333,18 +321,14 @@ async fn the_remote_branch_check_answers_for_the_exact_name_only() {
     );
 }
 
-/// The other half of the same question. A name can be taken by commits
-/// this history never had, and there git refuses the push outright — so
-/// "taken" alone cannot decide what the UI should do about it. The commit
-/// `branch_tip` hands back is what tells the two apart before anything is
-/// sent.
+/// A name taken by commits this history never had is refused outright, so
+/// "taken" alone cannot decide the UI's move: the commit `branch_tip` hands
+/// back tells the two cases apart before anything is sent.
 #[tokio::test]
 async fn a_taken_name_holding_commits_of_its_own_is_refused() {
     let (mut bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
 
-    // Their branch leaves the trunk and takes a commit with it; ours
-    // leaves from the same place and never gets that commit.
     work.git(&["switch", "-c", "theirs"]);
     work.commit_file("b.txt", "theirs\n", "theirs");
     work.git(&["push", "origin", "theirs"]);
@@ -377,9 +361,8 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
         "and their branch is where it was"
     );
 
-    // The only thing that can land here, and the lease is what makes
-    // it offerable: pinned to a commit that is not there any more, git
-    // says no and the branch nobody looked at stands.
+    // Only a leased overwrite can land here; a lease on a commit that is no
+    // longer there is refused.
     let stale = remote::plan_publish(
         &exec,
         &work.path,
@@ -414,10 +397,9 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
 /// Writes a `pre-receive` hook into a bare repository that turns every
 /// push away, in the shape a forge writes its own refusals in.
 ///
-/// The hook is how a refusal the far side decides for itself can be had
-/// offline at all: a protected branch, a repository rule and a hook all
-/// reach this end as the same `[remote rejected]`, and only the sentence
-/// underneath differs.
+/// Offline stand-in for any far-side refusal: a protected branch, a
+/// repository rule and a hook all arrive as the same `[remote rejected]`,
+/// differing only in the sentence underneath.
 fn decline_every_push(bare: &TestRepo, said: &str) {
     decline_every_push_watched(bare, said, || {});
 }
@@ -459,8 +441,7 @@ async fn a_branch_the_far_side_keeps_comes_back_as_a_refusal_with_its_words() {
         "the words are the far side's own, without git's framing"
     );
     // Under `--porcelain` the per-ref result is on stdout and stderr keeps
-    // the prose, so what the log carries is what a push already carried:
-    // the far side's lines, and git's own last word about the refs.
+    // the prose: the far side's lines and git's own last word.
     assert!(
         err.to_string().contains("GH006") && err.to_string().contains("failed to push"),
         "git's whole message is still there for the log: {err}"
@@ -503,12 +484,9 @@ async fn a_push_the_far_side_turns_down_is_not_one_a_fetch_would_answer() {
     );
 }
 
-/// The same refusal over a tag, which comes down as a report the way the
-/// branch beside it does, not as a plain failure
-/// (デザイン規約 §答えの要らない報せ). **Both halves of a tag's traffic are read
-/// the same way** — sending one and taking one off the far side are
-/// different commands here (`push` against `push --delete`), so one being
-/// classified says nothing about the other.
+/// A tag refusal is a report like a branch's (デザイン規約 §答えの要らない報せ).
+/// Both halves are checked: sending and deleting are different commands
+/// (`push` / `push --delete`), so one being classified says nothing of the other.
 #[tokio::test]
 async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
     let (bare, mut work) = origin_and_clone();
@@ -549,22 +527,11 @@ async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
 
 /// The same refusal, installed while a neighbour holds the hook open for
 /// writing — the window a `fork()` in another test opens over a file this
-/// one has just written, and the way the test above would lose the far
-/// side's words under a loaded run.
+/// one has just written. A hook git cannot execute declines silently, so
+/// the install is what has to wait (`TestRepo::write_hook`).
 ///
-/// **A hook git cannot execute is still a refusal, and a silent one.**
-/// `receive-pack` writes its own `cannot exec` to the stderr it
-/// inherited, away from the sideband, so nothing reaches this end
-/// under `remote:` and the ref line alone is left to speak — which is
-/// git's generic `(pre-receive hook declined)` (measured). The report
-/// is right about a push the far side turned down and wrong about
-/// why, and no amount of reading the answer harder recovers it: the
-/// install is what has to wait
-/// (`TestRepo::write_hook`).
-///
-/// Linux only, because POSIX only says `execve` *may* refuse a file
-/// open for writing — this leans on it doing so, which is a promise
-/// Linux makes and the container is the machine that keeps it.
+/// Linux only: POSIX only says `execve` *may* refuse a file open for
+/// writing, and Linux does.
 #[tokio::test]
 #[cfg(target_os = "linux")]
 async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
@@ -576,19 +543,16 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
         .expect("the tag goes over while nothing is standing over it");
     decline_every_push(&bare, "Tag protection rules prevent this.");
 
-    // Opened: the hook stays the hook throughout, and the install
-    // below rewrites this same inode.
+    // The install below rewrites this same inode, so the handle stays on it.
     let hook = bare.path.join(".git").join("hooks").join("pre-receive");
     let handle = std::fs::OpenOptions::new()
         .write(true)
         .open(&hook)
         .expect("hold the hook open for writing");
 
-    // Let go only once the install has said it is waiting, and inside the
-    // scope, since that is what the install is waiting for. An install
-    // that never looked finishes with the handle still held, and the push
-    // below is then the one that meets the busy hook — which is where the
-    // words go missing.
+    // Let go only once the install says it is waiting, inside the scope. An
+    // install that never looked leaves the handle held, so the push below
+    // meets the busy hook and loses the words.
     let (busy, saw_busy) = std::sync::mpsc::channel();
     let mut held = Some(handle);
     let installing = &bare;
@@ -620,14 +584,13 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
     drop(held);
 }
 
-/// The refusal a fetch answers says so in git's own words, which is what
-/// separates a report with a move behind it from one without.
+/// git's own summary is what marks the refusal a fetch answers — the
+/// report with a move behind it.
 #[tokio::test]
 async fn a_push_that_is_only_out_of_date_reports_gits_own_advice() {
     let (bare, mut work) = origin_and_clone();
     let (exec, cancel) = env();
 
-    // Somebody else pushes while this end is not looking.
     let mut other = TestRepo::init();
     other.git(&["remote", "add", "origin", &bare.file_url()]);
     other.git(&["fetch", "origin"]);
@@ -678,9 +641,8 @@ fn origin_that_moved_on(bare: &TestRepo, file: &str, message: &str) -> TestRepo 
     other
 }
 
-/// Two lines that have grown apart, with the way to reconcile them
-/// written down: whichever way that is, the stop is not a failure — the
-/// same landing the merge and the rebase come to rest on.
+/// With `pull.rebase` set either way, a conflicting pull stops the way a
+/// merge or rebase does — a landing, not a failure.
 #[tokio::test]
 async fn a_pull_that_conflicts_stops_with_the_operation_standing() {
     for (reconcile, marker) in [("false", "MERGE_HEAD"), ("true", "rebase-merge")] {
@@ -705,10 +667,8 @@ async fn a_pull_that_conflicts_stops_with_the_operation_standing() {
     }
 }
 
-/// A refusal stays the failure it reads as: a branch with no tracking
-/// information and a tree the pull would write over both exit 1 with
-/// nothing standing (measured, 2.55), which is what tells them apart from
-/// the stop above.
+/// A refusal stays a failure: no tracking information and a tree the pull
+/// would write over both exit 1 with nothing standing, unlike the stop above.
 #[tokio::test]
 async fn a_pull_with_nothing_to_pull_from_is_a_failure() {
     let (_bare, mut work) = origin_and_clone();
@@ -749,17 +709,10 @@ async fn a_pull_brings_the_upstream_in_and_moves_the_branch() {
     );
 }
 
-/// **What the pre-merge run leaves out**: what git itself does behind the
-/// fixed command lines these functions hand it (the lines are the unit
-/// tests' beside `remote::list` and `remote::fetch`) — the tracking ref a
-/// deleted branch leaves, a remote added with a URL nothing answers for
-/// and kept after a push there fails, and the pulls whose whole answer is
-/// git's (a divergence with no orders, a tree it would write over). Beyond
-/// the command line, what each reads of git's answer — the delete, a failed
-/// push's classification, the landing and the stop a pull leaves standing
-/// — is held by the pre-merge tests above and by `remote::refusal`'s
-/// own, so the full gate runs these (`-- --ignored ::periodic::`) rather
-/// than every change.
+/// What git itself does behind the fixed command lines these functions hand
+/// it (the lines are unit-tested beside `remote::list` and `remote::fetch`).
+/// What each reads of git's answer is held above and by `remote::refusal`'s
+/// own tests, so only the full gate runs these.
 mod periodic {
     use super::*;
 
@@ -829,8 +782,6 @@ mod periodic {
             .expect("correct the URL");
         assert_eq!(work.git(&["remote", "get-url", "fork"]), bare.file_url());
 
-        // And the corrected remote is usable, which is the whole point of
-        // keeping it.
         let spec = remote::plan_publish(&exec, &work.path, "fork", "main", "", &cancel)
             .await
             .expect("plan publish");
@@ -839,9 +790,8 @@ mod periodic {
             .expect("push to the corrected remote");
     }
 
-    /// The first push to a remote made by the same answer: when the URL turns
-    /// out to go nowhere, the push fails and the remote stays. Undoing the add
-    /// would throw away the only part of the answer that was worth keeping.
+    /// The remote stays after its first push fails: undoing the add would
+    /// throw away the only part of the answer worth keeping.
     #[tokio::test]
     #[ignore = "what git keeps after a failed push: not worth the pre-merge run"]
     async fn a_push_to_a_remote_that_goes_nowhere_leaves_the_remote_behind() {
@@ -874,12 +824,9 @@ mod periodic {
         );
     }
 
-    /// **git refuses a divergence it has no orders for** — `pull.rebase` and
-    /// `pull.ff` unset, both sides holding commits of their own: exit 128
-    /// with nothing started (measured, 2.55). Delegating means this reaches
-    /// the reader as git's own words, hints and all
-    /// (デザイン規約 §git が言ったことを読む場所), which is where the setting
-    /// that answers it is named.
+    /// With `pull.rebase` and `pull.ff` unset, git refuses a divergence with
+    /// exit 128 and nothing started; its own words, which name the setting,
+    /// reach the reader (デザイン規約 §git が言ったことを読む場所).
     #[tokio::test]
     #[ignore = "git's own refusal text and exit code: not worth the pre-merge run"]
     async fn a_divergence_git_has_no_orders_for_is_a_failure() {

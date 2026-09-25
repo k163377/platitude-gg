@@ -1,35 +1,29 @@
 //! Where the repository stands, as one record every reader shares.
 //!
-//! The reads — the refs listing, the status, the walk — each see a piece
-//! of the same repository at their own moment, and this is the one place
-//! their reports land: HEAD, whether anything else holds its tip, whether
-//! a remote already has the commit it is on, and what the last status saw
-//! of the standing operation. Everything that wants one of those answers
-//! reads it from here, and everything that reports one goes through
-//! here
-//! (CLAUDE.md 性能予算; デザイン規約 §行が読む答えはどこから来るか).
+//! The reads (refs listing, status, walk) each see the repository at
+//! their own moment; their reports land here — HEAD, whether anything
+//! else holds its tip, whether a remote has its commit, and what the last
+//! status saw of the standing operation — and every reader of those
+//! answers reads them here (デザイン規約 §行が読む答えはどこから来るか).
 //!
 //! **Newer wins, and a write is a clock.** Two reads can land in the
-//! wrong order — a poll's status that began before a commit and landed
-//! after the commit's own read — and what the fresh one saw is what
-//! stands. Every read takes a stamp before it spawns git and offers its
-//! report under that stamp; a write takes a stamp on its way out
-//! ([`Standing::fence`]), and a report stamped before that is refused.
-//! So HEAD here never moves backwards past a write, whichever read lands
-//! first, and no consumer has to order the reads for itself.
+//! wrong order (a poll's status begun before a commit, landing after the
+//! commit's own read). Every read takes a stamp before it spawns git and
+//! offers its report under it; a write takes a stamp on its way out
+//! ([`Standing::fence`]) and a report stamped before that is refused. So
+//! HEAD never moves backwards past a write, and no consumer orders the
+//! reads itself.
 //!
-//! **Every report has a number, and the numbers run across sessions.**
-//! A consumer arms a landing on "the first report after this write" and
-//! reads that number off the write's own answer ([`Standing::fence`]);
-//! the feed carrying both outlives the session that filled it, and a
-//! count starting again at 1 would leave a landing armed by a closed
+//! **The report numbers run across sessions.** A consumer arms a landing
+//! on "the first report after this write" by the number the write's
+//! answer carries ([`Standing::fence`]); the feed outlives the session,
+//! so a count restarting at 1 would leave a landing armed by a closed
 //! session waiting on a number the new one takes a lifetime to reach.
 
 use super::*;
 
-/// Numbers every report of HEAD this process sends, in the order the
-/// reports were accepted — one counter for every session, for the reason
-/// the details read's is ([`super::details_read`]).
+/// Numbers every report of HEAD this process sends, in acceptance order —
+/// process-wide (module doc).
 static NEXT_HEAD_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// What the refs listing last saw of the branch tip, which is everything
@@ -40,24 +34,21 @@ pub(super) struct HeadHold {
     pub(super) tip: Oid,
     /// Short name of the branch HEAD is on; empty when detached.
     pub(super) branch: String,
-    /// Some other ref already sits exactly on `tip`, which the listing
-    /// answers on its own — no walk needed.
+    /// Some other ref sits exactly on `tip` — answered without a walk.
     pub(super) on_a_ref: bool,
 }
 
 /// What became of a report of HEAD.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum HeadOffer {
-    /// The read observed the repository before a write ended, or before a
-    /// read that has already reported — its HEAD is older than the one
-    /// standing and changes nothing.
+    /// The read looked before a write ended, or before a read that has
+    /// already reported; changes nothing.
     Stale,
     /// The same HEAD as the one standing, and nothing was waiting to hear
     /// it again.
     Same,
     /// The same HEAD, reported by the first read to land after a write —
-    /// what a consumer waiting on "the repository as the write left it"
-    /// is waiting for, moved or not ([`Standing::fence`]).
+    /// what a consumer waiting on that write is owed ([`Standing::fence`]).
     Settled { seq: u64 },
     /// HEAD is somewhere else now.
     Moved { seq: u64 },
@@ -78,61 +69,51 @@ pub(super) struct Standing {
     inner: Mutex<Inner>,
 }
 
-/// What a write's end hands its own answer: the two numbers a consumer
-/// can wait on that write by, neither of them the write's id.
+/// What a write's end hands its answer: the two numbers a consumer can
+/// wait on that write by.
 ///
-/// **Both mean "at or above, and it looked after the write"** — they
-/// order different things and cannot be compared with each other. A
-/// consumer waiting on what the write left arms on one of them and is
-/// answered by the first report or listing numbered at or above it,
-/// whichever order that and the write's answer reach it in.
+/// Both mean "at or above looked after the write", but they order
+/// different things and cannot be compared with each other. The consumer
+/// is answered by the first report or listing at or above its number, in
+/// whichever order that and the write's answer reach it.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Fence {
     /// The smallest number the first report of HEAD after this write can
     /// carry ([`NEXT_HEAD_SEQ`]). Reads nobody asked for move it too.
     pub head_seq: u64,
     /// The smallest stamp a read that looked after this write can have
-    /// ([`Standing::stamp`], taken before git is spawned). What a
-    /// consumer waiting for a **listing** made after the write measures
-    /// against: the listing's own stamp says when it looked, so one
-    /// already in flight when the write ended is told from one the write
-    /// is answered by — which counting arrivals cannot do, since the two
-    /// travel separate feeds and are applied in no fixed order.
+    /// ([`Standing::stamp`]) — what a consumer waiting for a listing
+    /// measures against. Counting arrivals cannot tell a listing in flight
+    /// when the write ended from one begun after: they travel separate
+    /// feeds in no fixed order.
     pub reads_from: u64,
 }
 
 #[derive(Default)]
 struct Inner {
-    /// HEAD as the newest read that reported it left it. `None` until one
-    /// has — which the walk tells from "looked, and there is no commit
-    /// yet" (`head.oid` is `None` then), because the two take opposite
-    /// actions.
+    /// HEAD as the newest report left it. `None` until one has, which the
+    /// walk must tell from "no commit yet" (`head.oid` is `None`): the two
+    /// take opposite actions.
     head: Option<HeadState>,
-    /// The stamp of the last write's end. A read that looked before it
-    /// is refused for the repository after it — its HEAD and its
-    /// listing alike.
+    /// The stamp of the last write's end; a read that looked before it is
+    /// refused, HEAD and listing alike.
     fence: u64,
     /// The stamp of the report `head` came from. A report stamped
     /// earlier is older news about HEAD alone: the listing or the status
     /// it came with is still the newest of its kind, and still goes out.
     head_at: u64,
     /// A write ended and no read has reported since — the next accepted
-    /// report is the one a consumer waiting on that write is owed, moved
-    /// or not.
+    /// report is owed to whoever waits on that write, moved or not.
     fenced: bool,
     /// The number of the last report sent ([`NEXT_HEAD_SEQ`]) — a move,
-    /// or the first read after a write. A read that found HEAD where the
-    /// last report left it sends nothing and takes no number, so the
-    /// number a status is read under (`head_seq`) names the report the
-    /// consumer holds.
+    /// or the first read after a write. A read that found HEAD unmoved
+    /// takes no number, so the number a status is read under (`head_seq`)
+    /// names the report the consumer holds.
     seq: u64,
-    /// Which commit, under which refs listing, the off-window question
-    /// was last put to git for (`RepoSession::settle_head_published`):
-    /// the same pair is the same answer, and the refs moving is the one
-    /// thing that can change it.
+    /// The (commit, refs listing) the off-window question was last put to
+    /// git for (`RepoSession::settle_head_published`); only the refs
+    /// moving can change the answer.
     published_ask: Option<(Oid, u64)>,
-    /// What the refs listing saw of the tip — the half of the reach
-    /// question the listing answers by itself.
     hold: Option<HeadHold>,
     /// Whether anything besides the branch HEAD is on reaches its tip, as
     /// last answered; `None` until it has been.
@@ -144,17 +125,15 @@ struct Inner {
     /// Dirty working tree — one of the two halves that put a synthetic WIP
     /// row in front of the log stream (the other is below).
     wip_dirty: bool,
-    /// What a standing merge is bringing in (`MERGE_HEAD`), empty the rest
-    /// of the time: the WIP row leashes these as well as HEAD, so it draws
-    /// the fork the merge commit is about to have. Beside `wip_dirty`
-    /// because the two decide the same row — either one makes it, and
-    /// either moving is a graph to rebuild.
+    /// What a standing merge is bringing in (`MERGE_HEAD`), else empty;
+    /// the WIP row leashes these as well as HEAD. With `wip_dirty` it
+    /// decides that row: either makes it, either moving rebuilds the graph.
     merge_incoming: Vec<Oid>,
-    /// Why the standing rebase stopped, as the last read that managed to
-    /// tell left it. A read of git's markers can fail transiently, and a
-    /// single tick answering "not an `edit` stop" would turn the exit
-    /// card's `--skip` from a hold back into a click (`offers::skip_is_free`).
-    /// Cleared by the first read that finds no rebase standing.
+    /// Why the standing rebase stopped, as the last read that could tell
+    /// left it: a read of git's markers can fail transiently, and one tick
+    /// answering "not an `edit` stop" would turn the exit card's `--skip`
+    /// from a hold into a click (`offers::skip_is_free`). Cleared by the
+    /// first read that finds no rebase standing.
     rebase_stop: integrate::RebaseStop,
     /// The merge tool as the last status read that asked for it saw it,
     /// repeated by the reads that did not ask.
@@ -171,18 +150,14 @@ impl Default for Standing {
 }
 
 impl Standing {
-    /// A stamp for a read about to start: taken **before** git is
-    /// spawned, so what it orders is when the repository was looked
-    /// at.
+    /// A stamp for a read about to start: taken before git is spawned, so
+    /// it orders when the repository was looked at.
     pub(super) fn stamp(&self) -> u64 {
         self.stamps.fetch_add(1, Ordering::SeqCst) + 1
     }
 
-    /// A write has ended. From here on the repository is spoken for by
-    /// reads begun after it, and the next read that reports is the
-    /// one a consumer waiting on this write is owed ([`HeadOffer::Settled`]).
-    ///
-    /// Answers both numbers a consumer can wait on it by ([`Fence`]).
+    /// A write has ended: only reads begun after it speak for the
+    /// repository, and the next to report is [`HeadOffer::Settled`].
     pub(super) fn fence(&self) -> Fence {
         let at = self.stamp();
         let mut inner = self.lock();
@@ -196,15 +171,14 @@ impl Standing {
 
     /// Whether a read stamped `at` may still speak for the repository —
     /// false once a write has ended behind it. Two reads of one tick both
-    /// may: which of them speaks for HEAD is [`Self::offer_head`]'s to
-    /// order, and what each read listed is still the newest of its kind.
+    /// may: [`Self::offer_head`] orders their HEADs, and what each listed
+    /// is still the newest of its kind.
     pub(super) fn current(&self, at: u64) -> bool {
         at >= self.lock().fence
     }
 
-    /// Takes a read's report of HEAD, stamped at its spawn. Only a report
-    /// the consumer is sent takes a number — a read that found HEAD where
-    /// the last report left it changes nothing and numbers nothing.
+    /// Takes a read's report of HEAD, stamped at its spawn; only a report
+    /// the consumer is sent takes a number.
     pub(super) fn offer_head(&self, at: u64, head: &HeadState) -> HeadOffer {
         let mut inner = self.lock();
         if at < inner.fence || at < inner.head_at {
@@ -215,8 +189,7 @@ impl Standing {
         if inner.head.as_ref() != Some(head) {
             inner.head = Some(head.clone());
             // The walk's answer was about the commit HEAD just left; the
-            // next walk answers for where it is now, and that answer goes
-            // out even where it reads the same.
+            // next one goes out even where it reads the same.
             inner.published = None;
             let seq = NEXT_HEAD_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
             inner.seq = seq;
@@ -232,8 +205,7 @@ impl Standing {
     }
 
     /// The number of the last report sent — what a status read under it
-    /// carries, so the consumer can tell which report its counts stand
-    /// beside.
+    /// carries, so the consumer knows which report its counts stand beside.
     pub(super) fn head_seq(&self) -> u64 {
         self.lock().seq
     }
@@ -276,9 +248,7 @@ impl Standing {
     }
 
     /// Claims the off-window question for `oid` under the refs listing
-    /// `refs` names, answering whether it is a new one: the same commit
-    /// under the same listing was asked already, and asking git again
-    /// would read the same answer.
+    /// `refs`, answering whether it is a new one (`Inner::published_ask`).
     pub(super) fn claim_published_ask(&self, oid: Oid, refs: u64) -> bool {
         self.lock().published_ask.replace((oid, refs)) != Some((oid, refs))
     }
@@ -293,8 +263,7 @@ impl Standing {
     }
 
     /// Records the sides a standing merge brings in, answering whether
-    /// they moved — a merge that started, finished or was aborted redraws
-    /// the WIP row's leashes.
+    /// they moved.
     pub(super) fn set_merge_incoming(&self, incoming: Vec<Oid>) -> bool {
         let mut inner = self.lock();
         let moved = inner.merge_incoming != incoming;
@@ -339,8 +308,6 @@ mod tests {
         }
     }
 
-    /// The number a report went out under; a report that went nowhere
-    /// has none.
     fn number(offer: HeadOffer) -> u64 {
         match offer {
             HeadOffer::Moved { seq } | HeadOffer::Settled { seq } => seq,
@@ -362,11 +329,9 @@ mod tests {
         assert_eq!(standing.head(), Some(on("main", 1)));
     }
 
-    /// The order the reads are stamped in is the order they looked, and a
-    /// read that looked earlier cannot overwrite one that looked later —
-    /// whichever of the two lands first. Its HEAD is the stale part and
-    /// nothing more: the two reads of one tick both still speak for what
-    /// they listed.
+    /// A read that looked earlier cannot overwrite one that looked later,
+    /// whichever lands first — but only its HEAD is stale: both still speak
+    /// for what they listed.
     #[test]
     fn a_read_that_looked_earlier_is_stale_once_a_later_one_has_reported() {
         let standing = Standing::default();
@@ -389,11 +354,9 @@ mod tests {
         assert!(standing.current(later));
     }
 
-    /// A write is a clock: a poll that began before it ended cannot speak
-    /// for the repository after it, however late it lands, and the write's
-    /// own read is answered `Settled` even where HEAD did not move — that
-    /// is the report a consumer waiting on the write is owed, under the
-    /// number the write's answer named or one above it.
+    /// A poll begun before a write ended is stale however late it lands,
+    /// and the first read after it is `Settled` even where HEAD did not
+    /// move, numbered at or above what the fence named.
     #[test]
     fn a_write_fences_off_the_reads_that_began_before_it_ended() {
         let standing = Standing::default();
@@ -441,12 +404,7 @@ mod tests {
         );
     }
 
-    /// The other half of the same fence, for the consumers that wait on a
-    /// **listing**: the stamp says when a read looked, so one already in
-    /// flight when the write ended is below the fence and one begun after
-    /// it is at or above — which is the only thing that tells the two
-    /// apart once they are travelling separate feeds and arriving in no
-    /// fixed order.
+    /// The listing half of the fence ([`Fence::reads_from`]).
     #[test]
     fn a_listing_that_looked_before_the_write_ended_is_below_the_fence() {
         let standing = Standing::default();
@@ -477,10 +435,9 @@ mod tests {
         assert_eq!(standing.offer_head(at, &on("main", 2)), HeadOffer::Same);
     }
 
-    /// The numbers run across records: a report of one is never numbered
-    /// below a fence of another, so a landing armed by a session that has
-    /// since closed is answered by the first report of the one that
-    /// replaced it.
+    /// A report of one record is never numbered below a fence of another,
+    /// so a landing armed by a closed session is answered by its
+    /// replacement's first report.
     #[test]
     fn the_numbers_run_across_records() {
         let one = Standing::default();
@@ -496,9 +453,6 @@ mod tests {
         );
     }
 
-    /// A moved HEAD takes the walk's answer with it: the next walk answers
-    /// for where HEAD is, and that answer goes out even where it reads the
-    /// same as the one about the commit HEAD left.
     #[test]
     fn a_move_takes_the_published_answer_with_it() {
         let standing = Standing::default();
@@ -521,9 +475,6 @@ mod tests {
         );
     }
 
-    /// The off-window question goes to git once per commit per refs
-    /// listing: the same pair again would read the same answer, and the
-    /// listing moving is the one thing that could have changed it.
     #[test]
     fn the_off_window_question_is_claimed_once_per_listing() {
         let standing = Standing::default();

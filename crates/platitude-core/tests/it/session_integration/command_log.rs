@@ -51,9 +51,8 @@ async fn the_command_log_holds_what_the_user_asked_for() {
     let commands = sink.count(|e| matches!(e, SessionEvent::CommandStarted { .. }));
     assert_eq!(commands, 1, "only the write itself was recorded");
 
-    // Switched on, the reads show up as well. Exact even though it is set
-    // on a live session: the read below is asked for after the store, and
-    // the ask is what spawns it.
+    // Switched on, the reads show up too — exact on a live session, since
+    // the read below is asked for (and so spawned) after the store.
     session.set_recording(Recording::WithBackground);
     session.refresh_status();
     sink.wait_for("a background read", |evs| {

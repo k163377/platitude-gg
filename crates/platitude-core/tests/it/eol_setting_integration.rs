@@ -1,10 +1,7 @@
-//! Reading and writing `core.autocrlf` against real git.
-//!
-//! The unit tests beside [`platitude_core::eol::setting`] hold what git's
-//! own boolean vocabulary parses to; these prove the two levels really are
-//! two files — that a global value is inherited where a repository writes
-//! nothing, that a repository's own value stands over it, and that taking
-//! one back out puts the inherited one back in force.
+//! Reading and writing `core.autocrlf` against real git. The boolean
+//! vocabulary is held by the unit tests beside
+//! [`platitude_core::eol::setting`]; these prove the two levels are two
+//! files.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -15,10 +12,8 @@ use platitude_core::eol::setting::{self, AutoCrlf, ConfigScope};
 use platitude_core::process::GitExecutor;
 use tokio_util::sync::CancellationToken;
 
-/// A repository whose own file sets nothing, so the global level is the
-/// only thing left to answer — `TestRepo` writes `core.autocrlf=false`
-/// into every repository it makes, which would otherwise stand over every
-/// global value these tests write.
+/// `TestRepo` writes `core.autocrlf=false` locally, which would stand over
+/// every global value these tests write.
 fn no_local_setting() -> (TestRepo, GitExecutor, CancellationToken) {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
@@ -49,8 +44,7 @@ async fn a_level_that_sets_nothing_says_so() {
     );
 }
 
-/// The repository level, standing over the global one and then giving it
-/// back — the errand the empty row exists for.
+/// Giving the global value back is the errand the empty row exists for.
 #[tokio::test]
 async fn a_repository_stands_over_the_global_value_until_it_is_taken_out() {
     let (repo, exec, cancel) = no_local_setting();
@@ -108,11 +102,9 @@ async fn a_repository_stands_over_the_global_value_until_it_is_taken_out() {
     );
 }
 
-/// **`--unset` fails when there was nothing to unset** (measured 2.55: exit 5,
-/// the same code as its refusal to touch a key written twice), so the
-/// write reads the file first and leaves a level that already says it
-/// alone. Without that, the empty row would report git's failure every
-/// time it was picked on a repository that had never set the key.
+/// `--unset` of an absent key exits 5, the same code as a key written
+/// twice, so the write reads the file first and leaves a level that
+/// already says nothing alone.
 #[tokio::test]
 async fn taking_out_a_key_that_was_never_there_is_not_a_failure() {
     let (repo, exec, cancel) = no_local_setting();

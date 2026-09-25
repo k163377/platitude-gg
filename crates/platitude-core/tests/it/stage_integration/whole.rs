@@ -4,8 +4,7 @@
 //! takes, and the names a staged rename is undone by. The periodic part
 //! records what git's commands then do to the index and the disk.
 //!
-//! An empty selection never reaches git at all, and is pinned where that is
-//! decided (`stage::whole`), with no repository to build.
+//! An empty selection never reaches git; that is pinned in `stage::whole`.
 
 use crate::support::TestRepo;
 use crate::support::exec::{env, logged};
@@ -118,11 +117,9 @@ async fn discard_chosen_pulls_a_staged_renames_old_name_from_status() {
     assert!(!repo.path.join("elsewhere.txt").exists());
 }
 
-/// A staged copy carries `orig_path` exactly like a rename, and its
-/// source is left alone: the source is a live file with rows and
-/// choices of its own, and pulling it in would reset work the user
-/// never chose (measured: `status.renames=copies` + a copied-from-modified
-/// file reports `2 C.` with the source as `orig_path`).
+/// A staged copy carries `orig_path` exactly like a rename (`2 C.` under
+/// `status.renames=copies`), and its source is left alone: pulling it in
+/// would reset work the user never chose.
 #[tokio::test]
 async fn discard_chosen_leaves_a_staged_copys_source_alone() {
     let mut repo = TestRepo::init();
@@ -156,13 +153,9 @@ async fn discard_chosen_leaves_a_staged_copys_source_alone() {
     );
 }
 
-/// **What the pre-merge run leaves out**: what the commands chosen above then
-/// do to the index and the disk. Which command each side and each HEAD
-/// takes is held before every merge — the argv in
-/// `discard_chosen_takes_each_side_by_its_own_command`, the unborn-branch
-/// tests, the rename's old name pulled from status; these record git's own
-/// `add` / `restore` semantics behind a fixed command line, run by the full
-/// gate (`-- --ignored ::periodic::`) rather than by every change.
+/// Left out of the pre-merge run: git's own `add` / `restore` semantics
+/// behind the command lines pinned above. Run by the full gate
+/// (`-- --ignored ::periodic::`).
 mod periodic {
     use super::*;
 

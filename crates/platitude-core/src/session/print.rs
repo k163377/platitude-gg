@@ -5,18 +5,14 @@ use super::*;
 
 /// One delivered row, small enough to keep for every row on screen.
 ///
-/// **What the session keeps of the graph it has sent.** The only question
-/// asked of it is whether a rebuild arrived at the same picture, and a
-/// hash answers that in sixteen bytes where the row itself takes 822
-/// (measured on `JetBrains/kotlin`, 2,001 rows —
-/// ci/baseline/perf-windows-x64.md). The window defaults to 2,000 rows
-/// and can be widened (`LogOptions::limit`), so this is the part of the
-/// graph's cost that grows with what somebody asks to see.
+/// The only question asked of it is whether a rebuild arrived at the same
+/// picture, which a hash answers in sixteen bytes where the row takes
+/// hundreds. The window can be widened (`LogOptions::limit`), so this is
+/// the part of the graph's cost that grows with what somebody asks to see.
 ///
-/// **Two halves because the chips move on their own.** A refs read that
-/// finds new badges writes them into rows already delivered
-/// (`apply_refs`), and it holds the new chips and nothing else — so the
-/// half it has to restate is the only half it can.
+/// **Two halves because the chips move on their own**: a refs read writes
+/// new badges into rows already delivered (`apply_refs`) holding only the
+/// new chips, so the half it restates is the only half it can.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct RowPrint {
     /// Everything except the chips.
@@ -38,10 +34,9 @@ impl RowPrint {
         }
     }
 
-    /// **Destructured on purpose.** A field added to [`LogRow`] and not
-    /// added here is a change the graph would stop noticing — the rebuild
-    /// would call the new picture the old one and leave the screen as it
-    /// was. Naming every field makes that a build error.
+    /// **Destructured on purpose**: a field added to [`LogRow`] and not
+    /// hashed here is a change the rebuild would call the old picture.
+    /// Naming every field makes that a build error.
     fn rest_of(row: &LogRow) -> u64 {
         use std::hash::{Hash, Hasher};
         let LogRow {
@@ -89,13 +84,10 @@ impl RowPrint {
         }
         segments.len().hash(&mut h);
         stash_ref.hash(&mut h);
-        // A push from a terminal moves nothing else on the row, so without
-        // this a rebuild would call the new picture the old one and the
-        // warnings would stay as they were.
         published.hash(&mut h);
         parents.hash(&mut h);
-        // A copy over there staging one more file moves nothing else on
-        // its row — the id is the all-zero one whatever it is holding.
+        // Another copy staging one more file moves nothing else on its row
+        // (its id is all-zero whatever it holds).
         if let Some(carried) = carried {
             carried.name.hash(&mut h);
             carried.path.hash(&mut h);
@@ -128,18 +120,12 @@ impl RowPrint {
 mod tests {
     use super::*;
 
-    /// A full id spelled out of one hex digit; the input is always valid.
     fn oid(digit: char) -> Oid {
         Oid::from_hex_str(&digit.to_string().repeat(40)).unwrap()
     }
 
-    /// A row that differs anywhere prints differently.
-    ///
-    /// This is the whole safety of keeping prints: a field the print
-    /// forgets is a change the graph stops noticing, and what that looks
-    /// like is a screen that quietly keeps showing the old one. Every
-    /// field is moved here, one at a time, so forgetting one
-    /// fails.
+    /// Every field is moved one at a time, so a field the print forgets
+    /// fails here instead of quietly leaving the old row on screen.
     #[test]
     fn a_row_that_differs_anywhere_prints_differently() {
         let base = LogRow {

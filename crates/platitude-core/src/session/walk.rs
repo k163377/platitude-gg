@@ -5,46 +5,36 @@
 use super::rows::{LogTotals, Sifter, StreamItem, wip_row};
 use super::*;
 
-/// Where a buffered pass puts what it walks: the lanes it lays, the
-/// marks it stamps its rows with, and the rows themselves.
-///
-/// The three travel together because they are one thing — the picture
-/// being built off screen — and a pass that took them apart would hand
-/// the walk half of it.
+/// Where a buffered pass puts what it walks: lanes, publish marks and
+/// rows — one off-screen picture, so they travel together.
 pub(super) struct Building<'a> {
     pub(super) builder: &'a mut GraphBuilder,
     pub(super) marks: &'a mut PublishMarks,
     pub(super) out: &'a mut Vec<LogRow>,
 }
 
-/// What a walk's command cannot be built without: the commit HEAD
-/// stands on, and the commits the stashes stand on.
+/// What a walk's command cannot be built without: HEAD's commit and the
+/// stashes' commits.
 ///
-/// **Read as one ([`RepoSession::walk_inputs`]), because the reads are
-/// independent and each is a process.** One after the other they stood
-/// in front of the first chunk of every opening, and on Windows the
-/// launch is most of what a read costs
-/// (ci/baseline/code-costs-windows-x64.md).
-///
-/// **The stashes are read whatever HEAD turns out to be.** A walk with
-/// no commit to start from has no use for them, but asking HEAD first
-/// to find that out is the serial pair this exists to undo — so a
-/// repository with no commits yet pays one cheap listing per pass.
+/// Read concurrently ([`RepoSession::walk_inputs`]): each is a process,
+/// and in series they stand in front of the first chunk of every opening
+/// (ci/baseline/code-costs-windows-x64.md §git のプロセス代). So the
+/// stashes are read even for an unborn HEAD — asking HEAD first would
+/// bring the series back.
 #[derive(Clone)]
 pub(super) struct WalkInputs {
     /// `None` is an unborn HEAD: nothing to walk.
     head_tip: Option<Oid>,
-    /// The commit each stash stands on, by the name it is drawn under.
+    /// Each stash's own commit, by the name it is drawn under.
     stash_refs: HashMap<Oid, String>,
 }
 
 impl RepoSession {
     /// The two reads a walk waits on, taken together.
     ///
-    /// HEAD is asked of git only where no refs read has landed to
-    /// answer it (`known_head_tip`), and a listing that failed leaves
-    /// the walk without stash rows — the same nothing it drew before
-    /// stashes were in it.
+    /// HEAD is asked of git only where no refs read has answered it
+    /// (`known_head_tip`); a failed stash listing leaves the walk without
+    /// stash rows.
     pub(super) async fn walk_inputs(
         self: &Arc<Self>,
         workdir: &std::path::Path,
@@ -56,8 +46,8 @@ impl RepoSession {
                 None => refs::head_tip(&self.executor, workdir, cancel).await,
             }
         };
-        // Stashes are part of the graph: their oids join the walk and the
-        // synthetic index/untracked parents are sifted out below.
+        // Stash oids join the walk; their synthetic parents are sifted out
+        // (`Sifter`).
         let stashes = async {
             stash::load(&self.executor, workdir, cancel)
                 .await
@@ -87,11 +77,9 @@ impl RepoSession {
             head_tip,
             stash_refs,
         } = inputs;
-        // An unborn HEAD has nothing to log.
         let Some(head_tip) = head_tip else {
-            // No commits yet, but there can still be something to commit:
-            // the working-tree row does not hang off HEAD, so it stands
-            // here on its own where the first commit will.
+            // Unborn HEAD: nothing to log, but the working-tree row can
+            // still stand on its own where the first commit will.
             let mut totals = LogTotals::default();
             if self.pending_commit().is_some() {
                 self.emit_wip_root_row(generation);
@@ -100,17 +88,13 @@ impl RepoSession {
             return Ok(totals);
         };
 
-        // The row at the top and the walk under it, decided once (see
-        // `pending_commit`): the sides a standing merge brings in are
-        // leashed by that row, and the walk is told to start there so
-        // each leash has a node to land on even when no branch or remote
-        // points at it any more.
+        // The row at the top and the walk under it, decided once
+        // (`pending_commit`).
         let pending_row = self.pending_commit();
         let incoming = pending_row.as_deref().unwrap_or_default();
 
-        // Where the other working copies stand when they stand on no
-        // branch — off the worktree read, which is the only listing that
-        // names them (`note_worktree_holders`).
+        // Detached working copies, off the worktree read — the only
+        // listing that names them (`note_worktree_holders`).
         let standing = self.worktree_holders();
         let detached = detached_oids(&standing);
 
@@ -127,8 +111,8 @@ impl RepoSession {
             ..LogTotals::default()
         };
 
-        // Something to commit: prepend the synthetic WIP row so the
-        // current chain owns lane 0 from the very first paint.
+        // The WIP row goes first so the current chain owns lane 0 from
+        // the first paint.
         if pending_row.is_some() {
             self.emit_wip_row(generation, &head_tip, incoming);
             totals.shown += 1;
@@ -172,12 +156,9 @@ impl RepoSession {
         Ok(totals)
     }
 
-    /// Buffered variant of [`RepoSession::stream_log`]: rows accumulate
-    /// into the caller's builder/vec without touching shared state or the
-    /// sink (used by every offscreen rebuild — the tag-inclusive swap
-    /// pass and `refresh_log`'s background refreshes). The shown row
-    /// count is `out.len()`; what comes back is the rest of what the pass
-    /// has to answer for ([`LogTotals`]).
+    /// Buffered variant of [`RepoSession::stream_log`] for offscreen
+    /// rebuilds: rows accumulate into `into` without touching shared state
+    /// or the sink.
     pub(super) async fn collect_log(
         self: &Arc<Self>,
         workdir: &std::path::Path,
@@ -195,9 +176,8 @@ impl RepoSession {
             head_tip,
             stash_refs,
         } = inputs;
-        // An unborn HEAD has nothing to log (see stream_log).
         let Some(head_tip) = head_tip else {
-            // Still something to commit (see stream_log).
+            // Unborn HEAD (see stream_log).
             if self.pending_commit().is_some() {
                 out.push(super::rows::wip_root_row(builder));
             }
@@ -212,13 +192,10 @@ impl RepoSession {
         let pending_row = self.pending_commit();
         let incoming = pending_row.as_deref().unwrap_or_default();
 
-        // Something to commit: prepend the synthetic WIP row (mirrors
-        // stream_log).
         if pending_row.is_some() {
             out.push(wip_row(&head_tip, incoming, builder));
         }
 
-        // The working copies standing on no branch (see stream_log).
         let standing = self.worktree_holders();
         let detached = detached_oids(&standing);
 
@@ -273,36 +250,21 @@ impl RepoSession {
     /// The sides the uncommitted row would leash, or `None` when there is
     /// no such row because nothing is stacked on HEAD.
     ///
-    /// A different question from "is the tree dirty". Resolving every
-    /// conflict of a merge as ours and staging it leaves `git status`
-    /// empty with `MERGE_HEAD` still standing, and the commit written
-    /// there is still a merge carrying both parents. The row draws the
-    /// commit that is about to be written, so it is there whenever there
-    /// is one — which a standing operation is enough for on its own
-    /// (`refresh::publish_status` raises `wip_dirty` for one, because an
-    /// `edit` stop and an emptied-commit stop both land on this row over a
-    /// clean tree).
+    /// Not "is the tree dirty": a merge resolved all-ours and staged
+    /// leaves `git status` empty with `MERGE_HEAD` standing, and still
+    /// writes a merge. The row draws the commit about to be written, and a
+    /// standing operation alone is enough for one (`graph::wip_row_stands`).
     ///
-    /// **Sides are the merge's alone**: a stopped cherry-pick raises the
-    /// row the same way, but nothing it could write carries a second
-    /// parent — and in this very state it writes nothing at all, because
-    /// resolving as ours left the tree at HEAD, which a cherry-pick
-    /// refuses to commit where a merge still records one (measured 2.55).
+    /// Sides are the merge's alone: a stopped cherry-pick raises the row
+    /// the same way but writes no second parent.
     ///
-    /// One answer for the row and for the walk, because they are one
-    /// decision: the sides join the walk only to give the row's dotted
-    /// edges something to land on, so a walk that reached `MERGE_HEAD`
-    /// with no row above it would leave a commit on screen that no tip
-    /// names and no edge reaches — appearing and vanishing with a merge
-    /// the graph never mentions.
+    /// One answer for the row and the walk: the sides join the walk only
+    /// to give the row's dotted edges something to land on, so a walk
+    /// reaching `MERGE_HEAD` with no row above it would show a commit no
+    /// tip names and no edge reaches.
     pub(super) fn pending_commit(&self) -> Option<Vec<Oid>> {
-        // **Held back where somebody asked for that**
-        // ([`PassHooks::holds_back_the_working_tree_row`]): a pass that
-        // began before the first status carries no row of this window's,
-        // and every copy's. That is the scheduler's race to win or lose,
-        // so it is the one arrangement a repository cannot be walked
-        // into — and the readers that land on the working tree have to
-        // be answerable for what they do in it.
+        // Held back where a harness asked
+        // ([`PassHooks::holds_back_the_working_tree_row`]).
         if self.holds_back_the_working_tree_row() {
             return None;
         }
@@ -311,7 +273,7 @@ impl RepoSession {
         stacked.then_some(incoming)
     }
 
-    /// Sends the same row for a branch with no commits yet.
+    /// Sends the working-tree row for a branch with no commits yet.
     fn emit_wip_root_row(&self, generation: u64) {
         let Some(mut guard) = self.store_shared() else {
             return;
@@ -343,16 +305,13 @@ impl RepoSession {
         });
     }
 
-    /// Builds graph rows for a batch and sends them (holding the shared
-    /// lock so generations cannot interleave), counting them and what the
-    /// walk marked HEAD's own row with into `totals`.
+    /// Builds graph rows for a batch and sends them under the shared lock
+    /// (generations cannot interleave), counting into `totals`.
     ///
-    /// A stream may only add to the graph it reset: `generation` matching
-    /// the installed one is what says these rows belong to what the
-    /// consumer shows. The counter would answer a different question —
-    /// it moves for passes that never reach anybody, and a stream still
-    /// on screen would stop delivering halfway through. A refused batch
-    /// counts nothing: its stream's totals are nobody's.
+    /// A stream may only add to the graph it reset: `generation` must
+    /// match the installed one — not `log_gen`, which moves for passes
+    /// that reach nobody and would cut a stream still on screen. A refused
+    /// batch counts nothing.
     fn emit_rows(
         &self,
         generation: u64,
@@ -420,18 +379,13 @@ fn walk_command(
     if let Some(limit) = options.limit {
         cmd = cmd.arg(format!("--max-count={limit}"));
     }
-    // Stashes, the sides of a standing merge, and the working copies
-    // standing on no branch are named by id: none of them is under
-    // `--branches` or `--remotes` (a merge of a tag, of `FETCH_HEAD`, or
-    // of a branch deleted since it stopped is reachable by nothing else,
-    // and a detached checkout is named by the worktree listing alone), and
-    // each is a row somebody can be sent to — the stash from its section,
-    // the merge side from the leash that lands on it, the checkout from
-    // its WORKTREES row (デザイン規約 §左メニューの所作).
+    // Stashes, merge sides and detached copies are named by id: none is
+    // under `--branches` / `--remotes` (a merge of a tag, `FETCH_HEAD` or a
+    // since-deleted branch is reachable by nothing else), and each is a row
+    // somebody can be sent to (デザイン規約 §左メニューの所作).
     //
-    // **`HEAD` here is this window's own.** Another copy's is not in the
-    // walk at all unless it is put there: `git log` reads the HEAD of the
-    // working tree it is run in and no other.
+    // `HEAD` is this window's own: another copy's is in the walk only if
+    // named here.
     let mut extra = stash_refs
         .keys()
         .chain(incoming)
@@ -446,11 +400,8 @@ fn walk_command(
     cmd
 }
 
-/// What a walk that stopped means.
-///
-/// A self-inflicted cancel means the parser hit a fatal error: it cancels
-/// the run itself, so the cancellation is how that arrives here, and what
-/// could not be read is the answer worth reporting.
+/// What a walk that stopped means: with a parse error, the cancel was the
+/// parser's own, and the unreadable output is what to report.
 fn map_walk_error(error: GitError, parse_error: Option<String>) -> GitError {
     match parse_error {
         Some(message) => unreadable_walk(message),

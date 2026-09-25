@@ -1,14 +1,9 @@
-//! Best-effort content previews for the diff pane.
-//!
-//! A text diff says nothing useful about a binary file, and an image is
-//! better shown than described. This module finds the actual old/new
-//! content of a diff target so the UI can render images and report
-//! binary sizes — as **files**: the working tree's side is the file
-//! already there, and a blob's side is written out of `git cat-file`
-//! into a file of this run's own ([`PreviewFiles`]) that a `file:` URL
-//! can name. Everything is best-effort: a side that
-//! cannot be read is simply absent, which is also what "added" and
-//! "deleted" look like.
+//! Best-effort content previews for the diff pane: the old/new content of
+//! a diff target, so the UI can render images and report binary sizes.
+//! Sides are files a `file:` URL can name — the working tree's own, or a
+//! blob written out of `git cat-file` ([`PreviewFiles`]). A side that
+//! cannot be read is absent, which is also what "added" and "deleted"
+//! look like.
 
 use std::collections::BTreeSet;
 use std::io::Write as _;
@@ -21,9 +16,9 @@ use tokio_util::sync::CancellationToken;
 use crate::details::DiffTarget;
 use crate::process::{GitCommand, GitExecutor};
 
-/// Extensions the UI renders with a QML `Image`, with the MIME type the
-/// preview reports for them. Extension-based on purpose: content sniffing
-/// would need both sides fetched before deciding whether to fetch them.
+/// Extensions the UI renders with a QML `Image`, and their MIME types. By
+/// extension on purpose: sniffing would fetch both sides before deciding
+/// whether to fetch them.
 const IMAGE_TYPES: [(&str, &str); 11] = [
     ("png", "image/png"),
     ("jpg", "image/jpeg"),
@@ -38,9 +33,9 @@ const IMAGE_TYPES: [(&str, &str); 11] = [
     ("avif", "image/avif"),
 ];
 
-/// MIME type for paths the preview treats as images. Formats the runtime
-/// lacks a decoder for degrade in the UI (`Image.status === Error`), so
-/// listing a type here is safe.
+/// MIME type for paths the preview treats as images. A format the runtime
+/// cannot decode degrades in the UI (`Image.status === Error`), so
+/// listing one is safe.
 pub fn image_mime(path: &str) -> Option<&'static str> {
     let ext = Path::new(path).extension()?.to_str()?;
     IMAGE_TYPES
@@ -54,16 +49,13 @@ pub fn image_mime(path: &str) -> Option<&'static str> {
 pub struct PreviewSide {
     /// Content size in bytes.
     pub size: u64,
-    /// Where the content can be read from a file — the working-tree file
-    /// itself, or the file this run wrote the blob to. Only for images,
-    /// and only while the read that made it stands: the next read of the
-    /// same pane takes it away again ([`PreviewFiles::sweep_before`]).
+    /// The working-tree file, or the file the blob was written to. Images
+    /// only, and only until the pane's next read sweeps it
+    /// ([`PreviewFiles::sweep_before`]).
     pub file: Option<PathBuf>,
-    /// Why a wanted `file` is not there. A picture whose blob could not
-    /// be written out still reports its size, and this is the only place
-    /// what stopped it survives — nothing downstream can tell that side
-    /// from one no file was ever asked for. `None` for every side that
-    /// has its file, and for every side that was never to have one.
+    /// Why a wanted `file` is not there — the only trace of it: a
+    /// size-only side otherwise reads like one no file was asked for.
+    /// `None` when the file is there or was never wanted.
     pub unwritten: Option<String>,
 }
 
@@ -81,11 +73,12 @@ pub struct FilePreview {
 
 /// Where one side's content lives.
 enum SideSource {
-    /// `<rev>:<path>` — readable through `git cat-file`. `path` is the
-    /// repository path the blob is filed under, whose extension names the
-    /// file it is written to.
-    Blob { spec: String, path: String },
-    /// A file in the working tree.
+    /// `spec` is `<rev>:<path>` for `git cat-file`; `path`'s extension
+    /// names the file the blob is written to.
+    Blob {
+        spec: String,
+        path: String,
+    },
     WorkTree(PathBuf),
     /// The side does not exist (e.g. the old side of an untracked file).
     Absent,
@@ -95,17 +88,13 @@ enum SideSource {
 // The files a blob side is written to
 // ---------------------------------------------------------------------------
 
-/// Where this run keeps every preview file: one directory of its own under
-/// the system temp, named after the process, and one directory per session
-/// inside it.
+/// This run's preview directory; each session has a directory inside it.
 pub fn run_dir() -> PathBuf {
     std::env::temp_dir().join(format!("platitude-gg-{}", std::process::id()))
 }
 
-/// Removes everything the run wrote, directory included — for the moment
-/// after the last session is gone. Best-effort: what a reader still holds
-/// open stays until it lets go, and a directory that was never made is
-/// nothing to remove.
+/// Removes everything the run wrote, for after the last session is gone.
+/// Best-effort: a file a reader still holds open stays.
 pub fn remove_run_dir() {
     let dir = run_dir();
     if let Err(error) = std::fs::remove_dir_all(&dir)
@@ -118,45 +107,37 @@ pub fn remove_run_dir() {
 /// The preview files one session writes, and the sweeps that take them
 /// away again.
 ///
-/// A blob's bytes have no path a `file:` URL could name, so they are
-/// written to one: `<epoch>-<side>.<ext>` under this session's directory,
-/// the epoch being the diff read's own ([`crate::session::RepoSession`]
-/// numbers them), so a file re-read is a new file and the URL that names
-/// it is a new URL — an `Image` reloads on a source that changed and on
-/// nothing else. What takes them away is the pane moving on: the read
-/// handed to the pane sweeps the reads before it
-/// ([`Self::sweep_before`]), the pane closing sweeps them all
-/// ([`Self::release`]), and the session closing removes the directory
-/// ([`Self::remove_all`]). Only a read that has finished writing is ever
-/// swept — one still being written is left for the next sweep, whatever
-/// its number, so a slow read that lands after a fast one can still hand
-/// the pane files that are there.
+/// A blob side is written to `<epoch>-<side>.<ext>`, the epoch being the
+/// diff read's own ([`crate::session::RepoSession`] numbers them): a
+/// re-read is a new file and a new URL, and an `Image` reloads only on a
+/// changed source. The pane moving on sweeps the reads before it
+/// ([`Self::sweep_before`]), the pane closing sweeps all
+/// ([`Self::release`]), the session closing removes the directory
+/// ([`Self::remove_all`]). Only settled reads are swept, whatever their
+/// number, so a slow read landing after a fast one still hands the pane
+/// files that are there.
 pub struct PreviewFiles {
     dir: PathBuf,
     /// The reads whose files are on disk and no longer being written.
     settled: Mutex<BTreeSet<u64>>,
-    /// Whether `dir` sits in the run's own directory, which the last of
-    /// these out removes — a directory a caller chose has a parent that
-    /// is nobody's to remove.
+    /// Whether `dir` is inside the run's directory, which the last session
+    /// out removes; a caller-chosen directory's parent is not ours.
     in_run_dir: bool,
 }
 
 /// How many sessions the run's directory belongs to.
 ///
-/// **An empty directory is not an abandoned one.** A session that has
-/// not previewed a picture yet has left nothing in it, so emptiness says
-/// nothing about who still needs it — and taking it then costs the next
-/// write its file: `create_dir_all` makes the parent and the child in
-/// two steps, and a removal landing between them fails the write with
-/// `NotFound`, which lands the side by size alone. Counting is what says
-/// the directory is still somebody's; the lock is what keeps a session
-/// being made from racing the exit that read the count as zero.
+/// An empty directory is not an abandoned one: a session that has not
+/// previewed yet has written nothing, and removing the directory then
+/// fails its next write (`create_dir_all` makes parent and child in two
+/// steps; a removal between them is `NotFound`, landing the side by size
+/// alone). The lock keeps a session being made from racing the exit that
+/// read the count as zero.
 static SESSIONS: Mutex<usize> = Mutex::new(0);
 
 impl PreviewFiles {
-    /// A directory of this run's own for one session. Made on first
-    /// write, so a session that never previews a picture never touches
-    /// the disk.
+    /// One session's directory inside the run's, made on first write: a
+    /// session that never previews a picture never touches the disk.
     pub fn new() -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(1);
         let serial = NEXT.fetch_add(1, Ordering::Relaxed);
@@ -182,10 +163,9 @@ impl PreviewFiles {
         PreviewRead { files: self, epoch }
     }
 
-    /// Removes the files of every settled read numbered below `epoch` —
-    /// what the read that has just been handed to the pane makes of the
-    /// ones before it. Anything the pane still shows of those it has
-    /// already decoded.
+    /// Removes the files of every settled read numbered below `epoch`, once
+    /// that read is handed to the pane (what it still shows of them is
+    /// already decoded).
     pub fn sweep_before(&self, epoch: u64) {
         self.sweep(|read| read < epoch);
     }
@@ -196,8 +176,8 @@ impl PreviewFiles {
     }
 
     /// Removes everything, directory included — the session closing. A
-    /// read still writing recreates nothing: its file stays until the
-    /// session is dropped, which removes the directory once more.
+    /// read still writing may leave its file; the drop removes the
+    /// directory once more.
     pub fn remove_all(&self) {
         crate::session::relock(&self.settled).clear();
         if let Err(error) = std::fs::remove_dir_all(&self.dir)
@@ -247,10 +227,9 @@ impl Drop for PreviewFiles {
         if !self.in_run_dir {
             return;
         }
-        // The last session out turns the light off, and only that one:
-        // while the count is held down here, no session can be made that
-        // would want the directory back (see [`SESSIONS`]). What a read
-        // cut short left in it keeps it, the way it always did.
+        // Only the last session out removes the run's directory, holding
+        // the count so no session is made meanwhile ([`SESSIONS`]). Files a
+        // cut-short read left keep it.
         let mut sessions = crate::session::relock(&SESSIONS);
         *sessions = sessions.saturating_sub(1);
         if *sessions > 0 {
@@ -280,10 +259,8 @@ pub struct PreviewRead<'a> {
 }
 
 impl PreviewRead<'_> {
-    /// The file a side of this read is written to: named by the read and
-    /// the side, with the extension of the path the blob is filed under
-    /// (`old.jpg` → `<epoch>-old.jpg`), which is what a decoder is picked
-    /// by when the bytes do not say.
+    /// `<epoch>-<side>.<ext>`, the extension taken from the blob's
+    /// repository path: a decoder is picked by it when the bytes do not say.
     fn path_for(&self, side: &str, repo_path: &str) -> PathBuf {
         let name = match Path::new(repo_path).extension().and_then(|e| e.to_str()) {
             Some(ext) => format!("{}-{side}.{ext}", self.epoch),
@@ -337,18 +314,15 @@ pub async fn file_preview(
 /// more than a first line in the wrong colour.
 pub const SOURCE_BYTE_CAP: u64 = 4 * 1024 * 1024;
 
-/// The whole of the side a diff's colours are read against — the new one
-/// where the target has it, the old one for a file that was deleted.
-///
-/// What it is for is context. A hunk starts wherever it starts, and a
-/// lexer only knows what a line means if it walked the file to get there
+/// The whole of the side a diff's colours are read against (the new one,
+/// or the old one for a deleted file): a lexer only knows what a hunk's
+/// first line means if it walked the file to get there
 /// ([`crate::highlight`]). `None` where the side cannot be read, is not
-/// UTF-8, or is over [`SOURCE_BYTE_CAP`] — the colours then start each
-/// hunk clean.
+/// UTF-8, or is over [`SOURCE_BYTE_CAP`] — each hunk's colours then start
+/// clean.
 ///
-/// The blob side is one read: a `cat-file -s` probe would spawn a
-/// whole process to save the rare oversized read. The working-tree
-/// side asks the metadata first — that one is free.
+/// The blob side is not size-probed first: a `cat-file -s` would spawn a
+/// process to save the rare oversized read.
 pub async fn source_text(
     executor: &GitExecutor,
     workdir: &Path,
@@ -358,8 +332,6 @@ pub async fn source_text(
     let (old, new) = side_sources(workdir, target);
     let bytes = match read_source(executor, workdir, &new, cancel).await {
         Some(bytes) => bytes,
-        // No new side: the file was deleted, and every row of its diff
-        // comes from the old one.
         None => read_source(executor, workdir, &old, cancel).await?,
     };
     if bytes.len() as u64 > SOURCE_BYTE_CAP {
@@ -431,8 +403,6 @@ fn side_sources(workdir: &Path, target: &DiffTarget) -> (SideSource, SideSource)
             };
             (old, blob(&oid.to_hex(), path))
         }
-        // Both sides are commits, so both are blobs — the older one under
-        // whatever name the rename detection gave it there.
         DiffTarget::Range {
             from,
             to,
@@ -442,9 +412,8 @@ fn side_sources(workdir: &Path, target: &DiffTarget) -> (SideSource, SideSource)
             let old_path = orig_path.as_deref().unwrap_or(path);
             (blob(&from.to_hex(), old_path), blob(&to.to_hex(), path))
         }
-        // **A stack of patches has no pair of sides.** The pane shows what
-        // each chosen commit did to the file in turn, so there is no one
-        // "before" and no one "after" to put a picture of side by side.
+        // A stack of patches has no one "before" and "after" to show side
+        // by side.
         DiffTarget::Choice { .. } => (SideSource::Absent, SideSource::Absent),
         DiffTarget::Staged { path, orig_path } => {
             let old_path = orig_path.as_deref().unwrap_or(path);
@@ -461,19 +430,15 @@ fn side_sources(workdir: &Path, target: &DiffTarget) -> (SideSource, SideSource)
 
 /// Whether the object database holds this side at all.
 ///
-/// Asking is not optional. The specs [`side_sources`] builds name a side
-/// that is routinely not there — the parent side of a file the commit
-/// added, `HEAD:` before there is a HEAD, `:0:` for a staged deletion —
-/// and `cat-file` answers by failing (`fatal: Not a valid object name`,
-/// exit 128). 128 is outside the 0/1 a [`GitCommand::answers_by_code`]
-/// command may answer with, and stays there: a `cat-file` exiting 128
-/// because the repository is gone has failed. `rev-parse --verify -q`
-/// asks the same question and says no with exit 1, which the command
-/// log keeps as an answer
-/// (規約 core.md §終了コードで答える問い合わせはコマンドログでも答え).
+/// The specs [`side_sources`] builds routinely name a side that is not
+/// there (the parent side of an added file, `HEAD:` before there is a
+/// HEAD, `:0:` for a staged deletion), and `cat-file` says so with exit
+/// 128 — a failure, since a vanished repository exits 128 too.
+/// `rev-parse --verify -q` says no with exit 1, an answer
+/// (rules/core.md「終了コードで答える問い合わせは」).
 ///
 /// A read that never ran and a spec that resolved to nothing are the same
-/// answer here: both mean this side has no content to show.
+/// answer here: no content to show.
 async fn blob_is_there(
     executor: &GitExecutor,
     workdir: &Path,
@@ -507,17 +472,12 @@ async fn load_side(
     }
 }
 
-/// Reads one side out of the object database, once [`blob_is_there`] has
-/// said there is one to read. Having no side is data — it is what
-/// added, deleted and unborn HEAD all look like from here.
+/// Reads one side out of the object database. No side is data: added,
+/// deleted and unborn HEAD all look like that from here.
 ///
-/// An image side is written to `into` as it streams out of `cat-file`,
-/// and its size is what arrived; the bytes stream through. A side
-/// that could not be written is reported by size, the way a non-image
-/// binary is, and carries what stopped it
-/// ([`PreviewSide::unwritten`]) — the size on its own reads exactly like
-/// a side no picture was ever wanted from, and a reader looking at the
-/// run afterwards would have nothing else to go on.
+/// An image side is streamed into `into` and sized by what arrived; one
+/// that could not be written is sized by `cat-file -s` like a non-image
+/// binary, and carries why ([`PreviewSide::unwritten`]).
 async fn blob_side(
     executor: &GitExecutor,
     workdir: &Path,
@@ -611,10 +571,9 @@ enum WriteBlobError {
     /// `cat-file` itself fell over.
     #[error("{0}")]
     Git(#[from] crate::error::GitError),
-    /// A step of the write did. **Which path and which step is the whole
-    /// diagnosis**: a bare `NotFound` says nothing about whether the
-    /// session's directory, the file in it or the stream into it is what
-    /// went, and the side that comes back carries only this sentence.
+    /// A step of the write did. The path and step are the whole
+    /// diagnosis: a bare `NotFound` cannot say whether the directory, the
+    /// file or the stream went, and the side carries only this sentence.
     #[error("{} {step}: {error}", path.display())]
     Io {
         path: PathBuf,
@@ -662,10 +621,8 @@ mod tests {
         assert_eq!(image_mime("tricky.png.txt"), None);
     }
 
-    /// **Text that is no picture has no preview, and asks git nothing**:
-    /// its diff already tells the whole story. The executor cannot run
-    /// anything and the repository is not there, so a read that slipped
-    /// past is counted here and finds nothing real to read.
+    /// The executor cannot run anything and the repository is not there,
+    /// so a read that slipped past is counted and finds nothing real.
     #[tokio::test]
     async fn plain_text_has_no_preview_and_asks_git_nothing() {
         let (exec, asked) = refusing::git();
@@ -687,9 +644,8 @@ mod tests {
         assert_eq!(asked.count(), 0, "nothing was asked of git");
     }
 
-    /// A directory of this test's own, so what it sweeps is only what it
-    /// wrote. The temp dir outlives the files: dropping them removes
-    /// their own directory and nothing above it.
+    /// A directory of this test's own; the temp dir outlives the files,
+    /// whose drop removes only their own directory.
     fn files() -> (tempfile::TempDir, PreviewFiles) {
         let dir = tempfile::tempdir().expect("a temp dir");
         let files = PreviewFiles::at(dir.path().join("s"));
@@ -755,14 +711,10 @@ mod tests {
         );
     }
 
-    /// The run's directory is shared, so a session on its way out leaves
-    /// it to the sessions still holding it — including the ones that have
-    /// written nothing yet and so left it looking abandoned. Taking it
-    /// from them costs their next write its file ([`SESSIONS`]).
-    ///
-    /// Only this half is assertable from a test binary running its tests
-    /// side by side: whether the *last* session out removes the directory
-    /// depends on the sessions the other tests are holding.
+    /// A session on its way out leaves the run's directory to one that has
+    /// written nothing yet ([`SESSIONS`]). Only this half is assertable
+    /// here: whether the last session out removes it depends on what the
+    /// parallel tests hold.
     #[test]
     fn the_run_directory_stays_while_another_session_holds_it() {
         let live = PreviewFiles::new();

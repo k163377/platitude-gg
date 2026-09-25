@@ -1,9 +1,6 @@
 //! Hunk and line subsets, applied as patches rebuilt from the diff the
-//! selection was made on.
-//!
-//! Every one of these carries the fingerprint of those bytes, and every
-//! one of them refuses outright where the file has moved on
-//! ([`super::refusal`]).
+//! selection was made on. Each carries that diff's fingerprint and refuses
+//! outright where the file has moved on ([`super::refusal`]).
 
 use std::path::Path;
 
@@ -22,19 +19,15 @@ use super::whole::unstage_paths;
 
 /// Stages or unstages part of one file's diff.
 ///
-/// The diff is re-run here, so the bytes the selection indexes into are
-/// exactly the bytes being rebuilt. A concurrent edit changes what the
-/// indices mean, so `seen` — the fingerprint of the diff the selection
-/// was made on ([`details::file_diff_with_fingerprint`]) — is checked
-/// against the re-run bytes, and any drift is a refusal. (`git apply`
-/// cannot be the net here: a patch rebuilt from the drifted bytes
-/// always fits them.)
+/// The diff is re-run here and `seen` — the fingerprint of the diff the
+/// selection was made on ([`details::file_diff_with_fingerprint`]) — is
+/// checked against it; any drift is a refusal. `git apply` cannot be the
+/// net: a patch rebuilt from drifted bytes always fits them.
 ///
-/// [`DiffTarget::Untracked`] is staged with intent-to-add first (git's own
+/// [`DiffTarget::Untracked`] is marked intent-to-add first (git's own
 /// requirement for partially staging a new file), then treated as unstaged.
-/// Its fingerprint is checked *before* the mark, against the same
-/// `--no-index` bytes the UI derived the selection from — marking first
-/// would change which command the diff even is.
+/// Its fingerprint is checked *before* the mark: marking first would change
+/// which command the diff even is.
 pub async fn apply_partial(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -76,10 +69,8 @@ pub async fn apply_partial(
 
     let result = apply_prepared(executor, repo, &target, selects, side, verify, cancel).await;
     if result.is_err() {
-        // The intent-to-add mark has already moved the file out of the
-        // untracked bucket, so a failure puts it back where it was.
-        // Best-effort — the failure itself is what the caller
-        // surfaces.
+        // The intent-to-add mark already moved the file out of the
+        // untracked bucket, so a failure puts it back (best-effort).
         if let Some(path) = intent_path
             && let Err(undo) = unstage_paths(executor, workdir, &[path], cancel).await
         {
@@ -92,10 +83,8 @@ pub async fn apply_partial(
     result
 }
 
-/// The staging half of [`apply_partial`], once the target is one a diff
-/// can be built from. `verify` carries the fingerprint still to check —
-/// `None` when the untracked arm already checked it against the bytes
-/// the selection was actually made on.
+/// The staging half of [`apply_partial`]. `verify` is `None` when the
+/// untracked arm already checked the fingerprint.
 async fn apply_prepared(
     executor: &GitExecutor,
     repo: &RepoInfo,
@@ -112,9 +101,7 @@ async fn apply_prepared(
     }
     refuse_combined(&raw)?;
     let Some(built) = patch::build_partial(&raw, selects, side) else {
-        // The selection indexes a diff that no longer holds it — the file
-        // changed under the open diff, so this comes back as a refusal
-        // the reader can see.
+        // The file changed under the open diff.
         return Err(stale(taking(side)));
     };
 
@@ -137,16 +124,13 @@ async fn apply_prepared(
     executor.run(cmd, cancel).await.map(drop)
 }
 
-/// Throws away part of one file's unstaged diff: the selection is built
-/// the way [`apply_partial`] builds an unstaging one — the post-image side
-/// stays whole, since that is the side the patch has to fit — and applied
-/// in reverse to the working tree alone. Without `--cached` the index is
-/// not touched, so what is staged survives.
+/// Throws away part of one file's unstaged diff: built like an unstaging
+/// selection (the post-image side stays whole, since that is the side the
+/// patch has to fit) and applied in reverse to the working tree alone, so
+/// what is staged survives.
 ///
-/// Only the unstaged side gets here. A staged hunk is unstaged first (that
-/// is what the staged side's affordance does) and thrown away from the
-/// unstaged side afterwards; an untracked file has no pre-image to restore
-/// part of, so it goes whole or not at all.
+/// Only the unstaged side gets here: a staged hunk is unstaged first, and
+/// an untracked file has no pre-image to restore part of.
 ///
 /// Destructive — the caller confirms first.
 pub async fn discard_partial(
@@ -173,8 +157,6 @@ pub async fn discard_partial(
     verify_fingerprint(&raw, seen, ReportKind::StaleDiscard)?;
     refuse_combined(&raw)?;
     let Some(built) = patch::build_partial(&raw, selects, PatchSide::Reverse) else {
-        // As in apply_partial: a vanished selection comes back as a
-        // refusal the reader can see.
         return Err(stale(ReportKind::StaleDiscard));
     };
 
@@ -187,8 +169,7 @@ pub async fn discard_partial(
         })?;
     let cmd = GitCommand::new()
         .cwd(workdir)
-        // Same pinning as the staging path: the patch lands byte-for-byte
-        // or not at all.
+        // Pinned against `apply.whitespace`, as when staging.
         .args(["apply", "--whitespace=nowarn", "--reverse"])
         .arg(scratch.path());
     executor.run(cmd, cancel).await.map(drop)
@@ -216,9 +197,7 @@ mod tests {
         Oid::from_hex_str("0123456789abcdef0123456789abcdef01234567").expect("40 hex digits")
     }
 
-    /// The three targets whose diff is of history: one commit against its
-    /// parent, a span between two, and several commits' own patches one
-    /// after another.
+    /// The three targets whose diff is of history.
     fn committed_targets() -> [DiffTarget; 3] {
         [
             DiffTarget::Commit {
@@ -241,10 +220,8 @@ mod tests {
         ]
     }
 
-    /// **A committed diff has no index entry to be written into**, so all
-    /// three are turned down here — and turned down ahead of the diff the
-    /// patch would have been rebuilt from. The pane offers no pieces on
-    /// such a target; this is the floor under that.
+    /// A committed diff has no index entry to be written into. The pane
+    /// offers no pieces on such a target; this is the floor under that.
     #[tokio::test]
     async fn no_diff_of_history_can_be_staged_and_none_of_them_reaches_git() {
         for target in committed_targets() {
@@ -261,10 +238,6 @@ mod tests {
         }
     }
 
-    /// Discarding writes the working tree, so **only the side that has
-    /// one gets here**: a staged hunk is unstaged first and thrown away
-    /// from the unstaged side afterwards, and an untracked file has no
-    /// pre-image to restore part of.
     #[tokio::test]
     async fn only_the_unstaged_side_can_be_thrown_away_in_pieces() {
         let others = [

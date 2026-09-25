@@ -1,10 +1,9 @@
 //! Refs listing and HEAD state against real git, including a local
 //! file-based "remote" (no network involved).
 //!
-//! **HEAD is read here in all three states, and each is read once**: two
-//! of the three are an exit code, so what the state is and how the
-//! command log classifies it are the same read (`answer_reads` holds the
-//! rest of that family).
+//! HEAD is read in all three states, each once: the state and how the
+//! command log classifies it come off the same read (`answer_reads` holds
+//! the rest of that family).
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::expect_used)]
@@ -28,7 +27,6 @@ fn scenario() -> TestRepo {
     repo.git(&["branch", "feature/x"]);
     repo.git(&["branch", "local-only"]);
 
-    // A bare clone acts as origin via file:// semantics (path remote).
     let remote_path = repo.path.parent().expect("parent").join("origin.git");
     let remote_str = remote_path.to_string_lossy().replace('\\', "/");
     let repo_dir = repo.path.clone();
@@ -39,9 +37,8 @@ fn scenario() -> TestRepo {
     repo.git(&["remote", "add", "origin", &remote_str]);
     repo.git(&["fetch", "origin"]);
     repo.git(&["branch", "-u", "origin/main", "main"]);
-    // The bare clone took every branch, so origin is made to forget
-    // local-only — that is what leaves it local. feature/x needs nothing:
-    // it never had an upstream, so only its name matches.
+    // The bare clone took every branch, so local-only is deleted there;
+    // feature/x keeps a same-named branch but never gets an upstream.
     repo.git(&["push", "origin", "--delete", "local-only"]);
     repo
 }
@@ -87,15 +84,9 @@ async fn lists_branches_tags_and_remotes() {
         "origin/HEAD symref must be hidden"
     );
 
-    // Remote-state comes from the upstream and nowhere else: main has one,
-    // feature/x was pushed without one and so has a same-named branch on
-    // origin that is not its own, and local-only was deleted on origin.
-    //
-    // **git is asked the same question here**, because agreeing with it
-    // is the whole reason a matching name is not enough
-    // (`RemoteBranches::spoken_for`): it reads `branch.<name>.merge` and
-    // has no answer for feature/x, though `origin/feature/x` is right
-    // there in the listing above.
+    // Remote-state comes from the upstream alone, to agree with git
+    // (`RemoteBranches::spoken_for`): git names no upstream for feature/x
+    // though `origin/feature/x` is in the listing.
     find(RefKind::RemoteBranch, "origin/feature/x");
     assert_eq!(
         repo.git(&[
@@ -118,13 +109,9 @@ async fn lists_branches_tags_and_remotes() {
     assert!(!with_remote.contains("refs/heads/local-only"));
 }
 
-/// **Two of the three states answer by exit code**, and the same two
-/// reads say what the state is: `symbolic-ref -q` exits 1 for "detached",
-/// `rev-parse --verify -q HEAD` exits 1 for "unborn". So the state and
-/// its classification are read off one repository — unmarked, each of
-/// these logged a failed row over an ordinary answer, on every refresh
-/// and on both graph passes (規約 core.md §終了コードで答える問い合わせは
-/// コマンドログでも答え).
+/// `symbolic-ref -q` exits 1 for "detached" and `rev-parse --verify -q
+/// HEAD` for "unborn" — unmarked, each logs a failed row on every refresh
+/// (rules/core.md「終了コードで答える問い合わせは」).
 #[tokio::test]
 async fn head_state_on_branch_and_detached_answers_by_code() {
     let mut repo = TestRepo::init();
@@ -159,22 +146,18 @@ async fn head_state_on_branch_and_detached_answers_by_code() {
         vec![CommandEnd::Answered(0), CommandEnd::Answered(1)],
         "detached is an answer, not a failed row"
     );
-    // Both of them, counted: `ends_of` drops the rows that never ended,
-    // so a read whose end went missing would leave an `all()` over this
-    // true — and so would no read at all.
+    // Counted, not `all()`: `ends_of` drops rows that never ended, so `all()`
+    // would pass with an end missing, or with no read at all.
     assert_eq!(
         log.ends_of(&["rev-parse", "--verify"]),
         vec![CommandEnd::Answered(0), CommandEnd::Answered(0)],
         "the commit resolved on both reads, and both reads ended"
     );
 
-    // No ref carries the HEAD marker while detached.
     let refs_list = refs::load(&executor, &repo.path, &cancel).await.unwrap();
     assert!(refs_list.iter().all(|r| !r.is_head));
 }
 
-/// The third state — the one every freshly initialised repository opens
-/// in — and the exit code that says so.
 #[tokio::test]
 async fn empty_repository_has_unborn_head_and_says_so_by_code() {
     let repo = TestRepo::init();
@@ -196,12 +179,9 @@ async fn empty_repository_has_unborn_head_and_says_so_by_code() {
     assert!(refs_list.is_empty());
 }
 
-/// **The walk's HEAD read asks one question.** Where a caller has no use
-/// for the branch — the walk names commits, not branches — the pair
-/// `head_state` runs is a second process launch in front of the first
-/// chunk, and on Windows the launch is most of what a read costs
-/// (ci/baseline/code-costs-windows-x64.md). The answers are the same
-/// ones, exit code and all.
+/// The walk names commits, not branches, so its HEAD read skips the second
+/// process `head_state` runs — on Windows the launch is most of what a read
+/// costs (ci/baseline/code-costs-windows-x64.md).
 #[tokio::test]
 async fn the_narrow_head_read_asks_for_the_commit_and_nothing_else() {
     let mut repo = TestRepo::init();
@@ -229,10 +209,8 @@ async fn the_narrow_head_read_asks_for_the_commit_and_nothing_else() {
     );
 }
 
-/// The counts a sidebar row draws, taken from real git: a placeholder
-/// spelled wrong reads as an empty leg, and every branch would
-/// then look level with its upstream while the parser still
-/// passed.
+/// Against real git because a misspelled placeholder reads as an empty leg:
+/// every branch would look level with its upstream while the parser passed.
 #[tokio::test]
 async fn a_branch_counts_how_far_it_stands_from_its_upstream() {
     let mut repo = TestRepo::init();
@@ -254,18 +232,15 @@ async fn a_branch_counts_how_far_it_stands_from_its_upstream() {
         repo.git(&["branch", "-u", &format!("origin/{branch}"), branch]);
     }
 
-    // Two commits this side alone.
     repo.git(&["switch", "ahead"]);
     repo.commit_file("a.txt", "2\n", "ahead one");
     repo.commit_file("a.txt", "3\n", "ahead two");
 
-    // One the far side alone: made here, sent, then dropped from under.
     repo.git(&["switch", "behind"]);
     repo.commit_file("a.txt", "4\n", "theirs");
     repo.git(&["push", "origin", "behind"]);
     repo.git(&["reset", "--hard", "HEAD~1"]);
 
-    // One each way: the sent commit is dropped and another put in its place.
     repo.git(&["switch", "diverged"]);
     repo.commit_file("a.txt", "5\n", "theirs");
     repo.git(&["push", "origin", "diverged"]);

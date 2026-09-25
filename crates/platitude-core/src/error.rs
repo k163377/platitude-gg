@@ -7,13 +7,9 @@ use crate::report::{ReportKind, WriteReport};
 
 /// Errors produced while locating, spawning or running the git CLI.
 ///
-/// **These sentences are read as they are written.** Every one of them
-/// reaches a screen — the error line, the notice bar, the command log,
-/// the band's state card — and nothing on the way renders markup, so a
-/// command wrapped in backticks arrives with the backticks in it
-/// (デザイン規約 §git 用語のコード表記: the code chip is a menu row's form,
-/// and it is a chip). Punctuate them the way a sentence is
-/// punctuated, and leave the marking up to whoever draws them.
+/// The `#[error]` sentences reach the screen verbatim and nothing on the
+/// way renders markup: punctuate them as sentences, with no backticks
+/// (the code chip is a menu row's form — デザイン規約 §git 用語のコード表記).
 #[derive(Debug, thiserror::Error)]
 pub enum GitError {
     /// The git executable could not be found on PATH.
@@ -48,21 +44,15 @@ pub enum GitError {
         stderr: String,
     },
 
-    /// A write that did not happen and has something to say for itself:
-    /// the far side turned it down under a rule of its own, a hook here
-    /// did, or git worked out from what this end holds that it could not
-    /// stand. Nothing was half done and there is nothing here to put
-    /// right, so the screen reports it
-    /// (デザイン規約 §答えの要らない報せ).
+    /// A write that did not happen and has something to say for itself —
+    /// refused by the far side, a hook here, or git itself — with nothing
+    /// half done, so the screen reports it (デザイン規約 §答えの要らない報せ).
     ///
-    /// Reads the same as [`GitError::Failed`] wherever it is only
-    /// being logged: `report` is the part the screen is made out
-    /// of, and which of them this is lives in
-    /// [`ReportKind`].
+    /// Logged the same as [`GitError::Failed`]; `report` is what the screen
+    /// is made of, and its [`ReportKind`] says which refusal this is.
     ///
-    /// Boxed because every `Result<_, GitError>` in the crate carries the
-    /// widest variant, and four more strings here would put that cost on
-    /// reads that can never be refused by anybody (`result_large_err`).
+    /// Boxed: every `Result<_, GitError>` carries the widest variant
+    /// (`result_large_err`).
     #[error("{command} exited with code {code}: {stderr}")]
     Reported {
         command: String,
@@ -81,10 +71,8 @@ pub enum GitError {
 
     /// The given path is not inside a git repository (or does not exist).
     ///
-    /// `bare` separates the one folder that *is* a repository and still
-    /// cannot be opened: a bare one has no work tree to show. The screen
-    /// says something different for it, and this is how it knows — git's
-    /// wording is for people.
+    /// `bare`: it is a repository, but one with no work tree to show. The
+    /// screen words that differently and cannot tell it from git's text.
     #[error("not a git repository: {}", path.display())]
     NotARepository {
         path: PathBuf,
@@ -105,12 +93,9 @@ pub enum GitError {
     /// A write this end worked out could not stand, and stopped before
     /// git — carrying the [`WriteReport`] the screen states it from.
     ///
-    /// The same pair as [`GitError::Failed`] and [`GitError::Reported`],
-    /// one step earlier: those two are git's answer with and without
-    /// something to report, these two are this end's own. **Nothing ran**,
-    /// which is the whole of why this variant names no command and no exit
-    /// code — putting one in front of the reader would name a command they
-    /// never ran (デザイン規約 §git が言ったことを読む場所).
+    /// [`GitError::Reported`] one step earlier. Nothing ran, so it names no
+    /// command and no exit code: showing one would name a command the
+    /// reader never ran (デザイン規約 §git が言ったことを読む場所).
     #[error("{message}")]
     Withheld {
         message: String,

@@ -7,8 +7,7 @@ use super::{
 };
 
 /// Which platform's placement rules to apply. A parameter, so all three
-/// can be tested from any machine — the 3-OS CI that would otherwise
-/// reach them stays unrun until Phase 5 (CLAUDE.md).
+/// can be tested from any machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Platform {
     Windows,
@@ -58,17 +57,14 @@ impl Env {
             .map(|(_, v)| v.as_str())
     }
 
-    /// A non-empty variable, which is what every base directory needs to
-    /// be: an empty `HOME` is not a home directory.
+    /// A non-empty variable: an empty `HOME` is not a home directory.
     fn filled(&self, key: &str) -> Option<&str> {
         self.get(key).filter(|v| !v.is_empty())
     }
 
-    /// True when anything is driving this process.
-    ///
-    /// Asked by a build that carries a verification harness, and handed
-    /// back as [`Build::driven`]. A shipped build never asks, so a `PGG_*`
-    /// variable somebody happens to have exported costs them nothing.
+    /// True when anything is driving this process. Asked only by a build
+    /// carrying a verification harness ([`Build::driven`]), so a `PGG_*`
+    /// variable somebody exported costs a shipped build nothing.
     pub fn automated(&self) -> bool {
         self.vars
             .iter()
@@ -79,26 +75,19 @@ impl Env {
 /// Which build is asking for a store.
 ///
 /// A build made in a worktree, or one with debug assertions on, keeps its
-/// own copy of the two files. Several of those are up at once on this
-/// machine, next to the one being used for real work (CLAUDE.md
-/// ビルド・テスト), and the files are what two processes fight over — so
-/// giving each build its own is both what lets them run side by side and
-/// what keeps a development run from costing somebody the tabs and the
-/// layout they were in. What ships reaches the real files, and nothing
-/// else does.
+/// own copy of the two files, so development builds run side by side
+/// without costing a person the tabs and layout of the real one. What
+/// ships reaches the real files, and nothing else does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Build<'a> {
     /// The worktree the binary was built in, empty for a plain checkout
     /// (`models::build_tree` reads it out of the build path).
     pub tree: &'a str,
-    /// Built with debug assertions on.
     pub debug: bool,
-    /// A machine is driving this run, so it gets no files at all —
-    /// otherwise a screenshot run would write its window geometry into a
-    /// person's real settings and the next run would open on it.
-    /// [`Env::automated`] is how a caller works it out, but only a build
-    /// carrying a verification harness ever asks: what ships passes
-    /// `false` without reading the environment.
+    /// A machine is driving this run, so it gets no files at all — a
+    /// screenshot run would otherwise write its window geometry into a
+    /// person's real settings. What ships passes `false` without reading
+    /// the environment ([`Env::automated`]).
     pub driven: bool,
 }
 
@@ -114,9 +103,8 @@ impl Build<'_> {
     }
 
     /// The directory this build's files live in, under the platform's
-    /// base. The tree names it, because that is the one thing that tells
-    /// two development builds apart — the same tree built both ways is
-    /// still one build to a person, and shares.
+    /// base. The tree names it: the same tree built both ways is one build
+    /// to a person, and shares.
     fn dir(&self) -> PathBuf {
         let base = PathBuf::from(DIR_NAME);
         if !self.tree.is_empty() {
@@ -130,14 +118,10 @@ impl Build<'_> {
 }
 
 impl Store {
-    /// Windows separates the two by roaming: settings follow a person to
-    /// another machine, a window position stays. Linux has the same
-    /// split spelled out in the XDG spec. macOS has no such convention, so
-    /// both sit in Application Support.
-    ///
-    /// A base directory the environment does not name leaves the store
-    /// with no files at all — every path comes from the environment
-    /// itself.
+    /// Windows and XDG split the two by roaming (settings follow a person
+    /// to another machine, a window position stays); macOS has no such
+    /// convention. A base directory the environment does not name leaves
+    /// the store with no files at all.
     pub(super) fn platform_paths(platform: Platform, env: &Env, build: Build) -> Self {
         let (settings_base, state_base) = match platform {
             Platform::Windows => (
@@ -190,8 +174,7 @@ mod tests {
         assert!(Store::locate(Platform::Windows, &empty, Build::SHIPPED).is_ephemeral());
     }
 
-    /// The build that ships is the one that never says it, whatever is in
-    /// the environment around it.
+    /// The shipped build never says this, whatever the environment holds.
     const DRIVEN: Build<'static> = Build {
         driven: true,
         ..Build::SHIPPED
@@ -218,8 +201,7 @@ mod tests {
         );
     }
 
-    /// What a caller hands to [`Build::driven`], which is the only place
-    /// the environment still decides this.
+    /// What a harness build hands to [`Build::driven`].
     #[test]
     fn a_knob_is_what_says_something_is_driving() {
         assert!(Env::from_pairs(&[("PGG_AUTO_ACT", "open-picker")]).automated());
@@ -235,14 +217,9 @@ mod tests {
 
     #[test]
     fn each_platform_puts_the_files_where_it_keeps_them() {
-        // The Windows bases are spelled with forward slashes on purpose.
-        // `join` punctuates with the separator of the host the test runs on,
-        // so a `C:\Roaming` fixture comes back as `C:\Roaming/platitude-gg/…`
-        // on Linux — where a backslash is an ordinary character, not a
-        // separator — and the assertion could only ever hold on one of the
-        // three operating systems. Windows reads both separators, so this is
-        // the spelling every host agrees on, and what is under test is which
-        // base directory each file lands in.
+        // Windows bases in forward slashes on purpose: `join` uses the
+        // host's separator and Linux reads a backslash as an ordinary
+        // character, so only this spelling holds on every host.
         let windows = Store::locate(
             Platform::Windows,
             &Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("LOCALAPPDATA", "C:/Local")]),

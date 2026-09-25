@@ -7,36 +7,22 @@ use super::*;
 /// Numbers every plan ask this process makes, so an answer can say which
 /// click it belongs to.
 ///
-/// Process-global, for the reason the details read's is
-/// ([`super::details_read`]): the feed carrying these answers outlives
-/// the session that filled it, and a counter starting again at 1 would
-/// leave a closed session's answer sitting above everything the new one
-/// asks.
+/// Process-global: the feed carrying these answers outlives the session
+/// that filled it, and a counter restarting at 1 would put a closed
+/// session's answer above the new one's.
 static NEXT_PLAN_ASK: AtomicU64 = AtomicU64::new(1);
 
-/// Numbers every merge-tool ask this process makes.
-///
-/// **This one exists for the log, not for the code.** The read that
-/// answers a settings screen has stopped four times in a gate with the
-/// indicator turning and nothing after it (`P3-確認事項.md`), and what
-/// the logs could not say was how far it had got: the screen reports
-/// `loading=true choices=0` either way, whether the ask was never
-/// accepted, or the opening never finished, or a git read never came
-/// back. The stages in [`RepoSession::ask_merge_tools`] say which, and
-/// the number ties them to the ask they belong to — the slot makes the
-/// read single-flight, but two tabs are two sessions and one screen can
-/// be opened twice.
+/// Numbers every merge-tool ask, for the log only: a screen stuck on
+/// `loading=true choices=0` may be an ask never accepted, an opening never
+/// finished or a git read never back, and the stages logged in
+/// [`RepoSession::ask_merge_tools`] say which, tied to their ask by this
+/// number (two tabs are two sessions; a screen can be opened twice).
 static MERGE_TOOL_ASKS: AtomicU64 = AtomicU64::new(1);
 
 impl RepoSession {
-    /// Says a write came to rest on a stop, when that is what git did
-    /// ([`SessionEvent::WriteStopped`]).
-    ///
-    /// A stop leaves the operation standing, with everything it did on
-    /// screen — the badge, the exit card, the conflicted rows
-    /// (デザイン規約 §進行中の操作から出る). The event says the one thing
-    /// the write's own answer cannot, that the press is answered by the
-    /// working tree.
+    /// Says a write came to rest on a stop ([`SessionEvent::WriteStopped`])
+    /// — the one thing the write's own answer cannot say: that the press
+    /// is answered by the working tree (デザイン規約 §進行中の操作から出る).
     ///
     /// Called from inside the write's own task, so the write it speaks
     /// for is the one the queue is serving ([`Self::running_write`]).
@@ -72,10 +58,8 @@ impl RepoSession {
         )
     }
 
-    /// `git rebase <upstream>`, carrying uncommitted work across the way
-    /// every other rewrite here does — nothing is asked, and the
-    /// staged/unstaged split survives
-    /// (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
+    /// `git rebase <upstream>`, carrying uncommitted work across like every
+    /// other rewrite here (デザイン規約 §未コミット変更がある状態で履歴を書き換える).
     pub fn rebase(
         self: &Arc<Self>,
         upstream: String,
@@ -100,27 +84,20 @@ impl RepoSession {
     /// `git rebase --interactive` with a plan assembled in the UI. The todo
     /// editor is the helper binary shipped beside the application.
     ///
-    /// `expect_head` (full hex) is the tip the plan was composed against —
-    /// anything else refuses, there being no unpinned replay. The screen
-    /// pins it when the plan opens; a terminal
-    /// or another session moving the branch in between would leave the
-    /// plan's todo silently dropping whatever landed, so a tip that moved
-    /// is refused and nothing is touched. It travels with the plan,
-    /// because the carry spawns the replay twice and both spawns need it
-    /// in front of them
+    /// `expect_head` (full hex) is the tip the plan was composed against
+    /// (pinned when the plan opens). A tip moved since — a terminal,
+    /// another session — is refused with nothing touched, or the todo
+    /// would silently drop whatever landed. It travels with the plan
+    /// because the carry spawns the replay twice and both check it
     /// ([`Replay::tip_still_stands`]).
     ///
-    /// **A standing operation takes the plan's premise too.**
-    /// An operation started from a terminal — `git merge topic` that stops
-    /// on a conflict, a cherry-pick, a revert — leaves HEAD exactly where
-    /// it was, so the tip check sees nothing wrong, and firing the replay
-    /// into it destroys the standing operation outright: git refuses the
-    /// rebase in the very words the carry reads as a dirty tree, and the
-    /// stash that follows takes `MERGE_HEAD` down with it (measured, 2.55 —
-    /// `session_integration::standing_op`). The carry has its own guard
-    /// now; this one is the plan's, and it says so before anything is
-    /// spawned. The set is `opText != ""` on the screen — the same
-    /// operations the badge names, bisect included.
+    /// **A standing operation is refused too**, before anything is spawned.
+    /// A merge / cherry-pick / revert stopped from a terminal leaves HEAD
+    /// where it was, so the tip check passes, and the replay would destroy
+    /// it: git refuses the rebase in the words the carry reads as a dirty
+    /// tree, and the stash that follows takes `MERGE_HEAD` with it
+    /// (`session_integration::standing_op`). The set is the badge's
+    /// (`opText != ""`), bisect included — wider than the carry's own guard.
     pub fn rebase_interactive(
         self: &Arc<Self>,
         upstream: String,
@@ -150,16 +127,12 @@ impl RepoSession {
     /// would be made of; the answer arrives as
     /// [`SessionEvent::RebasePlanLoaded`], or as
     /// [`SessionEvent::RebasePlanRefused`] where the range cannot be
-    /// replayed. A read like [`RepoSession::check_publish`] — nothing is
-    /// touched, so it stays off the write queue.
+    /// replayed. A read, so it stays off the write queue.
     ///
-    /// **One ask at a time** ([`Latest::begin_numbered`]). The screen has one plan, so
-    /// a second right-click replaces the first: the earlier read is
-    /// cancelled where it stands — `from^..HEAD` off a deep commit is a
-    /// walk of the whole branch, and leaving it running is a walk nobody
-    /// will read — and its answer, if it was already past the point of
-    /// stopping, is one the numbering keeps from overtaking the answer
-    /// the screen is waiting for.
+    /// **One ask at a time** ([`Latest::begin_numbered`]): a second
+    /// right-click cancels the earlier read (`from^..HEAD` off a deep
+    /// commit walks the whole branch), and the numbering keeps an answer
+    /// already past cancelling from overtaking the one the screen awaits.
     pub fn ask_rebase_plan(self: &Arc<Self>, from: String) {
         let (generation, cancel) = self
             .plan_read
@@ -173,10 +146,8 @@ impl RepoSession {
                 return;
             }
             let answer = rebase_plan::preview(&s.executor, &workdir, &from, &cancel).await;
-            // A superseded read says nothing at all: the click it answers
-            // is one the screen has already left behind, and its failure
-            // is this end's own cancellation, which the error surface
-            // leaves alone.
+            // A superseded read says nothing: its failure is this end's own
+            // cancellation.
             if cancel.is_cancelled() {
                 return;
             }
@@ -195,9 +166,8 @@ impl RepoSession {
                     });
                 }
                 Err(error) => {
-                    // Both halves: the failure itself to the shared error
-                    // surface, and word to the asker so its waiting state
-                    // comes down.
+                    // Both: the failure to the error surface, and word to
+                    // the asker so its waiting state comes down.
                     s.sink
                         .event(SessionEvent::RebasePlanFailed { generation, from });
                     s.fail("rebase-plan", error);
@@ -250,10 +220,7 @@ impl RepoSession {
         )
     }
 
-    /// Replaces one commit's message.
-    ///
-    /// The newest commit is amended: an amend touches nothing else,
-    /// while a replay would rewrite every commit after it.
+    /// Replaces one commit's message; the newest is amended, not replayed.
     pub fn reword(self: &Arc<Self>, oid: String, message: String) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
@@ -343,9 +310,7 @@ impl RepoSession {
     }
 
     /// Hands conflicted paths to `git mergetool` (empty = all of them).
-    ///
-    /// Runs under the write lock like any other write, which means it holds
-    /// the lock for as long as the user keeps the tool open.
+    /// Holds the write lock for as long as the user keeps the tool open.
     pub fn mergetool(self: &Arc<Self>, paths: Vec<String>) -> Option<OperationId> {
         self.write(
             OperationKind::Mergetool,
@@ -357,19 +322,16 @@ impl RepoSession {
     }
 
     /// Reads what the settings field can offer: tools named in config
-    /// (cheap) and tools git found installed (about eight seconds on
-    /// Windows, kept for the life of the process).
+    /// (cheap) and tools git found installed (seconds on Windows, kept for
+    /// the life of the process).
     ///
-    /// A read of its own, for the reason the remote tag read is: eight
-    /// seconds on the write queue would hold the poll out and put every
-    /// later write behind a dialog nobody is waiting on.
+    /// Off the write queue: seconds there would hold the poll out and put
+    /// every later write behind a dialog nobody is waiting on.
     ///
-    /// The answers arrive in up to two waves — config names in
-    /// milliseconds, the installed sweep when it lands — with `settled`
-    /// marking the last, so the fast half never waits on the slow one.
-    /// Either read failing contributes nothing — what it feeds is a
-    /// free text field, and offering nothing is a working
-    /// state.
+    /// Answers in up to two waves — config names, then the installed
+    /// sweep — with `settled` marking the last, so the fast half never
+    /// waits on the slow one. A failed read contributes nothing: the field
+    /// is free text, and offering nothing is a working state.
     pub fn ask_merge_tools(self: &Arc<Self>) {
         let ask = MERGE_TOOL_ASKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let Ok(permit) = Arc::clone(&self.merge_tools_slot).try_acquire_owned() else {
@@ -380,16 +342,11 @@ impl RepoSession {
         self.runtime.spawn(async move {
             let _permit = permit;
             tracing::info!(ask, "merge tools: asked");
-            // **Every road out of here ends in the event.** The screen
-            // marks its combo loading the instant this is accepted
-            // (`repo_tab::list_merge_tools`) and only this event puts
-            // it down, so a road that says nothing is an indicator that
-            // turns for as long as the window is open. The ask arrives
-            // from a settings screen that can be opened inside the
-            // opening, where there is no working tree *yet*
-            // ([`RepoSession::workdir_when_open`] waits that out); once
-            // the opening has settled without one there is nothing to
-            // offer, and offering nothing is a working state.
+            // **Every road out of here ends in the event**: the screen
+            // marks its combo loading on accept (`repo_tab::list_merge_tools`)
+            // and only this event puts it down. The settings screen can be
+            // opened inside the opening (`workdir_when_open` waits that
+            // out); an opening that settled without a tree offers nothing.
             let Some(workdir) = s.workdir_when_open().await else {
                 tracing::info!(ask, "merge tools: the opening settled with no working tree");
                 s.sink.event(SessionEvent::MergeToolsLoaded {
@@ -400,9 +357,6 @@ impl RepoSession {
             };
             tracing::info!(ask, "merge tools: the working tree is known");
             let cancel = s.root_cancel.clone();
-            // Config first: these are deliberate choices, and they arrive
-            // in milliseconds where the other takes seconds. Publish them
-            // on their own.
             let mut names = conflict::user_defined_tools(&s.executor, &workdir, &cancel)
                 .await
                 .unwrap_or_default();
@@ -442,17 +396,13 @@ impl RepoSession {
     }
 
     /// Records which merge tool to launch; empty clears the choice.
-    ///
-    /// Refreshing afterwards is what re-reads the name for the menu row,
-    /// so the row and the config never disagree for longer than a write.
     pub fn set_merge_tool(self: &Arc<Self>, tool: String) -> Option<OperationId> {
-        // The refresh this write triggers has to re-read, or it would
-        // repeat the name from before the write.
+        // The refresh behind this write has to re-read the name, or the
+        // menu row would repeat the one from before the write.
         self.merge_tool_wanted
             .store(true, std::sync::atomic::Ordering::SeqCst);
         self.write(
-            // `Config`, because `Mergetool` is what the pane watches to
-            // know a tool is open, and writing the setting opens none.
+            // Not `Mergetool`: the pane reads that as a tool being open.
             OperationKind::Config,
             AfterWrite::Snapshots,
             move |exec, repo, cancel| async move {

@@ -66,7 +66,6 @@ async fn renaming_a_stash_keeps_its_contents_and_says_so_everywhere() {
         "the commit says the same as the list"
     );
 
-    // The work is still there, untracked file included.
     repo.git(&["stash", "pop"]);
     let status = repo.git(&["status", "--porcelain"]);
     assert!(status.contains("a.txt"), "the change came back: {status}");
@@ -87,7 +86,6 @@ async fn renaming_a_stash_leaves_the_others_where_they_were() {
     repo.git(&["stash", "push", "-m", "second"]);
     let (exec, cancel) = env();
 
-    // The older of the two (`stash@{1}`) is the one renamed.
     stash::rename(&exec, &repo.path, "stash@{1}", "renamed first", &cancel)
         .await
         .expect("rename");
@@ -100,8 +98,6 @@ async fn renaming_a_stash_leaves_the_others_where_they_were() {
     );
 }
 
-/// The rules the rename box enforces are git's own — held to them by
-/// asking git itself about every shape the box has to judge.
 #[tokio::test]
 async fn the_name_rules_are_the_ones_git_applies() {
     let mut repo = TestRepo::init();

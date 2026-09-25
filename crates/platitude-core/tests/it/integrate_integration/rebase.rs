@@ -1,6 +1,4 @@
-//! Rebase: each way the replay stops, and the ways out of it. What git
-//! itself does with a plain rebase — the replay, its clean-tree refusal,
-//! the commits it drops or a `--skip` loses — is recorded in [`periodic`].
+//! Rebase: each way the replay stops, and the ways out of it.
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
@@ -12,10 +10,7 @@ use platitude_core::process::Kept;
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
 use platitude_core::{opstate, status};
 
-/// A rebase that stopped part-way is a landing of its own — git left
-/// the replay standing, and the badge, the exit card and the
-/// conflicted rows are the whole of what happened
-/// (by design. デザイン規約 §進行中の操作から出る).
+/// A stop is a landing, not a failure (デザイン規約 §進行中の操作から出る).
 fn stopped(outcome: Result<integrate::RebaseOutcome, platitude_core::error::GitError>) {
     match outcome.expect("a stop is an answer, not a failure") {
         integrate::RebaseOutcome::Stopped => {}
@@ -71,11 +66,8 @@ async fn a_conflicting_rebase_reports_progress_and_can_be_aborted() {
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "topic two");
 }
 
-/// The one failure that leaves `rebase-merge` standing: a rebase asked
-/// for while one is already in progress. git spends 128 on it (measured
-/// 2.55) — every other failure leaves nothing behind — so reading the
-/// marker without the code would call it a stop, and git's sentence
-/// about what is really there would never reach the screen.
+/// git exits 128 here with `rebase-merge` still standing, so reading the
+/// marker without the code would call it a stop and hide git's sentence.
 #[tokio::test]
 async fn a_second_rebase_over_one_already_standing_is_still_a_failure() {
     let mut repo = TestRepo::init();
@@ -131,9 +123,7 @@ async fn a_conflicting_rebase_can_be_skipped() {
     assert!(subjects.contains("keeper"));
 }
 
-/// The free skip, and whether it reaches a person after all: resolving a
-/// conflict by taking the upstream side wholesale leaves the commit with
-/// nothing to say, and `--continue` has to decide what that means.
+/// Taking the upstream side wholesale leaves the commit empty.
 #[tokio::test]
 async fn resolving_a_conflict_to_match_upstream_then_continuing() {
     let mut repo = TestRepo::init();
@@ -155,14 +145,12 @@ async fn resolving_a_conflict_to_match_upstream_then_continuing() {
         )
         .await,
     );
-    // Taking upstream's side outright, which is what `Take theirs`-style
-    // resolution does — and which leaves this commit contributing nothing.
+    // In a rebase `Ours` is the upstream side.
     conflict::take_side(&exec, &repo.path, &["f.txt".into()], Side::Ours, &cancel)
         .await
         .expect("take the upstream side");
 
-    // A plain rebase drops the emptied commit itself: `--empty=drop` is
-    // the merge backend's default, so nobody is asked anything.
+    // `--empty=drop` is the merge backend's default: nobody is asked.
     integrate::resolve_current(&exec, &repo.path, Continuation::Continue, &cancel)
         .await
         .expect("continue carries on past the emptied commit");
@@ -175,11 +163,10 @@ async fn resolving_a_conflict_to_match_upstream_then_continuing() {
     );
 }
 
-/// The other emptied-commit path, and the one that does reach a person:
-/// interactive rebase — what this app drives for squash / reword / drop —
-/// stops on a commit that came out empty and asks for `--skip` by name.
-/// So there *is* a state where skipping costs nothing, and the gesture on
-/// that row cannot be chosen from the plain rebase's behaviour alone.
+/// Unlike the plain rebase, the interactive one (squash / reword / drop)
+/// stops on a commit that came out empty and names `--skip`: a state where
+/// skipping costs nothing, so the skip gesture cannot be chosen from the
+/// plain rebase alone.
 #[tokio::test]
 async fn an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip() {
     let mut repo = TestRepo::init();
@@ -195,9 +182,8 @@ async fn an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip() {
     repo.git(&["add", "-A"]);
     repo.git(&["commit", "-m", "X arrives with company"]);
     repo.git(&["checkout", "topic"]);
-    // The stop is an answer, so nothing carries git's words back to the
-    // caller: the command log is where they are read, and this is the
-    // observer that stands in for it (デザイン規約 §git が言ったことを読む場所).
+    // The stop is an answer, so git's words reach only the command log;
+    // this observer stands in for it (デザイン規約 §git が言ったことを読む場所).
     let said = std::sync::Arc::new(crate::support::Said::default());
     let (exec, cancel) = crate::support::exec::observed_env(said.clone(), Kept::Asked);
 
@@ -235,33 +221,26 @@ async fn an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip() {
         message.contains("git rebase --skip"),
         "git names the way out: {message}"
     );
-    // Two flags are set at once here — the stopped pick leaves
-    // CHERRY_PICK_HEAD behind — and only one of them is the operation.
-    // Anything naming what is in progress has to ask `from_state`: a
-    // badge that lists the flags reads
-    // `REBASING · CHERRY-PICKING` for one rebase.
+    // The stopped pick leaves CHERRY_PICK_HEAD too: name the operation
+    // through `from_state`, or a badge reads `REBASING · CHERRY-PICKING`.
     let (exec2, cancel2) = env();
     let state = opstate::detect(&exec2, &repo.path, &cancel2)
         .await
         .expect("op state");
     assert!(state.rebasing && state.cherry_picking, "got: {state:?}");
     assert_eq!(InProgress::from_state(&state), Some(InProgress::Rebase));
-    // And nothing is conflicted while it stands there, so a UI cannot
-    // tell this stop from an `edit` stop by the file list alone.
+    // Nothing is conflicted, so the file list cannot tell this from an
+    // `edit` stop.
     let state = status::load(&exec, &repo.path, &cancel)
         .await
         .expect("status");
     assert_eq!(state.conflicted().count(), 0);
 }
 
-/// **What the pre-merge run leaves out**: what git does with a plain rebase
-/// once it is asked — the replay itself, the wording of its clean-tree
-/// check, the verbatim-upstream commit it drops unasked, and the work a
-/// `--skip` takes with it. The reading of those answers is held before every merge:
-/// the refusal's classifier by `integrate::rebase`'s unit tests, the
-/// `Blocked` and `Done` landings by `session_integration::carry_rewrite`,
-/// and the skip road by the tests above. Run by the full gate
-/// (`-- --ignored ::periodic::`) rather than by every change.
+/// What git does with a plain rebase. Reading its answers is held pre-merge:
+/// the refusal's classifier by `integrate::rebase`'s unit tests, `Blocked` /
+/// `Done` by `session_integration::carry_rewrite`, the skip by the tests
+/// above (rules-refs/core.md `periodic`).
 mod periodic {
     use super::*;
 
@@ -296,8 +275,6 @@ mod periodic {
         );
     }
 
-    /// A branch holding a commit of its own while `main` has moved on — the
-    /// shape someone asks a `rebase <current> onto it` for.
     fn behind_main() -> TestRepo {
         let mut repo = TestRepo::init();
         repo.commit_file("a.txt", "one\n", "root");
@@ -309,18 +286,11 @@ mod periodic {
         repo
     }
 
-    /// git's clean-tree refusal for a *plain* rebase, in git's own words.
-    ///
-    /// A refusal is an answer: it arrives as `Blocked`, and the caller goes
-    /// round through a stash. The interactive path words the same two
-    /// refusals identically — that is what lets one carry serve both
-    /// (規約 §未コミット変更がある状態で履歴を書き換える) — and both halves
-    /// are exercised here because git words the staged one differently from
-    /// the unstaged one.
-    ///
-    /// The third case decides whether a stash is taken at all: untracked
-    /// files are in nobody's way, and a rebase over a tree holding only those
-    /// goes straight through.
+    /// A refusal arrives as `Blocked` and the caller carries the work through
+    /// a stash. The interactive path words both refusals the same, which lets
+    /// one carry serve both (デザイン規約 §未コミット変更がある状態で履歴を書き換える);
+    /// git words staged and unstaged differently, so both are here. Untracked
+    /// files do not stop a rebase, so they take no stash.
     #[tokio::test]
     #[ignore = "git's own clean-tree wording: not worth the pre-merge run"]
     async fn a_dirty_tree_stops_a_plain_rebase_before_it_touches_anything() {
@@ -377,9 +347,8 @@ mod periodic {
         );
     }
 
-    /// What reaches a person as "skip or not?" is always the hard one: a
-    /// commit whose change is already upstream *to the letter* is dropped by
-    /// git without stopping, so it never gets as far as the UI.
+    /// A commit already upstream to the letter is dropped without stopping,
+    /// so "skip or not?" never reaches the UI for it.
     #[tokio::test]
     #[ignore = "git dropping a verbatim-upstream commit itself: not worth the pre-merge run"]
     async fn a_commit_already_upstream_verbatim_never_stops_the_rebase() {
@@ -413,10 +382,8 @@ mod periodic {
         assert!(subjects.contains("keeper"));
     }
 
-    /// And skipping has a price: the commit left out takes its own work with
-    /// it, wherever else that work does or does not exist. Only the reflog
-    /// holds it afterwards — the same standing a hard reset leaves behind,
-    /// which is the one this app already asks to be held for.
+    /// A skipped commit takes its own work with it; only the reflog holds it
+    /// afterwards, as after a hard reset, which this app asks to be held for.
     #[tokio::test]
     #[ignore = "what git's --skip loses: not worth the pre-merge run"]
     async fn skipping_drops_work_that_is_nowhere_else() {
@@ -451,8 +418,6 @@ mod periodic {
             !repo.path.join("only-here.txt").exists(),
             "the skipped commit's own file goes with it"
         );
-        // Reachable only by hash: no branch, no tag, nothing in the UI points
-        // at it any more.
         let orphan = repo.git(&["log", "--format=%s", "-1", before.trim()]);
         assert_eq!(orphan, "conflicts, and carries its own file");
         let described = repo.git(&["log", "--format=%s", "--all"]);

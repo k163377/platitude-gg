@@ -1,16 +1,8 @@
 //! Heap accounting for the structures that stay resident.
 //!
-//! Not a profiler. It answers one question — *how many bytes does this
-//! collection own* — for the handful of things that are still alive when
-//! the window is sitting idle, which is what a memory budget is spent
-//! against.
-//!
-//! Attribution only. The ground truth for "how much Rust heap is live" is
-//! the counting allocator in the app crate; what this module produces is a
-//! breakdown of it, and whatever the named parts do not add up to is
-//! reported as a remainder. Getting a container's own
-//! overhead slightly wrong therefore shows up only as a
-//! bigger remainder.
+//! Attribution only: the counting allocator in the app crate is the ground
+//! truth, and what the named parts do not add up to is reported as a
+//! remainder — so a container's overhead slightly off shows only there.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -70,9 +62,8 @@ impl Footprint for String {
     }
 }
 
-/// Nothing at all while the text fits inline, which is the whole point of
-/// [`crate::Name`] — so this has to ask: `capacity()` answers for
-/// the inline buffer too.
+/// Zero while the text fits inline — `capacity()` answers for the inline
+/// buffer too, so this has to ask.
 impl Footprint for crate::Name {
     fn heap_bytes(&self) -> usize {
         if self.is_heap_allocated() {
@@ -107,9 +98,9 @@ impl<T: Footprint + ?Sized> Footprint for Box<T> {
     }
 }
 
-/// **Counted in full at every site that holds one.** Shared handles are the
-/// one place this module can double-count, so a report that names two
-/// holders of the same `Arc` says so beside the numbers.
+/// Counted in full at every holder — the one place this module can
+/// double-count, so a report naming two holders of one `Arc` says so beside
+/// the numbers.
 impl<T: Footprint + ?Sized> Footprint for std::sync::Arc<T> {
     fn heap_bytes(&self) -> usize {
         // Two atomic counters sit in front of the value in the same box.
@@ -123,9 +114,8 @@ impl<T: Footprint> Footprint for [T] {
     }
 }
 
-/// **Needed explicitly**, or the deref to `[T]` answers instead and a
-/// spilled buffer goes uncounted — the one case this type exists to make
-/// rare is also the one that would then be invisible.
+/// Needed explicitly, or the deref to `[T]` answers instead and a spilled
+/// buffer goes uncounted.
 impl<A: smallvec::Array> Footprint for smallvec::SmallVec<A>
 where
     A::Item: Footprint,
@@ -148,11 +138,9 @@ impl<A: Footprint, B: Footprint> Footprint for (A, B) {
 
 /// The buffer behind a `HashMap`/`HashSet` of this capacity.
 ///
-/// hashbrown holds a power-of-two number of buckets at 7/8 load, with one
-/// control byte beside each. `capacity()` is already the usable figure —
-/// buckets × 7/8 — so undoing that ratio lands back on the bucket count
-/// exactly, and rounding it up again would report every table at twice its
-/// size.
+/// hashbrown: power-of-two buckets at 7/8 load, one control byte each.
+/// `capacity()` is already buckets × 7/8, so undoing the ratio lands on the
+/// bucket count exactly — rounding up again would double every table.
 fn table_bytes<T>(capacity: usize) -> usize {
     if capacity == 0 {
         return 0;
@@ -179,23 +167,19 @@ impl<T: Footprint, S> Footprint for std::collections::HashSet<T, S> {
 
 /// A `BTreeMap`'s nodes.
 ///
-/// **Charged by the node.** A node holds room for eleven pairs
-/// whether or not eleven are in it, and it is allocated whole — so a
-/// map with one entry in it costs the same as a map with eleven.
-/// Charging entries reads a fleet of one-entry maps as almost free,
-/// which is the opposite of what it is (measured: `remote_tag_index`,
-/// one inner map per tag).
+/// Charged by the node: a node is allocated whole with room for eleven
+/// pairs, so charging entries would read a fleet of one-entry maps as
+/// almost free.
 ///
-/// The node count is where this stays an estimate: a tree grown by
-/// insertion settles around six of the eleven slots used, and only the
-/// single-node case (`len <= 11`) is exact.
+/// The node count is an estimate — a tree grown by insertion uses about six
+/// of the eleven slots — and exact only for `len <= 6`.
 fn btree_bytes<K, V>(len: usize) -> usize {
     if len == 0 {
         return 0;
     }
     // `LeafNode`: a parent pointer, its index, the length, and room for
-    // eleven pairs. An internal node adds twelve edge pointers, and there
-    // are far fewer of those than leaves.
+    // eleven pairs. Internal nodes (twelve more edge pointers) are few
+    // enough to leave out.
     let node = 2 * size_of::<usize>() + 11 * (size_of::<K>() + size_of::<V>());
     let nodes = len.div_ceil(6).max(1);
     nodes * node
@@ -284,10 +268,8 @@ impl Footprint for crate::session::RefsSnapshot {
             + self.tags.heap_bytes()
             + self.tags_by_name.heap_bytes()
             + self.tag_drifts.heap_bytes()
-            // Not `remote_tags`: the snapshot holds a pointer to the
-            // session's one index, which the report counts under its own
-            // name (`session::heap` の `remote-tag-index`). Counting it
-            // here says the same bytes twice.
+            // Not `remote_tags`: it points at the session's one index,
+            // counted as `remote-tag-index` (`session::heap`).
             + self.head.heap_bytes()
             + self.remote_names.heap_bytes()
             + self.remote_urls.heap_bytes()
@@ -351,8 +333,7 @@ impl Footprint for crate::status::WorkTreeStatus {
 // Reports
 // ---------------------------------------------------------------------------
 
-/// One named part of a breakdown: what it is, how many bytes it owns, and
-/// how many things are in it.
+/// One named part of a breakdown; `count` is how many things are in it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Part {
     pub name: &'static str,
@@ -372,7 +353,6 @@ impl Part {
     }
 }
 
-/// Sum of a breakdown's parts.
 pub fn total(parts: &[Part]) -> usize {
     parts.iter().map(|p| p.bytes).sum()
 }

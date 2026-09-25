@@ -1,6 +1,5 @@
-//! One id from the press to the last publish: a write answers under the
-//! id the queue handed back when it accepted it, whatever ran before or
-//! after it, and everything said about it on the way carries the same id
+//! One id from the press to the last publish: everything a write says
+//! carries the id the queue handed back on accepting it
 //! (`platitude_core::operation`).
 
 use std::sync::Arc;
@@ -46,13 +45,9 @@ fn lifecycle_of(events: &[SessionEvent], id: OperationId) -> Vec<&'static str> {
         .collect()
 }
 
-/// An apply pressed just before a pop of the same entry. Both answer
-/// under the same kind; the apply lands, and the pop is refused, because
-/// git will not restore over the change the apply just made (measured:
-/// `Your local changes … would be overwritten by merge`, exit 1, entry
-/// kept, nothing unmerged). Counted by turn, the apply's landing would be
-/// taken for the pop's and the pop's refusal for somebody else's; by id,
-/// each answer is its own, and nothing about the order is inferred.
+/// An apply pressed just before a pop of the same entry: both answer under
+/// the same kind, the apply lands and the pop is refused (git will not
+/// restore over the apply's change). Only the id tells the answers apart.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_pop_behind_an_apply_answers_under_its_own_id() {
     let mut repo = holding_one_stash();
@@ -99,11 +94,9 @@ async fn a_pop_behind_an_apply_answers_under_its_own_id() {
     session.close();
 }
 
-/// The boundaries come in order under each id — the start, git's
-/// answer, and the settling of the reads it invalidated — and the queue
-/// takes the next write only once the one in front is settled: the
-/// stash listing the pop moved has published before the pop is settled,
-/// and the apply was settled before the pop's git ran.
+/// Under each id: start, git's answer, then the settling of the reads it
+/// invalidated (the stash listing included) — and the queue takes the next
+/// write only once the one in front is settled.
 #[tokio::test(flavor = "multi_thread")]
 async fn each_write_is_settled_before_the_next_one_starts() {
     let repo = holding_one_stash();
@@ -161,17 +154,12 @@ async fn each_write_is_settled_before_the_next_one_starts() {
     session.close();
 }
 
-/// A pop is several commands — the status read that decides what a
-/// non-zero exit meant, the pop itself, the status read that judges the
-/// refusal — and every one of them stands in the log under the pop's id,
-/// the apply's under the apply's. The log holds only what the user asked
-/// for, and every such command names its write.
+/// A pop is several commands (status reads around the pop itself), and
+/// each stands in the log under the pop's id.
 ///
-/// **The last assertion is the one the window is built on**: a command
-/// the reader asked for that ran under no write would be a failure
-/// nothing on screen answers for, and the page raises the log off the
-/// operation's answer alone (rules-refs/app-ui.md — `CommandsModel`'s
-/// failure touches no panel).
+/// The last assertion is the one the window is built on
+/// (rules/core.md「`Asked` は書き込みの中にしか無い」): a command run under no
+/// write would be a failure nothing on screen answers for.
 #[tokio::test(flavor = "multi_thread")]
 async fn every_command_of_a_compound_write_carries_its_id() {
     let repo = holding_one_stash();
@@ -239,12 +227,11 @@ async fn every_command_of_a_compound_write_carries_its_id() {
     session.close();
 }
 
-/// The reads a listing asks for are the write's reads too. A working
-/// copy taken in a terminal, standing on no branch, reaches the graph
-/// only through the walk the worktree listing asks for — and the write
-/// whose listing found it is not settled until that walk has answered.
-/// The walk is parked from inside (`PassDoors`), so "not settled yet"
-/// is read off a pass provably still out.
+/// A detached working copy made in a terminal reaches the graph only
+/// through the walk the worktree listing asks for, and the write whose
+/// listing found it is not settled until that walk answers. The walk is
+/// parked from inside (`PassDoors`), so "not settled" is read off a pass
+/// provably still out.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_write_is_not_settled_until_the_reads_its_listings_asked_for_have_landed() {
     let mut repo = TestRepo::init();
@@ -261,9 +248,8 @@ async fn a_write_is_not_settled_until_the_reads_its_listings_asked_for_have_land
     repo.git_in(&spike, &["add", "idea.txt"]);
     repo.git_in(&spike, &["commit", "-m", "spike: try the idea"]);
 
-    // The next off-screen pass parks on its own task until let go — the
-    // worker under it is why two are declared (`CaptureSink::hook_once`
-    // says the same).
+    // Parks the next off-screen pass on its own task, taking its worker —
+    // hence `worker_threads = 2`.
     let (parked, at_the_door) = tokio::sync::oneshot::channel();
     let (release, held) = std::sync::mpsc::channel::<()>();
     doors.run_inside_next_pass(PassStep::Swapping, move || {
@@ -314,10 +300,8 @@ async fn a_write_is_not_settled_until_the_reads_its_listings_asked_for_have_land
     session.close();
 }
 
-/// A read the write asked for that fell over is the write's own news:
-/// the settling names it under the write's id, where the failure itself
-/// (`OpFailed`) carries none. The graph rebuild a commit asks for is made
-/// to fail from inside (`PassDoors::fail_every_pass`).
+/// The settling names the failed read under the write's id, where the
+/// failure itself (`OpFailed`) carries none.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_read_that_failed_is_named_under_the_writes_own_id() {
     let mut repo = TestRepo::init();
@@ -349,13 +333,10 @@ async fn a_read_that_failed_is_named_under_the_writes_own_id() {
     session.close();
 }
 
-/// A repository with one commit and a change staged on top, opened with
-/// the doors into its graph passes and the opening's own passes closed —
-/// so the next pass to reach a door is the one the write asks for.
-///
-/// The commit those tests make moves both halves: the tree goes clean
-/// and a ref moves, so the rebuild behind it is one the graph really
-/// changes under.
+/// One commit and a staged change, opened with the doors into its passes
+/// and the opening's passes over — so the next pass at a door is the
+/// write's. A commit then moves both tree and ref, so its rebuild really
+/// changes the graph.
 async fn staged_with_doors() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, Arc<PassDoors>) {
     let mut repo = TestRepo::init();
     repo.commit_file("f.txt", "base\n", "root");
@@ -367,22 +348,18 @@ async fn staged_with_doors() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, A
     (repo, sink, session, doors)
 }
 
-/// Leaves a hook on the next graph pass to reach `at` that takes the
-/// stream over from inside it — which is what makes the handover an
-/// ordering: the hook runs on that pass's own task, so the pass it
-/// displaces is exactly the one that was running.
-///
-/// `take_over` is what asks for the newer graph, and whatever it leaves
-/// at the doors is left before the ask.
+/// Leaves a hook on the next graph pass to reach `at` that takes the stream
+/// over from inside it, on that pass's own task — so the pass displaced is
+/// exactly the one running. `take_over` asks for the newer graph, and
+/// whatever it leaves at the doors is left before the ask.
 fn taken_over_from_inside(
     doors: &Arc<PassDoors>,
     session: &Arc<RepoSession>,
     at: PassStep,
     take_over: impl FnOnce(&Arc<PassDoors>, &Arc<RepoSession>) + Send + 'static,
 ) {
-    // Weak, both of them: the session holds the doors, the doors hold
-    // this hook, and a strong handle either way would be a ring nothing
-    // ever drops.
+    // Weak: the session holds the doors and the doors this hook, so a
+    // strong handle would be a cycle nothing drops.
     let doors_later = Arc::downgrade(doors);
     let session_later = Arc::downgrade(session);
     doors.run_inside_next_pass(at, move || {
@@ -392,17 +369,13 @@ fn taken_over_from_inside(
     });
 }
 
-/// A rebuild another ask took over is not an answer: the write behind it
-/// is not settled until the ask that took it over has answered for the
-/// graph.
+/// A rebuild another ask took over is not an answer: the write is not
+/// settled until the one that took over has answered for the graph.
 ///
-/// **The one that took over is parked, and the test is what lets it
-/// go** — so the picture it publishes cannot exist before the release,
-/// and a settling recorded ahead of that picture is one that did not
-/// wait for it. Read off the order the two were recorded in: when a
-/// look taken while the pass is parked lands is a race with the reads
-/// a settling makes either way
-/// (core.md §「もう起きない」は完了後の件数・状態で証明する).
+/// The replacement is parked until the test releases it, so its picture
+/// cannot exist before the release. Read off the recorded order: a look
+/// taken while it is parked races the settling's reads
+/// (rules/core.md「「もう起きない」は完了後の件数・状態で証明する」).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_write_waits_for_the_rebuild_that_took_its_own_over() {
     let (_repo, sink, session, doors) = staged_with_doors().await;
@@ -413,8 +386,7 @@ async fn a_write_waits_for_the_rebuild_that_took_its_own_over() {
         &session,
         PassStep::Swapping,
         move |doors, session| {
-            // Parked where this pass is standing, so the ask that displaces
-            // it cannot answer until the test lets it.
+            // Parks the replacement until the test lets it go.
             doors.run_inside_next_pass(PassStep::Swapping, move || {
                 reached
                     .send(())
@@ -438,9 +410,8 @@ async fn a_write_waits_for_the_rebuild_that_took_its_own_over() {
         .expect("the replacement parked");
 
     release.send(()).expect("the replacement is waiting");
-    // Both halves are waited for before either is read, so what the
-    // order below says is the order they happened in, whichever the
-    // test looked for first.
+    // Both halves are waited for before either is read, so the order
+    // below is the order they happened in.
     sink.wait_for("the graph the replacement walked", |evs| {
         let answered = evs
             .iter()
@@ -457,9 +428,8 @@ async fn a_write_waits_for_the_rebuild_that_took_its_own_over() {
     );
 
     let events = sink.events.lock().unwrap();
-    // The write's own pass published nothing — it was taken over — so
-    // the one picture after its answer is the replacement's, and the
-    // replacement stood at the door until the release above.
+    // The write's own pass was taken over and published nothing, so the
+    // one picture after its answer is the replacement's.
     let answered = index_of(
         &events,
         |e| matches!(e, SessionEvent::WriteFinished { id: got, .. } if *got == id),
@@ -481,14 +451,8 @@ async fn a_write_waits_for_the_rebuild_that_took_its_own_over() {
     session.close();
 }
 
-/// What the write waits for is the queue's promise as much as its own
-/// answer: the request behind it does not start until the rebuild that
-/// took its own over has landed.
-///
-/// Parked and released the way the test above is, and for the same
-/// reason — the picture the replacement publishes cannot exist before
-/// the release, so a write that started ahead of it is one the queue
-/// let through on a handover.
+/// The request behind the write does not start until the rebuild that took
+/// the write's own over has landed. Parked and released as above.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_queue_holds_the_next_write_until_the_replacement_has_landed() {
     let (_repo, sink, session, doors) = staged_with_doors().await;
@@ -557,13 +521,10 @@ async fn the_queue_holds_the_next_write_until_the_replacement_has_landed() {
     session.close();
 }
 
-/// A replacement that failed is the write's own news: the graph never
-/// caught up with the commit, and the settling says so under the
-/// write's id.
+/// The settling names the replacement's failure under the write's id.
 ///
-/// The one that takes over restarts the stream, so the fault it walks
-/// into is one the write's own pass cannot read: a rebuild asks for a
-/// fault at `Swapping`, and only a stream asks at `Streaming`.
+/// The replacement restarts the stream, so its fault (`Streaming`) is one
+/// the write's own rebuild (`Swapping`) cannot walk into.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_write_whose_replacement_failed_says_the_graph_did_not_land() {
     let (_repo, sink, session, doors) = staged_with_doors().await;
@@ -588,9 +549,8 @@ async fn a_write_whose_replacement_failed_says_the_graph_did_not_land() {
     session.close();
 }
 
-/// The acceptance boundary refuses: once the session is closed and
-/// its write loop has ended, a request gets no id, because nothing
-/// would ever answer one.
+/// Once the write loop has ended, a request gets no id: nothing would
+/// ever answer one.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_closed_session_accepts_nothing() {
     let repo = holding_one_stash();

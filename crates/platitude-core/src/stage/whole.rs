@@ -28,11 +28,8 @@ async fn run_over_paths(
     executor.run(cmd, cancel).await.map(drop)
 }
 
-/// Whether HEAD names a commit yet.
-///
-/// Before the first one there is nothing to restore a path from, and the
-/// commands that would take one back to HEAD have to empty it out of the
-/// index instead.
+/// Whether HEAD names a commit yet. Before the first one, the commands
+/// that would restore from HEAD have to empty the index instead.
 async fn head_is_unborn(
     executor: &GitExecutor,
     workdir: &Path,
@@ -52,9 +49,8 @@ pub async fn stage_paths(
     run_over_paths(executor, cmd, paths, cancel).await
 }
 
-/// `git add --all`: stages modifications, additions and deletions, plus
-/// the files git is not tracking yet. Staging all means all, untracked
-/// files included — never the tracked-only `--update`.
+/// `git add --all`: untracked files included — never the tracked-only
+/// `--update`.
 pub async fn stage_all(
     executor: &GitExecutor,
     workdir: &Path,
@@ -71,10 +67,9 @@ pub async fn unstage_all(
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     let cmd = if head_is_unborn(executor, workdir, cancel).await? {
-        // No HEAD to reset to; drop every entry instead. `--ignore-unmatch`
-        // because an empty index matches nothing and `git rm` calls that
-        // fatal — but "unstage nothing" has succeeded at its job (measured:
-        // `rm --cached -r -- .` in a fresh `git init` exits 128).
+        // No HEAD to reset to; drop every entry instead. `--ignore-unmatch`:
+        // `git rm` calls an empty index matching nothing fatal, but
+        // "unstage nothing" has succeeded.
         GitCommand::new().cwd(workdir).args([
             "rm",
             "--cached",
@@ -91,17 +86,15 @@ pub async fn unstage_all(
 }
 
 /// Removes staged changes for `paths`, keeping the working tree as-is.
-///
-/// `git restore --staged` needs a HEAD to restore from; on an unborn branch
-/// the equivalent is dropping the entries from the index entirely.
+/// On an unborn branch (no HEAD to restore from) the entries are dropped
+/// from the index instead.
 pub async fn unstage_paths(
     executor: &GitExecutor,
     workdir: &Path,
     paths: &[String],
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    // Asked here as well as in `run_over_paths`, so nothing to
-    // unstage answers before the spawn that reads HEAD.
+    // Before HEAD is read, so an empty list costs no spawn.
     if paths.is_empty() {
         return Ok(());
     }
@@ -134,14 +127,10 @@ pub async fn discard_worktree(
 }
 
 /// `git restore --staged --worktree -- <paths>`: throws away both sides at
-/// once, back to HEAD — what is staged and what is on disk. With
-/// `--staged` git restores from HEAD, so a path HEAD does not have goes
-/// from disk with it: a file staged as new is deleted, and so is the new
-/// name of a rename — whose old name must be passed alongside it, or its
-/// staged deletion is left standing (measured).
-///
-/// Before the first commit there is no HEAD to restore from, and `git rm`
-/// is the same journey: out of the index and off the disk.
+/// once, back to HEAD. A path HEAD does not have goes from disk too: a
+/// file staged as new is deleted, and so is the new name of a rename —
+/// whose old name must be passed alongside it, or its staged deletion is
+/// left standing. Before the first commit, `git rm` does the same.
 ///
 /// Destructive — the caller confirms first.
 pub async fn discard_to_head(
@@ -150,8 +139,7 @@ pub async fn discard_to_head(
     paths: &[String],
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    // As in unstage_paths: asked before HEAD is read, so an empty list
-    // costs no spawn.
+    // As in unstage_paths.
     if paths.is_empty() {
         return Ok(());
     }
@@ -167,12 +155,10 @@ pub async fn discard_to_head(
     run_over_paths(executor, cmd, paths, cancel).await
 }
 
-/// `git clean -f -d -- <paths>`: deletes untracked files. `status -uall`
-/// hands us one path per file, and `-f` alone already deletes a file inside
-/// an untracked directory; `-d` is kept so a directory pathspec still takes
-/// the whole tree. An emptied parent directory stays on disk — git does not
-/// track directories, so status stays clean. Destructive — the caller
-/// confirms first.
+/// `git clean -f -d -- <paths>`: deletes untracked files. `-d` so a
+/// directory pathspec still takes the whole tree. An emptied parent
+/// directory stays on disk, which status does not show. Destructive — the
+/// caller confirms first.
 pub async fn remove_untracked(
     executor: &GitExecutor,
     workdir: &Path,
@@ -186,32 +172,28 @@ pub async fn remove_untracked(
 }
 
 /// Which side of the working tree a chosen row was standing on. Carried
-/// with the path itself: a file changed on both sides has a row in each
-/// bucket, and which of them was chosen decides whether what is staged
-/// survives the discard.
+/// with the path: a file changed on both sides has a row in each bucket,
+/// and which was chosen decides whether what is staged survives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiscardSide {
     /// An unstaged edit: the disk goes back to the index, what is staged
     /// stays.
     Unstaged,
-    /// An untracked file: there the file itself is the change, so it goes.
+    /// An untracked file: the file itself goes.
     Untracked,
     /// A staged change: both sides go, back to HEAD.
     Staged,
 }
 
 /// Discards a chosen set of rows: each side goes by its own command — at
-/// most three for the lot, however many rows were chosen (デザイン規約
-/// §その他の操作) — and a side that stops the run stops it before the
-/// next side is touched.
+/// most three for the lot (デザイン規約 §その他の操作) — and a side that
+/// fails stops the run before the next side is touched.
 ///
-/// A staged rename is undone by both of its names at once (see
+/// A staged rename is undone by both of its names (see
 /// [`discard_to_head`]). Which staged paths are renames is read from
-/// status here, in the same write as the commands: a list made in
-/// the UI predates whatever writes are queued ahead of this one —
-/// the reasoning
-/// [`stage_conflicted`](crate::session::RepoSession::stage_conflicted)
-/// spells out.
+/// status here, in the same write: a list made in the UI predates the
+/// writes queued ahead of this one (as in
+/// [`stage_conflicted`](crate::session::RepoSession::stage_conflicted)).
 ///
 /// Destructive — the caller confirms first.
 pub async fn discard_chosen(
@@ -233,10 +215,9 @@ pub async fn discard_chosen(
     if !staged.is_empty() {
         let current = status::load(executor, workdir, cancel).await?;
         let chosen: HashSet<&str> = staged.iter().map(String::as_str).collect();
-        // Renames only: undoing `R` needs both of its names or the old one
-        // stays staged as a deletion. A copy (`C`) carries `orig_path` too,
-        // but its source is a live file with rows of its own — pulling it
-        // in here would reset a file the user never chose.
+        // Renames only: a copy (`C`) carries `orig_path` too, but its
+        // source is a live file with rows of its own — pulling it in would
+        // reset a file the user never chose.
         let old_names: Vec<String> = current
             .staged()
             .filter_map(|item| match item {
@@ -261,10 +242,9 @@ mod tests {
     use super::*;
     use crate::refusing;
 
-    /// **An empty selection runs nothing**, down to the read of HEAD that
-    /// two of the commands need before they can choose one: every command
-    /// here reads a missing pathspec as the whole work tree, and
-    /// `git clean -f -d --` on its own would delete every untracked file.
+    /// Not even the read of HEAD: every command here reads a missing
+    /// pathspec as the whole work tree, and `git clean -f -d --` on its own
+    /// would delete every untracked file.
     #[tokio::test]
     async fn an_empty_selection_runs_nothing() {
         let (exec, asked) = refusing::git();

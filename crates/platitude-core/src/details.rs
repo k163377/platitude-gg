@@ -1,10 +1,7 @@
 //! Commit details (metadata + changed files) and on-demand file diffs.
 //!
-//! Merge commits are diffed against their **first parent** (the common GUI
-//! convention). Every diff run — the patch producers and the
-//! `--name-status` file list alike — pins `--no-ext-diff` and the
-//! standard `a/ b/` prefixes, so the parsers see a stable shape
-//! regardless of user config.
+//! Merges are diffed against their first parent. Every diff run pins the
+//! output shape (`DIFF_SHAPE_ARGS`, `--no-ext-diff`) against user config.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -21,22 +18,10 @@ use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 /// co-author trailers, full message body. NUL-separated, record
 /// NUL-terminated via `-z`.
 ///
-/// Author and committer are the mailmap spellings, for the same reason the
-/// graph log asks for them (`parse::log`) — and because these two have to
-/// agree: a person whose picture is drawn on their row in the graph would
-/// otherwise lose it the moment the row was clicked. **The trailers
-/// are raw**: git applies no mailmap to them, and they are message
-/// text, so a co-author who also authors commits can appear under two
-/// spellings.
-///
-/// The trailer field is git's own answer: the rules for what counts
-/// as a trailer (last paragraph, key: value shape, folded
-/// continuations) belong to git.
-/// `key=` matches case-insensitively, so the `Co-Authored-By` the tooling
-/// writes and the `Co-authored-by` the convention documents both land
-/// here. Values are joined with U+001F, which no address or name can
-/// contain, so the NUL field split survives (git 2.55 measured; the
-/// options are all 2.23 or older).
+/// Author and committer are the mailmap spellings, matching the graph log
+/// (`parse::log`) so a row's avatar survives the click. The trailers are
+/// raw (git applies no mailmap to them). `key=` matches case-insensitively;
+/// values are joined with U+001F (rules-refs/app-ui.md「co-author は詳細ペインの日付行」).
 const DETAILS_FORMAT_ARG: &str = "--format=%H%x00%P%x00%aN%x00%aE%x00%at%x00%cN%x00%cE%x00%ct%x00\
      %(trailers:key=Co-authored-by,valueonly,unfold,separator=%x1F)%x00%B";
 const DETAILS_FIELDS: usize = 10;
@@ -51,9 +36,8 @@ const DIFF_SHAPE_ARGS: [&str; 6] = [
     "diff.external=",
 ];
 
-/// Whom a message credits: this parser hands git's packed trailer field
-/// straight to `parse_co_authors`. Reading the same lines out of text
-/// nobody has committed yet is [`crate::trailers::co_authors_in`].
+/// Parses git's packed trailer field; uncommitted text is
+/// [`crate::trailers::co_authors_in`]'s.
 pub use crate::trailers::{CoAuthor, parse_co_authors};
 
 /// Full metadata of one commit plus its changed files.
@@ -75,14 +59,9 @@ pub struct CommitDetails {
     pub files: Vec<FileChange>,
 }
 
-/// Loads commit metadata and its changed-file list.
-///
-/// **One invocation.** `show` prints the file list after the
-/// format expansion, so asking for both together spares the details pane
-/// a second process — and on Windows the process is the expensive part
-/// of a 100ms interaction budget: git's own work in this call is a
-/// rounding error beside starting it (`process::program`,
-/// ci/baseline/code-costs-windows-x64.md).
+/// Loads commit metadata and its changed-file list in one `show` — on
+/// Windows the process start dominates this call
+/// (ci/baseline/code-costs-windows-x64.md).
 pub async fn commit_details(
     executor: &GitExecutor,
     workdir: &Path,
@@ -96,9 +75,7 @@ pub async fn commit_details(
         "-r",
         "--name-status",
         "--find-renames",
-        // Merges are read against their first parent, as everywhere else
-        // here. It has to be said: left alone, `show` prints no file list
-        // for a merge at all.
+        // Left alone, `show` prints no file list for a merge.
         "--diff-merges=first-parent",
         DETAILS_FORMAT_ARG,
         &hex,
@@ -117,13 +94,9 @@ pub async fn commit_details(
 }
 
 /// Splits the combined output into the `--format` record and the
-/// `--name-status` bytes behind it.
-///
-/// The cut is counted in NULs — the record is exactly
-/// [`DETAILS_FIELDS`] of them. A commit message is free to contain a
-/// line spelled `M\tsrc/main.rs`, and a scan would file it under
-/// changed files.
-/// `show` writes one newline between the record and the list.
+/// `--name-status` bytes behind it, counting [`DETAILS_FIELDS`] NULs — a
+/// message may hold a line like `M\tsrc/main.rs`, which a scan would take
+/// for a file. One newline separates the two.
 fn split_record(bytes: &[u8]) -> Option<(&[u8], &[u8])> {
     let mut end = 0;
     for _ in 0..DETAILS_FIELDS {
@@ -150,8 +123,7 @@ fn parse_details(bytes: &[u8]) -> Option<CommitDetails> {
     for hex in fields[1].split(|b| *b == b' ').filter(|s| !s.is_empty()) {
         parents.push(Oid::from_hex(hex).ok()?);
     }
-    // %B is the last field; `-z` terminates the record with NUL, and show
-    // appends a newline after the format expansion. Trim both.
+    // %B is last: trim the `-z` NUL and the newline `show` appends.
     let mut message = text(9);
     while message.ends_with(['\0', '\n']) {
         message.pop();
@@ -172,30 +144,19 @@ fn parse_details(bytes: &[u8]) -> Option<CommitDetails> {
     })
 }
 
-/// A record marker no status token can begin with, so a log covering
-/// several commits can be cut back into them. What lies between two
-/// records is `<status>\0<path>\0` pairs, and a status is an ASCII
-/// capital (measured, git 2.55).
+/// Record marker for a multi-commit log: between records are only
+/// `<status>\0<path>\0` pairs, and a status is an ASCII capital.
 const UNION_MARK: u8 = 0x01;
 
-/// How many commit ids go on one command line. The ids **are** the
-/// arguments and Windows caps a command line at 32k, while one Shift
-/// click can sweep a choice over more rows than that
-/// (`GraphModel::oids_between`) — so the reading is chunked, and
-/// every choice a person would actually make is still one
-/// invocation.
+/// Commit ids per command line: Windows caps a command line at 32k, and
+/// one Shift click can choose more rows than fit.
 const UNION_CHUNK: usize = 200;
 
 /// The files a set of commits changed, each against its own first
-/// parent, merged into one list.
-///
-/// **Per commit.** A graph's rows are a walk over every branch, so two
-/// rows next to each other need not be parent and child and "the commits
-/// between" is no git range at all; what is well defined is what each of
-/// these commits did (デザイン規約 §複数のコミットを選ぶ). A path several of
-/// them touched is listed once, wearing the status of the first commit
-/// asked for — callers pass them newest first, so that is the most
-/// recent thing to have happened to it.
+/// parent, merged into one list — per commit, since adjacent graph rows
+/// need not form a git range (デザイン規約 §複数のコミットを選ぶ). A path
+/// several touched wears the status of the first commit asked for
+/// (callers pass newest first).
 pub async fn union_files(
     executor: &GitExecutor,
     workdir: &Path,
@@ -225,18 +186,14 @@ async fn union_chunk(
         .args(DIFF_SHAPE_ARGS)
         .args([
             "log",
-            // The order asked for is the order the graph stands in.
-            // Plain `--no-walk` re-sorts by date, which would put the
-            // status of a path onto whichever commit git thinks is
-            // newest, away from the row the reader is looking at.
+            // Plain `--no-walk` re-sorts by date, away from the graph's
+            // order.
             "--no-walk=unsorted",
             "-z",
             "-r",
             "--name-status",
             "--find-renames",
             "--diff-merges=first-parent",
-            // Nothing but the marker: this reading wants the files, and
-            // the rows naming the commits are already on screen.
             "--format=%x01",
         ])
         .args(oids.iter().map(Oid::to_hex));
@@ -244,11 +201,8 @@ async fn union_chunk(
     let mut changes = Vec::new();
     // The first split is what stands before the first record: nothing.
     for record in out.stdout.split(|b| *b == UNION_MARK).skip(1) {
-        // What `log` puts between the format expansion and the file list
-        // is `\0\n` — the NUL `-z` terminates the record with, then the
-        // newline it writes after any format (measured, git 2.55). The
-        // NUL alone would come out as an empty token, which the parser
-        // drops; the newline would arrive glued to the first status.
+        // `log` puts `\0\n` between the format expansion and the file
+        // list; the newline would otherwise glue onto the first status.
         let files = record.strip_prefix(b"\0").unwrap_or(record);
         let files = files.strip_prefix(b"\n").unwrap_or(files);
         changes.extend(
@@ -261,14 +215,10 @@ async fn union_chunk(
     Ok(changes)
 }
 
-/// The files that differ between two commits — what "these two" means
-/// where a choice holds exactly two (デザイン規約 §複数のコミットを選ぶ).
-///
-/// A tree against a tree, so it is answerable for any pair whether or
-/// not one is an ancestor of the other. **It is not [`union_files`] of
-/// the same two**: this one carries whatever unselected commits did
-/// between them and drops what the older of the two did itself, that
-/// being the side it is measured from.
+/// The files that differ between two commits' trees — a choice of exactly
+/// two (デザイン規約 §複数のコミットを選ぶ). Not [`union_files`] of the two:
+/// this carries what unselected commits did in between and drops what the
+/// older one did itself.
 pub async fn compare_files(
     executor: &GitExecutor,
     workdir: &Path,
@@ -278,9 +228,8 @@ pub async fn compare_files(
 ) -> Result<Vec<FileChange>, GitError> {
     let from_hex = from.to_hex();
     let to_hex = to.to_hex();
-    // The same plumbing the one-commit list runs through, so the two
-    // agree about renames: what this list calls a rename is what the
-    // patch behind the row will be asked for (`DiffTarget::Range`).
+    // The same `diff-tree --find-renames` as the patch behind each row
+    // (`DiffTarget::Range`), so the two agree about renames.
     let cmd = GitCommand::new().cwd(workdir).args(DIFF_SHAPE_ARGS).args([
         "diff-tree",
         "-z",
@@ -310,9 +259,7 @@ pub enum DiffTarget {
         /// Source path when the file list reported a rename/copy.
         orig_path: Option<String>,
     },
-    /// One file between two commits — what a choice of exactly two
-    /// commits reads (デザイン規約 §複数のコミットを選ぶ). Two trees, so
-    /// neither has to be an ancestor of the other.
+    /// One file between two commits' trees (a choice of exactly two).
     Range {
         from: Oid,
         to: Oid,
@@ -320,15 +267,10 @@ pub enum DiffTarget {
         /// Source path where the file list reported a rename/copy.
         orig_path: Option<String>,
     },
-    /// One file as each of several chosen commits changed it, one patch
-    /// after another in walk order — what a choice of three or more reads
-    /// (デザイン規約 §複数のコミットを選ぶ).
-    ///
-    /// **Each commit's own patch.** The file list above it is what
-    /// these commits did, so the patches behind a row of it are theirs
-    /// too: a comparison across the span would carry whatever unchosen
-    /// commits stand in between, and this is the reading a cherry-pick of
-    /// the same choice would actually apply.
+    /// One file as each of several chosen commits changed it, each
+    /// commit's own patch — a choice of three or more
+    /// (デザイン規約 §複数のコミットを選ぶ). A span comparison would carry
+    /// unchosen commits in between.
     Choice {
         /// Newest first, the order the graph stands in.
         oids: Vec<Oid>,
@@ -360,13 +302,9 @@ pub async fn file_diff(
     )
 }
 
-/// [`file_diff`] plus the fingerprint of the bytes it was parsed from.
-///
-/// The fingerprint travels with the parsed diff to the UI and comes back
-/// attached to hunk/line selections, so a partial write can tell "the
-/// diff the selection was made on" from "the diff the write re-ran"
-/// (`stage::apply_partial`). Positional selections are only meaningful
-/// against the exact bytes they indexed.
+/// [`file_diff`] plus the fingerprint of the bytes it was parsed from. It
+/// comes back with hunk/line selections so a partial write can refuse a
+/// diff that moved since (`stage::apply_partial`).
 pub async fn file_diff_with_fingerprint(
     executor: &GitExecutor,
     workdir: &Path,
@@ -377,18 +315,11 @@ pub async fn file_diff_with_fingerprint(
     Ok((parse_patch(&raw), fingerprint(&raw)))
 }
 
-/// Stable fingerprint of a raw diff. Drift detection only:
-/// two runs of the same command over an unchanged file produce the same
-/// bytes, and any edit in between changes them.
-///
-/// Stable *within one run*: `DefaultHasher`'s algorithm is not promised
-/// across std releases, which is enough here because every value is
-/// compared against one the same binary made. Persisting a fingerprint, or
-/// comparing across processes, needs a digest that promises more — and
-/// that change stops at this function. The crate's other staleness hashes
-/// stay their own on purpose, the nearest being
-/// [`crate::highlight::LexCache`]'s source hash, which lives only for
-/// the run it was made in (rules-refs/core.md).
+/// Fingerprint of a raw diff, for drift detection. Stable only within one
+/// run (`DefaultHasher` promises nothing across std releases): persisting
+/// it or comparing across processes needs a stronger digest. Not shared
+/// with the crate's other staleness hashes
+/// (rules-refs/core.md「staleness のハッシュは問いごとに持つ」).
 pub fn fingerprint(raw: &[u8]) -> u64 {
     use std::hash::{DefaultHasher, Hash, Hasher};
     let mut hasher = DefaultHasher::new();
@@ -396,9 +327,8 @@ pub fn fingerprint(raw: &[u8]) -> u64 {
     hasher.finish()
 }
 
-/// Closes a diff command with the file it is of: the pathspec end every
-/// one of them takes, and the source name as well where the file list
-/// reported a rename — git is told both, or it has no pair to match.
+/// Appends `-- <path>`, plus the rename source where there is one —
+/// without both, git has no pair to match.
 fn for_paths(cmd: GitCommand, path: &str, orig_path: Option<&str>) -> GitCommand {
     let cmd = cmd.arg("--").arg(literal_pathspec(path));
     match orig_path {
@@ -409,20 +339,17 @@ fn for_paths(cmd: GitCommand, path: &str, orig_path: Option<&str>) -> GitCommand
 
 /// Same diff as [`file_diff`], returned unparsed.
 ///
-/// Partial staging rebuilds patches from these bytes (see [`crate::patch`]),
-/// so both paths must run the exact same command: hunk and line indices are
-/// only meaningful against the output they were derived from.
+/// Partial staging rebuilds patches from these bytes ([`crate::patch`]), so
+/// both must run the exact same command: hunk and line indices only mean
+/// something against the bytes they came from.
 pub async fn file_diff_raw(
     executor: &GitExecutor,
     workdir: &Path,
     target: &DiffTarget,
     cancel: &CancellationToken,
 ) -> Result<Vec<u8>, GitError> {
-    // A path git spells with a trailing `/` is a directory it would not
-    // open — a repository of its own inside the working copy — and there
-    // is no patch of it to ask for: `--no-index` against a directory
-    // answers `Could not access` and prints nothing (measured). What the
-    // row has to say instead is [`embedded`].
+    // A trailing `/` is a nested repository git would not open;
+    // `--no-index` on it prints nothing. The row reads [`embedded`] instead.
     if let DiffTarget::Untracked { path } = target
         && path.ends_with('/')
     {
@@ -473,10 +400,8 @@ pub async fn file_diff_raw(
             path,
             orig_path,
         } => {
-            // Each patch is named before it, so the pane can say which
-            // commit it is of (`FilePatch::from_commit`). Oldest first —
-            // stacked patches read the way the history ran, and the way a
-            // cherry-pick would apply them.
+            // Each patch is headed by its commit (`FilePatch::from_commit`).
+            // Oldest first, the way a cherry-pick would apply them.
             let c = base
                 .args([
                     "log",
@@ -499,9 +424,8 @@ pub async fn file_diff_raw(
             .args(["diff", "--no-ext-diff", "--"])
             .arg(literal_pathspec(path)),
         DiffTarget::Untracked { path } => {
-            // `--no-index` renders file content as an all-additions patch;
-            // it exits 1 when the sides differ, which is the normal case.
-            // Its arguments are filenames — no magic prefix.
+            // Exit 1 (the sides differ) is the normal case. The arguments
+            // are file names, not pathspecs — no magic prefix.
             let out = executor
                 .run_unchecked(
                     base.answers_by_code(1)
@@ -530,35 +454,18 @@ pub enum Embedded {
     /// The commit the index entry would point at — the HEAD of the
     /// repository sitting there.
     On(Oid),
-    /// A repository with no commit yet. `git add` refuses such a path
-    /// (`does not have a commit checked out`), so there is nothing this
-    /// repository could record for it (measured).
+    /// A repository with no commit yet; `git add` refuses such a path.
     Unborn,
 }
 
-/// What the one entry git answers with for a repository inside the
-/// working copy (`vendor/nest/`) is standing on.
+/// What a repository inside the working copy (`vendor/nest/`) is standing
+/// on — a `git add` of it writes a gitlink naming that commit.
 ///
-/// A `git add` of that path writes a **gitlink**: one index entry of
-/// mode 160000 naming the commit that repository's HEAD is on
-/// (measured). The files under it belong to that repository, so the
-/// commit is the whole of what this repository would keep of it.
+/// `rev-parse` walks up, so a directory that is not a repository of its own
+/// answers with the outer one's HEAD; `--show-prefix` must come back empty
+/// for the answer to count. `None` for every path this cannot be said about.
 ///
-/// **The answer counts only when it came from that directory.**
-/// `rev-parse` walks up, so asked in a directory that is *not* a
-/// repository of its own it answers with the repository above — whose
-/// HEAD has nothing to do with the row (measured: a plain directory
-/// answered with the outer repository's HEAD). `--show-prefix` rides
-/// along and says which happened, in git's own terms: empty is the
-/// root of the work tree the answer came from, and anything else is
-/// the way down to the directory asked about from a repository
-/// further up. `None` is what a caller gets for every path this
-/// cannot be said about.
-///
-/// The exit code is the answer: 128 is what an unborn
-/// HEAD comes back as, and it is nothing for the command log to raise
-/// itself over — this is only ever asked about a path git itself
-/// declined to open. Both lines are printed either way (measured).
+/// Exit 128 is an unborn HEAD, an answer; both lines print either way.
 pub async fn embedded(
     executor: &GitExecutor,
     workdir: &Path,
@@ -576,7 +483,7 @@ pub async fn embedded(
         return None;
     }
     // The second line is the commit where there is one, and the literal
-    // `HEAD` back again where there is not (measured).
+    // `HEAD` back again where there is not.
     Some(
         match lines
             .next()
@@ -668,9 +575,6 @@ mod tests {
 
     #[test]
     fn a_message_that_reads_like_a_status_line_stays_in_the_message() {
-        // Nothing stops a commit from describing its own diff. Counting
-        // NULs is what keeps this out of the file table; scanning for a
-        // status letter would put `src/main.rs` there twice.
         let bytes = combined("subject\n\nM\tsrc/main.rs\n", b"M\0src/main.rs\0");
         let (record, files) = split_record(&bytes).unwrap();
         let d = parse_details(record).unwrap();
@@ -692,11 +596,8 @@ mod tests {
         assert!(split_record(b"one\0two\0").is_none());
     }
 
-    /// **A choice of nothing reads nothing, and asks git nothing**: a
-    /// `log --no-walk` given no ids reads HEAD, which is no part of an
-    /// empty choice. The executor cannot run anything and the repository
-    /// is not there, so an ask that slipped through would fail on the
-    /// spawn instead.
+    /// `log --no-walk` given no ids reads HEAD, so an empty choice must not
+    /// reach git; an ask that slipped through would fail on the spawn.
     #[tokio::test]
     async fn a_choice_of_nothing_reads_nothing_and_asks_git_nothing() {
         let (exec, asked) = refusing::git();

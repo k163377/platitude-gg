@@ -9,17 +9,12 @@ use platitude_core::details::DiffTarget;
 use platitude_core::identity::SignatureStatus;
 use platitude_core::session::{DiffReadOutcome, SessionEvent};
 
-/// Colours arrive behind the rows they belong to.
-///
-/// The order is the whole of it: a diff that waits for its colours is a
-/// diff that shows nothing for as long as the colouring takes, which on
-/// a file of any size is hundreds of milliseconds
-/// (`SessionEvent::DiffColoured`).
+/// Colours arrive behind their rows: a diff that waited for its colours
+/// would show nothing while the colouring runs (`SessionEvent::DiffColoured`).
 #[tokio::test(flavor = "multi_thread")]
 async fn a_diff_arrives_before_the_colours_for_it() {
     let mut repo = TestRepo::init();
-    // A language the set has rules for, or there would be nothing to say
-    // about the lines and no second event at all.
+    // A language the set has rules for, or there is no second event.
     repo.commit_file("src/f.rs", "fn one() -> u32 {\n    1\n}\n", "add f");
     repo.write_file("src/f.rs", "fn one() -> u32 {\n    2\n}\n");
 
@@ -39,8 +34,7 @@ async fn a_diff_arrives_before_the_colours_for_it() {
             rows < painted,
             "the rows have to be out before the colours for them"
         );
-        // And the colours have to be about something: an empty answer
-        // would pass the ordering above while saying nothing at all.
+        // An empty answer would pass the ordering while saying nothing.
         match &evs[painted] {
             SessionEvent::DiffColoured { colors, .. } => assert!(
                 !colors.is_empty(),
@@ -55,14 +49,10 @@ async fn a_diff_arrives_before_the_colours_for_it() {
     session.close();
 }
 
-/// A read nobody is waiting for any more hands over nothing.
-///
-/// Walking down a commit's file list starts a read per row. Colouring is
-/// the expensive half — without the epoch check, a colouring per
-/// abandoned row is left running behind the reader — and the rows are the
-/// cheap half, but they carry the fingerprint the next partial stage is
-/// refused against (`RepoSession::diff_epoch`), so an abandoned read that
-/// lands last would hand the pane one taken from a file it has left.
+/// A read nobody is waiting for any more hands over nothing — not even its
+/// rows, which carry the fingerprint the next partial stage is refused
+/// against (`RepoSession::diff_epoch`): an abandoned read landing last
+/// would hand the pane one from a file it has left.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_read_the_reader_has_left_hands_over_nothing() {
     let mut repo = TestRepo::init();
@@ -73,11 +63,8 @@ async fn a_read_the_reader_has_left_hands_over_nothing() {
 
     let (sink, session) = opened(&repo).await;
 
-    // The first click, held where the race is: polled once, so it runs to
-    // the point where it waits on its own git and stops there. The second
-    // click is then asked for while the first is demonstrably still in
-    // flight
-    // (core.md §非同期・並行テスト).
+    // The first click, polled once so it stops waiting on its own git; the
+    // second is asked for while the first is provably in flight.
     let mut first = Box::pin(session.read_diff(DiffTarget::Unstaged {
         path: "src/a.rs".to_string(),
     }));
@@ -89,9 +76,8 @@ async fn a_read_the_reader_has_left_hands_over_nothing() {
         path: "src/b.rs".to_string(),
     });
 
-    // Carried on from where it stopped, it finds itself passed and ends
-    // there. That is the completion boundary the counts below are read
-    // against: nothing of this read is still on its way.
+    // Resumed, it finds itself passed and ends: the completion boundary
+    // the counts below are read against.
     assert_eq!(
         crate::support::wait::bounded("the read the reader left", first).await,
         DiffReadOutcome::Overtaken
@@ -125,9 +111,8 @@ async fn a_read_the_reader_has_left_hands_over_nothing() {
     session.close();
 }
 
-/// The signature question is asked and answered on its own, apart from
-/// the details it belongs beside: verifying may run gpg, and the details
-/// pane cannot wait for that.
+/// Asked and answered apart from the details: verifying may run gpg, which
+/// the details pane cannot wait for.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_signature_answer_names_the_commit_it_is_about() {
     let mut repo = TestRepo::init();

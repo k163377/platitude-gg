@@ -12,19 +12,15 @@ impl RepoSession {
     }
 
     /// The refs pass for a caller whose place in the flight is already
-    /// taken (`ReadFlight::stamp`). The fenced read asks again through
-    /// here from inside its own pass, so a write's own read behind the
-    /// fence answers it as well and no listing is spent twice.
+    /// taken (`ReadFlight::stamp`) — the way the fenced read asks again
+    /// from inside its own pass.
     pub(super) fn read_refs_from(self: &Arc<Self>, stamp: Stamp) {
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            // **The rebuild is asked for from inside the pass**, so that a
-            // caller closing the reads (`wait_for_snapshot_reads`) has
-            // closed the ask as well: a boundary that let the reader out
-            // first would have the reader's rebuild land on top of the one
-            // the caller took afterwards and cancel it. A caller answered
-            // by somebody else's pass is covered by the same rule, since
-            // that pass asked before it could answer anyone.
+            // The rebuild is asked for inside the pass, so a caller closing
+            // the reads (`wait_for_snapshot_reads`) has closed the ask too;
+            // asked after, it would land on top of the caller's own rebuild
+            // and cancel it.
             s.refs_read
                 .run_from(stamp, || async {
                     let reread = s.publish_refs().await;
@@ -37,11 +33,9 @@ impl RepoSession {
         });
     }
 
-    /// [`RepoSession::publish_refs`] behind the single flight every refs
-    /// reader shares ([`ReadFlight`]). **The way in for all of them** —
-    /// the periodic tick and a write's own settling included, which is
-    /// what keeps two `for-each-ref` over tens of thousands of refs from
-    /// running at once.
+    /// [`RepoSession::publish_refs`] behind the refs readers' single
+    /// flight ([`ReadFlight`]) — the way in for all of them, the tick and
+    /// a write's own settling included.
     pub(super) async fn read_refs(self: &Arc<Self>) -> Reread {
         self.refs_read.run(|| self.publish_refs()).await
     }
@@ -50,74 +44,57 @@ impl RepoSession {
     /// reports whether the ref layout moved since the last read — or that
     /// nothing was published at all.
     ///
-    /// Chips alone are applied without rebuilding, but a moved ref means
-    /// commits the graph has never seen (an external commit, a fetch, a
-    /// switch), and those only appear if the walk runs again.
-    ///
-    /// The rebuild is the caller's: one that reads status in the same
-    /// pass rebuilds once for both (see [`RepoSession::refresh_poll`]).
+    /// A moved ref means commits the graph has never seen, which only a
+    /// walk brings. The rebuild is the caller's, so one that reads status
+    /// in the same pass rebuilds once for both
+    /// ([`RepoSession::refresh_poll`]).
     async fn publish_refs(self: &Arc<Self>) -> Reread {
         let Some(workdir) = self.workdir() else {
             return Reread::Failed;
         };
-        // Stamped before git is spawned: what the stamp orders is
-        // when the repository was looked at
-        // (`Standing`).
+        // Stamped before git is spawned: the stamp orders when the
+        // repository was looked at (`Standing`).
         let looked = self.standing.stamp();
         let cancel = self.root_cancel.clone();
         let refs = refs::load(&self.executor, &workdir, &cancel).await;
-        // The listing marks the branch HEAD is on, so the ordinary case is
-        // already answered and the two processes that ask again are not
-        // spawned at all. Detached and unborn have no marked ref, and only
-        // those pay (`refs::head_in`).
+        // Only detached and unborn have no marked ref in the listing and
+        // pay for asking again (`refs::head_in`).
         let head = match refs.as_ref().ok().and_then(|refs| refs::head_in(refs)) {
             Some(head) => Ok(head),
             None => refs::head_state(&self.executor, &workdir, &cancel).await,
         };
-        // Whether the list below is a repeat. It decides what a ref move
-        // means for it further down, and it has to be asked before the
-        // read that would settle it either way.
+        // Asked before the read below settles it: whether that read is a
+        // repeat decides what a ref move means further down.
         let remotes_repeated = self.remotes.peek(|_| ()).is_some();
-        // A repository with no remotes is normal, and so is a failure
-        // to read the list; neither is a reason to lose the refs.
+        // No remotes, or a failed read of them, is no reason to lose the
+        // refs.
         let remotes = self.remotes(&workdir, &cancel).await.unwrap_or_default();
         match (refs, head) {
             (Ok(refs), Ok(head)) => {
-                // A read that looked before a write ended is fenced
-                // (`Standing::current`), and read again: a write that
-                // touched only the index reads no refs behind itself, and
-                // nothing else would until the next tick. Its place is
-                // taken here, in this pass, so the fence's own read —
-                // already waiting on the gate where the write reads refs
-                // — answers it.
+                // Fenced by a write that ended after this looked
+                // (`Standing::current`): read again, since an index-only
+                // write reads no refs behind itself. Stamped inside this
+                // pass, so a read the write already has waiting on the gate
+                // answers it.
                 if !self.standing.current(looked) {
                     self.read_refs_from(self.refs_read.stamp());
                     return Reread::Same;
                 }
-                // First, and before the joins: the walk asks git where
-                // HEAD is only while nothing has told it, so the answer
-                // goes down as early as this read can put it there.
-                //
-                // It does not save the two walks `open` starts: on a
-                // repository whose listing above takes long enough to
-                // matter, both of them are past this point before it
-                // returns. What it settles is every rebuild after — a
-                // commit, a fetch, a poll tick that found a ref moved.
+                // Before the joins: the walk asks git for HEAD only while
+                // nothing has told it. Too late for the two walks `open`
+                // starts; it saves every rebuild after.
                 self.record_head_from_refs(looked, &refs, &head);
                 let remote_tags = self.remote_tag_index();
                 let keys = refs_keys(&refs, &head);
                 let key = keys.walk;
                 let previous = relock(&self.refs_key).replace(key);
-                // **The joins have a key of their own** (`join_key`), and
-                // an unmoved repository does not build them at all —
-                // sorting tens of thousands of refs into a snapshot only
-                // to compare it equal is measurable work on every quiet
-                // tick (ci/baseline/refs-join-windows-x64.md).
-                //
-                // The snapshot still goes out. A consumer that attached
-                // after the last one is waiting for it, and it is the one
-                // already published, so the sidebar reads it by pointer
-                // and rebuilds nothing (`share_snapshot`).
+                // The joins have a key of their own (`join_key`): an
+                // unmoved repository does not build them, since sorting
+                // every ref into a snapshot only to compare it equal is
+                // work on every quiet tick
+                // (ci/baseline/refs-join-windows-x64.md). The held
+                // snapshot still goes out, for a consumer that attached
+                // since; the sidebar reads it by pointer (`share_snapshot`).
                 let inputs = join_key(
                     keys.listing,
                     self.remote_tag_gen.load(Ordering::SeqCst),
@@ -132,14 +109,9 @@ impl RepoSession {
                         snapshot: held,
                         looked,
                     });
-                    // The refs are part of `inputs`, so they are where
-                    // they were: nothing to walk, nothing to re-ask.
+                    // The refs are part of `inputs`: nothing moved.
                     return Reread::Same;
                 }
-                // One index and one set of joins for both halves: the
-                // sidebar snapshot and the row chips read the same
-                // listing, and building either twice is one whole join
-                // thrown away.
                 let held = self.worktree_holders();
                 let joins = RefJoins::new(&refs, &held);
                 let mut snapshot = build_snapshot(&refs, &head, &remote_tags, &joins);
@@ -160,26 +132,19 @@ impl RepoSession {
                 // nothing else may run inside it.
                 self.apply_refs(label_map);
                 let refs_moved = previous.is_some_and(|previous| previous != key);
-                // A tip that nothing else holds is a property of where the
-                // refs point, so it is re-asked when they move — and on
-                // the first read, which has nothing to compare against.
+                // Whether a tip is held by nothing else depends on where the
+                // refs point: re-asked when they move, and on the first read.
                 if previous != Some(key) {
                     self.settle_head_reach();
-                    // HEAD moving swaps out the checked-out files, and with
-                    // them whatever the neighbours of a path looked like.
+                    // A HEAD move swaps the checked-out files, and with them
+                    // the line-ending neighbours.
                     self.forget_eol_derived();
                 }
-                // A ref move may have arrived with a config edit, so the
-                // following read has to ask again — unless this pass read
-                // the list itself, in which case what it holds is already
-                // newer than the move and dropping it would only buy the
-                // same answer twice (a write drops it on the way in, so
-                // the read that settles the write is exactly that case).
-                //
-                // **Read from the pass.** One pass
-                // answers every reader sharing this flight ([`ReadFlight`]),
-                // so a caller that named its own case would be naming it
-                // for readers that are not in it.
+                // A ref move may have come with a config edit, so the next
+                // read asks again — unless this pass read the list itself
+                // and already holds something newer than the move. Decided
+                // from the pass, not the caller: one pass answers every
+                // reader in the flight ([`ReadFlight`]).
                 if refs_moved && remotes_repeated {
                     self.remotes.forget();
                 }
@@ -200,19 +165,14 @@ impl RepoSession {
         self.read_status_from(self.status_read.stamp());
     }
 
-    /// The status pass for a caller whose place is already taken — the
-    /// fenced read's own ask (`read_refs_from` says why the place is
-    /// taken inside the pass).
+    /// [`RepoSession::read_refs_from`] for the status pass.
     pub(super) fn read_status_from(self: &Arc<Self>, stamp: Stamp) {
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            // Asked for from inside the pass, for the reason
-            // [`RepoSession::read_refs_from`] gives.
+            // The rebuild is asked for inside the pass, as in
+            // [`RepoSession::read_refs_from`].
             s.status_read
                 .run_from(stamp, || async {
-                    // An external change (another tool, the terminal) can
-                    // make the tree dirty or clean, which adds or removes
-                    // the WIP row.
                     let reread = s.publish_status().await;
                     if reread == Reread::Moved {
                         s.refresh_log();
@@ -223,30 +183,22 @@ impl RepoSession {
         });
     }
 
-    /// [`RepoSession::publish_status`] behind the single flight every
-    /// status reader shares ([`ReadFlight`]). **The way in for all of
-    /// them** — the periodic tick and a write's own settling included,
-    /// which is what keeps two `status -uall` from lstat'ing every tracked
-    /// and ignored file at the same time. `publish_status` lives in
-    /// [`super::refresh_op`] and so cannot be made private the way
-    /// [`RepoSession::publish_refs`] is; what keeps a fourth caller off it
-    /// is this doc and
-    /// `session_integration::the_ways_in_to_a_status_read_never_run_two_at_once`.
+    /// [`RepoSession::publish_status`] behind the status readers' single
+    /// flight ([`ReadFlight`]) — the way in for all of them.
+    /// `publish_status` lives in [`super::refresh_op`] and so cannot be
+    /// private the way [`RepoSession::publish_refs`] is; nothing else may
+    /// call it
+    /// (`session_integration::the_ways_in_to_a_status_read_never_run_two_at_once`).
     pub(super) async fn read_status(self: &Arc<Self>) -> Reread {
         self.status_read.run(|| self.publish_status()).await
     }
 
-    /// Reads the stash list again, behind its own flight
-    /// ([`ReadFlight`]), which is what orders the answers: a pass
-    /// holds the flight from before it looks until after it has
-    /// published, so a second caller waits for
-    /// it.
+    /// Reads the stash list again, behind its own flight ([`ReadFlight`]).
     ///
     /// Answers with the read's task, done once the listing has published
     /// — what the write queue waits on before it says a write is settled
-    /// (`session::write`) — and what the task answers is the reads that
-    /// did not: empty where the listing landed. `None` where no repository
-    /// is open and nothing was read.
+    /// (`session::write`) — and the task answers the reads that failed:
+    /// empty where the listing landed. `None` where no repository is open.
     pub fn refresh_stashes(self: &Arc<Self>) -> Option<tokio::task::JoinHandle<Vec<FollowUp>>> {
         let workdir = self.workdir()?;
         let s = Arc::clone(self);
@@ -255,10 +207,7 @@ impl RepoSession {
             let published = s
                 .stash_read
                 .run(move || async move {
-                    // Stamped before git is spawned, the way the refs pass
-                    // is: what it orders is when the repository was looked
-                    // at, which is what a consumer holding a dropped row
-                    // off the screen measures the write against
+                    // Stamped before git is spawned, as in the refs pass
                     // (`Standing::stamp`).
                     let looked = session.standing.stamp();
                     let cancel = session.root_cancel.clone();
@@ -284,22 +233,18 @@ impl RepoSession {
         }))
     }
 
-    /// Reads the worktree list again, behind its own flight the way
-    /// [`Self::refresh_stashes`] does, and then the reads the listing asks
-    /// for: a working copy taken or given back moves no ref, so the join
-    /// that marks the rows has to be asked for by name — and a copy
-    /// standing on no branch is a row of its own, which only the walk can
-    /// put there.
+    /// Reads the worktree list again, behind its own flight as
+    /// [`Self::refresh_stashes`] does, and then the reads it asks for: a
+    /// working copy taken or given back moves no ref, so the joins are
+    /// asked for by name, and a copy on no branch is a row only the walk
+    /// can put there.
     ///
-    /// **Those reads are waited for, after the flight is let go.** The
-    /// task this answers with is what the write queue waits on before it
-    /// says a write is settled, and a settling that let the listing's own
-    /// walk run on would put the boundary before the row it is a boundary
-    /// for. Every caller the pass answers acts on the same news
-    /// ([`WorktreeRead`]), so a caller answered by somebody else's pass
-    /// waits for the same reads. What the task answers is the reads that
-    /// did not land, the listing's own included; empty where everything
-    /// did.
+    /// Those reads are awaited after the flight is let go: the task is
+    /// what the write queue waits on to call a write settled, and letting
+    /// the walk run on would put that boundary before its row. Every
+    /// caller the pass answers gets the same news ([`WorktreeRead`]) and
+    /// waits for the same reads. The task answers the reads that did not
+    /// land, the listing's own included; empty where all did.
     pub fn refresh_worktrees(self: &Arc<Self>) -> Option<tokio::task::JoinHandle<Vec<FollowUp>>> {
         let workdir = self.workdir()?;
         let s = Arc::clone(self);

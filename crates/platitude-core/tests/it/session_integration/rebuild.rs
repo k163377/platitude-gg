@@ -8,9 +8,8 @@ use crate::support::session::{CaptureSink, is_stream_event, open_unawaited, open
 use platitude_core::OperationKind;
 use platitude_core::session::{Recording, RefreshOutcome, RepoSession, SessionEvent};
 
-/// A write rebuilds the graph exactly once. Committing turns a dirty tree
-/// clean, which removes the WIP row; reacting to that separately from the
-/// write itself would stream the whole graph twice for one action.
+/// Committing also turns the tree clean (the WIP row goes); reacting to
+/// that apart from the write would stream the graph twice.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_write_rebuilds_the_graph_once() {
     let mut repo = TestRepo::init();
@@ -18,9 +17,7 @@ async fn a_write_rebuilds_the_graph_once() {
     repo.write_file("new.txt", "content\n");
 
     let (sink, session) = open_unawaited(&repo);
-    // Wait until the WIP row is on screen (root + WIP = 2 rows) behind an
-    // explicit opening boundary, so the commit below is the transition
-    // that removes it and every later stream event is a reaction to a write.
+    // Root + WIP row settled, so every later stream event reacts to a write.
     sink.opened_graph(&session, 2).await;
 
     session.stage_all();
@@ -28,9 +25,8 @@ async fn a_write_rebuilds_the_graph_once() {
         "add new file".into(),
         platitude_core::commit::CommitOptions::default(),
     );
-    // A no-op write behind the commit is a queue barrier. `WriteStarted`
-    // cannot be delivered until the commit's refresh has itself completed,
-    // so it cannot cancel or overlook a trailing rebuild.
+    // A no-op write behind the commit is a queue barrier: its `WriteStarted`
+    // comes only after the commit's refresh has completed.
     session.stage_all();
 
     let barrier_at = sink
@@ -94,10 +90,8 @@ async fn a_write_rebuilds_the_graph_once() {
     session.close();
 }
 
-/// Opens `scenario()` and takes a baseline only after the opening graph
-/// and snapshot reads have answered. The operation under test supplies
-/// its own completion boundary, and that is what this helper waits
-/// on.
+/// Opens `scenario()` and returns the stream-event baseline once the
+/// opening graph and snapshot reads have answered.
 async fn settled_graph() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, usize) {
     let (repo, _) = scenario();
     let (sink, session) = open_unawaited(&repo);
@@ -106,9 +100,8 @@ async fn settled_graph() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, usize
     (repo, sink, session, baseline)
 }
 
-/// A background rebuild that finds nothing changed must stay silent — no
-/// reset, no chunk, no repaint. This is what keeps a quiet auto-fetch
-/// interval (or any other background refresh) from flickering the graph.
+/// A background rebuild that finds nothing changed stays silent, or every
+/// quiet refresh flickers the graph.
 #[tokio::test(flavor = "multi_thread")]
 async fn background_refresh_swaps_only_on_change() {
     let (mut repo, sink, session, baseline) = settled_graph().await;
@@ -126,9 +119,8 @@ async fn background_refresh_swaps_only_on_change() {
         sink.events.lock().unwrap()
     );
 
-    // History moved outside the session: the same call now delivers one
-    // atomic replacement — a single LogReplaced carrying every row, so
-    // the consumer never holds an empty model in between.
+    // History moved outside: one `LogReplaced` with every row, so the
+    // consumer never holds an empty model.
     repo.commit_file("h.txt", "x\n", "outside commit");
     let changed = crate::support::wait::bounded(
         "the tracked graph refresh",
@@ -156,18 +148,14 @@ async fn background_refresh_swaps_only_on_change() {
     session.close();
 }
 
-/// A ref that moved outside the session (a commit in a terminal, a fetch,
-/// a switch by another tool) points at commits this graph has never
-/// walked, so re-reading the refs has to rebuild — chips alone cannot show
-/// them. A re-read that finds every ref where it left it stays silent.
+/// A ref moved outside the session points at commits this graph never
+/// walked, so the refs read has to rebuild — chips alone cannot show them.
+/// Unmoved refs stay silent.
 #[tokio::test(flavor = "multi_thread")]
 async fn an_external_ref_move_rebuilds_the_graph() {
     let (mut repo, sink, session, baseline) = settled_graph().await;
-    // Where the opening ends in the record. Whether its own stream got
-    // as far as starting before the tracked refresh took it over is the
-    // scheduler's to decide (`a_rebuild_taken_over_before_it_started_never_walks`
-    // is the shape where it did not), so the streams counted below are
-    // the ones after this mark.
+    // Whether the opening's own stream started before the tracked refresh
+    // took it over is the scheduler's call, so streams count from here.
     let opened_at = sink.events.lock().unwrap().len();
 
     let quiet_refs = sink.count(|event| matches!(event, SessionEvent::RefsLoaded { .. }));
@@ -213,21 +201,14 @@ async fn an_external_ref_move_rebuilds_the_graph() {
     session.close();
 }
 
-/// Chips are diffed against the graph that is on screen, so they are only
-/// ever sent for that one. A rebuild landing in the middle of a refs read
-/// moves every commit down a row (the WIP row goes in at the top), and row
-/// numbers taken before it name other commits after it. Nothing takes such
-/// a mistake back either: the session believes those chips are on screen,
-/// so the next read has nothing to say and the next rebuild nothing to
-/// swap.
+/// Chips are diffed against the graph on screen, so they are only sent for
+/// that one. A rebuild landing mid-read shifts every row (the WIP row goes
+/// on top), and chips numbered before it land on other commits — for good,
+/// since the session believes them drawn.
 ///
-/// The hook makes the interleaving exact: it holds the read at the
-/// sink call that publishes its snapshot while the test rebuilds the
-/// graph under it.
-// `worker_threads = 2` is the test's own premise: the hook below
-// parks a worker on a blocking `recv`, and a pool inherited from
-// `available_parallelism` can be a single thread on a small runner —
-// the parked hook then owns the only worker and nothing else runs.
+/// The hook holds the read at the sink call that publishes its snapshot
+/// while the test rebuilds under it.
+// `worker_threads = 2`: the hook below parks a worker (`CaptureSink::hook_once`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn chips_read_from_one_graph_do_not_land_on_another() {
     let mut repo = TestRepo::init();
@@ -238,8 +219,8 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
     let (sink, session) = open_unawaited(&repo);
     sink.opened_graph(&session, 3).await;
 
-    // Something for the read to find, on the last row of the graph it
-    // reads it from: a chip that travels as a diff.
+    // Something for the read to find on the graph's last row: a chip that
+    // travels as a diff.
     repo.git(&["tag", "v2", &root]);
 
     let (release, held) = std::sync::mpsc::channel::<()>();
@@ -264,9 +245,8 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
     })
     .await;
 
-    // Rebuilt from here, with the read held: dirtying the tree puts the
-    // WIP row at the top, so every row number that read took moves down
-    // one.
+    // With the read held, dirtying the tree puts the WIP row on top and
+    // shifts every row that read numbered.
     repo.write_file("f.txt", "dirty\n");
     session.refresh_status();
     sink.wait_for("the rebuild that adds the WIP row", |evs| {
@@ -307,18 +287,14 @@ async fn chips_read_from_one_graph_do_not_land_on_another() {
     session.close();
 }
 
-/// A pass that was superseded before it could start leaves the graph
-/// alone. Which pass is in charge is decided when somebody asks —
-/// both entry points cancel the running token before spawning — so a
-/// reset that arrives late leaves the screen as it is. Clearing it
-/// would wipe the record a rebuild compares against and leave every
-/// later chip diff numbered for a graph nobody was ever
-/// shown.
+/// A pass superseded before it could start leaves the graph alone: both
+/// entry points cancel the running token before spawning, so a late reset
+/// is dropped. Clearing would wipe the record a rebuild compares against,
+/// numbering later chip diffs for a graph nobody was shown.
 ///
-/// Held under the graph lock, the interleaving is exact: the losing pass
-/// cannot reach its reset before the cancel that supersedes it.
-// `worker_threads = 2`: the parked hook needs a worker to spare
-// (see the sibling above).
+/// Held under the graph lock, the losing pass cannot reach its reset
+/// before the cancel that supersedes it.
+// `worker_threads = 2`: the hook below parks a worker (`CaptureSink::hook_once`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
     let mut repo = TestRepo::init();
@@ -330,8 +306,7 @@ async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
     sink.opened_graph(&session, 3).await;
 
     // Park in the swap that adds the WIP row: it sends under the graph
-    // lock, so everything else is stopped at the door with the graph
-    // fully installed behind it.
+    // lock, so everything else waits with the graph fully installed.
     let (release, held) = std::sync::mpsc::channel::<()>();
     sink.hook_once(
         |e| matches!(e, SessionEvent::LogReplaced { rows, .. } if rows.len() == 4),
@@ -381,10 +356,8 @@ async fn a_pass_nobody_asked_for_any_more_leaves_the_graph_alone() {
     session.close();
 }
 
-/// One tick, one rebuild. A commit made outside the session moves a ref
-/// *and* turns the tree clean, and the poll reads both: walking the
-/// history once per reader would throw a whole pass away every time
-/// someone else commits.
+/// One tick, one rebuild: an outside commit moves a ref *and* cleans the
+/// tree, and the poll reads both.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_poll_rebuilds_the_graph_once() {
     let mut repo = TestRepo::init();
@@ -399,7 +372,6 @@ async fn a_poll_rebuilds_the_graph_once() {
     let starts = || sink.count(|e| matches!(e, SessionEvent::LogStarted { .. }));
     let (quiet_replacements, quiet_starts) = (replacements(), starts());
 
-    // An idle repository is what the poll spends nearly all its ticks on.
     let idle =
         crate::support::wait::bounded("the tracked poll", session.refresh_poll_tracked().outcome())
             .await;
@@ -438,24 +410,19 @@ async fn a_poll_rebuilds_the_graph_once() {
     session.close();
 }
 
-/// **One ask, one set of reads.** A restart runs two passes where tags
-/// are drawn — the tag-less one that paints and the rebuild that is owed
-/// the picture the tags are in (`restart_log`) — and the second starts
-/// the moment the first lands, on a repository neither of them moved.
-/// Asking git the walk's own questions again there is a process launch
-/// apiece, which is most of what a read costs on Windows
+/// One ask, one set of reads: a restart with tags runs two passes
+/// (`restart_log`), the second the moment the first lands on an unmoved
+/// repository, and re-asking there is a process launch apiece
 /// (ci/baseline/code-costs-windows-x64.md).
 ///
-/// The stash listing is the one of those reads that always goes to git:
-/// HEAD is answered by the settled refs read (`known_head_tip`) and the
-/// remote tips by the snapshot beside it, so counting `stash list` is
-/// counting how many times the pair asked.
+/// `stash list` is the one of those reads that always goes to git (HEAD
+/// comes from the refs read, `known_head_tip`), so counting it counts how
+/// many times the pair asked.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_two_passes_of_one_ask_read_the_stashes_once() {
     let (_repo, sink, session, _baseline) = settled_graph().await;
-    // From here the background reads are in the command log, and the
-    // opening's own passes are behind this line (the baseline closed
-    // them).
+    // The baseline closed the opening's passes, so what is recorded from
+    // here is this ask's.
     session.set_recording(Recording::WithBackground);
     let ran = |needle: &'static str| {
         sink.count(
@@ -464,8 +431,8 @@ async fn the_two_passes_of_one_ask_read_the_stashes_once() {
     };
     assert_eq!(ran("stash list"), 0, "nothing from before the baseline");
 
-    // A window nobody has asked for yet, which is one ask and two passes:
-    // the options carry tags (`LogOptions::default`).
+    // A new window is one ask and two passes, since the options carry tags
+    // (`LogOptions::default`).
     session.set_log_limit(Some(platitude_core::session::DEFAULT_LOG_LIMIT + 1));
     crate::support::wait::bounded("the graph passes", session.wait_for_graph_passes()).await;
 
@@ -484,30 +451,20 @@ async fn the_two_passes_of_one_ask_read_the_stashes_once() {
     session.close();
 }
 
-/// A rebuild taken over before it started does not walk.
+/// A rebuild taken over before it started does not walk: a cancelled pass
+/// has nobody left to answer, and the walk is the most expensive read.
 ///
-/// Asking for one cancels the pass that held the stream, and a cancelled
-/// pass has nobody left to answer: what it would build is a graph that
-/// has already been replaced. The walk is the most expensive read in the
-/// app, so starting it to find that out is the whole of it spent.
+/// The opening hits this: its tag-inclusive pass waits out the tag-less one
+/// (`restart_log`), and a walk left running there turns up after the
+/// boundary meant to close the opening.
 ///
-/// **The opening is where this lands.** Its tag-inclusive pass waits out
-/// the tag-less one that paints (`restart_log`), so a write, a poll tick
-/// or a test closing its baseline in between would leave a full history
-/// walk running — and that walk's command turns up *after* the boundary
-/// that is meant to close the opening, which makes
-/// `remote_tags_integration::learning_what_the_remotes_carry_…` fail
-/// under load and nowhere else.
-///
-/// The single-threaded runtime is what makes the order a fact: a
-/// spawned pass is not polled until this test awaits, so the second
-/// ask is known to arrive before the first has read anything.
+/// The single-threaded runtime makes the order a fact: a spawned pass is
+/// not polled until this test awaits, so the second ask arrives first.
 #[tokio::test]
 async fn a_rebuild_taken_over_before_it_started_never_walks() {
     let (_repo, sink, session, _baseline) = settled_graph().await;
-    // From here the background reads are in the command log, so what the
-    // two asks below spend is countable — and the opening's own passes
-    // are behind this line, both closed by the baseline.
+    // The baseline closed the opening's passes, so what the two asks below
+    // spend is countable.
     session.set_recording(Recording::WithBackground);
     let walks = || {
         sink.count(
@@ -537,14 +494,10 @@ async fn a_rebuild_taken_over_before_it_started_never_walks() {
     session.close();
 }
 
-/// **The snapshot is built out of more than where the refs point.**
-/// Setting an upstream moves no ref at all — it is two config keys — but
-/// the listing carries what each branch reads and how far it stands from
-/// it, and the sidebar's badge and the row's chips are built from that.
-///
-/// A key that answered only for positions republished the snapshot from
-/// before the write, so the answer just given was nowhere on screen until
-/// something else moved a ref (observed: `Set upstream…` redrew nothing).
+/// Setting an upstream moves no ref (it is two config keys), but the
+/// listing carries each branch's upstream and distance, which the badge and
+/// chips are built from — a key over positions alone would republish the
+/// snapshot from before the write.
 #[tokio::test(flavor = "multi_thread")]
 async fn setting_an_upstream_rebuilds_what_the_rows_read() {
     let mut origin = TestRepo::init();
@@ -600,8 +553,7 @@ fn position_of(events: &[SessionEvent], kind: OperationKind) -> Option<usize> {
         .position(|e| matches!(e, SessionEvent::WriteFinished { kind: got, .. } if *got == kind))
 }
 
-/// What the session actually spawned, for a failure that is about
-/// the commands themselves.
+/// What the session spawned, for failure messages.
 fn commands(sink: &CaptureSink) -> Vec<String> {
     sink.events
         .lock()

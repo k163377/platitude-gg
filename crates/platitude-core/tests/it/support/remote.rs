@@ -24,8 +24,8 @@ pub fn origin_and_clone() -> (TestRepo, TestRepo) {
 ///
 /// The first of those is the edge, which git grafts as parentless — `%P`
 /// comes back empty and `<edge>~1` exits 1, the same answers the real
-/// first commit gives (measured on 2.55). The clone sits beside the source's
-/// own work tree, so the returned `TestRepo` is what keeps it on disk.
+/// first commit gives. The clone sits beside the source's own work tree,
+/// so the returned `TestRepo` is what keeps it on disk.
 /// `--depth` needs a `file://` URL; git ignores it on a plain local path.
 pub fn shallow_clone(commits: usize, depth: usize) -> (TestRepo, PathBuf, Vec<String>) {
     let mut source = TestRepo::init();

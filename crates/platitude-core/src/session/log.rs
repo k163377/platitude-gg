@@ -4,13 +4,10 @@
 use super::rows::LogTotals;
 use super::*;
 
-/// The reads a pass takes before the walk: where the remote-tracking
-/// branches stand (what the rows are marked against) and what the
-/// walk's own command is built from ([`WalkInputs`]).
-///
-/// **One set serves both passes of one ask** (`restart_log`): the
-/// rebuild draws the picture the paint drew but for the tags, and it
-/// starts the moment the paint lands.
+/// The reads a pass takes before the walk: the remote-tracking tips the
+/// rows are marked against, and the walk's own inputs ([`WalkInputs`]).
+/// One set serves both passes of one ask
+/// (rules-refs/core.md「pass が walk の前に読む物は 1 組で取る」).
 #[derive(Clone)]
 pub(super) struct PassReads {
     tips: RemoteTips,
@@ -22,14 +19,10 @@ impl RepoSession {
         *self.lock_log_options()
     }
 
-    /// Whether the graph is drawing tags — the TAGS band's eye, and what
-    /// every row's chips are cut against (`LabelIndex::labels_of`).
-    ///
-    /// Read from the session: the first of a restart's two passes runs
-    /// with the tags taken out of the walk to get a picture up (see
-    /// `restart_log`), and a chip cut to match the pass's own
-    /// `LogOptions` would take every tag off the screen for the length
-    /// of that pass and then put it back.
+    /// Whether the graph is drawing tags — what every row's chips are cut
+    /// against (`LabelIndex::labels_of`). Read from the session, not the
+    /// pass's `LogOptions`: a restart's fast pass walks without tags, and
+    /// cutting to it would blink every tag off for that pass.
     pub(super) fn tags_shown(&self) -> bool {
         self.lock_log_options().include_tags
     }
@@ -47,10 +40,8 @@ impl RepoSession {
     }
 
     /// Changes the graph window size (`None` = full history) and restarts.
-    ///
-    /// The window this sets is the one the graph opens with, so the tail's
-    /// step is measured from it (`log_window_step`) — growing the window
-    /// afterwards leaves the step where this put it.
+    /// Also resets the tail's step (`log_window_step`), which growing the
+    /// window leaves alone.
     pub fn set_log_limit(self: &Arc<Self>, limit: Option<u32>) {
         {
             let mut options = self.lock_log_options();
@@ -70,18 +61,10 @@ impl RepoSession {
         self.lock_log_options().step
     }
 
-    /// Widens the graph window by one step and rebuilds it **in place**.
-    ///
-    /// **The swap pass.** A restart's direct pass clears the graph
-    /// before it streams (see `run_direct_pass`), and this is asked for
-    /// at the bottom of the window by somebody reading it: blanking the
-    /// rows and sending them back to the top is no answer to a press
-    /// down there. The swap pass builds the wider walk off-screen and
-    /// splices it in, so what is on screen stays where it is and the
-    /// tail grows under it.
-    ///
-    /// Nothing to do on a window that is already the whole history: there
-    /// is no step past the end of it.
+    /// Widens the graph window by one step and rebuilds it in place with a
+    /// swap pass: a direct pass would blank the rows and send the reader at
+    /// the bottom back to the top. A no-op on a window that is already the
+    /// whole history.
     pub fn grow_log_window(self: &Arc<Self>) {
         let Some(workdir) = self.workdir() else {
             return;
@@ -102,25 +85,15 @@ impl RepoSession {
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
             let _held = held;
-            // Changed: the wider graph is in, footer and all. Cancelled:
-            // somebody else owns the stream and answers for it. Unchanged
-            // cannot land here — this pass carries a footer the last one
-            // did not. Only a failure leaves the window unanswered:
-            //
-            // the wider walk died, so nothing on screen moved and nothing
-            // told the window that the press it is waiting on is over — a
-            // swap pass reports a failed walk to the tab
-            // (`run_swap_pass` -> `fail`). Put the window back to the one
-            // that is drawn and take the ordinary route, which does
-            // answer the graph.
+            // Only a failure leaves the press unanswered: a swap pass
+            // reports a failed walk to the tab (`run_swap_pass` -> `fail`),
+            // not the graph. Put the window back and take the ordinary
+            // route, which does answer the graph.
             let outcome = s.run_swap_pass(&workdir, options, &run_cancel, None).await;
             run.answer(outcome);
             if outcome == RefreshOutcome::Failed {
-                // **Only if the window is still the one this press set.**
-                // A failure is reported without re-reading the token, so
-                // it can arrive after somebody else has asked for a
-                // window of their own — and putting this press's back
-                // then would walk a history nobody asked for.
+                // Only if the window is still this press's: the failure can
+                // arrive after somebody else set a window of their own.
                 let mut options = s.lock_log_options();
                 if options.limit != grown {
                     return;
@@ -136,28 +109,19 @@ impl RepoSession {
         relock(&self.log_options)
     }
 
-    /// The graph on screen has been left behind the repository, or has
-    /// caught up with it again. Said on the turn only
-    /// ([`SessionEvent::LogStale`]).
-    ///
-    /// **Every pass ends in one of these two.** A rebuild that lands, one
-    /// that finds nothing to change and a stream that starts over all
-    /// leave a graph that is this repository's; only a rebuild that could
-    /// not be walked leaves the last one standing. A cancelled pass says
-    /// neither — whoever cancelled it is the one drawing now, and this is
-    /// their answer to give.
+    /// The graph on screen has fallen behind the repository, or caught up
+    /// again; said on the turn only ([`SessionEvent::LogStale`]). Every
+    /// pass that is not cancelled ends in one of the two — only a rebuild
+    /// that could not be walked says `true`.
     pub(super) fn tell_graph_stale(&self, stale: bool) {
         if self.graph_stale.swap(stale, Ordering::SeqCst) != stale {
             self.sink.event(SessionEvent::LogStale { stale });
         }
     }
 
-    /// What a pass reads before it can walk, taken as one.
-    ///
-    /// **All at once, because no answer feeds another.** Read one after
-    /// the other they were three process launches standing between an
-    /// opening and its first chunk, and on Windows the launch is most
-    /// of what a read costs (ci/baseline/code-costs-windows-x64.md).
+    /// What a pass reads before it can walk, taken concurrently: no answer
+    /// feeds another, and in series the process launches dominate the time
+    /// to the first row (ci/baseline/code-costs-windows-x64.md §git のプロセス代).
     pub(super) async fn pass_reads(
         self: &Arc<Self>,
         workdir: &std::path::Path,
@@ -171,12 +135,8 @@ impl RepoSession {
     }
 
     /// What this pass walks with: the reads the ask above it took, or its
-    /// own where it is the only pass there is.
-    ///
-    /// The two halves come back apart, because a pass has a use for the
-    /// tips of a read whose other half failed — the marks are what the
-    /// rows it never emits would have been stamped with, and the failure
-    /// is the walk's to report.
+    /// own. The halves come back apart: a failed walk input is the walk's
+    /// to report, and the tips still seed the pass's marks.
     async fn reads_for(
         self: &Arc<Self>,
         taken: Option<PassReads>,
@@ -192,12 +152,9 @@ impl RepoSession {
         }
     }
 
-    /// Restarts the log → graph stream (used by manual full refresh).
-    ///
-    /// With tags enabled this runs **two passes**: a fast tag-less pass
-    /// paints immediately (tag tips make the walk's frontier setup cost
-    /// seconds on tag-heavy repositories), then a tag-inclusive pass
-    /// rebuilds in the background and atomically replaces the graph.
+    /// Restarts the log → graph stream. With tags enabled this runs two
+    /// passes: a tag-less one that paints at once, then a tag-inclusive
+    /// rebuild swapped in (rules-refs/core.md「2 段ストリーミング」).
     pub fn restart_log(self: &Arc<Self>) {
         let Some(workdir) = self.workdir() else {
             return;
@@ -210,21 +167,12 @@ impl RepoSession {
         let options = self.log_options();
         self.runtime.spawn(async move {
             let _held = held;
-            // Two passes under one ask, and the last of them answers for
-            // it: the fast one only paints, and a rebuild is owed the
-            // picture the tags are in.
+            // The last pass answers for the ask.
             let outcome = if options.include_tags {
                 let fast = LogOptions {
                     include_tags: false,
                     ..options
                 };
-                // **One ask, one set of reads.** The rebuild draws the
-                // same picture the paint did but for the tags, and it
-                // starts the moment that one lands — asking git the two
-                // questions again there is three process launches for
-                // answers a walk old (`PassReads`). A stash pushed from
-                // outside in between is drawn by the next tick, the way
-                // it would be with no pass running at all.
                 let reads = s.pass_reads(&workdir, &run_cancel).await.ok();
                 match s
                     .run_direct_pass(&workdir, fast, &run_cancel, reads.clone())
@@ -243,32 +191,26 @@ impl RepoSession {
         });
     }
 
-    /// Takes the log stream over: a fresh token for this pass, with the
-    /// one it displaces cancelled, and the ask it answers as
-    /// ([`GraphRun`]) — numbered here, so the ask that displaced a pass
-    /// is numbered after it and the pass's caller can wait for this one
-    /// instead ([`RepoSession::graph_answer`]).
+    /// Takes the log stream over: a fresh token for this pass, the one it
+    /// displaces cancelled, and the numbered ask it answers as
+    /// ([`GraphRun`]) — a displaced pass's caller waits for the later
+    /// number ([`RepoSession::graph_answer`]).
     ///
-    /// **Called on the caller's thread, before the pass is spawned**:
-    /// call order is what decides which pass owns the graph, and spawn
-    /// order does not follow it
-    /// (core.md).
+    /// Call on the caller's thread before spawning the pass: call order
+    /// decides which pass owns the graph, and spawn order does not follow
+    /// it (rules-refs/core.md「担当を決めるのはキャンセルトークン 1 つ」).
     ///
-    /// **The number and the handover are taken together**, under the
-    /// lock the token is swapped under: two asks racing here would
-    /// otherwise be able to number themselves in one order and take the
-    /// stream in the other, leaving the pass that was displaced waiting
-    /// on a number lower than its own replacement's — which is a wait
-    /// nothing in the chain answers.
+    /// The number and the handover are taken under one lock: otherwise two
+    /// racing asks could number in one order and take the stream in the
+    /// other, leaving the displaced pass waiting on a number nothing
+    /// answers.
     pub(super) fn take_log_run(&self) -> (CancellationToken, GraphRun) {
         let run_cancel = self.root_cancel.child_token();
         let (run, displaced) = {
             let mut owner = relock(&self.log_cancel);
             (self.graph_passes.ask(), owner.replace(run_cancel.clone()))
         };
-        // Outside the lock, the way it was taken: what a cancellation
-        // wakes is somebody else's task, and this lock is not one to be
-        // holding while that happens.
+        // Cancelled outside the lock: it wakes somebody else's task.
         if let Some(prev) = displaced {
             prev.cancel();
         }
@@ -276,9 +218,8 @@ impl RepoSession {
     }
 
     /// Streams one pass straight to the UI (chunked, resets the graph).
-    /// Reports itself and answers what it came to: `Changed` where the
-    /// stream reached the consumer, and the two ways it does not —
-    /// taken over, or a walk that failed.
+    /// `Changed` where the stream reached the consumer; otherwise
+    /// `Cancelled` (taken over) or `Failed`.
     async fn run_direct_pass(
         self: &Arc<Self>,
         workdir: &std::path::Path,
@@ -291,59 +232,44 @@ impl RepoSession {
         // Before the lock, because reading them can go to git.
         let (tips, inputs) = self.reads_for(reads, workdir, cancel).await;
         {
-            // Reset graph state for the new stream and announce it under
-            // one lock: everything that reads row numbers out of `shared`
-            // takes the same lock and sends what it read before letting
-            // go, so no message can describe a graph the consumer is not
-            // on yet (see `apply_refs`). A session that has let go of
-            // what it drew keeps nothing this pass could put back
-            // (`RepoSession::keeps_what_it_reads`).
+            // Reset and announce under one lock: every reader of row
+            // numbers in `shared` sends under the same lock, so no message
+            // describes a graph the consumer is not on yet (see
+            // `apply_refs`). `None` from a session that has let go of what
+            // it drew (`RepoSession::keeps_what_it_reads`).
             let Some(mut shared) = self.store_shared() else {
                 return RefreshOutcome::Cancelled;
             };
-            // Whoever asked last owns the graph, and asking is what
-            // cancelled this token (both entry points swap it before
-            // spawning). Resetting for a stream nobody wants any more
-            // would blank the record of what is on screen and leave
-            // every later chip diff numbered for a graph that was never
-            // shown; the walk is cancelled and would deliver no rows to
-            // put back.
+            // Superseded: resetting now would blank the record of what is
+            // on screen for a stream nobody wants
+            // (rules-refs/core.md「降ろされたパスの state はそのまま」).
             if cancel.is_cancelled() {
                 watch.answered();
                 return RefreshOutcome::Cancelled;
             }
             shared.builder = GraphBuilder::new();
-            // Seeded from the refs this graph is being drawn against, so
-            // every row the stream emits already carries the answer the
-            // menus read off it.
+            // Seeded first, so every emitted row already carries the
+            // answer the menus read off it.
             shared.publish_marks = PublishMarks::new(tips);
             shared.generation = generation;
             shared.applied.clear();
             shared.sent_rows.clear();
-            // Nothing has answered for this graph yet — not even this
-            // pass, which only learns its footer when the walk ends, so
-            // a rebuild landing in between finds no answer to read as
-            // this one's.
+            // No footer until the walk ends, so a rebuild landing in
+            // between finds none to compare against.
             shared.sent_footer = None;
             self.sink.event(SessionEvent::LogStarted { generation });
-            // Nothing old is standing any more: the column this stream is
-            // about to fill is empty. Said here, because the graph that
-            // had fallen behind has already gone.
+            // The stale graph has just been cleared.
             self.tell_graph_stale(false);
-            // From here the column is empty and turning on this stream.
             watch.announced(generation);
         }
-        // Outside the lock the reset was taken under: a fault raised here
-        // unwinds, and `watch` is what the empty column hears from.
+        // Outside the lock: a fault raised here unwinds, and `watch` is
+        // what reports it.
         self.run_pass_step(PassStep::Streaming);
         let started = Instant::now();
-        // A fault left here stands in for the walk, so what follows is
-        // the same reporting arm a git that failed would have reached
-        // (`PassHooks::fault`).
+        // A raised fault or a failed walk input stands in for the walk and
+        // takes the reporting arm a failed git would (`PassHooks::fault`).
         let walk = match (self.pass_fault(PassStep::Streaming), inputs) {
             (Some(error), _) => Err(error),
-            // A read the walk cannot be built without is this pass's
-            // failure, and takes the same arm a git that failed does.
             (None, Err(error)) => Err(error),
             (None, Ok(inputs)) => {
                 self.stream_log(workdir, generation, options, cancel, inputs)
@@ -352,32 +278,27 @@ impl RepoSession {
         };
         match walk {
             Ok(totals) => {
-                // What the pass read off HEAD's own row goes to the one
-                // record before the consumer hears the pass is over — from
-                // the stream the consumer is on: a superseded one had its
-                // rows refused (`emit_rows`), and its "not in the window"
-                // is not the window's answer.
+                // HEAD's published mark goes to the record before the
+                // consumer hears the pass is over — only from the stream
+                // the consumer is on; a superseded one's rows were refused
+                // (`emit_rows`).
                 if self.lock_shared().generation == generation {
                     self.settle_head_published(totals.head, totals.head_published);
                 }
                 let footer = Footer {
                     walked: totals.walked,
-                    // Truncation is a property of the walk: the shown count
-                    // drifts from it in both directions (the WIP row adds
-                    // one, sifted stash parents subtract), so comparing it
-                    // against --max-count would flag the wrong streams.
+                    // Judged on the walked count: the shown count drifts
+                    // both ways from it (the WIP row, sifted stash parents).
                     truncated: options.limit.is_some_and(|n| totals.walked >= n),
                 };
-                // Recorded and sent under one lock, like every other
-                // message describing what is in `shared`: a rebuild taking
-                // the lock next compares against this footer, and finds
-                // it only after the consumer has been told.
+                // Recorded and sent under one lock, so a rebuild comparing
+                // against this footer finds it only after the consumer has
+                // been told.
                 let Some(mut shared) = self.store_shared() else {
                     return RefreshOutcome::Cancelled;
                 };
-                // Only the stream the consumer is on may answer for it.
-                // A superseded one would leave its numbers behind as the
-                // record of somebody else's graph (see `emit_rows`).
+                // Only the stream the consumer is on records its footer
+                // (see `emit_rows`).
                 if shared.generation == generation {
                     shared.sent_footer = Some(footer);
                 }
@@ -411,9 +332,8 @@ impl RepoSession {
         }
     }
 
-    /// The swap pass's walk, and the two things that stand in for it:
-    /// a fault the run was told to raise (see `run_direct_pass`), and a
-    /// read the walk's command cannot be built without.
+    /// The swap pass's walk, or what stands in for it: a raised fault or a
+    /// failed walk input (as in `run_direct_pass`).
     async fn walk_off_screen(
         self: &Arc<Self>,
         workdir: &std::path::Path,
@@ -432,12 +352,9 @@ impl RepoSession {
         }
     }
 
-    /// Builds a full pass off-screen, then swaps it in as one reset +
-    /// one chunk (the UI drains all three events in a single slot call,
-    /// so the replacement is flicker-free).
-    ///
-    /// `reads` is what the ask above took for both of its passes, and
-    /// `None` where this is the only pass there is ([`PassReads`]).
+    /// Builds a full pass off-screen, then swaps it in whole with one
+    /// `LogReplaced`, so the replacement is flicker-free. `reads` is the
+    /// ask's shared set, or `None` to take its own ([`PassReads`]).
     pub(super) async fn run_swap_pass(
         self: &Arc<Self>,
         workdir: &std::path::Path,
@@ -445,30 +362,23 @@ impl RepoSession {
         cancel: &CancellationToken,
         reads: Option<PassReads>,
     ) -> RefreshOutcome {
-        // Superseded before it began: somebody took the stream over
-        // between this pass being asked for and its first read. The check
-        // further down stops a finished pass from installing a graph
-        // nobody wants; this one stops it from being walked at all, and
-        // the walk is the most expensive read in the app. **The opening
-        // is where that matters**: its tag-inclusive pass waits out the
-        // tag-less one that paints, so anything asking for a rebuild in
-        // between (a write, a poll tick, a test taking its baseline)
-        // would otherwise leave a whole history walk running for a graph
-        // that has already been replaced.
+        // Superseded before it began: skip the walk, the most expensive
+        // read in the app
+        // (rules-refs/core.md「始まる前に取り上げられた pass は walk しない」).
+        // The check under the lock below stops a finished pass from
+        // installing.
         if cancel.is_cancelled() {
             return RefreshOutcome::Cancelled;
         }
         let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
-        // Nothing on screen is waiting on this one: it builds off screen
-        // and replaces the graph at the end, so a pass that never gets
-        // there leaves a real picture standing (`PassWatch`).
+        // Off-screen: a pass that never finishes leaves a real picture
+        // standing (`PassWatch`).
         let mut watch = PassWatch::operation(self);
         self.run_pass_step(PassStep::Swapping);
         let started = Instant::now();
         let mut builder = GraphBuilder::new();
-        // Taken before the walk: the walk runs across awaits and cannot
-        // hold this lock (`published::RemoteTips`). Beside the walk's own
-        // reads, for the reason `run_direct_pass` takes them together.
+        // Taken before the walk, which runs across awaits and cannot hold
+        // this lock (`published::RemoteTips`).
         let (tips, inputs) = self.reads_for(reads, workdir, cancel).await;
         let mut marks = PublishMarks::new(tips);
         let mut rows: Vec<LogRow> = Vec::new();
@@ -492,22 +402,20 @@ impl RepoSession {
             .await;
         let walked = match result {
             Ok(totals) => {
-                // The mark on HEAD's row is a fact about the repository,
-                // and it goes to the record whether or not the picture
-                // below turns out to be the one already on screen.
+                // HEAD's mark goes to the record even if the picture turns
+                // out unchanged.
                 self.settle_head_published(totals.head, totals.head_published);
                 totals.walked
             }
             Err(error) => {
                 watch.answered();
-                // The fast pass is already on screen; report quietly.
+                // A cancelled pass says nothing (as in `run_direct_pass`).
                 if matches!(error, GitError::Cancelled { .. }) {
                     return RefreshOutcome::Cancelled;
                 }
-                // What is on screen is now the graph this pass would have
-                // replaced: whole, and no longer this repository's. The
-                // band says so (`STALE GRAPH`); git's words go where every
-                // other read's do.
+                // The graph on screen is whole but no longer this
+                // repository's: the band says so (`STALE GRAPH`), and git's
+                // words go where every read's do.
                 self.tell_graph_stale(true);
                 self.fail("log", error);
                 return RefreshOutcome::Failed;
@@ -521,11 +429,8 @@ impl RepoSession {
             let Some(mut shared) = self.store_shared() else {
                 return RefreshOutcome::Cancelled;
             };
-            // Superseded: someone asked for a graph after this pass
-            // was started, and that ask cancelled this token. Read off
-            // the token — the generation counter is stamped when a
-            // pass begins running, which is not the order the asks
-            // came in.
+            // Superseded — read off the token, not the generation, which
+            // follows spawn order.
             if cancel.is_cancelled() {
                 watch.answered();
                 return RefreshOutcome::Cancelled;
@@ -547,21 +452,14 @@ impl RepoSession {
                 // truncation.
                 truncated: options.limit.is_some_and(|n| walked >= n),
             };
-            // Both halves of what the last pass delivered. Rows alone
-            // would call a widened window "the same picture" and leave the
-            // truncation notice claiming history the user just asked to
-            // see — a rebuild is the only thing that speaks when one
-            // overtakes the stream the change asked for (core.md).
+            // Rows and footer both: rows alone would call a widened window
+            // the same picture and leave the truncation notice standing
+            // (rules-refs/core.md「swap を省く判定は行とフッタの両方」).
             //
-            // **Every pass speaks while the working-tree row is held
-            // back** ([`PassHooks::holds_back_the_working_tree_row`]).
-            // What that hold arranges is a pass with no row of this
-            // window's, and after a write there is nothing else for such
-            // a pass to differ by — a stopped replay moves no branch, and
-            // the row that would have made the difference is the one
-            // being held — so the reproduction would be walked and then
-            // dropped here as "the same picture" (measured). Nobody but a
-            // harness ever raises it.
+            // Every pass speaks while the working-tree row is held back
+            // ([`PassHooks::holds_back_the_working_tree_row`]): after a
+            // stopped replay that row is the only difference, so the pass
+            // would be dropped as the same picture. Only a harness raises it.
             let unchanged = !self.holds_back_the_working_tree_row()
                 && shared.sent_footer == Some(footer)
                 && shared.sent_rows.len() == rows.len()
@@ -574,21 +472,13 @@ impl RepoSession {
             shared.publish_marks = marks;
             shared.applied = applied;
             if unchanged {
-                // The UI already shows exactly this: swapping would only
-                // reset the view (scroll anchor, selection re-resolve) for
-                // an identical picture. Background refreshes land here on
-                // every quiet auto-fetch tick — same options over an
-                // unmoved repository walk the same commits, so the footer
-                // matches whenever the rows do.
-                //
-                // The generation stays behind with it. Nothing was sent,
-                // so the graph on screen is still the one before this
-                // pass — and this walk numbered its rows the same way, or
-                // it would not have compared equal.
+                // The UI already shows exactly this; swapping would only
+                // reset the view. The generation stays: nothing was sent,
+                // and this walk numbered its rows the same way or it would
+                // not compare equal.
                 tracing::debug!(generation, total, "graph rebuild unchanged; swap skipped");
-                // The one pass that sends nothing is also the one that
-                // clears a mark left by an earlier failure: this walk read
-                // the repository and found the picture on screen to be it.
+                // A walk that found the screen current clears an earlier
+                // failure's mark.
                 self.tell_graph_stale(false);
                 watch.answered();
                 return RefreshOutcome::Unchanged;
@@ -596,9 +486,7 @@ impl RepoSession {
             shared.sent_rows = rows.iter().map(RowPrint::of).collect();
             shared.sent_footer = Some(footer);
             shared.generation = generation;
-            // Still under the lock (see run_direct_pass): a refs read that
-            // takes it next diffs chips against this graph, and its event
-            // follows the rows it numbers.
+            // Under the lock, as in run_direct_pass.
             self.sink.event(SessionEvent::LogReplaced {
                 generation,
                 rows,
@@ -606,8 +494,6 @@ impl RepoSession {
                 walked: footer.walked,
                 truncated: footer.truncated,
             });
-            // The graph is this repository's again, whatever the pass
-            // before it left standing.
             self.tell_graph_stale(false);
         }
         watch.answered();
@@ -622,8 +508,7 @@ impl RepoSession {
         self.refresh_status();
         self.refresh_stashes();
         self.refresh_worktrees();
-        // The window coming back is the moment the other copies are most
-        // likely to have moved, so their pass is asked for here.
+        // Focus coming back is when the other copies most likely moved.
         self.refresh_carried();
     }
 }

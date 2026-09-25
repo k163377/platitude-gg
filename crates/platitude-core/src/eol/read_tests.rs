@@ -29,8 +29,7 @@ fn with_head(body: &[&str]) -> Vec<u8> {
 
 #[test]
 fn a_whole_file_flip_is_read_as_a_flip() {
-    // The exact shape git printed for a three-line LF file rewritten
-    // with CRLF (measured).
+    // The shape git prints for a three-line LF file rewritten with CRLF.
     let raw = with_head(&[
         "@@ -1,3 +1,3 @@",
         "-one",
@@ -74,9 +73,8 @@ fn one_crlf_line_in_an_lf_file_is_read_as_mixed() {
 
 #[test]
 fn the_file_a_notice_names_is_the_one_the_untouched_lines_use() {
-    // Most of the file is rewritten with CRLF but some lines are left
-    // alone: what the file "uses" has to come from those, or a change
-    // big enough to outvote the file would report itself as normal.
+    // A change big enough to outvote the file must not report itself as
+    // what the file uses.
     let mut body = vec!["@@ -1,6 +1,6 @@", " keep", " keep"];
     body.extend(std::iter::repeat_n("-line", 4));
     body.extend(std::iter::repeat_n("+line\r", 4));
@@ -108,8 +106,6 @@ fn a_file_that_was_already_mixed_says_nothing_until_the_change_adds_to_it() {
 
 #[test]
 fn a_crlf_file_says_nothing_until_an_lf_line_lands_in_it() {
-    // The untouched lines are CRLF, so CRLF is what the file uses and LF
-    // is the ending that disagrees with it.
     let own = with_head(&["@@ -1,2 +1,3 @@", " keep\r", " these\r", "+more\r"]);
     assert_eq!(read_one(&own), Reading::Quiet);
 
@@ -166,7 +162,7 @@ fn a_new_file_that_arrives_mixed_is_reported_as_mixed() {
 
 #[test]
 fn a_file_with_no_ending_at_all_reports_its_first() {
-    // Measured shape: the marker follows the old side's only line.
+    // The marker follows the old side's only line.
     let raw = with_head(&[
         "@@ -1 +1 @@",
         "-no-newline-here",
@@ -186,8 +182,8 @@ fn a_file_with_no_ending_at_all_reports_its_first() {
 
 #[test]
 fn losing_the_final_newline_is_not_an_ending_change() {
-    // The new side's last line has no terminator, so the tally
-    // passes it over: an LF tally would read as a flip.
+    // The unterminated last line is not tallied: an LF tally would read
+    // as a flip.
     let raw = with_head(&[
         "@@ -1,2 +1,2 @@",
         " one",
@@ -245,8 +241,6 @@ fn binary_and_combined_patches_say_nothing() {
 
 #[test]
 fn a_content_line_that_looks_like_a_header_stays_content() {
-    // The hunk counts say how many lines belong to it, so a context
-    // line reading `diff --git …` cannot start a second file.
     let raw = with_head(&[
         "@@ -1,3 +1,3 @@",
         " diff --git a/x b/x",

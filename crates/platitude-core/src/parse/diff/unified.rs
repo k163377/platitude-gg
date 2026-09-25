@@ -1,5 +1,5 @@
-//! One content line of a unified hunk: a single marker column, then the
-//! text — the ordinary two-sided diff, beside `combined` for the merges.
+//! Content lines of a unified (two-sided) hunk: one marker column, then
+//! the text.
 
 use super::{DiffHunk, DiffLine, DiffLineKind};
 
@@ -48,9 +48,7 @@ pub(super) fn read_unified_line(h: &mut DiffHunk, line: &str, old_no: &mut u32, 
             });
         }
         None => {
-            // A completely empty line inside a hunk is a context line
-            // whose content is empty (git prints a lone space, but some
-            // tools strip trailing whitespace; tolerate).
+            // An empty context line whose lone space some tool stripped.
             h.lines.push(DiffLine {
                 kind: DiffLineKind::Context,
                 old_no: Some(*old_no),

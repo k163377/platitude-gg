@@ -8,28 +8,21 @@ use super::*;
 /// there.
 ///
 /// Two commits under one name means the remotes disagree, which reads on
-/// screen exactly like a tag that drifted from the one here — the name
-/// standing on more than one row.
+/// screen like a tag that drifted from the one here — the name standing
+/// on more than one row.
 ///
-/// **One sorted run.** A tag standing on two
-/// commits is rare, so nearly every name has exactly one reading — and a
-/// `BTreeMap` per name allocates a whole eleven-slot node to hold that one
-/// — a node per name, which on a repository with tens of thousands of
-/// remote tags is an order of magnitude more than the same readings take
-/// flat, and a large share of the process's entire Rust heap
-/// (ci/baseline/code-costs-windows-x64.md §メモリの形). The operations are
-/// the ones the two joins need — is this name out there, and walk the
-/// names in order — and both are as good on a sorted run as on a tree.
-/// **Public because the sidebar snapshot carries a pointer to it**
-/// ([`crate::session::RefsSnapshot::remote_tags`]): a tag's row opens on
-/// the remotes carrying its name, and copying those names into the
-/// snapshot is every name a second time (see `readings` below for what
-/// that costs). What is public is the reading
+/// One sorted run, not a map per name: nearly every name has one
+/// reading, and a `BTreeMap` node per name is an order of magnitude more
+/// heap than the flat run (ci/baseline/code-costs-windows-x64.md
+/// §メモリの形).
+///
+/// Public because the sidebar snapshot carries a pointer to it
+/// ([`crate::session::RefsSnapshot::remote_tags`]) rather than a second
+/// copy of every name. What is public is the reading
 /// ([`Self::carriers_against`]); the run itself is this module's.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct RemoteTagIndex {
-    /// Sorted by name, then by commit. Built once per merge and read many
-    /// times, so it is sorted on the way in and never mutated after.
+    /// Sorted by name, then by commit; never mutated after `build`.
     entries: Vec<RemoteTagEntry>,
 }
 
@@ -38,23 +31,18 @@ pub struct RemoteTagIndex {
 pub(crate) struct RemoteTagEntry {
     pub(crate) name: crate::Name,
     pub(crate) commit: Oid,
-    /// Sorted, and more than one when several remotes agree on the commit.
-    ///
-    /// **Inline while there is one**, which is nearly always: a `Vec` would
-    /// be an allocation per tag to hold a single remote's name, and a
-    /// repository with 45,901 of them pays that 45,901 times.
+    /// Sorted; more than one when several remotes agree on the commit.
+    /// Inline while there is one (nearly always) — a `Vec` would be an
+    /// allocation per tag.
     pub(crate) remotes: smallvec::SmallVec<[Carrier; 1]>,
 }
 
 /// One remote's reading of one tag.
 ///
-/// **What that remote advertised, kept per remote.** Two remotes can
-/// carry the same name on the same commit with one of them holding a tag
-/// object and the other pointing straight at the commit, and a single
-/// flag for the pair could only be the two OR-ed together. That is lossy
-/// in exactly the direction this index has to survive: readings are taken
-/// out of it again when a remote is fetched on its own or stops being
-/// configured, and a fold cannot be undone.
+/// `annotated` is per remote: two remotes can carry one name on one
+/// commit, one as a tag object and one pointing straight at the commit,
+/// and a flag OR-ed for the pair could not be undone when one remote's
+/// readings are taken back out (fetched on its own, or unconfigured).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct Carrier {
     pub(crate) remote: crate::Name,
@@ -69,12 +57,11 @@ impl RemoteTagEntry {
 }
 
 impl RemoteTagIndex {
-    /// Collects readings into the sorted run. Each `(name, commit)` is one
-    /// entry however many remotes carry it, and their names gather on it.
+    /// Collects readings into the sorted run: one entry per
+    /// `(name, commit)`, with the remotes carrying it gathered on it.
     ///
-    /// **The only constructor**, and public for the same reason the type
-    /// is: a snapshot standing on nothing but this index can only be built
-    /// by whoever can build one (`models::nav::testkit`).
+    /// The only constructor; public so a snapshot can be built on nothing
+    /// but this index (`models::nav::testkit`).
     pub fn build(readings: impl Iterator<Item = (crate::Name, Oid, bool, crate::Name)>) -> Self {
         let mut entries: Vec<RemoteTagEntry> = Vec::new();
         for (name, commit, annotated, remote) in readings {
@@ -102,13 +89,11 @@ impl RemoteTagIndex {
         Self { entries: folded }
     }
 
-    /// Every reading held, in the shape [`Self::build`] takes them back.
-    ///
-    /// **This is what makes the index the only copy.** Keeping the
-    /// per-remote answers beside it, so one remote's could be replaced on
-    /// its own, is a second copy of every name — megabytes of the memory
-    /// budget (ci/baseline/code-costs-windows-x64.md §メモリの形) — for
-    /// data already here. Taking them out again costs one pass.
+    /// Every reading held, in the shape [`Self::build`] takes them back —
+    /// what lets the index be the only copy: replacing one remote's
+    /// readings rebuilds from this instead of keeping a per-remote copy of
+    /// every name beside it (ci/baseline/code-costs-windows-x64.md
+    /// §メモリの形).
     pub(crate) fn readings(
         &self,
     ) -> impl Iterator<Item = (crate::Name, Oid, bool, crate::Name)> + '_ {
@@ -131,19 +116,11 @@ impl RemoteTagIndex {
     /// — what a tag's row opens under itself
     /// (デザイン規約 §左メニューの所作).
     ///
-    /// **`against` is the reading the others are read against** — the
-    /// remote this repository's tag rows act on. A name is one tag
-    /// wherever it is, and which of its readings is *the* one is not a
-    /// question the commits can answer: the reader's own copy is one
-    /// opinion among them, and calling it the reference puts the warning
-    /// on whichever remote disagrees with a local tag that may itself be
-    /// the odd one out.
-    ///
-    /// Nobody stands apart where `against` does not carry the name: with
-    /// no reading to be read against, the list is a list of names.
-    ///
-    /// One row at a time, so this walks the one name's run rather than
-    /// building anything: the rows that are not open are not asked.
+    /// `against` is the remote this repository's tag rows act on, not the
+    /// local tag: that is one opinion among the readings, and as the
+    /// reference it would put the warning on whichever remote disagrees
+    /// with a local tag that may itself be the odd one out. Where
+    /// `against` does not carry the name, nobody stands apart.
     pub fn carriers_against(&self, name: &str, against: &str) -> Vec<(&str, bool)> {
         let start = self.entries.partition_point(|e| e.name.as_str() < name);
         let run = || {
@@ -170,11 +147,8 @@ impl RemoteTagIndex {
     /// the commit it is on here (デザイン規約 §ref の種別). A drift stands
     /// the name on two rows, and neither of them wears the badge.
     ///
-    /// **One search.** This is answered for every tag on every refs
-    /// read, and `JetBrains/kotlin` brings 45,901 of them
-    /// (`RefJoins`) — a second walk of the same run costs the whole
-    /// of that again for an answer this one already
-    /// has.
+    /// One walk of the run: this is asked for every tag on every refs read
+    /// (`RefJoins`).
     pub(crate) fn agrees_at(&self, name: &str, here: Oid) -> bool {
         let start = self.entries.partition_point(|e| e.name.as_str() < name);
         let mut carried = false;
@@ -190,8 +164,7 @@ impl RemoteTagIndex {
         carried
     }
 
-    /// The names in order, each with every reading of it. One name is one
-    /// run of the sorted entries.
+    /// The names in order, each with every reading of it.
     pub(crate) fn names(&self) -> impl Iterator<Item = (&str, &[RemoteTagEntry])> {
         let mut rest = self.entries.as_slice();
         std::iter::from_fn(move || {
@@ -204,7 +177,7 @@ impl RemoteTagIndex {
         })
     }
 
-    /// Readings held, across every name.
+    /// Entries held — one per `(name, commit)`.
     pub(crate) fn len(&self) -> usize {
         self.entries.len()
     }
@@ -236,16 +209,9 @@ mod tests {
         Oid::from_hex_str(&format!("{byte:02x}").repeat(20)).expect("valid sha")
     }
 
-    /// Taking one remote's readings back out leaves the others exactly as
-    /// they were told — including the one thing a folded flag would lose.
-    ///
-    /// Two remotes can carry a name on the same commit with one holding a
-    /// tag object and the other pointing straight at it (measured: only
-    /// the annotated side advertises the `^{}` line). The index is the
-    /// only copy of the readings, so a fetch of one remote rebuilds from
-    /// what it hands back — and if `annotated` were one flag per entry it
-    /// could only be the two OR-ed, and dropping the annotated side would
-    /// leave the lightweight one still calling itself annotated.
+    /// Pins the per-remote `annotated` (`Carrier`): with one flag per
+    /// entry, dropping the annotated side would leave the lightweight one
+    /// still calling itself annotated.
     #[test]
     fn a_remotes_readings_come_back_out_the_way_they_went_in() {
         let commit = oid(7);

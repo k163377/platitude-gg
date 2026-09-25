@@ -5,11 +5,8 @@ use std::sync::OnceLock;
 use syntect::highlighting::{Color, StyleModifier, Theme, ThemeItem, ThemeSettings};
 use syntect::parsing::{SyntaxReference, SyntaxSet};
 
-/// The colour a run gets when no rule below claims it — identifiers,
-/// parameters, punctuation. **The app's own `textPrimary`**: code is the
-/// thing on this screen worth reading, and anything dimmer than the
-/// window's own words reads as though it were not
-/// (デザイン規約 §シンタックスハイライト).
+/// The colour a run gets when no rule below claims it: the app's own
+/// `textPrimary` (デザイン規約 §シンタックスハイライト).
 const PLAIN: u32 = 0xE2E8F0;
 
 /// The same colour as [`PLAIN`], in the form the grammar path paints
@@ -17,29 +14,21 @@ const PLAIN: u32 = 0xE2E8F0;
 pub(super) const PLAIN_RGB: super::Rgb = super::Rgb::of(PLAIN);
 
 // The rest of デザイン規約 §シンタックスハイライト's table, one const per
-// row of it. Two arrays name these — `PALETTE` in syntect's scopes,
-// `grammar::CAPTURES` in tree-sitter's captures — and the two
-// vocabularies differ by design; the values do not, so they are written
-// once here and referred to from both. Written twice they would drift
-// silently, and one file would then wear two colourings: a path a
-// grammar claims still reads through syntect when it is conflicted
-// (`patch::patch_colors` takes the combined branch first).
+// row, written once for both `PALETTE` (syntect scopes) and
+// `grammar::CAPTURES` (tree-sitter captures): a conflicted file of a
+// grammar language reads through syntect, so two copies drifting would
+// give one file two colourings.
 
-/// Context — the colour the app gives every secondary word. A
-/// colour of its own: dimming text is how this app says
-/// "disabled" (規約 §無効), and a comment is not disabled.
+/// `textSecondary`, never dimmer — dimming says disabled
+/// (デザイン規約 §シンタックスハイライト).
 pub(super) const COMMENT: u32 = 0x94A3B8;
 
-/// The words that make it a language.
 pub(super) const KEYWORD: u32 = 0x60A5FA;
 
-/// What things are.
 pub(super) const TYPE: u32 = 0x7DD3FC;
 
-/// What things do.
 pub(super) const FUNCTION: u32 = 0xA78BFA;
 
-/// What is written down literally.
 pub(super) const STRING: u32 = 0xFCD34D;
 
 /// Numbers, and the constants a language names itself — `true`, `null`.
@@ -52,16 +41,14 @@ pub(super) const ANNOTATION: u32 = 0xFDA4AF;
 /// mapping is what this array owns; デザイン規約's table
 /// owns the values (same rule as `Theme.qml`).
 ///
-/// syntect scores selectors and takes the best match, so a broad name
-/// sits safely beside a narrow one — `keyword` and `keyword.operator`
-/// both belong here and the narrower one wins where it applies.
+/// syntect takes the best-scoring selector, so `keyword` and
+/// `keyword.operator` sit side by side and the narrower one wins.
 const PALETTE: [(&str, u32); 19] = [
     ("comment", COMMENT),
     ("punctuation.definition.comment", COMMENT),
     ("keyword", KEYWORD),
     ("storage", KEYWORD),
-    // Keywords, but not their operators: `=` and `+` in accent blue
-    // turns every line into a row of lights.
+    // Operators and punctuation stay plain (デザイン規約 §シンタックスハイライト).
     ("keyword.operator", PLAIN),
     ("punctuation", PLAIN),
     ("entity.name.type", TYPE),
@@ -86,9 +73,8 @@ pub(super) fn knows(path: &str) -> bool {
 }
 
 /// Whether the set has a syntax of its own for this path, past the
-/// plain-text one every `.txt` resolves to, which colours nothing.
-/// What decides if a file that outgrew its grammar is worth handing to
-/// the lexer at all (`patch::patch_colors`).
+/// plain-text one, which colours nothing — whether a file that outgrew
+/// its grammar is worth handing to the lexer (`patch::patch_colors`).
 pub(super) fn reads(path: &str) -> bool {
     let syntaxes = &assets().syntaxes;
     syntax_for(syntaxes, path)
@@ -100,9 +86,8 @@ pub(super) struct Assets {
     pub(super) theme: Theme,
 }
 
-/// Loaded once, on the first diff that asks. A window that is opened
-/// and closed without a file being read pays none of it, and the load
-/// is inside the same background hop as the diff itself.
+/// Loaded once, on the first diff that asks, inside that diff's
+/// background hop.
 pub(super) fn assets() -> &'static Assets {
     static ASSETS: OnceLock<Assets> = OnceLock::new();
     ASSETS.get_or_init(|| Assets {
@@ -111,16 +96,10 @@ pub(super) fn assets() -> &'static Assets {
     })
 }
 
-/// The app's palette as something syntect can highlight against. Built
-/// here: every published theme is drawn for its own ground and its own
-/// idea of how loud code should be, and next to this window's words all
-/// of them read as though the code were the caption
-/// (measured — base16-ocean, Catppuccin Mocha, Dracula, Monokai
-/// were all tried against the real thing).
+/// The app's palette as a syntect theme; published themes are rejected
+/// (デザイン規約 §シンタックスハイライト).
 fn palette() -> Theme {
-    // Through `super::Rgb::of`, the one place `0xRRGGBB` is taken
-    // apart, and then into syntect's own colour — opaque, since the
-    // palette is foreground only.
+    // Opaque: the palette is foreground only.
     let color = |rgb: u32| {
         let super::Rgb { r, g, b } = super::Rgb::of(rgb);
         Color { r, g, b, a: 0xff }

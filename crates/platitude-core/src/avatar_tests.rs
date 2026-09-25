@@ -6,8 +6,7 @@ fn scratch() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir")
 }
 
-/// A real picture on disk. The store decodes what it is handed, so a
-/// few bytes standing in for one do not reach the far side.
+/// A real picture on disk — the store decodes what it is handed.
 fn picture(dir: &Path, name: &str, tint: u8) -> PathBuf {
     let png = crate::picture::png_of(24, 16, |x, _| [tint, x as u8, 40, 255]);
     file_of(dir, name, &png)
@@ -37,12 +36,10 @@ fn assigning_copies_the_picture_in() {
         .expect("assign");
     assert!(store_dir.join(&file).is_file(), "the copy is on disk");
     assert_eq!(avatars.file_of("ada@example.com"), Some(file.as_str()));
-    // The address folded, the name kept as it was given.
     assert_eq!(avatars.list()[0].email, "ada@example.com");
     assert_eq!(avatars.list()[0].name, "Ada");
 
-    // The picture a person picked can go away without taking the
-    // avatar with it.
+    // The picked file can go away without taking the avatar with it.
     std::fs::remove_file(&source).expect("remove source");
     assert!(store_dir.join(&file).is_file());
 }
@@ -83,7 +80,6 @@ fn the_same_picture_for_two_people_is_stored_once() {
         .expect("assign");
     assert_eq!(a, b);
 
-    // And taking it off one leaves the other drawable.
     assert!(avatars.remove(&store_dir, "ada@example.com"));
     assert!(store_dir.join(&b).is_file(), "the file is still spoken for");
     assert!(avatars.remove(&store_dir, "bob@example.com"));
@@ -95,8 +91,7 @@ fn something_that_is_not_a_picture_is_refused_before_anything_is_written() {
     let scratch = scratch();
     let store_dir = scratch.path().join("avatars");
     let mut avatars = Avatars::default();
-    // Named like a picture, which is exactly why the name is not
-    // what decides.
+    // Named like a picture: the content decides, not the name.
     let source = file_of(scratch.path(), "cat.png", b"hello");
     assert!(matches!(
         avatars.assign(&store_dir, "ada@example.com", "Ada", &source),
@@ -126,7 +121,6 @@ fn what_is_stored_is_the_small_square_rather_than_what_was_picked() {
     let scratch = scratch();
     let store_dir = scratch.path().join("avatars");
     let mut avatars = Avatars::default();
-    // Wide, and far bigger than anything ever drawn.
     let wide = crate::picture::png_of(1200, 800, |x, y| {
         [(x % 251) as u8, (y % 253) as u8, 30, 255]
     });
@@ -143,7 +137,7 @@ fn what_is_stored_is_the_small_square_rather_than_what_was_picked() {
         stored.len(),
         wide.len()
     );
-    // The header says it plainly: IHDR carries the two sides.
+    // IHDR's width and height.
     let side = u32::from_be_bytes([stored[16], stored[17], stored[18], stored[19]]);
     let other = u32::from_be_bytes([stored[20], stored[21], stored[22], stored[23]]);
     assert_eq!((side, other), (crate::picture::SIDE, crate::picture::SIDE));
@@ -205,7 +199,6 @@ fn a_round_trip_through_the_table_keeps_every_assignment() {
 
     let back = Avatars::from_values(&avatars.to_values());
     assert_eq!(back, avatars);
-    // Sorted by address, so the file a person opens always reads in
-    // the same order.
+    // Sorted by address, so the settings file reads in a stable order.
     assert_eq!(back.list()[0].email, "ada@example.com");
 }

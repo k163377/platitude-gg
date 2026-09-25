@@ -14,16 +14,14 @@ use super::theme::{ANNOTATION, COMMENT, CONSTANT, FUNCTION, KEYWORD, PLAIN_RGB, 
 /// `textPrimary` the regex lexer falls back to.
 pub(super) const PLAIN: Rgb = PLAIN_RGB;
 
-/// Capture name → colour, デザイン規約 §シンタックスハイライト's table said in
-/// tree-sitter's capture vocabulary. The colours themselves live in
-/// `theme`, which the syntect mirror (`theme::PALETTE`) reads too, so
-/// the two vocabularies cannot disagree about a value.
+/// Capture name → colour: デザイン規約 §シンタックスハイライト's table in
+/// tree-sitter's capture vocabulary (the values live in `theme`, shared
+/// with `theme::PALETTE`).
 ///
-/// Only coloured names are listed: a capture nothing here matches —
-/// operators, punctuation, variables — comes out [`PLAIN`]. tree-sitter
-/// resolves a capture to the **longest listed dot-prefix**, so `keyword`
-/// covers `keyword.control` and the narrow `constant.builtin` stands
-/// beside the unlisted broad `constant`.
+/// Unlisted captures (operators, punctuation, variables) come out
+/// [`PLAIN`]. tree-sitter resolves a capture to the longest listed
+/// dot-prefix, so `keyword` covers `keyword.control` and the narrow
+/// `constant.builtin` stands without the broad `constant`.
 const CAPTURES: [(&str, u32); 20] = [
     ("comment", COMMENT),
     ("keyword", KEYWORD),
@@ -71,8 +69,7 @@ struct Entry {
 }
 
 /// Builds one configuration, or `None` for a query the runtime
-/// refuses — that language then reads through the fallback
-/// lexer.
+/// refuses — that language then reads through the fallback lexer.
 fn configured(
     language: Language,
     name: &'static str,
@@ -86,10 +83,10 @@ fn configured(
     Some(config)
 }
 
-/// Several highlight queries as one. Some crates ship theirs as a
-/// *delta* over another language's — qmljs over JavaScript's, objc over
-/// C's — and alone those colour almost nothing. The specific language
-/// goes first: where two patterns claim one node, tree-sitter keeps the
+/// Several highlight queries as one, for crates that ship theirs as a
+/// delta over another language's (qmljs over JavaScript's, objc over
+/// C's) and colour almost nothing alone. The specific language goes
+/// first: where two patterns claim one node, tree-sitter keeps the
 /// earlier.
 fn layered(queries: &[&str]) -> String {
     queries.join("\n")
@@ -149,18 +146,15 @@ static ENTRIES: [Entry; 37] = [
     entry!(&["xml", "svg", "xsd", "plist"], "xml", || configured(tree_sitter_xml::LANGUAGE_XML.into(), "xml", tree_sitter_xml::XML_HIGHLIGHT_QUERY, "")),
 ];
 
-/// The grammar for a path, `None` where no entry claims it (the caller
-/// then falls back to the regex lexer). An entry matches by extension,
-/// or — for the entries that carry a dot themselves (`cmakelists.txt`)
-/// — by the whole file name. A name with no extension matches nothing:
-/// a wrapper script that happens to be called `go` is not Go.
+/// The grammar for a path, `None` where no entry claims it. An entry
+/// matches by extension, or — for the entries that carry a dot
+/// themselves (`cmakelists.txt`) — by the whole file name. A name with
+/// no extension matches nothing: a wrapper script called `go` is not Go.
 pub(super) fn for_path(path: &str) -> Option<&'static Lang> {
     entry_for(path).and_then(lang_of)
 }
 
-/// Whether an entry claims this path — without building anything.
-/// Asked wherever only the fork matters: the quick-pass decision, and
-/// whether a file is worth fetching at all.
+/// Whether an entry claims this path, without building anything.
 pub(super) fn claims(path: &str) -> bool {
     entry_for(path).is_some()
 }
@@ -215,8 +209,7 @@ mod tests {
     }
 
     /// A comment and a literal in each language, by [`Entry::name`] —
-    /// little enough to read, enough that any query which paints at all
-    /// paints something here.
+    /// enough that any query which paints at all paints something here.
     const SAMPLES: [(&str, &str); 37] = [
         ("rust", "// note\nfn main() { let s = \"hi\"; }"),
         ("qml", "// note\nItem { property string s: \"hi\" }"),
@@ -257,13 +250,10 @@ mod tests {
         ("xml", "<!-- note -->\n<a b=\"c\"/>"),
     ];
 
-    /// The guard above says a query was accepted; painting is
-    /// another matter: several upstream crates ship their
-    /// highlights as a *delta* over another language's — colourless on
-    /// their own (observed: qmljs, typescript, tsx, cpp and objc all
-    /// did, and a QML diff came out plain end to end). Every entry
-    /// answers for its own sample here, so a language added without its
-    /// bases fails in this crate.
+    /// A query being accepted is not painting: a delta query (see
+    /// [`layered`]) is colourless without its bases. Every entry answers
+    /// for its own sample, so a language added without its bases fails
+    /// here.
     #[test]
     fn every_grammar_colours_a_sample_of_its_language() {
         for entry in &ENTRIES {
@@ -301,8 +291,6 @@ mod tests {
         assert!(claims("tools/CMakeLists.txt"));
         assert!(claims("デザイン規約.md"));
         assert!(!claims("notes.qqq"));
-        // A name with no extension is nobody's: a wrapper script that
-        // happens to be called `go` is not Go.
         assert!(!claims("scripts/go"));
         // Groovy's crate ships no queries, so gradle scripts read
         // through the fallback lexer.

@@ -32,13 +32,10 @@ async fn squash_and_reword_run_through_the_write_queue() {
     session.close();
 }
 
-/// The commands a rewrite issued, named coarsely enough to read as
-/// the route it took.
+/// The route a rewrite took, as the commands it issued.
 ///
-/// Matched from the front of the command: the status refresh that
-/// follows a stopped rebase reads its progress with
-/// `rev-parse --git-path rebase-merge/msgnum`, which a plain `contains`
-/// counts as a fourth rebase (measured).
+/// Matched from the front: a plain `contains` counts the stopped rebase's
+/// `rev-parse --git-path rebase-merge/msgnum` status read as a fourth rebase.
 fn rewrite_route(sink: &CaptureSink) -> Vec<&'static str> {
     let mut out = Vec::new();
     for event in sink.events.lock().unwrap().iter() {
@@ -67,14 +64,10 @@ fn stopped_part_way(repo: &TestRepo) -> bool {
     repo.path.join(".git").join("rebase-merge").exists()
 }
 
-/// A squash fired over a dirty tree lands on its own: git refuses to
-/// replay while the work is in the tree, so the session goes round the way
-/// a person typing the three commands would (デザイン規約
-/// §未コミット変更がある状態で履歴を書き換える). What lands is what `stash` →
-/// `squash` → `stash pop --index` leaves — **the staged and unstaged
-/// halves still told apart**, which is the one thing `--autostash` cannot
-/// do: it restores with a plain apply and everything comes back unstaged
-/// (measured, 2.55).
+/// A squash over a dirty tree goes round through `stash` → `squash` →
+/// `stash pop --index` (デザイン規約 §未コミット変更がある状態で履歴を書き換える),
+/// so the staged and unstaged halves stay apart — `--autostash` restores
+/// with a plain apply and brings everything back unstaged.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_squash_over_a_dirty_tree_carries_the_work_across() {
     install_todo_editor();
@@ -129,12 +122,9 @@ fn rebase_onto() -> platitude_core::integrate::RebaseOptions {
     }
 }
 
-/// A whole branch moved onto a new base goes round the very same way, so
-/// the answer to "does my staging survive a history rewrite" does not
-/// depend on which menu row was clicked. Handing this to `--autostash`
-/// instead would restore with a plain apply and bring **everything back
-/// unstaged** — the split below is exactly what that flag cannot keep
-/// (measured, 2.55).
+/// A rebase onto a new base goes round the same way (not `--autostash`, as
+/// with the squash above), so whether staging survives a rewrite does not
+/// depend on which menu row was clicked.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_rebase_onto_over_a_dirty_tree_carries_the_work_across() {
     let mut repo = TestRepo::init();
@@ -182,11 +172,9 @@ async fn a_rebase_onto_over_a_dirty_tree_carries_the_work_across() {
     session.close();
 }
 
-/// And when that rebase stops on a conflict, the work waits in the stash
-/// exactly as a stopped replay's does — no restore is attempted over a
-/// tree git is still holding. This is what the alignment gives up:
-/// `--autostash` would have put the work back itself after `--continue`
-/// or `--abort` (measured), whereas this entry is the person's to pop.
+/// When that rebase stops, the work waits in the stash as a stopped
+/// replay's does — the entry is the person's to pop, where `--autostash`
+/// would have restored it after `--continue` / `--abort`.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_rebase_onto_that_stops_leaves_the_work_in_the_stash() {
     let mut repo = TestRepo::init();
@@ -226,10 +214,9 @@ async fn a_rebase_onto_that_stops_leaves_the_work_in_the_stash() {
     session.close();
 }
 
-/// Untracked files are not in the way of a replay at all (measured: git takes
-/// the plan and leaves them where they are), so no stash is taken for
-/// them. The route is the whole assertion — a needless stash would still
-/// have ended with the same working tree.
+/// Untracked files are not in a replay's way, so no stash is taken for
+/// them. The route is the whole assertion: a needless stash would end with
+/// the same tree.
 #[tokio::test(flavor = "multi_thread")]
 async fn untracked_files_alone_are_replayed_straight_over() {
     install_todo_editor();
@@ -256,11 +243,9 @@ async fn untracked_files_alone_are_replayed_straight_over() {
     session.close();
 }
 
-/// The replay goes through and the *restore* is what collides. The
-/// landing is the one a move already has (規約 §未コミット変更がある状態
-/// での移動): markers in the files, and the stash entry kept so the work
-/// still exists somewhere other than a marked-up file. Nothing
-/// failed.
+/// The replay goes through and the restore collides: markers in the files
+/// and the entry kept, as a move lands
+/// (デザイン規約 §未コミット変更がある状態での移動). Nothing failed.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_restore_that_collides_lands_in_the_files_and_keeps_the_entry() {
     install_todo_editor();
@@ -303,12 +288,10 @@ async fn a_restore_that_collides_lands_in_the_files_and_keeps_the_entry() {
     session.close();
 }
 
-/// The replay stops part-way, and the restore is held back: git
-/// will not write into an index that already holds unmerged paths, so a
-/// pop there does nothing while reporting the collision it walked into
-/// (measured `could not write index` / `needs merge` — 規約 §`stash pop` の
-/// 非ゼロを conflict と読んでよいのは). The work waits in the stash,
-/// drawn as its own row in the graph, until the operation is over.
+/// The replay stops part-way and the restore is held back: a pop onto an
+/// index with unmerged paths does nothing yet reports a collision
+/// (rules-refs/core.md「`stash pop` の非ゼロを conflict と読めるのは」).
+/// The work waits in the stash until the operation is over.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_replay_that_stops_part_way_leaves_the_work_in_the_stash() {
     install_todo_editor();
@@ -353,20 +336,14 @@ fn reached_the_stash(event: &SessionEvent) -> bool {
         if display.starts_with("git stash push"))
 }
 
-/// **A commit that lands inside the carry is refused.**
+/// The composed plan is a fixed list of ids the helper writes over git's
+/// todo whole, and the carry spawns the replay twice (refused over the
+/// dirty tree, then after a `detect` and a stash) — so a commit typed in
+/// between is not in the list, and a rebase drops what the todo leaves out
+/// without saying so. The pin sits in front of every spawn.
 ///
-/// The plan a screen composes is a fixed list of ids, and the carry spawns
-/// the replay twice: refused over the dirty tree, then again once a
-/// `detect` and a stash have emptied it — three spawns of room. git writes
-/// its own todo from `upstream..HEAD` and the helper replaces it whole, so
-/// a commit typed into that stretch is not in the list, and a rebase drops
-/// what the todo leaves out **without saying so**. Before the pin moved to
-/// sit in front of every spawn, this ran through: `terminal.txt` gone, the
-/// history replayed without it, and the write reported as a success.
-///
-/// The window is entered on purpose: the session is held inside the
-/// sink delivery that announces the stash, and the commit is made
-/// from the test's own thread while it is parked there
+/// The session is held inside the sink delivery that announces the stash
+/// while the test commits from its own thread
 /// ([`crate::support::session::CaptureSink::hook_once`]).
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_commit_landing_inside_the_carry_is_refused_rather_than_dropped() {
@@ -375,8 +352,7 @@ async fn a_commit_landing_inside_the_carry_is_refused_rather_than_dropped() {
     repo.commit_file("a.txt", "one\n", "root");
     let head = repo.commit_file_id("b.txt", "two\n", "the plan's only step");
     let base = repo.git(&["rev-parse", "HEAD~1"]);
-    // What git refuses the first spawn over, which is what sends the write
-    // round through the stash in the first place.
+    // Dirty, so the first spawn is refused and the write goes round the stash.
     repo.write_file("a.txt", "uncommitted\n");
 
     let (sink, session) = opened(&repo).await;
@@ -391,8 +367,8 @@ async fn a_commit_landing_inside_the_carry_is_refused_rather_than_dropped() {
         // The tip the plan was composed against: sound when it was pressed.
         head.clone(),
     );
-    // The sink records before it runs the hook, so this is answered by the
-    // very delivery that is holding the write.
+    // The sink records before running the hook, so the delivery holding
+    // the write answers this.
     sink.wait_for("the carry reaching its stash", |events| {
         events.iter().any(reached_the_stash).then_some(())
     })
@@ -438,9 +414,8 @@ fn reached_the_tip_check(event: &SessionEvent) -> bool {
         if display.starts_with("git rev-parse --verify HEAD"))
 }
 
-/// What the write of `kind` reported for itself, or `None` where it
-/// carried no report — the half of the answer the notice bar is written
-/// out of, which the error string alone cannot say.
+/// What the write of `kind` reported, or `None` — the half of the answer
+/// the notice bar is written from.
 async fn write_report(
     sink: &CaptureSink,
     kind: OperationKind,
@@ -456,21 +431,16 @@ async fn write_report(
     .await
 }
 
-/// **A one-commit edit is pinned to the tip its todo was read against.**
+/// A one-commit edit is pinned to the tip its todo was read against.
 ///
-/// `drop` / `squash` / reword build their own todo out of `upstream..HEAD`
-/// and hand git the whole list ([`platitude_core::sequencer::plan_edit`]),
-/// so a commit that lands after the rows are read is not in it — and a
-/// rebase drops what the todo leaves out **without saying so**. The plan
-/// composed on screen has been pinned since it was built; these three were
-/// not, on the reading that the pin cost a `rev-parse HEAD` on the
-/// response path of the three edits people click most. It costs nothing:
-/// the rows already end at the tip (`EditPlan::tip`).
+/// `drop` / `squash` / reword hand git a whole todo built from
+/// `upstream..HEAD` ([`platitude_core::sequencer::plan_edit`]), so a commit
+/// landing after the rows are read is dropped the same way. The pin costs
+/// no process (`EditPlan::tip`).
 ///
-/// The window is entered on purpose: the session is parked inside the sink
-/// delivery that announces the tip check, and the commit is made from the
-/// test's own thread while it is held there — the todo is read by then and
-/// the branch has not been looked at yet.
+/// The session is parked inside the delivery that announces the tip check
+/// while the test commits: the todo is read by then, the branch not yet
+/// looked at.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_commit_landing_after_a_one_commit_edits_todo_is_refused() {
     install_todo_editor();
@@ -500,8 +470,7 @@ async fn a_commit_landing_after_a_one_commit_edits_todo_is_refused() {
         refusal.contains("tip moved") && refusal.contains("nothing was rewritten"),
         "the refusal says the plan's premise went: {refusal}"
     );
-    // The reader is told, since nothing ran that a row in the log
-    // panel could explain
+    // The reader is told, since nothing ran that a log row could explain
     // (デザイン規約 §答えの要らない報せ).
     let report = write_report(&sink, OperationKind::Drop)
         .await
@@ -539,14 +508,9 @@ async fn a_commit_landing_after_a_one_commit_edits_todo_is_refused() {
     session.close();
 }
 
-/// The same pin, at the other end of the same write: the carry spawns the
-/// replay twice, and the stretch between them — a `detect`, a `stash
-/// push`, and the pop that may follow — is the wider of the two windows.
-///
-/// **And the work comes back.** A refusal on the second attempt is one
-/// nothing here started, so the stash the carry made is put back before
-/// the answer goes out: a reader who is told the branch moved still has
-/// what they had staged and unstaged, on the side it was on.
+/// The same pin across the carry's two spawns, the wider window. And the
+/// work comes back: a refusal on the second attempt puts the carry's stash
+/// back before the answer goes out.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_commit_landing_inside_a_one_commit_edits_carry_is_refused() {
     install_todo_editor();
@@ -554,8 +518,7 @@ async fn a_commit_landing_inside_a_one_commit_edits_carry_is_refused() {
     repo.commit_file("a.txt", "one\n", "root");
     let doomed = repo.commit_file_id("b.txt", "two\n", "the one to go");
     repo.commit_file("c.txt", "three\n", "after it");
-    // What git refuses the first spawn over, which is what sends the write
-    // round through the stash in the first place.
+    // Dirty, so the first spawn is refused and the write goes round the stash.
     repo.write_file("a.txt", "staged edit\n");
     repo.git(&["add", "--", "a.txt"]);
     repo.write_file("c.txt", "unstaged edit\n");
@@ -596,11 +559,9 @@ async fn a_commit_landing_inside_a_one_commit_edits_carry_is_refused() {
         "and nothing was rewritten"
     );
     assert_eq!(repo.git(&["stash", "list"]), "", "the entry was put back");
-    // Both edits are in the tree again. **Which side they are on is not
-    // this path's to keep**: a replay that came back an `Err` did nothing,
-    // so the restore is `stash_round::pop_back_after_failure`'s plain pop
-    // and everything lands unstaged — the split survives the way round
-    // that lands (`pop_back_split_first`).
+    // Back in the tree, but unstaged: after an `Err` the restore is
+    // `stash_round::pop_back_after_failure`'s plain pop (the split survives
+    // only the way round that lands, `pop_back_split_first`).
     assert_eq!(
         std::fs::read_to_string(repo.path.join("a.txt")).expect("read"),
         "staged edit\n",

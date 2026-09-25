@@ -19,14 +19,14 @@ fn the_wip_row_stands_for_a_clean_tree_under_an_operation_but_not_under_a_bisect
     };
     assert!(!wip_row_stands(&clean, &OpState::default()));
     assert!(wip_row_stands(&dirty, &OpState::default()));
-    // A rebase stopped at `edit` leaves the tree clean, and the row is
-    // where its exit card lands.
+    // A rebase stopped at `edit` leaves the tree clean; its exit card
+    // lands on the row.
     let rebasing = OpState {
         rebasing: true,
         ..OpState::default()
     };
     assert!(wip_row_stands(&clean, &rebasing));
-    // A bisect has no card to land, and changes nothing about the tree.
+    // A bisect has no card to land.
     let bisecting = OpState {
         bisecting: true,
         ..OpState::default()
@@ -34,12 +34,9 @@ fn the_wip_row_stands_for_a_clean_tree_under_an_operation_but_not_under_a_bisect
     assert!(!wip_row_stands(&clean, &bisecting));
 }
 
-/// The map from commit to row holds commits. A synthetic row stands for
-/// work that is not an object — the all-zero id is git's own way of
-/// saying so — and an id that says "no object" is no address: more than
-/// one row can honestly carry it, and the two readers of the map
-/// (`row_of` for the commits refs point at, the out-of-order guard for a
-/// commit's parents) never ask about one.
+/// A synthetic row carries the all-zero id, which more than one row can
+/// share, so it is no address; neither reader of the map (`row_of`, the
+/// out-of-order guard for parents) ever asks about one.
 #[test]
 fn a_row_with_no_object_is_not_in_the_map_from_commit_to_row() {
     let mut b = GraphBuilder::new();
@@ -54,26 +51,19 @@ fn a_row_with_no_object_is_not_in_the_map_from_commit_to_row() {
     assert_eq!(unborn.tracked_oids(), 0, "nothing to wait for either");
 }
 
-/// **Another working copy going dirty may not repaint history.** Its row
-/// is drawn above the commit that copy is standing on, and every commit
-/// on screen has to come out in the lane and the colour it had without
-/// it: a copy picked up on window focus would otherwise re-colour chains
-/// under the reader's eyes (デザイン規約 / P3-確認事項 §別 worktree の未
-/// コミット行).
-///
-/// Both ends of the walk are covered — a commit a lane is already waiting
-/// for (`08`, the branch's own tip is below it) and one nothing waits for
-/// (`09`, a tip of its own).
+/// Another working copy's row, drawn above the commit that copy stands
+/// on, may not move any commit's lane or colour: a copy picked up on
+/// window focus would re-colour chains under the reader's eyes
+/// (P3-確認事項 §別 worktree の未コミット行). Covers a commit a lane
+/// already waits for (`02`, HEAD) and tips nothing waits for (`04`, `06`).
 #[test]
 fn a_row_for_another_copy_moves_no_lane_and_no_colour() {
     fn lanes_and_colours(insert_above: &[u8]) -> Vec<(u8, u16, u8)> {
         let mut pool = StrPool::new();
         let mut b = GraphBuilder::new();
-        // **The demo's own shape, in the order the walk emits it**
-        // (`demo-repo basic`, read off `git log --date-order` with the
-        // tips the walk is given): this window's row, the stash on HEAD,
-        // HEAD, the remote-only tip that is HEAD's *sibling*, their
-        // shared parent, the topic branch, and the trunk under both.
+        // `demo-repo basic` in walk order: this window's row, the stash
+        // on HEAD, HEAD, the remote-only sibling tip, their shared parent,
+        // the topic branch, and the trunk under both.
         b.push_virtual(&oid(2));
         let history = [
             (commit(&mut pool, 1, &[2]), true),
@@ -210,11 +200,9 @@ fn a_merge_reaching_head_leaves_the_wip_leash_dashed() {
     );
 }
 
-/// The everyday shape that gave this away: a stash taken on a branch
-/// that was later merged. The merge's second parent is exactly the
-/// stash's base, so its fork edge wants the leash's lane — and taking
-/// it would draw the stash's whole run down to the base as solid,
-/// committed history.
+/// A stash taken on a branch that was later merged: the merge's second
+/// parent is the stash's base, so its fork edge wants the leash's lane —
+/// taking it would draw the stash's run down to the base as solid history.
 #[test]
 fn a_merge_reaching_a_stash_base_leaves_the_leash_dashed() {
     let mut pool = StrPool::new();

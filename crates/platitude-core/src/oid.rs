@@ -7,10 +7,8 @@ use std::fmt;
 #[error("invalid object id")]
 pub struct OidParseError;
 
-/// A full git object id, stored as raw bytes.
-///
-/// Holds either 20 bytes (SHA-1) or 32 bytes (SHA-256) so commit metadata for
-/// very large repositories stays compact (no heap allocation per id).
+/// A full git object id, stored inline (20 bytes SHA-1 or 32 SHA-256) so
+/// large histories allocate nothing per id.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Oid {
     len: u8,
@@ -33,7 +31,7 @@ impl Oid {
         })
     }
 
-    /// Parses from a `&str` (convenience over [`Oid::from_hex`]).
+    /// [`Oid::from_hex`] over a `&str`.
     pub fn from_hex_str(hex: &str) -> Result<Self, OidParseError> {
         Self::from_hex(hex.as_bytes())
     }
@@ -47,9 +45,8 @@ impl Oid {
         }
     }
 
-    /// The all-zero id of a repository that has no object to take a
-    /// length from yet (an unborn branch). Only ever a sentinel, and
-    /// [`Oid::hex_is_zero`] reads it at whatever length it is written.
+    /// The all-zero id where there is no object to take a length from yet
+    /// (an unborn branch); [`Oid::hex_is_zero`] reads it at any length.
     pub fn zero_unsized() -> Self {
         Self {
             len: 20,
@@ -58,13 +55,11 @@ impl Oid {
     }
 
     /// Whether a hex id is the all-zero sentinel [`Oid::zero_like`]
-    /// writes — the id the synthetic uncommitted-changes row carries.
-    /// Empty is not a sentinel: it is "no id at all".
+    /// writes. Empty is not a sentinel: it is "no id at all".
     pub fn hex_is_zero(hex: &str) -> bool {
         !hex.is_empty() && hex.bytes().all(|b| b == b'0')
     }
 
-    /// Raw bytes of the id.
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes[..self.len as usize]
     }

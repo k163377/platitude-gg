@@ -3,19 +3,13 @@
 
 use super::*;
 
-/// Builds the synthetic row for uncommitted changes: zero id, no author,
-/// one dashed edge running down to HEAD. The UI recognizes the all-zero
-/// id and renders the dashed empty node and the WIP subject.
-///
-/// `incoming` is what a standing merge is bringing in (`MERGE_HEAD`, empty
-/// otherwise): each side gets a dashed edge of its own, so the row already
-/// draws the fork the merge commit will have.
-/// The same row on a branch with no commits yet: nothing to reach down
-/// to, so the node stands alone where the first commit will.
+/// The synthetic row for uncommitted changes on a branch with no commits
+/// yet: nothing to reach down to, so the node stands alone where the first
+/// commit will.
 pub(super) fn wip_root_row(builder: &mut GraphBuilder) -> LogRow {
     let zero = Oid::zero_unsized();
     let g = builder.push_virtual_root();
-    // Uncommitted work is on no remote, and there is no commit to ask about.
+    // Uncommitted work is on no remote.
     let published = false;
     LogRow {
         row: g.row,
@@ -35,15 +29,18 @@ pub(super) fn wip_root_row(builder: &mut GraphBuilder) -> LogRow {
         stash_ref: String::new(),
         published,
         carried: None,
-        // The edges this row draws are leashes.
+        // The edges this row draws are leashes, not parents.
         parents: Box::default(),
     }
 }
 
+/// The synthetic row for uncommitted changes: zero id (what the UI
+/// recognizes it by), no author, a dashed edge down to HEAD and one to
+/// each side a standing merge brings in (`incoming`, from `MERGE_HEAD`),
+/// so the row already draws the fork the merge commit will have.
 pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) -> LogRow {
     let zero = Oid::zero_like(head);
     let g = builder.push_virtual_merging(head, incoming);
-    // Uncommitted work is on no remote, and there is no commit to ask about.
     let published = false;
     LogRow {
         row: g.row,
@@ -63,37 +60,33 @@ pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) 
         stash_ref: String::new(),
         published,
         carried: None,
-        // As above: the dashed edges to HEAD and to each incoming side
-        // are drawn and no more.
+        // Leashes, not parents.
         parents: Box::default(),
     }
 }
 
-/// What one completed log pass has to answer for besides its rows: the
-/// counts, and what it read off HEAD's own row.
+/// What one completed log pass answers for besides its rows: the counts,
+/// and what it read off HEAD's own row.
 ///
-/// The counts differ in both directions: the synthetic WIP row is shown
-/// but never walked, and a stash's synthetic index/untracked parents are
-/// walked but never shown.
+/// The counts differ in both directions: the WIP row is shown but never
+/// walked, a stash's synthetic parents are walked but never shown.
 #[derive(Clone, Copy, Default)]
 pub(super) struct LogTotals {
     /// Rows delivered to the UI.
     pub(super) shown: u32,
-    /// Commits the walk emitted — what `--max-count` limits, so this is
-    /// what decides `truncated`.
+    /// Commits the walk emitted — what `--max-count` limits, so this
+    /// decides `truncated`.
     pub(super) walked: u32,
     /// The commit the walk started from; `None` on a branch with no
     /// commits yet.
     pub(super) head: Option<Oid>,
     /// Whether a remote already has that commit, as the walk marked its
     /// row (`session::published`); `None` where the window stopped short
-    /// of it — which is the one case that has to be asked of git
-    /// (`RepoSession::settle_head_published`).
+    /// of it, the one case asked of git (`RepoSession::settle_head_published`).
     pub(super) head_published: Option<bool>,
 }
 
 impl LogTotals {
-    /// Keeps the mark a row carries where the row is HEAD's own.
     pub(super) fn note_row(&mut self, oid: &Oid, published: bool) {
         if self.head == Some(*oid) {
             self.head_published = Some(published);
@@ -108,14 +101,9 @@ pub(super) struct StreamItem {
 }
 
 impl StreamItem {
-    /// This entry as a display row. The stash selector is what asks for
-    /// the dashed first-parent edge, and is put back onto the row after
-    /// the build — a row carries the selector the operations act on.
-    ///
-    /// The one place a row is built from a sifted entry: the streaming
-    /// pass, the buffered pass and the chunk emitter all come through
-    /// here, and the three of them drawing a stash row differently is the
-    /// bug this shape is here to make impossible.
+    /// The one place a row is built from a sifted entry, so the streaming
+    /// pass, the buffered pass and the chunk emitter cannot draw a stash
+    /// row three ways.
     pub(super) fn row(
         &self,
         pool: &crate::model::StrPool,
@@ -125,8 +113,7 @@ impl StreamItem {
         let mut row = make_row(&self.meta, pool, builder, marks, self.stash_ref.is_some());
         if let Some(stash_ref) = &self.stash_ref {
             row.stash_ref = stash_ref.clone();
-            // A stash is off to one side of every branch and no remote
-            // carries it, whatever the commit it was built on.
+            // No remote carries a stash, whatever its base.
             row.published = false;
         }
         row
@@ -134,10 +121,9 @@ impl StreamItem {
 }
 
 /// Filters a parsed batch for display: stash commits keep only their
-/// first-parent edge (the base commit), and their synthetic index /
-/// untracked parent commits are recorded and dropped when they arrive
-/// later (the walk shows no parent before all of its children, so the
-/// stash row always streams first).
+/// first-parent edge, and their synthetic index / untracked parents are
+/// dropped when they arrive (the walk shows no parent before its
+/// children, so the stash row always comes first).
 fn sift_batch(
     batch: Vec<CommitMeta>,
     stash_refs: &HashMap<Oid, String>,
@@ -159,19 +145,14 @@ fn sift_batch(
     }
 }
 
-/// What one pass sifts its batches against, and what they have cost so
-/// far: the stash oids whose extra parents are folded away, the synthetic
-/// parents already spoken for, and the commits the walk has emitted
-/// ([`LogTotals::walked`]).
+/// The sifting state one pass carries across its batches, and the
+/// commits emitted so far ([`LogTotals::walked`]).
 ///
-/// Both passes drive the sifting through this — the streaming one when a
-/// chunk's worth has piled up, the buffered one on every callback — so
-/// the skip set and the count cannot come apart from the batches that
-/// filled them.
+/// Both passes sift through this, so the skip set and the count cannot
+/// come apart from the batches that filled them.
 pub(super) struct Sifter<'a> {
     stash_refs: &'a HashMap<Oid, String>,
     skip: std::collections::HashSet<Oid>,
-    /// Commits the walk emitted, batch by batch.
     pub(super) walked: u32,
 }
 
@@ -184,8 +165,6 @@ impl<'a> Sifter<'a> {
         }
     }
 
-    /// Takes everything the parser has produced so far and sifts it for
-    /// display, leaving `pending` empty for the next batch.
     pub(super) fn take(&mut self, pending: &mut Vec<CommitMeta>) -> Vec<StreamItem> {
         let batch = std::mem::take(pending);
         self.walked += batch.len() as u32;
@@ -195,8 +174,7 @@ impl<'a> Sifter<'a> {
     }
 }
 
-/// Builds one display row from a commit (labels attached by the caller).
-/// `dashed_edge` draws the first-parent edge dashed (stash rows).
+/// Labels are the caller's to attach; `dashed_edge` is for stash rows.
 fn make_row(
     commit: &CommitMeta,
     pool: &crate::model::StrPool,
@@ -205,9 +183,8 @@ fn make_row(
     dashed_edge: bool,
 ) -> LogRow {
     let g = builder.push_with_edge_style(commit, dashed_edge);
-    // Asked here because this is where the parents are: the mark is
-    // carried down the walk from the rows a remote branch stands on
-    // (`session::published`).
+    // Asked here, where the parents are: the mark is carried down the walk
+    // from the rows a remote branch stands on (`session::published`).
     let published = marks.mark(commit);
     LogRow {
         row: g.row,
@@ -239,19 +216,14 @@ fn make_row(
     }
 }
 
-/// The rows the other working copies get, handed out as the walk reaches
-/// what each of them is standing on.
+/// The rows for the other working copies, handed out as the walk reaches
+/// the commit each stands on.
 ///
-/// **A row stands above every synthetic row landing on the same commit**
-/// — uncommitted work is what is about to become a commit and a stash is
-/// not, so it is asked for at whichever arrives first: the
-/// commit itself, or a stash built on it. A stash on the same
-/// commit sorts above it by date, so the commit alone is the
-/// wrong anchor.
-///
-/// **A copy whose commit the walk never reaches draws nothing.** The rows
-/// are handed out by the walk, so a HEAD outside the window is a row that
-/// simply never comes.
+/// A row stands above every synthetic row on the same commit (uncommitted
+/// work is about to become a commit, a stash is not), so it is handed out
+/// at whichever arrives first: the commit, or a stash built on it — a
+/// stash sorts above its base by date. A copy whose HEAD is outside the
+/// window draws nothing.
 pub(super) struct CarriedRows(Vec<crate::session::Carried>);
 
 impl CarriedRows {
@@ -259,9 +231,8 @@ impl CarriedRows {
         Self(carried.to_vec())
     }
 
-    /// The rows owed to a stream entry, in the order the listing had them.
-    /// Each copy is handed out once: the anchor is the commit a row lands
-    /// on, and a stash asks with the base it was built on.
+    /// The rows owed to a stream entry, in listing order; a stash asks
+    /// with its base.
     pub(super) fn take_for(
         &mut self,
         item: &StreamItem,
@@ -277,9 +248,7 @@ impl CarriedRows {
         self.take_at(&anchor, builder)
     }
 
-    /// The same, for a caller that has worked the anchor out itself — a
-    /// graph being laid out again has the rows, and the anchor is the
-    /// same commit either way
+    /// The same, for a caller that has worked the anchor out itself
     /// (`session::relay`).
     pub(super) fn take_at(&mut self, anchor: &Oid, builder: &mut GraphBuilder) -> Vec<LogRow> {
         let anchor = *anchor;
@@ -290,12 +259,8 @@ impl CarriedRows {
             if wip.head != anchor {
                 return true;
             }
-            // **No chip.** Whose row this is belongs to the words on it
-            // (デザイン規約 §未コミット行が名乗るもの) — a chip in the
-            // ref column would be a name in the column of names that
-            // names no ref, and the row already has a sentence to carry
-            // it. The copy rides on the row itself, for the words and
-            // for the pane the row opens.
+            // No chip (デザイン規約 §未コミット行が名乗るもの): the copy
+            // rides on the row, for its words and for the pane it opens.
             let mut row = wip_row(&wip.head, &[], builder);
             row.carried = Some(wip.clone());
             out.push(row);

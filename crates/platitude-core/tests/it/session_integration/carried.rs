@@ -2,10 +2,9 @@
 //! that reads them, and what turning the copies off does to a pass in
 //! flight.
 //!
-//! The pass is driven onto the queue while a slot the test holds keeps
-//! it there, so the turning-off lands on a pass that has begun and has
-//! not read — asked for at the exact point it could happen
-//! (core.md §非同期・並行テスト).
+//! A slot the test holds keeps the pass on the queue, so the turning-off
+//! lands on a pass that has begun and not yet read
+//! (rules/core.md §非同期・並行テストの実装方針).
 
 use std::sync::Arc;
 
@@ -25,8 +24,7 @@ fn a_copy_beside(repo: &mut TestRepo) {
     std::fs::write(copy.join("carried.txt"), "u\n").expect("a file in the copy");
 }
 
-/// The rows a graph pass sent — streamed in a chunk, or swapped in whole
-/// — as its generation and whether any of them is another copy's.
+/// A graph pass's generation, and whether any of its rows is another copy's.
 fn copy_drawn(event: &SessionEvent) -> Option<(u64, bool)> {
     let (generation, rows) = match event {
         SessionEvent::LogChunk { generation, rows }
@@ -46,7 +44,6 @@ fn draws_a_copy(events: &[SessionEvent]) -> Option<u64> {
         .find_map(|(generation, drawn)| drawn.then_some(generation))
 }
 
-/// Whether the pass at `generation` drew a row for another copy.
 fn pass_draws_a_copy(events: &[SessionEvent], generation: u64) -> bool {
     events
         .iter()
@@ -54,11 +51,8 @@ fn pass_draws_a_copy(events: &[SessionEvent], generation: u64) -> bool {
         .any(|(at, drawn)| at == generation && drawn)
 }
 
-/// The copies turned off under a pass that has begun: the pass lands
-/// nothing, the rows come down with the switch, and the graph drawn
-/// after it has no row for the copy. A pass that landed would have put
-/// the row back up, with the tick stopped and nothing left to take it
-/// down again.
+/// A pass that landed after the switch would put the copy's row back up,
+/// with the tick stopped and nothing left to take it down again.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_pass_in_flight_when_the_copies_are_turned_off_lands_nothing() {
     let (mut repo, _head) = scenario();
@@ -72,9 +66,8 @@ async fn a_pass_in_flight_when_the_copies_are_turned_off_lands_nothing() {
     let with_copy = sink
         .wait_for("a graph drawing the copy's row", draws_a_copy)
         .await;
-    // The opening's own pass is over — the row it read is on screen —
-    // and the walk it asked for has landed, so what follows is the
-    // test's own subject.
+    // Let the opening's pass and the walk it asked for land, so what
+    // follows is the test's own subject.
     bounded(
         "the opening's pass over the copies",
         session.wait_for_carried_pass(),
@@ -95,8 +88,8 @@ async fn a_pass_in_flight_when_the_copies_are_turned_off_lands_nothing() {
     let pass = session
         .refresh_carried()
         .expect("a pass begins: the copies are read and none is out");
-    // Under it: the rows come down and the walk is asked for again,
-    // both queued behind the held slot.
+    // Both queued behind the held slot: the rows come down, the walk is
+    // asked for again.
     session.set_copies_read(false);
     drop(held);
     assert_eq!(

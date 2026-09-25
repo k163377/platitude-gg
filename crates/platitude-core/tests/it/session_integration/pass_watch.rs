@@ -1,20 +1,12 @@
-//! What a graph pass says when it falls over.
+//! What a graph pass says when it falls over. A panicking pass is
+//! swallowed at the task boundary, leaving a graph turning on an empty
+//! column with nothing reported; `PassWatch` breaks that silence, and
+//! these prove it still does. The fault is raised from inside the pass
+//! (`PassHooks`, here `PassDoors`), the only place it can come from.
 //!
-//! The one ending with no `match` arm behind it: a pass that panics dies
-//! where it stands and the runtime swallows it at the task boundary, so
-//! nothing here would go red on its own — the symptom is a graph left
-//! turning on an empty column with nothing in the error surface and
-//! nothing in the command log. `PassWatch` is what breaks that silence,
-//! and these are what prove it still does.
-//!
-//! The fault is raised from inside the pass, through the seam the session
-//! is opened with (`PassHooks`, here `PassDoors::run_inside_next_pass`),
-//! because that is the only place it can come from.
-//!
-//! The mark a fallen rebuild leaves on the graph is held here too — it
-//! goes up in the same arm — along with the other door into a pass,
-//! `PassDoors::fail_every_pass`, which is what lets the band's
-//! `STALE GRAPH` be photographed and so has to keep reaching the walk.
+//! Also held here: the mark a fallen rebuild leaves (same arm), and
+//! `PassDoors::fail_every_pass`, which the `STALE GRAPH` screenshots need
+//! to keep reaching the walk.
 
 use std::sync::Arc;
 
@@ -23,9 +15,8 @@ use crate::support::session::{CaptureSink, PassDoors, is_stream_event, open_with
 use crate::support::wait::bounded;
 use platitude_core::session::{PassStep, RefreshOutcome, RepoSession, SessionEvent};
 
-/// `scenario()` opened with the doors into its passes in hand, and
-/// everything the opening starts closed out: the pass each test takes
-/// down is the one it asked for and no other.
+/// `scenario()` opened with the doors in hand and the opening's passes
+/// over, so the pass each test takes down is the one it asked for.
 async fn settled() -> (TestRepo, Arc<CaptureSink>, Arc<RepoSession>, Arc<PassDoors>) {
     let (repo, _) = scenario();
     let (sink, session, doors) = open_with_doors(&repo);
@@ -37,12 +28,8 @@ fn announcements(sink: &CaptureSink) -> usize {
     sink.count(|event| matches!(event, SessionEvent::LogStarted { .. }))
 }
 
-/// A streaming pass that falls over answers the stream it announced.
-///
-/// It emptied the column on its way in and nobody else can speak for
-/// that generation, so the report has to carry the same number the
-/// `LogStarted` did — a `LogFailed` under any other number leaves the
-/// graph turning exactly as it was.
+/// It emptied the column on its way in and nobody else can speak for that
+/// generation: a `LogFailed` under any other number leaves the graph turning.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_stream_that_falls_over_answers_its_own_generation() {
     let (_repo, sink, session, doors) = settled().await;
@@ -68,9 +55,8 @@ async fn a_stream_that_falls_over_answers_its_own_generation() {
         failed, announced,
         "the answer belongs to the stream that emptied the column"
     );
-    // The band's `STALE GRAPH` badge carries the sentence; core has
-    // no words of its own here, and nobody said any (app-ui.md
-    // 「Rust に文言を置かない」).
+    // The band's `STALE GRAPH` carries the sentence
+    // (rules-refs/app-ui.md「Rust に文言を置かない」).
     assert!(
         error.is_empty(),
         "no words were put in the graph: {error:?}"
@@ -78,14 +64,9 @@ async fn a_stream_that_falls_over_answers_its_own_generation() {
     session.close();
 }
 
-/// An off-screen pass that falls over reports as the operation it was.
-///
-/// Nothing on screen is waiting on it and what is standing there is a
-/// real graph — only older than it should be — so the tab carries the
-/// failure and the rows are left alone. What the graph does hear is that
-/// it has fallen behind ([`SessionEvent::LogStale`]), which is the
-/// state: the band raises `STALE GRAPH` over the picture that is
-/// still standing.
+/// Nothing on screen waits on it and a real (older) graph is standing, so
+/// the tab carries the failure, the rows are left alone, and the graph
+/// only hears it has fallen behind ([`SessionEvent::LogStale`]).
 #[tokio::test(flavor = "multi_thread")]
 async fn an_offscreen_pass_that_falls_over_reports_the_operation() {
     let (_repo, sink, session, doors) = settled().await;
@@ -124,15 +105,9 @@ async fn an_offscreen_pass_that_falls_over_reports_the_operation() {
     session.close();
 }
 
-/// The mark goes back down when a pass reads the repository again — and
-/// **the pass that says so is the one that sends nothing else**.
-///
-/// A rebuild over a repository nothing has touched comes back
-/// `Unchanged` and stays silent, so that a quiet auto-fetch tick costs
-/// the consumer nothing. That silence is what makes this worth holding:
-/// with the mark only ever going up, the ordinary answer to "is it
-/// current again" would never arrive, and the band would carry
-/// `STALE GRAPH` over a graph that had been read since.
+/// The mark comes down when a pass reads the repository again — even an
+/// `Unchanged` rebuild, which otherwise stays silent; without that, the
+/// band would carry `STALE GRAPH` over a graph read since.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_graph_read_again_is_no_longer_behind() {
     let (_repo, sink, session, doors) = settled().await;
@@ -147,9 +122,7 @@ async fn a_graph_read_again_is_no_longer_behind() {
     })
     .await;
 
-    // Nothing has moved, so this one walks the same commits and finds
-    // the picture on screen to be them: `Unchanged`, and the only thing
-    // it has to say is that the mark can come down.
+    // Nothing has moved: `Unchanged`, with only the mark to take down.
     let outcome = bounded("the quiet rebuild", session.refresh_log_tracked().outcome()).await;
     assert_eq!(
         outcome,
@@ -173,16 +146,10 @@ async fn a_graph_read_again_is_no_longer_behind() {
 }
 
 /// The fault the screen is driven with reaches the pass's ordinary
-/// reporting arm.
-///
-/// **The one injection whose failure would look like a pass.**
-/// `fail_every_pass` exists so `STALE GRAPH` can be photographed, and a
-/// verb photographs whatever window it is given: an injection that
-/// stopped reaching the walk would leave every run of those verbs
-/// looking at a healthy graph and calling it green (verify-ui スキル
-/// 「仕込みが PATH に届かなかった run は普通の窓を撮る」). So the arm it
-/// leaves by is held here — the outcome, the words, and the mark that
-/// tells the band a whole graph has gone out of date.
+/// reporting arm. An injection that stopped reaching the walk would leave
+/// the `STALE GRAPH` verbs photographing a healthy graph and passing
+/// (rules-refs/app-ui.md「`STALE GRAPH` の動確は `graph-stale` / `graph-stopped`」),
+/// so the outcome, the words, and the mark are held here.
 #[tokio::test(flavor = "multi_thread")]
 async fn the_fault_the_screen_is_driven_with_fails_the_walk() {
     let (_repo, sink, session, doors) = settled().await;
@@ -216,21 +183,16 @@ async fn the_fault_the_screen_is_driven_with_fails_the_walk() {
     session.close();
 }
 
-/// A window that is closing is told nothing.
-///
-/// The report exists for a graph left waiting on a pass, and a session
-/// whose runtime is going away has nobody left to read one — being told
-/// its history could not be read is the last thing a closing tab should
-/// paint. The pass still gets far enough to own the stream, so this
-/// is the silence of the guard.
+/// A closing session has nobody left to read the report, and a closing tab
+/// should not paint "history could not be read". The pass still owns the
+/// stream, so this is the guard's own silence.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_closing_session_is_told_nothing() {
     let (_repo, sink, session, doors) = settled().await;
     let announced = announcements(&sink);
 
     // Closed from inside the pass, after the announcement: closing first
-    // would stop the pass at its own cancellation check, well before the
-    // guard this is about.
+    // would stop it at its own cancellation check, before the guard.
     let closing = Arc::downgrade(&session);
     doors.run_inside_next_pass(PassStep::Streaming, move || {
         if let Some(session) = closing.upgrade() {

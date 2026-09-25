@@ -1,13 +1,11 @@
 //! Remotes: cloning, listing, fetch and push.
 //!
-//! This is the only place the application causes network traffic, and it
-//! causes it the same way a terminal would — by running git. Authentication
-//! is git's (`GIT_TERMINAL_PROMPT=0` makes a missing credential helper fail
-//! at once).
+//! The only place the application causes network traffic, always by
+//! running git. Authentication is git's (`GIT_TERMINAL_PROMPT=0` makes a
+//! missing credential helper fail at once).
 //!
-//! Network commands take a timeout.
-//! Cancellation is the normal way to stop one early; the timeout is the
-//! backstop for a connection that neither finishes nor fails.
+//! Network commands take a timeout: the backstop for a connection that
+//! neither finishes nor fails. Cancellation is the normal early stop.
 
 use std::time::Duration;
 
@@ -40,8 +38,7 @@ pub use self::tags::{
 
 /// Default time budget for commands that talk to a remote.
 ///
-/// Three minutes covers an ordinary fetch of a large repository over a slow
-/// link without leaving a hung connection running for an hour. A user on a
-/// genuinely slow line can raise it (the `network_timeout_secs` settings
-/// key; the dialog's input field is what is still missing — 実装計画 §7).
+/// Covers an ordinary fetch of a large repository over a slow link without
+/// leaving a hung connection running. Raised by the `network_timeout_secs`
+/// settings key (its dialog field is still missing — 実装計画 §7).
 pub const DEFAULT_NETWORK_TIMEOUT: Duration = Duration::from_secs(180);

@@ -1,10 +1,8 @@
 //! Tests of [`crate::conflict`]'s parsers, in a file of their own
-//! (structure.md §分割: テストだけ巨大なら同ディレクトリの専用ファイルへ).
+//! (structure.md §分割).
 
-use crate::conflict::*;
-// The merge-tool half of `conflict` is a module of its own; the
-// parser this pins is private to it (`conflict::tool`).
 use crate::conflict::tool::parse_tool_help;
+use crate::conflict::*;
 use crate::status::{StatusItem, WorkTreeStatus};
 
 #[test]
@@ -20,11 +18,9 @@ fn classifies_stage_letters() {
     assert_eq!(ConflictKind::from_stages('X', 'Y'), ConflictKind::Other);
 }
 
-/// Real `git mergetool --tool-help` output (2.51.0.windows.1), cut to
-/// the shape that matters: the installed group holds both terminal and
-/// windowed tools, a user-defined block follows it, and the group of
-/// tools git knows but cannot find comes after that — indented exactly
-/// like the first one, which is why the heading has to stop the read.
+/// Real `git mergetool --tool-help` output (2.51.0.windows.1), cut down.
+/// The not-available group is indented like the installed one, so its
+/// heading is what has to stop the read.
 const TOOL_HELP: &str = "\
 'git mergetool --tool=<tool>' may be set to one of the following:
 \t\tvimdiff          Use Vim with a custom layout (see `git help mergetool`'s `BACKEND SPECIFIC HINTS` section)

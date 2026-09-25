@@ -1,11 +1,7 @@
 //! Conflict resolution support: which files are conflicted, how far a
 //! stepped operation has got, what its two sides are called, and taking
-//! one of them wholesale.
-//!
-//! Handing the merge itself over to an editor is the other half, and it
-//! is about reaching that tool ([`tool`]). **The module is `tool`** —
-//! [`mergetool`] is the launch itself, and a module of that name would
-//! shadow it.
+//! one of them wholesale. Handing the merge to an external tool is [`tool`]
+//! (not `mergetool`, which would shadow the [`mergetool`] fn).
 
 pub(crate) mod tool;
 
@@ -18,8 +14,8 @@ use crate::integrate::InProgress;
 use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 use crate::status::{StatusItem, WorkTreeStatus};
 
-/// The pre-merge tests' machine for [`available_tools`]: mry builds it into
-/// debug builds only, so it is named here for them and nowhere else.
+/// The pre-merge tests' mock of [`available_tools`] (mry builds it into
+/// debug builds only).
 #[cfg(debug_assertions)]
 pub use tool::mock_available_tools;
 pub use tool::{available_tools, configured_tool, mergetool, set_merge_tool, user_defined_tools};
@@ -59,9 +55,8 @@ impl ConflictKind {
         }
     }
 
-    /// True when a merge tool has three usable sides to work with. The
-    /// delete/delete and add/add-with-no-base cases are decided by picking
-    /// a side.
+    /// True when a merge tool has content on both sides to work with
+    /// (`UU` / `AA`); the rest are decided by picking a side.
     pub fn is_content_conflict(self) -> bool {
         matches!(self, ConflictKind::BothModified | ConflictKind::BothAdded)
     }
@@ -97,10 +92,8 @@ pub struct Progress {
 /// What to call the two sides of a conflict, for whatever operation is
 /// stopped. Either may be empty when git left nothing to name it by.
 ///
-/// **The two swap over during a rebase**: the commits being replayed are
-/// `theirs`, and `ours` is the upstream they are landing on. Reading the
-/// names from the operation is what keeps a UI from having to explain
-/// that — each side is called what it actually is.
+/// During a rebase the two swap over: `ours` is the upstream being landed
+/// on, `theirs` the commits being replayed.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Sides {
     /// The side already in place (`--ours`).
@@ -111,7 +104,7 @@ pub struct Sides {
 
 /// Reads what the stopped operation's two sides are called.
 ///
-/// Where each name comes from (measured —
+/// Where each name comes from (pinned by
 /// `what_a_stopped_operation_says_about_its_two_sides`):
 ///
 /// | operation | ours | theirs |
@@ -121,10 +114,8 @@ pub struct Sides {
 /// | cherry-pick | the current branch | `CHERRY_PICK_HEAD`, named |
 /// | revert | the current branch | `REVERT_HEAD`, named |
 ///
-/// `branch` is the current branch as the status that asks read it —
-/// `None` detached, which names no side and is left to the caller's own
-/// wording. Handed in: the status runs every tick for the life of a
-/// stop, and HEAD is what it already read.
+/// `branch` is the current branch as the caller's status read it (`None`
+/// detached: no name), handed in so each tick does not read HEAD again.
 pub async fn sides(
     executor: &GitExecutor,
     workdir: &Path,
@@ -133,11 +124,8 @@ pub async fn sides(
     cancel: &CancellationToken,
 ) -> Result<Sides, GitError> {
     if op == InProgress::Rebase {
-        // Both backends keep the same two files under their own
-        // directory; the merge backend is the default and the only one
-        // this app starts, but a rebase begun at the command line may be
-        // the other. One `rev-parse` resolves all four paths (the shape
-        // `opstate::detect` uses) in one process.
+        // Either backend may hold the rebase (one begun at the command line
+        // may be `apply`); one `rev-parse` resolves all four paths.
         let mut cmd = GitCommand::new().cwd(workdir).arg("rev-parse");
         for rel in [
             "rebase-merge/head-name",
@@ -176,8 +164,7 @@ pub async fn sides(
         InProgress::Merge => "MERGE_HEAD",
         InProgress::CherryPick => "CHERRY_PICK_HEAD",
         InProgress::Revert => "REVERT_HEAD",
-        // Answered above. Named here: the match stays exhaustive, and
-        // an empty rev names nothing.
+        // Answered above; an empty rev names nothing.
         InProgress::Rebase => "",
     };
     Ok(Sides {
@@ -207,9 +194,8 @@ pub(crate) async fn git_file(
         .unwrap_or_default()
 }
 
-/// The branch name a commit is reachable by, empty when git cannot name
-/// one. An older commit comes back as `main~3`, which still says which
-/// line of history it belongs to.
+/// The branch name a commit is reachable by (`main~3` for an older one),
+/// empty when git cannot name one.
 async fn name_of(
     executor: &GitExecutor,
     workdir: &Path,
@@ -250,13 +236,9 @@ pub enum Side {
     Theirs,
 }
 
-/// `git restore --ours|--theirs` followed by `git add`, which is what
-/// "take this side" means to git (restore writes the chosen stage into
-/// the working tree and leaves the path unmerged; the add resolves it —
-/// measured, identical to the older `checkout --ours` spelling).
-///
-/// Note the reversal during a rebase: the commits being replayed are
-/// "theirs", so `Ours` is the upstream side the caller is landing on.
+/// `git restore --ours|--theirs` then `git add`: restore writes the chosen
+/// stage into the working tree but leaves the path unmerged; the add
+/// resolves it. `Ours` is the upstream during a rebase ([`Sides`]).
 pub async fn take_side(
     executor: &GitExecutor,
     workdir: &Path,

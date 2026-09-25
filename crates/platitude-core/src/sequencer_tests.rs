@@ -1,5 +1,5 @@
 //! Tests of [`crate::sequencer`]'s todo rendering and helpers, in a
-//! file of their own (structure.md §分割: テストだけ巨大なら同ディレクトリの専用ファイルへ).
+//! file of their own (structure.md §分割).
 
 use std::path::Path;
 
@@ -99,10 +99,9 @@ fn render_and_parse_round_trip() {
     assert_eq!(render_todo(&lines), "pick aaa one\nsquash bbb two\n");
 }
 
-/// The todo git writes for the same range under `--update-refs`, copied
-/// from a run of it (2.51, measured): one line per local branch inside
-/// the range, none for the tag, and a **comment** where another working
-/// copy has the branch checked out.
+/// Real `--update-refs` todo (git 2.51): one line per local branch inside
+/// the range, none for the tag, and a comment where another working copy
+/// has the branch checked out.
 const GENERATED: &str = "\
 pick 987d296 # c2
 update-ref refs/heads/inside-a
@@ -124,10 +123,8 @@ fn full(short: &str) -> String {
     format!("{short}{}", "0".repeat(40 - short.len()))
 }
 
-/// **What decides which refs follow a rewrite is git's**, and the plan
-/// is merged into its todo: the `update-ref` lines it put there
-/// travel with the commit they came after. Written whole instead, the
-/// flag is passed and nothing follows (P3-確認事項 §A).
+/// Writing the plan whole instead would pass `--update-refs` and move no
+/// ref.
 #[test]
 fn the_plan_carries_over_the_ref_lines_git_wrote() {
     let plan = format!(
@@ -160,9 +157,8 @@ fn the_plan_carries_over_the_ref_lines_git_wrote() {
     );
 }
 
-/// A row moved takes its ref with it, which is what a hand editing the
-/// file would leave behind — and a dropped row keeps it, so the branch
-/// lands where the commit it was on used to be.
+/// A dropped row keeps its ref line too, so the branch lands where that
+/// commit used to be.
 #[test]
 fn a_ref_line_travels_with_the_commit_it_was_written_after() {
     let plan = format!(
@@ -179,10 +175,8 @@ fn a_ref_line_travels_with_the_commit_it_was_written_after() {
     assert_eq!(lines.len(), 6, "and nothing else was added: {lines:?}");
 }
 
-/// A line git wrote for a commit the plan says nothing about is
-/// left out and named on stderr: the range moved between the plan
-/// and the spawn, and a ref put at the tip is one nobody asked to
-/// move.
+/// The range moved between the plan and the spawn; carrying the line to
+/// the tip would move a ref nobody asked to move.
 #[test]
 fn a_ref_line_with_no_commit_left_is_reported_rather_than_moved() {
     let plan = format!("pick {} c2\npick {} c5\n", full("987d296"), full("3c37418"));
@@ -233,23 +227,19 @@ fn the_helper_must_sit_in_the_directory_it_is_looked_for_in() {
 
 #[test]
 fn a_parent_header_is_read_out_of_the_headers_alone() {
-    // A shallow clone's edge keeps in the stored object the header its
-    // parsed `%P` has lost; the history's first commit never had one.
+    // A shallow edge keeps the header its parsed `%P` lost; a first commit
+    // never had one.
     assert!(has_parent_header(
         b"tree aaa\nparent bbb\nauthor a <a@e> 1 +0000\n\nsubject\n"
     ));
     assert!(!has_parent_header(
         b"tree aaa\nauthor a <a@e> 1 +0000\n\nsubject\n"
     ));
-    // A message that opens with the word is past the blank line, so it is
-    // no header — and reading one there would refuse a rebase from a
-    // perfectly good first commit.
+    // Past the blank line it is message, not header.
     assert!(!has_parent_header(
         b"tree aaa\nauthor a <a@e> 1 +0000\n\nparent process died\n"
     ));
-    // git writes the object with LF even on Windows (measured), and a CR
-    // does not hide the header either: taking an edge for the root is the
-    // costly direction of this answer.
+    // A CR does not hide the header.
     assert!(has_parent_header(
         b"tree aaa\r\nparent bbb\r\n\r\nsubject\r\n"
     ));
@@ -273,13 +263,9 @@ fn apply_plan_writes_the_plan_over_the_todo_file() {
     );
 }
 
-/// **A plan the size of a history, reordered end to end.** The ids are
-/// matched by the nine characters git abbreviates to, the lines it wrote
-/// stay with their own commits wherever those went, and nothing is left
-/// over. Either half done as a scan — one over git's lines per line of the
-/// plan, or one closing the gap each taken line leaves — makes the cost go
-/// with the square of the range (ci/baseline の
-/// code-costs-windows-x64.md §todo の突き合わせ).
+/// Sized like a history and reordered end to end, because done as a scan
+/// either half of the merge goes with the square of the range (ci/baseline
+/// の code-costs-windows-x64.md §todo の突き合わせ).
 #[test]
 fn a_reordered_plan_the_size_of_a_history_keeps_every_ref_with_its_commit() {
     // Leading characters that differ, the way a real abbreviation does: a
@@ -298,8 +284,7 @@ fn a_reordered_plan_the_size_of_a_history_keeps_every_ref_with_its_commit() {
             generated.push_str(&format!("update-ref refs/heads/b{i}\n"));
         }
     }
-    // Back to front: the order the old scan paid most for, since every row
-    // it took came from the far end of what was left.
+    // Back to front: the order a scan pays most for.
     let mut plan = String::new();
     for i in (0..ROWS).rev() {
         plan.push_str(&format!("pick {} subject {i}\n", oid(i)));

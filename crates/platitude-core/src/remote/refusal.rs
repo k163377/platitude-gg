@@ -1,21 +1,17 @@
 //! What a non-zero push was: outdated, turned down over there, or a
-//! plain failure — and the words whoever said no wrote for themselves.
+//! plain failure — and the far side's own words.
 //!
-//! Kept apart from [`super::push`], which is about where a push goes and
-//! how hard it may overwrite: this half is read by the tag commands as
-//! well ([`super::tags`]), and none of it looks at a [`PushSpec`].
+//! Kept apart from [`super::push`] because the tag commands read it too
+//! ([`super::tags`]) and none of it looks at a [`super::PushSpec`].
 
 use crate::error::GitError;
 use crate::report::{ReportKind, WriteReport};
 
-/// Which of the three a non-zero push of a branch is: outdated, turned
-/// down over there, or a plain failure.
+/// Which of the three a non-zero push of a branch is.
 ///
-/// The two refusals are told apart because **only one of them has a next
-/// move** — fetching is what answers `fetch first`, and nothing answers a
-/// protected branch — so they reach the screen as two reports with
-/// different words and only one of them queues anything
-/// (デザイン規約 §答えの要らない報せ).
+/// The two refusals are told apart because only one has a next move (a
+/// fetch answers `fetch first`, nothing answers a protected branch), so
+/// they reach the screen as different reports (デザイン規約 §答えの要らない報せ).
 pub(super) fn refusal(
     command: String,
     out: &crate::process::GitOutput,
@@ -32,17 +28,10 @@ pub(super) fn refusal(
                 ReportKind::Outdated,
                 remote,
                 branch,
-                // **Nobody over there said anything**, so nothing is
-                // quoted: the far side never saw this push, and what
-                // turned it down is git reading what this clone holds.
-                // git's own advice under it is written for somebody at a
-                // terminal — three sentences ending in `git pull` and a
-                // page of `git push --help` — and the one thing it says
-                // that this reader does not already have from the
-                // heading is the cause, which the screen writes in its
-                // own line (`Words.writeReportedWhy`,
-                // デザイン規約 §答えの要らない報せ). The whole of what git
-                // wrote is in the log with the command it came from.
+                // Nothing is quoted: the far side never saw this push, and
+                // git's terminal advice adds only the cause, which the
+                // screen writes itself (`Words.writeReportedWhy`). The full
+                // text is in the log.
                 String::new(),
             )),
         };
@@ -50,11 +39,9 @@ pub(super) fn refusal(
     refused(command, out, remote, branch, deleting)
 }
 
-/// The same reading for a push that **no fetch can answer** — a tag,
-/// whose local name a fetch leaves exactly where it is (`remote::tags`).
-///
-/// Either the far side turned it down under a rule of its own, or it is
-/// a plain failure; there is no third reading to offer.
+/// The same reading for a push no fetch can answer — a tag, whose local
+/// name a fetch leaves where it is (`remote::tags`): a far-side refusal
+/// or a plain failure.
 pub(super) fn refused(
     command: String,
     out: &crate::process::GitOutput,
@@ -85,14 +72,13 @@ pub(super) fn refused(
 /// Whether the far side is the one that said no, and how it explained
 /// itself.
 ///
-/// **`[remote rejected]` is git's own separation** and the whole of what
-/// this reads: `[rejected]` is a refusal this end worked out from what it
-/// holds, and every one of those has a next move here. A host that could
-/// not be reached prints no ref lines at all, so silence answers `None`.
+/// Only `[remote rejected]` counts: `[rejected]` is a refusal this end
+/// worked out, each with a next move here. An unreachable host prints no
+/// ref lines, so `None`.
 ///
-/// The explanation is the far side's: its `remote:` lines where it wrote
-/// any, and git's own parenthetical where it wrote none (a bare
-/// `receive-pack` refusing a deletion says nothing else).
+/// The explanation is the far side's `remote:` lines, or git's own
+/// parenthetical where it wrote none (a bare `receive-pack` refusing a
+/// deletion says nothing else).
 fn refused_reason(porcelain: &str, stderr: &str) -> Option<String> {
     let mut summary = None;
     for line in porcelain.lines() {
@@ -115,21 +101,16 @@ fn refused_reason(porcelain: &str, stderr: &str) -> Option<String> {
     })
 }
 
-/// What the far side said for itself, out of the lines git copies to
-/// stderr under `remote:`.
+/// What the far side said for itself, out of git's `remote:` lines on
+/// stderr.
 ///
-/// The `error:` some servers put in front of every line goes with the
-/// framing: what is left is read under a sentence that has already said
-/// what did not happen, and a second word for "this went wrong" there
-/// only makes a report look like a fault of the application's.
+/// A leading `error:` is dropped: the report's heading already says what
+/// did not happen, and a second failure word makes it look like the
+/// application's fault.
 ///
-/// **The lines are joined into one.** What reads them is a report with a
-/// heading of its own, and a report is a heading and one line under it
-/// (デザイン規約 §長さ) — so they run on as the sentences they are, and
-/// what does not fit is read in the log with the command it came from.
-/// Which of them carries the rule is not something this end can know: a
-/// forge writes the summary first and the rule it broke after it, a hook
-/// writes whatever its author wrote.
+/// The lines are joined into one, since a report is a heading and one
+/// line (デザイン規約 §長さ); which line carries the rule this end cannot
+/// know.
 fn remote_words(stderr: &str) -> String {
     let mut said: Vec<&str> = Vec::new();
     for line in stderr.lines() {
@@ -167,15 +148,9 @@ fn bracket_reason(summary: &str) -> String {
 /// only as it used to be.
 ///
 /// The lines are `<flag>\t<from>:<to>\t<summary>`, where `!` is a refusal.
-/// Three summaries say the same thing: a plain push found commits it would
-/// drop (`fetch first`, or `non-fast-forward` for a ref that is not the
-/// current branch's upstream), or a lease was pinned to a commit the remote
-/// has since left (`stale info`). All three are answered by fetching.
-///
-/// Anything else — a hook, a protected branch, an unreachable host — is
-/// not something a fetch helps with; whether the far side decided it is
-/// [`refused_reason`]'s question. A host that could not be reached at all
-/// prints no ref lines, so it cannot be mistaken for one of these.
+/// Three summaries are answered by fetching: `fetch first`,
+/// `non-fast-forward` (a ref that is not the current branch's upstream),
+/// and `stale info` (a lease pinned to a commit the remote has left).
 fn is_outdated(porcelain: &str) -> bool {
     porcelain.lines().any(|line| {
         let mut fields = line.split('\t');
@@ -192,10 +167,8 @@ fn is_outdated(porcelain: &str) -> bool {
 mod tests {
     use super::*;
 
-    /// Recorded from git 2.51 pushing to a local bare repository (the
-    /// refusals from a second clone pushing first, from a lease pinned to
-    /// what it had left, and from a `pre-receive` hook exiting non-zero).
-    /// Every line here is `--porcelain` output as git wrote it.
+    /// `--porcelain` output recorded from git 2.51 pushing to a local bare
+    /// repository.
     const REFUSED_FETCH_FIRST: &str = "To C:/tmp/remote.git\n\
          !\trefs/heads/main:refs/heads/main\t[rejected] (fetch first)\nDone\n";
     const REFUSED_STALE_LEASE: &str = "To C:/tmp/remote.git\n\
@@ -220,20 +193,15 @@ mod tests {
         assert!(!is_outdated(NEW_BRANCH));
     }
 
-    /// A refusal the remote decided on its own terms. Fetching tells us
-    /// nothing about it, so it stays a plain refusal with no next move —
-    /// and so does a host that never answered, which prints no ref lines
-    /// at all.
     #[test]
     fn refusals_a_fetch_cannot_help_with_are_left_alone() {
         assert!(!is_outdated(REFUSED_BY_THE_FAR_SIDE));
         assert!(!is_outdated(""));
     }
 
-    /// The same run of git 2.51 against a bare repository whose
-    /// `pre-receive` hook exits non-zero, and the words GitHub writes
-    /// through it (measured — the two `remote: error:` lines are exactly what
-    /// a protected branch answers a deletion with).
+    /// The same git 2.51 run with a `pre-receive` hook exiting non-zero,
+    /// and the `remote: error:` lines GitHub answers a protected-branch
+    /// deletion with.
     const REFUSED_BY_THE_FAR_SIDE: &str = "To C:/tmp/remote.git\n\
          !\trefs/heads/main:refs/heads/main\t[remote rejected] (pre-receive hook declined)\nDone\n";
     const FAR_SIDE_WORDS: &str = "remote: error: GH006: Protected branch update failed for \
@@ -253,8 +221,6 @@ mod tests {
         );
     }
 
-    /// A server that says nothing for itself still has to leave the
-    /// screen something to read, and git's own parenthetical is it.
     #[test]
     fn a_silent_far_side_leaves_gits_parenthetical() {
         assert_eq!(
@@ -263,9 +229,6 @@ mod tests {
         );
     }
 
-    /// The refusals this end worked out for itself are not the far side
-    /// speaking, whatever else is on stderr — nor is a host that never
-    /// answered at all.
     #[test]
     fn a_refusal_from_this_end_is_not_the_far_side_speaking() {
         assert_eq!(refused_reason(REFUSED_FETCH_FIRST, FAR_SIDE_WORDS), None);

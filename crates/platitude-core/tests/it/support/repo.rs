@@ -8,31 +8,25 @@ use std::process::{Command, Output};
 /// Base timestamp for deterministic commits (arbitrary fixed epoch).
 const BASE_EPOCH: u64 = 1_700_000_000;
 
-/// The argument [`TestRepo::write_hook`] runs a freshly installed hook
-/// with to find out whether the kernel will let git run it at all. Every
-/// hook carries a line that exits on it, so that run does none of the
-/// hook's work: git hands `pre-receive` and `pre-commit` no arguments and
-/// `pre-push` the remote's name and URL, so nothing git runs is ever
-/// given this.
+/// The argument [`TestRepo::write_hook`] probes a fresh hook with. Every
+/// hook exits on it first, so the probe does none of the hook's work; git
+/// never passes it.
 const HOOK_PROBE_ARG: &str = "--test-repo-probe";
 
 pub struct TestRepo {
-    // Kept alive for the lifetime of the repo; dropped last.
     _dir: tempfile::TempDir,
     /// Replaces the developer's global config for TestRepo-spawned git only.
     global_config: PathBuf,
-    /// Keeps Git's default excludes lookup away from the developer's XDG
-    /// config directory for setup commands too.
+    /// Keeps setup git's default excludes lookup off the developer's XDG
+    /// config directory.
     xdg_config: PathBuf,
     pub path: PathBuf,
     tick: u64,
 }
 
-/// Written into `.git/config` right after init — one file write doing
-/// five `git config` spawns' work per repo (process spawns dominate
-/// suite time on Windows). Must stay repo-local: the code under test
-/// sees no `global_config`, only this file. `{autocrlf}` is filled
-/// by [`TestRepo::init`] / [`TestRepo::init_autocrlf`].
+/// Written into `.git/config` right after init — one file write in place
+/// of five `git config` spawns. Must stay repo-local: the code under test
+/// sees no `global_config`, only this file.
 const REPO_CONFIG: &str = "\
 [user]
 \tname = Test User
@@ -45,10 +39,9 @@ const REPO_CONFIG: &str = "\
 \tautocrlf = {autocrlf}
 ";
 
-/// Test-only speed knobs for TestRepo-spawned git (setup commits are the
-/// bulk of the suite's writes): no fsync — repos are throwaway — and no
-/// auto-gc mid-test. Unknown keys are ignored by older git, so nothing here
-/// is a compatibility constraint.
+/// Speed knobs for TestRepo-spawned git only: no fsync (repos are
+/// throwaway), no auto-gc mid-test. Older git ignores unknown keys, so
+/// nothing here is a compatibility constraint.
 const GLOBAL_CONFIG: &str = "\
 [core]
 \tfsync = none
@@ -57,18 +50,14 @@ const GLOBAL_CONFIG: &str = "\
 ";
 
 impl TestRepo {
-    /// A repository with `core.autocrlf=false`: git stores and checks out
-    /// bytes verbatim, so what a test writes is what the tests see.
+    /// A repository with `core.autocrlf=false`: bytes go in and out verbatim.
     pub fn init() -> Self {
         Self::init_with_autocrlf("false")
     }
 
-    /// A repository with `core.autocrlf=true` — the setting the Git for
-    /// Windows installer offers by default, where git converts CRLF to LF on
-    /// the way into the index and back on the way out. Pinning behaviour
-    /// under it is the only way the conversion path gets walked at all; a
-    /// suite that only ever runs with `false` has never seen what most
-    /// Windows checkouts do.
+    /// A repository with `core.autocrlf=true` — the Git for Windows
+    /// installer's default (CRLF to LF into the index, back on the way out),
+    /// and the only way the suite walks that conversion path.
     pub fn init_autocrlf() -> Self {
         Self::init_with_autocrlf("true")
     }
@@ -96,41 +85,30 @@ impl TestRepo {
         repo
     }
 
-    /// The file this repository's git reads and writes `--global` in. A
-    /// test of a `--global` write needs a file of its own: the one the
-    /// executor under test is isolated with is shared by the whole suite,
-    /// and the suite runs in parallel (`support::exec::logged_global`).
+    /// The file this repository's git reads and writes `--global` in — a
+    /// `--global` write test needs its own, since the executor's isolated
+    /// one is shared by the parallel suite (`support::exec::logged_global`).
     pub fn global_config(&self) -> &Path {
         &self.global_config
     }
 
     /// Writes one of the repository's own hooks and makes it runnable —
-    /// the shebang is this method's, so `body` is the script alone. One
-    /// spelling of the mechanics for every test that needs a hook: the
-    /// exec bit is the half that only matters on machines the author is
-    /// not on, and a copy that forgot it passes everywhere but the
-    /// container.
+    /// the shebang is this method's, so `body` is the script alone. Use it
+    /// rather than a hand-written hook: one that forgets the exec bit
+    /// passes everywhere but the Linux container.
     ///
-    /// **Runnable is waited for.** The write above leaves the hook
-    /// exec-able by nobody for as long as a neighbouring fork holds
-    /// the descriptor it was written through (`ETXTBSY` —
-    /// `support::busy`), and git meeting that window declines the push
-    /// *silently*: `receive-pack` writes its own `cannot exec` to the
-    /// stderr it inherited, away from the sideband, so the ref line's
-    /// generic `(pre-receive hook declined)` is all that reaches this end
-    /// and the report carries git's parenthetical where the hook's own
-    /// words belong (measured). Nothing downstream can tell that from a
-    /// hook that ran and said nothing, so the install is what waits: it
-    /// runs the hook once, with [`HOOK_PROBE_ARG`] to keep that run from
-    /// doing the hook's work, and returns when the kernel lets it.
+    /// Returns once the hook is runnable: while a neighbouring fork holds
+    /// the descriptor it was written through, nobody can exec it (`ETXTBSY`
+    /// — `support::busy`), and git then declines the push with only a
+    /// generic `(pre-receive hook declined)`, indistinguishable from a hook
+    /// that ran and said nothing.
     pub fn write_hook(&self, name: &str, body: &str) {
         self.write_hook_watched(name, body, || {});
     }
 
-    /// [`TestRepo::write_hook`], telling `on_busy` the first time the hook
-    /// it has just written cannot be executed yet — for the one test that
-    /// holds that window open on purpose and has to know the install
-    /// reached it before it lets go.
+    /// [`TestRepo::write_hook`], telling `on_busy` the first time the new
+    /// hook cannot be executed yet — for the test that holds that window
+    /// open on purpose and must know the install reached it.
     pub fn write_hook_watched(&self, name: &str, body: &str, on_busy: impl FnOnce()) {
         let hooks = self.path.join(".git").join("hooks");
         std::fs::create_dir_all(&hooks).expect("create hooks dir");
@@ -153,18 +131,15 @@ impl TestRepo {
                 .stderr(std::process::Stdio::null());
             let ran = super::busy::run_once_it_is_not_busy(&mut probe, on_busy)
                 .expect("the hook never became runnable");
-            // The guard is the hook's first statement, so a probe that
-            // reaches the interpreter at all leaves 0. Anything else
-            // is an install nobody can run, and this is where it is
-            // said.
+            // The guard is the hook's first statement, so anything but 0
+            // is an install nobody can run.
             assert!(
                 ran.status.success(),
                 "the hook as installed does not run: {ran:?}"
             );
         }
-        // Windows has no such window: the handle `fs::write` opened is
-        // not inheritable, and nothing there refuses to run a file over
-        // an open writer.
+        // Windows has no such window: `fs::write`'s handle is not
+        // inheritable, and nothing refuses to run a file over an open writer.
         #[cfg(not(unix))]
         drop(on_busy);
     }
@@ -221,17 +196,13 @@ impl TestRepo {
         Command::new("git")
             .args(args)
             .current_dir(dir)
-            // Isolate from developer/global configuration.
             .env("GIT_CONFIG_GLOBAL", &self.global_config)
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("XDG_CONFIG_HOME", &self.xdg_config)
             .env("GIT_TERMINAL_PROMPT", "0")
-            // The editor is pinned: a continue that wants a message
-            // takes the recorded one (`true` exits 0 without writing —
-            // the same pin the executor under test uses).
+            // A continue that wants a message takes the recorded one.
             .env("GIT_EDITOR", "true")
             .env("LC_ALL", "C")
-            // Deterministic identities and times.
             .env("GIT_AUTHOR_NAME", "Test User")
             .env("GIT_AUTHOR_EMAIL", "test@example.com")
             .env("GIT_COMMITTER_NAME", "Test User")
@@ -251,9 +222,8 @@ impl TestRepo {
         std::fs::write(p, content).expect("write file");
     }
 
-    /// Writes + stages + commits a file. Two spawns; the suite makes some
-    /// four hundred of these, so the commit id is a separate ask
-    /// ([`Self::commit_file_id`]).
+    /// Writes + stages + commits a file. The id is a third spawn most
+    /// callers don't need, so it is a separate ask ([`Self::commit_file_id`]).
     pub fn commit_file(&mut self, rel: &str, content: &str, message: &str) {
         self.write_file(rel, content);
         self.git(&["add", "--", rel]);
@@ -278,11 +248,8 @@ impl TestRepo {
     }
 }
 
-/// A hook body that holds git where it stands until `release` exists.
-///
-/// The only way a test can have a write provably still running while it
-/// drives everything around it: a sleep would put time in place of the
-/// fact, and the fact wanted here is that git has not returned yet.
+/// A hook body that holds git until `release` exists — a write provably
+/// still running while the test drives everything around it.
 pub fn barrier_hook(release: &std::path::Path) -> String {
     let release = release.to_string_lossy().replace('\\', "/");
     format!(
@@ -290,20 +257,16 @@ pub fn barrier_hook(release: &std::path::Path) -> String {
     )
 }
 
-/// A clean filter that holds `git add` where it stands until `release`
-/// exists, then hands the content through unchanged.
+/// A clean filter that holds `git add` until `release` exists, then hands
+/// the content through unchanged — [`barrier_hook`] for staging, which
+/// runs no hook.
 ///
-/// The staging counterpart of [`barrier_hook`], and the only one there
-/// is: `git add` runs no hook, and a write that only touches the index is
-/// exactly the one whose follow-up reads leave the refs alone. Wire it
-/// with `filter.<name>.clean` **and `filter.<name>.required`** — without
-/// the second, a filter git cannot run is one it warns about, stages the
-/// raw bytes for and exits 0 from, which is a barrier that silently
-/// is not one.
+/// Wire it with `filter.<name>.clean` and `filter.<name>.required`:
+/// without the second, a filter git cannot run is only warned about (raw
+/// bytes staged, exit 0) — a barrier that silently is not one.
 ///
-/// **It spins**: the shell git runs a filter in has no `sleep` on the
-/// PATH the suite hands it, and a loop that calls one leaves through
-/// its cap at once instead of waiting.
+/// It spins: the shell git runs a filter in has no `sleep` on the suite's
+/// PATH, so a loop calling one leaves through its cap at once.
 pub fn barrier_filter(release: &std::path::Path) -> String {
     let release = release.to_string_lossy().replace('\\', "/");
     format!(

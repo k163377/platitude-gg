@@ -8,19 +8,15 @@ use super::scan::{Scan, text_after};
 pub struct Sighting {
     /// The path as the patch header spelled it, prefix stripped.
     ///
-    /// Left C-quoted: git C-quotes headers for paths with quotes, control
-    /// characters or backslashes, and `parse::diff` leaves those alone too.
-    /// A caller matching these against a known set of paths simply misses
-    /// such a file, which costs a mark and keeps every mark it puts
-    /// right.
+    /// Left C-quoted where git quoted it, as `parse::diff` does: a caller
+    /// matching against known paths misses such a file — a lost mark,
+    /// never a wrong one.
     pub path: String,
     pub reading: Reading,
 }
 
-/// Reads every file in a patch. Empty when there is nothing to say.
-///
-/// Accepts the multi-file output of a whole-tree `git diff` as readily as
-/// one file's.
+/// Reads every file in a patch — one file's or a whole-tree `git diff`.
+/// Empty when there is nothing to say.
 pub fn read(raw: &[u8]) -> Vec<Sighting> {
     let mut out = Vec::new();
     let mut scan: Option<Scan> = None;
@@ -34,8 +30,7 @@ pub fn read(raw: &[u8]) -> Vec<Sighting> {
         rest = tail;
 
         // Inside a hunk every line is content until the counts run out, so
-        // the header shapes below cannot be confused with a context line
-        // that happens to start with `diff --git`.
+        // a context line starting with `diff --git` is not a header.
         if let Some(s) = scan.as_mut()
             && s.in_hunk()
         {
@@ -55,8 +50,7 @@ pub fn read(raw: &[u8]) -> Vec<Sighting> {
                     .or_else(|| text_after(line, b"diff --combined ")),
                 ..Scan::default()
             };
-            // More than one old side: no single "before" to compare against,
-            // and the file is mid-conflict anyway.
+            // More than one old side: no single "before" to compare against.
             s.quiet = true;
             scan = Some(s);
             continue;
@@ -81,7 +75,7 @@ pub fn read(raw: &[u8]) -> Vec<Sighting> {
 }
 
 /// Reads a patch that covers one file. [`Reading::Quiet`] when it covers
-/// none or more than one, since neither answers "what about this file".
+/// none or more than one.
 pub fn read_one(raw: &[u8]) -> Reading {
     match read(raw).as_slice() {
         [only] => only.reading,

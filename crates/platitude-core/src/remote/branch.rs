@@ -16,15 +16,12 @@ use super::tags::split_ls_remote_line;
 
 /// What a remote carries under this exact branch name, if anything.
 ///
-/// Asked before a first push, because git answers two different ways to a
-/// name that is already over there: it fast-forwards one that our history
-/// contains — silently advancing somebody else's branch — and refuses one
-/// it does not (measured, both). The commit is returned, so the caller
-/// can tell those two apart before anything is sent.
+/// Asked before a first push: git silently fast-forwards a same-named
+/// branch our history contains and refuses one it does not, and the
+/// returned commit lets the caller tell the two apart before sending.
 ///
-/// **The pattern has to be the full `refs/heads/<name>`.** `ls-remote`
-/// matches a bare name against the *tail* of a ref, so asking for `topic`
-/// answers yes when the remote only has `feature/topic` (measured).
+/// The pattern must be the full `refs/heads/<name>`: `ls-remote` matches a
+/// bare name against a ref's tail, so `topic` would hit `feature/topic`.
 pub async fn branch_tip(
     executor: &GitExecutor,
     workdir: &Path,
@@ -40,8 +37,7 @@ pub async fn branch_tip(
         .timeout(timeout)
         .paced_elsewhere();
     let out = executor.run(cmd, cancel).await?;
-    // A remote that has nothing to say answers with an empty stdout and
-    // exit 0, so the absence is in the output.
+    // Absence is an empty stdout with exit 0.
     Ok(out
         .stdout
         .split(|b| *b == b'\n')
@@ -55,24 +51,21 @@ pub async fn branch_tip(
 pub enum RemoteBranchState {
     /// Nothing is there under that name: the push makes the branch.
     Free,
-    /// It is there and this history contains it, so the push lands and
-    /// moves it on.
+    /// It is there and this history contains it: the push moves it on.
     FastForward,
-    /// It is there with commits this history does not have. **git refuses
-    /// this push** (measured), so nothing can happen by pressing.
+    /// It is there with commits this history lacks: git refuses the push.
     Refused,
-    /// It is there, and what it holds cannot be read from here — the
-    /// commit it names is not in this repository, so the two histories
-    /// cannot be compared without fetching it first.
+    /// It is there, but its commit is not in this repository, so the
+    /// histories cannot be compared without a fetch.
     Unknown,
-    /// The remote never answered: a URL typed wrong, credentials that are
-    /// not there, no network. Silence is not "nothing is there".
+    /// The remote never answered (bad URL, no credentials, no network).
+    /// Silence is not "nothing is there".
     Unreachable,
 }
 
 impl RemoteBranchState {
-    /// The wire name the UI reads. Spelled out so the two ends cannot
-    /// drift apart on a rename.
+    /// The wire name the UI reads; spelled out so a variant rename cannot
+    /// change it.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Free => "free",
@@ -87,11 +80,9 @@ impl RemoteBranchState {
 /// `git push <remote> --delete <branch>`: removes a branch on the remote.
 /// Destructive — the caller confirms first.
 ///
-/// Read the same way an ordinary push is (`--porcelain`, then
-/// [`super::refusal::refusal`]): the far side is the only thing standing between a
-/// branch and its deletion, and a name it keeps for a rule of its own —
-/// a protected branch, a hook — is a report to pass on (デザイン規約
-/// §リモートブランチを消す).
+/// Read like an ordinary push (`--porcelain`, then
+/// [`super::refusal::refusal`]): a far-side refusal (protected branch,
+/// hook) is a report to pass on (デザイン規約 §リモートブランチを消す).
 pub async fn delete_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,
@@ -113,21 +104,14 @@ pub async fn delete_remote_branch(
     Err(super::refusal::refusal(command, &out, remote, branch, true))
 }
 
-/// Replaces a branch on a remote with one under a new name: the
-/// composition git has no command for, and **not a rename** — the far
-/// side sees a branch created and a branch deleted.
+/// Replaces a branch on a remote with one under a new name — not a
+/// rename: the far side sees a create and a delete, and whatever hung off
+/// the old name (an open PR, a protection rule) stays behind.
 ///
-/// The new name is pushed **from the remote-tracking ref**: the question
-/// asked was about a name, and a local branch of the same name that has
-/// moved on since would publish its commits as well. Then the old name
-/// goes, and any local branch that tracked it is pointed at the new one
-/// — `push --delete` prunes the tracking ref an upstream setting names,
-/// and a stale one sends the next push straight back to the name just
-/// deleted.
-///
-/// Whatever hung off the old name — an open pull request, a
-/// protected-branch rule — stays behind on the name that went. The UI
-/// warns about this before it runs.
+/// The new name is pushed from the remote-tracking ref, since a moved-on
+/// local branch of the same name would publish its commits too. Local
+/// branches tracking the old name are then repointed: a stale upstream
+/// would send the next push back to the deleted name.
 pub async fn replace_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,
@@ -154,9 +138,8 @@ pub async fn replace_remote_branch(
 
 /// Local branches configured to track `<remote>/<branch>`.
 ///
-/// One read of the whole `branch.` section: which local branches point
-/// at a remote one is not something git answers directly, and the
-/// section is small.
+/// One read of the whole `branch.` section: git has no direct query for
+/// it, and the section is small.
 async fn tracking_branches(
     executor: &GitExecutor,
     workdir: &Path,
@@ -182,8 +165,6 @@ fn parse_tracking(bytes: &[u8], remote: &str, branch: &str) -> Vec<String> {
     let mut remotes: Vec<(String, String)> = Vec::new();
     let mut merges: Vec<(String, String)> = Vec::new();
     for record in config::parse_z_records(bytes) {
-        // What a branch tracks is the value; a key written without one
-        // names nothing to compare against.
         let Some(value) = record.value() else {
             continue;
         };

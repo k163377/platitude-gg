@@ -1,43 +1,29 @@
 //! Pictures a person has put against the authors they read.
 //!
-//! Nothing here talks to anybody. A picture is one the person named on
-//! their own disk, copied in beside the settings; there is no service to
-//! ask and none is going to be added (CLAUDE.md 絶対制約: the only network
-//! this application has is git's). What everyone else gets from a gravatar
-//! service, this gets from a file dialog.
+//! A picture is a local file the person picked, copied in beside the
+//! settings; there is no avatar service and none is to be added (CLAUDE.md
+//! 絶対制約: the only network is git's).
 //!
-//! The key is the **address**, lowercased and read through `.mailmap`
-//! (`parse::log`): names are what people change, what two people share,
-//! and what a repository spells three ways. The store keeps the name
-//! too, but only so a list of assignments can be read by a human — the
-//! address is what matching runs on.
+//! The key is the address, lowercased and read through `.mailmap`
+//! (`parse::log`) — names change, are shared, and are spelled several ways.
 //!
 //! The index lives in `settings.toml` and the images in `avatars/` beside
-//! it, because both are what a person decided (`settings` module). An
-//! image is named for a hash of its own
-//! bytes, which buys three things: replacing a picture changes the file
-//! name, so an image cache keyed by path cannot hand back the old one; the
-//! same picture assigned to two people is stored once; and no part of an
-//! address ever reaches a file name, so nothing has to be escaped, kept
-//! under a path limit, or checked against the names Windows reserves.
+//! it — both are what a person decided (`settings` module). An image is
+//! named for a hash of its own bytes: replacing a picture changes the file
+//! name (so a path-keyed image cache cannot hand back the old one), a shared
+//! picture is stored once, and no part of an address reaches a file name.
 
 use std::path::{Path, PathBuf};
 
 /// Directory the images sit in, beside `settings.toml`.
 pub const DIR_NAME: &str = "avatars";
 
-/// Extensions the picker offers. **What a file is gets decided by what
-/// is in it** (`picture`) — a picture saved under the wrong name still
-/// works. This is only so that somebody browsing for their own picture
-/// sees only pictures.
+/// Extensions the file dialog filters on — the dialog's only; the format
+/// is decided by the content (`picture`).
 pub const EXTENSIONS: [&str; 3] = ["png", "jpg", "jpeg"];
 
-/// Largest file read. Nothing this size is ever *kept* — everything is
-/// rewritten small on the way in — so this bounds the reading and
-/// decoding done while a person waits, and nothing else. In particular
-/// it bounds no part of the picture itself: a flat PNG decodes to about
-/// a thousand times its own bytes, which is what `picture::MAX_PIXELS`
-/// is for.
+/// Largest file read. It bounds the reading while a person waits, not the
+/// decoded size (`picture::MAX_PIXELS` does).
 pub const MAX_BYTES: u64 = 10 * 1024 * 1024;
 
 #[derive(Debug, thiserror::Error)]
@@ -58,34 +44,24 @@ pub enum AvatarError {
         #[source]
         source: std::io::Error,
     },
-    /// No configuration directory, so nothing can be kept. A screenshot run
-    /// and a machine with no `APPDATA` both land here.
+    /// No configuration directory (a screenshot run, or no `APPDATA`).
     #[error("there is nowhere to keep avatars")]
     NoStore,
 }
 
-/// A refusal as the screen is written from it (app-ui.md「Rust に文言を
-/// 置かない」): which one it is, the numbers its sentence takes, and
-/// whoever outside wrote a line of their own.
-///
-/// **The sentences above are the log's.** They reach a screen through
-/// this instead, where the words are `qsTr`'d like every other word in
-/// the application — six of the seven are this end's own writing and had
-/// no business being in Rust at all. The two that wrap an `io::Error` are
-/// the exception in the other direction: the operating system's words
-/// are carried across untouched, under a frame the UI writes.
+/// A refusal as the screen is written from it; the `#[error]` sentences
+/// above are the log's only (rules-refs/app-ui.md「アバターの拒否は種別 + 数で渡す」).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AvatarRefusal {
     pub kind: &'static str,
     /// The numbers the sentence takes, in the order it takes them.
     pub facts: Vec<String>,
-    /// What the operating system said, where the failure is one it made.
-    /// Empty for the rest, which is how the screen tells the two apart.
+    /// What the operating system said (`read` / `write`). Empty otherwise,
+    /// which is how the screen tells the two apart.
     pub said: String,
 }
 
 impl AvatarError {
-    /// This refusal as the screen reads it.
     #[must_use]
     pub fn refusal(&self) -> AvatarRefusal {
         let plain = |kind: &'static str| AvatarRefusal {
@@ -126,14 +102,10 @@ impl AvatarError {
     }
 }
 
-/// The key a picture is filed under.
-///
-/// One function so the log parser, the details pane and the store cannot
-/// disagree about what counts as the same person. git hands addresses back
-/// exactly as each commit spelled them — mailmap matches without regard to
-/// case but does not rewrite what it did not map (measured) — so a person
-/// who shouted their address into one commit would otherwise file under a
-/// second key.
+/// The key a picture is filed under — the one fold the log parser, the
+/// details pane and the store share. git returns addresses as each commit
+/// spelled them (mailmap matches case-insensitively but does not rewrite
+/// what it did not map), so without it one person files under two keys.
 pub fn key(email: &str) -> String {
     email.trim().to_lowercase()
 }
@@ -156,10 +128,8 @@ pub struct Avatars {
 }
 
 impl Avatars {
-    /// Reads assignments off a parsed `[[avatar]]` array. Entries
-    /// missing either half of the mapping are dropped: an assignment
-    /// with no address matches nobody, and one with no file draws
-    /// nothing.
+    /// Reads assignments off a parsed `[[avatar]]` array. Entries with no
+    /// address or no safe file name are dropped.
     pub fn from_values(values: &[toml::Value]) -> Self {
         let mut entries: Vec<Assignment> = Vec::new();
         for value in values {
@@ -184,8 +154,7 @@ impl Avatars {
                 .and_then(toml::Value::as_str)
                 .unwrap_or_default()
                 .to_string();
-            // Last writer wins for a repeated address, the same way a
-            // repeated key in a table would.
+            // Last writer wins for a repeated address.
             entries.retain(|e| e.email != email);
             entries.push(Assignment { email, name, file });
         }
@@ -225,25 +194,20 @@ impl Avatars {
             .map(|e| e.file.as_str())
     }
 
-    /// Drops assignments whose image is no longer on disk. A person who
-    /// emptied the directory by hand has said what they meant; carrying the
-    /// entry forward would leave a row in the settings list that draws
-    /// nothing and cannot be told apart from one that is merely slow.
+    /// Drops assignments whose image is no longer on disk; kept, they would
+    /// be settings rows that draw nothing and look merely slow.
     pub fn forget_missing(&mut self, dir: &Path) -> usize {
         let before = self.entries.len();
         self.entries.retain(|e| dir.join(&e.file).is_file());
         before - self.entries.len()
     }
 
-    /// Files a picture under an address, rewriting it small on the way in
+    /// Files a picture under an address, copying it in rewritten small
     /// (`picture`). Returns the name of the file now holding it.
     ///
-    /// Keeping a copy of our own is what makes this durable: the picture a
-    /// person picked out of their downloads folder will be moved or
-    /// deleted, and a store that only remembered the path would then draw
-    /// nothing with no way to say why. Rewriting is what keeps a
-    /// photograph from costing tens of megabytes of memory for as
-    /// long as the application is up.
+    /// A copy, not the path: the picked file will be moved or deleted.
+    /// Rewriting keeps a full-size photograph out of memory for as long as
+    /// the application is up.
     pub fn assign(
         &mut self,
         dir: &Path,
@@ -264,9 +228,8 @@ impl Avatars {
             path: source.to_path_buf(),
             source: source_err,
         })?;
-        // What gets stored is the rewritten picture, so the name is a hash
-        // of that and not of what was picked: two people who found the
-        // same photograph in different formats still share one file.
+        // Named for the rewritten bytes, so one photograph picked in two
+        // formats still shares one file.
         let bytes = crate::picture::normalize(&bytes)?;
         let file = format!("{}.png", content_name(&bytes));
         let target = dir.join(&file);
@@ -274,9 +237,8 @@ impl Avatars {
             path: dir.to_path_buf(),
             source: source_err,
         })?;
-        // Written even when a file of that name is already there: same
-        // name means same bytes, and a half-written one from a previous
-        // run is worth replacing.
+        // Written even when the name exists: a half-written one from a
+        // previous run gets replaced.
         std::fs::write(&target, &bytes).map_err(|source_err| AvatarError::Write {
             path: target.clone(),
             source: source_err,
@@ -309,10 +271,8 @@ impl Avatars {
         true
     }
 
-    /// Deletes an image no assignment points at any more. Failure here
-    /// is silent: the assignment is already gone, which is what was
-    /// asked for, and a file left behind costs a few kilobytes until the
-    /// same picture is assigned again.
+    /// Deletes an image no assignment points at any more. Failure is only
+    /// logged: the assignment is already gone, which is what was asked for.
     fn sweep(&self, dir: &Path, file: &str) {
         if self.entries.iter().any(|e| e.file == file) {
             return;
@@ -323,9 +283,8 @@ impl Avatars {
     }
 }
 
-/// A file name built only from the bytes it will hold: 16 hex digits of
-/// FNV-1a over the content, plus the length, which is what keeps two
-/// different pictures from colliding on a 64-bit hash alone.
+/// FNV-1a of the content plus its length; the length keeps two pictures
+/// from colliding on the 64-bit hash alone.
 fn content_name(bytes: &[u8]) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for b in bytes {
@@ -336,9 +295,7 @@ fn content_name(bytes: &[u8]) -> String {
 }
 
 /// Whether a name out of the settings file may be joined onto the avatars
-/// directory. Everything this writes is hex and a known extension, so
-/// anything else came from an edited file — and `..` in a stored name is
-/// how a settings file turns into a way to read an arbitrary path.
+/// directory — a hand-edited `..` would otherwise read an arbitrary path.
 fn is_safe_file_name(file: &str) -> bool {
     !file.is_empty()
         && Path::new(file).file_name().is_some_and(|n| n == file)

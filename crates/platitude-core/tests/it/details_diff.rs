@@ -63,12 +63,9 @@ async fn details_of_the_root_commit_show_created_files() {
 #[tokio::test]
 async fn details_read_co_authors_whatever_case_the_trailer_used() {
     let mut repo = TestRepo::init();
-    // The spelling tools actually write is `Co-Authored-By`; the one the
-    // convention documents is `Co-authored-by`. git's `key=` matches
-    // either, and both have to land here. The one in the prose stays
-    // out: a trailer is a property of the final block, git decides
-    // that, and the count below is what would go wrong if the message
-    // were ever scanned by hand instead.
+    // Tools write `Co-Authored-By`, the convention `Co-authored-by`; git's
+    // `key=` matches both. The one in the prose stays out: git decides the
+    // final trailer block, and a hand scan would break the count below.
     let sha = repo.commit_file_id(
         "a.txt",
         "one\n",
@@ -88,8 +85,8 @@ async fn details_read_co_authors_whatever_case_the_trailer_used() {
     assert_eq!(d.co_authors[0].email, "noreply@anthropic.com");
     assert_eq!(d.co_authors[1].name, "Bob Builder");
     assert_eq!(d.co_authors[1].email, "bob@example.com");
-    // The trailer stays part of the message: the description box is the
-    // editor for what gets saved, so nothing is taken out of it.
+    // The trailer stays in the message: the description box edits what
+    // gets saved.
     assert!(d.message.contains("Co-Authored-By: Claude Opus 5"));
 }
 
@@ -253,11 +250,9 @@ async fn binary_file_diff_is_flagged() {
     assert!(patches[0].hunks.is_empty());
 }
 
-/// Stops a merge on four kinds of conflict at once: both changed it
-/// (`UU`), both added it (`AA`), we deleted / they changed (`DU`), and we
-/// changed / they deleted (`UD`). The first two have two blobs to compare
-/// and get a combined diff; the other two have one and get a bare
-/// `* Unmerged path` line.
+/// Stops a merge on `UU`, `AA`, `DU` (we deleted) and `UD` (they deleted)
+/// at once. The first two have two blobs and get a combined diff; the
+/// other two get a bare `* Unmerged path` line.
 fn stopped_merge_of_four_kinds(repo: &mut TestRepo) {
     repo.commit_file("both.txt", "one\ntwo\nthree\n", "base");
     repo.commit_file("ours-del.txt", "base\n", "one we will drop");
@@ -282,9 +277,6 @@ fn stopped_merge_of_four_kinds(repo: &mut TestRepo) {
     repo.git_expect_failure(&["merge", "--no-edit", "side"]);
 }
 
-/// One stopped merge, all four kinds read back from it: the two-blob
-/// conflicts (`UU`, `AA`) come out combined, the one-sided pair
-/// (`DU`, `UD`) has nothing to diff and says so.
 #[tokio::test]
 async fn a_stopped_merge_reads_back_all_four_conflict_kinds() {
     let mut repo = TestRepo::init();
@@ -292,7 +284,7 @@ async fn a_stopped_merge_reads_back_all_four_conflict_kinds() {
 
     let (executor, cancel) = env();
 
-    // UU — both changed it: the full combined shape, markers and all.
+    // UU: the full combined shape, markers and all.
     let patches = details::file_diff(
         &executor,
         &repo.path,
@@ -316,9 +308,6 @@ async fn a_stopped_merge_reads_back_all_four_conflict_kinds() {
         "one range per parent after the first"
     );
 
-    // Every marker column git wrote, in order. This is the whole point of
-    // the parse: without it the pane has nothing to show on the one file
-    // someone opened it for.
     let markers: Vec<&str> = hunk.lines.iter().map(|l| l.markers.as_str()).collect();
     assert_eq!(
         markers,
@@ -332,8 +321,7 @@ async fn a_stopped_merge_reads_back_all_four_conflict_kinds() {
     assert!(text[3].starts_with("======="));
     assert!(text[5].starts_with(">>>>>>>"));
 
-    // The result's numbering runs unbroken down the pane — it is the file
-    // on disk, markers and all.
+    // The result's numbering is the file on disk, markers and all.
     let result: Vec<Option<u32>> = hunk.lines.iter().map(|l| l.new_no).collect();
     assert_eq!(
         result,
@@ -354,10 +342,8 @@ async fn a_stopped_merge_reads_back_all_four_conflict_kinds() {
         vec![Some(1), None, Some(2), None, None, None, Some(3)]
     );
 
-    // AA — both added it: combined too, and it keeps both sides'
-    // paths (both sides invented the path, so neither is "the old
-    // side" — being read as new would take the pane's pieces away for
-    // the wrong reason).
+    // AA: combined too, keeping both sides' paths — read as new, it would
+    // lose the pane's pieces for the wrong reason.
     let patches = details::file_diff(
         &executor,
         &repo.path,
@@ -374,7 +360,7 @@ async fn a_stopped_merge_reads_back_all_four_conflict_kinds() {
     assert!(patch.new_path.is_some());
     assert!(!patch.hunks.is_empty());
 
-    // DU / UD — one side left: named but not diffed.
+    // DU / UD: named but not diffed.
     for path in ["ours-del.txt", "theirs-del.txt"] {
         let patches = details::file_diff(
             &executor,
@@ -400,8 +386,6 @@ async fn a_stopped_merge_reads_back_all_four_conflict_kinds() {
 
 #[tokio::test]
 async fn a_choice_lists_what_each_of_its_commits_changed() {
-    // The commit between the two chosen ones contributes nothing: what
-    // is listed is what the chosen commits did.
     let mut repo = TestRepo::init();
     let older = repo.commit_file_id("a.txt", "a\n", "older chosen");
     repo.commit_file("between.txt", "b\n", "not chosen");
@@ -436,16 +420,13 @@ async fn a_path_two_of_the_chosen_touched_is_listed_once_as_the_newest_left_it()
         .unwrap();
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].path, "f.txt");
-    // The most recent thing to have happened to it.
     assert_eq!(files[0].status, 'M');
 }
 
 #[tokio::test]
 async fn comparing_two_commits_is_not_what_each_of_them_changed() {
-    // The two readings a choice can have are different answers, and this
-    // is the difference: a comparison carries whatever the unchosen commit
-    // between them did, and drops what the older of the two did itself —
-    // that being the side it is measured from.
+    // A comparison carries what the unchosen commit between them did and
+    // drops what the older one did itself, the side it is measured from.
     let mut repo = TestRepo::init();
     repo.commit_file("base.txt", "base\n", "root");
     let older = repo.commit_file_id("a.txt", "a\n", "older chosen");
@@ -481,7 +462,6 @@ async fn a_choice_stacks_the_patch_of_each_commit_that_touched_the_file() {
         &executor,
         &repo.path,
         &DiffTarget::Choice {
-            // Newest first, the order a choice arrives in.
             oids: vec![
                 Oid::from_hex_str(&newer).unwrap(),
                 Oid::from_hex_str(&older).unwrap(),
@@ -494,9 +474,8 @@ async fn a_choice_stacks_the_patch_of_each_commit_that_touched_the_file() {
     .await
     .unwrap();
 
-    // One block per chosen commit that touched it, oldest first — the way
-    // the history ran, and the way a cherry-pick would apply them. Each
-    // says which commit it is of, or the second reads as more of the first.
+    // Oldest first, as a cherry-pick would apply them. Each names its
+    // commit, or the second reads as more of the first.
     assert_eq!(patches.len(), 2);
     assert!(patches[0].from_commit.ends_with("older chosen"));
     assert!(patches[1].from_commit.ends_with("newer chosen"));
@@ -539,8 +518,7 @@ async fn a_diff_of_one_thing_names_no_commit_above_it() {
     )
     .await
     .unwrap();
-    // The band is for a stack; one patch standing alone has the pane's own
-    // heading above it and needs no second one.
+    // The band is for a stack; a lone patch already has the pane's heading.
     assert_eq!(patches.len(), 1);
     assert!(patches[0].from_commit.is_empty());
 }
@@ -583,14 +561,11 @@ async fn the_patch_behind_a_compared_row_is_between_the_two_commits() {
     );
 }
 
-/// **What the pre-merge run leaves out**: that `git show` still writes the two
-/// shapes of its record the details parser's unit tests read from bytes
-/// written by hand — the record that stops with no file list after it
-/// (`details::tests::a_commit_that_changed_nothing_ends_at_the_record`), and
-/// a message that reads like a file list standing before the NUL that ends
-/// it (`details::tests::a_message_that_reads_like_a_status_line_stays_in_the_message`).
-/// What git writes moves only with git, so the full gate
-/// (`-- --ignored ::periodic::`) runs these rather than every change.
+/// That `git show` still writes the two record shapes `details::tests` reads
+/// from hand-written bytes (`a_commit_that_changed_nothing_ends_at_the_record`,
+/// `a_message_that_reads_like_a_status_line_stays_in_the_message`), which
+/// moves only with git — so the full gate (`-- --ignored ::periodic::`)
+/// runs these, not every change.
 mod periodic {
     use super::*;
 
@@ -607,8 +582,8 @@ mod periodic {
         let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
             .await
             .unwrap();
-        // The one input where git writes the record and then stops: the file
-        // list and the newline in front of it are both absent.
+        // The one input where git stops after the record: no file list, and
+        // no newline before it.
         assert_eq!(d.message, "nothing to see");
         assert!(d.files.is_empty(), "got {:?}", d.files);
     }
@@ -617,9 +592,8 @@ mod periodic {
     #[ignore = "git show's NUL between a message and its files: not worth the pre-merge run"]
     async fn a_message_that_reads_like_a_file_list_is_not_read_as_one() {
         let mut repo = TestRepo::init();
-        // The metadata and the changed files arrive from one `git show`, so
-        // the boundary between them has to be the NUL count and nothing else.
-        // A commit is free to describe its own diff in prose.
+        // Metadata and files arrive from one `git show`, so only the NUL
+        // count may split them; a message can describe its diff in prose.
         let sha = repo.commit_file_id(
             "real.txt",
             "one\n",

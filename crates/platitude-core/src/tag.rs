@@ -1,13 +1,9 @@
 //! Tag names.
 //!
-//! git has no rename for a tag, so this module builds one out of the two
-//! commands it does have: point a new name at what the old one pointed at,
-//! then drop the old name. The object itself is never rewritten, so an
-//! annotated or signed tag keeps its message, its tagger and its signature
-//! — the new name points at that same tag object. What it cannot change is
-//! the name recorded *inside* an annotated tag; that is git's own limit,
-//! and re-creating the tag to fix it would throw away everything else the
-//! object holds.
+//! git has no tag rename. [`rename`] never rewrites the object, so an
+//! annotated or signed tag keeps its message, tagger and signature; the
+//! name recorded *inside* it stays the old one (re-creating the tag would
+//! lose the rest).
 
 use std::path::Path;
 
@@ -18,19 +14,14 @@ use crate::process::{GitCommand, GitExecutor};
 
 /// Points `to` at whatever `from` names, then deletes `from`.
 ///
-/// Left to git to refuse when `to` already exists: overwriting a tag
-/// silently is how a release mark ends up somewhere else.
+/// Left to git to refuse when `to` exists: overwriting a tag silently is
+/// how a release mark ends up somewhere else. If that first step fails,
+/// the old tag is untouched.
 ///
-/// The first step is the one that can fail on its own (bad name, name
-/// taken); if it does, the old tag is still there and nothing was lost.
-///
-/// A rename that changes only letter case is refused outright. On a
-/// case-insensitive filesystem (Windows, macOS) with the tag packed —
-/// the normal state after a clone — the create step sees the new name as
-/// free and writes a loose ref whose *file* collides with the old name;
-/// the delete step then removes both, and every command involved exits 0
-/// (measured, `tag V1.0 v1.0` + `tag -d v1.0` on packed refs
-/// leaves no tag at all). Refused everywhere, since the same repository
+/// A case-only rename is refused outright: on a case-insensitive disk
+/// with the tag packed (normal after a clone) the new loose ref's file
+/// collides with the old name, and the delete then removes both with
+/// every command exiting 0. Refused everywhere, since the same repository
 /// may be opened from either kind of filesystem.
 pub async fn rename(
     executor: &GitExecutor,
@@ -47,12 +38,9 @@ pub async fn rename(
             ),
         });
     }
-    // **The two halves fail differently, and say so differently**
-    // (デザイン規約 §答えの要らない報せ): nothing has moved while the new name is
-    // being made, so a refusal there is one the box the name was typed
-    // into can still answer — most often the name is taken. Once it is
-    // made, a failure to take the old one off leaves both standing, which
-    // is the same half-done rename a stash's has.
+    // The two halves report differently (デザイン規約 §答えの要らない報せ):
+    // a refused create has moved nothing, so the name box can still answer
+    // it; a failed delete leaves both names, a half-done rename.
     let create = GitCommand::new()
         .cwd(workdir)
         .args(["tag", "--end-of-options", to, from]);
@@ -64,10 +52,8 @@ pub async fn rename(
     delete(executor, workdir, from, cancel)
         .await
         .map_err(|error| {
-            // **A session closing is a cancellation.** That is how a write
-            // is stopped on the way out, and it is told apart from a
-            // failure one layer up (`session::write`); dressed as a report
-            // it would raise a bar over a window that is going away.
+            // A closing session cancels, and `session::write` tells that
+            // apart; as a report it would raise a bar over a closing window.
             if error.is_cancelled() || error.report().is_some() {
                 return error;
             }
@@ -75,16 +61,8 @@ pub async fn rename(
         })
 }
 
-/// Puts `name` on `commit` — a lightweight tag, which is what `git tag`
-/// makes when nothing asks for more.
-///
-/// Plain, for [`rename`]'s reason: git refuses when the name is taken,
-/// and a release mark that moves without anybody saying so is the
-/// accident that refusal exists to stop.
-///
-/// `commit` is anything git resolves — the row's oid is what the menus
-/// hand over — and an empty one leaves the tag on HEAD, which is what git
-/// does with the argument left off.
+/// Puts a lightweight tag `name` on `commit` (anything git resolves;
+/// empty means HEAD). No `--force`, for [`rename`]'s reason.
 pub async fn create(
     executor: &GitExecutor,
     workdir: &Path,
@@ -101,8 +79,7 @@ pub async fn create(
     executor.run(cmd, cancel).await.map(drop)
 }
 
-/// Deletes a tag. Only the name goes: whatever it marked is still in the
-/// repository, reachable or not.
+/// Deletes a tag name; what it marked stays in the repository.
 pub async fn delete(
     executor: &GitExecutor,
     workdir: &Path,
@@ -115,19 +92,15 @@ pub async fn delete(
     executor.run(cmd, cancel).await.map(drop)
 }
 
-/// Whether a name is one git will take for a branch or a tag.
-///
-/// The rules are `git check-ref-format`'s, applied to `refs/heads/<name>`
-/// (which is also what `refs/tags/<name>` allows). Checked here as a
-/// pure function of the string: this is the answer an input box needs
-/// on every character it is given.
-/// `tests/it/rename_integration.rs` holds it to what real git says.
+/// Whether git will take a name for a branch or a tag: the rules of
+/// `git check-ref-format` for `refs/heads/<name>` (the same for tags), as
+/// a pure function because an input box asks on every keystroke.
+/// `tests/it/rename_integration.rs` holds it to real git.
 pub fn is_valid_name(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
-    // Whole-name rules first: these say nothing about where they matched,
-    // so no component walk can see them.
+    // Whole-name rules: a per-component walk cannot see these.
     if name.starts_with('/')
         || name.ends_with('/')
         || name.ends_with('.')
@@ -153,12 +126,9 @@ mod tests {
     use super::*;
     use crate::refusing;
 
-    /// **A rename that changes only letter case never reaches git**: the
-    /// create+delete pair would take both names off a case-insensitive
-    /// disk with every command exiting 0 ([`rename`]). The executor cannot
-    /// run anything and the repository is not there, so a rename that
-    /// reached for git would fail on the spawn rather than come back as
-    /// this refusal.
+    /// The executor cannot run anything and the repository is not there,
+    /// so a rename that reached for git would fail on the spawn rather
+    /// than come back as this refusal.
     #[tokio::test]
     async fn a_case_only_rename_is_refused_without_asking_git() {
         let (exec, asked) = refusing::git();
@@ -177,11 +147,9 @@ mod tests {
         assert_eq!(asked.count(), 0, "nothing was asked of git");
     }
 
-    /// Every shape an argv can carry is pinned against real git in
-    /// `tests/it/rename_integration.rs`
-    /// (`the_name_rules_are_the_ones_git_applies` — including `@` and a
-    /// leading dash, which git takes and this must too). Only what cannot
-    /// reach `check-ref-format` through a command line stays here.
+    /// Only what cannot reach `check-ref-format` through an argv; the rest
+    /// is pinned against real git in
+    /// `rename_integration::the_name_rules_are_the_ones_git_applies`.
     #[test]
     fn control_characters_are_refused_without_asking_git() {
         assert!(!is_valid_name("new\nline"));

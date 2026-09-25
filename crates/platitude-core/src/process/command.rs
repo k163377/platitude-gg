@@ -8,12 +8,9 @@ use std::time::Duration;
 use super::slots::Pace;
 use crate::operation::OperationId;
 
-/// Wraps a path from git's own output so git reads it back as that
-/// exact path (a file really named `:(glob)x` has to
-/// round-trip).
-///
-/// Only for arguments git parses as pathspecs. `git diff --no-index`
-/// takes filenames, which go in bare.
+/// Wraps a path so git reads it back as that exact path (a file really
+/// named `:(glob)x` has to round-trip). Only for arguments git parses as
+/// pathspecs: `git diff --no-index` takes filenames, which go in bare.
 pub fn literal_pathspec(path: &str) -> String {
     format!(":(literal){path}")
 }
@@ -36,34 +33,29 @@ pub(super) fn shell_quote(arg: &str) -> std::borrow::Cow<'_, str> {
 pub enum CommandEnd {
     /// The process ran and returned this code (`-1` = killed by a signal).
     Exited(i32),
-    /// The process ran and its code is one of the answers the command
-    /// named (`merge-base --is-ancestor` says "no" with 1; a marked
-    /// command's 0 lands here too, so the log can tell an answer-shaped
-    /// read from a plain success). The log keeps the row and its
-    /// code, quietly.
+    /// The code is the answer the command named (`merge-base
+    /// --is-ancestor` says "no" with 1), or such a command's 0 — so the log
+    /// can tell an answer-shaped read from a plain success.
     Answered(i32),
     TimedOut,
     Cancelled,
-    /// git never started, or the pipes died under it. The reported message
-    /// is the reason.
+    /// git never started, or the pipes died under it; the message says why.
     Failed,
 }
 
 /// What the command log keeps of one handle's invocations.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Kept {
-    /// Every one of them, as a row, from the spawn: the commands the
-    /// reader asked for.
+    /// Every one of them, as a row: the commands the reader asked for.
     Asked,
-    /// The reads a session makes on its own — kept only while background
-    /// reads are switched on, since a poll tick runs five commands and
-    /// would bury what somebody actually did.
+    /// The reads a session makes on its own, kept only while background
+    /// reads are switched on: a poll tick's commands would bury what
+    /// somebody did.
     #[default]
     Unasked,
     /// The same, except that a git which said no leaves its row anyway:
-    /// the fetches nobody asked for. The panel the first of them raises
-    /// has to hold the command that raised it, and one that lands every
-    /// interval would bury the log all the same.
+    /// the fetches nobody asked for (the panel a failure raises must hold
+    /// the command that raised it).
     UnaskedUnlessItFails,
 }
 
@@ -72,35 +64,29 @@ pub enum Kept {
 /// Called from tokio worker threads, on every command's hot path:
 /// implementations return at once.
 pub trait CommandObserver: Send + Sync + 'static {
-    /// Whether this handle's invocations are being kept at all. Asked
-    /// before the strings are built, so the reads a repository page makes
-    /// on a timer cost nothing while nobody is recording them.
+    /// Whether this handle's invocations are kept at all. Asked before the
+    /// strings are built, so unrecorded timer reads cost nothing.
     fn records(&self, kept: Kept) -> bool;
 
-    /// A command is about to be spawned; the returned id is what its end
-    /// is reported under. `display` is the log line, `full` the same
-    /// command with the fixed configuration and environment spelled out,
-    /// so it can be pasted into a terminal and do the same thing.
-    /// `operation` is the write the command runs under, where the handle
-    /// was given one ([`super::GitExecutor::under`]) — a compound write
-    /// is several commands under one id — and `None` for a read.
+    /// A command was asked for; its end is reported under the returned id.
+    /// `display` is the log line, `full` the same with the fixed
+    /// configuration and environment spelled out, to paste into a terminal.
+    /// `operation` is the write it runs under
+    /// ([`super::GitExecutor::under`]), `None` for a read.
     fn started(&self, display: &str, full: &str, kept: Kept, operation: Option<OperationId>)
     -> u64;
 
-    /// The command ended. `waited_ms` is what it spent in the queue for
-    /// a slot before anything was spawned (`super::slots`), `elapsed_ms`
-    /// what the process itself took from the spawn to the reap — kept
-    /// apart, so a slow answer can be read as a slow git or as a busy
-    /// application. A command cancelled while it waited ends with no
-    /// process at all: `Cancelled`, its wait, and nothing run.
+    /// `waited_ms` is the queue wait for a slot (`super::slots`),
+    /// `elapsed_ms` spawn to reap — apart, so a slow answer reads as a
+    /// slow git or a busy application. A command cancelled while waiting
+    /// ends `Cancelled` with nothing run.
     fn finished(&self, id: u64, end: CommandEnd, waited_ms: u64, elapsed_ms: u64, message: &str);
 }
 
-/// A command's time budget: the stock default — resolved by the executor,
-/// so a test harness can lift it in one place — an explicit bound, or
-/// none at all. Deliberately not comparable: `At(DEFAULT_TIMEOUT)` and
-/// `Stock` resolve to the same bound, so an `==` would answer the wrong
-/// question.
+/// A command's time budget. `Stock` is resolved by the executor, so a test
+/// harness can lift it in one place. Not comparable on purpose:
+/// `At(DEFAULT_TIMEOUT)` and `Stock` resolve alike, so `==` would answer
+/// the wrong question.
 #[derive(Debug, Clone, Copy)]
 pub(super) enum TimeBudget {
     Stock,
@@ -113,14 +99,11 @@ pub struct GitCommand {
     pub(super) args: Vec<OsString>,
     pub(super) cwd: Option<PathBuf>,
     pub(super) timeout: TimeBudget,
-    /// Applied after the fixed environment (`FIXED_ENV`), so a command can
-    /// override a default or add its own (interactive rebase adds
-    /// `GIT_SEQUENCE_EDITOR`).
+    /// Applied after the fixed environment (`FIXED_ENV`), so it overrides.
     pub(super) env: Vec<(OsString, OsString)>,
     /// The non-zero exit code this command answers by, where it has one.
     pub(super) answer_code: Option<i32>,
-    /// What sets the command's pace, which is which pool of slots it
-    /// waits for ([`super::slots`]).
+    /// Which share of the slots it waits for ([`super::slots`]).
     pub(super) pace: Pace,
 }
 
@@ -136,21 +119,17 @@ impl GitCommand {
         }
     }
 
-    /// Marks a command paced by something other than this machine — the
-    /// far end of a network connection, a credential helper's prompt, a
-    /// person in another program — so the slot it sits in is outside
-    /// the click's reserve ([`super::slots::Pace`]). Set
-    /// by the builders that know: the fetches, pushes and `ls-remote`s,
-    /// the clone, the merge tool, the signature check that runs gpg.
+    /// Marks a command paced by something other than this machine (a
+    /// network peer, a credential prompt, a person in another program), so
+    /// its slot is outside the click's reserve ([`super::slots::Pace`]).
     pub fn paced_elsewhere(mut self) -> Self {
         self.pace = Pace::Elsewhere;
         self
     }
 
-    /// Marks the exit code this command answers with, so the command
-    /// log keeps the row without raising itself over it
-    /// (デザイン規約 §git が言ったことを読む場所). Named per command: a code
-    /// means what the command that returned it says it means.
+    /// Marks the exit code this command answers with, so the command log
+    /// keeps the row without raising itself (デザイン規約 §git が言ったことを読む場所).
+    /// Named per command: a code means what its command says it means.
     pub fn answers_by_code(mut self, code: i32) -> Self {
         self.answer_code = Some(code);
         self
@@ -212,8 +191,7 @@ impl Default for GitCommand {
     }
 }
 
-/// `Clone` for the one reader that hands an answer to more than one
-/// asker — two identical background reads sharing a run
+/// `Clone` only for identical background reads sharing one run
 /// (`super::slots`); nothing else copies output.
 #[derive(Debug, Default, Clone)]
 pub struct GitOutput {
@@ -234,11 +212,8 @@ impl GitOutput {
         String::from_utf8_lossy(&self.stderr)
     }
 
-    /// git's own explanation of a failure, passed through unedited.
-    ///
-    /// Usually stderr, but some porcelain reports on stdout and exits
-    /// non-zero with stderr empty (`git commit` printing "nothing to
-    /// commit" is the one users hit daily), so stdout is the fallback.
+    /// git's own explanation of a failure, unedited: stderr, else stdout
+    /// (rules/core.md §git サブプロセス規約).
     pub fn failure_message(&self) -> String {
         let stderr = self.stderr_utf8().trim().to_string();
         if stderr.is_empty() {

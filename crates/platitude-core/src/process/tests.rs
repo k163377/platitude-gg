@@ -3,8 +3,7 @@ use std::sync::Mutex;
 use super::*;
 use crate::process::literal_pathspec;
 
-/// A cross-platform command that announces it is running, then sleeps for
-/// ~30s, used to exercise cancellation after an observable start edge.
+/// Says `ready`, then sleeps: an observable start edge to cancel after.
 fn sleeper() -> Command {
     #[cfg(windows)]
     {
@@ -81,8 +80,8 @@ fn describe_quotes_what_a_shell_would_split_or_read() {
 
 #[test]
 fn the_full_form_spells_out_what_is_always_applied() {
-    // The program is named here: `new()` may spell it as a path
-    // (`program`), and this is about the shape around it.
+    // `new()` may spell the program as a path; this is about the shape
+    // around it.
     let executor = GitExecutor::with_program("git");
     let full = executor.describe_full(&GitCommand::new().args(["status", "--porcelain=v2"]));
     assert!(full.starts_with("LC_ALL=C "), "{full}");
@@ -156,10 +155,9 @@ async fn the_observer_hears_about_a_command_that_never_started() {
     assert!(!seen[0].3.is_empty(), "the reason is reported");
 }
 
-/// **A token cancelled before the ask spawns nothing**: the wait for a
-/// slot is the token's to end, and the token is asked first, so even a
-/// free slot is not taken. The program is not there, so a spawn would have
-/// ended `Failed`, not `Cancelled`.
+/// The token is asked before the slot, so even a free slot is not taken.
+/// The program is missing so that a spawn would end `Failed`, not
+/// `Cancelled`.
 #[tokio::test]
 async fn a_token_cancelled_before_the_ask_spawns_nothing() {
     let recorder = Arc::new(Recorder::default());

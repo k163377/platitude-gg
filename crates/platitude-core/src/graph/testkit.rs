@@ -7,7 +7,6 @@ use super::{GraphBuilder, GraphRow, SegmentKind};
 
 pub(super) fn oid(n: u8) -> Oid {
     let hex = format!("{n:02x}").repeat(20);
-    // Test-only helper; the input is always valid hex.
     Oid::from_hex_str(&hex).unwrap()
 }
 

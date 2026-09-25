@@ -1,26 +1,20 @@
 //! Whether the current branch's tip is held by anything besides that
 //! branch.
 //!
-//! A history rewrite moves the branch off its tip and replays what came
-//! after the edit. Everything the old chain held on to goes with it — but
-//! only as far as no other ref reaches it. If something else does, the old
-//! commits stay drawn on the graph and the work is one cherry-pick away;
-//! if nothing does, the reflog is all that is left (デザイン規約 §長押し).
+//! A history rewrite moves the branch off its tip: if another ref reaches
+//! the old chain it stays drawn and the work is one cherry-pick away;
+//! otherwise only the reflog has it (デザイン規約 §長押し).
 //!
-//! The answer is about the branch tip alone. The rewritten range is
-//! merge-free (the sequencer refuses a range with a merge in it), so every
-//! commit in it is an ancestor of the tip: whatever reaches the tip reaches
-//! all of them, and if nothing reaches the tip then the tip itself is lost.
+//! The tip alone is enough to ask about: the rewritten range is merge-free
+//! (the sequencer refuses a merge), so every commit in it is an ancestor
+//! of the tip.
 //!
-//! Two questions in one, for cost. A ref sitting exactly on the tip is
-//! already in the listing the refresh just read, so that half is free and
-//! covers tags. The other half — a branch, a remote-tracking ref or a
-//! stash that is a *descendant* of the tip — needs git, and deliberately
-//! leaves tags out of the walk: on a tag-heavy repository they are the
-//! great majority of both the refs and the walk's own time
+//! Two questions, for cost: a ref exactly on the tip is in the listing the
+//! refresh already read (free, and covers tags); a descendant branch,
+//! remote-tracking ref or stash needs git, and that walk leaves tags out —
+//! on a tag-heavy repository they dominate it
 //! (ci/baseline/head-reach-windows-x64.md). Missing one costs a hold mark
-//! on a row that could have been a click, which is the direction to be
-//! wrong in.
+//! where a click would do: the safe direction.
 
 use std::path::Path;
 
@@ -30,12 +24,8 @@ use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 use crate::refs::{HeadState, RefEntry};
 
-/// True when some ref other than the branch HEAD is on already sits on the
-/// commit HEAD points at.
-///
-/// Reads the listing the refs refresh already has, so it costs no process.
-/// Annotated tags count peeled, because the commit is what the answer is
-/// about.
+/// True when a ref other than HEAD's branch sits on HEAD's commit
+/// (annotated tags peeled). No process: reads the refresh's listing.
 pub fn a_ref_sits_on_head(refs: &[RefEntry], head: &HeadState) -> bool {
     let Some(oid) = head.oid else {
         return false;
@@ -45,11 +35,8 @@ pub fn a_ref_sits_on_head(refs: &[RefEntry], head: &HeadState) -> bool {
 }
 
 /// True when a branch, a remote-tracking ref or the stash reaches `tip`
-/// without `branch` — that is, when moving `branch` off `tip` would leave
-/// the old commits still drawn.
-///
-/// `branch` is the short name of the branch to leave out (the one about to
-/// be rewritten); an empty name leaves nothing out.
+/// without `branch` (the short name of the branch about to be rewritten;
+/// empty leaves nothing out).
 pub async fn reached_without_branch(
     executor: &GitExecutor,
     workdir: &Path,
@@ -58,25 +45,18 @@ pub async fn reached_without_branch(
     cancel: &CancellationToken,
 ) -> Result<bool, GitError> {
     let out = executor.run(command(workdir, tip, branch), cancel).await?;
-    // Anything printed is a commit no other ref reaches — the tip itself,
-    // since the walk starts there and stops at the first one.
+    // Anything printed is the tip, which no other ref reaches.
     Ok(out.stdout_utf8().trim().is_empty())
 }
 
 /// The walk behind [`reached_without_branch`], split out to be read in a
 /// test without a repository.
 ///
-/// The exclusion pattern for `--branches` is the **short name**: git
-/// matches it against the part after the namespace, so
-/// `--exclude=refs/heads/main` silently excludes nothing and the walk
-/// then answers "held" for every branch there is (measured).
-///
-/// `--glob=refs/stash*` keeps its `*`: a `--glob` pattern only matches
-/// a hierarchy, so the exact refname alone matches nothing (measured).
-/// Naming `refs/stash` as a plain rev would need `--ignore-missing`
-/// for the repositories that never stashed, and that flag would also
-/// swallow a bad `tip` — which would come back as "held", the wrong
-/// way to fail.
+/// `--exclude` takes the **short name** — `refs/heads/main` silently
+/// excludes nothing and every branch reads "held". `--glob=refs/stash*`
+/// keeps its `*`: the exact refname matches nothing, and a plain
+/// `refs/stash` rev would need `--ignore-missing`, which also swallows a
+/// bad `tip` (both in rules-refs/core.md).
 fn command(workdir: &Path, tip: &str, branch: &str) -> GitCommand {
     let mut cmd = GitCommand::new()
         .cwd(workdir)

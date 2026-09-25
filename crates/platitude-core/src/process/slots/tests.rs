@@ -5,9 +5,8 @@ fn slots(total: usize, reserve: usize) -> Arc<Slots> {
     Arc::new(Slots::new(Limits { total, reserve }))
 }
 
-/// Asks for a slot and drives the ask to its first wait: `Ready` is a
-/// grant, `Pending` a place in the queue. The future is kept, since
-/// dropping it is leaving the queue.
+/// Kept as a future: a pending ask is a place in the queue, and dropping
+/// it leaves.
 type Ask = std::pin::Pin<Box<dyn std::future::Future<Output = Option<Slot>> + Send>>;
 
 fn ask(slots: &Arc<Slots>, priority: Priority, pace: Pace) -> Ask {
@@ -77,9 +76,7 @@ async fn an_interactive_ask_goes_ahead_of_a_background_one_queued_before_it() {
     );
 }
 
-/// The fairness the interactive priority is paid for with: a
-/// background read passed by `OVERTAKEN_LIMIT` clicks is served next
-/// even with a click waiting beside it.
+/// Served next even with a click waiting beside it.
 #[tokio::test]
 async fn a_background_read_overtaken_often_enough_is_served_next() {
     let slots = slots(1, 0);
@@ -133,8 +130,6 @@ async fn a_wait_dropped_leaves_the_queue_and_holds_nothing() {
     assert_eq!(slots.report().running, 1);
 }
 
-/// A grant and a leaving in the same instant: the slot given to a
-/// wait nobody is holding any more comes straight back.
 #[tokio::test]
 async fn a_grant_that_crosses_the_leaving_is_given_straight_back() {
     let slots = slots(1, 0);
@@ -143,8 +138,8 @@ async fn a_grant_that_crosses_the_leaving_is_given_straight_back() {
     let mut waiting = ask(&slots, Priority::Interactive, Pace::Here);
     assert!(granted(&mut waiting).is_none());
 
-    // The slot is granted into the channel while the wait has not
-    // been polled again; then the wait is dropped with it inside.
+    // Granted into the channel before the wait is polled again; then the
+    // wait is dropped with the slot inside.
     drop(holding);
     assert_eq!(slots.report().running, 1, "granted, unpolled");
     drop(waiting);
@@ -157,9 +152,6 @@ async fn a_grant_that_crosses_the_leaving_is_given_straight_back() {
     assert!(granted(&mut next).is_some());
 }
 
-/// A fetch stalled at a prompt and a background read together fill
-/// what they share, and a click still finds its reserve — while a
-/// second round trip and a second read wait for one of theirs.
 #[tokio::test]
 async fn what_is_paced_elsewhere_and_what_nobody_waits_on_share_the_slots_outside_the_reserve() {
     let slots = slots(4, 2);
@@ -292,10 +284,6 @@ fn the_limits_one_number_stands_for() {
     );
 }
 
-/// The second identical background ask follows the first while the
-/// first is still queued, and leads for itself once the first has
-/// spawned — the answer of a run that may have looked before the ask
-/// is not that ask's answer.
 #[tokio::test]
 async fn an_identical_ask_follows_a_queued_leader_and_leads_after_a_spawned_one() {
     let slots = Arc::new(Slots::unbounded());
@@ -350,12 +338,7 @@ async fn a_leader_that_leaves_before_spawning_closes_its_group() {
 }
 
 // --- waiting for the queue to move (`settled`) ------------------------
-//
-// Driven by hand throughout: every one of these is about the order two
-// things happen in, and a wait that needed time to pass would be
-// answering about the machine instead.
 
-/// Waiting for what is already true answers without waiting at all.
 #[tokio::test]
 async fn a_wait_for_what_already_stands_answers_at_once() {
     let slots = slots(1, 0);
@@ -371,7 +354,6 @@ async fn a_wait_for_what_already_stands_answers_at_once() {
     );
 }
 
-/// And a wait begun first is woken by the ask that arrives after it.
 #[tokio::test]
 async fn a_wait_begun_first_is_woken_by_the_ask_that_follows() {
     let slots = slots(1, 0);
@@ -392,19 +374,11 @@ async fn a_wait_begun_first_is_woken_by_the_ask_that_follows() {
     );
 }
 
-/// **A stir landing inside the look is not lost** — the window
-/// [`Slots::settled`] takes its `Notified` out ahead of, driven
-/// through `settled` itself.
-///
-/// The predicate is the way in: it is called between the two, on a
-/// `Report` already read, so an ask joining the queue from inside it
-/// lands in exactly the window — no second thread, and nothing in the
-/// slots that exists for a test. The predicate then answers `false`,
-/// because the report it was handed was taken before the join.
-///
-/// So a `settled` that takes its `Notified` out *after* the look
-/// misses this stir — `notify_waiters` leaves no permit — and waits
-/// for a queue that has already stopped moving.
+/// The window [`Slots::settled`] takes its `Notified` out ahead of, driven
+/// through the predicate: it runs on a `Report` already read, so an ask
+/// joining from inside it stirs exactly there (and it answers `false`). A
+/// `settled` that took `Notified` out after the look would miss this stir
+/// and wait forever.
 #[tokio::test]
 async fn a_stir_from_inside_the_look_still_ends_the_wait() {
     let slots = slots(1, 0);
@@ -437,10 +411,6 @@ async fn a_stir_from_inside_the_look_still_ends_the_wait() {
     );
 }
 
-/// **The state is the answer, and the stir is only a reason to look.**
-/// A queue that moved before anybody was waiting leaves nothing behind
-/// to satisfy a later wait (`notify_waiters` stores no permit), and a
-/// stir that does not reach the answer leaves the wait where it was.
 #[tokio::test]
 async fn a_stir_is_not_the_answer_and_leaves_none_behind() {
     let slots = slots(1, 0);
@@ -458,8 +428,7 @@ async fn a_stir_is_not_the_answer_and_leaves_none_behind() {
         "the stirs before it began left nothing it could take for an answer"
     );
 
-    // A stir that moves the running rather than the queue: told, looked
-    // at, and still not the answer.
+    // A stir from the background queue: woken, looked, still not the answer.
     let mut background = ask(&slots, Priority::Background, Pace::Elsewhere);
     assert!(granted(&mut background).is_none(), "the pool is full");
     assert!(

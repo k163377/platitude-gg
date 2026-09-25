@@ -1,9 +1,7 @@
 //! Checkout and local branch management.
 //!
-//! Uses `switch` throughout. `checkout` doubles as a file-restoring
-//! command, so a branch whose name collides with a path is ambiguous;
-//! `switch` only ever moves HEAD and says so in its errors. The
-//! same split is why unstaging uses `restore` (see [`crate::stage`]).
+//! Uses `switch`, never `checkout`: `checkout` also restores files, so a
+//! branch named like a path is ambiguous to it.
 
 use std::path::Path;
 
@@ -12,13 +10,9 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-/// What a checkout should land on.
-///
-/// Every variant lands on a branch. Nothing here detaches HEAD: a branch
-/// is what the next commit needs somewhere to go, and the UI offers to
-/// make one wherever a bare commit is what was pointed at (デザイン規約
-/// §ブランチ・コミットへの移動). A HEAD already detached — left by git
-/// itself, or by the command line — is read and worked from as normal.
+/// What a checkout should land on — always a branch; nothing here detaches
+/// HEAD (デザイン規約 §ブランチ・コミットへの移動). A HEAD detached
+/// elsewhere is read and worked from as normal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CheckoutTarget {
     /// An existing local branch.
@@ -26,11 +20,8 @@ pub enum CheckoutTarget {
     /// A remote-tracking branch: creates `local` tracking it and switches.
     Track { remote_ref: String, local: String },
     /// An existing local branch, moved to `start` before landing on it.
-    ///
-    /// Commits only that branch had are left unreferenced, so the UI asks
-    /// before running this one. The move and the landing are one command
-    /// (`switch --force-create`): git either does both or neither, and a
-    /// working tree in the way still refuses the whole thing.
+    /// Commits only that branch had are left unreferenced (the UI asks
+    /// first). One command, so git does both or neither.
     ForceCreate { local: String, start: String },
 }
 
@@ -40,32 +31,21 @@ pub enum CheckoutOutcome {
     /// HEAD moved, carrying whatever uncommitted work did not stand in
     /// the way.
     Moved,
-    /// git refused because uncommitted work stands in the way, and
-    /// aborted before touching anything, so the repository is exactly as
-    /// it was. Carries the refusal itself: the caller goes round again
-    /// through a stash (`RepoSession::checkout`), and a second refusal —
-    /// the tree is empty by then, so something git cannot see past is
-    /// holding it — has to say why it gave up, in git's own words.
+    /// git refused because uncommitted work stands in the way, touching
+    /// nothing. Carries the refusal: the caller retries through a stash
+    /// (`RepoSession::checkout`), and a second refusal is reported in git's
+    /// own words.
     Blocked(GitError),
 }
 
-/// Whether git's refusal is the everyday "your work is in the way" one,
-/// which a stash gets past.
+/// Whether git's refusal is the "your work is in the way" one, which a
+/// stash gets past.
 ///
-/// Classifying human-facing output is otherwise off limits here, and this
-/// is the one place that earns the exception: git offers no
-/// machine-readable answer to "why can I not move", and the answer decides
-/// whether the move is worth a second attempt. Every invocation runs under
-/// `LC_ALL=C`, so the C-locale wording is what arrives.
-///
-/// Anything unrecognised is `false` and travels on as an ordinary error: a
-/// reworded message costs the retry only.
+/// Reads human-facing output (under `LC_ALL=C`) because git has no
+/// machine-readable answer to "why can I not move". Anything unrecognised
+/// is `false`: a reworded message costs the retry only.
 fn work_is_in_the_way(text: &str) -> bool {
     let text = text.to_ascii_lowercase();
-    // "The following untracked working tree files would be overwritten by
-    // checkout:", the singular "Untracked working tree file 'x' would be
-    // overwritten by merge." a restore runs into, and "Your local changes
-    // to the following files would be overwritten by checkout:".
     text.contains("untracked working tree file")
         || text.contains("would lose untracked files")
         || text.contains("would be overwritten by checkout")
@@ -74,11 +54,9 @@ fn work_is_in_the_way(text: &str) -> bool {
 /// Moves HEAD to `target`, taking uncommitted work along where git will
 /// have it.
 ///
-/// Carrying changes over a collision is done by stashing across the move
-/// (`RepoSession::checkout`), which keeps both the staged/unstaged split
-/// and a way back. `--merge` would three-way merge the changes in, but
-/// it reports a conflicted result as a *success* with no merge left to
-/// abort, and refuses to run at all while anything is
+/// A collision is carried by stashing across the move
+/// (`RepoSession::checkout`), not `--merge`: that reports a conflicted
+/// result as success with nothing to abort, and refuses while anything is
 /// staged.
 pub async fn checkout(
     executor: &GitExecutor,
@@ -86,10 +64,8 @@ pub async fn checkout(
     target: &CheckoutTarget,
     cancel: &CancellationToken,
 ) -> Result<CheckoutOutcome, GitError> {
-    // Exit 1 is this command answering "not while that work is there",
-    // which the caller acts on (it goes round through a stash). Only 0
-    // and 1 count as answers, so the 128 a name git does not know exits
-    // with still reads as the failure it is.
+    // Exit 1 is "not while that work is there" (the caller retries through
+    // a stash); 128 stays a failure.
     let cmd = GitCommand::new()
         .cwd(workdir)
         .answers_by_code(1)
@@ -99,17 +75,9 @@ pub async fn checkout(
         CheckoutTarget::Track { remote_ref, local } => {
             cmd.args(["--create", local, "--track", remote_ref])
         }
-        // **`--no-track`, and it is load-bearing.** Moving a branch says
-        // nothing about what it reads, but `branch.autoSetupMerge` is on
-        // by default and `--force-create` honours it for a
-        // remote-tracking start point **even where the branch already
-        // exists** — it overwrites `branch.<local>.remote` / `.merge`
-        // with the start point (measured 2.55; `reset --hard` and
-        // `branch -f` onto the same ref leave them alone). All the reflog
-        // says is `branch: Reset to <start>`, so an upstream lost this
-        // way is named nowhere — and that line is the only thing that
-        // tells the move apart from a plain reset, which writes
-        // `reset: moving to <start>` and keeps the upstream.
+        // `--no-track` is load-bearing: without it a remote-tracking start
+        // silently overwrites the existing branch's upstream
+        // (rules-refs/core.md, the `switch --force-create` line).
         CheckoutTarget::ForceCreate { local, start } => {
             cmd.args(["--no-track", "--force-create", local, start])
         }
@@ -150,24 +118,15 @@ impl ResetMode {
     }
 }
 
-/// Moves the ref HEAD is on (the current branch) to `rev`.
+/// Moves the ref HEAD is on (the current branch) to `rev`, an object id.
 ///
-/// `rev` is a commit, so it goes *before* any `--`: to `git reset` a
-/// `--` opens the pathspec form, which takes no mode flag at all. It
-/// carries no `--end-of-options` either, and that one is not
-/// an oversight: the minimum git refuses the option here in *every*
-/// position ("must come before non-option arguments", exit 128), alone
-/// among the verbs this crate issues — branch, switch, tag, remote,
-/// rev-parse, log and stash all take it (measured on 2.43, which is the
-/// floor git最低バージョン整合.md sets). Nothing is lost, because what reaches this is an
-/// object id off a graph row and an object id cannot read as an option.
-/// A caller that ever wants to pass a *name* has to resolve it first
-/// with `rev-parse --end-of-options`, since reset itself cannot say it.
+/// No `--` (to `reset` it opens the pathspec form, which takes no mode
+/// flag) and no `--end-of-options` (the minimum git refuses it in `reset`
+/// — git最低バージョン整合.md). A caller with a *name* resolves it first
+/// with `rev-parse --end-of-options`.
 ///
-/// Not a way out of an operation in progress, and the UI does not offer
-/// it as one: mid-merge, `Soft` refuses outright ("Cannot do a soft reset
-/// in the middle of a merge") while the other two drop `MERGE_HEAD`
-/// without a word, abandoning the merge as a side effect (measured).
+/// Not a way out of an operation in progress (the UI does not offer it):
+/// mid-merge, `Soft` refuses and the other two silently drop `MERGE_HEAD`.
 pub async fn reset(
     executor: &GitExecutor,
     workdir: &Path,
@@ -207,10 +166,8 @@ pub async fn create(
 /// Deletes a local branch. `force` maps to `-D` (drops unmerged work);
 /// without it git refuses to delete an unmerged branch itself.
 ///
-/// Both spellings are the ones the delete row wears as its chip, so the
-/// menu, this call, and the command log read as the same words: the
-/// long form for the everyday delete, and for the forced one the exact
-/// spelling git's own refusal hint suggests.
+/// Both spellings are the delete row's chip, so the menu and the command
+/// log read the same (`-D` is what git's own refusal hint suggests).
 pub async fn delete(
     executor: &GitExecutor,
     workdir: &Path,
@@ -227,11 +184,8 @@ pub async fn delete(
 
 /// Renames a local branch. `force` allows overwriting an existing name.
 ///
-/// **A refusal here is a report** (デザイン規約 §答えの要らない報せ):
-/// nothing moved, git said why, and the box the name was typed into is
-/// still open — so the answer belongs in it
-/// ([`crate::report::ReportKind::RenameRefused`]).
-/// The common one is a name that is already taken.
+/// A refusal is a report shown in the still-open name box
+/// ([`crate::report::ReportKind::RenameRefused`]; デザイン規約 §答えの要らない報せ).
 pub async fn rename(
     executor: &GitExecutor,
     workdir: &Path,
@@ -255,31 +209,15 @@ pub async fn rename(
 /// Records which remote branch a local one is measured against
 /// (`branch.<name>.remote` / `.merge`).
 ///
-/// **Two ways to write one pair of keys, and which one runs is whether
-/// the ref is here.** `branch --set-upstream-to` is git's own, and it
-/// refuses a name this repository holds no remote-tracking ref for
-/// (`fatal: the requested upstream branch … does not exist`, measured —
-/// git's own hint there points at `push -u`). A name not here is an
-/// answer all the same: the branch is then measured against a remote
-/// branch the next push makes, and nothing else can say so, so the pair
-/// is written straight (デザイン規約 §ブランチが測られる相手を決める).
+/// `branch --set-upstream-to` when the remote-tracking ref is here; git
+/// refuses a name it has no ref for, so otherwise the pair is written with
+/// `config`, `.remote` first (rules-refs/core.md「upstream の書き込みは 2 通りで」;
+/// デザイン規約 §ブランチが測られる相手を決める).
 ///
-/// **The flag takes the full refname** (`refs/remotes/origin/main`). The
-/// shorthand git prints and takes elsewhere is a rev-parse spelling, and
-/// a local branch literally named `origin/main` makes it *ambiguous* —
-/// git refuses the whole command (measured). The full form names one ref
-/// and cannot be read two ways; what lands in the config is identical
-/// either way.
+/// The flag takes the full refname: the `origin/main` shorthand is
+/// ambiguous, and refused, when a local branch has that name.
 ///
-/// **`.remote` goes down first.** A `.merge` standing on its own is read
-/// against whatever remote git falls back to, where a `.remote` on its
-/// own leaves the branch measured against nothing at all — so the half
-/// a failed second write leaves behind is the harmless one.
-///
-/// Nothing about the working tree stands in its way: this is
-/// configuration about a branch, so **a branch another working copy has
-/// checked out takes it** (measured) — unlike the delete, which git
-/// refuses there.
+/// A branch checked out in another worktree takes it (unlike delete).
 pub async fn set_upstream(
     executor: &GitExecutor,
     workdir: &Path,
@@ -313,11 +251,8 @@ pub async fn set_upstream(
     Ok(())
 }
 
-/// Whether this repository holds `full`, which is what decides the two
-/// halves of [`set_upstream`].
-///
-/// Exit 1 is the answer "no such ref", not a failure — left unmarked the
-/// command log would raise itself over it (規約 §git が言ったことを読む場所).
+/// Whether this repository holds `full`, which decides the two paths of
+/// [`set_upstream`].
 async fn ref_is_here(
     executor: &GitExecutor,
     workdir: &Path,
@@ -348,9 +283,6 @@ pub async fn is_merged_into(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["merge-base", "--is-ancestor", rev, into])
-        // Exit 1 here means "no", which is half of what this asks. Left
-        // unmarked, the command log would read it as a failure and raise
-        // itself over an answer.
         .answers_by_code(1);
     let out = executor.run_unchecked(cmd, cancel).await?;
     match out.code {
@@ -368,9 +300,8 @@ pub async fn is_merged_into(
 mod tests {
     use super::*;
 
-    // The messages git actually prints under LC_ALL=C. The integration
-    // tests prove the installed git still says them; these pin down which
-    // ones are worth a second attempt through a stash.
+    // Messages git prints under LC_ALL=C (the integration tests prove the
+    // installed git still says them).
 
     #[test]
     fn tracked_collisions_are_worth_another_go() {
@@ -407,9 +338,7 @@ mod tests {
         }
     }
 
-    /// A reset asks for its mode and its revision and nothing else: no
-    /// `--`, which would open the pathspec form, and no `--end-of-options`,
-    /// which the minimum git refuses here ([`reset`]).
+    /// No `--` and no `--end-of-options` ([`reset`]).
     #[tokio::test]
     async fn a_reset_names_its_mode_and_the_revision_and_nothing_more() {
         let (exec, asked) = crate::refusing::git();
@@ -435,8 +364,7 @@ mod tests {
         );
     }
 
-    /// A new branch is made where it stands or moved onto at once, and
-    /// the start point, when there is one, comes after the name.
+    /// The start point, when there is one, comes after the name.
     #[tokio::test]
     async fn a_new_branch_is_made_with_branch_or_moved_onto_with_switch_create() {
         let (exec, asked) = crate::refusing::git();

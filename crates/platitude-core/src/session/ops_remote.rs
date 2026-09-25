@@ -6,13 +6,10 @@ use super::*;
 impl RepoSession {
     /// `git fetch --prune`; `None` fetches every remote.
     ///
-    /// Refreshed as a refs-only write, the same as the two nobody asks
-    /// for: a fetch writes `refs/remotes/*` and `FETCH_HEAD` and gets no
-    /// nearer the working tree than that ([`AfterWrite::Refs`]).
-    ///
-    /// **What the press gives up**: with nothing brought down it does
-    /// not double as a status poll, so a tree made dirty outside this
-    /// window lands on the following tick.
+    /// Refreshed as refs-only ([`AfterWrite::Refs`]): a fetch writes
+    /// `refs/remotes/*` and `FETCH_HEAD`, nothing nearer the working tree.
+    /// So it is no status poll — a tree made dirty outside this window
+    /// lands on the following tick.
     pub fn fetch(self: &Arc<Self>, remote: Option<String>) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
@@ -28,13 +25,9 @@ impl RepoSession {
 
     /// `git pull`: the branch the working tree is on and its upstream.
     ///
-    /// Refreshed as a write that moves history ([`AfterWrite::Graph`]):
-    /// it is a fetch and an integration in one command, and the near half
-    /// lands on this copy's branch, its index and its working tree.
-    ///
-    /// **The stop is not a failure**, the same as the merge's and the
-    /// rebase's: git leaves the operation standing with its markers and
-    /// the conflicted rows, and the way on is the exit card
+    /// Refreshed as a history move ([`AfterWrite::Graph`]): the
+    /// integrating half lands on this branch, its index and working tree.
+    /// A stop is not a failure, as with merge and rebase
     /// (デザイン規約 §進行中の操作から出る).
     pub fn pull(self: &Arc<Self>) -> Option<OperationId> {
         let timeout = self.network_timeout();
@@ -69,16 +62,12 @@ impl RepoSession {
     /// Fetches when a push was refused for knowing the remote only as it
     /// used to be, and does nothing otherwise.
     ///
-    /// It is the one refusal with an answer: the fetch is what shows which
-    /// commits the remote actually holds — the graph then draws both sides,
-    /// so what an overwrite would remove can be seen —
-    /// and it is also what re-arms the lease, which is pinned to a commit
-    /// the remote has left and would be turned down again as it stands.
+    /// The fetch shows which commits the remote holds (the graph then
+    /// draws what an overwrite would remove) and re-arms the lease, which
+    /// is pinned to a commit the remote has left.
     ///
-    /// Queued, so it reports and refreshes like any
-    /// other fetch — under an id of its own, which nobody holds: the
-    /// push's answer is the push's. The push still fails: nothing is
-    /// retried, and the next move is whoever is looking at it to make.
+    /// Queued under an id of its own that nobody holds: the push's answer
+    /// is the push's. The push still fails; nothing is retried.
     fn catch_up_after(self: &Arc<Self>, result: &Result<(), GitError>, remote: String) {
         if result.as_ref().is_err_and(|error| error.is_outdated())
             && self.fetch(Some(remote)).is_none()
@@ -89,9 +78,9 @@ impl RepoSession {
 
     /// Pushes the branch that is checked out to wherever it belongs.
     ///
-    /// Resolving the target is part of the job: which remote a branch
-    /// tracks lives in configuration, and a name like `origin/main`
-    /// cannot be split back apart reliably.
+    /// The target is resolved inside the write: which remote a branch
+    /// tracks lives in configuration, and `origin/main` cannot be split
+    /// back apart reliably.
     pub fn push_current(
         self: &Arc<Self>,
         fallback_remote: String,
@@ -121,9 +110,9 @@ impl RepoSession {
 
     /// The first push of a branch, to the target the user just named.
     ///
-    /// Separate from [`Self::push_current`] because nothing local knows
-    /// where this goes: both halves come from the question, and the answer
-    /// becomes the upstream so the question is asked once per branch.
+    /// Apart from [`Self::push_current`] because nothing local knows where
+    /// this goes; the answer becomes the upstream, so it is asked once per
+    /// branch.
     pub fn publish_current(
         self: &Arc<Self>,
         remote_name: String,
@@ -155,9 +144,8 @@ impl RepoSession {
 
     /// `git remote add <name> <url>`.
     ///
-    /// Nothing is contacted, so this succeeds on a URL that goes nowhere;
-    /// the push that follows is what finds out. The remote is left in place
-    /// when that happens — [`Self::set_remote_url`] is the way back.
+    /// Nothing is contacted, so a URL that goes nowhere succeeds and stays
+    /// until a push finds out; [`Self::set_remote_url`] is the way back.
     pub fn add_remote(self: &Arc<Self>, name: String, url: String) -> Option<OperationId> {
         self.write(
             OperationKind::Remote,
@@ -168,19 +156,17 @@ impl RepoSession {
         )
     }
 
-    /// Marks a remote as this repository's origin, or clears the mark —
-    /// both of its keys either way (`remote.pushDefault` and
+    /// Marks a remote as this repository's origin, or clears the mark
+    /// (empty name) — both keys either way (`remote.pushDefault` and
     /// `checkout.defaultRemote`, [`remote::OriginMarks`]).
     ///
-    /// An empty name clears it. **That reaches the repository's own
-    /// config only** — a value set globally stays, and git has no local
-    /// spelling for "not set" that would shadow the push's (measured: an
-    /// empty local value means "no destination"). Moving the mark to
-    /// another remote is what a repository has against a global one, and
-    /// that is a set.
+    /// **Clearing reaches the repository's own config only**: a global
+    /// value stays, and git has no local spelling for "not set" (an empty
+    /// local value means "no destination"). Against a global mark, move it
+    /// to another remote.
     ///
-    /// Goes through the write queue for the refresh behind it: the mark is
-    /// in the refs snapshot, and the sidebar reads it from there.
+    /// Queued for the refresh behind it: the sidebar reads the mark off the
+    /// refs snapshot.
     pub fn mark_origin(self: &Arc<Self>, name: String) -> Option<OperationId> {
         self.write(
             OperationKind::Remote,
@@ -208,14 +194,12 @@ impl RepoSession {
 
     /// Asks whether a remote already carries a branch name, so a first push
     /// can tell "this creates a branch" from "this advances one somebody
-    /// else made". A read that reaches the network, which is why it is
-    /// only asked while that question is on screen.
+    /// else made". Reaches the network, so it is only asked while that
+    /// question is on screen.
     ///
-    /// One at a time: the name is asked about as it is typed, and a
-    /// new ask cancels the round trip the last one started
-    /// (`session::latest`). A cancelled ask answers nothing — the
-    /// one that displaced it is the one the question is waiting
-    /// on.
+    /// One at a time (`session::latest`): the name is asked as it is typed,
+    /// a new ask cancels the last one's round trip, and a cancelled ask
+    /// answers nothing.
     pub fn check_remote_branch(self: &Arc<Self>, remote_name: String, branch: String) {
         let Some(workdir) = self.workdir() else {
             return;
@@ -237,24 +221,20 @@ impl RepoSession {
             .await
             {
                 Ok(None) => remote::RemoteBranchState::Free,
-                // The name is taken, so what matters now is whether git
-                // would take the push: it does when this history already
-                // contains what the remote holds, and refuses otherwise
-                // (measured). The commit may not be in this repository at all —
-                // a branch never fetched — and then neither answer is
-                // ours to give.
+                // Taken: git takes the push only when this history already
+                // contains the remote's tip. A tip never fetched here leaves
+                // neither answer ours to give.
                 Ok(Some(over_there)) => {
                     tip = over_there.to_hex();
                     match commit::is_in_head_history(&s.executor, &workdir, &over_there, &cancel)
                         .await
                     {
                         Ok(true) => remote::RemoteBranchState::FastForward,
-                        // Only an overwrite can land here, and an overwrite
-                        // has to say what it takes off — the commit is in
-                        // this repository (that is how the comparison was
-                        // answered at all), so the walk can count them. A
-                        // walk that failed leaves `Unknown`, since
-                        // `theirs` is only trusted under `Refused`.
+                        // Only an overwrite lands here, and it has to say
+                        // what it takes off; the tip is here (the comparison
+                        // answered), so the walk can count. `theirs` is only
+                        // trusted under `Refused`, so a failed walk is
+                        // `Unknown`.
                         Ok(false) => {
                             match commit::count_beyond_head(
                                 &s.executor,
@@ -274,13 +254,11 @@ impl RepoSession {
                         Err(_) => remote::RemoteBranchState::Unknown,
                     }
                 }
-                // A newer ask took the question over: nothing to answer.
+                // A newer ask took the question over.
                 Err(e) if e.is_cancelled() => return,
-                // A remote that cannot be reached answers too, and the
-                // failure stays off the error surface: the question is
-                // standing and about to say so itself, so opening the
-                // command log would say the same thing twice
-                // (the command is recorded either way).
+                // Unreachable answers too, off the error surface: the
+                // question says so itself (the command is logged either
+                // way).
                 Err(_) => remote::RemoteBranchState::Unreachable,
             };
             if cancel.is_cancelled() {
@@ -320,15 +298,11 @@ impl RepoSession {
         )
     }
 
-    /// Deletes a branch here and on its remote as one write. The local
-    /// half goes first because it is the half that can refuse: a refusal
-    /// stops the pair with nothing touched anywhere, and the menu row
-    /// that asked morphs the way the plain delete's does. The remote
-    /// half reaches the network, which is why the pair sits on the write
-    /// queue as one command with one answer (合成は 1 手目が失敗したら
-    /// 止める — core.md) — and why the pair is a kind of its own
-    /// ([`OperationKind::DeleteBranchEverywhere`]): it answers as a
-    /// branch write, but the far end paces its second half.
+    /// Deletes a branch here and on its remote as one write. The local half
+    /// goes first because it can refuse, stopping the pair with nothing
+    /// touched (core.md「複合操作は 1 手目が失敗したら止める」).
+    /// A kind of its own ([`OperationKind::DeleteBranchEverywhere`]): it
+    /// answers as a branch write, but the far end paces its second half.
     pub fn delete_branch_everywhere(
         self: &Arc<Self>,
         branch: String,
@@ -359,14 +333,11 @@ impl RepoSession {
     /// answer to a rename here that takes nothing away over there
     /// (デザイン規約 §手元の改名の後のリモート).
     ///
-    /// **The setting goes down first, and that order is the point.** git's
-    /// own `push --set-upstream` records the pair only once the push has
-    /// landed, so a push the far side turned down leaves the branch still
-    /// measured against the name it was renamed away from. Written first,
-    /// a refused push leaves a branch already pointing where it belongs
-    /// and the toolbar's `push` is the retry ([`branch::set_upstream`]
-    /// writes the pair straight for a name this repository has not
-    /// fetched, which is exactly the name this pair is making).
+    /// **The setting goes down first.** `push --set-upstream` records the
+    /// pair only once the push landed, so a refused push would leave the
+    /// branch measured against the name it was renamed away from; written
+    /// first, the toolbar's `push` is the retry ([`branch::set_upstream`]
+    /// writes the pair straight for a name not yet fetched).
     pub fn point_upstream_and_push(
         self: &Arc<Self>,
         branch: String,

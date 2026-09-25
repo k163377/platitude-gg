@@ -7,7 +7,6 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-/// One entry of `git worktree list`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorktreeEntry {
     /// Absolute path of the worktree root (as git prints it).
@@ -19,28 +18,19 @@ pub struct WorktreeEntry {
     pub bare: bool,
     pub detached: bool,
     pub locked: bool,
-    /// What `git worktree lock --reason` was given, as git prints it
-    /// after the word. Empty both when the entry is not locked and when
-    /// it was locked without one, so `locked` is the flag and this is
-    /// only ever the words beside it.
+    /// What `git worktree lock --reason` was given. Empty when unlocked
+    /// and when locked without one; `locked` is the flag.
     pub lock_reason: String,
-    /// `git worktree prune` would drop this entry — its directory is
-    /// gone from where the administrative file says it is. The entry is
-    /// still listed, and the path it names leads nowhere.
+    /// `git worktree prune` would drop this entry: still listed, but its
+    /// directory is gone.
     pub prunable: bool,
     /// Why git would drop it, in git's own words (`gitdir file points to
     /// non-existent location`). Empty when `prunable` is false.
     pub prune_reason: String,
-    /// The repository's own working copy, the one the linked ones hang
-    /// off. **git says so by putting it first** — the listing opens on
-    /// the main worktree and the linked ones follow, wherever the
-    /// command is run from (git-worktree(1); measured from both ends of
-    /// one repository). There is no attribute for it, so the order is
-    /// the whole of the answer.
-    ///
-    /// A bare repository puts its bare entry in that place; the entry is
-    /// still the main one, and it is the caller that drops it for having
-    /// no working copy to show.
+    /// The repository's own working copy. git has no attribute for it:
+    /// the listing opens on it wherever it is run from (git-worktree(1)).
+    /// A bare repository's bare entry takes that place and is still the
+    /// main one; the caller drops it for having no working copy.
     pub main: bool,
 }
 
@@ -68,9 +58,8 @@ pub fn parse_worktrees(bytes: &[u8]) -> Result<Vec<WorktreeEntry>, WorktreeParse
             }
             cur = Some(WorktreeEntry {
                 path: path.to_string(),
-                // Read after the entry above was pushed, so this counts
-                // the entries already closed: nothing before it means
-                // this is the one git opened the listing with.
+                // After the push above: no closed entry means this is the
+                // first.
                 main: out.is_empty(),
                 branch: None,
                 head_hex: None,
@@ -114,12 +103,9 @@ pub fn parse_worktrees(bytes: &[u8]) -> Result<Vec<WorktreeEntry>, WorktreeParse
     Ok(out)
 }
 
-/// A flag line that may carry words after it (`locked`, `prunable`):
-/// `Some("")` for the bare word, `Some(reason)` for the word and its
-/// reason, `None` for anything else. **The word has to end there** — a
-/// future `lockedsomething` is another attribute, and git adds them to
-/// this listing (the parse ignores the ones it does not know precisely
-/// so that it can).
+/// A flag line that may carry a reason (`locked`, `prunable`): `Some("")`
+/// for the bare word, `Some(reason)` with one, `None` otherwise. The word
+/// has to end there: a future `lockedsomething` is another attribute.
 fn annotation<'a>(line: &'a str, word: &str) -> Option<&'a str> {
     if line == word {
         return Some("");
@@ -129,7 +115,6 @@ fn annotation<'a>(line: &'a str, word: &str) -> Option<&'a str> {
         .map(str::trim)
 }
 
-/// Loads the worktree list.
 pub async fn load(
     executor: &GitExecutor,
     workdir: &Path,
@@ -179,10 +164,7 @@ mod tests {
         assert_eq!(list[1].branch, None);
     }
 
-    /// **The place in the listing is the whole of the answer** — git
-    /// writes no attribute for it, so the row that draws the house has
-    /// nothing else to read. Every other entry has to answer no,
-    /// including the bare one a caller drops later.
+    /// Every entry but the first answers no, the bare one included.
     #[test]
     fn the_entry_git_opens_the_listing_with_is_the_main_working_copy() {
         let bytes = z(&[
@@ -224,10 +206,7 @@ mod tests {
         assert_eq!(list[1].branch.as_deref(), Some("dev"));
     }
 
-    /// Every annotation git puts on one of these entries, copied off a
-    /// real listing (git 2.55.0.windows.3): a lock with a reason and a
-    /// lock without one read apart, and the entry whose folder is gone
-    /// carries git's own words for why.
+    /// Copied off a real listing (git 2.55.0.windows.3).
     #[test]
     fn parses_every_state_of_a_real_listing() {
         let bytes = z(&[
@@ -257,7 +236,6 @@ mod tests {
         ]);
         let list = parse_worktrees(&bytes).unwrap();
         assert_eq!(list.len(), 5);
-        // The everyday entry carries none of them.
         assert!(!list[0].locked && !list[0].prunable && !list[0].detached);
         assert!(list[1].detached);
         assert!(list[2].prunable);
@@ -268,16 +246,12 @@ mod tests {
         assert!(!list[2].locked);
         assert!(list[3].locked);
         assert_eq!(list[3].lock_reason, "seat held by claude");
-        // Locked without a reason: the flag is on and there are no words
-        // to show beside it. The two cannot collapse — a row saying
-        // `Locked —` with nothing after it is what that would draw.
+        // Locked without a reason: flag on, no words (a row would
+        // otherwise draw `Locked —` with nothing after it).
         assert!(list[4].locked);
         assert_eq!(list[4].lock_reason, "");
     }
 
-    /// git adds attributes to this listing, so the parse ignores what it
-    /// does not know — and a word that only starts like a flag it does
-    /// know stays one of those.
     #[test]
     fn an_attribute_that_only_starts_like_a_flag_is_ignored() {
         let bytes = z(&[

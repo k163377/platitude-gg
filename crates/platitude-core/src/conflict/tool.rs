@@ -1,10 +1,6 @@
 //! Handing resolution over to `git mergetool`: which tool git would
-//! launch, what is installed to choose from, and the launch itself.
-//!
-//! Resolving conflicts is explicitly out of scope for this application
-//! (実装計画.md §1 スコープ外「内蔵conflictエディタ」): the built-in editor belongs to
-//! whatever tool the user already configured, so everything here is about
-//! reaching that tool and nothing about the merge.
+//! launch, what is installed to choose from, and the launch itself. A
+//! built-in conflict editor is out of scope (実装計画.md §1 スコープ外「内蔵conflictエディタ」).
 
 use std::path::Path;
 
@@ -14,40 +10,22 @@ use crate::config;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor, literal_pathspec};
 
-/// Keeps the temporary files git writes for the tool out of the working
-/// tree. The default (false) puts `<file>_LOCAL_<pid>`, `_REMOTE_`,
-/// `_BASE_` and `_BACKUP_` *beside* the conflicted file, so every launch
-/// fills the pane with four to six untracked entries per path until the
-/// tool is closed.
-///
-/// `mergetool.keepBackup` is deliberately left alone: the `<file>.orig`
-/// its default leaves behind is not git's scratch space but the person's
-/// safety net, and it is theirs to discard.
+/// Keeps the tool's temporary files (`<file>_LOCAL_<pid>` …) out of the
+/// working tree, where they would show as untracked until the tool closes.
+/// `mergetool.keepBackup` is left alone: the `.orig` is the person's safety
+/// net.
 const MERGETOOL_ARGS: [&str; 2] = ["-c", "mergetool.writeToTemp=true"];
 
-/// Launches the configured merge tool for `paths`, one at a time, and
-/// stages each file the tool resolves (git does the `add` itself).
+/// Launches the configured merge tool for `paths`, one at a time; git
+/// stages each file the tool resolves.
 ///
-/// The tool is resolved here, so the name that is launched is the one
-/// configured at this moment — a caller showing the name in a menu
-/// cannot launch a stale one. With none configured this refuses: git
-/// would otherwise guess a tool, and a guessed tool makes it prompt
-/// on a stdin that is closed.
+/// The tool is resolved at launch, so a name shown earlier cannot be stale;
+/// with none configured this refuses. Empty `paths` does nothing — bare
+/// `git mergetool` walks every conflict while holding the write queue.
 ///
-/// `paths` holds at least one path. Bare `git mergetool` walks every
-/// conflicted file in turn, and since the whole run holds the session's
-/// write queue, that turns one launch into a queue blocked for as many
-/// tool sessions as there are conflicts.
-///
-/// The tool runs for as long as the person takes, and cancelling
-/// the session is what stops it.
-///
-/// What a tool has to be is console-free: on Windows the
-/// subprocess gets none (CREATE_NO_WINDOW), which rules out
-/// anything that draws in a terminal (vimdiff and its kind)
-/// and nothing else. A windowed tool works, and so does a plain
-/// script that writes `$MERGED` — the merge tool contract is
-/// the whole requirement.
+/// Runs until the person is done; cancelling the session stops it. The
+/// tool must not need a console (no terminal tools such as vimdiff); a
+/// windowed tool or a script that writes `$MERGED` both work.
 pub async fn mergetool(
     executor: &GitExecutor,
     workdir: &Path,
@@ -65,22 +43,16 @@ pub async fn mergetool(
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(MERGETOOL_ARGS)
-        // `--gui` is what makes git resolve the tool the way
-        // [`configured_tool`] reports it. Without it git reads `merge.tool`
-        // alone, so someone who set only `merge.guitool` would be told a
-        // tool is configured and then watch the launch fail.
-        //
-        // `--tool` is passed even so, because `--no-prompt` does not cover
-        // the guessing path: with neither key set git picks a tool itself
-        // and *then* asks on stdin to confirm, which closed stdin turns
-        // into a failed file.
+        // `--gui` makes git resolve the tool as [`configured_tool`] does
+        // (without it a lone `merge.guitool` is ignored). `--tool` too:
+        // `--no-prompt` does not cover git's guessing path, which asks on
+        // the closed stdin.
         .args(["mergetool", "--gui", "--no-prompt"])
         .arg(format!("--tool={tool}"))
         .arg("--")
         .args(paths.iter().map(|p| literal_pathspec(p)))
         .no_timeout()
-        // Paced by the person in the tool, so the slot it sits in for
-        // as long as they take is an elsewhere slot (`process::Pace`).
+        // Paced by the person in the tool (`process::Pace`).
         .paced_elsewhere();
     executor.run(cmd, cancel).await.map(drop)
 }
@@ -95,9 +67,6 @@ pub async fn configured_tool(
     for key in ["merge.guitool", "merge.tool"] {
         let cmd = GitCommand::new()
             .cwd(workdir)
-            // Neither key being set answers with code 1, which is an
-            // answer — and is what a machine that configured no merge tool
-            // says to both of them.
             .answers_by_code(1)
             .args(["config", "--get", key]);
         let out = executor.run_unchecked(cmd, cancel).await?;
@@ -111,39 +80,23 @@ pub async fn configured_tool(
     Ok(None)
 }
 
-/// The answer, read once per process: what is installed on the machine
-/// does not change while the app is open, and at eight seconds it is not
-/// a read to repeat per tab or per dialog. Errors are not stored, so a
-/// read that timed out can be tried again.
+/// [`available_tools`]' answer, read once per process: what is installed
+/// does not change while the app is open, and the read takes seconds.
+/// Errors are not stored, so a timed-out read can be tried again.
 static INSTALLED: tokio::sync::OnceCell<Vec<String>> = tokio::sync::OnceCell::const_new();
 
-/// Merge tools git found installed and this app can actually launch.
+/// Merge tools git found installed and this app can launch. User-defined
+/// tools are [`user_defined_tools`]'s.
 ///
-/// **Slow on Windows** — seconds
-/// (ci/baseline/code-costs-windows-x64.md). `--tool-help` sources every
-/// one of git's tool definitions twice and probes each one's
-/// availability, which on Windows means walking the registry and Program
-/// Files. Keep it off the write queue, with nothing waiting
-/// on it.
+/// Seconds on Windows (ci/baseline/code-costs-windows-x64.md): keep it off
+/// the write queue, with nothing waiting on it.
 ///
-/// Only the first group is read (what is installed); the second
-/// group lists tools git knows of but cannot find. User-defined
-/// tools are [`user_defined_tools`]'s — it names them from config
-/// in a moment, reading a key where this one reads eight seconds
-/// of prose.
+/// Terminal tools are dropped (there is no console), by git's own prose
+/// marker; if that wording changes this returns nothing, which falls back
+/// to the caller's text field. `emerge` is lost too; typing it still works.
 ///
-/// **Tools that draw in a terminal are dropped.** The subprocess gets no
-/// console, so vimdiff and its kind cannot run, and offering them is
-/// offering a dead end. git marks the rest itself, in the description it
-/// prints. That marker is prose, and the price of it changing is this
-/// returning nothing — which lands on the plain text field the caller
-/// already has. It also loses `emerge`, which a graphical Emacs would run
-/// fine; typing the name still works.
-///
-/// **The pre-merge tests stand a machine of their own in here**
-/// (`mock_available_tools`, debug builds only) and leave this one's read
-/// to the `periodic` tests. mry copies what a mock matches on, so the
-/// three borrowed arguments are skipped.
+/// The pre-merge tests mock this (`mock_available_tools`); mry copies what
+/// a mock matches on, so the borrowed arguments are skipped.
 #[mry::mry(skip_args(GitExecutor, Path, CancellationToken))]
 pub async fn available_tools(
     executor: &GitExecutor,
@@ -175,10 +128,8 @@ pub(crate) fn parse_tool_help(text: &str) -> Vec<String> {
             inside = line.contains(GROUP);
             continue;
         }
-        // Entries are indented by two tabs. A blank line separates the
-        // user-defined block; anything else at a shallower indent is that
-        // block's heading or the next group's preamble — either way the
-        // installed list has ended.
+        // Entries are indented by two tabs; anything shallower and not
+        // blank (the user-defined heading, the next group) ends the list.
         let Some(entry) = line.strip_prefix("\t\t") else {
             if line.trim().is_empty() {
                 continue;
@@ -195,12 +146,8 @@ pub(crate) fn parse_tool_help(text: &str) -> Vec<String> {
     names
 }
 
-/// Merge tools defined in config (`mergetool.<name>.cmd`).
-///
-/// Cheap — a key read, where [`available_tools`] takes seconds.
-/// **Everything found is offered**: someone who wrote a `cmd` chose
-/// it, and a script that writes `$MERGED` satisfies the whole contract
-/// without needing a window or a console.
+/// Merge tools defined in config (`mergetool.<name>.cmd`), all offered: a
+/// script that writes `$MERGED` needs neither window nor console.
 pub async fn user_defined_tools(
     executor: &GitExecutor,
     workdir: &Path,
@@ -214,8 +161,7 @@ pub async fn user_defined_tools(
         cancel,
     )
     .await?;
-    // Only the key is read: the command itself is git's to run, and a
-    // `cmd` written with no value still named a tool.
+    // Only the key is read: a `cmd` with no value still names a tool.
     let mut names = Vec::new();
     for record in config::parse_z_records(&out) {
         let name = record
@@ -231,24 +177,13 @@ pub async fn user_defined_tools(
     Ok(names)
 }
 
-/// Records which merge tool to launch, or clears the choice when `tool`
-/// is empty.
+/// Records which merge tool to launch (global `merge.guitool`), or clears
+/// the choice when `tool` is empty.
 ///
-/// Written to `merge.guitool`, for two reasons that point the same
-/// way. It is the key that takes effect: launches pass `--gui`, under
-/// which git reads `guitool` first, so writing `tool` would silently
-/// do nothing for anyone who already set `guitool`. And it is the key
-/// that belongs to this app: `merge.tool` is what their terminal
-/// `git mergetool` uses, and choosing a windowed tool here has no
-/// business changing that — a terminal tool cannot run under this app
-/// at all (no console), while `merge.tool` may well name one.
-///
-/// Always global. Which editor someone reaches for is a property of
-/// their desk.
-///
-/// Clearing can still leave something configured: `merge.tool` may
-/// still be set, and [`configured_tool`] will then report it. That is
-/// the honest answer, since it is what git would launch.
+/// `guitool`, not `tool`: launches pass `--gui`, under which `guitool`
+/// wins, so writing `tool` would do nothing for anyone who set `guitool`.
+/// Clearing can leave `merge.tool` for [`configured_tool`] to report — it
+/// is what git would launch.
 pub async fn set_merge_tool(
     executor: &GitExecutor,
     workdir: &Path,
@@ -259,8 +194,7 @@ pub async fn set_merge_tool(
     if tool.is_empty() {
         let cmd = GitCommand::new()
             .cwd(workdir)
-            // "nothing was set" comes back as code 5, which is the same
-            // outcome as clearing, so code 5 is an answer here.
+            // Exit 5 is "nothing was set" — the same outcome as clearing.
             .answers_by_code(5)
             .args(["config", "--global", "--unset", "merge.guitool"]);
         let out = executor.run_unchecked(cmd, cancel).await?;
@@ -271,8 +205,7 @@ pub async fn set_merge_tool(
             }),
         };
     }
-    // No `--` separator: `git config <key> -- <value>` stores "--" as the
-    // value (the same trap `identity::set_identity` documents).
+    // No `--`: `git config <key> -- <value>` stores "--" as the value.
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args(["config", "--global", "merge.guitool", tool]);

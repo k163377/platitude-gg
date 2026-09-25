@@ -43,10 +43,9 @@ pub(super) struct AutoFetch {
 
 /// Where the fetch that opening a repository fires stands.
 ///
-/// Two ends reach for it and either can arrive first: the application asks
-/// once it has handed the session its settings, and the opening is what
-/// learns where the repository is. Held under one lock, so whichever
-/// arrives second fires it and it is fired exactly once.
+/// The app's ask (once it has handed over its settings) and the opening
+/// can arrive in either order; under one lock, whichever arrives second
+/// fires it, exactly once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum OpenFetchState {
     /// Nobody has asked for one.
@@ -60,28 +59,22 @@ pub(super) enum OpenFetchState {
 /// Steps one auto-fetch timer by hand, in place of waiting out its
 /// interval.
 ///
-/// Handed out by [`RepoSession::auto_fetch_ticker`] and bound to the timer
-/// that was running when it was taken, so a tick reports back whether that
-/// timer is still there to take it. That is what makes "this timer fetches
-/// nothing any more" something to wait for: a fetch queued a moment before
-/// the stop can start much later on a loaded machine, and no length of
-/// quiet proves the next one is not coming. The app only ever sets an
-/// interval.
+/// Bound to the timer running when [`RepoSession::auto_fetch_ticker`]
+/// handed it out, so a tick reports whether that timer is still there —
+/// which makes "this timer fetches nothing any more" something to wait
+/// for rather than a quiet to sit out. The app only ever sets an interval.
 pub struct AutoFetchTicker {
     pub(super) ticks: tokio::sync::mpsc::UnboundedSender<AutoFetchTick>,
-    /// The stop of the timer this ticker is bound to, read directly: the
-    /// refusal comes off this token, because nothing schedules a
-    /// cancelled task on any deadline — under load one sat unpolled for
-    /// the whole of a test suite's overall budget while the rest of the
-    /// session ran on (measured), and a caller awaiting its answer hung
-    /// with it.
+    /// The bound timer's stop, read directly: a cancelled task is polled
+    /// on no deadline, so waiting for it to drop the channel can hang the
+    /// caller under load.
     pub(super) stopped: CancellationToken,
 }
 
 impl AutoFetchTicker {
     /// Fires one tick and resolves once the timer has acted on it: `true`
-    /// when it took the tick, `false` once that timer has stopped — turned
-    /// off, replaced by another interval, or gone with the session. A
+    /// when it took the tick, `false` once that timer has stopped (turned
+    /// off, replaced by another interval, or gone with the session). A
     /// stopped timer never takes a tick, not even one that raced its own
     /// cancellation, so `false` is the last word on it.
     pub async fn tick(&self) -> bool {
@@ -89,11 +82,9 @@ impl AutoFetchTicker {
         if self.ticks.send(ack).is_err() {
             return false;
         }
-        // Biased towards the answer: a tick that was acted on says so even
-        // when the stop lands right behind it. The stop token is the other
-        // half of the race — a stopped timer's task answers by dropping
-        // the channel, but only when it is next polled, so the token is
-        // what answers here.
+        // Biased towards the answer: a tick acted on says so even when the
+        // stop lands right behind it; the token answers for a stopped timer
+        // (`stopped`).
         tokio::select! {
             biased;
             answered = taken => answered.is_ok(),
@@ -109,14 +100,12 @@ pub(super) struct Operation {
     /// Handed back at acceptance; every event about the write carries it.
     pub(super) id: OperationId,
     pub(super) kind: OperationKind,
-    /// The kind's lane ([`OperationKind::lane`]), read once here.
     pub(super) lane: Lane,
     /// What the write invalidates — which reads follow it.
     pub(super) after: AfterWrite,
 }
 
 impl Operation {
-    /// Accepts a write: takes its id and settles its lane.
     pub(super) fn new(kind: OperationKind, after: AfterWrite) -> Self {
         Self {
             id: OperationId::next(),
@@ -138,8 +127,8 @@ pub(super) enum Reread {
     /// What the caller acts on moved: the WIP row, or the refs.
     Moved,
     /// The read failed and published nothing. The failure is on the error
-    /// surface already ([`SessionEvent::OpFailed`]); this is what lets a
-    /// write settling behind the read name it under its own id.
+    /// surface already ([`SessionEvent::OpFailed`]); this lets a write
+    /// settling behind the read name it under its own id.
     Failed,
 }
 
@@ -159,10 +148,8 @@ pub(super) struct WorktreeRead {
 pub(super) struct WriteRequest {
     pub(super) operation: Operation,
     /// Taken at acceptance and held until the request is done — `None`
-    /// for the lanes that take no place (`session::write_order`). It
-    /// travels with the request, so a request the queue turns away
-    /// gives its place straight back by being
-    /// dropped.
+    /// for the lanes that take no place (`session::write_order`). A request
+    /// the queue turns away gives it back by being dropped.
     pub(super) place: Option<super::write_order::Place>,
     #[expect(
         clippy::type_complexity,
@@ -179,15 +166,11 @@ pub(super) struct WriteRequest {
     >,
 }
 
-/// What a pass reported *under* its graph: how far the walk got, and
-/// whether it stopped because the window ran out.
+/// What a pass reported under its graph: how far the walk got, and
+/// whether the window cut it.
 ///
-/// Kept beside the rows because it does not follow from them. The walk
-/// count drifts from the shown count in both directions (the WIP row is
-/// shown but never walked, sifted stash parents are walked but never
-/// shown), and truncation is a property of the walk alone — so two passes
-/// can draw the very same graph and still owe the consumer different
-/// answers.
+/// It does not follow from the rows (walked is not shown — `LogTotals`),
+/// so two passes can draw the same graph and owe different footers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Footer {
     pub(super) walked: u32,
@@ -199,57 +182,46 @@ pub(super) struct Footer {
 pub(super) struct Shared {
     pub(super) builder: GraphBuilder,
     /// Carries "a remote already has this" down the walk the `builder` is
-    /// drawing. Reset with it, and for the same reason: both are the
-    /// state of one pass over one window, and a pass that started over
-    /// begins on a frontier of its own
-    /// (`session::published::PublishMarks`).
+    /// drawing; reset with it, since both are one pass's state over one
+    /// window (`session::published::PublishMarks`).
     pub(super) publish_marks: PublishMarks,
-    /// The graph the consumer is on — the last pass that reached it, in
-    /// the row numbers `builder`, `applied` and `sent_rows` speak in.
-    /// Its own number: `log_gen` is bumped before a pass takes this
-    /// lock and bumped by passes that send nothing at all, and either way
-    /// everything here still belongs to the walk that was shown.
+    /// The graph the consumer is on, which `builder`, `applied` and
+    /// `sent_rows` speak in. Not `log_gen`: that is bumped before a pass
+    /// takes this lock and by passes that send nothing, while everything
+    /// here still belongs to the walk that was shown.
     pub(super) generation: u64,
     /// Label chips per commit id, derived from the last refs snapshot.
     pub(super) label_map: LabelIndex,
     /// Labels currently shown per row (for diffing on refs refresh).
     pub(super) applied: HashMap<u32, Vec<RefLabel>>,
-    /// A print of each row exactly as delivered to the UI (chips
-    /// included), kept so a background rebuild can tell "same picture"
-    /// from "changed" and skip the swap entirely — an unchanged
-    /// repository keeps the picture it has. Prints, because this is the
-    /// part of the graph that grows with the window
-    /// ([`RowPrint`]).
+    /// A print of each row as delivered to the UI (chips included), so a
+    /// background rebuild can tell "same picture" and skip the swap.
+    /// Prints rather than rows: this grows with the window ([`RowPrint`]).
     pub(super) sent_rows: Vec<RowPrint>,
-    /// The footer delivered with them, compared alongside the rows for the
-    /// same decision: a window change can leave every row where it is and
-    /// still change the answer beneath them (two commits through a window
-    /// of two are cut; through a window of three they are not), and that
-    /// change reaches the consumer through a rebuild whenever one overtakes
-    /// the stream the change asked for. `None` = no pass has answered for
-    /// this graph yet, so the next one to finish has something to say.
+    /// The footer delivered with them, compared alongside: a window change
+    /// can keep every row and still change the footer (two commits are cut
+    /// by a window of two, not by three), and a rebuild that overtook the
+    /// stream would otherwise swallow it. `None` until a pass has answered
+    /// for this graph.
     pub(super) sent_footer: Option<Footer>,
 }
 
 /// One fact read out of the repository and kept until something that
 /// could have changed it happens.
 ///
-/// Each is a single answer about the repository as a whole (does git
-/// normalise line endings here, what remotes are configured).
-/// Invalidation stays in the two event boundaries that own it: before a
-/// write's refresh, and after an external ref move.
-/// The latter has already read the current remote answer, so line-ending
-/// context is dropped immediately while remotes are dropped only for the
-/// following read (see [`RepoSession::forget_derived`]).
+/// Each is a single answer about the whole repository (does git normalise
+/// line endings here, what remotes are configured). Invalidation stays in
+/// the two event boundaries that own it: before a write's refresh, and
+/// after an external ref move — which has already read the current remote
+/// answer, so it drops line-ending context at once and remotes only for
+/// the following read (see [`RepoSession::forget_derived`]).
 ///
-/// Hand-written, for two reasons. `salsa` tracks dependencies between
-/// pure synchronous queries; these are async subprocess reads that can be
-/// cancelled. `moka` evicts by age and size; these expire on an event and
-/// never on a clock.
+/// Hand-written: these are cancellable async subprocess reads that expire
+/// on an event, never on a clock — outside what `salsa` (pure sync
+/// queries) or `moka` (age / size eviction) model.
 pub(super) struct Derived<T> {
     state: Mutex<DerivedState<T>>,
-    /// One repository read at a time. This is an async mutex because the
-    /// protected work is an async subprocess.
+    /// One repository read at a time (async: held across the subprocess).
     reading: tokio::sync::Mutex<()>,
 }
 
@@ -271,23 +243,14 @@ impl<T> Default for Derived<T> {
 }
 
 impl<T: Clone> Derived<T> {
-    /// Returns the current answer, or lets exactly one caller read it.
+    /// Returns the current answer, or lets exactly one caller read it
+    /// (single-flight: callers waiting behind the gate re-check the value).
     ///
-    /// A plain `get` followed by an async read followed by `put` lets every
-    /// concurrent caller observe the same miss and spawn the same git
-    /// process. The async gate makes that sequence single-flight; callers
-    /// waiting behind it re-check the value.
-    ///
-    /// Invalidation advances the generation and clears the value
-    /// synchronously, ahead of any slow read. A reader that then returns
-    /// from git sees that its answer belonged to the old generation and
-    /// reads once more — once: every write invalidates on its way out,
-    /// so a chase held open until no write lands mid-read is unbounded,
-    /// git process after git process, with every waiter parked behind
-    /// the gate. The second reading was taken during this call and is
-    /// answer enough; it stays out of the cache, so the next caller
-    /// settles the current
-    /// generation.
+    /// A read that returns into a newer generation reads once more, and
+    /// only once: every write invalidates on its way out, so chasing until
+    /// no write lands mid-read is unbounded with every waiter parked behind
+    /// the gate. That second reading answers this call but stays out of
+    /// the cache.
     pub(super) async fn get_or_try_init<E, F, Fut>(&self, mut read: F) -> Result<T, E>
     where
         F: FnMut() -> Fut,

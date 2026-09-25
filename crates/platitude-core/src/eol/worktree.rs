@@ -14,11 +14,9 @@ use super::Eol;
 /// bytes (ci/baseline/code-costs-windows-x64.md).
 const SAMPLE_MAX_BYTES: u64 = 1 << 20;
 
-/// Every untracked, non-ignored file and what its bytes look like.
-///
-/// One spawn for the whole set, where asking for a patch per file would be
-/// a spawn per file. For a new file the shape is the whole answer, except
-/// [`Shape::Mixed`], whose line count only the patch can give.
+/// Every untracked, non-ignored file and what its bytes look like, in one
+/// spawn instead of a patch per file. For a new file the shape is the whole
+/// answer, except [`Shape::Mixed`], whose line count only the patch gives.
 pub async fn untracked_shapes(
     executor: &GitExecutor,
     workdir: &Path,
@@ -50,10 +48,9 @@ pub enum Shape {
 /// Reads `ls-files --eol -z` output into one shape per path, in the order
 /// git listed them.
 ///
-/// The `w/` column is the one that matters: it is the bytes on disk, which
-/// is the same space a new file's patch is read in. `i/` would be the index,
-/// which only differs where git is converting — and where git converts,
-/// none of this is asked in the first place.
+/// Reads the `w/` column — the bytes on disk, the space a new file's patch
+/// is read in. `i/` differs only where git converts, and there none of this
+/// is asked.
 pub fn worktree_shapes(stdout: &[u8]) -> Vec<(String, Shape)> {
     let mut out = Vec::new();
     for record in stdout.split(|b| *b == 0).filter(|r| !r.is_empty()) {
@@ -95,14 +92,12 @@ pub(super) async fn worktree_endings(
 
     let mut found: Vec<(usize, Eol)> = Vec::new();
     for (path, shape) in worktree_shapes(&out.stdout) {
-        // Mixed has no single answer to give; the rest have nothing to say.
         let Shape::Uniform(eol) = shape else { continue };
         if let Some(index) = paths.iter().position(|p| *p == path) {
             found.push((index, eol));
         }
     }
-    // git answers in its own order; the caller's ranking is the one that
-    // decides which three get to vote.
+    // git answers in its own order; the caller's ranking decides who votes.
     found.sort_by_key(|(index, _)| *index);
     Ok(found)
 }

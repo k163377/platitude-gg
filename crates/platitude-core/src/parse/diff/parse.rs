@@ -10,9 +10,8 @@ use super::{DiffHunk, FilePatch};
 /// What one pass over a patch is building: the files closed so far, the one
 /// being read, and where each side of its open hunk has got to.
 ///
-/// A record, because the walk below has four phases and each touches
-/// a different three or four of them — as locals, every phase reads
-/// as if it could touch all six.
+/// A record, not locals, so each phase of the walk shows which fields it
+/// touches.
 #[derive(Default)]
 struct Reading {
     files: Vec<FilePatch>,
@@ -20,13 +19,13 @@ struct Reading {
     hunk: Option<DiffHunk>,
     old_no: u32,
     new_no: u32,
-    /// Where each parent of the hunk being read has got to. Empty for a
-    /// unified diff, which counts its one old side in `old_no`; one entry
-    /// per parent for a combined one.
+    /// Where each parent of the open hunk has got to: empty for a unified
+    /// diff (its one old side is `old_no`), one per parent for a combined
+    /// one.
     parent_no: Vec<u32>,
     /// The commit the patches that follow are of, where the stream names
     /// one (`\u{1}` at the head of a line — `DiffTarget::Choice`). Empty
-    /// for every diff of one thing, which is all the others.
+    /// for a diff of one thing.
     label: String,
 }
 
@@ -59,8 +58,8 @@ impl Reading {
             return true;
         }
 
-        // A combined header names one path: there is no single old
-        // side to name. `---`/`+++` follow and carry the prefixes.
+        // A combined header names one path; `---`/`+++` follow and carry
+        // the prefixes.
         if let Some(rest) = line
             .strip_prefix("diff --cc ")
             .or_else(|| line.strip_prefix("diff --combined "))
@@ -147,9 +146,8 @@ impl Reading {
         self.hunk = Some(h);
     }
 
-    /// A content line of the open hunk. Header noise outside one — index,
-    /// mode, similarity — reaches here and is dropped, which is what makes
-    /// this the walk's last resort.
+    /// A content line of the open hunk. The walk's last resort: header
+    /// noise outside a hunk (index, mode, similarity) is dropped here.
     fn reads_body(&mut self, line: &str) {
         let Some(h) = self.hunk.as_mut() else {
             return;
@@ -178,16 +176,13 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
     // newline and strips one trailing CR (an interior one stays: CRLF file
     // content is data).
     for line in text.lines() {
-        // A stream carrying several commits' patches names each one before
-        // its own (`DiffTarget::Choice`). No line of a diff and no line of
-        // a file can begin with this byte — git never writes it, and a
-        // file that did would have its patch printed as binary.
+        // A stream of several commits' patches names each before its own
+        // (`DiffTarget::Choice`). No diff line can begin with this byte:
+        // git never writes it, and a file holding it is printed as binary.
         if let Some(rest) = line.strip_prefix('\u{1}') {
-            // **What stood before it is finished.** git writes a blank
-            // line between the record and the patch under it (measured
-            // 2.55), and with the previous file still open that blank
-            // lands in its last hunk as an empty context line — a row of
-            // a file nobody wrote.
+            // Close the previous file first: the blank line git writes
+            // after the record would land in its last hunk as a context
+            // line.
             reading.flush_file();
             reading.label = rest.to_string();
             continue;
@@ -199,8 +194,7 @@ pub fn parse_patch(bytes: &[u8]) -> Vec<FilePatch> {
             continue;
         }
         // A body line always opens with its marker columns (` `, `+`, `-`
-        // or a lone `\`), so a run of `@` at the head is unambiguously a
-        // hunk header — of one `@` per parent plus one.
+        // or a lone `\`), so a run of `@` at the head is a hunk header.
         if line.starts_with("@@") {
             reading.opens_hunk(line);
             continue;
@@ -243,7 +237,6 @@ mod tests {
                 DiffLineKind::Context,
             ]
         );
-        // Line numbering: context advances both, del only old, add only new.
         assert_eq!(h1.lines[0].old_no, Some(1));
         assert_eq!(h1.lines[0].new_no, Some(1));
         assert_eq!(h1.lines[1].old_no, Some(2));

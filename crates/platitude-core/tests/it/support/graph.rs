@@ -45,16 +45,12 @@ pub fn replay_rows(events: &[SessionEvent]) -> BTreeMap<u32, LogRow> {
 }
 
 /// Replays the graph events the way the UI model does (`GraphModel::drain`
-/// in platitude-app), keyed by row number.
+/// in platitude-app), keyed by row number, generation rules included: a
+/// message about a replaced graph is dropped.
 ///
-/// Rows arrive with the walk and their chips are corrected afterwards: a
-/// fetch that moves no ref this repository holds rebuilds nothing, so what
-/// the remote turned out to have reaches the graph as `LabelsChanged`
-/// against rows already on screen. Reading only the walk would miss it.
-///
-/// The generation rules are part of the model and are kept here: a
-/// message about a graph that has been replaced is dropped on
-/// arrival.
+/// Chips are corrected after the walk (`LabelsChanged`, e.g. from a fetch
+/// that moves no ref this repository holds), so reading only the walk
+/// would miss them.
 pub fn replay_graph(events: &[SessionEvent]) -> BTreeMap<u32, SeenRow> {
     fn take(batch: &[LogRow], into: &mut BTreeMap<u32, SeenRow>) {
         for r in batch {

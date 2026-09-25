@@ -1,5 +1,4 @@
-//! Tests of [`crate::patch`]'s hunk splitting and rewriting, in a
-//! file of their own (structure.md §分割: テストだけ巨大なら同ディレクトリの専用ファイルへ).
+//! Tests of [`crate::patch`], in a file of their own (structure.md §分割).
 
 use crate::patch::*;
 
@@ -88,8 +87,7 @@ fn forward_deletion_only_selection_shrinks_the_new_side() {
         )
         .expect("patch"),
     );
-    // The old side is invariant (3); the new side loses the deletion
-    // and gains neither addition.
+    // The old side is invariant (3); the new side loses the deletion.
     assert!(out.contains("@@ -1,3 +1,2 @@"), "got: {out}");
     assert!(out.contains("-two\n"));
     assert!(!out.contains("two changed"));
@@ -105,9 +103,8 @@ fn reverse_line_selection_demotes_unselected_additions_to_context() {
         )
         .expect("patch"),
     );
-    // The new side is the pre-image when applying with -R, so it keeps
-    // its original numbering and count (4); the old side grows because
-    // the additions that stay staged become context.
+    // With -R the new side is the pre-image and keeps its count (4); the
+    // old side grows by the additions that stay staged, now context.
     assert!(out.contains("@@ -1,5 +1,4 @@"), "got: {out}");
     assert!(out.contains("-two\n"), "selected deletion kept");
     assert!(

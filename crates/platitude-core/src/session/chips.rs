@@ -5,13 +5,9 @@ use super::*;
 
 impl RepoSession {
     /// The snapshot to publish: the one already on screen when this read
-    /// found it unchanged, so the sidebar can tell "the same" from "equal"
-    /// by pointer and rebuild nothing for it.
-    ///
-    /// Still published either way. Withholding the event instead would
-    /// save the same work, but a consumer that attached after the last one
-    /// went out would then sit empty until something moved, and "nothing
-    /// changed" is the state that lasts longest.
+    /// found it unchanged, so the sidebar tells "the same" by pointer and
+    /// rebuilds nothing. Published even so: withheld, a consumer attached
+    /// since the last one would sit empty until something moved.
     pub(super) fn published_snapshot(&self) -> Option<Arc<RefsSnapshot>> {
         relock(&self.last_snapshot).as_ref().map(Arc::clone)
     }
@@ -24,9 +20,8 @@ impl RepoSession {
             return Arc::clone(previous);
         }
         let shared = Arc::new(fresh);
-        // Handed to the caller either way — the event it rides is the
-        // caller's to send — but kept only while this session keeps what
-        // it reads (`RepoSession::keeps_what_it_reads`).
+        // Kept only while this session keeps what it reads
+        // (`RepoSession::keeps_what_it_reads`).
         if self.keeps_what_it_reads() {
             *slot = Some(Arc::clone(&shared));
         }
@@ -36,14 +31,11 @@ impl RepoSession {
     /// Installs a new label map into the join and sends the rows whose
     /// chips changed.
     ///
-    /// Read and send happen under one lock, and the row numbers travel
-    /// with the graph they were read from: a log pass installs its own
-    /// state and announces it under the same lock, so a diff can neither
-    /// be invalidated between the two nor arrive ahead of the rows it
-    /// numbers. The generation covers what the lock cannot — a superseded
-    /// pass that installs late leaves `shared` describing a graph the
-    /// consumer already dropped, and its row numbers point at other
-    /// commits there.
+    /// Read and send happen under the lock a log pass installs and
+    /// announces its graph under, so a diff can neither be invalidated
+    /// between the two nor arrive ahead of its rows. The generation covers
+    /// a superseded pass that installs late, whose row numbers point at
+    /// other commits in the consumer's graph.
     pub(super) fn apply_refs(&self, label_map: LabelIndex) {
         let tags = self.tags_shown();
         let Some(mut shared) = self.store_shared() else {

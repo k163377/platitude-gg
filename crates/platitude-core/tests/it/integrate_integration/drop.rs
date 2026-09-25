@@ -6,8 +6,6 @@ use crate::support::integrate::apply;
 use platitude_core::process::Kept;
 use platitude_core::sequencer;
 
-/// Dropping one commit out of the middle leaves everything after it in
-/// place, rewritten onto the gap.
 #[tokio::test]
 async fn dropping_a_commit_keeps_the_ones_after_it() {
     let mut repo = TestRepo::init();
@@ -27,23 +25,19 @@ async fn dropping_a_commit_keeps_the_ones_after_it() {
             .collect::<Vec<_>>(),
         vec!["after it", "root"]
     );
-    // The commit's own file goes with it; the later one stays.
     assert!(!repo.path.join("b.txt").exists());
     assert!(repo.path.join("c.txt").exists());
-    // The plan starts at the dropped commit's parent, and that parent
-    // is the upstream: nothing below the gap is replayed, so it keeps
-    // the object name it had.
+    // The dropped commit's parent is the upstream, so nothing below the
+    // gap is replayed.
     assert_eq!(repo.git(&["rev-parse", "HEAD~1"]), kept);
 }
 
-/// The two edges of the same operation, measured: the newest commit
-/// (nothing after it to replay) and the very first one (no parent to
-/// start the plan from).
+/// The newest commit (nothing after it to replay) and the first (no parent
+/// to start the plan from).
 #[tokio::test]
 async fn dropping_at_either_end_of_the_history() {
     let (exec, cancel) = env();
 
-    // The newest commit.
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     let newest = repo.commit_file_id("b.txt", "two\n", "the newest");
@@ -53,8 +47,7 @@ async fn dropping_at_either_end_of_the_history() {
     apply(&repo, &plan).await;
     assert_eq!(repo.git(&["log", "--format=%s"]), "root");
 
-    // The first commit, which has no parent to be the plan's upstream —
-    // the plan says `--root` instead.
+    // The first commit.
     let mut repo = TestRepo::init();
     let first = repo.commit_file_id("a.txt", "one\n", "the first");
     repo.commit_file("b.txt", "two\n", "the second");
@@ -67,10 +60,9 @@ async fn dropping_at_either_end_of_the_history() {
     assert!(!repo.path.join("a.txt").exists());
 }
 
-/// Planning against the first commit asks for a parent that is not
-/// there, and that "no" is an answer. Left unmarked it counts as a
-/// failure, and the command log throws its panel open over a perfectly
-/// good drop (規約 §終了コードで答える問い合わせ).
+/// Planning against the first commit asks for a parent that is not there;
+/// unmarked, that "no" opens the panel over a good drop
+/// (core.md「終了コードで答える問い合わせは」).
 #[tokio::test]
 async fn reaching_past_the_first_commit_is_an_answer_not_a_failure() {
     use crate::support::Ends;
@@ -107,10 +99,9 @@ async fn reaching_past_the_first_commit_is_an_answer_not_a_failure() {
     );
 }
 
-/// A merge *below* the commit is not in the way: the replay stands on
-/// it, so it keeps both its parents. Dropping the newest commit is the
-/// edge here: a plan that reaches one commit too far refuses over a
-/// merge it was never going to touch.
+/// The replay stands on a merge below the commit, so it keeps both
+/// parents. Dropping the newest commit is the edge: a plan that reaches
+/// one commit too far refuses over a merge it never touches.
 #[tokio::test]
 async fn a_merge_under_the_dropped_commit_is_left_alone() {
     let mut repo = TestRepo::init();
@@ -123,8 +114,7 @@ async fn a_merge_under_the_dropped_commit_is_left_alone() {
     let merge = repo.git(&["rev-parse", "HEAD"]);
     let (exec, cancel) = env();
 
-    // The newest commit, sitting straight on the merge: nothing follows
-    // it, so the whole plan is the one drop.
+    // The newest commit, straight on the merge.
     let newest = repo.commit_file_id("b.txt", "two\n", "on top of the merge");
     let plan = sequencer::plan_edit(&exec, &repo.path, &newest, sequencer::Edit::Drop, &cancel)
         .await

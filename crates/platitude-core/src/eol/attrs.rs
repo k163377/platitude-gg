@@ -12,9 +12,8 @@ use crate::process::{GitCommand, GitExecutor};
 /// What git's own settings decide about a path before anything is sampled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ruling {
-    /// `.gitattributes` says the path is not text. This is the only
-    /// exclusion mechanism — the app keeps no path list of its own; build
-    /// output, test data and the rest are `.gitattributes`' business.
+    /// `.gitattributes` says the path is not text — the only exclusion;
+    /// the app keeps no path list of its own.
     NotText,
     /// git decides the stored endings itself, so a new file cannot disagree
     /// with its neighbours and there is nothing to compare.
@@ -53,11 +52,8 @@ pub async fn rulings(
     rulings_given(executor, workdir, paths, converting, cancel).await
 }
 
-/// [`rulings`] for a caller that already knows whether git normalises.
-///
-/// Whether it does is a property of the repository's configuration,
-/// so a session that has read it once can hand the answer down and
-/// every diff after the first opens with one fewer process
+/// [`rulings`] for a caller that already knows whether git normalises —
+/// a property of the configuration a session reads once
 /// (`RepoSession::normalising`).
 pub async fn rulings_given(
     executor: &GitExecutor,
@@ -70,10 +66,9 @@ pub async fn rulings_given(
         return Ok(Vec::new());
     }
     let mut out = Vec::with_capacity(paths.len());
-    // A batch of hundreds costs less than twice what a single path's own
-    // spawn does — the process is most of the price
-    // (ci/baseline/code-costs-windows-x64.md). Chunking also keeps a long
-    // list under the command-line length limit.
+    // Chunked to stay under the command-line length limit; batches stay
+    // large because the process is most of the price
+    // (ci/baseline/code-costs-windows-x64.md).
     for batch in paths.chunks(ATTR_BATCH) {
         for attrs in attributes(executor, workdir, batch, cancel).await? {
             out.push(match attrs {
@@ -106,10 +101,9 @@ async fn attributes(
         cmd = cmd.arg(p.as_str());
     }
     let out = executor.run(cmd, cancel).await?;
-    // `-z` prints one `path\0attr\0value\0` triple per attribute asked for,
-    // so a path answering for two attributes takes two triples. Keyed by
-    // path: nothing promises the order, and a path git dropped would
-    // otherwise shift every answer after it.
+    // `-z` prints a `path\0attr\0value\0` triple per path per attribute.
+    // Keyed by path: nothing promises the order, and a dropped path would
+    // shift every answer after it.
     let mut found: HashMap<String, Attributes> = HashMap::new();
     let fields: Vec<&[u8]> = out.stdout.split(|b| *b == 0).collect();
     for triple in fields.chunks(3) {
@@ -145,13 +139,10 @@ async fn attributes(
 
 /// Whether `core.autocrlf` converts on the way into the index.
 ///
-/// The read and the spellings are [`super::setting`]'s — the notice and
-/// the settings screen ask about one key, and two readings of it would be
-/// two answers to "does git decide the endings here".
-///
-/// The attribute and `autocrlf` settle it: `core.eol` only takes
-/// effect where a path is already text by one of them, both of which
-/// have answered by then.
+/// Read through [`super::setting`] so the notice and the settings screen
+/// cannot give two answers about one key. `core.eol` is not consulted: it
+/// only takes effect where the attribute or `autocrlf` already made a path
+/// text.
 pub async fn normalises(
     executor: &GitExecutor,
     workdir: &Path,

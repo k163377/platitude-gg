@@ -1,19 +1,13 @@
 //! Which parts of a changed line actually changed — the emphasis the
-//! diff pane lays under them, worked out from the rows alone.
+//! diff pane lays under them.
 //!
-//! Deletions and the additions that replace them arrive as adjacent
-//! runs. The k-th line of one run is read against the k-th of the
-//! other: the parts the two do not share are what the eye should land
-//! on, the parts they do share are the quiet ground around them. A line
-//! with no counterpart — the tail of the longer run — changed as a
-//! whole; a run with no counterpart at all (pure insertion, pure
-//! removal) gets no emphasis, because a wash with nothing quiet in it
-//! says nothing.
+//! The k-th line of a deletion run is read against the k-th of the
+//! addition run after it. The tail of the longer run changed as a whole;
+//! a run with no counterpart at all (pure insertion or removal) gets no
+//! emphasis, as there is nothing quiet around it.
 //!
-//! This is presentation: `git diff --word-diff` answers a similar
-//! question, but its output replaces the line-based form the pane is
-//! built on, so the ranges are worked out here, over text the diff
-//! already carries.
+//! Worked out here rather than by `git diff --word-diff`, whose output
+//! replaces the line-based form the pane is built on.
 
 use crate::parse::diff::{DiffHunk, DiffLineKind, FilePatch};
 
@@ -21,9 +15,8 @@ use crate::parse::diff::{DiffHunk, DiffLineKind, FilePatch};
 /// disjoint.
 type Ranges = Vec<(usize, usize)>;
 
-/// What changed inside every row of a diff, addressed the way its rows
-/// already are: which patch, which hunk, which line of it. Empty where
-/// there is nothing to emphasise.
+/// What changed inside every row of a diff, addressed by patch, hunk and
+/// line. Empty where there is nothing to emphasise.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct IntraMarks {
     patches: Vec<Vec<Vec<Ranges>>>,
@@ -41,10 +34,9 @@ impl IntraMarks {
     }
 }
 
-/// Below this much sharing, two lines are not versions of each other —
-/// emphasising their scattered coincidences would light most of both
-/// rows and say less than the wash already does. Whole-line emphasis
-/// instead. Per mille of the longer line's characters.
+/// Below this much sharing (per mille of the longer line's characters) two
+/// lines are not versions of each other: whole-line emphasis instead of
+/// lighting their scattered coincidences.
 const KINSHIP_FLOOR_PER_MILLE: usize = 500;
 
 /// A shared run shorter than this, between two emphasised stretches, is
@@ -56,15 +48,13 @@ const KEEP_RUN_CHARS: usize = 3;
 /// middle, so it only runs where the middle is small…
 const REFINE_CELL_CAP: usize = 4_096;
 
-/// …and only until a whole diff has spent this many cells on it. Past
-/// the budget every remaining pair keeps its coarse one-range answer —
-/// the same shape, less finely cut.
+/// …and only until a whole diff has spent this many cells on it; past it,
+/// remaining pairs keep their coarse one-range answer.
 const REFINE_CELL_BUDGET: usize = 2_000_000;
 
-/// Reads every hunk of `patches` and answers what to emphasise on each
-/// row. Linear in the text, plus a bounded refinement
-/// ([`REFINE_CELL_BUDGET`]); cheap enough to ride with the rows
-/// themselves.
+/// What to emphasise on each row of `patches`. Linear in the text plus a
+/// bounded refinement ([`REFINE_CELL_BUDGET`]), so it can ride with the
+/// rows.
 pub fn marks(patches: &[FilePatch]) -> IntraMarks {
     let mut budget = REFINE_CELL_BUDGET;
     IntraMarks {
@@ -88,8 +78,6 @@ pub fn marks(patches: &[FilePatch]) -> IntraMarks {
     }
 }
 
-/// One hunk: pair each run of deletions with the run of additions that
-/// follows it, and read the pairs against each other.
 fn hunk_marks(hunk: &DiffHunk, budget: &mut usize) -> Vec<Ranges> {
     let lines = &hunk.lines;
     let mut out = vec![Vec::new(); lines.len()];
@@ -104,8 +92,7 @@ fn hunk_marks(hunk: &DiffHunk, budget: &mut usize) -> Vec<Ranges> {
             i += 1;
         }
         let dels_end = i;
-        // `\ No newline at end of file` can stand between the two runs;
-        // it is git talking.
+        // `\ No newline at end of file` can stand between the two runs.
         let mut j = i;
         while j < lines.len() && lines[j].kind == DiffLineKind::NoNewline {
             j += 1;
@@ -115,8 +102,7 @@ fn hunk_marks(hunk: &DiffHunk, budget: &mut usize) -> Vec<Ranges> {
             j += 1;
         }
         if j == adds {
-            // Pure removal: nothing replaced it, nothing to weigh it
-            // against.
+            // Pure removal.
             continue;
         }
         i = j;
@@ -127,7 +113,6 @@ fn hunk_marks(hunk: &DiffHunk, budget: &mut usize) -> Vec<Ranges> {
             out[dels + k] = del_ranges;
             out[adds + k] = add_ranges;
         }
-        // The tail of the longer run changed as a whole.
         for line in dels + paired..dels_end {
             out[line] = whole(&lines[line].text);
         }
@@ -158,7 +143,6 @@ fn line_marks(old: &str, new: &str, budget: &mut usize) -> (Ranges, Ranges) {
     if old_mid.0 == old_mid.1 && new_mid.0 == new_mid.1 {
         return (Vec::new(), Vec::new());
     }
-    // Two lines that mostly disagree are not versions of each other.
     let chars = |s: &str| s.chars().count();
     let shared = chars(&old[..prefix]) + chars(&old[old_mid.1..]);
     let longer = chars(old).max(chars(new));
@@ -224,8 +208,6 @@ fn refined(om: &str, nm: &str, old_off: usize, new_off: usize) -> (Ranges, Range
             };
         }
     }
-    // Walk the table, keeping runs: shared stretches long enough to
-    // stand, unshared stretches as emphasis on their own side.
     let mut old_ranges = Vec::new();
     let mut new_ranges = Vec::new();
     let (mut i, mut j) = (0usize, 0usize);
@@ -240,8 +222,6 @@ fn refined(om: &str, nm: &str, old_off: usize, new_off: usize) -> (Ranges, Range
                         nj: usize,
                         i: usize,
                         j: usize| {
-        // A shared run too short to stand becomes emphasis on both
-        // sides instead.
         if run > 0 && run < KEEP_RUN_CHARS {
             push_range(old_ranges, byte_at(a, oi, om), byte_at(a, i, om));
             push_range(new_ranges, byte_at(b, nj, nm), byte_at(b, j, nm));
@@ -375,7 +355,7 @@ mod tests {
 
     #[test]
     fn runs_with_no_counterpart_get_no_emphasis() {
-        // Pure insertion: a wash with nothing quiet in it says nothing.
+        // Pure insertion.
         let patches = one_hunk("@@ -1,1 +1,3 @@\n context\n+alpha\n+beta\n");
         let added = marks(&patches);
         for line in 0..3 {
@@ -389,8 +369,7 @@ mod tests {
     #[test]
     fn short_shared_runs_are_swallowed_by_the_emphasis() {
         // Between the changes only `b` and `d` survive, each shorter
-        // than KEEP_RUN_CHARS — kept, they would read as noise, so the
-        // emphasis swallows them into one stretch.
+        // than KEEP_RUN_CHARS.
         let mut budget = usize::MAX;
         let (old_marks, new_marks) =
             line_marks("Qlong ab1de tailW", "Qlong xb2dy tailW", &mut budget);

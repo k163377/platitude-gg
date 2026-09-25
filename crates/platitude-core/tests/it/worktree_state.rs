@@ -1,10 +1,7 @@
-//! status / stash against real git. The committed parser fixtures under
-//! tests/fixtures/ are regenerated here (`capture_fixtures`); the checks
-//! that parse them live beside each parser as unit tests, and the same
-//! scenarios read live through `status::load` / `stash::load` are in
-//! [`periodic`]. Op-state detection is pinned where the operations that
-//! produce it live — `integrate_integration` stops a real merge / rebase /
-//! cherry-pick and reads the state back.
+//! status / stash against real git: regenerates the committed parser
+//! fixtures under tests/fixtures/ (`capture_fixtures`; the parsing checks
+//! are unit tests beside each parser) and reads the same scenarios live in
+//! [`periodic`]. Op-state detection is pinned in `integrate_integration`.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -29,8 +26,6 @@ fn dirty_scenario() -> TestRepo {
     repo
 }
 
-// --- captured fixtures ----------------------------------------------------
-
 fn fixture_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -39,7 +34,7 @@ fn fixture_dir() -> std::path::PathBuf {
 
 /// Regenerates the committed fixture bytes from real git output. Run with:
 /// `cargo test -p platitude-core --test it -- --ignored capture`
-/// then review the diff (the .bin files come from here).
+/// then review the diff.
 #[tokio::test]
 #[ignore = "regenerates committed fixtures; run explicitly and review the diff"]
 async fn capture_fixtures() {
@@ -58,13 +53,11 @@ async fn capture_fixtures() {
     std::fs::write(fixture_dir().join("stash_list.bin"), &stash_bytes).unwrap();
 }
 
-/// **What the pre-merge run leaves out**: the fixtures' two scenarios read
-/// live through `status::load` and `stash::load`. The parsers read the
-/// committed bytes before every merge (`status_tests::committed_status_fixture_parses`,
+/// What the pre-merge run leaves out: the fixtures' two scenarios read
+/// live. The parsers read the committed bytes pre-merge
+/// (`status_tests::committed_status_fixture_parses`,
 /// `stash_tests::committed_stash_fixture_parses`) and every session open
-/// reads a status and a stash list live, so what is left is whether git
-/// still writes those bytes — the full gate runs it
-/// (`-- --ignored ::periodic::`) rather than every change.
+/// reads both live, so what is left is whether git still writes those bytes.
 mod periodic {
     use super::*;
 

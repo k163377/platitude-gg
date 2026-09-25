@@ -40,23 +40,18 @@ impl RepoSession {
         )
     }
 
-    /// Asks whether `branch --delete` would go through for this branch:
-    /// merged into its reference point it deletes quietly, unmerged git
-    /// refuses. Asked when a menu opens over a branch the drawn rows
-    /// could not answer for (`GraphModel.branchDeleteMerged`), so its
-    /// delete row can wear `-D` from the start.
-    /// The reference point is read off the snapshot, which
-    /// already holds git's own rule for it (`BranchItem::upstream_oid`:
-    /// the upstream where the listing resolves it, HEAD otherwise — a
-    /// configured name that resolves to nothing is not the measure), and
-    /// the reachability is `merge-base`'s. A read, so it
-    /// skips the queue the way the other checks do.
+    /// Asks whether `branch --delete` would go through for this branch
+    /// (merged into its reference point) or be refused, for a menu opened
+    /// over a branch the drawn rows could not answer for
+    /// (`GraphModel.branchDeleteMerged`), so its delete row can wear `-D`
+    /// from the start. The reference point is git's own rule, read off the
+    /// snapshot (`BranchItem::upstream_oid`: the upstream where the listing
+    /// resolves it, HEAD otherwise); reachability is `merge-base`'s. A
+    /// read, so it skips the queue.
     ///
     /// **Every ask is answered**, a failed read included
-    /// ([`SessionEvent::BranchDeleteChecked::merged`]): the row draws the
-    /// same either way, and what the answer buys is that a run where the
-    /// reads fell over says so on a line, for the harness waiting
-    /// for the echo.
+    /// ([`SessionEvent::BranchDeleteChecked::merged`]), so a harness
+    /// waiting for the echo sees a run whose reads fell over.
     pub fn check_branch_delete(self: &Arc<Self>, branch: String) {
         let Some(workdir) = self.workdir() else {
             self.sink.event(SessionEvent::BranchDeleteChecked {
@@ -85,12 +80,11 @@ impl RepoSession {
 
     /// Points a local branch at the remote branch it is measured against.
     ///
-    /// `upstream` is the full remote-tracking refname the question was
-    /// answered with — the one spelling that cannot be read two ways
-    /// ([`branch::set_upstream`]). Through the queue like every other
-    /// write: the counts beside the branch, the delete's reference point
-    /// and where a push goes all come off this setting, so the reads
-    /// behind it are the ones that put the new answer on screen.
+    /// `remote` and `remote_branch` arrive apart, as the question was
+    /// answered — a pair cannot be read two ways where `origin/x` can
+    /// ([`branch::set_upstream`]). Queued: the counts beside the branch,
+    /// the delete's reference point and a push's target all come off this
+    /// setting, and the refresh behind the write redraws them.
     pub fn set_upstream(
         self: &Arc<Self>,
         branch: String,
@@ -153,8 +147,8 @@ impl RepoSession {
         )
     }
 
-    /// Deletes a tag. Destructive in one way only: what it marked may
-    /// have nothing else reaching it, so the UI asks first.
+    /// Deletes a tag. What it marked may have nothing else reaching it, so
+    /// the UI asks first.
     pub fn delete_tag(self: &Arc<Self>, name: String) -> Option<OperationId> {
         self.write(
             OperationKind::Tag,

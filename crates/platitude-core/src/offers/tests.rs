@@ -1,7 +1,7 @@
 use super::*;
 
-/// The inputs of an idle, open repository standing on `main`, which the
-/// cases below bend one at a time.
+/// An idle, open repository on `main`; the cases below bend one input at
+/// a time.
 fn offers_on(kind: RefKind, full: &str) -> RefMenuOffers {
     ref_menu(
         kind, full, "abc123", true, 0, "main", false, "", 0, "", "", false, "origin", "here", "",
@@ -34,13 +34,11 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
             switch_asks: false,
             branch_here: true,
             integrate_from: true,
-            // A branch nobody is standing on is not a pull's subject:
-            // git pulls into the branch it is run on.
+            // git pulls into the branch it is run on, not this one.
             pull: false,
             delete: true,
             delete_remote: true,
-            // A branch goes out through the toolbar, and the tag rows
-            // name nothing on it.
+            // A branch goes out through the toolbar; the tag rows are a tag's.
             push_tag: false,
             delete_remote_tag: false,
             delete_tag_everywhere: false,
@@ -126,8 +124,7 @@ fn the_current_branch_keeps_its_rows_but_moves_and_deletes_nowhere() {
     assert!(offers.branch_here, "where a branch is most often started");
 }
 
-/// The same inputs as [`offers_on`], with the working tree standing on
-/// `main` and tracking whatever `upstream` names.
+/// [`offers_on`], with `main` tracking `upstream`.
 fn offers_tracked(kind: RefKind, full: &str, upstream: &str) -> RefMenuOffers {
     ref_menu(
         kind, full, "abc123", true, 0, "main", false, "", 0, "", "", false, "origin", "here",
@@ -169,8 +166,8 @@ fn a_pull_is_offered_on_the_two_ends_of_the_trees_own_comparison() {
     );
 }
 
-/// The upstream's own row, with one of the three things that hold a
-/// write back bent at a time.
+/// The upstream's own row, bent by the three things that hold a write
+/// back.
 fn pull_on_the_upstream(busy: i32, op_text: &str, detached: bool) -> RefMenuOffers {
     ref_menu(
         RefKind::Remote,
@@ -240,8 +237,8 @@ fn a_branch_out_in_another_copy_keeps_switch_and_asks_nothing() {
 
 #[test]
 fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
-    // `push --delete` weighs nothing on this machine — the hold stands in
-    // for the refusal git cannot give.
+    // `push --delete` touches nothing on this machine, so a local hold
+    // does not bar it.
     let offers = ref_menu(
         RefKind::Remote,
         "origin/feat",
@@ -266,10 +263,8 @@ fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
     );
 }
 
-/// A branch and the reading it speaks for that have drifted stand on two
-/// rows, and only the one under the pointer is this menu's to take away.
-/// The row that reaches the other one stays and says why — the reading
-/// is deleted from the row where it does stand (デザイン規約
+/// A drifted branch and its remote reading stand on two rows, and only the
+/// one under the pointer is this menu's to delete (デザイン規約
 /// §左メニューの所作 の削除の表).
 #[test]
 fn a_drifted_reading_keeps_the_local_delete_and_loses_the_remote_one() {
@@ -443,8 +438,6 @@ fn tag_offers(sides: &str, default_remote: &str, busy: i32) -> RefMenuOffers {
     )
 }
 
-/// The push row is the tag's alone, and it needs both a destination and
-/// something here to send.
 #[test]
 fn only_a_tag_is_pushed_from_this_menu_and_only_with_a_remote_to_send_it_to() {
     assert!(tag_offers("here", "origin", 0).push_tag);
@@ -472,9 +465,8 @@ fn only_a_tag_is_pushed_from_this_menu_and_only_with_a_remote_to_send_it_to() {
     );
 }
 
-/// The three deletes, one per side the name stands on. **Assembled, not
-/// the branch's fixed table**: a row with nothing to name is gone rather
-/// than greyed, and a tag always has one that can be pressed.
+/// One delete per side the name stands on — assembled, not the branch's
+/// fixed table: a row with nothing to name is gone rather than greyed.
 #[test]
 fn each_delete_row_needs_the_side_it_names() {
     let here = tag_offers("here", "origin", 0);
@@ -508,11 +500,9 @@ fn each_delete_row_needs_the_side_it_names() {
     );
 }
 
-/// A remote carrying the name on **another commit** is a reading this
-/// row cannot answer for: both rows that reach it are out. What stays is
-/// the local delete and the push — which is the leased overwrite there,
-/// and the one row that is about the tag on this commit
-/// (デザイン規約 §相手の履歴を置き換える).
+/// A remote holding the name on another commit: both rows that reach it
+/// are out, and the push stays as the leased overwrite (デザイン規約
+/// §相手の履歴を置き換える).
 #[test]
 fn a_tag_the_remote_has_elsewhere_loses_both_rows_that_reach_it() {
     let drifted = ref_menu(
@@ -538,11 +528,9 @@ fn a_tag_the_remote_has_elsewhere_loses_both_rows_that_reach_it() {
     assert!(!drifted.delete_tag_everywhere);
 }
 
-/// A section that has not answered yet reads as an ordinary local tag:
-/// the everyday delete stays, and the rows that need a remote reading
-/// wait for one — the qualified `--delete` git needs does not fail
-/// on a name the remote has not got
-/// (measured — `remote::delete_remote_tag`).
+/// An unread section reads as a local tag: the remote rows wait for a
+/// reading, since git's qualified `--delete` does not fail on a name the
+/// remote lacks (`remote::delete_remote_tag`).
 #[test]
 fn an_unread_tag_keeps_its_local_delete_and_offers_no_remote_one() {
     let unread = tag_offers("", "origin", 0);
@@ -552,8 +540,7 @@ fn an_unread_tag_keeps_its_local_delete_and_offers_no_remote_one() {
     assert!(!unread.delete_tag_everywhere);
 }
 
-/// With no remote configured there is nowhere for either remote row to
-/// reach, whatever a stale reading says.
+/// No remote configured outweighs a stale reading.
 #[test]
 fn no_remote_leaves_the_tag_only_its_local_delete() {
     let offers = tag_offers("both", "", 0);
@@ -562,9 +549,8 @@ fn no_remote_leaves_the_tag_only_its_local_delete() {
     assert!(!offers.delete_tag_everywhere);
 }
 
-/// Nothing about where the working tree is stops a tag going out or
-/// coming off a remote: it names a commit, and a stopped operation or
-/// unmerged files have no bearing on either.
+/// A tag names a commit, so a stopped operation or unmerged files do not
+/// hold its remote rows back.
 #[test]
 fn a_stopped_operation_does_not_hold_a_tag_back() {
     let offers = ref_menu(

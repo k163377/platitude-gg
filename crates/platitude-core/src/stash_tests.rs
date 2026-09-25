@@ -1,5 +1,4 @@
-//! Tests of [`crate::stash`]'s parsers and its standing, in a file of
-//! their own (structure.md §分割: テストだけ巨大なら同ディレクトリの専用ファイルへ).
+//! Tests of [`crate::stash`]'s parsers and standing (structure.md §分割).
 
 use crate::stash::*;
 
@@ -45,9 +44,8 @@ fn wrong_arity_is_an_error() {
     assert!(parse_stashes(&bytes).is_err());
 }
 
-/// Raw `stash list -z` bytes out of real git, committed under
-/// tests/fixtures/ and regenerated only with:
-/// `cargo test -p platitude-core --test it -- --ignored capture`
+/// Real git's `stash list -z` bytes under tests/fixtures/, regenerated
+/// only by `worktree_state::capture_fixtures` (command in the panic below).
 #[test]
 fn committed_stash_fixture_parses() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -77,8 +75,6 @@ fn a_label_is_one_line_with_something_on_it() {
     assert!(!is_valid_message("tab\there"));
 }
 
-/// The three shapes measured out of git, and the one it cannot tell
-/// apart from a prefix it wrote.
 #[test]
 fn a_label_is_read_out_of_the_prefix_git_put_on_it() {
     assert_eq!(
@@ -89,24 +85,21 @@ fn a_label_is_read_out_of_the_prefix_git_put_on_it() {
         label_in("On (no branch): on a detached head"),
         "on a detached head"
     );
-    // A summary written for a commit has its own colon in it, and the
-    // cut is at the first `": "` — the one git made.
+    // Cut at the first `": "`, git's; a commit-style summary keeps its own.
     assert_eq!(
         label_in("On main: feat: write the summary"),
         "feat: write the summary"
     );
-    // git's own, naming the commit the work stood on.
+    // git's own, naming the commit rather than the work.
     assert_eq!(label_in("WIP on main: 1234567 subject"), "");
     assert_eq!(label_in("WIP on (no branch): 1234567 subject"), "");
-    // Put on the reflog by `stash store` (a rename), which has no
-    // branch to name.
+    // `stash store` (a rename) writes no prefix.
     assert_eq!(label_in("a plain label"), "a plain label");
     assert_eq!(
         label_in("On its own with no colon"),
         "On its own with no colon"
     );
-    // The two ambiguities, recorded as they stand: a label that
-    // opens the way one of git's prefixes does is read as one.
+    // Accepted misreads: a label opening like git's prefix is read as one.
     assert_eq!(label_in("On second thought: revert it"), "revert it");
     assert_eq!(label_in("WIP on the parser"), "");
 }
@@ -121,8 +114,7 @@ fn the_standing_names_the_one_refusal_that_applies() {
         conflicted,
         partially_staged: 0,
     };
-    // Unborn outranks everything: git refuses however dirty the
-    // folder is.
+    // Unborn outranks everything: git refuses however dirty the tree is.
     assert_eq!(standing(true, &counts(1, 2, 3, 0)).as_str(), "unborn");
     assert_eq!(standing(false, &counts(1, 0, 0, 2)).as_str(), "conflicts");
     assert_eq!(standing(false, &counts(0, 0, 0, 0)).as_str(), "clean");

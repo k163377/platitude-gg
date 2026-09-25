@@ -6,10 +6,9 @@ use super::*;
 
 impl RepoSession {
     /// Re-reads the author identity and signing configuration. The task
-    /// answers once the configuration has published — what the write
-    /// queue waits on after an identity write (`session::write`) — with
-    /// the read that did not land, empty where it did. `None` where no
-    /// repository is open and nothing was read.
+    /// answers once the configuration has published (the write queue waits
+    /// on it after an identity write) with the read that did not land,
+    /// empty where it did. `None` where no repository is open.
     pub fn refresh_author(self: &Arc<Self>) -> Option<tokio::task::JoinHandle<Vec<FollowUp>>> {
         let workdir = self.workdir()?;
         let s = Arc::clone(self);
@@ -45,9 +44,8 @@ impl RepoSession {
                 if written.is_saved() {
                     return Ok(());
                 }
-                // Half of an identity reads as a whole one everywhere it
-                // is used, so a write that did not take is reported as a
-                // failure even when git raised nothing against it.
+                // Half an identity reads as a whole one everywhere, so a
+                // write that did not take fails even when git raised nothing.
                 Err(GitError::Rejected {
                     message: if written.message.is_empty() {
                         "git still reports a different identity".to_string()
@@ -59,15 +57,12 @@ impl RepoSession {
         )
     }
 
-    /// Reads HEAD's message and author so an amend can start from them.
-    ///
-    /// On demand: only the amend path wants
-    /// them, and a repository refresh already runs several commands.
+    /// Reads HEAD's message and author so an amend can start from them —
+    /// on demand, since only the amend path wants them.
     pub fn load_head_commit(self: &Arc<Self>) {
         self.spawn_read("head-commit", |s, workdir, cancel| async move {
-            // An unborn branch has no HEAD to amend; the empty prefill is
-            // that state's answer. A read that failed outright goes to
-            // the error surface — an amend started from a blank it
+            // An unborn branch answers with the empty prefill. A failed read
+            // goes to the error surface: an amend started from a blank it
             // trusts would commit the blank.
             let head = commit::head_commit(&s.executor, &workdir, &cancel)
                 .await?

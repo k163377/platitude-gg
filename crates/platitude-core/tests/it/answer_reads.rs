@@ -1,11 +1,7 @@
-//! Reads outside the configuration family that answer with their exit
-//! code, pinned the way config_reads.rs pins the config ones: unmarked,
-//! each of these logged a failed row over an ordinary answer (規約
-//! core.md §終了コードで答える問い合わせはコマンドログでも答え).
-//!
-//! **The two HEAD reads are pinned where the state they answer is**
-//! (`refs_integration`): detached and unborn *are* those exit codes, so
-//! the state and the classification come off one read of one repository.
+//! Reads outside the configuration family (config_reads.rs) that answer
+//! with their exit code (core.md「終了コードで答える問い合わせは」). The
+//! two HEAD reads are pinned in `refs_integration`, where detached and
+//! unborn are those exit codes.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -16,7 +12,6 @@ use platitude_core::details::{self, DiffTarget};
 use platitude_core::process::CommandEnd;
 use platitude_core::{Oid, preview, stash};
 
-/// Every `cat-file` that ran, ran against a side that was there.
 #[track_caller]
 fn assert_read_what_exists(ends: &[CommandEnd]) {
     assert!(
@@ -25,8 +20,8 @@ fn assert_read_what_exists(ends: &[CommandEnd]) {
     );
 }
 
-/// The diff of a file nothing tracks yet: `diff --no-index` exits 1
-/// whenever the sides differ, which against `/dev/null` is every time.
+/// `diff --no-index` exits 1 whenever the sides differ — against
+/// `/dev/null`, every time.
 #[tokio::test]
 async fn diffing_an_untracked_file_answers_by_code() {
     let mut repo = TestRepo::init();
@@ -49,11 +44,10 @@ async fn diffing_an_untracked_file_answers_by_code() {
     assert_eq!(log.ends_of(&["--no-index"]), vec![CommandEnd::Answered(1)]);
 }
 
-/// The side a preview asks for is routinely not there — the parent of a
-/// file this commit added, `HEAD:` before there is a HEAD, `:0:` for a
-/// staged deletion. `cat-file` says so by failing (exit 128, outside the
-/// 0/1 an answer is allowed), so the side is probed by a read that
-/// answers and `cat-file` only runs on a real side (`preview::blob_side`).
+/// A preview's side is routinely missing (an added file's parent, `HEAD:`
+/// when unborn, `:0:` for a staged deletion) and `cat-file` fails on it
+/// with 128, so `preview::blob_side` probes with a read that answers and
+/// runs `cat-file` only on a real side.
 #[tokio::test]
 async fn previewing_a_side_that_is_not_there_answers_by_code() {
     let mut repo = TestRepo::init();
@@ -89,10 +83,8 @@ async fn previewing_a_side_that_is_not_there_answers_by_code() {
     assert_answered(&log.ends_of(&["rev-parse", "--verify"]), "the side probe");
 }
 
-/// The colours behind a diff are read against the file it is of, and for a
-/// file this commit deleted that side is gone — the same probe keeps
-/// `cat-file` off it before the fallback to the old one
-/// (`preview::source_text`).
+/// A deleted file's new side is gone; the same probe keeps `cat-file` off
+/// it before `preview::source_text` falls back to the old side.
 #[tokio::test]
 async fn colouring_a_deleted_file_answers_by_code() {
     let mut repo = TestRepo::init();
@@ -125,9 +117,8 @@ async fn colouring_a_deleted_file_answers_by_code() {
     assert_answered(&log.ends_of(&["rev-parse", "--verify"]), "the side probe");
 }
 
-/// Renaming a stash probes the shifted entry before dropping the old one;
-/// 0 is "where the store pushed it" and 1 is the refusing arm — either way
-/// an answer.
+/// Renaming probes the shifted entry before dropping the old one; 0 (the
+/// store pushed it) and 1 (the refusing arm) are both answers.
 #[tokio::test]
 async fn renaming_a_stash_probes_by_code() {
     let mut repo = TestRepo::init();

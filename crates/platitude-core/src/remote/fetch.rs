@@ -32,8 +32,6 @@ pub async fn fetch(
 mod tests {
     use super::*;
 
-    /// Every fetch prunes — the tracking refs of branches deleted over
-    /// there go with it — and one remote is named after `--`.
     #[tokio::test]
     async fn a_fetch_prunes_and_names_one_remote_or_all() {
         let (exec, asked) = crate::refusing::git();

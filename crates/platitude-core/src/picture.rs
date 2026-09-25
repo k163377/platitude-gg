@@ -1,72 +1,43 @@
-//! What a picture becomes on its way into the store.
+//! What a picture becomes on its way into the store: decoded, cut to its
+//! centre square (a face is drawn into a square), averaged down to
+//! [`SIDE`] and written back out as PNG. The store holds that alone.
 //!
-//! A person picks a file off their own disk and it is drawn at 20 and 40
-//! pixels. Nothing else about it is kept: it is decoded, cut to its
-//! centre square, averaged down and written back out as PNG. The store
-//! holds that alone.
+//! Shrinking here is what bounds memory: a file's bytes say nothing about
+//! its pixels, and each decode stays resident per person given a picture
+//! (`ci/baseline/avatar-shrink-windows-x64.md`). Decoding here keeps the
+//! store drawable: the drawing end cannot say what went wrong (an
+//! undecodable file draws as an empty ring), so it is refused while the
+//! person is still there.
 //!
-//! Doing it here settles four things at once (measured:
-//! `ci/baseline/avatar-shrink-windows-x64.md`).
-//!
-//! **Memory.** The ceiling the store had was on bytes, and bytes say
-//! nothing about pixels: an ordinary telephone photograph is a fifth of
-//! it and 46MB decoded, and a flat PNG decodes to about a thousand times
-//! its own size. One decode is kept for as long as anything references
-//! it, so that cost is paid per person given a picture, against a
-//! 300MB budget for the whole application.
-//!
-//! **Redrawing.** `ctx.drawImage(url, …)` re-samples the source on every
-//! repaint, and a repaint is not rare — every visible row redraws while
-//! the graph column's divider is dragged.
-//!
-//! **Shape.** The face is drawn into a square, so a picture that is not
-//! square is squashed into one. The centre square is taken here instead.
-//!
-//! **Refusal.** A file nobody can decode is refused on the way in:
-//! accepted, it would be drawn as an empty ring, because the drawing end
-//! has no way to say what went wrong. Decoding here means everything in
-//! the store can be drawn, and everything else was refused while a
-//! person was still standing there.
-//!
-//! Reading is deliberately narrow — PNG and JPEG, by content.
-//! Every tool that makes pictures writes one of the two, anything
-//! else is one export away, and each additional decoder is surface
-//! that runs on a file this application did not make.
+//! Reading is PNG and JPEG only, by content: each additional decoder is
+//! surface that runs on a file this application did not make.
 
 use std::io::Cursor;
 
-/// Largest side the store keeps. The biggest a face is drawn is 40
-/// (`Metrics.detailsAvatar`), and a canvas rasterises at device
-/// resolution (measured), so this carries a display packing 6.4 device
-/// pixels into each logical one — and a doubled token to 3.2.
+/// Largest side the store keeps. The biggest face is 40
+/// (`Metrics.detailsAvatar`) and a canvas rasterises at device resolution,
+/// so this covers a 6.4x display — or a doubled token at 3.2x.
 ///
-/// Smaller pictures are left at their own size: blowing a 64 pixel icon
-/// up to this would store a blurred copy of it and nothing else.
+/// Smaller pictures keep their own size: upscaling would store only a
+/// blurred copy.
 pub const SIDE: u32 = 256;
 
-/// Most pixels a picture may have before it is refused. This is the peak
-/// worth holding for the moment it takes to shrink one — 32 megapixels
-/// is 128MB of memory — and it cannot be expressed as a file size: a
-/// flat PNG decodes to about a thousand times its own bytes.
+/// Most pixels a picture may have before it is refused: the peak worth
+/// holding while one is shrunk (32 megapixels is 128MB decoded).
 pub const MAX_PIXELS: u64 = 32_000_000;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PictureError {
-    /// Not a PNG or a JPEG, or one that will not come apart. The sentence
-    /// names the two formats: every category word for the file is a
-    /// second name for the avatar, and the settings card puts this line
-    /// directly under the one word it uses
-    /// (デザイン規約 §アバターを与える).
+    /// Not a PNG or a JPEG, or one that will not come apart. Names the
+    /// formats, not a category word (デザイン規約 §アバターを与える).
     #[error("this file is not a PNG or a JPEG that can be read")]
     Unreadable,
-    /// The dimensions are named because the ceiling a person was told
-    /// about is the file size — without them, a 2MB file being refused
-    /// has no explanation at all.
+    /// Names the dimensions: the ceiling a person was told about is a file
+    /// size, so a small file refused here needs them to make sense.
     #[error("this file is {width}x{height}, past the {} megapixels this can take", MAX_PIXELS / 1_000_000)]
     TooManyPixels { width: u32, height: u32 },
-    /// The file came apart but the small copy could not be written. Only a
-    /// bug or an allocator that gave up reaches this, so the wording does
-    /// not ask anybody to do anything.
+    /// Decoded, but the small copy could not be written. Only a bug
+    /// reaches this, so the wording asks nothing of anybody.
     #[error("the avatar could not be stored")]
     Unstorable,
 }
@@ -74,8 +45,7 @@ pub enum PictureError {
 /// The bytes to store for a picture: PNG, square, at most [`SIDE`].
 pub fn normalize(bytes: &[u8]) -> Result<Vec<u8>, PictureError> {
     let kind = kind_of(bytes).ok_or(PictureError::Unreadable)?;
-    // Asked of the header alone, so a picture too big to hold is refused
-    // without ever being held.
+    // From the header alone: a picture too big to hold is never held.
     let (width, height) = dimensions(bytes, kind).ok_or(PictureError::Unreadable)?;
     if u64::from(width) * u64::from(height) > MAX_PIXELS {
         return Err(PictureError::TooManyPixels { width, height });
@@ -97,9 +67,9 @@ enum Kind {
     Jpeg,
 }
 
-/// What a file is, by what is in it. The name it happens to carry is
-/// the file dialog's business (`avatar::EXTENSIONS`) — a picture
-/// saved under the wrong extension still draws.
+/// By content: the extension is the file dialog's business
+/// (`avatar::EXTENSIONS`), and a picture saved under the wrong one still
+/// draws.
 fn kind_of(bytes: &[u8]) -> Option<Kind> {
     if bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]) {
         Some(Kind::Png)
@@ -110,8 +80,7 @@ fn kind_of(bytes: &[u8]) -> Option<Kind> {
     }
 }
 
-/// Width and height without decoding the picture: both readers stop at
-/// the header when that is all that is asked of them.
+/// Width and height from the header alone, without decoding.
 fn dimensions(bytes: &[u8], kind: Kind) -> Option<(u32, u32)> {
     match kind {
         Kind::Png => {
@@ -135,9 +104,6 @@ fn decode(bytes: &[u8], kind: Kind) -> Option<Raw> {
     }
 }
 
-/// Everything is normalised to eight-bit colour with an alpha channel on
-/// the way out of the reader, so palettes, greyscale and sixteen-bit
-/// pictures all arrive in one shape.
 fn decode_png(bytes: &[u8]) -> Option<Raw> {
     let mut decoder = png::Decoder::new(Cursor::new(bytes));
     decoder.set_transformations(
@@ -151,8 +117,8 @@ fn decode_png(bytes: &[u8]) -> Option<Raw> {
         png::ColorType::Rgb => widen(&buffer, 3, |c| [c[0], c[1], c[2], 255]),
         png::ColorType::GrayscaleAlpha => widen(&buffer, 2, |c| [c[0], c[0], c[0], c[1]]),
         png::ColorType::Grayscale => widen(&buffer, 1, |c| [c[0], c[0], c[0], 255]),
-        // The transformations above expand a palette, so this is a
-        // reader that did not do what it was asked.
+        // The transformations expand a palette: only a misbehaving reader
+        // lands here.
         png::ColorType::Indexed => return None,
     };
     Some(Raw {
@@ -177,18 +143,13 @@ fn decode_jpeg(bytes: &[u8]) -> Option<Raw> {
     })
 }
 
-/// Rewrites `stride`-byte pixels as four-byte ones.
 fn widen(src: &[u8], stride: usize, to_rgba: impl Fn(&[u8]) -> [u8; 4]) -> Vec<u8> {
     src.chunks_exact(stride).flat_map(to_rgba).collect()
 }
 
-/// The centre square, averaged down to [`SIDE`] — a box filter, which is
-/// what a reduction this large wants: every source pixel is counted
-/// exactly once, so nothing shimmers when the result is drawn smaller
-/// still.
-///
-/// A picture already smaller than [`SIDE`] is only
-/// squared.
+/// The centre square, averaged down to [`SIDE`] with a box filter: every
+/// source pixel counts exactly once, so nothing shimmers when the result
+/// is drawn smaller still.
 fn shrink(img: &Raw) -> Raw {
     let edge = img.width.min(img.height);
     let side = SIDE.min(edge).max(1);
@@ -215,8 +176,7 @@ fn shrink(img: &Raw) -> Raw {
             }
             let at = ((row as usize) * (side as usize) + col as usize) * 4;
             for (channel, total) in sum.iter().enumerate() {
-                // `count` is at least one: both spans are widened to a
-                // minimum of a single pixel above.
+                // Both spans are at least one pixel wide.
                 out[at + channel] = (total / count.max(1)) as u8;
             }
         }
@@ -228,9 +188,8 @@ fn shrink(img: &Raw) -> Raw {
     }
 }
 
-/// PNG at the writer's ordinary setting. Squeezing harder buys a few
-/// kilobytes of a file measured in tens, and spends them on the one
-/// moment a person is waiting for the picture to appear.
+/// PNG at the writer's ordinary setting: squeezing harder saves a few
+/// kilobytes at the moment a person is waiting for the picture.
 fn encode(img: &Raw) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     {
@@ -244,8 +203,7 @@ fn encode(img: &Raw) -> Option<Vec<u8>> {
     Some(out)
 }
 
-/// A picture built here, so that nothing in this crate needs
-/// a binary fixture in the tree to have a real one to work on.
+/// Built here so no test needs a binary fixture in the tree.
 #[cfg(test)]
 pub(crate) fn png_of(width: u32, height: u32, colour: impl Fn(u32, u32) -> [u8; 4]) -> Vec<u8> {
     let mut px = Vec::with_capacity((width * height * 4) as usize);
@@ -270,9 +228,8 @@ mod tests {
         [img.px[at], img.px[at + 1], img.px[at + 2], img.px[at + 3]]
     }
 
-    /// 24x16, three colours across, quality 92 — emitted once from a
-    /// throwaway encoder, since a real JPEG is the only way to prove
-    /// the JPEG half comes apart at all.
+    /// 24x16, three colours across, quality 92: a real JPEG, since nothing
+    /// in the tree encodes one.
     const WIDE_JPEG_HEX: &str = concat!(
         "ffd8ffe000104a46494600010200000100010000ffc000110800100018030111",
         "00021101031101ffdb0043000302020202020302020203030303040604040404",
@@ -362,8 +319,8 @@ mod tests {
 
     #[test]
     fn too_many_pixels_is_refused_by_the_header_alone() {
-        // 36 megapixels of one colour: a small file, since that is the
-        // shape of the problem — bytes do not bound pixels.
+        // 36 megapixels of one colour in a small file: bytes do not bound
+        // pixels.
         let huge = png_of(6000, 6000, |_, _| [0, 0, 0, 255]);
         assert!(
             huge.len() < 1_000_000,

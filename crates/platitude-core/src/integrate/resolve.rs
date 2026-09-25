@@ -41,8 +41,7 @@ pub enum InProgress {
 }
 
 impl InProgress {
-    /// The verb git knows this operation by — what a chip or a pill
-    /// spells when it names the way out (`cherry-pick --abort`).
+    /// The verb git knows this operation by (`cherry-pick --abort`).
     pub fn command(self) -> &'static str {
         match self {
             InProgress::Rebase => "rebase",
@@ -54,13 +53,10 @@ impl InProgress {
 
     fn supports(self, continuation: Continuation) -> bool {
         match self {
-            // `git merge` steps through nothing, so there is no commit to
-            // leave out. **`--quit` it does take** (measured 2.55: the marker
-            // goes, the tree stays exactly as it stood) — the exit card
-            // still does not offer the row, but that is a decision about
-            // what to put in front of a reader, and the way out of a
-            // stopped operation that ends on another branch goes through
-            // this one (`session::build::leave_operation`).
+            // `git merge` steps through nothing, so no `--skip`. `--quit` it
+            // does take (the marker goes, the tree stays):
+            // `session::build::leave_operation` uses it, though the exit card
+            // does not offer it.
             InProgress::Merge => !matches!(continuation, Continuation::Skip),
             _ => true,
         }
@@ -87,8 +83,7 @@ impl InProgress {
 
 /// Continues, aborts or skips whatever is currently in progress.
 ///
-/// Returns `Ok(false)` when nothing is in progress, so a UI button
-/// can be a no-op.
+/// Returns `Ok(false)` when nothing is in progress.
 pub async fn resolve_current(
     executor: &GitExecutor,
     workdir: &Path,
@@ -119,10 +114,8 @@ pub async fn resolve(
     let mut cmd = GitCommand::new()
         .cwd(workdir)
         .args([op.command(), continuation.flag()]);
-    // Continuing a sequencer op would otherwise open an editor for the
-    // commit message it is about to write. `git merge --continue` and
-    // `git rebase --continue` accept no arguments at all — they rely on
-    // GIT_EDITOR, which the process layer pins to `true`.
+    // `--no-edit` for cherry-pick / revert only: `merge --continue` and
+    // `rebase --continue` reject it (they rely on `GIT_EDITOR=true`).
     if continuation == Continuation::Continue
         && matches!(op, InProgress::CherryPick | InProgress::Revert)
     {
@@ -148,10 +141,8 @@ mod tests {
         assert!(InProgress::CherryPick.supports(Continuation::Skip));
     }
 
-    /// And the way out it lacks is refused before a command is built: no
-    /// repository is read and nothing is asked of git. The program and the
-    /// tree are not there either, so a road that reached a spawn would come
-    /// back as a failure to start rather than this refusal.
+    /// The executor runs nothing and the tree is not there, so a road that
+    /// reached a spawn would fail to start instead of this refusal.
     #[tokio::test]
     async fn a_skip_asked_of_a_merge_is_refused_before_git_runs() {
         let (exec, asked) = refusing::git();

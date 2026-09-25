@@ -14,18 +14,14 @@ use crate::process::{GitCommand, GitExecutor};
 /// (`remote.pushDefault`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PushDefault {
-    /// The remote it names. **git does not check that one exists**: a name
-    /// no remote holds is taken for a URL, and the push fails at the
-    /// connection instead (measured 2.55: `'nope' does not appear to be a git
-    /// repository`).
+    /// The remote it names. git does not check that one exists: an unknown
+    /// name is taken for a URL and the push fails at the connection.
     pub remote: String,
-    /// Whether this repository's own config is what says so.
+    /// Whether this repository's own config says so.
     ///
-    /// A value set anywhere else cannot be cleared from here. git has no
-    /// local spelling for "not set" — an empty local value means "no
-    /// destination at all", and a plain `git push` then fails with
-    /// `No configured push destination.` (measured). Marking another remote is
-    /// the only move a repository has against a global value.
+    /// A value from any other level cannot be cleared from here: git has no
+    /// local "unset" (an empty local value means "no destination" and a
+    /// plain push fails), so marking another remote is the only move.
     pub local: bool,
 }
 
@@ -33,8 +29,6 @@ impl PushDefault {
     fn at(scope: &str, remote: &str) -> Self {
         Self {
             remote: remote.to_string(),
-            // Every other level — global, system, worktree, a `-c` on the
-            // command line — is one this repository cannot unset.
             local: scope == "local",
         }
     }
@@ -43,15 +37,11 @@ impl PushDefault {
 /// The keys `Mark as origin` writes ([`mark_origin`]), as this repository
 /// reads them.
 ///
-/// Two, because the role answers two questions in git: where a push goes
-/// when no branch says otherwise (`remote.pushDefault`), and which remote
-/// `git switch <name>` takes `<name>` from when more than one carries it
-/// (`checkout.defaultRemote` — unset, git refuses with `'topic' matched
-/// multiple (2) remote tracking branches`, measured 2.55). **Read as two
-/// because git keeps them as two**: `git remote rename` moves
-/// `remote.pushDefault` to the new name and `remove` unsets it, and both
-/// leave `checkout.defaultRemote` naming the old remote (measured 2.55),
-/// so a remote can hold one without the other.
+/// Two because the role answers two questions in git: where a push goes
+/// (`remote.pushDefault`) and which remote `git switch <name>` takes a
+/// name carried by several from (`checkout.defaultRemote`). Read as two
+/// because `git remote rename` / `remove` update only
+/// `remote.pushDefault`, so a remote can hold one without the other.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct OriginMarks {
     /// The push's, with the level that set it.
@@ -65,13 +55,8 @@ pub struct OriginMarks {
 /// Reads both [`OriginMarks`] keys with one `--get-regexp`, and which
 /// level set the push's.
 ///
-/// The record shape and the level order are [`push_marks`]'s; neither
-/// key set is exit 1, which is an answer.
-///
-/// A key written without a remote name behind it (`remote.pushDefault=`)
-/// answers `None`: no remote is called that, so there is nothing here to
-/// point at. What git does with it is refuse the push outright, and only
-/// git can say that (measured).
+/// A key with no remote name behind it (`remote.pushDefault=`) answers
+/// `None`: there is nothing to point at, and git refuses the push itself.
 pub async fn origin_marks(
     executor: &GitExecutor,
     workdir: &Path,
@@ -79,7 +64,7 @@ pub async fn origin_marks(
 ) -> Result<OriginMarks, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        // Unset is the usual state and it is an answer.
+        // Exit 1: neither key is set.
         .answers_by_code(1)
         .args([
             "config",
@@ -114,14 +99,11 @@ fn parse_origin_marks(bytes: &[u8]) -> OriginMarks {
 }
 
 /// Walks a `-z --show-scope --get-regexp` answer: `<scope>\0<key>\n<value>\0`
-/// per record, every level in precedence order, lowest first — so a key
-/// seen again overwrites what an earlier record said, and the last one is
-/// the effective value.
+/// per record, levels lowest first, so the last record per key is the
+/// effective value.
 ///
-/// A value that is empty or blank comes through as `None`, as does a key
-/// written bare, whose record has no newline in it (measured 2.55: a bare
-/// `pushDefault` line arrives as `local\0remote.pushdefault\0`). Both still
-/// override a level below.
+/// An empty or blank value, and a bare key (a record with no newline),
+/// come through as `None` and still override a level below.
 fn each_scoped_record(bytes: &[u8], mut each: impl FnMut(&str, &str, Option<&str>)) {
     let mut fields = bytes
         .split(|b| *b == 0)
@@ -144,20 +126,14 @@ fn each_scoped_record(bytes: &[u8], mut each: impl FnMut(&str, &str, Option<&str
 /// Both marks at once: the branch's own `branch.<branch>.pushRemote`, and
 /// the repository's [`PushDefault`] beside it.
 ///
-/// The one reader of the branch key, and one process for the pair.
-/// [`super::plan_current_push`] runs it before a send, and the status tick
-/// runs it so the toolbar names the same destination and the refs snapshot
-/// hears about a mark moved from a terminal — in **any** scope, which is
-/// what the remotes cache cannot see on its own (its invalidation stats
-/// the repository's config file alone, and `git config --global
-/// remote.pushDefault` writes a different one). A second, separate
-/// spelling of either key is how the label comes to name a remote the
-/// push never goes to.
+/// The one reader of the branch key, shared by [`super::plan_current_push`]
+/// and the status tick: a second spelling lets the label name a remote the
+/// push never goes to
+/// (rules-refs/core.md「push の印の読みは `remote::push_marks` 1 本だけ」).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PushMarks {
-    /// The branch's own mark, which beats every other (git-config(5); the
-    /// order is [`super::plan_current_push`]'s, measured 2.55). `None` where
-    /// the branch does not mark one.
+    /// The branch's own mark, which beats every other (order:
+    /// [`super::plan_current_push`]). `None` where unset.
     pub push_remote: Option<String>,
     /// The repository's mark, with the level that set it.
     pub push_default: Option<PushDefault>,
@@ -165,16 +141,10 @@ pub struct PushMarks {
 
 /// Reads both marks with one `--get-regexp` over the two exact keys.
 ///
-/// `-z --show-scope --get-regexp` writes `<scope>\0<key>\n<value>\0` per
-/// record, every level in precedence order, so the last record per key is
-/// the effective value (measured 2.55:
-/// `global\0remote.pushdefault\nfork\0local\0remote.pushdefault\nhome\0`
-/// — `home` wins). Keys arrive with section and variable lower-cased and
-/// the branch name spelled as it was written; the pattern embeds the
-/// branch name escaped, because the pattern is a regex and the name may
-/// hold `.` or `+` (`config::regexp_literal` — measured: unescaped,
-/// `wip.v2+x` answers with `wipAv22x`'s mark). Neither key set is exit 1,
-/// which is an answer.
+/// Keys arrive with section and variable lower-cased and the branch name
+/// as written. The branch name is escaped into the regex
+/// (`config::regexp_literal`): unescaped, `wip.v2+x` picks up
+/// `wipAv22x`'s mark.
 pub async fn push_marks(
     executor: &GitExecutor,
     workdir: &Path,
@@ -217,22 +187,19 @@ fn parse_push_marks(branch: &str, bytes: &[u8]) -> PushMarks {
     marks
 }
 
-/// The [`OriginMarks`] keys in the order they are written and cleared: the
-/// push's first, because it is the one the remote's row draws its badge
-/// from. Either half left behind by a second call that fails reads as a
-/// mark not wholly set, so the row still offers it — marking finishes it,
-/// and marking then clearing takes the rest off.
+/// The [`OriginMarks`] keys in write and clear order: the push's first,
+/// since the remote's row draws its badge from it. A half left by a failed
+/// second call reads as a mark not wholly set, so the row still offers
+/// marking, which finishes it.
 const ORIGIN_KEYS: [&str; 2] = ["remote.pushDefault", "checkout.defaultRemote"];
 
 /// Marks `name` as this repository's origin: `git config
 /// remote.pushDefault <name>`, then `git config checkout.defaultRemote
 /// <name>`.
 ///
-/// The old spelling on purpose (規約 git最低バージョン整合: `git config
-/// set` is 2.46), which sets one key per process. The key ends the
-/// options: git stops looking for them after it, so a remote actually
-/// named `-x` — which `remote add` will make — is taken as the value
-/// (measured, 2.55).
+/// The old spelling on purpose (git最低バージョン整合.md: `git config set`
+/// is 2.46), one key per process. The key ends the options, so a remote
+/// named `-x` is taken as the value.
 pub async fn mark_origin(
     executor: &GitExecutor,
     workdir: &Path,
@@ -248,9 +215,8 @@ pub async fn mark_origin(
 
 /// `git config --unset` on both [`OriginMarks`] keys.
 ///
-/// A key not being set is the state the caller asked for, and git says so
-/// with exit 5 (measured). This repository's own config is all it reaches
-/// ([`PushDefault::local`]).
+/// Exit 5 (already unset) is the state asked for. Reaches only this
+/// repository's config ([`PushDefault::local`]).
 pub async fn clear_origin(
     executor: &GitExecutor,
     workdir: &Path,
@@ -280,8 +246,7 @@ pub async fn clear_origin(
 mod tests {
     use super::*;
 
-    /// Recorded from git 2.55: `config -z --show-scope --get-regexp` over
-    /// the two keys, `<scope>\0<key>\n<value>\0` per record.
+    /// Fixture recorded from git 2.55.
     #[test]
     fn the_origin_marks_name_their_remotes_and_the_push_level() {
         let read = parse_origin_marks(
@@ -305,8 +270,8 @@ mod tests {
         }
     }
 
-    /// Each key stands alone: a remote renamed in a terminal takes the push
-    /// mark along and leaves the checkout one behind (measured 2.55).
+    /// A `remote rename` in a terminal moves the push mark and leaves the
+    /// checkout one behind.
     #[test]
     fn the_two_keys_may_name_different_remotes() {
         let read = parse_origin_marks(
@@ -319,8 +284,6 @@ mod tests {
         assert_eq!(checkout_only.checkout_default.as_deref(), Some("origin"));
     }
 
-    /// Levels arrive lowest first, so the last record per key is the
-    /// effective value.
     #[test]
     fn the_last_origin_record_per_key_is_the_effective_one() {
         let read = parse_origin_marks(
@@ -333,17 +296,13 @@ mod tests {
         assert_eq!(read.checkout_default.as_deref(), Some("fork"));
     }
 
-    /// A remote may be named `-x` (`remote add --end-of-options` makes one),
-    /// and the value comes back as it was written.
+    /// `remote add --end-of-options` can make a remote named `-x`.
     #[test]
     fn a_dashed_remote_name_survives_the_read() {
         let read = parse_origin_marks(b"local\0remote.pushdefault\n-x\0");
         assert_eq!(read.push_default.expect("a value").remote, "-x");
     }
 
-    /// The key written with nothing behind it. No remote is called that, so
-    /// there is nothing to mark — git refuses the push, and only git can
-    /// say so.
     #[test]
     fn an_origin_mark_without_a_remote_names_nothing() {
         let empty =
@@ -355,9 +314,7 @@ mod tests {
         assert_eq!(parse_origin_marks(b""), OriginMarks::default());
     }
 
-    /// Recorded from git 2.55: `config -z --show-scope --get-regexp`
-    /// writes `<scope>\0<key>\n<value>\0` per record, section and
-    /// variable lower-cased, the branch name as written.
+    /// Fixture recorded from git 2.55.
     #[test]
     fn the_marks_read_takes_both_keys_from_one_answer() {
         let marks = parse_push_marks(
@@ -370,8 +327,6 @@ mod tests {
         assert!(!marked.local, "the global level set it");
     }
 
-    /// Levels arrive lowest first, so the last record per key is the
-    /// effective value (measured, local `home` prints after global `fork`).
     #[test]
     fn the_last_record_per_key_is_the_effective_one() {
         let marks = parse_push_marks(
@@ -384,10 +339,6 @@ mod tests {
         assert!(marked.local);
     }
 
-    /// The two spellings of "nothing here": an empty local value (the
-    /// "no destination at all" state) and a key written bare, which
-    /// arrives as a record with no newline in it (measured, 2.55). Both
-    /// override a level below.
     #[test]
     fn an_empty_or_bare_key_names_nothing_and_still_overrides() {
         let empty = parse_push_marks(
@@ -403,8 +354,7 @@ mod tests {
         assert!(parse_push_marks("main", b"").push_remote.is_none());
     }
 
-    /// The branch name keeps its case in the key, and the match is exact:
-    /// `Topic`'s mark is not `topic`'s (measured, 2.55).
+    /// git keeps the branch name's case in the key (2.55).
     #[test]
     fn a_branch_keeps_its_case_and_another_case_is_another_branch() {
         let bytes: &[u8] = b"local\0branch.Topic.pushremote\nfork\0";
@@ -415,8 +365,7 @@ mod tests {
         assert!(parse_push_marks("topic", bytes).push_remote.is_none());
     }
 
-    /// A branch name holding regex metacharacters is compared literally —
-    /// the escaping lives in the pattern, and the parse compares as text.
+    /// The escaping lives in the pattern; the parse compares as text.
     #[test]
     fn a_metacharacter_branch_name_is_matched_literally() {
         let bytes: &[u8] = b"local\0branch.wip.v2+x.pushremote\nfork\0";
@@ -427,9 +376,8 @@ mod tests {
         assert!(parse_push_marks("wip", bytes).push_remote.is_none());
     }
 
-    /// The separating newline is inside the record, so a value holding
-    /// newlines of its own cannot shift the scope/record pairing
-    /// (measured, 2.55: `local\0remote.pushdefault\nfork\nx\0`).
+    /// The separating newline is inside the record, so a value's own
+    /// newlines cannot shift the scope/record pairing.
     #[test]
     fn a_value_holding_a_newline_does_not_shift_the_pairing() {
         let marks = parse_push_marks(

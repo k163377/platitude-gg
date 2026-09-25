@@ -1,9 +1,7 @@
 //! Core domain logic for platitude-gg: git subprocess execution, output
 //! parsing, commit-graph computation and the domain model.
 //!
-//! This crate must stay free of Qt (and any bridge) dependencies so that it
-//! can be unit-tested on any machine and reused unchanged if the QML bridge
-//! implementation is swapped (Qt Bridges -> CXX-Qt).
+//! Free of Qt and any bridge, so it survives a bridge swap unchanged.
 
 pub mod avatar;
 pub mod branch;
@@ -63,10 +61,7 @@ pub mod version;
 mod wait;
 pub mod worktrees;
 
-// Declarations and re-exports only. A type or a helper defined here would
-// make this file what every module reads and what names every module,
-// and the gate's dependency graph would read any change as reaching
-// everything (.claude/rules/structure.md §クレート root).
+// Declarations and re-exports only (.claude/rules/structure.md §クレート root).
 pub use error::GitError;
 pub use model::{CommitMeta, Name, StrPool};
 pub use oid::Oid;

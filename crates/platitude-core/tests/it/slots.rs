@@ -2,10 +2,8 @@
 //! what a token does to a command still waiting, and what two identical
 //! background reads spend.
 //!
-//! The competitors are driven by hand onto the queue
-//! (`support::wait::poll_once`) while a slot the test holds keeps them
-//! there, so every race below is asked for at the exact point it
-//! could happen (core.md §非同期・並行テスト).
+//! Competitors are driven onto the queue by hand (`support::wait::poll_once`)
+//! while a slot the test holds keeps them there (core.md §非同期・並行テスト).
 
 use std::sync::Arc;
 
@@ -48,8 +46,7 @@ async fn an_identical_background_read_shares_the_run_still_queued() {
     let (exec, log, cancel) = logged_on(&slots);
     let exec = exec.background();
 
-    // The pool is one slot, and this holds it: everything asked for
-    // below waits in the queue until it is given back.
+    // Holding the pool's one slot keeps everything below queued.
     let held = bounded(
         "the test's own slot",
         slots.acquire(Priority::Interactive, Pace::Here),
@@ -154,14 +151,9 @@ async fn a_session_opens_whole_through_two_slots_and_gives_them_back() {
     let exec = crate::support::exec::isolated().scheduled(Arc::clone(&slots));
     let (sink, session) = opened_with(&repo, exec).await;
     sink.opened_graph(&session, 5).await;
-    // **The graph landing is not the last slot going back.** An opening
-    // starts more than the three commands the rows are drawn from, and a
-    // reap runs after the answer its command carried — so the slots are
-    // waited for where they are given back (`Slots::settled`) rather than
-    // read on the beat the graph arrived. Reading them there says "one
-    // still running" whenever the machine is busy enough to put a beat
-    // between the two, which is a race and not an answer
-    // (core.md §非同期・並行テスト:「もう起きない」は完了後の状態で証明する).
+    // The graph landing is not the last slot going back (an opening runs
+    // more than three commands, and a reap follows its answer), so wait
+    // where slots are given back (core.md §非同期・並行テスト「もう起きない」).
     bounded(
         "every slot the opening took, given back",
         slots.settled(|report| report.running == 0),
@@ -181,10 +173,8 @@ async fn a_session_opens_whole_through_two_slots_and_gives_them_back() {
 /// session's close takes the queued command out, and the slot it was
 /// waiting for spawns nothing on its behalf.
 ///
-/// The session watches its own commands (`CommandFeed`), so what the
-/// queued read did is read off the sink — with the background reads
-/// switched on, since a details read is one the session makes on
-/// its own.
+/// What the queued read did is read off the sink (`CommandFeed`), with
+/// background reads recorded, since a details read is the session's own.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_closed_session_takes_its_queued_reads_with_it() {
     let (repo, head) = scenario();
@@ -212,13 +202,9 @@ async fn a_closed_session_takes_its_queued_reads_with_it() {
             })
         })
         .await;
-    // **`CommandStarted` is the ask being announced, not its place in the
-    // queue.** `GitExecutor::execute` tells the observer and only then
-    // goes to `Slots::acquire`, so between the two the count is still 0
-    // for as long as it takes that task to reach the lock — which under a
-    // full gate is long enough to be seen on both machines
-    // (P3-確認事項 §core). The queue is what this is about, so the queue
-    // is what is waited for; the event is kept for the id.
+    // `CommandStarted` is the ask, not its place in the queue
+    // (rules-refs/core.md, the `CommandStarted` line): the queue is waited
+    // for; the event is kept for the id.
     bounded(
         "the details read to reach the queue",
         slots.settled(|report| report.queued_interactive == 1),

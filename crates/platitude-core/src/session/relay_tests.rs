@@ -14,8 +14,6 @@ fn oid(n: u8) -> Oid {
     Oid::from_hex_str(&hex).unwrap()
 }
 
-/// One walked row, as a pass leaves it: what it says is its own, and
-/// what the laying rewrites is only where it sits.
 fn walked(id: u8, parents: &[u8], builder: &mut GraphBuilder) -> LogRow {
     let mine = oid(id);
     let parents: Box<[Oid]> = parents.iter().map(|p| oid(*p)).collect();
@@ -42,7 +40,6 @@ fn walked(id: u8, parents: &[u8], builder: &mut GraphBuilder) -> LogRow {
     }
 }
 
-/// A history the walk found, with nothing of any reading in it.
 fn history() -> Vec<LogRow> {
     let mut b = GraphBuilder::new();
     vec![
@@ -65,10 +62,8 @@ fn standing(pending: Option<Vec<Oid>>, carried: Vec<Carried>) -> Standing {
     }
 }
 
-/// The row the status asks for is put there by the laying, and the
-/// commits under it sit exactly where the walk left them — which is what
-/// makes laying out again safe to do at the moment of
-/// publishing.
+/// The commits under the row sit exactly where the walk left them, which
+/// is what makes laying out again safe at the moment of publishing.
 #[test]
 fn the_uncommitted_row_can_be_put_on_a_graph_that_was_walked_without_it() {
     let walked_rows = history();
@@ -93,8 +88,6 @@ fn the_uncommitted_row_can_be_put_on_a_graph_that_was_walked_without_it() {
     );
 }
 
-/// And taken off again, with the same history under it. The pair is the
-/// whole of what a tree turning dirty and clean again does to the graph.
 #[test]
 fn the_uncommitted_row_can_be_taken_off_a_graph_that_was_walked_with_it() {
     let walked_rows = history();
@@ -110,9 +103,6 @@ fn the_uncommitted_row_can_be_taken_off_a_graph_that_was_walked_with_it() {
     assert_eq!(where_they_sit(&without), before, "the history moved");
 }
 
-/// Laying it again is the answer to the reading in hand: a copy that
-/// has moved to another commit draws above the commit it is on
-/// now.
 #[test]
 fn a_copy_is_laid_where_its_reading_puts_it_now() {
     let copy = |head: u8| Carried {
@@ -150,8 +140,7 @@ fn a_copy_is_laid_where_its_reading_puts_it_now() {
     );
 }
 
-/// A branch with no commits yet: nothing to reach down to, so the row
-/// stands where the first commit will and takes the whole graph with it.
+/// An unborn branch: the row is the whole graph.
 #[test]
 fn the_row_stands_alone_where_there_is_no_commit_to_leash_to() {
     let (laid, _) = lay(Vec::new(), &standing(Some(Vec::new()), Vec::new()), None);
@@ -164,11 +153,8 @@ fn the_row_stands_alone_where_there_is_no_commit_to_leash_to() {
     );
 }
 
-/// The listing names every copy's HEAD for the price of one short
-/// process, and the readings cost a `status` each on a slower tick — so
-/// a copy that has committed is known to have moved long before what it
-/// is carrying is. Its reading draws nothing until the next one
-/// lands.
+/// The listing learns a copy committed long before its `status` reading
+/// does; until the next reading lands, the stale one draws nothing.
 #[test]
 fn a_reading_the_listing_has_moved_past_draws_nothing() {
     let reading = |path: &str, head: u8| Carried {
@@ -188,8 +174,6 @@ fn a_reading_the_listing_has_moved_past_draws_nothing() {
     assert_eq!(current.len(), 1, "the reading left behind was kept");
     assert_eq!(current[0].path, "/tmp/a");
 
-    // A copy taken since the last listing has a reading and no entry
-    // yet; it is there, so its row is too.
     let unlisted =
         std::collections::HashMap::from([(super::joins::same_path_key("/tmp/a"), oid(1))]);
     assert_eq!(
@@ -199,9 +183,6 @@ fn a_reading_the_listing_has_moved_past_draws_nothing() {
     );
 }
 
-/// What the walk found keeps everything it said: the laying rewrites
-/// where a row sits and nothing else, so the words, the chips and the
-/// published mark survive a graph being laid out again.
 #[test]
 fn laying_out_again_rewrites_the_lanes_and_nothing_a_row_says() {
     let mut walked_rows = history();

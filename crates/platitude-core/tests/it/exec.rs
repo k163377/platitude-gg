@@ -1,11 +1,8 @@
-//! Integration tests for the execution layer against the real system git.
+//! The execution layer against the real system git.
 //!
-//! The pre-merge part holds what the layer makes of git's answers; the periodic
-//! part records whether this machine's git meets the minimum.
-//!
-//! These await the executor directly — no `CaptureSink`, so no `Patience`
-//! arms itself — and the test executors carry no stock timeout. `bounded`
-//! is the backstop that turns a wedged git into a named failure here.
+//! These await the executor directly (no `CaptureSink`, so no `Patience`,
+//! and test executors carry no stock timeout), so `bounded` is the
+//! backstop that names a wedged git.
 
 use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};
@@ -24,10 +21,8 @@ async fn missing_binary_maps_to_git_not_found() {
     assert!(matches!(err, GitError::GitNotFound { .. }), "got {err:?}");
 }
 
-/// The empty path is the git on `PATH`, and it is the one the settings
-/// file holds for "whichever one this machine resolves". The probe is
-/// what a typed-in path is checked with, so this is the reading its
-/// default has to keep.
+/// Settings holds the empty path for "whichever git this machine resolves",
+/// and typed-in paths are checked with this probe, so it must keep that.
 #[tokio::test]
 async fn probing_the_empty_path_asks_the_git_on_path() {
     let cancel = CancellationToken::new();
@@ -36,9 +31,8 @@ async fn probing_the_empty_path_asks_the_git_on_path() {
     assert!(!probe.version().is_empty(), "{probe:?}");
 }
 
-/// A path with nothing at the end of it is told apart from one that ran
-/// and said something else — the two need different sentences, and it is
-/// the only thing a reader who mistyped a path has to go on.
+/// Told apart from one that ran and said something else: a reader who
+/// mistyped a path needs a different sentence.
 #[tokio::test]
 async fn probing_a_path_with_nothing_at_it_answers_missing() {
     let cancel = CancellationToken::new();
@@ -52,9 +46,6 @@ async fn probing_a_path_with_nothing_at_it_answers_missing() {
     assert_eq!(probe.version(), "");
 }
 
-/// Something that runs and is not git is a failure carrying its own
-/// words: the reader pointed at a real file and has to be told what
-/// it said.
 #[tokio::test]
 async fn probing_something_that_is_not_git_carries_its_own_words() {
     let repo_dir = TestRepo::init();
@@ -75,10 +66,9 @@ async fn probing_something_that_is_not_git_carries_its_own_words() {
     }
 }
 
-/// The work tree root and the git directory come off one `rev-parse`, one
-/// line each. The git directory is where the scratch files of a partial
-/// stage, a commit message and a rebase plan go, and a wrong one that is
-/// still a directory fails none of those — this is where it is named.
+/// A wrong git directory that is still a directory fails none of the
+/// scratch writes that go there (partial stage, commit message, rebase
+/// plan) — this is where it is named.
 #[tokio::test]
 async fn opens_a_valid_repository() {
     let mut repo_dir = TestRepo::init();
@@ -100,8 +90,6 @@ async fn opens_a_valid_repository() {
     );
 }
 
-/// A folder with no repository in it and a path that is not there at all
-/// are the same refusal: nothing to show here, and not bare.
 #[tokio::test]
 async fn open_rejects_a_non_repository() {
     let dir = tempfile::tempdir().unwrap();
@@ -119,10 +107,8 @@ async fn open_rejects_a_non_repository() {
     }
 }
 
-/// A bare repository is refused like any other folder that cannot be
-/// shown, but it says so about itself: there is a repository here, and it
-/// has no work tree. The screen has a line of its own for that, and this
-/// flag is the only thing it may read to choose it.
+/// The screen has a line of its own for a bare repository, and this flag
+/// is the only thing it may read to choose it.
 #[tokio::test]
 async fn open_rejects_a_bare_repository_as_bare() {
     let dir = tempfile::tempdir().unwrap();
@@ -144,10 +130,8 @@ async fn open_rejects_a_bare_repository_as_bare() {
     );
 }
 
-/// Every copy of one repository answers with the same repository, and
-/// each answers with the copy the folder is actually in — the two halves
-/// the strip needs to tell "another copy of what is already open" from
-/// "another repository" (デザイン規約 §タブの所作).
+/// The two halves the strip needs to tell "another copy of what is already
+/// open" from "another repository" (デザイン規約 §タブの所作).
 #[tokio::test]
 async fn place_names_the_copy_and_the_repository_it_hangs_off() {
     let mut repo_dir = TestRepo::init();
@@ -181,9 +165,6 @@ async fn place_names_the_copy_and_the_repository_it_hangs_off() {
     );
 }
 
-/// A folder deeper in the tree opens the copy above it, and that copy is
-/// filed under the same repository — the same fold the tab strip makes,
-/// asked of one answer.
 #[tokio::test]
 async fn place_from_a_subdirectory_answers_for_the_copy_around_it() {
     let mut repo_dir = TestRepo::init();
@@ -224,10 +205,8 @@ async fn failed_commands_surface_gits_stderr() {
     }
 }
 
-/// `answers_by_code` marks 0 and 1 as answers for the command log; any
-/// other exit from the same command (a fatal 128) is still a failure and
-/// must be reported as a plain exit — which keeps a broken repository
-/// off an answered, ok-looking row.
+/// A fatal 128 from the same command stays a plain exit, which keeps a
+/// broken repository off an answered, ok-looking row.
 #[tokio::test]
 async fn answers_by_code_reports_only_zero_and_one_as_answers() {
     use crate::support::Ends;
@@ -270,35 +249,23 @@ async fn answers_by_code_reports_only_zero_and_one_as_answers() {
     );
 }
 
-/// **A read leaves `.git/index.lock` alone.** The lock a write takes is
-/// fatal — `hold_locked_index` dies where it cannot create it — so a
-/// read that takes the same lock kills a write running beside it, and
-/// the reads run beside the writes: the queue orders the writes against
-/// each other (`session::write`). A `git diff` against the work tree
-/// refreshes the index, and locks it to do so, unless the fixed
-/// arguments say otherwise; `--no-optional-locks` is not that say-so,
-/// since `status` asks the flag before it locks and `diff` never
-/// asks.
-///
-/// The index a reader leaves behind is the whole of the evidence, so the
-/// stat has to be one a refresh would want to fix: over an index that
-/// already matches, a read with the fault and a read without it write the
-/// same nothing.
+/// A read must leave `.git/index.lock` alone: a write dies where it cannot
+/// take it, and reads run beside writes (the queue orders only writes,
+/// `session::write`). A work-tree `git diff` refreshes the index under
+/// that lock unless the fixed arguments say not to; `--no-optional-locks`
+/// does not reach `diff`.
 #[tokio::test]
 async fn a_work_tree_read_leaves_the_index_untouched() {
     let mut repo_dir = TestRepo::init();
     repo_dir.commit_file("a.txt", "one\n", "add a");
 
-    // The same bytes under a stat the index has not seen — the entry a
-    // refresh exists to fix, and the file a reader has nothing to say
-    // about.
+    // Same bytes under a stat the index has not seen: the entry a refresh
+    // would rewrite. Over a matching index a faulty read writes nothing.
     let file = std::fs::OpenOptions::new()
         .write(true)
         .open(repo_dir.path.join("a.txt"))
         .expect("open the tracked file");
-    // The epoch: the stat only has to differ from the one the index
-    // recorded, and a fixed date says so without reading a
-    // clock.
+    // A fixed date differs from the recorded stat without reading a clock.
     file.set_times(std::fs::FileTimes::new().set_modified(std::time::SystemTime::UNIX_EPOCH))
         .expect("give it a stat the index has not seen");
     drop(file);
@@ -324,16 +291,12 @@ async fn a_work_tree_read_leaves_the_index_untouched() {
         before,
         "a read rewrote the index, so it held the lock a write dies on"
     );
-    // And it is still a reader: a file whose stat alone moved is compared
-    // by content, and comes out unchanged.
     assert_eq!(out.stdout_utf8(), "", "a stat-only change is not a change");
 }
 
-/// **What the pre-merge run leaves out**: whether this machine's git meets the
-/// minimum — an answer about the machine, not about the code. The parse
-/// and the boundary are unit tests (`version::tests`), and the probe of the
-/// git on `PATH` runs before every merge; this runs in the full gate
-/// (`-- --ignored ::periodic::`) rather than on every change.
+/// Whether this machine's git meets the minimum is about the machine, not
+/// the code (the parse and boundary are `version::tests`), so the full gate
+/// runs it (`-- --ignored ::periodic::`), not every change.
 mod periodic {
     use super::*;
 

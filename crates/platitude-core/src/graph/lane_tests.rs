@@ -25,7 +25,6 @@ fn linear_history_stays_in_lane_zero() {
 
 #[test]
 fn branch_and_merge_uses_two_lanes() {
-    // 4 = merge(3, 2); 3 and 2 both children of 1.
     let mut pool = StrPool::new();
     let commits = vec![
         commit(&mut pool, 4, &[3, 2]),
@@ -99,11 +98,9 @@ fn octopus_merge_forks_three_ways() {
 
 #[test]
 fn second_parent_merges_into_existing_edge() {
-    // 6 -> [5, 1] opens lane 1 waiting for 1. Later 4 -> [3, 1]: its
-    // second parent is already awaited by lane 1, so the edge joins
-    // lane 1 immediately. First parents, by contrast, keep their
-    // own lane until the parent row (gitk-style), which is why
-    // 3 -> [1] still flows down lane 0.
+    // 6 -> [5, 1] opens lane 1 waiting for 1; 4 -> [3, 1] joins lane 1
+    // at once. A first parent keeps its own lane until the parent row
+    // (gitk-style), so 3 -> [1] still flows down lane 0.
     let mut pool = StrPool::new();
     let commits = vec![
         commit(&mut pool, 6, &[5, 1]),
@@ -154,9 +151,8 @@ fn independent_roots_occupy_separate_lanes() {
 
 #[test]
 fn fork_prefers_the_nearest_free_lane() {
-    // Node at lane 2 forks its second parent while lane 0 is free:
-    // crossing lane 1 to reach it would be worse than opening the
-    // adjacent lane 3.
+    // Node at lane 2 forks while lane 0 is free: the adjacent new lane 3
+    // beats crossing lane 1.
     let mut pool = StrPool::new();
     let commits = vec![
         commit(&mut pool, 9, &[1]),    // lane 0

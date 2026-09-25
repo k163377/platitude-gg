@@ -3,22 +3,12 @@
 //! that key with `checkout.defaultRemote` beside it — against real git,
 //! with `file://` remotes so nothing leaves the machine (実装計画 §11.3).
 //!
-//! Every expectation here was recorded from git itself before it was
-//! written down: the order it resolves the three keys in, the name it
-//! pushes a branch under once the destination is not the one it tracks,
-//! which remote an ambiguous `switch` takes, and the exit codes its reads
-//! answer with.
-//!
-//! **What is left here is what only git can answer**: that the four
-//! reads come back with what git holds — at every scope, and for a
-//! branch whose name is a regex — and that a push built from them lands
-//! where it said it would without moving where the branch fetches from.
-//! The order those reads are weighed in is a switch over their values,
-//! and every arrangement of it is asked of `remote::push`'s own tests,
-//! where an arrangement costs nothing rather than a clone, two bare
-//! repositories and a `config` write. What git does with the checkout key
-//! on its own — the `switch` it steers and the `remote rename` that leaves
-//! it behind — is recorded in [`periodic`].
+//! Only what git alone can answer: the four reads come back with what git
+//! holds — at every scope, and for a branch whose name is a regex — and a
+//! push built from them lands where it said without moving where the
+//! branch fetches from. The order the reads are weighed in is a switch
+//! over their values, covered by `remote::push`'s own tests. What git does
+//! with the checkout key on its own is in [`periodic`].
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -49,21 +39,15 @@ fn origin_fork_and_clone() -> (TestRepo, TestRepo, TestRepo) {
     (origin, fork, work)
 }
 
-/// **The upstream is under another name here, on purpose.** A branch
-/// spelled the same on both sides cannot say whether the plan read
-/// `branch.<name>.merge` at all: dropping that read entirely would answer
-/// with the branch's own name and come out identical. So this one is
-/// pushed as `main:elsewhere`, and what the plan has to carry across is a
-/// name nothing else in the repository holds.
+/// The upstream is under another name on purpose: with the same name on
+/// both sides, a plan that never read `branch.<name>.merge` would pass too.
 #[tokio::test]
 async fn nothing_marked_sends_a_branch_where_it_tracks() {
     let (_origin, _fork, mut repo) = origin_fork_and_clone();
     let (exec, cancel) = env();
 
     repo.git(&["push", "--set-upstream", "origin", "main:elsewhere"]);
-    // Asked of git rather than assumed: the test's own claim is that this
-    // value reaches the plan, so what it is has to come from outside the
-    // plan.
+    // Asked of git: the value the plan must carry has to come from outside it.
     assert_eq!(
         repo.git(&["config", "--get", "branch.main.merge"]).trim(),
         "refs/heads/elsewhere",
@@ -81,8 +65,8 @@ async fn nothing_marked_sends_a_branch_where_it_tracks() {
     assert!(!plan.set_upstream, "the branch already tracks something");
 }
 
-/// The whole point of the mark: a branch that tracks `origin/main` pushes
-/// somewhere else, under its own name, and keeps tracking origin.
+/// A branch that tracks `origin/main` pushes to the marked remote under its
+/// own name, and keeps tracking origin.
 #[tokio::test]
 async fn a_marked_remote_takes_the_push_from_the_upstream() {
     let (_origin, _fork, mut repo) = origin_fork_and_clone();
@@ -157,8 +141,7 @@ async fn the_origin_mark_reads_back_with_both_keys() {
         .expect("clearing a mark that is already gone is the state asked for");
 }
 
-/// The keys the snapshot reads, through the one reader both halves share
-/// — and one process for the pair.
+/// The keys the snapshot reads, through the one reader the send shares.
 #[tokio::test]
 async fn the_marks_read_back_and_unset_is_an_answer() {
     let (_origin, _fork, mut repo) = origin_fork_and_clone();
@@ -188,10 +171,9 @@ async fn the_marks_read_back_and_unset_is_an_answer() {
     );
 }
 
-/// A branch named with regex metacharacters reads its own mark and nobody
-/// else's: the name goes into the `--get-regexp` pattern escaped (measured
-/// 2.55: unescaped, `wip.v2+x` answers with `wipAv22x`'s mark), and the
-/// send resolves the same way.
+/// The name goes into the `--get-regexp` pattern escaped — unescaped,
+/// `wip.v2+x` answers with `wipAv22x`'s mark — and the send resolves the
+/// same way.
 #[tokio::test]
 async fn a_metacharacter_branch_reads_its_own_mark() {
     let (_origin, _fork, mut repo) = origin_fork_and_clone();
@@ -221,10 +203,9 @@ async fn a_metacharacter_branch_reads_its_own_mark() {
     assert_eq!(plan.remote_branch, "wip.v2+x", "the branch's own name");
 }
 
-/// The scope the label can go stale in: a mark written into the
-/// user's global configuration. The read sees it with its level, the
-/// label spells the same destination the send resolves, and the marks
-/// git weighs above it still win.
+/// A mark in the user's global configuration, the scope the label can go
+/// stale in: the read sees its level, the label spells what the send
+/// resolves, and the marks git weighs above it still win.
 #[tokio::test]
 async fn a_global_mark_is_read_and_sent_alike() {
     let (_origin, _fork, mut repo) = origin_fork_and_clone();
@@ -260,7 +241,6 @@ async fn a_global_mark_is_read_and_sent_alike() {
         "the label and the send disagree at global scope"
     );
 
-    // This repository's own mark beats the global one…
     remote::mark_origin(&exec, &repo.path, "home", &cancel)
         .await
         .expect("mark home locally");
@@ -271,8 +251,6 @@ async fn a_global_mark_is_read_and_sent_alike() {
     assert_eq!(marked.remote, "home");
     assert!(marked.local, "the repository's own config decided");
 
-    // …and the branch's own mark beats them both, for the read and the
-    // send alike.
     repo.git(&["config", "branch.main.pushRemote", "origin"]);
     let marks = remote::push_marks(&exec, &repo.path, "main", &cancel)
         .await
@@ -284,18 +262,14 @@ async fn a_global_mark_is_read_and_sent_alike() {
     assert_eq!(plan.remote, "origin");
 }
 
-/// **What the pre-merge run leaves out**: what git does with the checkout key
-/// once it is written — the remote an ambiguous `switch` takes, and the
-/// key a terminal's `remote rename` leaves on the old name. Writing that
-/// key and reading the two keys apart are held by the pre-merge tests above
-/// and by `remote::marks`' own, so the full gate runs these
-/// (`-- --ignored ::periodic::`) rather than every change.
+/// What git does with the checkout key once it is written. Writing it and
+/// reading the two keys apart are held above and by `remote::marks`' own
+/// tests, so only the full gate runs these.
 mod periodic {
     use super::*;
 
-    /// What the second key is for: a name more than one remote carries is one
-    /// `git switch` refuses to guess at, until a remote is marked — and then
-    /// it tracks the marked one.
+    /// What the second key is for: `git switch` refuses a name more than one
+    /// remote carries until a remote is marked, then tracks the marked one.
     #[tokio::test]
     #[ignore = "git's own use of checkout.defaultRemote: not worth the pre-merge run"]
     async fn a_marked_remote_is_where_an_ambiguous_switch_takes_its_branch() {
@@ -319,8 +293,7 @@ mod periodic {
     }
 
     /// Why the read keeps the two keys apart: a remote renamed in a terminal
-    /// takes the push's key along and leaves the checkout one on the old name
-    /// (measured 2.55).
+    /// takes the push's key along and leaves the checkout one on the old name.
     #[tokio::test]
     #[ignore = "what git's remote rename rewrites: not worth the pre-merge run"]
     async fn a_remote_renamed_in_a_terminal_leaves_the_checkout_key_behind() {

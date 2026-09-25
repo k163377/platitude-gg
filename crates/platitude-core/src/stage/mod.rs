@@ -1,10 +1,6 @@
-//! Staging: whole files, and hunk/line subsets via rebuilt partial patches.
-//!
-//! The two halves ask different questions of git and refuse for different
-//! reasons, so they are kept apart: [`whole`] runs one command over a list
-//! of paths, [`partial`] rebuilds a patch out of the diff a selection was
-//! made on, and [`refusal`] is what the second one says when the file it
-//! was made on has moved.
+//! Staging: [`whole`] runs one command over a list of paths, [`partial`]
+//! rebuilds a patch out of the diff a selection was made on, and
+//! [`refusal`] is what the second one says when that file has moved.
 
 mod partial;
 mod refusal;

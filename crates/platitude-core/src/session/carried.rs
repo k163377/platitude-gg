@@ -1,21 +1,14 @@
 //! What the other working copies are carrying: one `status` each, on a
 //! tick of their own.
 //!
-//! **The cost is the read.** One `status -uall` is most of a
-//! second on a reference-sized tree and it is the page's own
-//! tick's dominant term already
-//! (ci/baseline/poll-cost-windows-x64.md), and a window kept
-//! open beside another copy is what these rows are for. Hence
-//! a slower tick of its own
-//! (`settings::Defaults::copies_interval_secs`), a pass that
-//! drops the next tick ([`RepoSession::refresh_carried`]), and
-//! a cap on how many run at once that the slots hold: the
-//! reads go out on the session's background handle, and the
-//! slots serve them after anything somebody is waiting on and
-//! keep them out of the click's reserve (`process::Slots`,
-//! ci/baseline/git-slots-windows-x64.md).
-//! The listing that says which copies there are is the cheap half and
-//! rides the page's tick; this is the expensive one (CLAUDE.md §性能予算).
+//! The cost is the reads: a `status -uall` per copy, already the
+//! dominant term of the page's own tick
+//! (ci/baseline/poll-cost-windows-x64.md). Hence a slower tick
+//! (`settings::Defaults::copies_interval_secs`), a pass that drops the
+//! next tick ([`RepoSession::refresh_carried`]), and the background
+//! handle, which the slots serve after anything somebody waits on and
+//! keep out of the click's reserve (`process::Slots`). The listing of
+//! which copies there are is cheap and rides the page's tick.
 
 use std::path::Path;
 
@@ -29,42 +22,33 @@ use crate::worktrees::WorktreeEntry;
 /// One other working copy's uncommitted work, as a row draws it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Carried {
-    /// The name the row's chip shows — the last segment of the path, the
-    /// same one the WORKTREES row uses (`joins::shown_name`).
+    /// The row's chip name: the path's last segment, as the WORKTREES row
+    /// shows it (`joins::shown_name`).
     pub name: crate::Name,
-    /// Where that copy is, as git printed it. **What the row opens**: the
-    /// changes themselves are read in the copy they belong to, by opening
-    /// it in a tab of its own — the same door the WORKTREES row is, and
-    /// the only one that can stage and commit in the tree it is about.
+    /// Where that copy is, as git printed it — what the row opens, in a
+    /// tab of its own (the only place that can stage and commit there).
     pub path: String,
-    /// The commit the row leashes down to: that copy's HEAD. The row is
-    /// drawn where that commit lands, so a copy whose HEAD the walk never
-    /// reached draws nothing at all.
+    /// That copy's HEAD, where the row is drawn; a HEAD the walk never
+    /// reached draws nothing.
     pub head: Oid,
-    /// The six tallies the row names. **Off the row** — the numbers
-    /// belong to the copy the row is about, and the window has one set
-    /// of its own beside them.
+    /// The six tallies the row shows — that copy's, not this window's.
     pub kinds: Kinds,
 }
 
-/// Seconds between passes over the other copies, for a fresh settings
-/// file: three of the page's own ticks. Provisional until the
-/// measurement in ci/baseline/git-slots-windows-x64.md has been taken.
+/// Default seconds between passes over the other copies: a pass then runs
+/// about a tenth of the time (ci/baseline/git-slots-windows-x64.md §既定値).
 pub const COPIES_INTERVAL_DEFAULT_SECS: u32 = 30;
 
-/// The shortest interval offered: a `status` per copy every few seconds
-/// is already a machine spent on rows nobody is reading.
+/// The shortest interval: faster spends the machine on rows nobody reads.
 pub const COPIES_INTERVAL_MIN_SECS: u32 = 5;
 
 /// The longest — an hour, the way the auto-fetch ceiling is one.
 pub const COPIES_INTERVAL_MAX_SECS: u32 = 3600;
 
-/// The interval that will actually run, for a number a person asked
-/// for. Zero is off — the rows are not read at all — and anything else
-/// is held between the floor and the ceiling. The one place the range
-/// is applied, for the reason `auto_fetch_minutes` is the one place its
-/// ceiling is: the settings screen and a hand-written `settings.toml`
-/// write the same field.
+/// The interval that will run for the one asked: zero is off, anything
+/// else is clamped to the range. The one place the range is applied, as
+/// with `auto_fetch_minutes`: the settings screen and a hand-written
+/// `settings.toml` write the same field.
 #[must_use]
 pub fn copies_interval_secs(asked: u32) -> u32 {
     if asked == 0 {
@@ -77,36 +61,25 @@ pub fn copies_interval_secs(asked: u32) -> u32 {
 /// Reads every other working copy's status and keeps the ones with
 /// something to show.
 ///
-/// **How many run at once is the slots' to say**: every read
-/// is asked for at once on the background handle, and the
-/// slots admit as many as the half outside the click's
-/// reserve allows, after whatever this window's reader is
-/// waiting on (`process::Slots`). Ordering them behind this
-/// window's own reads by waiting on those made a ring, and
-/// the opening pass sat on the graph's loading spinner
-/// (observed); the cap keeps the machine for the reader
-/// without a wait.
+/// Every read is asked for at once on the background handle; how many
+/// run is the slots' to say (`process::Slots`). Waiting on this window's
+/// own reads instead made a ring that held the opening pass on the
+/// graph's spinner.
 ///
-/// **What makes this safe to point at somebody else's tree is already
-/// standing**: every invocation carries `--no-optional-locks` and
-/// `GIT_OPTIONAL_LOCKS=0` (`process::executor`). Without them a plain
-/// `status` writes the index of the tree it runs in, and while this
-/// window holds that lock the person working in that copy gets
-/// `fatal: Unable to create … index.lock` from their own `git add`
-/// (measured). Nothing here re-states it; the read is the window's
-/// ordinary one, aimed elsewhere.
+/// Safe to aim at somebody else's tree only because every invocation
+/// carries `--no-optional-locks` / `GIT_OPTIONAL_LOCKS=0`
+/// (`process::executor`): without them `status` writes that tree's index,
+/// and its owner's `git add` fails on `index.lock`.
 ///
-/// Skipped without a read: this window's own copy, a bare entry (no
-/// working tree to be dirty), and a prunable one (git says the directory
-/// is gone, so the read could only fail).
+/// Skips this window's own copy, a bare entry and a prunable one (the
+/// directory is gone).
 pub(super) async fn read_all(
     executor: &GitExecutor,
     worktrees: &[WorktreeEntry],
     here: &Path,
     cancel: &CancellationToken,
 ) -> Vec<Carried> {
-    // Spelled once: git prints its own separators and case, so telling
-    // this window's copy from the rest is a comparison of keys
+    // git prints its own separators and case: compare keys
     // (`joins::same_path_key`).
     let here = crate::session::joins::same_path_key(&here.to_string_lossy());
     let mine: Vec<&WorktreeEntry> = worktrees
@@ -154,9 +127,7 @@ pub(super) async fn read_all(
             found.push(wip);
         }
     }
-    // The pass as the measurement reads it: how many copies were read,
-    // and the wall clock the slots let them through in
-    // (ci/baseline/git-slots-windows-x64.md).
+    // Read by the measurement (ci/baseline/git-slots-windows-x64.md).
     tracing::info!(
         copies = mine.len(),
         carrying = found.len(),
@@ -164,23 +135,17 @@ pub(super) async fn read_all(
         slots = ?executor.slots().report(),
         "carried pass"
     );
-    // **In the listing's order.** What the rows are compared against to
-    // decide whether the graph is walked again is this list, and a set
-    // that merely came back shuffled would spend a whole `git log`
-    // saying nothing (`note_worktree_holders` sorts its own for the
-    // same reason).
+    // In the listing's order: this list decides whether the graph is
+    // walked again, and a shuffled set would cost a `git log` for nothing.
     found.sort_by_key(|(at, _)| *at);
     found.into_iter().map(|(_, wip)| wip).collect()
 }
 
-/// Whether the other copies are read at all, what the last pass left,
-/// and the pass in flight — **one owner under one lock**, so a pass that
-/// began before the copies were turned off cannot land after it: the
-/// switch and the rows move together, and a landing is checked against
-/// the switch's count in the same breath as it is written. Held apart
-/// (a flag beside the rows), the pass that was out when the switch went
-/// off landed its reading afterwards, and with the tick stopped nothing
-/// ever took those rows down again.
+/// Whether the other copies are read, what the last pass left, and the
+/// pass in flight — under one lock, so a pass begun before the copies
+/// were turned off cannot land after it. With a flag beside the rows,
+/// that pass put its rows back up with the tick stopped, and nothing took
+/// them down.
 #[derive(Default)]
 pub(super) struct Copies {
     state: std::sync::Mutex<CopiesState>,
@@ -190,15 +155,12 @@ struct CopiesState {
     /// The settings' switch (`settings::Defaults::copies_interval_secs`
     /// above zero).
     read: bool,
-    /// How many times the copies have been turned off. A pass takes the
-    /// number as it begins and lands on the same number only — rows read
-    /// for a switch since turned are a reading nobody asked for, and
-    /// would put back up what the turning took down.
+    /// How many times the copies have been turned off; a pass lands only
+    /// on the number it began with.
     turned: u64,
     rows: std::sync::Arc<Vec<Carried>>,
-    /// The pass in flight, stopped when the copies are turned off: a
-    /// read still waiting for a slot then spawns nothing, and one
-    /// running is not left to answer a question nobody is asking.
+    /// The pass in flight, cancelled when the copies are turned off (a
+    /// read still waiting for a slot then spawns nothing).
     pass: Option<CancellationToken>,
 }
 
@@ -234,8 +196,7 @@ pub(super) enum Landing {
 
 impl Copies {
     /// Begins a pass, or none while the copies are off. The token is a
-    /// child of `parent`, so the session's close ends the pass the way
-    /// it ends everything else.
+    /// child of `parent`, so the session's close ends it.
     pub(super) fn begin(&self, parent: &CancellationToken) -> Option<PassTicket> {
         let mut state = super::relock(&self.state);
         if !state.read {
@@ -249,7 +210,6 @@ impl Copies {
         })
     }
 
-    /// Lands what a pass read, and says what that came to.
     pub(super) fn land(&self, ticket: &PassTicket, fresh: Vec<Carried>) -> Landing {
         let mut state = super::relock(&self.state);
         if state.turned != ticket.turned {
@@ -262,9 +222,8 @@ impl Copies {
         Landing::Moved
     }
 
-    /// Turns the copies on or off. Off takes the rows down — what they
-    /// said is a reading nobody will take again — and stops the pass in
-    /// flight. Says whether a row moved.
+    /// Turns the copies on or off; off takes the rows down and stops the
+    /// pass in flight. Says whether a row moved.
     pub(super) fn turn(&self, read: bool) -> bool {
         let mut state = super::relock(&self.state);
         state.read = read;
@@ -282,16 +241,13 @@ impl Copies {
         true
     }
 
-    /// The rows as the last landing left them, for the walk that draws
-    /// them.
     pub(super) fn rows(&self) -> std::sync::Arc<Vec<Carried>> {
         std::sync::Arc::clone(&super::relock(&self.state).rows)
     }
 }
 
-/// A pass over the other copies, for whoever started it to wait on
-/// ([`super::RepoSession::refresh_carried`]): the reads are the
-/// session's, and this is where they are over.
+/// A pass over the other copies, for its starter to wait on
+/// ([`super::RepoSession::refresh_carried`]).
 #[derive(Debug)]
 pub struct CarriedPass {
     told: tokio::sync::oneshot::Receiver<CarriedOutcome>,
@@ -310,38 +266,22 @@ pub enum CarriedOutcome {
     /// The rows are as the pass read them; `moved` says whether that
     /// changed one, and asked for the walk again.
     Landed { moved: bool },
-    /// Nothing landed: the reads were stopped — by the session's close,
-    /// or by the copies being turned off under the pass — or the copies
-    /// were turned off between the reads and the landing.
+    /// Nothing landed: the session closed, or the copies were turned off,
+    /// under the pass.
     Dropped,
 }
 
 impl super::RepoSession {
     /// Reads what the other copies are carrying, and asks for the rebuild
-    /// if it came back different. Answers with the pass, for a caller
-    /// that waits on it; `None` where none begins — the repository is
-    /// not open, the pass before is still out, or the copies are off.
+    /// if it came back different. Answers with the pass; `None` where
+    /// none begins — the repository is not open, the pass before is still
+    /// out, or the copies are off.
     ///
-    /// **On a cadence of its own** (`settings::Defaults::copies_interval_secs`),
-    /// apart from the listing that rides the page's tick: the listing is
-    /// one process and nothing else, while this is a whole `status` per
-    /// copy. A window kept open beside another copy is what these rows
-    /// are for, so the clock is what brings them, and the ten-second
-    /// tick is too dear for them
-    /// (ci/baseline/poll-cost-windows-x64.md).
-    ///
-    /// **On a pass of its own, as well.** What waits on the worktree
-    /// pass is the write queue's settling, and a commit here is called
-    /// done on this window's own reads — a write over here does not
-    /// move what they are carrying.
-    ///
-    /// **One at a time**: on a big tree with several copies a pass can
-    /// outlast the interval, and the next tick is dropped, the way the
-    /// page's own poll drops its own. **Nobody is waiting on any of
-    /// it**, so the whole pass goes out on the background handle:
-    /// served after the reader's own commands, kept out of the click's
-    /// reserve, and taken back out of the queue with the session if it
-    /// closes first (`process::Slots`).
+    /// Off the page's tick, which a `status` per copy is too dear for (the
+    /// module doc), and apart from the worktree pass, which the write
+    /// queue's settling waits on: a write here does not move what the
+    /// other copies carry. One at a time — a tick that finds the last pass
+    /// out is dropped.
     pub fn refresh_carried(self: &std::sync::Arc<Self>) -> Option<CarriedPass> {
         let workdir = self.workdir()?;
         let Ok(permit) = std::sync::Arc::clone(&self.carried_slot).try_acquire_owned() else {
@@ -369,19 +309,15 @@ impl super::RepoSession {
         workdir: &Path,
         ticket: &PassTicket,
     ) -> CarriedOutcome {
-        // The listing again, read here: one process, against
-        // keeping a second copy of the listing in step with the
-        // worktree pass.
+        // Its own listing: one process, instead of keeping a copy of the
+        // worktree pass's in step.
         let Ok(worktrees) =
             crate::worktrees::load(&self.exec_background, workdir, &ticket.cancel).await
         else {
             return CarriedOutcome::Dropped;
         };
-        // Where the listing above found each copy, into the record the
-        // rows are drawn against. **Before the reads**: it describes the
-        // same moment they were started from, and a reading is only ever
-        // behind a listing taken after it
-        // (`RepoSession::note_copy_heads`).
+        // Recorded before the reads, so a reading is never newer than the
+        // listing it is drawn against (`RepoSession::note_copy_heads`).
         self.note_copy_heads(&worktrees, workdir);
         let carried = read_all(&self.exec_background, &worktrees, workdir, &ticket.cancel).await;
         // Reads stopped part-way are dropped: what they left out would
@@ -391,8 +327,7 @@ impl super::RepoSession {
         }
         match self.copies.land(ticket, carried) {
             Landing::Moved => {
-                // The rebuild a status that moved this tree asks for:
-                // these rows are drawn by the walk and by nothing else.
+                // These rows are drawn by the walk alone.
                 self.refresh_log();
                 CarriedOutcome::Landed { moved: true }
             }
@@ -402,40 +337,23 @@ impl super::RepoSession {
     }
 
     /// Waits for any pass over the other copies to end — the boundary a
-    /// test closes on before it counts their reads or turns them off,
-    /// the way `wait_for_snapshot_reads` closes the opening's.
+    /// test waits on before counting their reads or turning them off.
     pub async fn wait_for_carried_pass(&self) {
         if let Ok(permit) = self.carried_slot.acquire().await {
             drop(permit);
         }
     }
 
-    /// Reads what one other working copy is holding, for the pane that is
-    /// about to show it.
+    /// Reads the file list of one other working copy, fresh, for the pane
+    /// about to show it (the pass keeps only the rows' tallies). Read-only:
+    /// the pane has every write control down on another copy.
     ///
-    /// **A read of its own, aimed at the copy somebody is looking at.**
-    /// The tick above keeps the rows' tallies current for every copy;
-    /// this is the file list behind one row, asked for when that row is
-    /// selected — so a pane opened on a copy shows what it holds
-    /// now.
+    /// The last ask wins (`carried_read`): the reads are of different
+    /// trees, and the screen must answer the row the reader is on.
     ///
-    /// Nothing here can write: the pane it feeds has every write control
-    /// down while it is showing another copy, and the only door into that
-    /// copy's own writes is its own tab.
-    ///
-    /// **One at a time, and the last ask wins** (`carried_read`): these
-    /// are reads of different trees, so what is left on screen is the
-    /// answer about the row the reader is standing on, whichever of the
-    /// two came back first.
-    ///
-    /// **One read more than the tick's**, so a copy whose pane is open
-    /// pays twice: once for its row's tallies and once for the pane's
-    /// file list — each through the execution slots like every other git
-    /// (`process::Slots`), with nothing of its own to cap the pair. What
-    /// the second read costs is measured — one whole `status` of that
-    /// tree (ci/baseline/git-slots-windows-x64.md, the section on this
-    /// pair); whether the list can ride on the pass's own answer instead
-    /// is a decision nobody has taken.
+    /// A copy whose pane is open is read twice per tick, pass and pane
+    /// (ci/baseline/git-slots-windows-x64.md §ペインが立っているコピーの二重読み);
+    /// whether the list can ride on the pass's answer is undecided.
     pub fn read_carried_status(self: &std::sync::Arc<Self>, path: String, name: String) {
         let s = std::sync::Arc::clone(self);
         let cancel = self.carried_read.begin(&self.root_cancel);
@@ -444,9 +362,8 @@ impl super::RepoSession {
             let Ok(status) = crate::status::load(&s.executor, &at, &cancel).await else {
                 return;
             };
-            // Asked again after the read: cancelling is cooperative, so a
-            // read that had already worked its answer out can arrive here
-            // behind the ask that passed it.
+            // Checked again: cancellation is cooperative, so a finished read
+            // can arrive behind the ask that replaced it.
             if cancel.is_cancelled() {
                 return;
             }
@@ -456,23 +373,18 @@ impl super::RepoSession {
     }
 
     /// Whether the other copies are read at all — the settings' "never"
-    /// (`settings::Defaults::copies_interval_secs` = 0), which the
-    /// page's tick honours on its own and which this makes hold for the
-    /// reads an opening and a focus fire as well (`refresh_quick`).
-    /// Turned off, the rows already drawn come down with it — what they
-    /// said is a reading nobody will take again — and so does the pass
-    /// in flight, whose reading would put them back up (`Copies`).
+    /// (`settings::Defaults::copies_interval_secs` = 0), held here for the
+    /// reads an opening and a focus fire too (`refresh_quick`). Off takes
+    /// down the rows drawn and the pass in flight (`Copies`).
     pub fn set_copies_read(self: &std::sync::Arc<Self>, read: bool) {
         if self.copies.turn(read) {
             self.refresh_log();
         }
     }
 
-    /// The set as the last pass left it, for the walk that draws it.
-    ///
-    /// **A row stands or falls on the whole record**: the tallies are
-    /// drawn on the row, so a copy that only staged another file has
-    /// moved a row the walk has to rebuild.
+    /// The set as the last pass left it, for the walk that draws it. Whole
+    /// records compare: the tallies are drawn on the row, so a copy that
+    /// only staged another file has moved a row.
     pub(super) fn carried(&self) -> std::sync::Arc<Vec<Carried>> {
         self.copies.rows()
     }
@@ -512,8 +424,6 @@ mod tests {
         }
     }
 
-    // Turned off under a pass in flight, the copies stop it and refuse
-    // what it read: the rows the turning took down do not come back up.
     #[test]
     fn a_pass_begun_before_the_copies_were_turned_off_lands_nothing() {
         let copies = Copies::default();
@@ -539,8 +449,6 @@ mod tests {
         );
     }
 
-    // Turned back on, the copies read again on a count of their own: a
-    // pass from before the turning is still refused, a new one lands.
     #[test]
     fn the_copies_turned_back_on_land_a_new_pass_and_still_refuse_an_old_one() {
         let copies = Copies::default();

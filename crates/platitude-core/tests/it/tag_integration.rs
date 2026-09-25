@@ -1,11 +1,6 @@
-//! Making a tag, against real git.
-//!
-//! The refusal is half the point: `git tag` refuses a name that is taken,
-//! and `--force` stays off — a release mark that moves without anybody
-//! saying so is exactly what that refusal is there to stop (`tag::create`).
-//! What git does with a name that is taken, or that no ref can have, is
-//! git's own, and is in [`periodic`]. Sending one to a remote is
-//! `remote_tags_integration`, where the readings it has to agree with are.
+//! Making a tag, against real git; git's refusals of a taken or invalid
+//! name are in [`periodic`]. Sending one to a remote is
+//! `remote_tags_integration`.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -39,8 +34,6 @@ async fn a_tag_lands_on_the_commit_it_was_given() {
     );
 }
 
-/// The menus hand over the row's own commit, but the argument is optional
-/// the way git's is — and git's answer to leaving it off is HEAD.
 #[tokio::test]
 async fn no_commit_is_head() {
     let mut repo = TestRepo::init();
@@ -55,14 +48,9 @@ async fn no_commit_is_head() {
     assert_eq!(repo.git(&["rev-parse", "here"]), head);
 }
 
-/// A name that starts with a dash reaches git as a name
-/// (`--end-of-options`), and git turns it down on its own terms:
-/// `fatal: '-dashed' is not a valid tag name.` (measured, git 2.55) —
-/// **`check-ref-format` takes it, `git tag` does not**, so this is one
-/// place where [`tag::is_valid_name`] says yes and the command still
-/// refuses. Left to git: what a terminal can make, the box may offer
-/// to make (デザイン規約 §左メニューの所作「規則は git のもの」),
-/// and the refusal is git's own words.
+/// `check-ref-format` takes a leading dash but `git tag` does not, so
+/// [`tag::is_valid_name`] says yes and the command still refuses. Left to
+/// git (デザイン規約 §左メニューの所作「規則は git のもの」).
 #[tokio::test]
 async fn a_leading_dash_reaches_git_as_a_name_and_git_refuses_it() {
     let mut repo = TestRepo::init();
@@ -79,11 +67,10 @@ async fn a_leading_dash_reaches_git_as_a_name_and_git_refuses_it() {
     assert_eq!(repo.git(&["tag", "--list"]), "");
 }
 
-/// The first half of a rename: nothing has moved yet, so a refusal there
-/// is one the box the name was typed into can still answer
-/// (デザイン規約 §答えの要らない報せ). The second half — the new name made and the
-/// old one still there — is [`platitude_core::report::half_renamed`], which
-/// has no arrangement that reaches it from here.
+/// The first half of a rename: nothing has moved yet, so the refusal goes
+/// back under the box the name was typed into (デザイン規約 §答えの要らない報せ).
+/// The second half — new name made, old one still there — is
+/// [`platitude_core::report::half_renamed`], unreachable from here.
 #[tokio::test]
 async fn a_name_a_tag_cannot_take_is_reported_under_the_old_one() {
     let mut repo = TestRepo::init();
@@ -110,20 +97,16 @@ async fn a_name_a_tag_cannot_take_is_reported_under_the_old_one() {
     );
 }
 
-/// **What the pre-merge run leaves out**: git refusing a tag name — one that
-/// is taken, and one no ref can have. `tag::create` hands the name over on
-/// a fixed command line with no `--force`, so the refusal and the tag left
-/// where it was are git's; what the box turns down before git is
-/// `tag::is_valid_name`, held to git before every merge by
-/// `rename_integration::the_name_rules_are_the_ones_git_applies`. So the
-/// full gate runs them (`-- --ignored ::periodic::`) rather than every
-/// change.
+/// What the pre-merge run leaves out: git refusing a tag name that is
+/// taken or that no ref can have. `tag::create` hands it over on a fixed
+/// command line with no `--force`, so the refusal is git's; what the box
+/// turns down first is `tag::is_valid_name`, held to git pre-merge by
+/// `rename_integration::the_name_rules_are_the_ones_git_applies`.
 mod periodic {
     use super::*;
 
-    /// **Made, or refused.** The refusal is git's, and it has to come back as
-    /// a refusal — a create that quietly moved somebody's release mark would
-    /// be indistinguishable from one that did nothing.
+    /// The refusal has to come back as one: a create that quietly moved a
+    /// release mark would look like one that did nothing.
     #[tokio::test]
     #[ignore = "git's refusal of a taken tag name: not worth the pre-merge run"]
     async fn a_name_already_taken_is_refused_and_nothing_moves() {
@@ -148,9 +131,7 @@ mod periodic {
         );
     }
 
-    /// A name git will not take as a ref comes back as a refusal.
-    /// `tag::is_valid_name` is what keeps the box from getting this far; this
-    /// is the backstop under it.
+    /// The backstop under `tag::is_valid_name`.
     #[tokio::test]
     #[ignore = "git's refusal of a name no ref can have: not worth the pre-merge run"]
     async fn a_name_git_refuses_makes_no_tag() {

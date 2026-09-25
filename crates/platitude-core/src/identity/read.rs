@@ -121,11 +121,9 @@ pub(super) fn non_empty(value: &str) -> Option<String> {
     (!value.is_empty()).then(|| value.to_string())
 }
 
-/// git's boolean vocabulary (measured, 2.55): a valueless key
-/// (`[commit] gpgsign`, reaching a `-z` read with no value at all) is
-/// true, an empty value (`gpgsign =`) is false, and a number reads
-/// by its zeroness — so the two shapes are told
-/// apart.
+/// git's boolean vocabulary: a valueless key (`[commit] gpgsign`, no
+/// value at all in a `-z` read) is true, an empty value (`gpgsign =`) is
+/// false, and a number reads by its zeroness.
 fn parse_bool(value: Option<&str>) -> bool {
     let Some(value) = value else {
         return true;
@@ -181,8 +179,6 @@ mod tests {
 
     #[test]
     fn understands_gits_boolean_spellings() {
-        // Measured against git 2.55: any non-zero number is true, and an
-        // empty *value* is false — only a value-less key is true.
         for truthy in ["true", "yes", "on", "1", "TRUE", "42", "-1"] {
             assert!(parse_bool(Some(truthy)), "{truthy:?} is true to git");
         }

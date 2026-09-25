@@ -1,12 +1,9 @@
-//! The range the interactive-rebase screen composes over.
-//!
-//! A right-clicked commit asks what `git rebase --interactive` would offer
-//! from there up: the commits of `from^..HEAD`, oldest first, with enough
-//! about each to draw a row. Nothing here runs a rebase — the plan the
-//! screen assembles replays through [`crate::sequencer`], and this read is
-//! what it starts from. [`read_rows`] is the one parser both this preview
-//! and the sequencer's own plans go through, so the two entry points
-//! cannot come to read one repository differently.
+//! The range the interactive-rebase screen composes over: the commits of
+//! `from^..HEAD`, oldest first, with enough about each to draw a row.
+//! Nothing here runs a rebase — the plan replays through
+//! [`crate::sequencer`]. [`read_rows`] is the one parser this preview and
+//! the sequencer's plans share, so the two cannot read one repository
+//! differently.
 
 use std::path::Path;
 
@@ -26,17 +23,15 @@ pub struct PlanRow {
     pub author_email: String,
 }
 
-/// What one pass over a range read: the rows oldest-first, and whether a
-/// merge sits among them — taken off the same `%P` field, so the refusal
-/// costs no second process.
+/// The rows oldest-first, and whether a merge sits among them — off the
+/// same `%P` field, so the refusal costs no second process.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct RangeRead {
     pub rows: Vec<PlanRow>,
     pub merges: bool,
 }
 
-/// What a preview came back with: the rows to compose over, oldest first
-/// (git's todo order — the screen turns them round itself).
+/// Rows are oldest first (git's todo order; the screen turns them round).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanPreview {
     /// The commit the plan was asked from — the oldest one included.
@@ -46,52 +41,42 @@ pub struct PlanPreview {
     /// The range reaches the very first commit, so a rebase needs
     /// `--root` and there is no upstream to name.
     pub root: bool,
-    /// The very range the plan replays, spelled once here — the rewrite
-    /// warning asks about this string, so it cannot drift from what the
-    /// rebase touches.
+    /// The range the plan replays, spelled once — the rewrite warning asks
+    /// about this string, so it cannot drift from what the rebase touches.
     pub range: String,
-    /// How many commits of that range a remote already has, as of this
-    /// read — the `already pushed` count the run button wears. Read with
-    /// the rows, so the screen opens with its warning on; the refs
-    /// moving under an open plan is what asks again
-    /// ([`crate::session::RepoSession::check_plan_published`]).
+    /// How many commits of `range` a remote already has, as of this read
+    /// (the run button's `already pushed`). Refs moving under an open plan
+    /// ask again ([`crate::session::RepoSession::check_plan_published`]).
     pub published: u32,
     pub rows: Vec<PlanRow>,
     /// The commit the rows land on, for the screen's own `onto` row.
-    /// `None` when `root` — there is nothing under the first commit.
+    /// `None` when `root`.
     pub onto: Option<PlanRow>,
-    /// A local branch standing exactly on `upstream`, where one does —
-    /// the name the screen says first, with the id as the fallback.
-    /// Empty when none stands there, or on `root`.
+    /// A local branch standing exactly on `upstream`, the name the screen
+    /// prefers to the id. Empty when none stands there, or on `root`.
     pub onto_ref: String,
 }
 
-/// Why a preview was not made — this end's own answer, decided before a
-/// rebase is ever spawned. The wording belongs to the screen
-/// (app-ui.md「Rust に文言を置かない」), so what travels is the kind.
+/// Why a preview was not made, decided before any rebase spawns. The
+/// wording is the screen's (rules-refs/app-ui.md「Rust に文言を置かない」).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlanRefusal {
-    /// The range holds a merge commit, which a plain interactive rebase
-    /// drops — carrying on would silently flatten the history
-    /// (デザイン規約 §履歴を合流させる; `--rebase-merges` is a different
-    /// operation and the UI does not offer it).
+    /// The range holds a merge, which a plain interactive rebase silently
+    /// flattens (`--rebase-merges` is not offered; デザイン規約
+    /// §履歴を合流させる).
     AcrossMerge,
     /// The commit is not in the current branch's history: a rebase only
     /// ever rewrites the branch the tree is standing on.
     OffBranch,
     /// The commit below the range was never fetched — a shallow clone's
-    /// edge, which git answers exactly as it answers the real first commit
-    /// (`%P` empty, `<edge>~1` exits 1). Offered as `--root`, the replay
-    /// rewrites the edge into a first commit and cuts the branch off from
-    /// the history this clone does not hold: measured on a `--depth=3`
-    /// clone, dropping the edge left the branch on one commit where the
-    /// remote had six.
+    /// edge, which git answers like the real first commit (`%P` empty,
+    /// `<edge>~1` exits 1). Replayed as `--root`, it would cut the branch
+    /// off from the history this clone does not hold.
     UnfetchedBase,
 }
 
-/// A preview's two honest outcomes, apart from a read that failed. The
-/// plan rides boxed: a refusal is one byte, and the rows make the other
-/// variant hundreds (clippy `large_enum_variant`).
+/// A preview's two outcomes besides a failed read. Boxed for clippy
+/// `large_enum_variant`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlanAnswer {
     Plan(Box<PlanPreview>),
@@ -100,24 +85,17 @@ pub enum PlanAnswer {
 
 /// Reads what a plan from `from` (a full commit id) would be made of.
 ///
-/// Two serial process latencies in all: the range read carries the
-/// merge answer in its own `%P` field, and the onto row, its branch name
-/// and the count a remote already has of the range — all about the
-/// already-resolved range — run side by side. Serial spawns are what a
-/// 100ms interaction budget goes on (CLAUDE.md §性能予算,
-/// ci/baseline/code-costs-windows-x64.md §git のプロセス代). More go out
-/// only where git says there is nothing under `from`, to tell the
-/// history's first commit from a clone that stops there
-/// ([`sequencer::base_of`]).
+/// Serial spawns are what the interaction budget goes on (CLAUDE.md
+/// §性能予算): the merge answer rides the range read's `%P`, and the onto
+/// row, its branch name and the published count run side by side.
 pub async fn preview(
     executor: &GitExecutor,
     workdir: &Path,
     from: &str,
     cancel: &CancellationToken,
 ) -> Result<PlanAnswer, GitError> {
-    // The base answers before the range is read: a clone that stops here
-    // has nothing under `from` to replay onto, and refusing now also
-    // spares it the walk over everything it *does* hold.
+    // The base first: refusing an unfetched base spares the walk over
+    // everything the clone does hold.
     let (upstream, root) = match sequencer::base_of(executor, workdir, from, cancel).await? {
         sequencer::Base::Commit(oid) => (oid, false),
         sequencer::Base::Root => (String::new(), true),
@@ -128,26 +106,21 @@ pub async fn preview(
     let range = sequencer::range_arg(&upstream, root);
 
     let read = read_rows(executor, workdir, &range, cancel).await?;
-    // The merge answers first, as it does for the one-commit edits
-    // (`sequencer::plan_edit`): the two refusals overlap on a mis-click
-    // into another branch's history, and the two entry points should
-    // answer such a click with the same word.
+    // The merge first, as in `sequencer::plan_edit`: both refusals can fit
+    // a mis-click into another branch, and both entry points should give
+    // it the same one.
     if read.merges {
         return Ok(PlanAnswer::Refused(PlanRefusal::AcrossMerge));
     }
     // A linear `from^..HEAD` starts at `from` exactly when `from` is an
-    // ancestor of HEAD; anything else was a click on some other branch's
-    // row, and the range holds that branch's unrelated tail.
+    // ancestor of HEAD.
     if read.rows.first().is_none_or(|row| row.oid != from) {
         return Ok(PlanAnswer::Refused(PlanRefusal::OffBranch));
     }
 
-    // What the remotes already have of the range, beside the base reads:
-    // a warning that arrived a beat after the screen opened would be one
-    // the reader had already pressed past. The count is the answer even
-    // where it could not be read — no warning is what a plan over a
-    // repository with no remote shows, and a read that failed is logged
-    // where every read's failure is.
+    // Read with the rows: a warning arriving after the screen opened would
+    // already have been pressed past. A failed count reads as 0 (logged),
+    // as for a repository with no remote.
     let published = publish::state_of(executor, workdir, &range, cancel);
     let (onto, onto_ref, published) = if root {
         let published = published.await;
@@ -159,11 +132,9 @@ pub async fn preview(
             branch_at(executor, workdir, &upstream, cancel),
             published,
         );
-        // The name is the decoration; the base itself is the answer. The
-        // screen already writes the short id where no branch stands there
-        // (デザイン規約 §フル interactive rebase: 指すブランチが無ければ sha),
-        // so a `for-each-ref` that failed takes the same road and the
-        // preview stands.
+        // The name is decoration: a failed `for-each-ref` falls back to the
+        // id, as when no branch stands there
+        // (デザイン規約 §フル interactive rebase).
         let named = named.unwrap_or_else(|error| {
             tracing::debug!(%error, "no branch name for the plan's base; its id stands in");
             String::new()
@@ -191,14 +162,9 @@ pub async fn preview(
 }
 
 /// The first local branch standing exactly on `oid`, empty where none is.
-///
-/// "First" is the graph's own order, so the base wears in the header the
-/// name its row would lead with: current branch, then kind, then name
-/// (`session::model::LabelIndex::from_pairs`). Only the last of the three
-/// can decide anything here — the query is local branches alone, and the
-/// current branch cannot stand on the base, which the range `upstream..HEAD`
-/// has already been shown to sit above. Sorting is named here, and git's
-/// default happens to agree (measured 2.55).
+/// "First" is the name the base's graph row leads with
+/// (`session::model::LabelIndex::from_pairs`): with local branches only and
+/// HEAD above the base, that is name order.
 async fn branch_at(
     executor: &GitExecutor,
     workdir: &Path,
@@ -215,10 +181,9 @@ async fn branch_at(
     Ok(out.stdout_utf8().lines().next().unwrap_or("").to_string())
 }
 
-/// The commits of `range`, oldest first, with the fields a screen row
-/// shows and whether any of them is a merge. Five NUL-separated fields
-/// per record — none of them can carry a NUL, so the flat split below
-/// cannot tear one.
+/// The commits of `range`, oldest first, and whether any is a merge. None
+/// of the five fields can carry a NUL, so the flat split cannot tear a
+/// record.
 pub(crate) async fn read_rows(
     executor: &GitExecutor,
     workdir: &Path,
@@ -246,8 +211,6 @@ pub(crate) async fn read_rows(
         if oid.is_empty() {
             continue;
         }
-        // Two ids in `%P` is a merge: the answer rides the row read, so
-        // refusing a range never costs a `rev-list` of its own.
         read.merges |= parents
             .split(|b| *b == b' ')
             .filter(|p| !p.is_empty())

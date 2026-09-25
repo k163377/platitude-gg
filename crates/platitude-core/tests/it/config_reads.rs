@@ -1,18 +1,11 @@
 //! What the command log sees when this app reads git configuration.
 //!
-//! Every read here asks about keys that are usually not set, and git says
-//! so by exiting 1. That exit is the answer, so the command has to be
-//! marked as answering by code (`GitCommand::answers_by_code`): left
-//! unmarked it is logged as a failure and the command panel opens itself
-//! over it — for the remotes read, on every repository that has no remote,
-//! every time the sidebar refreshes (規約 core.md §終了コードで答える問い
-//! 合わせはコマンドログでも答え).
-//!
-//! The flag shows in how the log ends the row — `Answered` for a marked
-//! command, `Exited` for an unmarked one, whatever code it exited with —
-//! so these tests read the ends. The reads that cannot be made to exit 1
-//! from a test repository (every one of them has an identity, and
-//! `core.autocrlf` is set) still pin the flag that way.
+//! These keys are usually unset and git answers that with exit 1; unmarked
+//! (`GitCommand::answers_by_code`), the panel opens over it — for remotes,
+//! on every refresh of a repository with none
+//! (core.md「終了コードで答える問い合わせは」). The tests read how the log
+//! ends the row (`Answered` marked, `Exited` unmarked, whatever the code),
+//! so reads a test repository cannot make exit 1 still pin the flag.
 
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
@@ -27,16 +20,12 @@ use platitude_core::{conflict, eol, identity};
 /// A `file://` remote answers instantly; the budget just has to exist.
 const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
 
-/// How every configuration *read* of this run ended, in order. Both
-/// spellings (`--get`, `--get-regexp`) and no writes.
+/// Every config read, in order: `--get` and `--get-regexp`, no writes.
 fn config_reads(log: &Log) -> Vec<CommandEnd> {
     log.ends_of(&[" config ", "--get"])
 }
 
-/// The identity and signing keys, read on every refresh. A machine with no
-/// `user.name` anywhere exits 1 here, and one signing key short of the
-/// pattern is enough for git to answer 0 — the flag decides the same thing
-/// either way.
+/// Read on every refresh; a machine with no `user.name` exits 1 here.
 #[tokio::test]
 async fn reading_the_identity_answers_by_code() {
     let mut repo = TestRepo::init();
@@ -50,10 +39,8 @@ async fn reading_the_identity_answers_by_code() {
     assert_eq!(config_reads(&log), vec![CommandEnd::Answered(0)]);
 }
 
-/// The same read narrowed to one repository's own file, which is where a
-/// repository that overrides nothing gives the empty answer: the settings
-/// screen asks this of every repository the reader picks from the strip,
-/// and most of them will never have set a thing.
+/// Narrowed to one repository's own file, where the empty answer is the
+/// usual one: settings asks it of every repository picked from the strip.
 #[tokio::test]
 async fn reading_one_repositorys_own_identity_answers_by_code() {
     let mut repo = TestRepo::init();
@@ -70,8 +57,6 @@ async fn reading_one_repositorys_own_identity_answers_by_code() {
     assert_eq!(config_reads(&log), vec![CommandEnd::Answered(1)]);
 }
 
-/// The remotes, read the same way — and here the empty answer is the one a
-/// test repository actually gives.
 #[tokio::test]
 async fn listing_remotes_answers_by_code() {
     let mut repo = TestRepo::init();
@@ -113,8 +98,8 @@ async fn reading_the_tracking_branches_answers_by_code() {
     assert_answered(&config_reads(&log), "the tracking-branch read");
 }
 
-/// Where a push would go, for a branch that tracks nothing: the four keys
-/// git resolves a destination from, none of them there.
+/// A branch that tracks nothing: none of the four keys git resolves a
+/// destination from is set.
 #[tokio::test]
 async fn planning_a_push_answers_by_code() {
     let mut repo = TestRepo::init();
@@ -131,10 +116,8 @@ async fn planning_a_push_answers_by_code() {
     );
     assert_eq!(
         config_reads(&log),
-        // `branch.<name>.remote`, `branch.<name>.merge`, and the marks
-        // read (`branch.<name>.pushRemote` and `remote.pushDefault` in
-        // one process) — every key unset, and every read an answer the
-        // command log lets through.
+        // `branch.<name>.remote`, `branch.<name>.merge`, then
+        // `branch.<name>.pushRemote` and `remote.pushDefault` in one process.
         vec![
             CommandEnd::Answered(1),
             CommandEnd::Answered(1),
@@ -143,8 +126,6 @@ async fn planning_a_push_answers_by_code() {
     );
 }
 
-/// The merge tool the conflict pane offers: which one git would launch,
-/// and which ones the user wrote a command for.
 #[tokio::test]
 async fn reading_the_merge_tools_answers_by_code() {
     let mut repo = TestRepo::init();
@@ -161,11 +142,9 @@ async fn reading_the_merge_tools_answers_by_code() {
     assert_answered(&config_reads(&log), "the merge-tool reads");
 }
 
-/// Whether git normalises line endings on the way into the index — read
-/// off the fixture's `false`, then off a hand-written valueless key,
-/// which is git's boolean true and comes back as a `-z` record with no
-/// newline in it. That shape is git's to emit, so only a real read pins
-/// it; the CLI cannot even write the key that produces it.
+/// A hand-written valueless key is git's boolean true and comes back as a
+/// `-z` record with no newline; the CLI cannot write that key, so only a
+/// real read pins the shape.
 #[tokio::test]
 async fn reading_core_autocrlf_answers_by_code() {
     let mut repo = TestRepo::init();

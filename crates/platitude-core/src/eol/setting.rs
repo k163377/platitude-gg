@@ -1,14 +1,9 @@
 //! The one line-ending setting this app offers: `core.autocrlf`, read out
 //! of one of git's own files and written back into it.
 //!
-//! **This is the settings screen's, and only the settings screen's.** The
-//! warning that reads the same key (`attrs::normalises`) only reads it —
-//! a notice that offers to fix itself is where every other GUI's
-//! line-ending accident starts (デザイン規約 §改行コード
-//! の警告). What a reader changes here they came here to change.
-//!
-//! Nothing here converts a file. git does that, or does not, according to
-//! what is written; all this does is write it.
+//! Only the settings screen writes it; the warning that reads the same key
+//! (`attrs::normalises`) never offers a fix (デザイン規約 §改行コードの警告).
+//! Nothing here converts a file — git does, according to what is written.
 
 use std::path::Path;
 
@@ -18,9 +13,8 @@ use crate::config;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
-// The module that owns configuration owns the word for which of git's
-// files (`config::ConfigScope`), and it is not public on its own — so
-// every module that takes one keeps a door to it, the way `identity` does.
+// `config` is not public, so every module that takes a scope re-exports it
+// (as `identity` does).
 pub use crate::config::ConfigScope;
 
 /// The key, spelled once.
@@ -32,12 +26,8 @@ const PATTERN: &str = r"^core\.autocrlf$";
 /// What the read is called when it fails, in front of a reader.
 const READ_NAMED: &str = "git config --get-regexp core.autocrlf";
 
-/// The three answers git takes for `core.autocrlf`.
-///
-/// Three values of its own: `input` is neither of the other two — it
-/// converts on the way into the index and leaves the working tree
-/// alone — and a caller that only wants to know whether git converts
-/// asks [`AutoCrlf::normalises`].
+/// The three answers git takes for `core.autocrlf`. Whether git converts
+/// at all is [`AutoCrlf::normalises`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AutoCrlf {
     /// Store LF, check out CRLF.
@@ -71,31 +61,19 @@ impl AutoCrlf {
     }
 
     /// Whether git converts on the way into the index under this setting.
-    ///
-    /// `input` counts: it converts going in and not coming out, which is
-    /// still git deciding what gets stored, so there is nothing for a
-    /// notice to warn about either way.
+    /// `input` counts: git still decides what gets stored.
     pub fn normalises(self) -> bool {
         matches!(self, Self::True | Self::Input)
     }
 
-    /// What git makes of one `core.autocrlf` record, `None` where git is
-    /// given nothing it can use.
+    /// What git makes of one `core.autocrlf` record, in git's own boolean
+    /// vocabulary (rules-refs/core.md「`core.autocrlf` の綴りは git の bool 語彙」).
     ///
-    /// That covers two cases the screen cannot tell apart and does not
-    /// need to: a key that is simply not there, and a key holding a word
-    /// git itself refuses (measured 2.55: `INPUT` is accepted, `banana` is
-    /// `fatal: bad boolean config value`). The second is a configuration
-    /// git will not run on at all, so showing it as a fourth value the
-    /// picker could return to would be offering to restore a broken file.
-    ///
-    /// Everything else is git's own boolean vocabulary, matched the way
-    /// git matches it — case-insensitively, `input` first, and a valueless
-    /// key as true (measured 2.55: `yes` / `on` / `1` / any non-zero number are
-    /// true, `no` / `off` / `0` / an empty value are false).
+    /// `None` for a word git refuses: git will not run on that file, so it
+    /// reads like an unset key rather than a fourth value the picker could
+    /// restore.
     fn of_record(value: Option<&str>) -> Option<Self> {
-        // A key written with no `=` at all. git reads it as true, the same
-        // shape `identity` reads for `commit.gpgsign`.
+        // A key written with no `=` at all: git reads it as true.
         let Some(value) = value else {
             return Some(Self::True);
         };
@@ -123,10 +101,8 @@ impl AutoCrlf {
         }
     }
 
-    /// The effective value of a `-z` read that may hold a record per level.
-    ///
-    /// **The last record wins**, which is the whole reason the read
-    /// keeps every record (`config::parse_z_records`).
+    /// The effective value of a `-z` read that may hold a record per level:
+    /// the last record wins (`config::parse_z_records`).
     fn of_records(out: &[u8]) -> Option<Self> {
         let mut held = None;
         for record in config::parse_z_records(out) {
@@ -141,10 +117,8 @@ impl AutoCrlf {
 
 /// What one of git's own files sets, and nothing else.
 ///
-/// Not [`effective`], which answers with what git would use here: a value
-/// that is only inherited arrives there spelled exactly like one this file
-/// wrote down, and telling those two apart is what the screen's empty row
-/// means (the same distinction `identity::load_local` exists for).
+/// Not [`effective`]: there an inherited value reads exactly like one this
+/// file holds, and the screen's empty row is that difference.
 pub async fn held(
     executor: &GitExecutor,
     workdir: &Path,
@@ -160,8 +134,7 @@ pub async fn held(
 ///
 /// On Windows that last part is the common case: the Git for Windows
 /// installer writes `core.autocrlf=true` into the system configuration,
-/// so a global level that sets nothing still converts (measured, and
-/// the trap `attrs::normalises` documents).
+/// so a global level that sets nothing still converts.
 pub async fn effective(
     executor: &GitExecutor,
     workdir: &Path,
@@ -171,11 +144,8 @@ pub async fn effective(
     Ok(AutoCrlf::of_records(&out))
 }
 
-/// What a [`set`] left behind.
-///
-/// Read back from git, for the reason the identity's
-/// write reads itself back: the answer on screen has to
-/// be the file's.
+/// What a [`set`] left behind, read back from git: the answer on screen
+/// has to be the file's.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AutoCrlfWrite {
     /// What that file holds now.
@@ -186,23 +156,15 @@ pub struct AutoCrlfWrite {
     pub message: String,
 }
 
-/// Records `core.autocrlf` in one of git's files, where **`None` asks
-/// for the key to be taken out**.
+/// Records `core.autocrlf` in one of git's files; `None` takes the key out.
 ///
-/// What comes back is what that file holds afterwards ([`held`]): the
-/// question the screen asked was what this level sets, and the answer
-/// to that cannot be read at the effective level.
+/// Returns what that file holds afterwards ([`held`]), not the effective
+/// value: the screen asked what this level sets.
 ///
-/// **What the file already says is read first**, and a file that already
-/// says it is left alone. Not an optimisation: `git config --unset` fails
-/// when there was nothing to unset, and it fails with the *same* exit code
-/// as its refusal to touch a key written more than once (measured 2.55: both
-/// are 5). Asking first is what keeps those two apart — after it, a failed
-/// unset is a real one and is reported as such.
-///
-/// One key, so unlike the identity there is no second pass: a lost lock is
-/// a failure git names, and there is no half-written state for a retry to
-/// settle (規約 core.md).
+/// The file is read first and left alone when it already says it — not an
+/// optimisation: `--unset` of an absent key exits like its refusal of a
+/// multi-valued key. One key, so no retry pass: a lost lock leaves nothing
+/// half-written (rules-refs/core.md「`core.autocrlf` の書きは 1 キーなので 1 発」).
 pub async fn set(
     executor: &GitExecutor,
     workdir: &Path,
@@ -228,13 +190,9 @@ pub async fn set(
     })
 }
 
-/// The key, written or taken out.
-///
-/// The scope is spelled out on both, though git writes locally by default
-/// (measured 2.55: a bare `--unset` of a key held only in the user's own file
-/// exits 5 and leaves that file alone). The level a value is read back
-/// from and the level it is written at are then named by the same word,
-/// which is what stops the two from drifting apart later.
+/// The key, written or taken out, with the scope spelled out on both
+/// though git defaults to local: the level read back and the level written
+/// are then named by the same word.
 async fn write_key(
     executor: &GitExecutor,
     workdir: &Path,
@@ -245,7 +203,7 @@ async fn write_key(
     let cmd = GitCommand::new().cwd(workdir);
     let cmd = match wanted {
         // No `--` separator: `git config <key> -- <value>` stores "--" as
-        // the value (the trap `identity::set_identity` documents).
+        // the value.
         Some(value) => cmd.args(["config", scope.flag(), KEY, value.spelled()]),
         None => cmd.args(["config", scope.flag(), "--unset", KEY]),
     };
@@ -278,8 +236,6 @@ mod tests {
         }
     }
 
-    /// A word git will not run on reads as nothing: the picker can
-    /// only offer what git accepts.
     #[test]
     fn a_word_git_refuses_is_no_answer() {
         assert_eq!(read(Some("banana")), None);
@@ -297,7 +253,6 @@ mod tests {
         assert_eq!(AutoCrlf::of_records(&config::z(&[])), None);
     }
 
-    /// Only `input` and `true` mean git decides what gets stored.
     #[test]
     fn normalising_is_what_converts_on_the_way_in() {
         assert!(AutoCrlf::True.normalises());
@@ -305,8 +260,6 @@ mod tests {
         assert!(!AutoCrlf::False.normalises());
     }
 
-    /// The screen hands back exactly what it was shown, and an empty
-    /// answer is the row that takes the key out.
     #[test]
     fn a_spelled_value_comes_back_as_itself() {
         for value in [AutoCrlf::True, AutoCrlf::Input, AutoCrlf::False] {

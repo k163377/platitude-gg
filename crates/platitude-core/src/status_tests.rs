@@ -1,5 +1,4 @@
-//! Tests of [`crate::status`]'s parser and tally, in a file of their own
-//! (structure.md §分割: テストだけ巨大なら同ディレクトリの専用ファイルへ).
+//! Tests of [`crate::status`]'s parser and tally (structure.md §分割).
 
 use crate::status::*;
 
@@ -30,19 +29,14 @@ fn a_file_changed_on_both_sides_is_two_rows() {
     assert_eq!(kinds.total(), 2);
 }
 
-/// The same file counted for the pane that does not split it in two —
-/// another working copy's, where the index is not this window's to move.
-///
-/// **The row and the list have to agree.** The row is the way into that
-/// pane, so a tally counting sides over a list showing paths would be the
-/// graph saying one number and the pane another about one tree.
+/// Another copy's pane lists one row per path, and its tally has to agree
+/// with it (`Kinds`).
 #[test]
 fn a_file_changed_on_both_sides_is_one_row_folded() {
     let bytes = z(&[
         &format!("# branch.oid {SHA}"),
         &format!("1 MM N... 100644 100644 100644 {H1} {H2} both.txt"),
-        // Added to the index and then written again: the index's letter
-        // is the one that says what this copy has that HEAD has not.
+        // Added then edited: the index's letter (an addition) wins.
         &format!("1 AM N... 000000 100644 100644 {H1} {H2} new.txt"),
         "? fresh.txt",
         &format!("u UU N... 100644 100644 100644 100644 {H1} {H2} {H2} clash.txt"),
@@ -57,7 +51,7 @@ fn a_file_changed_on_both_sides_is_one_row_folded() {
             ..Kinds::default()
         }
     );
-    // And this window's own pane goes on counting the sides it lists.
+    // This window's pane still counts sides.
     assert_eq!(Kinds::of(&status).total(), 6);
 }
 
@@ -248,9 +242,8 @@ fn garbage_entry_is_fatal() {
     assert!(parse_status(&bytes).is_err());
 }
 
-/// Raw `--porcelain=v2 -z` bytes out of real git, committed under
-/// tests/fixtures/ and regenerated only with:
-/// `cargo test -p platitude-core --test it -- --ignored capture`
+/// Real git's `--porcelain=v2 -z` bytes under tests/fixtures/, regenerated
+/// only by `worktree_state::capture_fixtures` (command in the panic below).
 #[test]
 fn committed_status_fixture_parses() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

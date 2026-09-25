@@ -1,15 +1,12 @@
 //! Partial-patch construction for hunk- and line-level staging.
 //!
-//! Operates on the **raw bytes** of a `git diff` run: rebuilding a
-//! patch from [`crate::parse::diff`] would lose bytes `git apply`
-//! cares about (a CRLF file's `\r`, trailing whitespace, the exact
-//! index header). Selections address hunks and lines positionally and
-//! those positions match what the parser produces for the same bytes, so the
-//! UI can select on the parsed model while the patch is rebuilt from source.
+//! Works on the raw bytes of a `git diff` run: rebuilding from
+//! [`crate::parse::diff`] would lose bytes `git apply` cares about (a CRLF
+//! file's `\r`, trailing whitespace, the index header). Hunk and line
+//! positions match what the parser yields for the same bytes, so the UI
+//! selects on the parsed model while the patch is rebuilt from source.
 //!
-//! What this file holds is the scan: the files and hunks the raw bytes
-//! divide into, and which line is which kind. Writing a hunk out again —
-//! and the recounting that goes with it — is [`render`].
+//! This file is the scan; writing a hunk out again is [`render`].
 
 mod render;
 
@@ -64,8 +61,7 @@ pub fn build_partial(raw: &[u8], selects: &[HunkSelect], side: PatchSide) -> Opt
 
     for file in &files {
         let mut file_out: Vec<u8> = Vec::new();
-        // Offset between the two sides accumulated over emitted hunks;
-        // resets per file because line numbers are per file.
+        // Side offset over the emitted hunks; per file, as line numbers are.
         let mut offset: i64 = 0;
         for hunk in &file.hunks {
             let index = hunk_index;
@@ -95,18 +91,11 @@ pub fn hunk_count(raw: &[u8]) -> usize {
     split_files(raw).iter().map(|f| f.hunks.len()).sum()
 }
 
-/// Whether these bytes are the **combined** form git prints for a path
-/// with more than one side (`diff --cc`, hunks headed `@@@`).
-///
-/// Nothing can be built from one: there is no single pre-image for a
-/// rebuilt patch to sit on, and `git apply` refuses the whole shape. The
-/// UI already withholds the pieces on a conflicted file
-/// ([`crate::parse::diff`]), and this is the check underneath that — a
-/// selection that reached here anyway is refused here, ahead of git's
-/// own wording.
-///
-/// Read off the bytes because that is what the staging path has in
-/// hand ([`build_partial`] never parses).
+/// Whether these bytes are the combined form git prints for a path with
+/// more than one side (`diff --cc`, hunks headed `@@@`). Nothing can be
+/// built from one — there is no single pre-image — so the staging path
+/// refuses it here, underneath the UI withholding the pieces on a
+/// conflicted file.
 pub fn is_combined(raw: &[u8]) -> bool {
     lines(raw).any(|line| {
         line.starts_with(b"@@@")
@@ -128,8 +117,6 @@ struct RawHunk<'a> {
     body: Vec<&'a [u8]>,
 }
 
-/// Splits a patch into files and hunks without interpreting content.
-///
 /// Body lines always carry a marker byte (` `, `+`, `-`, `\`), so a line
 /// starting with `@@ ` or `diff --git ` is unambiguously a header.
 fn split_files(raw: &[u8]) -> Vec<RawFile<'_>> {
@@ -158,10 +145,8 @@ fn split_files(raw: &[u8]) -> Vec<RawFile<'_>> {
         if line.starts_with(b"@@ ") {
             flush_hunk(&mut current, &mut hunk);
             if current.is_none() {
-                // A hunk with no `diff --git` in front. `file_diff_raw`
-                // never produces the shape; the hunk-rewriting tests feed
-                // it to pin the rewriting without header noise, and the
-                // rebuilt patch then starts at the hunk.
+                // Headerless hunk: `file_diff_raw` never produces it, but
+                // the rewriting tests feed it bare.
                 current = Some(RawFile {
                     header: Vec::new(),
                     hunks: Vec::new(),
@@ -225,8 +210,7 @@ fn classify(line: &[u8]) -> Option<Body> {
         Some(b'+') => Some(Body::Addition),
         Some(b'-') => Some(Body::Deletion),
         Some(b'\\') => Some(Body::NoNewline),
-        // A wholly empty line inside a hunk is an empty context line (the
-        // parser tolerates the same shape).
+        // An empty line is empty context, as the parser reads it.
         None => Some(Body::Context),
         _ => None,
     }

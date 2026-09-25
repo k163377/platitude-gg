@@ -2,12 +2,10 @@
 //! their writes run in, what each may read while the other is writing,
 //! and what a session closed mid-write lets go of.
 //!
-//! **Every step is held open by a barrier** — a write by a hook git
-//! waits in, a stage by a clean filter, a read by a parked sink
-//! delivery — so "this had provably not happened yet" is arranged.
-//! Where the barrier *is* the arrangement, it is read back as well: a
-//! filter that silently does not hold makes a test green for the
-//! wrong reason.
+//! Every step is held open by a barrier (a hook, a clean filter, a parked
+//! sink delivery). Where the barrier is the whole arrangement it is read
+//! back too: a filter that does not hold makes a test green for the wrong
+//! reason.
 
 use std::sync::Arc;
 
@@ -29,15 +27,12 @@ fn held_at_the_first_commit() -> (TestRepo, std::path::PathBuf) {
 
 /// The order a reopened tab joins is the tree's.
 ///
-/// The closed session's commit is still inside git when the new session
-/// is opened and asks for a branch, so both writes are outstanding at
-/// once and nothing but the order can separate them. **The witness is the
-/// repository**: a branch cut at HEAD names the HEAD it found, so a
-/// branch on the root commit would say the reopened tab went first.
+/// Both writes are outstanding at once, so only the order separates them.
+/// The witness is the repository: a branch cut on the root commit would
+/// say the reopened tab went first.
 ///
-/// The two ends of the quit gate are read here too — the closed session's
-/// loop is what `Hub::parked_writes` holds, and the pending count on each
-/// session is what `Hub::writes_settled` asks.
+/// Also reads both ends of the quit gate: the closed session's loop is what
+/// `Hub::parked_writes` holds, the pending count what `Hub::writes_settled` asks.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_reopened_tab_writes_behind_the_close_it_found_running() {
     let (mut repo, release) = held_at_the_first_commit();
@@ -58,11 +53,9 @@ async fn a_reopened_tab_writes_behind_the_close_it_found_running() {
         })
         .await;
 
-    // The tab goes; the commit stays.
     closing.close();
 
-    // And comes back: a second session on the same index, with a queue of
-    // its own and no knowledge of the first.
+    // A second session on the same index, with a queue of its own.
     let (reopened_sink, reopened) = opened(&repo).await;
     let branch = reopened
         .create_branch("after-the-close".into(), None, false)
@@ -91,8 +84,6 @@ async fn a_reopened_tab_writes_behind_the_close_it_found_running() {
          so it ran behind it"
     );
 
-    // What the window's quit gate waits for: the reopened session's own
-    // write, and the loop the closed one left running.
     write_settled(&reopened_sink, branch).await;
     reopened.close();
     for (whose, session) in [("the closed", &closing), ("the reopened", &reopened)] {
@@ -110,15 +101,12 @@ async fn a_reopened_tab_writes_behind_the_close_it_found_running() {
     }
 }
 
-/// The reopened tab reads the tree only when nobody is writing it —
-/// and is told to look again the moment the write it was keeping out
-/// of lands.
+/// The reopened tab reads the tree only when nobody is writing it, and is
+/// told to look again the moment the write it kept out of lands.
 ///
-/// Without the first half a status read taken between a write's steps is
-/// published as where the repository stands, which is how a freshly
-/// opened tab offers to abort an operation that is still being done.
-/// Without the second half that reading stands until the poll timer comes
-/// round again.
+/// Without the first half a status read between a write's steps is
+/// published, and a fresh tab offers to abort an operation still being done.
+/// Without the second that reading stands until the next poll.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_reopened_tab_keeps_out_of_the_tree_and_is_told_when_it_is_free() {
     let (mut repo, release) = held_at_the_first_commit();
@@ -140,9 +128,8 @@ async fn a_reopened_tab_keeps_out_of_the_tree_and_is_told_when_it_is_free() {
     closing.close();
 
     let (reopened_sink, reopened) = opened(&repo).await;
-    // Taken before the hook is let go and judged after it: an assertion
-    // in between would leave the hook holding git for its whole cap on a
-    // failing run, and the suite waiting on it.
+    // Judged after the hook is let go: a failing assertion before it would
+    // leave git held for the hook's whole cap.
     let mid_write = crate::support::wait::bounded(
         "the tick taken over another session's write answers",
         reopened.refresh_poll_tracked().outcome(),
@@ -161,9 +148,8 @@ async fn a_reopened_tab_keeps_out_of_the_tree_and_is_told_when_it_is_free() {
         "the commit landed"
     );
 
-    // Nothing here asks the reopened session for anything: the session
-    // that finished the write is what tells it to look again, and the
-    // commit is one it has never seen.
+    // Nothing asks the reopened session to look: only the writing
+    // session's news can bring it this commit.
     let landed = repo.git(&["rev-parse", "HEAD"]);
     reopened_sink
         .wait_for(
@@ -187,11 +173,9 @@ async fn a_reopened_tab_keeps_out_of_the_tree_and_is_told_when_it_is_free() {
 /// carries on.
 ///
 /// A tab released mid-write keeps its session alive to the end of that
-/// write (`Hub::park_writes_of`), and on a repository the size of the
-/// budget's the drawn graph and the refs snapshot are the largest things
-/// in the process — held for as long as git takes, they would make a
-/// release cost memory. The measurement is the session's own report,
-/// which is what the memory budget is read off.
+/// write (`Hub::park_writes_of`), and at budget scale the drawn graph and
+/// refs snapshot are the largest things in the process. Measured by the
+/// session's own report, which the memory budget is read off.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_close_lets_go_of_the_screens_copy_while_its_write_runs() {
     let (mut repo, _head) = crate::support::session::scenario();
@@ -201,8 +185,7 @@ async fn a_close_lets_go_of_the_screens_copy_while_its_write_runs() {
     repo.write_hook("pre-commit", &barrier_hook(&release));
 
     let (sink, session) = opened(&repo).await;
-    // The parts below are what the opening's reads fill, so "let go of
-    // it" says nothing until the picture has arrived.
+    // "Let go" says nothing until the opening's reads have filled the parts.
     sink.opening_settled(&session).await;
     sink.wait_for("a graph pass landed", |evs| {
         evs.iter().find_map(pass_of).map(|_| ())
@@ -228,8 +211,7 @@ async fn a_close_lets_go_of_the_screens_copy_while_its_write_runs() {
     .await;
 
     session.close();
-    // Read with git still inside the hook, so this is the session the
-    // close kept alive.
+    // Git is still inside the hook: this is the session the close kept alive.
     let left = session.heap_report();
     assert_eq!(
         drawn_bytes(&session),
@@ -260,13 +242,11 @@ async fn a_close_lets_go_of_the_screens_copy_while_its_write_runs() {
 /// Whether a part of the memory report holds the page's copy of the
 /// repository — what [`RepoSession::close`] gives back.
 ///
-/// Named one by one: the parts a close deliberately keeps (the
-/// pending line-ending marks) would otherwise make this pass or fail
-/// on them too.
+/// Named one by one, so the parts a close keeps (pending line-ending
+/// marks) do not sway it.
 ///
-/// **The tag index is counted but not weighed.** Empty, it still costs
-/// the `Arc` and the struct behind it, so its bytes never reach zero and
-/// only the names it holds say whether a reading was let go.
+/// The tag index is counted but not weighed: empty, it still costs its
+/// `Arc` and struct, so its bytes never reach zero.
 fn drawn(part: &platitude_core::mem::Part) -> bool {
     matches!(
         part.name,
@@ -281,7 +261,6 @@ fn drawn(part: &platitude_core::mem::Part) -> bool {
     )
 }
 
-/// The weight of those parts, the tag index aside.
 fn drawn_bytes(session: &Arc<RepoSession>) -> usize {
     session
         .heap_report()
@@ -295,10 +274,8 @@ fn drawn_bytes(session: &Arc<RepoSession>) -> usize {
 /// read by it afterwards.
 ///
 /// The tick a landed write sets off is refused by the single-flight slot
-/// whenever that session is mid-read, and the read holding the slot began
-/// before the write — so dropping the refused tick leaves the session
-/// showing a repository that no longer exists until something else
-/// happens to ask. What is asked for by a write is owed.
+/// while that session is mid-read, and that read began before the write:
+/// dropping the refused tick would leave it showing a stale repository.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_write_landing_inside_a_read_is_read_again_when_that_read_ends() {
     let (_origin, repo) = crate::support::remote::origin_and_clone();
@@ -307,9 +284,9 @@ async fn a_write_landing_inside_a_read_is_read_again_when_that_read_ends() {
     let (writer_sink, writer) = opened(&repo).await;
     writer_sink.opening_settled(&writer).await;
 
-    // The reader is held inside a read of its own, so the tick the write
-    // sets off finds the slot taken. Parked from the sink's own delivery
-    // — only this test's root future may wait for anything meanwhile.
+    // The reader is parked inside a read of its own, so the write's tick
+    // finds the slot taken. Parked in the sink's delivery: only this test's
+    // root future may wait meanwhile.
     let (release, parked) = std::sync::mpsc::channel::<()>();
     reader_sink.hook_once(
         |e| matches!(e, SessionEvent::RefsLoaded { .. }),
@@ -323,13 +300,10 @@ async fn a_write_landing_inside_a_read_is_read_again_when_that_read_ends() {
         .create_branch("late".into(), None, false)
         .expect("the branch was accepted");
     write_settled(&writer_sink, late).await;
-    // Strictly after the branch's own `tell_the_tree`: the loop cannot
-    // start a second request until the first has given its place back
-    // and told the tree, so the refused tick is provably behind us while
-    // the reader is still parked. **A push, because it writes nothing
-    // here** — a second local write would tell the tree again once this
-    // test let the reader go, and would answer for the very wake the
-    // test is here to miss.
+    // The next request starts only after the branch's `tell_the_tree`, so
+    // the refused tick is provably behind us. A push, because it writes
+    // nothing here: a second local write would tell the tree again and
+    // supply the very wake this test must miss.
     let pushed = writer
         .push(platitude_core::remote::PushSpec {
             remote: "origin".into(),
@@ -348,8 +322,7 @@ async fn a_write_landing_inside_a_read_is_read_again_when_that_read_ends() {
         .await;
 
     drop(release);
-    // Nothing here asks the reader to look: the read it was owed is the
-    // only thing that can put the branch on its side.
+    // Nothing asks the reader to look: only the owed read can bring the branch.
     reader_sink
         .wait_for(
             "the reader reads the branch made while it was busy",
@@ -369,22 +342,15 @@ async fn a_write_landing_inside_a_read_is_read_again_when_that_read_ends() {
     writer.close();
 }
 
-/// A read this session owes is taken when **its own** write ends
-/// too.
+/// A read this session owes is taken when its own write ends too.
 ///
-/// The tail of a poll is one place a refused read can be served, and on
-/// its own it is not enough. A session reading when the news arrives is
-/// refused once for being busy, and refused again at that tail if a write
-/// of its own has started meanwhile — and after that nothing would take
-/// it: the write's own `tell_the_tree` speaks to the *other* sessions,
-/// and a write that only moved the index reads no refs behind itself
-/// ([`AfterWrite::Tree`]). The branch the other session made would stand
-/// missing until something else happened to ask.
+/// The poll's tail alone is not enough: a read refused for being busy is
+/// refused again there if a write of its own started meanwhile, that
+/// write's `tell_the_tree` speaks only to the other sessions, and a write
+/// that only moved the index reads no refs behind itself ([`AfterWrite::Tree`]).
 ///
-/// Every step is held open by a barrier — the poll by a parked
-/// delivery, the stage by a clean filter — and the poll's whole
-/// task is waited out through the graph pass it holds, so the second
-/// refusal has provably happened before the stage is let go.
+/// The poll's whole task is waited out through its graph pass, so the
+/// second refusal has provably happened before the stage is let go.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_read_owed_is_taken_when_this_session_s_own_write_ends() {
     let (_origin, mut repo) = crate::support::remote::origin_and_clone();
@@ -393,9 +359,7 @@ async fn a_read_owed_is_taken_when_this_session_s_own_write_ends() {
     repo.git(&["config", "filter.hold.required", "true"]);
     repo.write_file(".gitattributes", "held.txt filter=hold\n");
     repo.write_file("held.txt", "content\n");
-    // The barrier is the whole arrangement, so both halves of it are read
-    // back: a filter that is not wired makes the stage instant and the
-    // test green for the wrong reason.
+    // Both halves of the barrier are read back (module doc).
     assert_eq!(
         repo.git(&["check-attr", "filter", "--", "held.txt"]),
         "held.txt: filter: hold",
@@ -422,9 +386,8 @@ async fn a_read_owed_is_taken_when_this_session_s_own_write_ends() {
     );
     let polled = reader.refresh_poll_tracked();
 
-    // (2) The news arrives and is refused for being busy. The push is the
-    // witness that the branch's own `tell_the_tree` is behind us, and it
-    // writes nothing here, so it wakes nobody itself.
+    // (2) The news arrives and is refused for being busy. The push
+    // witnesses that `tell_the_tree` is behind us and wakes nobody itself.
     let late = writer
         .create_branch("late".into(), None, false)
         .expect("the branch was accepted");
@@ -458,9 +421,8 @@ async fn a_read_owed_is_taken_when_this_session_s_own_write_ends() {
         })
         .await;
 
-    // (4) The poll ends and tries what it owes — refused again, because
-    // the stage is provably still inside the filter. Waiting the pass out
-    // waits the poll's whole task out, that try included.
+    // (4) The poll ends and tries what it owes: refused again, the stage
+    // still inside the filter.
     drop(release);
     let parked_poll =
         crate::support::wait::bounded("the parked poll answers", polled.outcome()).await;
@@ -474,9 +436,8 @@ async fn a_read_owed_is_taken_when_this_session_s_own_write_ends() {
     )
     .await;
 
-    // (5) Only the reader's own write is left to take it. The stage is
-    // still inside git at this point — the premise of everything above,
-    // so it is read.
+    // (5) Only the reader's own write is left to take it. The stage still
+    // being in git is the premise, so it is read.
     assert_eq!(
         reader_sink.count(|e| matches!(e, SessionEvent::WriteFinished { id, .. } if *id == staged)),
         0,
@@ -504,14 +465,13 @@ async fn a_read_owed_is_taken_when_this_session_s_own_write_ends() {
     writer.close();
 }
 
-/// What a close gave back stays given back, even to a read that was
-/// already in flight when it happened.
+/// What a close gave back stays given back, even to a read already in
+/// flight when it happened.
 ///
 /// A refs pass stores its snapshot as it sends `RefsLoaded` and installs
-/// its chips **after** — so a close landing between the two would find
-/// the chips written back into the `Shared` it had just emptied, and the
-/// memory held for as long as the write keeping the session alive takes.
-/// The hook is what puts the close exactly there.
+/// its chips after, so a close between the two would find the chips
+/// written back into the `Shared` it had emptied. The hook puts the close
+/// there.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_read_in_flight_at_the_close_does_not_refill_what_it_gave_back() {
     let (mut repo, _head) = crate::support::session::scenario();
@@ -536,9 +496,7 @@ async fn a_read_in_flight_at_the_close_does_not_refill_what_it_gave_back() {
     })
     .await;
 
-    // Closed from inside the delivery of the read's own event, which is
-    // the one moment the snapshot is already stored and the chips are
-    // not. Nothing is parked here — the hook closes and returns.
+    // Nothing is parked here: the hook closes and returns.
     let closing = Arc::clone(&session);
     let closed_inside = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let closed_here = Arc::clone(&closed_inside);
@@ -549,15 +507,12 @@ async fn a_read_in_flight_at_the_close_does_not_refill_what_it_gave_back() {
             closed_here.store(true, std::sync::atomic::Ordering::SeqCst);
         },
     );
-    // The refs have to have moved, or the pass answers with the snapshot
-    // it already published and returns before it ever reaches the chips
-    // (`publish_refs`, the join-key fast path) — a read that stores
-    // nothing proves nothing here.
+    // The refs must move, or the pass returns before the chips on the
+    // join-key fast path (`publish_refs`).
     repo.git(&["branch", "moved-outside"]);
     session.refresh_refs();
-    // The read's own completion: the sink records an event before it
-    // runs the hook, so waiting on the event would judge the report
-    // before the close inside it has even happened.
+    // The read's completion, not its event: the sink records the event
+    // before running the hook, so the close would not have happened yet.
     crate::support::wait::bounded(
         "the refs pass that carries the close",
         session.wait_for_snapshot_reads(),
@@ -604,11 +559,9 @@ async fn a_read_in_flight_at_the_close_does_not_refill_what_it_gave_back() {
 /// A write whose far half reaches the network still takes its turn for
 /// the half that is here.
 ///
-/// The composite deletes are supervised as remote writes — a budget, and
-/// a token the close cancels — but they delete a ref in this copy before
-/// they reach for the other end, and that half queues behind a
-/// rename accepted before it. **The witness is which of the two git
-/// refused**: run in the order they were asked, the rename finds its
+/// Composite deletes are supervised as remote writes but delete a ref here
+/// first, and that half queues behind a rename accepted before it. The
+/// witness is which of the two git refused: in order, the rename finds its
 /// branch and the delete does not.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_composite_delete_takes_its_turn_for_the_half_that_is_here() {
@@ -634,8 +587,7 @@ async fn a_composite_delete_takes_its_turn_for_the_half_that_is_here() {
                 .then_some(())
         })
         .await;
-    // Queued behind the held commit, and the whole of what the close
-    // has to keep.
+    // Queued behind the held commit: what the close has to keep.
     let rename = closing
         .rename_branch("victim".into(), "survivor".into(), false)
         .expect("the rename was accepted");

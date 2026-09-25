@@ -10,15 +10,10 @@ use crate::process::{GitCommand, GitExecutor};
 
 /// `git cherry-pick <revs>`.
 ///
-/// `--allow-empty` is about commits that were empty when they were made:
-/// such a commit is exactly what was asked for, so it lands as it
-/// stands. Without the flag git stops on those too,
-/// in the same words it uses for the commit that turns out to add
-/// nothing — and those two are not the same answer (measured, 2.55).
-///
-/// A conflict is [`Landing::Stopped`]: copying a commit
-/// onto a branch that has moved on ends there as ordinarily as merging
-/// one does (デザイン規約 §進行中の操作から出る).
+/// `--allow-empty` lets a commit that was empty when made land as it
+/// stands; without it git stops on it in the same words as on one that
+/// became empty, and only the latter is walked past. A conflict is
+/// [`Landing::Stopped`].
 pub async fn cherry_pick(
     executor: &GitExecutor,
     workdir: &Path,
@@ -46,10 +41,8 @@ pub async fn cherry_pick(
 
 /// `git revert <revs>`.
 ///
-/// `--allow-empty` has no counterpart here (git rejects it outright), so
-/// a revert of a commit whose undoing is already in the branch is the
-/// one empty case, and it is walked past like the cherry-pick above. A
-/// conflict lands the same way that one's does.
+/// No `--allow-empty` (git rejects it for revert): the one empty case is a
+/// revert already in the branch, walked past like a cherry-pick's.
 pub async fn revert(
     executor: &GitExecutor,
     workdir: &Path,
@@ -78,22 +71,14 @@ pub async fn revert(
 /// Runs a cherry-pick / revert to the end, taking git up on its own
 /// `--skip` for every commit that leaves nothing to record.
 ///
-/// A commit whose changes the branch already has writes no commit, and
-/// both commands stop there: exit 1, the sequencer
-/// state left standing, and a message naming `--skip`.
-/// **That stop asks nothing of the person who pressed
-/// the row** — no conflict to resolve, the tree untouched,
-/// the branch already holding what was to be copied — so
-/// it is answered here
-/// (デザイン規約 §履歴を合流させる). A `rebase` needs none of this: it
-/// drops such commits by itself, and the `--empty=drop` that would say
-/// so in one word only reached these two commands in git 2.45, past the
-/// minimum this app supports
+/// A commit the branch already has stops both commands (exit 1, sequence
+/// standing, a message naming `--skip`) though it asks nothing of the
+/// person, so it is answered here (デザイン規約 §履歴を合流させる).
+/// `--empty=drop` would do it but is past the minimum git version
 /// (internal-docs/git最低バージョン整合.md).
 ///
 /// The number of commits bounds the loop: each `--skip` moves the
-/// sequence on by one, so no more skips can be wanted than there were
-/// commits to replay.
+/// sequence on by one.
 async fn skip_past_empty_commits(
     executor: &GitExecutor,
     workdir: &Path,
@@ -108,9 +93,8 @@ async fn skip_past_empty_commits(
             Err(error) if left_nothing_to_record(op, error) => {}
             _ => return landed(executor, workdir, op, outcome, cancel).await,
         }
-        // A stop that left nothing standing has nothing to skip, and
-        // `--skip` would answer "no revert in progress" with 128 — a red
-        // row in the log for a repository that is perfectly in order.
+        // Nothing standing = nothing to skip; `--skip` would exit 128 ("no
+        // revert in progress") as a red log row.
         if !still_stepping(executor, workdir, op, cancel).await? {
             return Ok(Landing::Done);
         }
@@ -123,24 +107,13 @@ async fn skip_past_empty_commits(
     landed(executor, workdir, op, outcome, cancel).await
 }
 
-/// Where the sequence came to rest: through to the end, standing there
-/// for someone to finish, or failed.
+/// Where the sequence came to rest: done, stopped on a conflict, or failed
+/// (the empty stops are answered by the loop before this).
 ///
-/// The empty stops are already behind this — the loop above answers those
-/// itself — so what arrives here is a conflict, a name git could not
-/// read, or a tree it would not write over. Only the first leaves the
-/// operation standing (measured 2.55: the other two exit 128 with no marker
-/// of any kind), and that one is the landing the working tree is the
-/// answer to (デザイン規約 §進行中の操作から出る).
-///
-/// **The code is read as well as the marker**, for the reason rebase's
-/// is: a cherry-pick or a revert asked for while one is *already*
-/// standing exits 128 with its own marker right there (measured, 2.55), and
-/// the marker alone would call that a stop.
-///
-/// A read that fails answers "no", for the reason merge's does: this is a
-/// question *about* the failure, and letting it replace the answer would
-/// report a `rev-parse` where git said why it would not copy the commit.
+/// The code is read as well as the marker: a cherry-pick or revert asked
+/// for while one is already standing exits 128 with its own marker there.
+/// A read that fails answers "no", so git's reason reaches the screen
+/// instead of a `rev-parse` error.
 async fn landed(
     executor: &GitExecutor,
     workdir: &Path,
@@ -154,10 +127,9 @@ async fn landed(
     if !matches!(error, GitError::Failed { code: 1, .. }) {
         return Err(error);
     }
-    // The operation standing has to be *this* one: a rebase stopped on a
-    // conflicting pick owns `CHERRY_PICK_HEAD` too, and a cherry-pick
-    // asked for over a stopped merge is refused by git — the marker
-    // on disk then belongs to the merge (measured, 2.55).
+    // The operation standing has to be this one: a rebase stopped on a
+    // conflicting pick owns `CHERRY_PICK_HEAD` too, and a cherry-pick git
+    // refuses over a stopped merge finds the merge's marker.
     let standing = opstate::detect(executor, workdir, cancel)
         .await
         .ok()
@@ -169,19 +141,14 @@ async fn landed(
     }
 }
 
-/// Whether git still holds this operation open, by either of the two
-/// things a `--skip` needs: the marker it left behind, or a sequence
-/// with steps still in it.
+/// Whether git still holds this operation open by either thing a `--skip`
+/// needs: its marker, or a sequence with steps left.
 ///
-/// A revert that records nothing has neither when it was asked for one
-/// commit (git refuses the commit before writing `REVERT_HEAD`, and a
-/// single revert never opens a sequence at all), and only the sequence
-/// when it was asked for several. A cherry-pick leaves its marker
-/// either way (measured, 2.55).
-///
-/// Another operation standing there is not this one: a rebase stopped
-/// on a conflicting pick owns both the sequence and `CHERRY_PICK_HEAD`,
-/// and it is not for a cherry-pick to step it on.
+/// An empty single revert has neither (git refuses before writing
+/// `REVERT_HEAD`), several reverts leave only the sequence, and a
+/// cherry-pick leaves its marker either way. Another operation standing is
+/// not this one: a rebase stopped on a conflicting pick owns both the
+/// sequence and `CHERRY_PICK_HEAD`.
 async fn still_stepping(
     executor: &GitExecutor,
     workdir: &Path,
@@ -195,33 +162,25 @@ async fn still_stepping(
     }
 }
 
-/// Whether git stopped because the commit it just replayed records
-/// nothing — the branch has those changes already.
+/// Whether git stopped because the replayed commit records nothing (the
+/// branch has it already).
 ///
-/// Classifies human-facing output under the same exception
-/// [`work_is_in_the_way`] takes. `LC_ALL=C` pins the C-locale wording,
-/// which names the command that stopped (measured 2.55, both wordings in
-/// `integrate_integration`).
-///
-/// Anything unrecognised is `false` and travels on as the failure it
-/// looks like: a reworded message costs only the walk
-/// past.
+/// Reads human-facing output under the exception `rebase::work_is_in_the_way`
+/// takes (`LC_ALL=C` wording). Anything unrecognised is `false` and travels
+/// on as a failure: a reworded message costs only the walk past.
 fn left_nothing_to_record(op: InProgress, error: &GitError) -> bool {
     let GitError::Failed { stderr, .. } = error else {
         return false;
     };
     let said = stderr.to_ascii_lowercase();
     // cherry-pick weighs `--allow-empty` before writing, so it stops in
-    // words of its own, naming the command and the `--skip` that leaves.
+    // words of its own.
     if said.contains(&format!("the previous {} is now empty", op.command())) {
         return true;
     }
-    // revert has no `--allow-empty` to weigh (git rejects the flag), so
-    // it never reaches that message: the commit it was about to write is
-    // refused by `git commit` itself, which says so on stdout and leaves
-    // stderr empty — which is what [`crate::process::GitOutput::failure_message`]
-    // passed through here. Every other way a revert stops writes to
-    // stderr, conflicts included (measured, 2.55).
+    // revert never reaches that message: `git commit` refuses the commit on
+    // stdout with stderr empty, and `GitOutput::failure_message` passes
+    // stdout through here. Every other revert stop writes to stderr.
     op == InProgress::Revert && said.contains("nothing to commit")
 }
 
@@ -237,11 +196,8 @@ mod tests {
         }
     }
 
-    /// The two ways git says "that commit records nothing", word for
-    /// word as 2.55 wrote them: cherry-pick weighs `--allow-empty` and
-    /// names itself, revert leaves stderr empty and lets `git commit`
-    /// answer on stdout. Both shapes are run for real in
-    /// `integrate_integration`.
+    /// Word for word as git writes them; `integrate_integration` runs both
+    /// for real.
     #[test]
     fn the_two_stops_that_mean_the_branch_has_it_already() {
         assert!(left_nothing_to_record(
@@ -259,9 +215,8 @@ mod tests {
         ));
     }
 
-    /// Each command reads only its own stop. The bare commit refusal is
-    /// a revert's alone — a cherry-pick reaching it has been stopped by
-    /// something this does not know, and unknown stops travel on.
+    /// The bare commit refusal is a revert's alone — a cherry-pick reaching
+    /// it was stopped by something unknown, which travels on.
     #[test]
     fn a_command_does_not_walk_past_another_ones_stop() {
         assert!(!left_nothing_to_record(

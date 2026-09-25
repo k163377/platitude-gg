@@ -156,9 +156,8 @@ impl Scan {
             Some(b'-') => (Side::Minus, true, false),
             Some(b'+') => (Side::Plus, false, true),
             Some(b' ') => (Side::Context, true, true),
-            // An empty line inside a hunk is git's context line for an empty
-            // source line with the marker column eaten by a tool in the
-            // middle; count it as context so the budgets still land.
+            // A context line for an empty source line whose leading space a
+            // tool in between stripped; counted so the budgets still land.
             None => (Side::Context, true, true),
             // Anything else means the counts were wrong; leave the hunk and
             // let the header path have the line.
@@ -177,8 +176,7 @@ impl Scan {
             self.new_left = self.new_left.saturating_sub(1);
         }
 
-        // Only a terminated line has an ending to classify; an unterminated
-        // final line is about to be corrected by `\ No newline` anyway.
+        // An unterminated final line has no ending; `\ No newline` follows.
         if !terminated {
             self.last = None;
             return;
@@ -200,9 +198,8 @@ impl Scan {
         if self.quiet || self.removed {
             return Reading::Quiet;
         }
-        // Nothing was added, so nothing this change did can have made the
-        // endings worse. Deleting the odd lines out of a mixed file is a
-        // repair.
+        // With nothing added the endings cannot have got worse; deleting a
+        // mixed file's odd lines is a repair.
         if self.plus.is_empty() {
             return Reading::Quiet;
         }
@@ -210,15 +207,14 @@ impl Scan {
         if self.added {
             return match (self.plus.sole(), self.plus.majority()) {
                 (Some(eol), _) => Reading::NewFile { eol },
-                // A new file that arrives already mixed is case (b): the
-                // lines that disagree with the rest are all its own.
+                // A new file that arrives mixed is (b): every disagreeing
+                // line is its own.
                 (None, Some(file)) => mixed(self.plus, file),
                 (None, None) => Reading::Quiet,
             };
         }
 
-        // (d) — the old side had no terminator anywhere. Its only line was
-        // the bare one, so `minus_bare` with nothing tallied says it all.
+        // (d) — the old side's only line was the bare one.
         if self.minus_bare && self.minus.is_empty() && self.context.is_empty() {
             return match self.plus.majority().or_else(|| self.plus.sole()) {
                 Some(eol) => Reading::FirstEnding { eol },
@@ -226,9 +222,8 @@ impl Scan {
             };
         }
 
-        // (a) — no context lines and each side is uniform. A one-line file
-        // whose only line changed its ending lands here too, deliberately:
-        // it is the same statement about a smaller file.
+        // (a) — no context lines and each side uniform. A one-line file
+        // whose line changed its ending lands here too, deliberately.
         if self.context.is_empty()
             && let (Some(from), Some(to)) = (self.minus.sole(), self.plus.sole())
             && from != to
@@ -236,10 +231,9 @@ impl Scan {
             return Reading::Flipped { from, to };
         }
 
-        // (b) — what the file uses is what the untouched lines use. Falling
-        // back to the old side and then to the new keeps a fully rewritten
-        // file answerable; a tie means the file is already so mixed that
-        // there is no "this file uses" to name, and nothing is said.
+        // (b) — what the file uses is what the untouched lines use, falling
+        // back to the old side and then the new for a full rewrite. A tie
+        // has no "this file uses" to name, so nothing is said.
         let Some(file) = self
             .context
             .majority()
