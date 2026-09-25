@@ -226,16 +226,17 @@ MenuItem {
         tint: menuItem.wordColor
         visible: menuItem.armedMs > 0
     }
-    // The `!` of a row that asks, sharing the hold mark's seat — a row is one or the other (`asks`). Drawn the way
-    // every other `!` is (raised a gap, half a gap in — `ActionButtonLabel`, `NameCell`), to read the same anywhere.
+    // The `!` of a row that asks, sharing the hold mark's seat — a row is one or the other (`asks`). Ahead of the word,
+    // so it is the seat's icon (デザイン規約 §git 用語のコード表記「`!` の席」): the step a menu's icons take, centred
+    // where the hold mark is — at the mark's step a stroke this thin reads as punctuation.
     NavIcon {
-        x: Theme.spaceXs / 2
+        x: (Theme.iconSm - width) / 2
         anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: Metrics.opticalDrop - Theme.spaceXs
+        anchors.verticalCenterOffset: Metrics.opticalDrop
         kind: "bang"
         tint: Theme.warning
-        width: Theme.iconSm
-        height: Theme.iconSm
+        width: Theme.iconMd
+        height: Theme.iconMd
         // Only on a row that can be pressed; a blocked row says `blockedWhy` instead.
         visible: menuItem.asks && menuItem.armedMs <= 0 && !menuItem.blocked
     }

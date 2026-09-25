@@ -58,9 +58,6 @@ ActionButton {
     faceColor: Theme.bgSurface
     alert: fetchButton.fails > 0
     alertTone: Theme.warning
-    // `Resume` wins the shared box, so its `!` has no air of its own (デザイン規約 §リモートから取り込む
-    // 「箱を勝ち取った語の `!` は手前へ詰める」).
-    alertTight: fetchButton.stopped
     busy: fetchButton.busyLatched
           || (fetchButton.curPage !== null
               && (fetchButton.curPage.pageTab.busyOp === "fetch" || fetchButton.curPage.pageTab.autoFetchRunning))

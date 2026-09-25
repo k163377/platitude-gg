@@ -248,19 +248,6 @@ AppDialog {
                         color: categoryRow.current
                                ? Theme.bgSelected
                                : categoryHover.hovered ? Theme.bgHover : "transparent"
-                        // The category holding an unsaved identity: the rail is the one column always showing both
-                        // (規約 §設定の画面).
-                        NavIcon {
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.right: parent.right
-                            anchors.rightMargin: Theme.spaceSm
-                            width: Theme.iconSm
-                            height: Theme.iconSm
-                            kind: "bang"
-                            tint: Theme.warning
-                            visible: categoryRow.modelData.key === "git"
-                                     && settingsDialog.unsavedIdentities > 0
-                        }
                         NavIcon {
                             id: categoryMark
                             anchors.verticalCenter: parent.verticalCenter
@@ -271,6 +258,7 @@ AppDialog {
                             tint: categoryRow.enabled ? Theme.textPrimary : Theme.textMuted
                         }
                         Label {
+                            id: categoryWord
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.left: categoryMark.right
                             anchors.leftMargin: Theme.spaceSm
@@ -279,6 +267,19 @@ AppDialog {
                             // `textPrimary` selected or not — the wash says which is showing (規約 §設定の画面);
                             // muted only when the row cannot be pressed (§無効).
                             color: categoryRow.enabled ? Theme.textPrimary : Theme.textMuted
+                        }
+                        // The category holding an unsaved identity: the rail is the one column always showing both
+                        // (規約 §設定の画面). On the word's right shoulder, as `NameCell` seats a file's mark
+                        // (規約 §git 用語のコード表記「`!` の席」).
+                        NavIcon {
+                            x: categoryWord.x + categoryWord.implicitWidth - Theme.spaceXs / 2
+                            y: categoryWord.y
+                            width: Theme.iconSm
+                            height: Theme.iconSm
+                            kind: "bang"
+                            tint: Theme.warning
+                            visible: categoryRow.modelData.key === "git"
+                                     && settingsDialog.unsavedIdentities > 0
                         }
                         HoverHandler {
                             id: categoryHover

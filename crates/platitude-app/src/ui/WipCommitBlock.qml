@@ -192,7 +192,6 @@ Flickable {
                             : commitButton.eolWarned ? Theme.warning : Theme.accent
                 alert: commitButton.eolWarned
                 alertTone: Theme.warning
-                alertTight: true
                 // Command and branch are git's spelling, so both wear the chip (デザイン規約 §git 用語のコード表記);
                 // the words between are translatable. The branch takes the accent: which branch one is on is the
                 // thing to get wrong here.

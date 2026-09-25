@@ -36,8 +36,14 @@ Item {
     /// The last go at this button's action failed.
     property bool alert: false
     property color alertTone: btnLabel.tint
-    /// Pull the mark back to a letter's distance from the word.
-    property bool alertTight: false
+    /// How high and how far right the mark's ink may stand, in this cell's coordinates: half a gap inside the frame
+    /// the cell sits in (`ActionButton.alertTopEdge`). A shoulder that would reach past either is pulled back in.
+    property real alertCeiling: Number.NEGATIVE_INFINITY
+    property real alertWall: Number.POSITIVE_INFINITY
+    /// The word the mark rides: where its letters end and where its ground starts. A word with no chip takes the mark
+    /// half a gap into its trailing bearing, the air a chip's ground stands in (`NameCell`'s mark likewise).
+    readonly property real alertWordEnd: btnLabel.inkWidth - (btnLabel.code ? 0 : Theme.spaceXs / 2)
+    readonly property real alertWordTop: ground.y
     property int fontSize: Theme.fontMd
 
     // The widest wording's ink and nothing else; the air to the frame is `ActionButton.slack`'s
@@ -94,6 +100,7 @@ Item {
     /// visible child.
     readonly property real phraseFixed:
         (btnLabel.phraseHoldMs > 0 ? Theme.iconSm + phraseRow.spacing : 0)
+        + (phraseAlert.visible ? phraseAlert.width + phraseRow.spacing : 0)
         + headChip.implicitWidth + phraseRow.spacing
         + (countWord.visible ? countWord.implicitWidth + phraseRow.spacing : 0)
         + (noteWord.visible ? noteWord.implicitWidth + phraseRow.spacing : 0)
@@ -187,6 +194,18 @@ Item {
             visible: btnLabel.phraseHoldMs > 0
             progress: btnLabel.phraseHoldProgress
             tint: btnLabel.tint
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: Metrics.opticalDrop
+        }
+        // A phrase's `!` stands at its left end as the button's icon: inside, it would split the sentence, and the
+        // right end is the face's corner, where the signature mark stands (デザイン規約 §git 用語のコード表記「`!` の席」).
+        NavIcon {
+            id: phraseAlert
+            visible: btnLabel.alert
+            kind: "bang"
+            tint: btnLabel.alertTone
+            width: Theme.iconMd
+            height: Theme.iconMd
             anchors.verticalCenter: parent.verticalCenter
             anchors.verticalCenterOffset: Metrics.opticalDrop
         }
@@ -331,6 +350,7 @@ Item {
     // The chip, as wide as the ink rather than the shared box, hanging half a gap off either end
     // (デザイン規約 §git 用語のコード表記).
     Rectangle {
+        id: ground
         z: -1
         visible: btnLabel.code && !btnLabel.folded
         x: -Theme.spaceXs / 2
@@ -343,22 +363,19 @@ Item {
         radius: Theme.radiusSm
         color: Theme.bgHover
     }
-    // The failure mark: raised, past the word's (or chip's) end and half a gap in after a flag; on a phrase, at its
-    // head, since the face's corner at the end is the signature's (デザイン規約 §git 用語のコード表記「`!` の席」).
+    // The failure mark, on the right shoulder of the word it is about: past the word's end, its ink half a gap over the
+    // word's ground — pulled back wherever that would reach the frame (デザイン規約 §git 用語のコード表記「`!` の席」).
     NavIcon {
-        // Folded, the seat wears it instead (`ActionButtonSeat.cornerAlert`).
-        visible: btnLabel.alert && !btnLabel.folded
+        id: alertMark
+        // The stem's round cap stands half a stroke over the grid line.
+        readonly property real inkTop: alertMark.inkTopGrid / 16 * alertMark.height - alertMark.stroke / 2
+        // Folded, the seat wears it instead (`ActionButtonSeat.cornerAlert`); a phrase, at its left end (`phraseAlert`).
+        visible: btnLabel.alert && !btnLabel.folded && !btnLabel.phrased
         kind: "bang"
         tint: btnLabel.alertTone
         width: Theme.iconSm
         height: Theme.iconSm
-        x: btnLabel.phrased
-           ? phraseRow.x - width + Theme.spaceXs / 2
-           : btnLabel.inkWidth - (btnLabel.splitFlag ? Theme.spaceXs / 2 : 0)
-             - (btnLabel.alertTight ? Theme.spaceXs : 0)
-        // On the line where the word is the first of two: raised, the stem lands on the frame's top line.
-        y: btnLabel.phrased
-           ? phraseRow.y - Theme.spaceXs
-           : btnLabel.lineBox > 0 ? headText.y : -Theme.spaceXs
+        x: Math.min(btnLabel.alertWordEnd + alertMark.inkRight, btnLabel.alertWall) - alertMark.inkRight
+        y: Math.max(btnLabel.alertWordTop - Theme.spaceXs / 2, btnLabel.alertCeiling) - alertMark.inkTop
     }
 }

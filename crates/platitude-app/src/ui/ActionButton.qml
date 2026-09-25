@@ -38,9 +38,6 @@ HoverToolButton {
     property bool alert: false
     /// The mark's colour, where it is not the word's.
     property color alertTone: actionBtn.fg
-    /// Pull the mark back to a letter's distance from the word: it sits at the end of the label's advance width, and a
-    /// word ending in `)` leaves so much side bearing there that the mark reads as a separate thing.
-    property bool alertTight: false
     /// The hold's fill colour — the frame's by default. A bare button names its own and fills edge to edge like a held
     /// menu row (the hunk heading's `Discard hunk` — デザイン規約 §長押し).
     property color holdTone: actionBtn.frameColor
@@ -232,6 +229,10 @@ HoverToolButton {
     /// glued to the window. The wash still fills the whole cell: that is the target.
     readonly property real frameInset:
         actionBtn.folded ? Math.max(0, (actionBtn.height - actionBtn.foldedDepth) / 2) : 0
+    /// Half a gap inside the frame's top and right lines, in the button's coordinates: as far as a `!` on a word's
+    /// shoulder may reach (`ActionButtonLabel.alertCeiling`).
+    readonly property real alertTopEdge: actionBtn.frameInset + Theme.borderWidth + Theme.spaceXs / 2
+    readonly property real alertRightEdge: actionBtn.width - Theme.borderWidth - Theme.spaceXs / 2
     /// The fill inside the frame, for a button that has to read as a box laid on its ground (the operation panel's).
     /// Under the wash, so the hand still lights it.
     property color faceColor: "transparent"
@@ -363,7 +364,8 @@ HoverToolButton {
                 alert: actionBtn.alert
                 // A step down while busy, like every mark (デザイン規約 §進行中・長押しの定数).
                 alertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
-                alertTight: actionBtn.alertTight
+                alertCeiling: actionBtn.alertTopEdge - actionBtn.topPadding - btnRow.y - btnLabel.y
+                alertWall: actionBtn.alertRightEdge - actionBtn.leftPadding - btnRow.x - btnLabel.x
                 fontSize: actionBtn.font.pixelSize
                 phraseHead: actionBtn.phraseHead
                 phraseHoldMs: actionBtn.armedMs
@@ -418,7 +420,8 @@ HoverToolButton {
                 tint: actionBtn.fg
                 alert: actionBtn.alert
                 alertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
-                alertTight: actionBtn.alertTight
+                alertCeiling: actionBtn.alertTopEdge - actionBtn.topPadding - stackCol.y - stackLabel.y
+                alertWall: actionBtn.alertRightEdge - actionBtn.leftPadding - stackCol.x - stackLabel.x
                 // A step under the band's: two lines in a two-line row, and the word is the half a reader already
                 // knows.
                 fontSize: Theme.fontSm
