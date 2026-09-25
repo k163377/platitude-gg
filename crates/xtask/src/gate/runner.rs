@@ -366,7 +366,7 @@ pub(super) fn runner(
 /// answers for runs nothing, and a build in there for nobody is a
 /// container this gate did not owe. The look is the plan's, and the
 /// second look a queued step takes can only take work away
-/// (`super::run_one`); `--fresh` leaves every step uncached, so it always
+/// (`super::step::run_one`); `--fresh` leaves every step uncached, so it always
 /// asks.
 ///
 /// **A failure here is the side's failure**, reported with no step run.
@@ -375,7 +375,7 @@ pub(super) fn runner(
 /// no copy were wanted. **Once it builds it builds to its end**: the build
 /// is a container of its own, which its launcher's end would not stop
 /// ([`execute_step`]). Either way, every step of the side then meets the
-/// halt at its own door (`super::run_one`).
+/// halt at its own door (`super::step::run_one`).
 pub(super) fn linux_runner(
     ground: &Ground<'_>,
     steps: &[&Required],
@@ -405,7 +405,7 @@ pub(super) fn linux_runner(
     };
     ground.waited.add(room.waited);
     // One name, written over by the next gate here, as a step's log is
-    // (`super::log_of`): a tree runs one gate at a time (`lanes::sole`),
+    // (`super::step::log_of`): a tree runs one gate at a time (`lanes::sole`),
     // so a name per run would only leave a file per gate behind.
     let log = ground.logs.join("linux-runner.log");
     println!(

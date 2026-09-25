@@ -59,7 +59,7 @@
 //!
 //! **A failure here stops the side.** The build either ends green and a
 //! copy is installed, or this returns the error and the gate's Linux side
-//! reports it without running a step (`gate::run_sides`). There is no
+//! reports it without running a step (`gate::sides::run_sides`). There is no
 //! road from here back to `cargo xtask`.
 
 use std::path::Path;

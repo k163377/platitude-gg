@@ -253,7 +253,7 @@ mod tests {
     /// mounted from is the whole of what keeps two runs of a side apart —
     /// their settings stores, their screenshots and the git configuration
     /// they read an identity from all sit in it. The gate starts a side's
-    /// verbs together (`gate::verbs`), which is where a clock that two of
+    /// verbs together (`gate::sides::verbs`), which is where a clock that two of
     /// them read inside one tick would have handed them one directory.
     #[test]
     fn container_runs_started_together_are_handed_a_directory_each() {

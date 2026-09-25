@@ -270,7 +270,7 @@ fn settle_a_pass(
 ///
 /// **Why they are separate.** A block of verbs shares one release: the
 /// first uncached verb builds it and the rest are handed `--no-build`
-/// (`gate::verbs`), so a verb's wall clock is that build plus the verb
+/// (`gate::sides::verbs`), so a verb's wall clock is that build plus the verb
 /// wherever it happened to come first. Ranked by wall clock, the verb
 /// that built would read as the expensive one, and the thing to look at
 /// would be whichever verb the ordering put in front. `fixture` is the

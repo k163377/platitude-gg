@@ -256,7 +256,7 @@ mod tests {
     /// root a preset is built in is the whole of what keeps two runs
     /// apart — the repositories, the `origin.git` they push to and the
     /// configuration they are isolated by all sit in it. The gate starts
-    /// a side's verbs together (`gate::verbs`), and each of them builds
+    /// a side's verbs together (`gate::sides::verbs`), and each of them builds
     /// its own repository, which is where a clock that two of them read
     /// inside one tick would have handed them one root to `git init` in.
     #[test]

@@ -1,6 +1,6 @@
 //! What a red step leaves behind for the run after it.
 //!
-//! A step's log is named by the step's index (`super::log_of`), so the
+//! A step's log is named by the step's index (`super::step::log_of`), so the
 //! next gate in this tree writes over it: the one container run that has
 //! ever been stopped by `Cargo.lock` lost its log to the re-run that
 //! passed, and what it said is known only from a terminal that happened

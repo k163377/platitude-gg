@@ -216,7 +216,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// red.
 ///
 /// One pool for the whole run, as the gate builds one for its sides
-/// (`gate::run_sides`): this verb drives steps, and a runner's steps are
+/// (`gate::sides::run_sides`): this verb drives steps, and a runner's steps are
 /// units of the machine's budget the same way a gate's are. Not the
 /// standalone road — that one is for a command that *is* one unit and
 /// holds one ticket for its whole life (`budget::standalone`).

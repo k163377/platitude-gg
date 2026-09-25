@@ -38,7 +38,7 @@ const KEEP: usize = 200;
 
 /// How long one side's units waited for room another gate was holding,
 /// how many did, and how long the units themselves ran. Filled by the
-/// threads running them, read once at the end ([`super::run_one`]).
+/// threads running them, read once at the end ([`super::step::run_one`]).
 ///
 /// The two halves answer different questions. The wait says another gate
 /// was on the machine beside this one. The run lengths say what a
@@ -145,7 +145,7 @@ impl Waited {
     /// side that no row answers for, or one two rows answer for.
     ///
     /// **The ledger checking itself, not the run.** A step a red stopped
-    /// the group short of has a row of its own (`super::not_run`), and a
+    /// the group short of has a row of its own (`super::sides::not_run`), and a
     /// cached one has a row saying it was cached, so every step of the
     /// plan is answered for however the run went. What is left over is a
     /// path through the runner that files nothing — and the cost of that

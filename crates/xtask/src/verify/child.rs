@@ -125,7 +125,7 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     crate::budget::child_started(child.id(), &app);
     // **The one failure the parent can end the wait on.** A QML file that
     // will not load leaves an application with no window at all, sitting
-    // in its event loop until the ceiling — and `gate::verbs` runs the
+    // in its event loop until the ceiling — and `gate::sides::verbs` runs the
     // verbs of such a tree one at a time until one comes back green, so
     // every one of them pays the full watchdog (P3-確認事項). Qt says so
     // itself the moment it happens, and the run is already decided by

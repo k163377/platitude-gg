@@ -35,7 +35,7 @@ const LOCK: &str = "lock";
 /// unwinds leaves both to the operating system.
 ///
 /// The lock file stays where it is, and nothing collects there: it stands
-/// at one name per tree (`gate::running_note`). Removing a lock file at
+/// at one name per tree (`gate::run::running_note`). Removing a lock file at
 /// a name every gate opens is what would stop it being one lock — a
 /// second gate that opened it first would go on holding a file no longer
 /// at that name while a third made a new one there

@@ -18,7 +18,7 @@
 //! stamps a red outside what the others read leaves standing. Stage 3
 //! (`--all`) always runs this way. **A red among the always-steps stops
 //! the run whichever way it was asked**: they are seconds and go first
-//! ([`super::run_sides`]), and what they catch is fixed before anything
+//! ([`super::sides::run_sides`]), and what they catch is fixed before anything
 //! else is worth running.
 
 use std::sync::Mutex;

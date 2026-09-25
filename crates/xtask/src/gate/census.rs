@@ -423,7 +423,7 @@ pub(crate) fn record(
 }
 
 /// The file under one writer at a time, for as long as the guard lives.
-/// The gate runs the verbs several at once (`gate::verbs`), and a run
+/// The gate runs the verbs several at once (`gate::sides::verbs`), and a run
 /// reads the whole file, puts its own line in and writes the whole back
 /// — two of those at once would each lose the other's line. The lock
 /// lives under target/, which git ignores: a file beside the census

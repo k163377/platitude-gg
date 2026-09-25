@@ -238,7 +238,7 @@ pub(crate) const HELD: &str = "PGG_BUDGET_HELD";
 /// ran, a container command, a `shipped` build, one of `check`'s steps.
 ///
 /// **The two places a ticket is taken are the runner's steps
-/// (`gate::run_one`, `gate::runner`, `check::run_side`) and the top of a
+/// (`gate::step::run_one`, `gate::runner`, `check::run_side`) and the top of a
 /// standalone command.** Below either, everything is a child and carries
 /// its parent's ([`under`]) — which is what this answers first, before
 /// it goes looking for a repository: inside a container there may be no

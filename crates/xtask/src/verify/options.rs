@@ -15,7 +15,7 @@ use std::path::PathBuf;
 /// `tests/it/support/wait::OVERALL_BUDGET`; this one is held under it
 /// because a red costs differently on this side — a verb that reaches
 /// the ceiling spends the whole of it in wall clock, and a block whose
-/// verbs are all red spends it one verb at a time (`gate::verbs` runs
+/// verbs are all red spends it one verb at a time (`gate::sides::verbs` runs
 /// alone until one comes back green). What that buys and what it costs
 /// is in internal-docs/反映前テストの機械化.md §動詞の天井.
 ///

@@ -14,7 +14,7 @@
 //! So the count is over the whole of it. Every unit a gate runs takes a
 //! **ticket** out of one machine-wide budget before it starts, and gives
 //! it back when it ends; a unit is one step, which is the granularity
-//! the runner already has (`gate::run_one`). Both sides draw on the same
+//! the runner already has (`gate::step::run_one`). Both sides draw on the same
 //! budget, because both sides are the same machine.
 //!
 //! **What a ticket weighs** is what its unit takes of the machine: a
