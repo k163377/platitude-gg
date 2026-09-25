@@ -474,10 +474,6 @@ Rectangle {
     /// …taken from the two in the order above. Each gives what it can and passes the rest on.
     readonly property real opsRepoCut: Math.min(topBar.opsOver, repoPick.slack)
     readonly property real opsBranchCut: Math.min(topBar.opsOver - topBar.opsRepoCut, branchPick.slack)
-    /// The seat the two smaller chevrons stand in. **The same proportion to their own mark that the repository's keeps
-    /// to its** — its seat is the ☰'s cell and its mark is a step larger, so the two written as one ratio put the same
-    /// amount of air, to the eye, around every chevron in the row.
-    readonly property int opsMarkSeat: Math.round(Theme.iconSm * Theme.railWidth / Theme.iconMd)
     /// What the panel keeps clear at its right end for everything laid out in it: the find button, the band's own step
     /// in from the window edge, and a step between it and the actions, which are a set and would otherwise read as
     /// four. Its whole width, because that is what it is drawn at — the share the three divide between them is what is

@@ -118,10 +118,7 @@ HoverToolButton {
     property int markSeat: picker.markSize
     property int pixelSize: Theme.fontMd
     property int weight: Font.DemiBold
-    /// How tall what this picker writes comes out: one line, or two where there is an upstream under the name.
-    readonly property real linesHeight:
-        nameRuler.height + (picker.note === "" ? 0 : noteRuler.height)
-    /// …and how tall the two stand when both are written, **whatever is written now**: read off the faces, not the
+    /// How tall the two lines stand when both are written, **whatever is written now**: read off the faces, not the
     /// words. The depth the panel's buttons are drawn to — their own two lines are there whether or not this branch
     /// has an upstream to write under its name, and a picker still waiting on its repository writes neither.
     readonly property real pairHeight: nameMetrics.height + noteMetrics.height
@@ -305,10 +302,6 @@ HoverToolButton {
     FontMetrics {
         id: nameMetrics
         font: nameRuler.font
-    }
-    FontMetrics {
-        id: trailMetrics
-        font: trailRuler.font
     }
     FontMetrics {
         id: noteMetrics

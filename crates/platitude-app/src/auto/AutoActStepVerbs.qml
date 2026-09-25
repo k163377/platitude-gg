@@ -25,6 +25,7 @@ Item {
     readonly property var detailsModel: driver.detailsModel
     readonly property var branchesModel: driver.branchesModel
     readonly property var worktreeModel: driver.worktreeModel
+    readonly property var workTree: driver.workTree
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
     readonly property var diffPane: driver.diffPane
