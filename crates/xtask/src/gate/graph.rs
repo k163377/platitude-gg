@@ -59,6 +59,9 @@ pub(crate) struct Graph {
     reexports: BTreeMap<String, BTreeMap<String, Vec<String>>>,
     /// file -> the paths it re-exports by glob.
     globs: BTreeMap<String, Vec<Vec<String>>>,
+    /// reader -> the files it reads only as the `pub use` that binds a
+    /// name it takes to the file defining it ([`Resolved::bindings`]).
+    pub(crate) bindings: BTreeMap<String, BTreeSet<String>>,
     pub unresolved: Vec<(String, String)>,
     /// `#[qobject]` type names the app defines -> file.
     app_types: BTreeMap<String, String>,
@@ -214,7 +217,21 @@ impl Graph {
         } else {
             carried
         };
+        // A `pub use` passes code, not data: the reader is owed the binding's
+        // own change and nothing the binding's file reads elsewhere
+        // (`Resolved`).
+        if carried == Carried::AsProductFile && self.bound_only(reader, file) {
+            return None;
+        }
         (carried == Carried::Whole || !self.sandboxed(reader)).then_some(carried)
+    }
+
+    /// Whether `reader` reads `file` only as the `pub use` that binds a
+    /// name it takes to the file defining it.
+    fn bound_only(&self, reader: &str, file: &str) -> bool {
+        self.bindings
+            .get(reader)
+            .is_some_and(|bound| bound.contains(file))
     }
 
     /// Whether `file` is a module of an integration binary — one that
@@ -246,6 +263,9 @@ impl Graph {
         }
         let mut found: BTreeMap<String, bool> = BTreeMap::new();
         let mut queue = Queue::new();
+        // Files read only as a binding: in the key for their own text, and
+        // walked no further (a `pub use` passes no data — `Resolved`).
+        let mut bound: BTreeSet<String> = BTreeSet::new();
         for file in files {
             take(&mut found, &mut queue, file, self.sandboxed(file));
         }
@@ -257,6 +277,10 @@ impl Graph {
                 if guarded && as_data(file, &reader) {
                     continue;
                 }
+                if self.bound_only(&reader, file) {
+                    bound.insert(file.clone());
+                    continue;
+                }
                 take(
                     &mut found,
                     &mut queue,
@@ -265,7 +289,7 @@ impl Graph {
                 );
             }
         }
-        found.into_keys().collect()
+        found.into_keys().chain(bound).collect()
     }
 }
 
@@ -306,14 +330,23 @@ pub(crate) fn build(root: &Path) -> Result<Graph, String> {
     for file in &files {
         let (raw, code) = &texts[file];
         let bare = bare_roots(&g, file, code);
+        let mut bound = BTreeSet::new();
+        let mut read = BTreeSet::new();
         for segments in paths_in(code, &g.crate_roots, &bare) {
             let targets = resolve(&g, file, &segments, 0);
             if targets.is_empty() {
                 g.unresolved.push((file.clone(), segments.join("::")));
             }
-            for target in targets {
-                g.edge(file, &target);
-            }
+            read.extend(targets.reads);
+            bound.extend(targets.bindings);
+        }
+        for target in read.iter().chain(&bound) {
+            g.edge(file, target);
+        }
+        // Bound through and also read for something of its own: a read.
+        let bound_only: BTreeSet<String> = bound.difference(&read).cloned().collect();
+        if !bound_only.is_empty() {
+            g.bindings.insert(file.clone(), bound_only);
         }
         // An integration binary's strings lay out its sandbox; they read
         // nothing of this tree.
@@ -392,18 +425,13 @@ fn bare_roots(g: &Graph, file: &str, code: &str) -> BTreeMap<String, Vec<String>
         if first == "super" && inline.iter().any(|(open, close)| at > *open && at < *close) {
             *first = "self".to_string();
         }
-        for target in resolve(g, file, &segments, 0) {
-            for child in g.children.get(&target).into_iter().flatten() {
+        for target in resolve(g, file, &segments, 0).all() {
+            for child in g.children.get(target).into_iter().flatten() {
                 let mut path = segments.clone();
                 path.push(child.clone());
                 bare.entry(child.clone()).or_insert(path);
             }
-            for name in g
-                .reexports
-                .get(&target)
-                .into_iter()
-                .flat_map(BTreeMap::keys)
-            {
+            for name in g.reexports.get(target).into_iter().flat_map(BTreeMap::keys) {
                 let mut path = segments.clone();
                 path.push(name.clone());
                 bare.entry(name.clone()).or_insert(path);
@@ -892,10 +920,12 @@ fn reexports_in(code: &str) -> (BTreeMap<String, Vec<String>>, Vec<Vec<String>>)
     let mut named = BTreeMap::new();
     let mut globs = Vec::new();
     let mut rest = code;
-    // The earliest `pub use` or `pub(…) use`.
+    // The earliest `pub use` or `pub(…) use`. Every `pub(` is looked at:
+    // a `pub(crate) mod` or `fn` standing before the first re-export is
+    // no reason to stop reading.
     let next = |text: &str| -> Option<usize> {
         let plain = text.find("pub use ");
-        let scoped = text.find("pub(").filter(|&p| {
+        let scoped = text.match_indices("pub(").map(|(p, _)| p).find(|&p| {
             text[p..]
                 .find(')')
                 .is_some_and(|close| text[p + close..].starts_with(") use "))
@@ -1010,15 +1040,39 @@ fn split_top_level(text: &str) -> Vec<String> {
         .collect()
 }
 
+/// What a path resolves to: the files that define what it names, and the
+/// files whose `pub use` bound the name on the way — read as code only.
+/// Repointing a binding changes what the reader gets without touching what
+/// it named before, so the reader is owed by the binding's file as well;
+/// but a `pub use` line passes no data, so a product file that file reads
+/// elsewhere is not handed on through it (`Graph::hands_on`, and read
+/// back in `Graph::inputs`). A crate root is a binding like any other:
+/// nothing reads it for code ([`complaints`]).
+#[derive(Default)]
+struct Resolved {
+    reads: Vec<String>,
+    bindings: Vec<String>,
+}
+
+impl Resolved {
+    fn is_empty(&self) -> bool {
+        self.reads.is_empty() && self.bindings.is_empty()
+    }
+
+    fn all(&self) -> impl Iterator<Item = &String> {
+        self.reads.iter().chain(self.bindings.iter())
+    }
+}
+
 /// The files the path lands in: the deepest module along it that exists,
-/// followed through `pub use` re-exports; a glob re-export lands on
-/// every file it could mean, and on the re-exporting file itself.
-fn resolve(g: &Graph, from: &str, segments: &[String], depth: usize) -> Vec<String> {
+/// followed through `pub use` re-exports ([`Resolved`]); a glob re-export
+/// lands on every file it could mean, and on the re-exporting file itself.
+fn resolve(g: &Graph, from: &str, segments: &[String], depth: usize) -> Resolved {
     if depth > 8 {
-        return Vec::new();
+        return Resolved::default();
     }
     let Some(module) = g.modules.get(from) else {
-        return Vec::new();
+        return Resolved::default();
     };
     let mut at = 1;
     let (krate, mut path) = match segments.first().map(String::as_str) {
@@ -1027,21 +1081,21 @@ fn resolve(g: &Graph, from: &str, segments: &[String], depth: usize) -> Vec<Stri
         Some("super") => {
             let mut path = module.path.clone();
             if path.pop().is_none() {
-                return Vec::new();
+                return Resolved::default();
             }
             (module.krate.clone(), path)
         }
         Some(other) if g.crate_roots.contains_key(other) => (other.to_string(), Vec::new()),
-        _ => return Vec::new(),
+        _ => return Resolved::default(),
     };
     while segments.get(at).is_some_and(|s| s == "super") {
         if path.pop().is_none() {
-            return Vec::new();
+            return Resolved::default();
         }
         at += 1;
     }
     let Some(mut file) = g.index.get(&(krate.clone(), path.clone())).cloned() else {
-        return Vec::new();
+        return Resolved::default();
     };
     while let Some(seg) = segments.get(at) {
         let mut next = path.clone();
@@ -1056,20 +1110,34 @@ fn resolve(g: &Graph, from: &str, segments: &[String], depth: usize) -> Vec<Stri
         }
     }
     let Some(seg) = segments.get(at) else {
-        return vec![file];
+        return Resolved {
+            reads: vec![file],
+            bindings: Vec::new(),
+        };
     };
     if let Some(target) = g.reexports.get(&file).and_then(|m| m.get(seg)) {
         let mut through = resolve(g, &file, &self_relative(g, target), depth + 1);
+        // Bound here on the way to what it names; named nowhere the graph
+        // can see, the file itself is what the reader depends on.
         if through.is_empty() {
-            through.push(file);
+            through.reads.push(file);
+        } else {
+            through.bindings.push(file);
         }
         return through;
     }
-    let mut targets = vec![file.clone()];
+    // A glob keeps the file as a read, as it stood before bindings were
+    // told apart: the name may be the file's own.
+    let mut targets = Resolved {
+        reads: vec![file.clone()],
+        bindings: Vec::new(),
+    };
     for glob in g.globs.get(&file).into_iter().flatten() {
         let mut through = glob.clone();
         through.push(seg.clone());
-        targets.extend(resolve(g, &file, &self_relative(g, &through), depth + 1));
+        let found = resolve(g, &file, &self_relative(g, &through), depth + 1);
+        targets.reads.extend(found.reads);
+        targets.bindings.extend(found.bindings);
     }
     targets
 }
@@ -1387,6 +1455,9 @@ pub(crate) fn complaints(g: &Graph) -> Vec<String> {
             // its fixtures — none is a helper on the root.
             .filter(|r| !r.ends_with('/') && !r.ends_with("_tests.rs"))
             .filter(|r| g.modules.get(*r).is_none_or(|m| m.test_binary.is_none()))
+            // A reader that takes a name the root re-exports reads the
+            // root's `pub use` alone (`Resolved`), not a helper on it.
+            .filter(|r| !g.bound_only(r, &file))
             .collect();
         if !readers.is_empty() {
             out.push(format!(
@@ -1424,6 +1495,9 @@ pub(crate) fn collect(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod bindings;
 
 #[cfg(test)]
 mod tests {
@@ -1611,6 +1685,21 @@ mod tests {
         assert_eq!(named["Executor"], vec!["process", "Executor"]);
         assert_eq!(named["Outcome"], vec!["process", "outcome", "Outcome"]);
         assert_eq!(globs, vec![vec!["walk".to_string()]]);
+    }
+
+    /// A root's re-exports usually stand below its `pub(crate) mod` and
+    /// `pub(crate) fn` items; the first `pub(` that is not a `use` must
+    /// not end the reading, or every reader of those names is put down
+    /// as reading the root itself.
+    #[test]
+    fn a_re_export_below_a_scoped_item_is_still_read() {
+        let (named, globs) = reexports_in(
+            "pub(crate) mod permit;\npub(crate) fn seat() {}\n\
+             pub(crate) use approval::{FLAGS, gui as GUI};\npub(crate) use hooks::*;\n",
+        );
+        assert_eq!(named["FLAGS"], vec!["approval", "FLAGS"]);
+        assert_eq!(named["GUI"], vec!["approval", "gui"]);
+        assert_eq!(globs, vec![vec!["hooks".to_string()]]);
     }
 
     #[test]

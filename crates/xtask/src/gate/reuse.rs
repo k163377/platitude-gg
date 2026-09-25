@@ -20,7 +20,7 @@ use crate::subprocess::{common_git_dir, git_query};
 
 /// The format the file is written in. A reader that does not know this
 /// number reads nothing.
-const VERSION: &str = "graph-cache 2";
+const VERSION: &str = "graph-cache 3";
 
 /// How many built graphs a repository keeps: more than the commit at hand
 /// and its parent, so a seat rebasing onto a tree another seat has read
@@ -163,7 +163,8 @@ fn sweep(shelf: &Path) {
 }
 
 /// One record per line, fields tab-separated: `M` a module, `D` a file
-/// and everything it reads, `U` a path that resolved nowhere. Tabs
+/// and everything it reads, `B` a reader and the files it reads as a
+/// binding alone (`graph::Resolved`), `U` a path that resolved nowhere. Tabs
 /// because a workspace path can hold a space and never one of these.
 fn write(graph: &Graph) -> String {
     let mut out = String::from(VERSION);
@@ -184,6 +185,15 @@ fn write(graph: &Graph) -> String {
         for target in to {
             out.push('\t');
             out.push_str(target);
+        }
+        out.push('\n');
+    }
+    for (reader, bound) in &graph.bindings {
+        out.push_str("B\t");
+        out.push_str(reader);
+        for file in bound {
+            out.push('\t');
+            out.push_str(file);
         }
         out.push('\n');
     }
@@ -244,6 +254,11 @@ fn read(text: &str) -> Option<Graph> {
                         .insert(from.clone());
                 }
                 graph.deps.insert(from, to);
+            }
+            "B" => {
+                let reader = fields.next()?.to_string();
+                let bound: BTreeSet<String> = fields.map(str::to_string).collect();
+                graph.bindings.insert(reader, bound);
             }
             "U" => {
                 let file = fields.next()?.to_string();
@@ -306,6 +321,9 @@ fn same(one: &Graph, other: &Graph) -> Result<(), String> {
     }
     if one.rdeps != other.rdeps {
         return Err("the readers differ".into());
+    }
+    if one.bindings != other.bindings {
+        return Err("the bindings differ".into());
     }
     if one.unresolved != other.unresolved {
         return Err("the unresolved paths differ".into());
