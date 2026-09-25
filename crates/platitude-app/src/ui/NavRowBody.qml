@@ -104,15 +104,19 @@ RowLayout {
         }
     }
     // Every branch's distance from its upstream (`models::nav` の `Role::Ahead` rides each row); none when level or
-    // untracked (デザイン規約 §左メニューの所作).
+    // untracked (デザイン規約 §左メニューの所作). The main copy, named by its branch and opening no line for it, draws
+    // that branch's measure here only while open — the counts it read as it opened (`NavFacts.answers`).
     Loader {
         id: trackSeat
-        active: !body.row.folder && body.row.kindHint === "branch" && (body.row.ahead > 0 || body.row.behind > 0)
+        readonly property int ahead: body.homeCopy ? body.row.factsAhead : body.row.ahead
+        readonly property int behind: body.homeCopy ? body.row.factsBehind : body.row.behind
+        active: !body.row.folder && (trackSeat.ahead > 0 || trackSeat.behind > 0)
+                && (body.row.kindHint === "branch" || (body.homeName !== "" && body.row.factsOpen))
         visible: trackSeat.active
         Layout.alignment: Qt.AlignVCenter
         sourceComponent: HeadTrack {
-            ahead: body.row.ahead
-            behind: body.row.behind
+            ahead: trackSeat.ahead
+            behind: trackSeat.behind
         }
     }
     // Nothing = local only, cloud = on a remote, PR mark = has a PR (fake until Phase 4: PGG_FAKE_PR). Tags too

@@ -478,6 +478,37 @@ Item {
             row.destroy()
         }
 
+        /// The main copy opens no line for its branch, so the branch's measure rides the row's own line — and only
+        /// while open: closed, the row says what it is and nothing more.
+        function test_the_repositorys_own_copy_draws_its_branchs_measure_only_while_open() {
+            root.branchUpstream = "origin/main"
+            root.branchGone = ""
+            root.branchAhead = 6
+            root.branchBehind = 0
+            const home = root.rowOf({ "kindHint": "worktree", "name": "repo", "full": "C:/work/repo",
+                                      "bucket": "main", "change": "MAIN" })
+            compare(root.measuresUnder(home).length, 0, "closed, no measure")
+
+            root.openRow(home)
+            verify(home.factsOpen)
+            const measures = root.measuresUnder(home)
+            compare(measures.length, 1, "open, one measure")
+            verify(measures[0].parent.visible, "on the row's own line")
+            compare(measures[0].ahead, 6, "counting the branch the copy has out")
+            compare(measures[0].behind, 0)
+
+            home.openKey = ""
+            verify(!home.factsOpen)
+            compare(root.measuresUnder(home).length, 0, "and gone again once the row closes")
+            home.destroy()
+
+            // Detached, the copy is named by its folder and has no branch to measure.
+            const loose = root.openRow(root.rowOf({ "kindHint": "worktree", "name": "repo", "full": "C:/work/repo",
+                                                    "bucket": "", "change": "MAIN" }))
+            compare(root.measuresUnder(loose).length, 0)
+            loose.destroy()
+        }
+
         /// The card is sized over the lines it was handed, so a blank one would be an empty row to look past.
         function test_a_row_with_nothing_to_add_draws_no_lines() {
             root.sectionUpstream = ""

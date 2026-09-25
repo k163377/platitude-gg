@@ -89,7 +89,7 @@ QtObject {
         const drawn = kind === "branch" ? [navFacts.copyLine(a), navFacts.readingLine(a)]
                     : kind === "remote" ? [navFacts.branchLine(a.local, a, a.branchTo), navFacts.copyLine(a)]
                     // The repository's own copy is already named by its branch (`NavRowBody.homeCopy`), so the line
-                    // naming it again is left out; its measure is on that branch's BRANCHES row.
+                    // naming it again is left out; its measure goes to the row's own line (`NavRowBody`'s track seat).
                     : kind === "worktree" ? [a.state === "MAIN" ? null : navFacts.branchLine(a.branch, a, a.branchTo),
                                              navFacts.readingLine(a), navFacts.stateLine(a)]
                     // One line per remote carrying the tag — the one section whose lines are a list.
