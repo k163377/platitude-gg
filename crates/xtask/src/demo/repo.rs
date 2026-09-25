@@ -165,9 +165,9 @@ impl DemoRepo {
     ) -> Result<(), String> {
         self.write(rel, content)?;
         self.git(&["add", "--", rel])?;
-        // Two commands from now is what the commit itself will carry;
-        // reading the base keeps it reproducible.
-        let written = self.base_epoch + (self.tick + 2) * TICK_SECS - earlier;
+        // The next command — the commit — carries `tick + 1`; reading the
+        // base keeps it reproducible.
+        let written = self.base_epoch + (self.tick + 1) * TICK_SECS - earlier;
         let date = format!("--date={written} +0000");
         let mut args = vec!["commit", &date];
         let author_arg = author.map(|a| format!("--author={a}"));
@@ -252,3 +252,6 @@ pub(super) fn file_url(path: &Path) -> String {
     }
     format!("file://{p}")
 }
+
+#[cfg(test)]
+mod tests;
