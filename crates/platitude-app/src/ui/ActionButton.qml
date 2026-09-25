@@ -229,14 +229,14 @@ HoverToolButton {
         holdMs: actionBtn.holdMs
         onFinished: actionBtn.held()
     }
+    /// The frame's height once folded: the depth the button had with its word, handed down by whoever sets that depth.
+    /// Folding gives up the word, not the depth (デザイン規約 §操作パネル).
+    property real foldedDepth: 0
     /// How far in from the cell's top and bottom the frame is drawn. A folded cell fills the band's height like the ☰
-    /// and the window's three, and the frame keeps the button's own box height — a line along the band's top edge
-    /// reads as a box glued to the window. The wash still fills the whole cell: that is the target.
-    ///
-    /// Read only when folded: elsewhere the height is the implicit height, and a binding reading both is a loop to the
-    /// engine even where the arithmetic is not.
+    /// and the window's three, and the frame keeps `foldedDepth` — a line along the band's top edge reads as a box
+    /// glued to the window. The wash still fills the whole cell: that is the target.
     readonly property real frameInset:
-        actionBtn.folded ? Math.max(0, (actionBtn.height - actionBtn.implicitHeight) / 2) : 0
+        actionBtn.folded ? Math.max(0, (actionBtn.height - actionBtn.foldedDepth) / 2) : 0
     /// The fill inside the frame, for a button that has to read as a box laid on its ground (the operation panel's).
     /// Under the wash, so the hand still lights it.
     property color faceColor: "transparent"

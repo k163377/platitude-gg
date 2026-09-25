@@ -485,15 +485,16 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "band-actions",
         when: &[],
-        plain: "band_actions fits=true folded=false",
+        plain: "band_actions fits=true folded=false deep=true",
     },
     // The end of that road: the words given up for the marks at the floor
     // the window has with its left list open — the width they must be
-    // done by.
+    // done by. `deep=` is every frame still two lines deep: the fold gives
+    // up the word, not the depth.
     Verb {
         name: "band-actions-fold",
         when: &[],
-        plain: "band_actions fits=true folded=true",
+        plain: "band_actions fits=true folded=true deep=true",
     },
     // The marks with one saying the last go failed. A `!` on a button with
     // no word has only the mark's corner to stand in, so judged is that it
@@ -504,7 +505,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "band-actions-alert",
         when: &[],
-        plain: "band_actions fits=true folded=true cut=true alert=true",
+        plain: "band_actions fits=true folded=true deep=true cut=true alert=true",
     },
     // The same corner on the other mark, put there by the run of failures
     // that stops the timer. Its own line because the band's `alert=` is the
@@ -517,7 +518,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "band-actions-none",
         when: &[],
-        plain: "band_actions fits=true folded=false cut=false",
+        plain: "band_actions fits=true folded=false deep=true cut=false",
     },
     // The fourth badge. A run whose shim never reached PATH reads this
     // machine's git and wears no badge; `badge=` is the band's own reading,

@@ -465,8 +465,10 @@ Item {
     function reportBandActions() {
         Harness.report(
             "band_actions fits=" + (window.width >= Math.ceil(window.floorWidth))
-            // The four judged lead together: `must_say` catches only neighbours in one substring.
+            // The five judged lead together: `must_say` catches only neighbours in one substring. `deep=` is the frames'
+            // depth, which a fold keeps (`TopBar.actionsDeep`).
             + " folded=" + topBar.actionsFolded
+            + " deep=" + topBar.actionsDeep
             + " cut=" + topBar.actionWordCut
             + " alert=" + topBar.actionAlertShown
             + " cap=" + topBar.actionCapW
