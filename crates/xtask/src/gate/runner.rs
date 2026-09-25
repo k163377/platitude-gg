@@ -8,13 +8,15 @@
 
 use std::path::Path;
 
-use super::{Ground, Required, census, default_jobs, rank, seat_of};
+use super::plan::Required;
+use super::sides::rank;
+use super::{Ground, census, default_jobs, seat_of};
 
 /// The tests' switch: with it set no step runs at all (`execute_step`).
 pub(super) const FAKE_LOG: &str = "PGG_GATE_FAKE_LOG";
 
 /// The tests' switch for a step another tree stamped while this one
-/// waited for room ([`run_one`]).
+/// waited for room ([`run_one`](super::step::run_one)).
 pub(super) const FAKE_STAMP: &str = "PGG_GATE_FAKE_STAMP";
 
 /// Where a faked run records the steps it was handed `--no-build`, so a

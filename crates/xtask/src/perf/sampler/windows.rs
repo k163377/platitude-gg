@@ -9,14 +9,12 @@ use crate::perf::SAMPLE_MS;
 
 /// The script's output, read a line at a time. The attribution script
 /// speaks the same way (`perf::attribution`).
-#[cfg(windows)]
-pub(crate) type Lines = std::io::Lines<std::io::BufReader<std::process::ChildStdout>>;
+pub(in crate::perf) type Lines = std::io::Lines<std::io::BufReader<std::process::ChildStdout>>;
 
 /// The process creation flag that starts a process with its primary
 /// thread suspended: a pid with nothing executed yet, which the sampler
 /// resumes once the process is in its job object.
-#[cfg(windows)]
-pub(crate) const CREATE_SUSPENDED: u32 = 0x0000_0004;
+pub(in crate::perf) const CREATE_SUSPENDED: u32 = 0x0000_0004;
 
 /// How long the script is given to compile and say `ready`, and later to
 /// join and resume the process and say `resumed`: seconds against a
@@ -24,7 +22,6 @@ pub(crate) const CREATE_SUSPENDED: u32 = 0x0000_0004;
 /// nothing in that time is a sampler that will never sample, and a wait
 /// on it with no ceiling would hold the machine's every build behind a
 /// measurement that never starts.
-#[cfg(windows)]
 const SCRIPT_CEILING: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// Reads the script's lines until `wanted`, within [`SCRIPT_CEILING`],
@@ -34,8 +31,7 @@ const SCRIPT_CEILING: std::time::Duration = std::time::Duration::from_secs(30);
 /// sees them as somebody else's. The read blocks, so it runs on a thread
 /// of its own and the ceiling is kept here; a script that never answers
 /// leaves that thread on the pipe until the script is ended.
-#[cfg(windows)]
-pub(crate) fn await_line(mut lines: Lines, wanted: &'static str) -> Result<Lines, String> {
+pub(in crate::perf) fn await_line(mut lines: Lines, wanted: &'static str) -> Result<Lines, String> {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         loop {
@@ -71,8 +67,7 @@ pub(crate) fn await_line(mut lines: Lines, wanted: &'static str) -> Result<Lines
 
 /// Ends a script that will not be read any further, and says so when it
 /// would not end.
-#[cfg(windows)]
-pub(crate) fn end(child: &mut std::process::Child, what: &str) {
+pub(in crate::perf) fn end(child: &mut std::process::Child, what: &str) {
     if let Err(error) = child.kill() {
         println!("  note: could not end {what}: {error}");
     }
@@ -82,7 +77,6 @@ pub(crate) fn end(child: &mut std::process::Child, what: &str) {
 /// prints once it is waiting for a process to watch. Anything it prints
 /// before that is PowerShell complaining, and a script that ends before
 /// saying it is a sampler that will never sample.
-#[cfg(windows)]
 pub(super) fn windows_arm(
     seconds: u64,
     software: bool,
@@ -108,7 +102,6 @@ pub(super) fn windows_arm(
 
 /// Reads the armed script's samples until it stops — the process reaped,
 /// or the script's own deadline passed.
-#[cfg(windows)]
 pub(super) fn windows_watch(
     mut child: std::process::Child,
     lines: Lines,
@@ -157,18 +150,14 @@ pub(super) fn windows_watch(
 /// Spelled in decimal because PowerShell reads a hexadecimal literal with
 /// the top bit set as a negative `Int32` and then refuses to hand it to a
 /// `uint` parameter.
-#[cfg(windows)]
 pub(super) const AWAKE: u32 = 0x8000_0003;
-#[cfg(windows)]
 pub(super) const SYSTEM_AWAKE: u32 = 0x8000_0001;
-#[cfg(windows)]
 pub(super) const CONTINUOUS: u32 = 0x8000_0000;
 
 /// The Win32 the sampler script calls: who is in front, the input idle
 /// counter, the execution state, the whole-machine times, and the job
 /// object the measured process is put in and resumed under
 /// (`windows_script` says what each is for).
-#[cfg(windows)]
 const HOST_CLASS: &str = "public static class PerfHost {
   [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();
   [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
@@ -213,7 +202,6 @@ const HOST_CLASS: &str = "public static class PerfHost {
 /// into the sampler script (`windows_script`). `Start()` waits up to a
 /// second for the first answer, which in practice arrives within the
 /// registration call.
-#[cfg(windows)]
 const DISPLAY_CLASS: &str = "public class PerfDisplay : System.Windows.Forms.NativeWindow {
   [DllImport(\"user32.dll\")] static extern IntPtr RegisterPowerSettingNotification(IntPtr h, ref Guid guid, int flags);
   [StructLayout(LayoutKind.Sequential, Pack=4)] struct PBS { public Guid PowerSetting; public uint DataLength; public byte Data; }
@@ -284,7 +272,6 @@ const DISPLAY_CLASS: &str = "public class PerfDisplay : System.Windows.Forms.Nat
 /// in front however often this fires. A software run raises it not at
 /// all: its frames need no compositing, and a person at the machine
 /// would otherwise have the window in their face every second.
-#[cfg(windows)]
 fn windows_script(seconds: u64, software: bool) -> String {
     // Drawing with the software scene graph the screen is left alone —
     // its frames need no display, and `ES_DISPLAY_REQUIRED` would hold

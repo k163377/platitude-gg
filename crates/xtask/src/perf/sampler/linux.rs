@@ -10,7 +10,6 @@ use crate::perf::SAMPLE_MS;
 /// nobody's failure — `measure` ends the run at a deadline of its own
 /// inside it, and this only has to outlast that — so the sampling is a
 /// stand watched (`wait::stood`).
-#[cfg(target_os = "linux")]
 pub(super) fn linux_sampler(
     pid: u32,
     started: Instant,
@@ -35,7 +34,6 @@ pub(super) fn linux_sampler(
 /// Memory and whole-machine processor time. There is no window question
 /// here: nothing on this side of the project measures a real window on
 /// Linux (`perf::guard_the_window`, ci/linux).
-#[cfg(target_os = "linux")]
 fn linux_sample_once(pid: u32) -> Sample {
     let mut sample = Sample::default();
     let Ok(text) = std::fs::read_to_string(format!("/proc/{pid}/status")) else {

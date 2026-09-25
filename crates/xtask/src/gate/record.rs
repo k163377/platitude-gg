@@ -275,7 +275,7 @@ fn moment(spent: Duration) -> String {
 }
 
 /// The block both the terminal and the record hold.
-pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::Shift) -> String {
+pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::census::Shift) -> String {
     let (always, cached, to_run) = run.steps;
     let (verbs_selected, verbs_run, verbs_left) = run.verbs;
     let mut out = format!(
@@ -351,7 +351,7 @@ pub(crate) fn render(run: &Run<'_>, spent: &Spent, shift: &super::Shift) -> Stri
 /// ended and the process that ran it, and takes away all but the newest
 /// [`KEEP`]. A record nobody could write is not worth a red gate: the run
 /// itself has already answered, and this is the note beside it.
-pub(crate) fn keep(dir: &Path, run: &Run<'_>, spent: &Spent, shift: &super::Shift) {
+pub(crate) fn keep(dir: &Path, run: &Run<'_>, spent: &Spent, shift: &super::census::Shift) {
     let records = dir.join("target").join(DIR);
     if std::fs::create_dir_all(&records).is_err() {
         return;
@@ -613,7 +613,7 @@ mod tests {
             verbs: (353, 353, 0),
             outcome: "PASS",
         };
-        let text = render(&run, &spent, &crate::gate::Shift::default());
+        let text = render(&run, &spent, &crate::gate::census::Shift::default());
         for word in [
             "gate lock",
             "graph",

@@ -19,7 +19,10 @@ use super::{Limits, percent};
 /// awake across this wait as across everything else —
 /// [`keep_awake`] is held for the whole invocation, which is
 /// what makes the gap between two runs no darker than a run.
-pub(crate) fn wait_for_quiet(limits: &Limits, ceiling: std::time::Duration) -> Result<(), String> {
+pub(in crate::perf) fn wait_for_quiet(
+    limits: &Limits,
+    ceiling: std::time::Duration,
+) -> Result<(), String> {
     if limits.quiet_percent.is_infinite() {
         return Ok(());
     }
@@ -102,7 +105,7 @@ pub(crate) fn wait_for_quiet(limits: &Limits, ceiling: std::time::Duration) -> R
 /// A pid is reused, and a wake loop that only asked whether *something*
 /// holds that number would outlive its parent for as long as whatever
 /// took the number lives.
-pub(crate) struct Awake(Option<std::process::Child>);
+pub(in crate::perf) struct Awake(Option<std::process::Child>);
 
 impl Drop for Awake {
     fn drop(&mut self) {
@@ -119,7 +122,7 @@ impl Drop for Awake {
 pub(super) const WAKE_SECS: u64 = 20;
 
 #[cfg(windows)]
-pub(crate) fn keep_awake(display: bool) -> Awake {
+pub(in crate::perf) fn keep_awake(display: bool) -> Awake {
     // Holding the display pokes the input timer too, so an already-dark
     // screen comes back; a software run holds only the machine and
     // injects nothing.
@@ -178,7 +181,7 @@ public static class PerfWake {{\n\
 }
 
 #[cfg(not(windows))]
-pub(crate) fn keep_awake(_display: bool) -> Awake {
+pub(in crate::perf) fn keep_awake(_display: bool) -> Awake {
     Awake(None)
 }
 

@@ -584,7 +584,7 @@ fn binary_steps(
     // goes dirty in the middle of unrelated work. A gate whose runs
     // moved it stops before it stamps, because the stamp names a
     // commit and the tree that passed is no longer the one it holds
-    // (`gate::execute`).
+    // (`gate::execute::execute`).
     for line in &lines {
         let mut host = xtask(&["verify-ui"]);
         host.extend(crate::verify::suite_words(line));

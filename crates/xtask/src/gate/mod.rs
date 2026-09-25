@@ -44,17 +44,13 @@ mod tiers;
 use std::path::Path;
 
 use halt::Halt;
-use plan::Required;
 use record::Waited;
 pub(crate) use reuse::preserve_reader;
 pub use run::run;
 pub(crate) use run::{default_jobs, for_landing};
-use sides::rank;
 pub(crate) use sides::seat_of;
 use stamp::Store;
 pub(crate) use standing::standing;
-
-use census::Shift;
 
 use crate::command::{self, Permission, Where};
 
