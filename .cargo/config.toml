@@ -1,6 +1,4 @@
-# `cargo xtask <command>` — the cross-platform dev task runner
-# (crates/xtask). See CLAUDE.md: no Windows-only dev tooling.
-# `--locked`, like every cargo the gate starts: a cargo that would rewrite
-# Cargo.lock says so and stops (internal-docs/反映前テストの機械化.md).
+# `cargo xtask <command>` (crates/xtask). `--locked`, like every cargo the
+# gate starts (internal-docs/反映前テストの機械化.md).
 [alias]
 xtask = "run --quiet --locked -p xtask --"

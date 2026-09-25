@@ -1,12 +1,9 @@
 [workspace]
 resolver = "3"
 members = ["crates/platitude-core", "crates/platitude-app", "crates/xtask"]
-# A bare `cargo build` builds the product; the task runner is built only
-# when invoked (`cargo xtask …`) or with --workspace.
+# A bare `cargo build` leaves the task runner out.
 default-members = ["crates/platitude-core", "crates/platitude-app"]
-# platitude-core stays Qt-free (`cargo test -p platitude-core` works without
-# Qt); building the whole workspace requires a Qt installation because of
-# platitude-app. The Phase 0 spike stays excluded (throwaway reference code).
+# The Phase 0 spike is throwaway reference code.
 exclude = ["spike"]
 
 [workspace.package]
@@ -18,50 +15,31 @@ license = "MIT"
 platitude-core = { path = "crates/platitude-core" }
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "process", "io-util", "time", "sync", "macros", "fs"] }
-# Settings/state files. Used through `toml::Table`: per-key fallback
-# needs the parsed tree anyway, and leaving the derive aside keeps
-# serde_derive/syn out of the build (measured: 14 -> 8 crates, -38KB).
+# Settings/state files, through `toml::Table` with no derive: per-key
+# fallback needs the parsed tree anyway, and serde_derive/syn stay out.
 toml = "1"
 tokio-util = "0.7"
-# Logging only — the `warn!` / `info!` macros. `attributes`, the other
-# half of the default, is off: nothing writes `#[instrument]`, so the
-# feature's whole content is a proc-macro crate compiled for no caller —
-# a cost in build time: nothing of it reaches the binary.
-# The first `#[instrument]` means turning it back on.
+# `attributes` (default) is off: nothing writes `#[instrument]`, so it is
+# a proc-macro crate compiled for no caller. The first one turns it back on.
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 
-# **The task runner is optimised even in a debug build.** `cargo xtask`
-# runs the dev profile (`.cargo/config.toml`), and xtask is the thing a
-# person waits for: the corpus generator alone writes tens of gigabytes
-# through a few hundred million integer draws, which unoptimised is most
-# of an hour. Only the one package, so nothing else pays the compile
-# time.
+# The task runner is optimised even in the dev profile `cargo xtask` runs:
+# a person waits on it, and the corpus generator makes a few hundred
+# million integer draws. Only this package pays the compile.
 [profile.dev.package.xtask]
 opt-level = 3
 
-# **The hooks build in a directory of their own.** Claude Code's hooks
-# and git's reference-transaction hook run the task runner through
-# `cargo run --profile hooks` (.claude/settings.json, .githooks/), and
-# cargo holds a profile's directory locked for the whole of any build in
-# it: a hook built into target/debug waits behind every `cargo test` a
-# gate runs in the same tree — a tool call, a prompt, the end of a turn,
-# each held for the length of a compile. The same code with its own lock
-# (target/hooks), unoptimised because a hook's work is a few file reads
-# and the compile is what a session waits for.
+# The hooks' own build directory (target/hooks), away from the gate's lock
+# on target/debug: 反映前テストの機械化.md §hook は自前の build directory で動く.
+# Unoptimised: a hook is a few file reads, and its compile is the wait.
 [profile.hooks]
 inherits = "dev"
 
 [profile.hooks.package.xtask]
 opt-level = 0
 
-# **The shipped build has a directory of its own too.** `cargo xtask
-# shipped` builds the app without the harness feature and the gate's
-# verbs build it with, and in one directory each build replaces the
-# other's binary: the verbs' release was relinked twice a gate, and a
-# verb starting while `shipped` links would read a binary being replaced.
-# In target/shipped the two never meet, so the gate runs `shipped` beside
-# its verbs. The release settings unchanged, at the price of one more
-# copy of the release build per tree.
+# `cargo xtask shipped` in target/shipped, so it never replaces the verbs'
+# harness build under them (same doc and §).
 [profile.shipped]
 inherits = "release"
 

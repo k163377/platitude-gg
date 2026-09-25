@@ -1,6 +1,4 @@
-# ci/linux/Dockerfile is the only image this repository builds, and the one
-# file it needs from the tree is the toolchain pin. Everything else would be
-# context sent for nothing — target/ above all, gigabytes of it, across the
-# Windows filesystem boundary on every build.
+# ci/linux/Dockerfile, the only image built here, needs just the toolchain pin;
+# anything else is build context sent for nothing (target/ above all).
 *
 !rust-toolchain.toml

@@ -1,4 +1,4 @@
-// Phase 0 spike UI — throwaway. English-only strings (project rule).
+// Phase 0 spike UI — throwaway.
 pragma ComponentBehavior: Bound
 
 import QtQuick
@@ -38,7 +38,6 @@ ApplicationWindow {
     readonly property int rowH: 24
     readonly property int graphAreaW: 8 * laneW + 8
 
-    // ---- fps instrumentation -------------------------------------------
     property int frameCounter: 0
     property int fps: 0
     onFrameSwapped: frameCounter++
@@ -53,7 +52,7 @@ ApplicationWindow {
         }
     }
 
-    // ---- scroll benchmark (S3) ------------------------------------------
+    // S3 scroll benchmark
     property bool benchRunning: false
     property var benchQueue: []
     property real benchT0: 0
@@ -106,7 +105,6 @@ ApplicationWindow {
         }
     }
 
-    // ---- automation entry points ----------------------------------------
     Component.onCompleted: {
         if (SpikeConfig.autoBench !== "") {
             startBench(SpikeConfig.autoBench === "all" ? [0, 1, 2] : [benchModeIndex(SpikeConfig.autoBench)])
@@ -120,7 +118,6 @@ ApplicationWindow {
             prepareShot()
     }
 
-    // ---- window-content screenshot mode (PGG_SPIKE_SHOTDIR) --------------
     function prepareShot() {
         SpikeConfig.report("SHOT prepare tab=" + tabBar.currentIndex + " dir=" + SpikeConfig.shotDir)
         if (tabBar.currentIndex === 3 && !logModel.loading && logModel.rowTotal === 0)
@@ -159,13 +156,11 @@ ApplicationWindow {
         onTriggered: Qt.quit()
     }
 
-    // ---- backends ---------------------------------------------------------
     DemoModel { id: demoModel }
     WorkerBackend { id: worker }
     GraphModel { id: graphModel }
     LogModel { id: logModel }
 
-    // ---- chrome -----------------------------------------------------------
     header: TabBar {
         id: tabBar
         TabButton { text: qsTr("S1 Model") }
@@ -190,7 +185,7 @@ ApplicationWindow {
         anchors.fill: parent
         currentIndex: tabBar.currentIndex
 
-        // ============================ S1: model =========================
+        // S1: model
         ColumnLayout {
             spacing: 8
             RowLayout {
@@ -243,7 +238,7 @@ ApplicationWindow {
             }
         }
 
-        // ============================ S4: worker ========================
+        // S4: worker
         ColumnLayout {
             spacing: 12
             Item { Layout.preferredHeight: 20 }
@@ -278,7 +273,7 @@ ApplicationWindow {
             Item { Layout.fillHeight: true }
         }
 
-        // ============================ S3: graph =========================
+        // S3: graph
         ColumnLayout {
             spacing: 4
             RowLayout {
@@ -312,7 +307,7 @@ ApplicationWindow {
             }
         }
 
-        // ============================ S5: log ===========================
+        // S5: log
         ColumnLayout {
             spacing: 4
             RowLayout {
@@ -384,7 +379,7 @@ ApplicationWindow {
             }
         }
 
-        // ============================ S2: IME ===========================
+        // S2: IME
         ColumnLayout {
             spacing: 8
             Label {
@@ -413,8 +408,6 @@ ApplicationWindow {
             }
         }
     }
-
-    // ======================= graph row delegates ========================
 
     Component {
         id: itemsDelegate

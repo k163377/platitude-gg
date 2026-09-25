@@ -1,40 +1,22 @@
 # Rust build artifacts (workspace root and spike/)
 target/
 
-# The shot board (cargo xtask shots): pictures and the page over them.
-# One board beside this .git for every seat, so it sits in the primary
-# checkout and never in a worktree's own tree.
+# The shot board (cargo xtask shots), one beside this .git for every seat.
 .shots/
 
-# The benchmark repository (cargo xtask corpus): generated, never
-# cloned, beside this .git so all six seats measure one corpus. A
-# hundred thousand tracked files and their build output, so a checkout
-# that does not ignore it reads as a hundred thousand untracked ones.
-# Delete it and the next `corpus` builds the same one again.
+# The benchmark repository (cargo xtask corpus), beside this .git so every
+# seat measures one corpus; the next `corpus` regenerates it if deleted.
 .pgg-perf-corpus/
 .pgg-perf-corpus.partial-*/
-# Its other working copies (cargo xtask corpus --copies): what the
-# slots measurement reads beside it.
+# Its extra working copies (cargo xtask corpus --copies).
 .pgg-perf-corpus-copy-*/
 
-# The task-chip ledger (hook chips): one file per session, beside this
-# .git so every seat's sessions write to one directory. Cleared when the
-# session that wrote it ends.
+# Hook ledgers, one file per session, beside this .git so every seat's
+# sessions share them: task chips (hook chips), recent shell lines (hook
+# repeat), the seat entered (hook seat), the landing permit (hook permit).
 .chips/
-
-# The repeat ledger (hook repeat): one file per session, beside this
-# .git wherever the session typed the line, holding the last ten minutes
-# of the shell lines it ran. Cleared when that session ends.
 .repeats/
-
-# Which seat a session entered (hook seat): one file per session, beside
-# this .git, so the roster's report knows the session is already in the
-# tree it would otherwise name. Cleared when that session ends.
 .entered/
-
-# The landing permit (hook permit): one file per session, beside this
-# .git so a seat's landing reads what the prompt hook wrote wherever the
-# session sat. Opened by the user's message, spent by one landing.
 .permits/
 
 # IDE / editors
@@ -45,7 +27,7 @@ target/
 # Qt / QML tooling
 .qmlls.ini
 
-# insta snapshot tests (pending snapshots are review-time only)
+# insta pending snapshots (review-time only)
 *.pending-snap
 
 # Byproduct of running aqtinstall from the project directory

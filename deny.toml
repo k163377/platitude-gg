@@ -1,30 +1,20 @@
-# cargo-deny configuration — machine-enforces two core guarantees (see internal-docs/実装計画.md §11.1):
-#   1. All networking in the dependency closure goes through the installed
-#      git CLI, executed as a subprocess.
-#   2. Git work goes through the system git subprocess.
-# Licensing: MIT app; permissive deps only. Qt / qtbridge are LGPL-3.0-only,
-# an approved exception (dynamically linked).
+# Machine-enforces internal-docs/実装計画.md §11.1 and 依存とライセンス.md:
+# networking and git work only through the git CLI subprocess, permissive
+# licenses only.
 
 [graph]
 all-features = true
 
 [advisories]
 ignore = [
-    # bincode is unmaintained, not vulnerable, and the advisory patches no
-    # release, so no upgrade clears it. It is reachable only as syntect's dump
-    # format — `dump-load` is a hard requirement of two-face — and the only
-    # bytes it decodes are the syntax dumps compiled into those crates; nothing
-    # a repository or a user supplies reaches it. Dropping it means dropping
-    # the regex fallback highlighter whole.
+    # No release clears it, and two-face requires `dump-load`: dropping it
+    # means dropping the regex fallback highlighter whole.
     { id = "RUSTSEC-2025-0141", reason = "unmaintained, not a vulnerability: bincode is syntect's dump format and only ever decodes syntax dumps compiled into syntect and two-face" },
 ]
 
 [licenses]
-# This allow list is where CLAUDE.md's absolute constraint keeps its license
-# set, so editing it edits that constraint and needs a human's approval.
-# The list is the policy, so an allowance that no crate matches today is
-# the normal state and an unmatched entry is the list holding a door
-# open for a later crate.
+# The license set of CLAUDE.md's absolute constraint: editing it needs a
+# human's approval. The list is the policy, so entries no crate matches are normal.
 unused-allowed-license = "allow"
 allow = [
     "MIT",
@@ -38,8 +28,7 @@ allow = [
     "Unicode-3.0",
     "CC0-1.0",
 ]
-# The qtbridge family is "LicenseRef-Qt-Commercial OR LGPL-3.0-only"; we
-# take the LGPL-3.0-only branch (approved exception, dynamically linked).
+# The qtbridge family's LGPL-3.0-only branch (approved exception, dynamically linked).
 exceptions = [
     { crate = "qtbridge", allow = ["LGPL-3.0-only"] },
     { crate = "qtbridge-build-utils", allow = ["LGPL-3.0-only"] },
@@ -53,7 +42,6 @@ exceptions = [
 [bans]
 multiple-versions = "allow"
 deny = [
-    # --- networking stacks: the git CLI subprocess owns every socket ---
     { crate = "reqwest", reason = "networking is forbidden: all network I/O goes through the git CLI" },
     { crate = "hyper", reason = "networking is forbidden: all network I/O goes through the git CLI" },
     { crate = "ureq", reason = "networking is forbidden: all network I/O goes through the git CLI" },
@@ -63,7 +51,6 @@ deny = [
     { crate = "rustls", reason = "TLS implies networking, which is forbidden" },
     { crate = "openssl-sys", reason = "TLS implies networking, which is forbidden" },
     { crate = "libssh2-sys", reason = "ssh auth is delegated to the git CLI" },
-    # --- git implementation libraries: system git subprocess only ---
     { crate = "git2", reason = "system git subprocess only; no libgit2" },
     { crate = "libgit2-sys", reason = "system git subprocess only; no libgit2" },
     { crate = "gix", reason = "system git subprocess only; no gitoxide" },

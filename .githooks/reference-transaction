@@ -1,30 +1,16 @@
 #!/bin/sh
-# platitude-gg: refs/heads/main moves only onto a gated commit.
+# platitude-gg: refs/heads/main moves only onto a gated commit
+# (internal-docs/反映前テストの機械化.md §git hook).
 #
-# Every ref update passes through this hook (merge, fetch with a refspec,
-# branch -f, update-ref, a commit or reset on main), and a non-zero exit
-# in the `prepared` state aborts it. The verdict is the task runner's
-# (`cargo xtask gate verdict`): a fast-forward onto a commit that carries a
-# full, on-main gate stamp, and nothing else. The question is only ever
-# asked about a session's git; the user's own is past the gate before it
-# is asked. PGG_GATE_SKIP=1 is what carries a marked git past it — the
-# user's to spell, never a session's (the pre-shell hook).
-#
-# `cargo xtask gate install` copies this file beside the repository's .git
-# (pgg-gate/hooks/) and writes `tree` next to the copy: the checkout whose
-# task runner answers. The verdict runs there, whichever tree the git
-# command ran in — git's own environment for the hook is dropped so that
-# cargo and git read that tree and not this one. Every session start and
-# every land installs. POSIX sh: git for Windows runs hooks in its own
-# sh, so one file serves all three systems. Every other ref costs one
-# `read`; cargo starts only when main is in the transaction.
+# The installed copy's `tree` names the checkout whose task runner answers;
+# git's environment for the hook is dropped so cargo and git read that tree,
+# not the one the git command ran in. POSIX sh: git for Windows runs hooks
+# in its own sh, so one file serves all three systems.
 [ "$1" = "prepared" ] || exit 0
-# Whose git is this? Without Claude Code's mark in the environment it is
-# the user's own — their terminal, their IDE, a window they are clicking
-# in — and their main is theirs to move. Asked here, ahead of the
-# verdict, so that a git without cargo on PATH (an IDE's) is not refused
-# for want of one. The verdict reads the same mark, and the two have to
-# name it alike (crates/xtask/src/gate/hooks.rs).
+# Without Claude Code's mark it is the user's git, and their main is theirs
+# to move. Asked ahead of the cargo guard below, which fails closed where
+# cargo is not on PATH (an IDE's git); the verdict reads the same mark
+# (crates/xtask/src/gate/hooks.rs).
 [ -n "$CLAUDECODE" ] || exit 0
 while read -r old new ref; do
   case "$ref" in

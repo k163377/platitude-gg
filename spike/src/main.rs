@@ -1,19 +1,11 @@
-// Phase 0 spike for platitude-gg — throwaway code.
-//
-// Validates Qt Bridges (qtbridge) against the go/no-go criteria:
-//   S1: expose Rust structs to QML, list-model / property updates reach the UI
-//   S2: Japanese IME in a QML TextArea (manual check, page provided here)
-//   S3: 100k-row commit-graph rendering at ~60 fps (items / canvas / shape renderers)
-//   S4: worker thread -> UI notification via QmlMethodInvoker
-//   S5: streaming `git log` of the JetBrains/kotlin repo, first chunk < 3s
-//
-// Headless-ish automation:
-//   PGG_SPIKE_AUTOBENCH=items|canvas|shape|all  -> run scroll benchmark, print fps, quit
-//   PGG_SPIKE_AUTOLOG=<repo path>               -> stream git log, print timings, quit
-//   PGG_SPIKE_TOPO=0                            -> use the default commit order
+// Phase 0 spike, throwaway: Qt Bridges against the go/no-go criteria —
+//   S1: Rust structs / list models in QML   S2: Japanese IME (manual)
+//   S3: 100k-row graph at ~60 fps           S4: worker -> UI via QmlMethodInvoker
+//   S5: streaming `git log` of JetBrains/kotlin, first chunk < 3s
+// PGG_SPIKE_AUTOBENCH=items|canvas|shape|all / PGG_SPIKE_AUTOLOG=<repo> run
+// one check, print the result and quit.
 
-// HashMap must be in scope: the QModelItem derive expands to unhygienic code
-// that names `HashMap` directly.
+// The QModelItem derive names `HashMap` unhygienically.
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
@@ -25,10 +17,6 @@ use qtbridge::qtbridge_type_lib::QModelIndex;
 use qtbridge::{
     QApp, QListModel, QListModelBase, QModelItem, QObjectHolder, invoke_method, qobject,
 };
-
-// ---------------------------------------------------------------------------
-// SpikeConfig: singleton exposing env-driven automation flags + stdout reporter
-// ---------------------------------------------------------------------------
 
 pub struct SpikeConfig {
     auto_bench: String,
@@ -81,11 +69,7 @@ impl SpikeConfig {
     }
 }
 
-// ---------------------------------------------------------------------------
-// S1: DemoModel — QListModel of Strings + a plain property, mutated via slots.
-// Uses ConvertToCamelCase to validate the naming option.
-// ---------------------------------------------------------------------------
-
+// S1 (also tries ConvertToCamelCase).
 pub struct DemoModel {
     items: Vec<String>,
     counter: i32,
@@ -167,11 +151,7 @@ impl DemoModel {
     }
 }
 
-// ---------------------------------------------------------------------------
-// S4: WorkerBackend — a std::thread ticking at ~60Hz, marshalled to the UI
-// thread through QmlMethodInvoker / invoke_method!.
-// ---------------------------------------------------------------------------
-
+// S4
 #[derive(Default)]
 pub struct WorkerBackend {
     progress: i32,
@@ -204,7 +184,6 @@ impl WorkerBackend {
                 if stop.load(Ordering::Relaxed) {
                     break;
                 }
-                // Queued call onto the Qt main thread.
                 invoke_method!(invoker, "on_tick", i);
                 std::thread::sleep(std::time::Duration::from_millis(16));
             }
@@ -230,11 +209,7 @@ impl WorkerBackend {
     }
 }
 
-// ---------------------------------------------------------------------------
-// S3: GraphModel — 100k synthetic commit-graph rows, lane data precomputed in
-// Rust (bit masks), QML only draws.
-// ---------------------------------------------------------------------------
-
+// S3: synthetic rows, lanes precomputed as bit masks; QML only draws.
 const LANES: i32 = 8;
 
 #[derive(QModelItem, Default, Clone)]
@@ -316,11 +291,7 @@ impl GraphModel {
     }
 }
 
-// ---------------------------------------------------------------------------
-// S5: LogModel — streams `git log` of a real repository from a worker thread,
-// batches rows into the model on the UI thread.
-// ---------------------------------------------------------------------------
-
+// S5
 #[derive(QModelItem, Default, Clone)]
 pub struct LogRow {
     sha: String,
@@ -333,7 +304,7 @@ pub struct LogModel {
     rows: Vec<LogRow>,
     staging: Arc<Mutex<Vec<LogRow>>>,
     started: Option<Instant>,
-    generation: Arc<AtomicBool>, // true while a load is running (poor man's cancel)
+    generation: Arc<AtomicBool>,
     first_ms: i32,
     total_ms: i32,
     row_total: i32,
@@ -438,9 +409,8 @@ impl LogModel {
 }
 
 impl LogModel {
-    /// Batch append with a single begin/endInsertRows pair. qtbridge's
-    /// QListModelBase only exposes single-row push/insert, so this mirrors its
-    /// implementation using the public proxy API.
+    /// One begin/endInsertRows pair for the batch: QListModelBase only
+    /// has single-row push/insert.
     fn extend_notified(&mut self, batch: Vec<LogRow>) {
         let Some(proxy) = self.try_get_rust_proxy_ptr() else {
             self.rows.extend(batch);
@@ -545,13 +515,10 @@ fn flush(
         Err(_) => return,
     };
     if was_empty {
-        // Edge-triggered: the UI-thread drain empties the staging buffer, so
-        // one queued invocation per burst is enough.
+        // Edge-triggered: drain empties the buffer, so one call per burst.
         invoke_method!(invoker, "drain");
     }
 }
-
-// ---------------------------------------------------------------------------
 
 fn main() {
     QApp::new()

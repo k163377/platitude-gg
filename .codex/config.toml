@@ -1,3 +1,2 @@
-# Bound individual tool results retained in history. Full diagnostic output
-# belongs in task-local logs; retrieve omitted evidence in bounded sections.
+# Full diagnostic output belongs in task-local logs, read back in bounded sections.
 tool_output_token_limit = 4000

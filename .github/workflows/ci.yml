@@ -1,7 +1,6 @@
 # 3-OS build + test + lint with egress control, plus a fully-offline test
-# job (internal-docs/実装計画.md §11.3). platitude-app requires Qt, installed
-# via aqtinstall (pinned here — CI is the toolchain pin location, like a
-# lockfile).
+# job (internal-docs/実装計画.md §11.3). QT_VERSION is pinned here: CI is the
+# toolchain's lockfile.
 name: CI
 
 on:
@@ -96,28 +95,22 @@ jobs:
 
       - name: Format check
         run: cargo fmt --all --check
-      # --all-features, because the code a feature switches off is code
-      # nothing else here compiles: the verification harness (automation)
-      # and the counting allocator (memprobe) are both off by default. The
-      # arms those two switch out are compiled by the test line below,
-      # which runs on the default set.
-      # --locked on every cargo here, as on the gate's (xtask::gate): a cargo
-      # that would rewrite Cargo.lock says so and fails, so the graph
-      # checked is the committed one.
+      # --all-features: nothing else here compiles automation / memprobe
+      # (both off by default); Test compiles the default set.
+      # --locked on every cargo here, as in the gate: the graph checked is
+      # the committed Cargo.lock.
       - name: Clippy
         run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --locked --workspace
-      # The shipped build is the one without the harness, and the only one
-      # that can fail to load its QML at all: a type from platitude.auto
-      # named in platitude.ui resolves in every other build here. It runs
-      # offscreen — the command sets QT_QPA_PLATFORM itself, no display.
+      # Only the build without the harness can fail to load its QML: a
+      # platitude.auto type named in platitude.ui resolves in every other
+      # build. No display needed — the command sets QT_QPA_PLATFORM itself.
       - name: Shipped build loads its QML
         run: cargo run --locked -p xtask -- shipped
 
-  # Everything (unit + real-git integration tests + offscreen app smoke)
-  # must pass inside an empty network namespace: the app itself never
-  # opens a socket (internal-docs/実装計画.md §11.3).
+  # All tests and an offscreen app smoke, inside an empty network namespace
+  # (internal-docs/実装計画.md §11.3).
   offline-test:
     runs-on: ubuntu-latest
     steps:
@@ -167,10 +160,8 @@ jobs:
           echo "QMAKE=${QT_ROOT}/bin/qmake" >> "${GITHUB_ENV}"
           echo "LD_LIBRARY_PATH=${QT_ROOT}/lib" >> "${GITHUB_ENV}"
 
-      # Build online, run offline.
-      # The harness feature (xtask HARNESS_FEATURE) is the only thing that
-      # reads the PGG_* knobs the smoke run drives the app with; a build
-      # without it stands until the timeout kills it.
+      # Build online, run offline. The smoke needs the harness feature
+      # (xtask HARNESS_FEATURE; ci/offline-test.sh).
       - name: Build test binaries and app
         run: |
           cargo build --locked -p platitude-app --features automation
@@ -199,11 +190,10 @@ jobs:
             index.crates.io:443
             static.crates.io:443
       - uses: actions/checkout@v4
-      # `check` with no argument runs all four checks, advisories included, so
-      # this job pulls the RustSec DB from github.com on top of the checkout.
+      # `check` with no argument runs all four; advisories pull the RustSec DB
+      # from github.com.
       - name: cargo-deny (advisories / bans / licenses / sources)
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          # The action's default, plus --locked: the graph it checks is the
-          # committed lock.
+          # The action's default, plus --locked.
           arguments: --all-features --locked

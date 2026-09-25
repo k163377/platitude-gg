@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Runs prebuilt test executables plus an offscreen app smoke test.
-# The caller wraps this script in `unshare -n` (empty network namespace),
-# proving the whole suite — including real git subprocess integration
-# tests — passes with zero network access (実装計画 §11.3).
+# Runs prebuilt test executables and an offscreen app smoke test inside the
+# caller's `unshare -n` (empty network namespace; 実装計画 §11.3).
 set -euo pipefail
 
 # Loopback only; there is no route out of this namespace.
@@ -21,12 +19,9 @@ for bin in "$@"; do
     fi
 done
 
-# Offscreen smoke: open a locally generated repository, stream it, and let
-# causal completion finish the run. The coreutils timeout is the parent kill
-# guard for a broken automation path; startup ends on that completion.
-# PGG_SMOKE_BIN must be a build carrying the harness feature — without it
-# the app reads none of the knobs below and the window stands until the
-# timeout kills it.
+# Offscreen smoke on a local repository: the run ends on causal completion,
+# and `timeout` is only the kill guard. PGG_SMOKE_BIN must carry the harness
+# feature, or the app ignores the knobs below and stands until the timeout.
 if [ -n "${PGG_SMOKE_BIN:-}" ]; then
     echo "== offline smoke: ${PGG_SMOKE_BIN}"
     smoke_root="$(mktemp -d)"
@@ -41,12 +36,9 @@ if [ -n "${PGG_SMOKE_BIN:-}" ]; then
     git -C "${smoke_repo}" add .
     git -C "${smoke_repo}" commit -qm "smoke commit"
 
-    # Whatever automation the caller carries is cleared by rule:
-    # everything under `PGG_` except the three names that say nothing
-    # about who is driving (xtask `app_env::clear_automation`, core
-    # `settings::AUTOMATION_PREFIX` / `settings::NOT_AUTOMATION` — change
-    # those and change this). A list would let a knob added to the app
-    # later compose two automation protocols in one run.
+    # Clear every `PGG_` variable except those that say nothing about who
+    # drives — core `settings::NOT_AUTOMATION` / xtask `app_env`, kept in
+    # step by hand. By prefix, not a list, so a knob added later is cleared.
     smoke_env=(env)
     while IFS= read -r name; do
         case "${name}" in
