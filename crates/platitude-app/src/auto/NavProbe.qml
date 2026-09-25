@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls.Fusion
+import platitude.ui
 
 /// What a headless run does to the sidebar, and what it reads back off it.
 ///
@@ -103,8 +105,21 @@ QtObject {
     function rowFactsShown() {
         return probe.sidebar.rowFactsShown()
     }
-    /// PGG_AUTO_ACT=nav-open-then: what the hand does once the row is open.
+    /// PGG_AUTO_ACT=nav-open-foot bar: whether the open row had closed the moment the list's bar was taken — read
+    /// then, before the run asks for the row again under the held bar.
+    property bool shutByBar: false
+    /// PGG_AUTO_ACT=nav-open-then / nav-open-foot: what the hand does once the row is open.
     function afterOpen(what, kind, row) {
+        if (what === "bar") {
+            // The list's own bar taken — the one property a press on it writes (`AutoScrollBar`); the hand stays on
+            // the row, as a real one on the bar over it does. Then the row is asked for again under the held bar,
+            // which must open nothing (`SidebarRowGestures.openFacts`).
+            Hand.heldBar = probe.listOf(kind).ScrollBar.vertical
+            probe.shutByBar = !probe.rowFactsOpen
+            probe.pointTipAt(kind, -1)
+            probe.pointTipAt(kind, row)
+            return
+        }
         const lines = probe.sidebar.openFactsItem()
         if (what === "rightclick") {
             lines.handClicked(Qt.RightButton, Qt.NoModifier)

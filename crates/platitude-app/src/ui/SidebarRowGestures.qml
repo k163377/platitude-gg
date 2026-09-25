@@ -169,7 +169,8 @@ QtObject {
     property string openedKey: ""
     property point openedAt: Qt.point(-1, -1)
     function openFacts(key, at) {
-        if (gestures.editKey !== "" || gestures.menuOpen)
+        // Nothing opens under a name box, a menu or a held scroll bar (`barWatch`).
+        if (gestures.editKey !== "" || gestures.menuOpen || Hand.heldBar !== null)
             return
         // Only a different row arriving under a still hand is refused; the same row coming back is pointed at again.
         if (key !== gestures.openedKey && gestures.settled(at))
@@ -211,6 +212,19 @@ QtObject {
             gestures.openKey = ""
         if (!gestures.menuOpen)
             gestures.menuFromFacts = false
+    }
+    /// Nor while a scroll bar is held (`Hand.heldBar`), and taking one closes the open row
+    /// (規約 §hover のツールチップ「スクロールバーを掴んだら、hover で開いたものは閉じる」). The rows re-read their hover
+    /// only when the hand is heard to move, and nothing is heard while a bar is held: left to the row, the close would
+    /// come after the drag — under another row's name once the delegate is reused, and with the list put back where
+    /// the opening found it (`NavList.keepOpenRowInView`). At the press, the list gives back what the opening took
+    /// before anything is dragged.
+    property Connections barWatch: Connections {
+        target: Hand
+        function onHeldBarChanged() {
+            if (Hand.heldBar !== null)
+                gestures.openKey = ""
+        }
     }
 
     /// A click landed on `key`: a box open on any other row is dropped without asking, typing and all. Which row was

@@ -412,12 +412,16 @@ pub(super) const TABLE: &[Verb] = &[
     // never made would vouch for itself); with `open=`, since an unopened
     // row shows whole too. `away`: the list scrolls back when the hand
     // leaves, and `back=` is the run's own note of where it stood — the
-    // list's memory is what is tested, so it cannot be the witness.
+    // list's memory is what is tested, so it cannot be the witness. `bar`:
+    // taking the list's bar closes the row at the grab (`shut=`) and gives
+    // the list back the same way, and the row asked for again while the bar
+    // is held stays shut.
     Verb {
         name: "nav-open-foot",
         when: &[
             (Arg::Is(""), "open=true shown=true"),
             (Arg::Is("away"), "open=false shown=false back=true"),
+            (Arg::Is("bar"), "open=false shown=false back=true shut=true"),
         ],
         plain: "open=",
     },

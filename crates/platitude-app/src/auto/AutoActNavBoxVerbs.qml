@@ -60,7 +60,8 @@ Item {
             navTipTimer.begin(arg)
         } else if (act === "nav-open-foot") {
             // The same rest on the last row of an overflowing section scrolled to its end, with nowhere to open into:
-            // the list has to move (`NavList.revealOpenRow`). `away` then leaves, and the list gives back what it took.
+            // the list has to move (`NavList.revealOpenRow`). `away` then leaves, and the list gives back what it took;
+            // `bar` takes the list's bar instead, which closes the row and gives it back the same way.
             navTipTimer.opens = true
             navTipTimer.then = arg
             navTipTimer.foot = true
@@ -739,6 +740,8 @@ Item {
                     + " open=" + navProbe.rowFactsOpen
                     + " shown=" + navProbe.rowFactsShown()
                     + " back=" + (Math.round(at) === Math.round(navTipTimer.restY))
+                    // `bar`: closed at the grab itself, not by the run's ask after it (`NavProbe.afterOpen`).
+                    + (navTipTimer.then === "bar" ? " shut=" + navProbe.shutByBar : "")
                     + " rest=" + Math.round(navTipTimer.restY) + " at=" + Math.round(at)
                     + " seat=" + sidebarPane.rowFactsGeom())
                 driver.complete()
