@@ -796,6 +796,167 @@ fn a_full_line_that_alone_shows_a_reached_component_is_owed_before_the_merge() {
     assert!(!text.contains("verify-linux perf"), "{text}");
 }
 
+/// The path the real tree has: the QtTest runner reads the QtTest tree,
+/// and the harness is built with the runner. A QtTest change reaches the
+/// harness as data a tool reads, which is no change to the harness; a
+/// change to code the harness is built with still owes every recorded
+/// line (`graph::Carried`).
+#[test]
+fn a_qtest_change_reaches_the_harness_as_data_and_owes_no_verb() {
+    let sb = Sandbox::new("harness-as-data");
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/main.rs",
+        "mod qmltest;\nmod seats;\nmod verify;\nfn main() {}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/qmltest.rs",
+        "pub fn run() -> &'static str { \"crates/platitude-app/tests/qml\" }\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/seats.rs",
+        "pub fn seat() {}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn x() {}\n}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/verify/mod.rs",
+        "use crate::{qmltest, seats};\npub fn run() { qmltest::run(); seats::seat(); }\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/tests/qml/tst_probe.qml",
+        "import QtTest\nItem {\n    TestCase { name: \"Probe\" }\n}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-census.txt",
+        "stash --preset basic\tDriver Main StashPane\nwindow\tDriver Main\n",
+    );
+    let base = sb.commit_all(&sb.seat, "test: harness fixture", &[]);
+
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/tests/qml/tst_probe.qml",
+        "import QtTest\nItem {\n    TestCase { name: \"Probe\"; function test_it() {} }\n}\n",
+    );
+    sb.commit_all(&sb.seat, "test(app-ui): probe", &[]);
+    sb.gate_ok(&sb.seat, &["--main", &base]);
+    let ran = without_always(&sb.ran());
+    // The runner's crate is in reach as a reader of the data, so its
+    // clippy runs; no verb, and nothing the app is built for.
+    assert_eq!(
+        ran,
+        set(&[
+            "qmltest",
+            "qmltest-linux",
+            "clippy xtask",
+            "clippy-linux xtask"
+        ]),
+        "{ran:?}"
+    );
+
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/seats.rs",
+        "pub fn seat() { let _ = 1; }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn x() {}\n}\n",
+    );
+    sb.commit_all(&sb.seat, "fix(xtask): what the harness is built with", &[]);
+    sb.gate_ok(&sb.seat, &["--main", &base]);
+    let ran = without_always(&sb.ran());
+    for owed in [
+        "test xtask 1",
+        "verify stash --preset basic",
+        "verify-linux stash --preset basic",
+        "verify window",
+    ] {
+        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
+    }
+}
+
+/// A suite of the tool's own shoots the runner, and the runner reads the
+/// product tree and the hook. The suite lays out its own product, so a
+/// product change leaves its green standing; a change to the runner's
+/// code, or to the hook it reads off the real tree, does not.
+#[test]
+fn a_tool_suites_green_stands_across_a_product_change_and_falls_with_what_it_reads() {
+    let sb = Sandbox::new("suite-key");
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/main.rs",
+        "mod qmltest;\nmod seats;\nfn main() { seats::seat(); }\n",
+    );
+    let reads = |n: u32| {
+        format!(
+            "pub fn seat() -> [&'static str; 2] {{ let _ = {n}; [\"crates/platitude-app/src/ui\", \
+             \".githooks/reference-transaction\"] }}\n"
+        )
+    };
+    sb.write(&sb.seat, "crates/xtask/src/seats.rs", &reads(0));
+    sb.write(
+        &sb.seat,
+        "crates/xtask/tests/probe.rs",
+        "const EXE: &str = env!(\"CARGO_BIN_EXE_xtask\");\n#[test]\nfn shoots() { assert!(!EXE.is_empty()); }\n",
+    );
+    let base = sb.commit_all(&sb.seat, "test: a suite of the tool's own", &[]);
+    let suite = ["test probe (all)", "test probe (all) linux"];
+
+    sb.write(&sb.seat, "crates/xtask/src/seats.rs", &reads(1));
+    sb.commit_all(&sb.seat, "feat(xtask): seats", &[]);
+    sb.gate_ok(&sb.seat, &["--main", &base]);
+    let ran = sb.ran();
+    for owed in suite {
+        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
+    }
+
+    // The product moved under the branch: the suite's green stands.
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/StashPane.qml",
+        "Item {\n    width: 5\n    property var model: StashModel\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app-ui): pane", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--main", &base]);
+    let ran = sb.ran();
+    for spared in suite {
+        assert!(
+            !ran.contains(spared),
+            "{spared} ran again for a product change; ran: {ran:?}\n{text}"
+        );
+    }
+    for standing in [
+        "cached [host ] test probe (all)",
+        "cached [linux] test probe (all) linux",
+    ] {
+        assert!(
+            text.contains(standing),
+            "{standing} not in the plan:\n{text}"
+        );
+    }
+    assert!(ran.contains("verify stash --preset basic"), "{ran:?}");
+
+    // The hook the runner reads off the real tree moved: it runs again.
+    let hook = sb.seat.join(".githooks").join("reference-transaction");
+    let script = std::fs::read_to_string(&hook).expect("the hook");
+    std::fs::write(&hook, format!("{script}# probe\n")).expect("the hook");
+    sb.commit_all(&sb.seat, "chore: the hook", &[]);
+    sb.gate_ok(&sb.seat, &["--main", &base]);
+    let ran = sb.ran();
+    for owed in suite {
+        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
+    }
+
+    // And so does the runner's own code.
+    sb.write(&sb.seat, "crates/xtask/src/seats.rs", &reads(2));
+    sb.commit_all(&sb.seat, "feat(xtask): seats again", &[]);
+    sb.gate_ok(&sb.seat, &["--main", &base]);
+    let ran = sb.ran();
+    for owed in suite {
+        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
+    }
+}
+
 /// An unreadable tier table is no empty table: empty, the selected lines
 /// would all be the host's and none the container's. The gate stops
 /// before its first step, and says which file.

@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use super::census::{self, Census};
-use super::graph::{self, stem_of};
+use super::graph::{self, Carried, Reach, stem_of};
 use super::record::Spent;
 use super::stamp::Store;
 use super::tiers::Tiers;
@@ -233,18 +233,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     // input widens only what runs.
     let touched = g.reach(&executable_changes);
     let reach = if everything.is_some() {
-        // Every node, and every QML file: a component with no edge is no
-        // node, and the verbs only its census line names would be missed.
-        let mut every: BTreeSet<String> = g
-            .deps
-            .keys()
-            .chain(g.rdeps.keys())
-            .chain(g.modules.keys())
-            .filter(|f| !f.ends_with('/'))
-            .cloned()
-            .collect();
-        every.extend(graph::qml_files(dir)?);
-        every
+        every_file(&g, dir)?
     } else {
         touched.clone()
     };
@@ -293,7 +282,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         fresh: ask.fresh,
         everything,
         changed,
-        reach,
+        reach: reach.into_keys().collect(),
         required,
         uncovered,
         unclaimed,
@@ -301,6 +290,26 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         verbs_in_shadow,
         verbs_left,
     })
+}
+
+/// The reach of everything: every node, and every QML file — a component
+/// with no edge is no node, and the verbs only its census line names
+/// would be missed. All handed whole: the change is the build itself.
+fn every_file(g: &graph::Graph, dir: &Path) -> Result<Reach, String> {
+    let mut every: Reach = g
+        .deps
+        .keys()
+        .chain(g.rdeps.keys())
+        .chain(g.modules.keys())
+        .filter(|f| !f.ends_with('/'))
+        .map(|f| (f.clone(), Carried::Whole))
+        .collect();
+    every.extend(
+        graph::qml_files(dir)?
+            .into_iter()
+            .map(|f| (f, Carried::Whole)),
+    );
+    Ok(every)
 }
 
 /// Each step with its key and whether a stamp already answers for it, the
@@ -418,12 +427,12 @@ struct Counted {
 fn uncovered(
     dir: &Path,
     census: &Census,
-    reach: &BTreeSet<String>,
+    reach: &Reach,
     worn: &BTreeMap<String, BTreeSet<String>>,
 ) -> Vec<String> {
     let (_, qml_tests) = qml_dirs();
     reach
-        .iter()
+        .keys()
         .filter(|f| f.ends_with(".qml"))
         // A QtTest file is shown by its own runner (`qmltest_steps`).
         .filter(|f| !under(f, &qml_tests))

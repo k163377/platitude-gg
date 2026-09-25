@@ -5,7 +5,7 @@
 
 use std::collections::BTreeSet;
 
-use super::graph::{self, Graph};
+use super::graph::{self, Carried, Graph};
 use crate::subprocess::git_query;
 
 struct Options {
@@ -153,9 +153,18 @@ fn probe(g: &Graph, changed: &[String], why: &[String], show: bool) {
         changed.len(),
         reach.len()
     );
+    // A file the product reaches as data a tool reads did not change
+    // (`graph::Carried`); the plan selects by the difference.
+    let as_data = |file: &String| {
+        if reach.get(file) == Some(&Carried::AsProductFile) {
+            " (as a product file the tool reads)"
+        } else {
+            ""
+        }
+    };
     for target in why {
         match g.why(changed, target) {
-            Some(chain) => println!("  why {target}: {}", chain.join(" -> ")),
+            Some(chain) => println!("  why {target}: {}{}", chain.join(" -> "), as_data(target)),
             None => println!("  why {target}: not in reach"),
         }
     }
@@ -170,10 +179,11 @@ fn probe(g: &Graph, changed: &[String], why: &[String], show: bool) {
         println!("  {file} is read by: {}", names(g.rdeps.get(file)));
         println!("  {file} reads: {}", names(g.deps.get(file)));
     }
-    for file in &reach {
+    for file in reach.keys() {
         println!(
-            "  {}{file}",
-            if changed.contains(file) { "* " } else { "  " }
+            "  {}{file}{}",
+            if changed.contains(file) { "* " } else { "  " },
+            as_data(file)
         );
     }
 }

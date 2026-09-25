@@ -74,8 +74,15 @@ pub(crate) struct Graph {
 /// off the real tree (the hook script `tests/gate` copies into its
 /// sandbox). Without the stop, every app or core change would owe the
 /// gate's sandbox tests on both sides, since the census reads the app.
+///
+/// The selection reads the difference too: a tool file handed
+/// `AsProductFile` did not change, so a step that file's name selects
+/// (the verbs through `verify` / `demo`, `qmltest` through its runner,
+/// the wedge through its record) is owed only by a file handed `Whole`,
+/// while the steps its code is built into (clippy, its own tests) are
+/// owed either way — a test of the tool may read the data.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum Carried {
+pub(crate) enum Carried {
     /// A product file, as a tool that does not build it reads it.
     AsProductFile,
     /// The change itself, or code built from it.
@@ -83,6 +90,9 @@ enum Carried {
 }
 
 type Handed = (String, Carried);
+
+/// The reach of a change: each file under the most it was handed.
+pub(crate) type Reach = BTreeMap<String, Carried>;
 
 /// Whether a file is part of the product — the two crates the app is
 /// built from, tests and all.
@@ -92,6 +102,12 @@ fn is_product(file: &str) -> bool {
     ["platitude-app", "platitude-core"]
         .iter()
         .any(|name| file.starts_with(&format!("crates/{name}/")))
+}
+
+/// Whether `reader` takes `file` as data off the disk: a product file
+/// read by a file outside the product ([`Carried::AsProductFile`]).
+fn as_data(file: &str, reader: &str) -> bool {
+    is_product(file) && !is_product(reader)
 }
 
 fn rel(root: &Path, path: &Path) -> String {
@@ -126,15 +142,17 @@ impl Graph {
     }
 
     /// Everything that reads one of `changed`, transitively, plus
-    /// `changed` itself. A QML node hands on only to QML readers and to
-    /// directory nodes (a Rust test reading the QML tree off the disk), and
-    /// a product file read off the disk stops at an integration binary
-    /// ([`Carried`]).
-    pub(crate) fn reach(&self, changed: &[String]) -> BTreeSet<String> {
-        self.walk(changed)
-            .into_keys()
-            .map(|(file, _)| file)
-            .collect()
+    /// `changed` itself, each under the most it was handed. A QML node
+    /// hands on only to QML readers and to directory nodes (a Rust test
+    /// reading the QML tree off the disk), and a product file read off
+    /// the disk stops at an integration binary ([`Carried`]).
+    pub(crate) fn reach(&self, changed: &[String]) -> Reach {
+        let mut reach = Reach::new();
+        for (file, carried) in self.walk(changed).into_keys() {
+            let most = reach.entry(file).or_insert(carried);
+            *most = (*most).max(carried);
+        }
+        reach
     }
 
     /// How `target` got into the reach of `changed`: the chain of readers
@@ -191,32 +209,63 @@ impl Graph {
         if file.ends_with(".qml") && !(reader.ends_with(".qml") || reader.ends_with('/')) {
             return None;
         }
-        let carried = if carried == Carried::Whole && is_product(file) && !is_product(reader) {
+        let carried = if carried == Carried::Whole && as_data(file, reader) {
             Carried::AsProductFile
         } else {
             carried
         };
-        let sandboxed = self
-            .modules
-            .get(reader)
-            .is_some_and(|module| module.test_binary.is_some());
-        (carried == Carried::Whole || !sandboxed).then_some(carried)
+        (carried == Carried::Whole || !self.sandboxed(reader)).then_some(carried)
+    }
+
+    /// Whether `file` is a module of an integration binary — one that
+    /// points its tool at a sandbox it laid out itself.
+    fn sandboxed(&self, file: &str) -> bool {
+        self.modules
+            .get(file)
+            .is_some_and(|module| module.test_binary.is_some())
     }
 
     /// What `files` read, transitively — the inputs a cache key for tests
-    /// selected in `files` has to name.
+    /// selected in `files` has to name: what a change would have to touch
+    /// to reach them ([`Graph::reach`]). So [`Carried`]'s stop is read
+    /// back: past an integration binary's module, a product file a tool
+    /// takes as data off the disk is no input (the binary points the tool
+    /// at its own sandbox), while the tool's code and a file outside the
+    /// product it reads off the real tree are. The QML rule is not read
+    /// back: a Rust file naming a QML file keeps it in its key.
     pub(crate) fn inputs(&self, files: &[String]) -> BTreeSet<String> {
-        let mut seen: BTreeSet<String> = BTreeSet::new();
-        let mut queue: Vec<String> = files.to_vec();
-        while let Some(file) = queue.pop() {
-            if !seen.insert(file.clone()) {
-                continue;
+        // Each file found, with whether a sandboxed module stands between
+        // it and a start (`guarded`); found without one, it stays found.
+        type Queue = std::collections::VecDeque<(String, bool)>;
+        fn take(found: &mut BTreeMap<String, bool>, queue: &mut Queue, file: &str, guarded: bool) {
+            if found.get(file).is_some_and(|had| !*had || guarded) {
+                return;
             }
-            if let Some(read) = self.deps.get(&file) {
-                queue.extend(read.iter().cloned());
+            found.insert(file.to_string(), guarded);
+            queue.push_back((file.to_string(), guarded));
+        }
+        let mut found: BTreeMap<String, bool> = BTreeMap::new();
+        let mut queue = Queue::new();
+        for file in files {
+            take(&mut found, &mut queue, file, self.sandboxed(file));
+        }
+        while let Some((reader, guarded)) = queue.pop_front() {
+            let Some(read) = self.deps.get(&reader) else {
+                continue;
+            };
+            for file in read {
+                if guarded && as_data(file, &reader) {
+                    continue;
+                }
+                take(
+                    &mut found,
+                    &mut queue,
+                    file,
+                    guarded || self.sandboxed(file),
+                );
             }
         }
-        seen
+        found.into_keys().collect()
     }
 }
 
@@ -1379,7 +1428,7 @@ pub(crate) fn collect(
 #[cfg(test)]
 mod tests {
     use super::{
-        bin_exe_names, build, defines_tests, literal_paths, mod_declaration, paths_in,
+        Carried, bin_exe_names, build, defines_tests, literal_paths, mod_declaration, paths_in,
         reexports_in, string_bodies, strip_comments,
     };
     use std::collections::BTreeMap;
@@ -1665,29 +1714,60 @@ mod tests {
         let from_the_product = reach(&[&qml]);
         for owed in [&ui, &tool, &bin] {
             assert!(
-                from_the_product.contains(owed),
+                from_the_product.contains_key(owed),
                 "{owed}: {from_the_product:?}"
             );
         }
+        // The product's own directory changed; the tool only reads it.
+        assert_eq!(from_the_product[&ui], Carried::Whole);
+        assert_eq!(from_the_product[&tool], Carried::AsProductFile);
+        assert_eq!(from_the_product[&bin], Carried::AsProductFile);
         assert!(
-            !from_the_product.contains(&shooter),
+            !from_the_product.contains_key(&shooter),
             "a sandboxed binary is no reader of the product's files: {from_the_product:?}"
         );
         for changed in [&script, &tool] {
-            assert!(
-                reach(&[changed]).contains(&shooter),
+            assert_eq!(
+                reach(&[changed]).get(&shooter),
+                Some(&Carried::Whole),
                 "{changed} is read or run by the binary itself"
             );
         }
-        assert!(reach(&[&core]).contains(&core_it), "compiled in");
+        assert!(reach(&[&core]).contains_key(&core_it), "compiled in");
         // Handed on whole by one path, the binary is owed whatever else
         // handed the same file less.
-        assert!(reach(&[&qml, &tool]).contains(&shooter));
+        let both = reach(&[&qml, &tool]);
+        assert!(both.contains_key(&shooter));
+        assert_eq!(both[&tool], Carried::Whole);
         assert_eq!(
             g.why(&[qml.clone(), tool.clone()], &shooter),
             Some(vec![tool.clone(), bin.clone(), shooter.clone()])
         );
-        assert_eq!(g.why(&[qml], &shooter), None);
+        assert_eq!(g.why(std::slice::from_ref(&qml), &shooter), None);
+
+        // The stop read back: a binary's key names what would reach it.
+        let inputs =
+            |files: &[&String]| g.inputs(&files.iter().map(|f| (*f).clone()).collect::<Vec<_>>());
+        let of_the_shooter = inputs(&[&shooter]);
+        for named in [&bin, &tool, &script] {
+            assert!(
+                of_the_shooter.contains(named),
+                "{named}: {of_the_shooter:?}"
+            );
+        }
+        for spared in [&ui, &qml] {
+            assert!(
+                !of_the_shooter.contains(spared),
+                "{spared} is the sandbox's to lay out: {of_the_shooter:?}"
+            );
+        }
+        // A tool's own tests may read the data: nothing stops before them.
+        let of_the_tool = inputs(&[&tool]);
+        for named in [&ui, &qml, &script] {
+            assert!(of_the_tool.contains(named), "{named}: {of_the_tool:?}");
+        }
+        // Compiled in, the product is the binary's own.
+        assert!(inputs(&[&core_it]).contains(&core));
     }
 
     /// The same stop on the tree as it stands; the hook script the sandbox
@@ -1698,16 +1778,33 @@ mod tests {
         let g = build(&root).expect("the graph of this tree");
         let window = format!("crates/{}/src/ui/{}.qml", "platitude-app", "Main");
         let reach = g.reach(&[window]);
-        assert!(
-            reach.contains("crates/xtask/src/gate/census.rs"),
+        assert_eq!(
+            reach.get("crates/xtask/src/gate/census.rs"),
+            Some(&Carried::AsProductFile),
             "{reach:?}"
         );
         let sandbox = format!("crates/xtask/{}/", "tests");
-        let shot: Vec<&String> = reach.iter().filter(|f| f.starts_with(&sandbox)).collect();
+        let shot: Vec<&String> = reach.keys().filter(|f| f.starts_with(&sandbox)).collect();
         assert!(shot.is_empty(), "{shot:?}");
         let hook = format!("{}/{}", ".githooks", "reference-transaction");
         let support = format!("crates/xtask/{}/gate/support.rs", "tests");
-        assert!(g.reach(&[hook]).contains(&support));
+        assert!(g.reach(std::slice::from_ref(&hook)).contains_key(&support));
+        // The suite's key names the runner it shoots and the hook it
+        // copies, and no product path: the product is what it lays out.
+        let suite: Vec<String> = g
+            .modules
+            .keys()
+            .filter(|f| f.starts_with(&sandbox))
+            .cloned()
+            .collect();
+        assert!(!suite.is_empty());
+        let inputs = g.inputs(&suite);
+        let runner = format!("crates/xtask/{}/main.rs", "src");
+        for named in [&hook, &runner] {
+            assert!(inputs.contains(named), "{named}: {inputs:?}");
+        }
+        let product: Vec<&String> = inputs.iter().filter(|f| super::is_product(f)).collect();
+        assert!(product.is_empty(), "{product:?}");
     }
 
     /// The gate's own reading (`complaints`), against a graph read fresh

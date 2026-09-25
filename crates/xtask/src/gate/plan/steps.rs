@@ -9,7 +9,7 @@ use super::{
     qml_dirs, under,
 };
 use crate::gate::census;
-use crate::gate::graph::{Graph, stem_of};
+use crate::gate::graph::{Carried, Graph, Reach, stem_of};
 use crate::gate::tiers::Tier;
 
 fn words(line: &[&str]) -> Vec<String> {
@@ -102,13 +102,13 @@ pub(crate) fn tested_on_linux(package: &str) -> bool {
 /// `whole` runs every package's tests unfiltered.
 fn sort(
     g: &Graph,
-    reach: &BTreeSet<String>,
+    reach: &Reach,
     whole: bool,
     worn: &BTreeMap<String, BTreeSet<String>>,
 ) -> Sorted {
     let (_, qml_tests) = qml_dirs();
     let mut sorted = Sorted::default();
-    for file in reach {
+    for file in reach.keys() {
         if file.ends_with(".qml") {
             // A QtTest file is no component: no census names it, so it
             // belongs to `qmltest_steps` alone.
@@ -167,7 +167,7 @@ fn sort(
 pub(super) fn select(
     g: &Graph,
     read: &Reading<'_>,
-    reach: &BTreeSet<String>,
+    reach: &Reach,
     changed: &[String],
     ask: &Ask<'_>,
 ) -> (Vec<Step>, Counted) {
@@ -249,13 +249,14 @@ fn deny_steps(g: &Graph, changed: &[String], whole: bool) -> Vec<Step> {
 ///
 /// `whole` selects it outright: neither the qmldir nor a QtTest file is a
 /// node of the source graph.
-fn qmltest_steps(reach: &BTreeSet<String>, whole: bool) -> Vec<Step> {
+fn qmltest_steps(reach: &Reach, whole: bool) -> Vec<Step> {
     let (ui, tests) = qml_dirs();
     // The qmldir counts (it declares the singletons), and so does the
-    // runner, whose staging a run resolves through; of the tests directory
-    // only the files the runner picks up by name.
-    let reads = |file: &String| {
-        file == QMLTEST
+    // runner, whose staging a run resolves through — when its code moved,
+    // not when the QML it stages did (`graph::Carried`); of the tests
+    // directory only the files the runner picks up by name.
+    let reads = |(file, carried): (&String, &Carried)| {
+        (file == QMLTEST && *carried == Carried::Whole)
             || under(file, &ui)
             || (under(file, &tests) && file.ends_with(".qml") && stem_of(file).starts_with("tst_"))
     };
@@ -298,9 +299,13 @@ fn record_of_a_wedge() -> [String; 7] {
 ///
 /// Host only: both sides pass the record through the same mount, and
 /// every verb step already proves the container carries a file out.
-fn wedge_steps(reach: &BTreeSet<String>, whole: bool) -> Vec<Step> {
+fn wedge_steps(reach: &Reach, whole: bool) -> Vec<Step> {
     let inputs = record_of_a_wedge();
-    if !whole && !reach.iter().any(|file| inputs.contains(file)) {
+    // Its xtask files read the product tree, so any product change
+    // reaches them as data (`graph::Carried`); what stops a stopped run
+    // from being readable is a change to their code.
+    let moved = |file: &String| reach.get(file) == Some(&Carried::Whole);
+    if !whole && !inputs.iter().any(moved) {
         return Vec::new();
     }
     let mut wedge = step(
@@ -494,7 +499,7 @@ fn verb_inputs() -> Vec<String> {
 fn binary_steps(
     read: &Reading<'_>,
     sorted: &Sorted,
-    reach: &BTreeSet<String>,
+    reach: &Reach,
     changed: &[String],
     ask: &Ask<'_>,
 ) -> (Vec<Step>, Counted) {
@@ -503,7 +508,7 @@ fn binary_steps(
     // Spelled in pieces: a whole path in a string here would be read as
     // this file reading the app's entry point.
     let entry = format!("{}/src/main.rs", app());
-    let qml_moved = !sorted.qml.is_empty() || reach.contains(&entry);
+    let qml_moved = !sorted.qml.is_empty() || reach.contains_key(&entry);
     let binary_moved = qml_moved
         || sorted.rust_in.contains_key("platitude-app")
         || sorted.rust_in.contains_key("platitude-core");
@@ -518,10 +523,13 @@ fn binary_steps(
         ));
     }
     // Every verb runs through the harness, which has no static edge into
-    // QML.
-    let harness_moved = reach
-        .iter()
-        .any(|file| harness().iter().any(|dir| under(file, dir)));
+    // QML. The harness reads the product tree, so every product change
+    // reaches it as data (`graph::Carried`) — that is no change to the
+    // harness, and what it changed the census names.
+    let harness_dirs = harness();
+    let harness_moved = reach.iter().any(|(file, carried)| {
+        *carried == Carried::Whole && harness_dirs.iter().any(|dir| under(file, dir))
+    });
     let lines = if read.whole || harness_moved {
         census.lines.keys().cloned().collect()
     } else {
