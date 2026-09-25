@@ -1,0 +1,16 @@
+# verify-ui 各論: Windows での起動・デバッグ
+
+## Windows での実行・デバッグの罠
+
+- Qt / QML のログ(console.*、QML ロードエラー含む)は既定で OutputDebugString 行き — **`QT_FORCE_STDERR_LOGGING=1` を付けないと stderr に出ず、QML の失敗が無音になる**
+- release ビルドは GUI サブシステム(`windows_subsystem`)のため PowerShell から直接起動すると**待機されない**(即座に制御が返り、プロセスが残って exe をロックする)。検証は `Start-Process -PassThru` + `WaitForExit` で行う
+- **ログを読みたい起動は `cargo run --release -p platitude-app [--features …]` で撃つ**(memprobe の `mem report` を読む時など、verify-ui に乗らない 1 回きりの計測)。**選ぶのは自分でログを読み切って窓を閉じるまでやる時だけ** — cargo が子を待つので窓を閉じるまでターンが返らない(ユーザーの「起動」は fast path)。GUI サブシステムの exe を PowerShell から直に撃つと出力は 1 行も掴めず、`Start-Process -RedirectStandardError` は空のファイルを残す。**Qt の bin を PATH に足す**
+- **画面ロック中は通常起動の GUI 検証がハングする**(`grabToImage` callback が返らない)。GUI 起動を伴う検証は必ず `WaitForExit(ms)` タイムアウト + 未終了なら `Kill()` のガード付きで実行する
+- **ヘッドレス検証の標準**(ロック状態と無関係に成立): `QT_QPA_PLATFORM=offscreen` + `QT_QPA_FONTDIR=C:\Windows\Fonts`。**FONTDIR 指定が無いと全文字が豆腐**(offscreen は Windows のシステムフォントを自動検出しない)
+- **FONTDIR の .ttc(TrueType Collection)は読み込まれない**(名指しでも豆腐)。Windows 標準の CJK フォント(Yu Gothic / MS Gothic / Meiryo / YaHei / SimSun)は全て .ttc なので、**スクショに日本語が出るのは FONTDIR に .ttf / .otf の CJK フォントが在る時だけ**(この開発機は `NotoSansJP-VF.ttf` が C:\Windows\Fonts に居るため出る)。実ウィンドウでは TTC は普通に使える — 検証環境だけの罠。**つまりヘッドレスの PNG は実窓と別の字で描かれている** — **行の中の 1px(枠と字の余白・ベースライン・印と語の高さ)は実窓で判定する**。その手の意匠は**実窓を `PrintWindow` で撮って画素を数える**のが正本で、ヘッドレスは「両 OS で壊れていないこと」の側を見る。**ただし字送り(advance)だけは実窓を開かずに測れる** — 使い捨ての `qmltestrunner.exe -input tst_*.qml` を**既定の windows プラットフォームで**(`-platform` 無しで)撃つと実窓と同じフォント DB が引かれ、`Text.implicitWidth ÷ 文字数` がそのまま実窓の送りになる。日本語の字形検証は demo `basic` の日本語コミット(`docs: 利用案内の骨子を日本語で直す` — 直 / 骨 が中国語字形だと一目で分かる)を目視する
+- fps 計測(PGG_AUTO_SCROLL)は offscreen でも完走するが、値は疑似フレームループの上限 — **判定に使う性能実測はアンロック状態・点灯した D3D の通常起動でのみ行う**(`perf --software` は表示に依らず撮れるがメモリだけが読める別の量)
+- **ポップアップ(Popup / Dialog / Menu)は `grabToImage` に写らない** — 撮影は overlay.png で足りる。実ウィンドウが要る検証は OS 側から `PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT=2)` で撮る(GPU 描画のため flags 必須)。キー入力の注入は `SendKeys` が届かない(ユーザーの操作中ウィンドウへ飛ぶ危険もある)。`PostMessage(hwnd, WM_KEYDOWN/UP)` を使う。クリックも `PostMessage(WM_LBUTTONDOWN/UP)` で確実に届くが、**hover は注入で検証不能**(`WM_MOUSEMOVE` 注入・`SetCursorPos` とも実マウスの動きに hover 状態を奪還され、成功と失敗が再現不能に混ざる)。hover の絵は hover.md §hover の絵の撮り方で出す。**フォーカスは要アクティブ化**(非アクティブウィンドウでは `activeFocusItem` が null のまま。フォアグラウンドスレッドへ `AttachThreadInput` してから `SetForegroundWindow` すれば奪えて検証可能)
+- exe の**起動**にも Qt の bin ディレクトリが PATH に要る。無いと**約 10ms で無言終了**する(ログもエラーダイアログも出ない)。検証スクリプトは PATH 設定込みで書く
+- **大きい木の git の時間は verify-ui の run の外で読む** — run は `GIT_CONFIG_NOSYSTEM=1` + 使い捨ての global config で撃つので、**system の gitconfig(この機械は `core.fscache = true`)が効かない**。時間を見るのは `cargo xtask perf`(system config を読む)か `cargo xtask corpus --probe`
+- **Qt 自身が出す警告は run の `app.log` で読む**(evidence ディレクトリの `run-<n>/app.log`。報告に載るのはハーネスが拾う行だけ)。**`QT_MESSAGE_PATTERN` の `%{backtrace}` は、この機械の Qt では空に展開される**(出所の特定には使えない)。QML が呼んでいる疑いなら、疑う関数に `console.warn` を 1 行入れて実窓で撃つのが最短
+- **Qt のログ行は Windows では ANSI コードページで出る**。この開発機は CP932 なので、`console.log` も QML ランタイム警告も、非 ASCII を含む行だけ **UTF-8 として壊れたバイト列**で届く(Linux は UTF-8 なのでそのまま読める)。**報告行の判定は ASCII だけ** — `verify/verbs.rs` の `must_say` に非 ASCII を書くと Windows で永久に一致しない。読み取り側は `crate::app_out` が lossy に復号して最後まで読む(**strict に読むと、その行で読み手が降りて pipe の読み口が閉じ、アプリが道連れで 0xC0000409 で落ちる**)
