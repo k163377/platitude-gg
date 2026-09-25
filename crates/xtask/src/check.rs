@@ -172,8 +172,8 @@ fn both_sides(
     host_steps: &[Vec<String>],
     linux_steps: &[Vec<String>],
 ) -> Result<Vec<String>, String> {
-    let pool = crate::budget::Pool::of(root, crate::gate::default_jobs())?;
-    let seat = crate::gate::seat_of(root);
+    let pool = crate::budget::Pool::of(root, crate::budget::default_jobs())?;
+    let seat = crate::budget::seat_of(root);
     let ground = Ground {
         root,
         pool: &pool,

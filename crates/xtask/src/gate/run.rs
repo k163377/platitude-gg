@@ -60,7 +60,7 @@ fn options(args: &[String]) -> Result<Options, String> {
         dry_run: false,
         keep_going: false,
         verbs: Vec::new(),
-        jobs: default_jobs(),
+        jobs: crate::budget::default_jobs(),
     };
     let mut at = 0;
     while let Some(arg) = args.get(at) {
@@ -107,15 +107,6 @@ fn options(args: &[String]) -> Result<Options, String> {
         at += 1;
     }
     Ok(opts)
-}
-
-/// How many verbs a side runs at once unless `--jobs` says (why a third:
-/// internal-docs/反映前テストの機械化.md §実測). Also what the machine's
-/// whole budget is computed from (`budget::demand`), so every process
-/// names the same pool.
-pub(crate) fn default_jobs() -> usize {
-    let cpus = std::thread::available_parallelism().map_or(1, |n| n.get());
-    (cpus / 3).clamp(1, 8)
 }
 
 fn gate(args: &[String]) -> Result<(), String> {
@@ -224,7 +215,7 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<Gated, String> 
         &mut spent,
     )?;
     print!("{}", plan::describe(&plan));
-    let jobs = default_jobs();
+    let jobs = crate::budget::default_jobs();
     let mut shift = Shift::default();
     // A landing's red leaves main where it was whatever else would pass,
     // so the first one is the answer.

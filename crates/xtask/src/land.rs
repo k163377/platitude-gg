@@ -105,7 +105,7 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     // The landings' queue (`budget::Pool::turn`), held to the end. Taken
     // before the seat's tree, its gate and the machine's budget, so a
     // landing standing in line stands in nobody's way.
-    let pool = crate::budget::Pool::of(&root, crate::gate::default_jobs())?;
+    let pool = crate::budget::Pool::of(&root, crate::budget::default_jobs())?;
     phases.mark("preflight");
     let turn = pool.turn(&crate::seats::slashed(seat_dir), &format!("land {branch}"));
     phases.mark("queue");

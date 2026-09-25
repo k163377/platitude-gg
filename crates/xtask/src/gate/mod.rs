@@ -36,9 +36,8 @@ use std::path::Path;
 use halt::Halt;
 use record::Waited;
 pub(crate) use reuse::preserve_reader;
+pub(crate) use run::for_landing;
 pub use run::run;
-pub(crate) use run::{default_jobs, for_landing};
-pub(crate) use sides::seat_of;
 use stamp::Store;
 pub(crate) use standing::standing;
 

@@ -24,7 +24,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             ));
         }
     };
-    let pool = Pool::of(&dir, crate::gate::default_jobs())?;
+    let pool = Pool::of(&dir, crate::budget::default_jobs())?;
     print!("{}", pool.standing()?);
     Ok(())
 }
@@ -36,7 +36,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// drives every edge, with no clock.
 fn hold(args: &[String]) -> Result<(), String> {
     let mut dir = crate::tree::workspace_root();
-    let (mut weight, mut jobs) = (LIGHT, crate::gate::default_jobs());
+    let (mut weight, mut jobs) = (LIGHT, crate::budget::default_jobs());
     let mut rank = Rank::Normal;
     let (mut seat, mut what) = ("held".to_string(), "hold".to_string());
     let (mut say, mut until, mut turn) = (None, None, false);

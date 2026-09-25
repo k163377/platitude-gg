@@ -16,7 +16,7 @@ pub(crate) const LIGHT: u32 = 1;
 
 /// A unit that starts a compiler or a test binary — one process driving
 /// many. Four is the ratio the default verb count was chosen against
-/// (`gate::default_jobs`); it is admission control, not a measurement.
+/// (`budget::default_jobs`); it is admission control, not a measurement.
 pub(crate) const COMPILE: u32 = 4;
 
 /// The whole budget is one gate at its widest — both sides, each a
@@ -228,10 +228,10 @@ pub(super) fn marked(
         return Ok(Admitted::carried());
     }
     let room =
-        Pool::of(tree, crate::gate::default_jobs())?.admit_once_the_machine_is_free(&Ask {
+        Pool::of(tree, crate::budget::default_jobs())?.admit_once_the_machine_is_free(&Ask {
             weight,
             rank,
-            seat: &crate::gate::seat_of(tree),
+            seat: &crate::budget::seat_of(tree),
             what,
         })?;
     // From here on, whatever this process spawns is this unit's work. Set

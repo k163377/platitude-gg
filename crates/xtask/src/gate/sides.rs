@@ -8,7 +8,6 @@ use super::Ground;
 use super::halt::Halt;
 use super::plan::{Plan, Required, Side};
 use super::record::{self, Spent, Waited};
-use super::run::default_jobs;
 use super::runner::{self, app_did_not_build, linux_runner};
 use super::stamp::Store;
 use super::step::{Ran, log_of, run_one};
@@ -46,9 +45,9 @@ pub(super) fn run_sides(
     // The budget is the machine's, shared by every seat (`budget`). `jobs`
     // above the machine's count widens the pool; below it, it narrows only
     // this gate's share.
-    let count = jobs.max(default_jobs());
+    let count = jobs.max(crate::budget::default_jobs());
     let pool = crate::budget::Pool::of(&plan.dir, count)?;
-    let seat = seat_of(&plan.dir);
+    let seat = crate::budget::seat_of(&plan.dir);
     // waits(measured): the sides' wall clock, said when both are in
     let started = std::time::Instant::now();
     println!(
@@ -178,14 +177,6 @@ fn linux_side(ground: &Ground<'_>, steps: &[&Required], jobs: usize) -> Vec<Stri
         runner::dismiss_container(ground, name);
     }
     failures
-}
-
-/// Which tree a unit belongs to, as the queue names it: the seat's
-/// letter, or the checkout's own name for the primary.
-pub(crate) fn seat_of(dir: &Path) -> String {
-    dir.file_name()
-        .map(|name| name.to_string_lossy().to_string())
-        .unwrap_or_else(|| dir.display().to_string())
 }
 
 pub(super) fn rank(landing: bool) -> crate::budget::Rank {

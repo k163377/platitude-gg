@@ -54,6 +54,7 @@
 
 mod cli;
 mod ledger;
+mod machine;
 mod queue;
 #[cfg(test)]
 mod tests;
@@ -74,6 +75,7 @@ pub(crate) static COMMANDS: &[&command::Command] = &[&BUDGET];
 
 pub use cli::run;
 pub(crate) use ledger::{Pool, probe};
+pub(crate) use machine::{default_jobs, seat_of};
 pub(crate) use queue::Rank;
 pub(crate) use unit::{
     Admitted, Ask, COMPILE, HELD, LIGHT, child_started, demand, standalone, under, watched,

@@ -8,7 +8,7 @@ use std::path::Path;
 
 use super::plan::Required;
 use super::sides::rank;
-use super::{Ground, census, default_jobs, seat_of};
+use super::{Ground, census};
 
 /// The tests' switch: with it set no step runs at all (`execute_step`).
 pub(super) const FAKE_LOG: &str = "PGG_GATE_FAKE_LOG";
@@ -274,11 +274,11 @@ pub(super) fn runner(
     let exe = format!("xtask{}", std::env::consts::EXE_SUFFIX);
     // A compile out of the same budget as any other, or every gate would
     // start with an uncounted cargo.
-    let pool = crate::budget::Pool::of(dir, jobs.max(default_jobs()))?;
+    let pool = crate::budget::Pool::of(dir, jobs.max(crate::budget::default_jobs()))?;
     let room = pool.admit_once_the_machine_is_free(&crate::budget::Ask {
         weight: crate::budget::COMPILE,
         rank: rank(landing),
-        seat: &seat_of(dir),
+        seat: &crate::budget::seat_of(dir),
         what: "the task runner's build",
     })?;
     // Through `check::run_step` for its ceiling: a build with none would
