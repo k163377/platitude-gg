@@ -141,7 +141,7 @@ struct Standing {
 /// out of `git worktree list --porcelain`.
 ///
 /// Every other tree in the listing is somebody else's — the corpus's
-/// own, a build left behind (`corpus::partial_path`) — and a `branch`
+/// own, a build left behind (`corpus::build::partial_path`) — and a `branch`
 /// line belongs to the tree whose record it sits in, so one under a
 /// tree that is not a copy names no copy's branch.
 fn copies_standing(name: &str, listing: &str) -> Vec<Standing> {

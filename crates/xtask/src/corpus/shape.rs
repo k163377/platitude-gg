@@ -117,7 +117,7 @@ pub(super) const FORK_BACK: u64 = 27;
 /// **A fixed distance is a comb.** Every branch keeping exactly one
 /// lane open for exactly the same number of rows gives a constant
 /// width, and a constant demands nothing of a renderer. The reference
-/// repository's window, walked by the same lane count `corpus::graph`
+/// repository's window, walked by the same lane count `corpus::readings::graph`
 /// applies to both, is p25 21 / p50 25 / p75 27 / max 33; what a
 /// spread of distances buys is that shape.
 pub(super) const FORK_BACKS: [(u64, u64); 7] = [
@@ -165,7 +165,7 @@ pub(super) const ANNOTATED_SHARE: u64 = 993;
 
 /// How large one pack may grow before `fast-import` starts another.
 /// The packs themselves come from the build's shape — one per blob pass
-/// and one for the commits and trees (`corpus::BLOB_IMPORTS`), five
+/// and one for the commits and trees (`corpus::build::BLOB_IMPORTS`), five
 /// like the reference repository's, under a multi-pack-index like its —
 /// and this is the ceiling on any one of them. Every git process an
 /// opening spawns maps all of them before it resolves anything.
