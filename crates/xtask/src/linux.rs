@@ -81,10 +81,12 @@ mod bare;
 pub(crate) mod container;
 mod offline;
 pub(crate) mod runner;
+mod tested;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use runner::a_runner_verb;
+pub(crate) use tested::tested_on_linux;
 
 /// The image. Its tag names the stage and fingerprints what built it.
 const IMAGE: &str = "pgg-linux";

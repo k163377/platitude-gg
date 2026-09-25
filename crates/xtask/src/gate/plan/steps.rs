@@ -92,17 +92,6 @@ struct Sorted {
     qml: BTreeSet<String>,
 }
 
-/// The packages whose tests the container runs too: core and xtask, which
-/// hold code behind `cfg(not(windows))` the host never compiles, and whose
-/// tests run on the image's Qt-free stage. The app holds some as well;
-/// before a merge Linux reaches it through `clippy-linux` (every target, so
-/// its tests compile), the container's verbs, qmltest and `bare`, and its
-/// own tests run there only in CI and `linux offline`. Read by the sweep as
-/// well (`crate::sweep::tested_here`).
-pub(crate) fn tested_on_linux(package: &str) -> bool {
-    matches!(package, "platitude-core" | "xtask")
-}
-
 /// `whole` runs every package's tests unfiltered.
 fn sort(
     g: &Graph,
@@ -387,7 +376,7 @@ fn unit_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
             format!("test {package} {}", filters.len())
         };
         steps.push(step(&id, Side::Host, false, command.clone(), &inputs));
-        if tested_on_linux(package) {
+        if crate::linux::tested_on_linux(package) {
             steps.push(on_linux(&id, &command, &inputs));
         }
     }
@@ -413,7 +402,7 @@ fn it_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
             format!("test {binary} {}", filters.len())
         };
         steps.push(step(&id, Side::Host, false, command.clone(), &inputs));
-        if tested_on_linux(package) {
+        if crate::linux::tested_on_linux(package) {
             steps.push(on_linux(&id, &command, &inputs));
         }
     }
@@ -457,7 +446,7 @@ fn periodic_steps(g: &Graph, dir: &Path, sorted: &Sorted) -> Vec<Step> {
         let mut inputs: Vec<String> = g.inputs(files).into_iter().collect();
         inputs.extend(cargo_inputs(&[]));
         steps.push(step(&id, Side::Host, false, command.clone(), &inputs));
-        if tested_on_linux(package) {
+        if crate::linux::tested_on_linux(package) {
             steps.push(on_linux(&id, &command, &inputs));
         }
     }

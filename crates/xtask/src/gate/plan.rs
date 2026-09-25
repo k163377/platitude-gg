@@ -14,7 +14,6 @@ use super::stamp::Store;
 use super::tiers::Tiers;
 use crate::subprocess::{git_query, run_captured};
 use steps::select;
-pub(crate) use steps::tested_on_linux;
 
 /// Which side of stage 2 a step runs on: the host, or the Linux container
 /// (which is "here" when the host is Linux — `cargo xtask linux`).

@@ -256,9 +256,9 @@ const CANONICAL: &[Line] = &[
 ];
 
 /// Whether this side's tests are built for `package` — in the container,
-/// only what the gate tests there (`gate::tested_on_linux`).
+/// only what the gate tests there (`linux::tested_on_linux`).
 fn tested_here(package: &str) -> bool {
-    on_the_host() || crate::gate::tested_on_linux(package)
+    on_the_host() || crate::linux::tested_on_linux(package)
 }
 
 /// Whether this process is out here rather than inside the gate's
