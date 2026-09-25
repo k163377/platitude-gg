@@ -1,7 +1,7 @@
 //! The commit guard: the primary checkout is where this repository is
 //! read, and every commit of it rides a worktree branch.
 
-use super::MAIN_APPROVAL_FLAG;
+use super::approval::MAIN_APPROVAL_FLAG;
 use super::git::unquote;
 use super::launch::resolve;
 use crate::seats::worktree_root;

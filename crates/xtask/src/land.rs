@@ -133,7 +133,7 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     crate::hook::permit::landed(&here, &Identity::current(None).session);
     // Again, now that main moved: git runs a copy of the hook script, and
     // a landing that changed the script would leave the old copy answering.
-    println!("{}", crate::gate::install(&root)?);
+    println!("{}", crate::gate::hooks::install(&root)?);
     println!("landed {branch}: main {before} -> {after} ({ahead} commit(s)).");
     // While the claim still stands, so nothing else is building here: the
     // rebase may have left a generation of build products behind.
@@ -178,7 +178,7 @@ fn prepare_gate(root: &std::path::Path, seat: &str) -> Result<(), String> {
     if let Some(word) = step_out_of_the_build_slot(&[seat]) {
         println!("{word}");
     }
-    println!("{}", crate::gate::install(root)?);
+    println!("{}", crate::gate::hooks::install(root)?);
     Ok(())
 }
 

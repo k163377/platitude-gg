@@ -343,13 +343,13 @@ fn escapes(line: &str, named: &str, number: usize, held: &mut Held) {
         if !word.starts_with("PGG_ALLOW_") {
             continue;
         }
-        if crate::hook::APPROVAL_FLAGS.contains(&word) {
+        if crate::hook::approval::APPROVAL_FLAGS.contains(&word) {
             continue;
         }
         held.findings.push(format!(
             "{named}:{number}: {word} is not an escape the pre-shell hook reads ({}) — an \
              instruction carrying it is gated by nothing",
-            crate::hook::APPROVAL_FLAGS.join(", ")
+            crate::hook::approval::APPROVAL_FLAGS.join(", ")
         ));
     }
 }

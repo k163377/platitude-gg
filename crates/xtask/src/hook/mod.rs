@@ -8,6 +8,7 @@
 
 use std::io::Read;
 
+pub(crate) mod approval;
 mod attribution;
 mod chips;
 mod commit;
@@ -25,32 +26,6 @@ mod seat;
 mod shell;
 mod still;
 mod write;
-
-/// The escape for a commit in the primary checkout the user asked for in
-/// so many words (`commit`). A landing does not read it — the permit does.
-const MAIN_APPROVAL_FLAG: &str = "PGG_ALLOW_MAIN";
-
-/// The same, for an instruction that asked for a rebase.
-const REBASE_APPROVAL_FLAG: &str = "PGG_ALLOW_REBASE";
-
-/// The same, for an instruction that asked for a real window.
-pub(crate) const GUI_APPROVAL_FLAG: &str = "PGG_ALLOW_GUI";
-
-/// The same, for an instruction that approved stopping processes outside this worktree.
-const PROCESS_STOP_APPROVAL_FLAG: &str = "PGG_ALLOW_KILL";
-
-/// The same, for an instruction that asked for a seat to be taken over
-/// from whoever holds it (`seats::takeover`).
-pub(crate) const TAKEOVER_APPROVAL_FLAG: &str = "PGG_ALLOW_TAKEOVER";
-
-/// Every escape this hook reads — what a flag spelled elsewhere is held to.
-pub(crate) const APPROVAL_FLAGS: [&str; 5] = [
-    MAIN_APPROVAL_FLAG,
-    REBASE_APPROVAL_FLAG,
-    GUI_APPROVAL_FLAG,
-    PROCESS_STOP_APPROVAL_FLAG,
-    TAKEOVER_APPROVAL_FLAG,
-];
 
 pub(crate) static HOOK: crate::command::Command = crate::command::Command {
     id: "hook.event",

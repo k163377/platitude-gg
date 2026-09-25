@@ -34,7 +34,7 @@ pub(crate) static LAUNCH: command::Command = command::Command {
     purpose: "start the app in a real window and confirm it outlived its first second",
     run_in: Where::Seat,
     needs: &[],
-    permission: Permission::Escape(crate::hook::GUI_APPROVAL_FLAG),
+    permission: Permission::Escape(crate::hook::approval::GUI_APPROVAL_FLAG),
 };
 
 pub(crate) static COMMANDS: &[&command::Command] = &[&KILL, &LAUNCH];
@@ -105,7 +105,7 @@ pub fn launch(args: &[String]) -> Result<(), String> {
     // main (gate::hooks) — true only of a window nothing drives, so the
     // automation knobs go first.
     crate::app_env::clear_automation(&mut command);
-    command.env_remove(crate::gate::SESSION);
+    command.env_remove(crate::gate::hooks::SESSION);
     let mut child = command
         .spawn()
         .map_err(|e| format!("failed to start {}: {e}", exe.display()))?;

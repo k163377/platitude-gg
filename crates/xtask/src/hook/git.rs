@@ -1,9 +1,10 @@
 //! The git a shell line may not run unasked: writing main, and rewriting
 //! the branch under the session.
 
+use super::approval::{MAIN_APPROVAL_FLAG, REBASE_APPROVAL_FLAG};
 use super::commit::primary_commit_denied;
 use super::payload::{deny, string_field};
-use super::{MAIN_APPROVAL_FLAG, REBASE_APPROVAL_FLAG, permit};
+use super::permit;
 use crate::subprocess::common_git_dir;
 use crate::subprocess::git_query;
 
@@ -33,7 +34,7 @@ pub(super) fn pre_git(input: &str) -> Result<bool, String> {
 /// answers to the gate at all; a session spelling either is stepping
 /// around the pre-merge tests.
 fn gate_control_change_denied(command: &str) -> bool {
-    let names = [crate::gate::SKIP, crate::gate::SESSION];
+    let names = [crate::gate::hooks::SKIP, crate::gate::hooks::SESSION];
     let Some(name) = names.into_iter().find(|name| command.contains(name)) else {
         return false;
     };
@@ -43,8 +44,8 @@ fn gate_control_change_denied(command: &str) -> bool {
          either name is the user's. Run `cargo xtask gate` (or `land`, which gates on the \
          way) and require a passing stamp for main. If validation appears incorrect, stop \
          and report the validation error to the user.",
-        crate::gate::SKIP,
-        crate::gate::SESSION
+        crate::gate::hooks::SKIP,
+        crate::gate::hooks::SESSION
     ));
     true
 }

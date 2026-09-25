@@ -88,7 +88,7 @@ pub(crate) enum Permission {
     /// Nothing beyond the pre-shell hook's ordinary reading of the line.
     Plain,
     /// The escape the pre-shell hook asks for in front, held as the
-    /// hook's own const (`hook::APPROVAL_FLAGS`).
+    /// hook's own const (`hook::approval::APPROVAL_FLAGS`).
     Escape(&'static str),
     /// The permit `hook::permit` reads off the user's own messages.
     Permit,

@@ -1,7 +1,7 @@
 //! The kill guard: a reap aimed by image name takes every seat's runs and
 //! the user's own window with it.
 
-use super::PROCESS_STOP_APPROVAL_FLAG;
+use super::approval::PROCESS_STOP_APPROVAL_FLAG;
 use super::payload::string_field;
 
 /// PreToolUse(Bash|PowerShell). Answers whether it refused, like `pre_git`.

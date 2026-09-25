@@ -55,7 +55,7 @@ pub(crate) static PERF: command::Command = command::Command {
         "a repository to measure against",
         "the machine still — the run refuses load that was not the application",
     ],
-    permission: Permission::Escape(crate::hook::GUI_APPROVAL_FLAG),
+    permission: Permission::Escape(crate::hook::approval::GUI_APPROVAL_FLAG),
 };
 
 pub(crate) static COMMANDS: &[&command::Command] = &[&PERF];

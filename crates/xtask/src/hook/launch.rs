@@ -2,7 +2,7 @@
 //! something from the sessions beside this one, and a launch someone reads
 //! the output of takes the turn it was started from.
 
-use super::GUI_APPROVAL_FLAG;
+use super::approval::GUI_APPROVAL_FLAG;
 use super::git::{unquote, xtask_verb};
 use super::payload::{bool_field, string_field};
 use super::shell::shell_segments;

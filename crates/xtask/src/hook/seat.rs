@@ -258,7 +258,7 @@ pub(super) fn pre_takeover(input: &str) -> Result<bool, String> {
          user asked for this letter in so many words, run the same command with {}=1 in \
          front of it; otherwise `cargo xtask seat` hands out a free letter, and when none is \
          free, stop and tell the user what stands in the way (`cargo xtask seats`).",
-        super::TAKEOVER_APPROVAL_FLAG
+        super::approval::TAKEOVER_APPROVAL_FLAG
     ));
     Ok(true)
 }
@@ -270,7 +270,7 @@ fn takes_over_unasked(command: &str) -> bool {
     let tokens: Vec<&str> = command.split_whitespace().collect();
     super::git::xtask_verb(&tokens, "seat")
         && seat_operation(&tokens) == Some("takeover")
-        && !command.contains(super::TAKEOVER_APPROVAL_FLAG)
+        && !command.contains(super::approval::TAKEOVER_APPROVAL_FLAG)
 }
 
 /// The operation a `seat` line names: the first argument past the verb
