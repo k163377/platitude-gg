@@ -906,13 +906,13 @@ Rectangle {
             faceColor: Theme.bgSurface
             // A plan standing over the graph refuses this press wherever it comes from (`RepoPage.startFind`), so the
             // button says so rather than answering a hand with nothing.
-            enabled: topBar.curPage !== null && !topBar.curPage.planActive
+            enabled: topBar.curPage !== null && !topBar.curPage.planShown
             // The freeze names itself, the way the stash button's does; with no tab open there is nothing on the panel
             // to ask about (規約 §無効).
             tip: {
                 if (topBar.curPage === null)
                     return ""
-                if (topBar.curPage.planActive)
+                if (topBar.curPage.planShown)
                     return qsTr("A rebase plan is being composed — the graph it stands over cannot be searched")
                 return qsTr("Find commits")
             }
