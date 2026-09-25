@@ -349,7 +349,7 @@ fn main() {
     // would then run against a render thread ended mid-frame, and a
     // lock that thread died holding is waited on for good, by a process
     // with nothing left running to say so (`harness::deadline`,
-    // internal-docs/P3-確認事項.md §check ハング調査で残った観察).
+    // internal-docs/ハング調査.md).
     harness::station(harness::Station::QtTearingDown);
     drop(app);
     if restart {
@@ -385,7 +385,7 @@ fn main() {
 fn start_again() {
     // **Undriven runs only.** A driven run inherits its own automation
     // in the environment it would hand on (.claude/rules/app-ui.md §UI
-    // 自動化の因果性 — a harness does not pass its state to a child), so
+    // 自動化 — a harness does not pass its state to a child), so
     // the successor would replay the verb, hold the run's own settings
     // directory, and outlive the parent that was supposed to bound it.
     if crate::harness::knobs().automated {
@@ -494,6 +494,7 @@ fn embed_harness_qml() {
     qrc::embed!("auto/AutoActDriver.qml");
     qrc::embed!("auto/AutoActFileRowVerbs.qml");
     qrc::embed!("auto/AutoActFindVerbs.qml");
+    qrc::embed!("auto/AutoActGraphReclickVerbs.qml");
     qrc::embed!("auto/AutoActGraphRowVerbs.qml");
     qrc::embed!("auto/AutoActHandVerbs.qml");
     qrc::embed!("auto/AutoActHistoryVerbs.qml");

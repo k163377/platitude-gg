@@ -528,7 +528,7 @@ Item {
     SampleTimer {
         id: noticeBarrier
         /// Whether the line also says no plan is standing — set by the verbs whose bar comes up *instead of* a plan
-        /// (`AutoActPlanVerbs`), and by nobody else: the other eleven reports are about writes, and a field they
+        /// (`AutoActPlanVerbs`), and by nobody else: the other reports are about writes, and a field they
         /// carry the same answer to every time is one nothing would notice going wrong.
         property bool saysPlan: false
         onTriggered: {
@@ -692,6 +692,7 @@ Item {
     AutoActSwitchVerbs { id: switchVerbs; driver: driver }
     AutoActPublishVerbs { id: publishVerbs; driver: driver }
     AutoActGraphRowVerbs { id: graphRowVerbs; driver: driver }
+    AutoActGraphReclickVerbs { id: graphReclickVerbs; driver: driver }
     AutoActStepVerbs { id: stepVerbs; driver: driver }
     AutoActPaneVerbs { id: paneVerbs; driver: driver }
     AutoActTipVerbs { id: tipVerbs; driver: driver }
@@ -719,6 +720,7 @@ Item {
             || switchVerbs.run(act, arg)
             || publishVerbs.run(act, arg)
             || graphRowVerbs.run(act, arg)
+            || graphReclickVerbs.run(act, arg)
             || stepVerbs.run(act, arg)
             || paneVerbs.run(act, arg)
             || tipVerbs.run(act, arg)

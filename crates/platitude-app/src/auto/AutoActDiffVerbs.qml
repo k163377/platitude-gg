@@ -9,6 +9,11 @@ import platitude.ui
 /// their own: the ones that read a place, write and read it again, or send the code
 /// sideways. The dispatch starts those by name.
 ///
+/// **One file on purpose.** Every sampler below `stageRowTimer` but `colourPlaceTimer` is started by id from its tail,
+/// and an id does not reach across files — a family cut out of this one would re-export each timer under an alias.
+/// `colour-place` shares `readY` with `keep-place` and `reachNow` with `code-grow` / `-shrink` / `-swap`. A split
+/// needs each family to own its entry first (the open, and the wait for a first-hunk row), as `AutoActSplitVerbs` does.
+///
 /// Built by `AutoActDriver`, which `RepoPage` builds only when a verb was given. What these verbs act on
 /// hangs off that driver; the names it owns are
 /// read back once below so the verbs can name them bare.
@@ -850,7 +855,7 @@ Item {
     // The wait is for the view (`keep-place` learned the same lesson): rows that have arrived are not rows the list has
     // laid out, and until it has, `codeMax` is measured against a width of nothing. A diff with nowhere sideways to go
     // says so and stops there — a run over one photographs a pane that proves nothing
-    // (app-ui.md §UI 自動化の因果性).
+    // (app-ui.md §UI 自動化).
     SampleTimer {
         id: codeSendTimer
         property bool sent: false
@@ -1008,7 +1013,7 @@ Item {
                     return
                 // A diff that fits its frame has no row below the fold to arrive from, so there is nothing here to
                 // see: said and stopped — the fixture stopped asking the
-                // question (app-ui.md §UI 自動化の因果性).
+                // question (app-ui.md §UI 自動化).
                 if (diffPane.view.maxY <= 0) {
                     codeGrowTimer.finish()
                     return
@@ -1292,7 +1297,7 @@ Item {
     // rows the list has laid out, and until it has there is no place to lose — the scroll goes nowhere and the restore
     // has nothing to undo. So what is waited for is the room the reading consumes, and a diff that is laid out and
     // still too short says so and stops there: nothing that short can hold a place, and a
-    // run over it photographs a pane that proves nothing (app-ui.md §UI 自動化の因果性).
+    // run over it photographs a pane that proves nothing (app-ui.md §UI 自動化).
     SampleTimer {
         id: keepPlaceTimer
         /// The line of the first hunk that gets staged, which is what rebuilds the diff under the reader.

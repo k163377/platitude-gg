@@ -5,6 +5,7 @@ AutoActDetailsVerbs 1.0 AutoActDetailsVerbs.qml
 AutoActDiffVerbs 1.0 AutoActDiffVerbs.qml
 AutoActFileRowVerbs 1.0 AutoActFileRowVerbs.qml
 AutoActFindVerbs 1.0 AutoActFindVerbs.qml
+AutoActGraphReclickVerbs 1.0 AutoActGraphReclickVerbs.qml
 AutoActGraphRowVerbs 1.0 AutoActGraphRowVerbs.qml
 AutoActHandVerbs 1.0 AutoActHandVerbs.qml
 AutoActHistoryVerbs 1.0 AutoActHistoryVerbs.qml
