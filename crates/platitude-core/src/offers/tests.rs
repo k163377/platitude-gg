@@ -236,6 +236,31 @@ fn a_branch_out_in_another_copy_keeps_switch_and_asks_nothing() {
 }
 
 #[test]
+fn a_branch_out_in_another_copy_asks_nothing_while_an_operation_stands() {
+    // The press opens that copy and leaves the stopped operation alone
+    // (デザイン規約 §進行中の操作から出る「`!` は着ない」).
+    for (op, conflicts) in [("CHERRY-PICKING", 0), ("REBASE 1/3", 2), ("", 1)] {
+        for (kind, full) in [(RefKind::Branch, "feat"), (RefKind::Remote, "origin/feat")] {
+            let asks = |held: &str| {
+                ref_menu(
+                    kind, full, "abc123", true, 0, "main", false, op, conflicts, held, "", false,
+                    "origin", "here", "",
+                )
+                .switch_asks
+            };
+            assert!(
+                asks(""),
+                "{full} with {op:?} / {conflicts}: a plain row asks"
+            );
+            assert!(
+                !asks("C:/work/other"),
+                "{full} with {op:?} / {conflicts}: a held row leads to its copy instead"
+            );
+        }
+    }
+}
+
+#[test]
 fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
     // `push --delete` touches nothing on this machine, so a local hold
     // does not bar it.

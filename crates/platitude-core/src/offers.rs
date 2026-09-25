@@ -233,7 +233,7 @@ pub fn ref_menu(
     let tag_on_remote = sides.is_some_and(TagSides::on_remote);
     RefMenuOffers {
         switch_to: branchy && full != current_branch,
-        switch_asks: op_standing || conflict_count > 0,
+        switch_asks: !held && (op_standing || conflict_count > 0),
         branch_here: kind != RefKind::Stash && !oid_hex.is_empty() && !busy && !op_standing,
         integrate_from: open
             && !busy

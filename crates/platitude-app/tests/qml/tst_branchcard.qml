@@ -21,12 +21,12 @@ Item {
     readonly property var free: ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream"]
     /// The branch the working tree is on: no move, no delete, and the rows say so.
     readonly property var current: ["branch-here", "integrate", "set-upstream", "current"]
-    /// One another working copy holds: `switch` stays and asks, the delete does not.
-    readonly property var held: ["switch", "asks", "branch-here", "integrate", "set-upstream"]
+    /// One another working copy holds: `switch` stays and leads there without asking, the delete goes.
+    readonly property var held: ["switch", "branch-here", "integrate", "set-upstream"]
     /// A reading standing on another commit: the local delete stays, the one that reaches over there goes.
     readonly property var drifted: ["switch", "branch-here", "integrate", "delete", "set-upstream"]
     /// Something running: every write is out at once.
-    readonly property var busy: ["switch", "asks"]
+    readonly property var busy: ["switch"]
 
     RefBranchMenu {
         id: card
