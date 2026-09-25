@@ -105,6 +105,12 @@ Item {
         const at = shared.sharedTip.parent
         return at !== null && at.tipBeside === true
     }
+    /// The target's tip answers what is being typed, not a hand (`NavNameBox`'s refusal), so a held scroll bar leaves
+    /// it be (`yieldToBar`). Read off the target like `tipPlace`.
+    readonly property bool tipTyped: {
+        const at = shared.sharedTip.parent
+        return at !== null && at.tipTyped === true
+    }
 
     /// The target's top-left in `host` coordinates. A method, so nothing binds to it — the seat moves with the sizes
     /// and the anchor.
@@ -212,6 +218,17 @@ Item {
         shared.sharedTip.close()
     }
 
+    /// A scroll bar was taken (`Hand.heldBar`): the targets are about to slide from under a hand Qt no longer hears, so
+    /// the box goes now, and a rest already counting goes with it — `drop` leaves a box that is not up yet, and closing
+    /// that one stops its count (規約 §hover のツールチップ「スクロールバーを掴んだら、hover で開いたものは閉じる」). A box
+    /// that answers typing is no hover's, and stays (`tipTyped`).
+    function yieldToBar() {
+        if (shared.tipTyped)
+            return
+        shared.drop()
+        shared.sharedTip.close()
+    }
+
     /// Puts it back after a fall the hand may be walking into — a turn later, because an `open()` from inside
     /// `Popup`'s own teardown is silently dropped. `Qt.callLater` runs before the next draw, so nothing blinks.
     function reopen() {
@@ -281,6 +298,20 @@ Item {
         function onParentChanged() {
             if (shared.sharedTip.visible)
                 Qt.callLater(shared.handOver)
+        }
+        // Asked for while a bar is held — a row reused under the hand takes the hover afresh, a rest runs out: down
+        // again before anything is drawn. Here, not in `onVisibleChanged`: that is heard from the middle of the
+        // opening, which carries on after a close made there (`QQuickPopupPrivate::prepareEnterTransition`).
+        function onOpened() {
+            if (Hand.heldBar !== null)
+                shared.yieldToBar()
+        }
+    }
+    Connections {
+        target: Hand
+        function onHeldBarChanged() {
+            if (Hand.heldBar !== null)
+                shared.yieldToBar()
         }
     }
 

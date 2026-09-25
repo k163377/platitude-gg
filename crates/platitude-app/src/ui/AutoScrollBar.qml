@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Fusion
+import platitude.ui
 
 // A scroll bar pinned visible while its view overflows, the policy computed from content size: the style's AsNeeded
 // re-derives it from transient view state and has been seen dropping the bar around model swaps. The comparison has a
@@ -33,6 +34,20 @@ ScrollBar {
     /// Whether the reader is here: pointing into the range, or holding the thumb (a drag may take the pointer
     /// anywhere). Not `activeFocus` — a list keeps it for the rest of the session after one click.
     readonly property bool attended: bar.inArea || bar.pressed
+
+    /// The window's hover stops while this is held (`Hand.heldBar`). Every way a hold ends clears it here: a bar hidden
+    /// or disabled mid-drag loses the grab and reports `pressed` false.
+    onPressedChanged: {
+        if (bar.pressed)
+            Hand.heldBar = bar
+        else if (Hand.heldBar === bar)
+            Hand.heldBar = null
+    }
+    // A bar taken down in the middle of a drag (its tab closed from the keyboard) must not go on being held.
+    Component.onDestruction: {
+        if (Hand.heldBar === bar)
+            Hand.heldBar = null
+    }
 
     /// Whether this bar has been sent since the reader arrived: raised by sending, lowered by leaving, no timer
     /// (デザイン規約 §QML 実装ルール のバーの明るさ).

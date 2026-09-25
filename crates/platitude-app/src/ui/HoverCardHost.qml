@@ -42,6 +42,32 @@ QtObject {
         keep.restart()
     }
 
+    /// A scroll bar outside this card is held (`Hand.heldBar`): what the card hangs off is sliding from under a hand Qt
+    /// no longer hears, so the card goes at once and does not come out until the bar is let go. **A bar inside it is
+    /// the hand reading the card** (`RefListPopup`, `SectionPeekPopup`), and keeps it — the hover frozen with it says
+    /// the hand is still in (規約 §hover のツールチップ「スクロールバーを掴んだら、hover で開いたものは閉じる」).
+    readonly property bool barOutside: Hand.heldBar !== null && !keeper.holds(Hand.heldBar)
+    function holds(item) {
+        for (let at = item; at !== null; at = at.parent) {
+            if (at === keeper.card.contentItem)
+                return true
+        }
+        return false
+    }
+    onBarOutsideChanged: {
+        if (keeper.barOutside)
+            keeper.card.close()
+    }
+    // Opened while such a bar is held — a rest that ran out, a row reused under the hand: down again before anything
+    // is drawn (`SharedToolTip.onOpened` says why not at `visibleChanged`).
+    property Connections opening: Connections {
+        target: keeper.card
+        function onOpened() {
+            if (keeper.barOutside)
+                keeper.card.close()
+        }
+    }
+
     property Timer keep: Timer {
         interval: Metrics.hoverKeepMs
         onTriggered: {

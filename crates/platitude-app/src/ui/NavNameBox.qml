@@ -86,6 +86,9 @@ SlimField {
     ToolTip.visible: box.refused && box.visible && box.refusedWhy !== ""
     ToolTip.delay: Metrics.tipDelayMs
     ToolTip.text: box.refusedWhy
+    /// That tip answers what is typed, not a hand: a held scroll bar leaves it standing (`SharedToolTip.tipTyped`) —
+    /// in the folded rail's peek the box stays open while the peek's own bar is used to look through the names.
+    readonly property bool tipTyped: true
 
     /// Where the box came out (PGG_AUTO_ACT=nav-branch-box / nav-rename-box): a clipped or scrolled-away box is
     /// nothing a picture answers.
