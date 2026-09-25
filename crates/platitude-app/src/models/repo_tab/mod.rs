@@ -37,7 +37,11 @@ impl Record for RemoteBranch {
 
 mod drain;
 #[cfg(test)]
+mod drain_remotes_tests;
+#[cfg(test)]
 mod drain_report_tests;
+#[cfg(test)]
+mod drain_signature_tests;
 #[cfg(test)]
 mod drain_tests;
 mod ops_config;
