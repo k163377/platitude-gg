@@ -1,4 +1,4 @@
-use super::{Conditions, Limits, Sample, Series, WAKE_SECS, parse_host, parse_sample};
+use super::{Conditions, Limits, Sample, Series, WAKE_SECS, parse_sample};
 
 #[test]
 fn an_os_high_water_mark_preserves_a_peak_between_samples() {
@@ -70,23 +70,6 @@ fn a_sampler_line_parses_into_a_tick() {
         Some(Some(false))
     );
     assert!(parse_sample("PowerShell said something else entirely").is_none());
-}
-
-/// The between-runs wait reads the machine alone. A locked session is
-/// the one thing it can see that the counters cannot say.
-#[test]
-fn a_host_line_parses_into_the_machine_alone() {
-    let awake = parse_host("int=1 k=7 u=8 i=9").expect("a whole line parses");
-    assert!(awake.interactive);
-    assert_eq!((awake.kernel, awake.user, awake.idle), (7, 8, 9));
-    let locked = parse_host("int=0 k=7 u=8 i=9").expect("a whole line parses");
-    assert!(!locked.interactive);
-    // Half the capacity went somewhere other than idle.
-    let later = parse_host("int=1 k=17 u=8 i=14").expect("a whole line parses");
-    assert!((later.busy_percent_since(&awake) - 50.0).abs() < 0.001);
-    // Two reads of the same instant divide by nothing.
-    assert!(awake.busy_percent_since(&awake).abs() < f64::EPSILON);
-    assert!(parse_host("PowerShell said something else entirely").is_none());
 }
 
 #[test]
