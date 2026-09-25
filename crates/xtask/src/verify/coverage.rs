@@ -29,7 +29,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let recorded = recorded(&census);
     // Every gate chooses what it owes off this table, so its rows are held
     // to the census below (`gate::tiers`).
-    let tiers = crate::gate::Tiers::load(&root);
+    let tiers = crate::gate::Tiers::load(&root)?;
     // A verb whose every row is a twin has no line on purpose.
     let twins_only = tiers.twinned_away();
 

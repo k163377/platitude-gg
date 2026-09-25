@@ -62,8 +62,14 @@ pub(crate) struct Tiers {
 }
 
 impl Tiers {
-    pub(crate) fn load(root: &Path) -> Tiers {
-        Tiers::parse(&std::fs::read_to_string(root.join(FILE)).unwrap_or_default())
+    /// The table as the tree holds it. A table that cannot be read — gone,
+    /// not text, not readable — is an error naming the path and the
+    /// cause, never an empty table: empty, every selected line would be
+    /// the host's before a merge and none the container's, and the
+    /// complaints, which read the rows, would have nothing to say.
+    pub(crate) fn load(root: &Path) -> Result<Tiers, String> {
+        let text = std::fs::read_to_string(root.join(FILE)).map_err(|e| format!("{FILE}: {e}"))?;
+        Ok(Tiers::parse(&text))
     }
 
     /// `<tier> TAB <census line> TAB <leans, ` ; `-separated, or -> TAB
@@ -360,5 +366,38 @@ mod tests {
             tiers.twinned_away().into_iter().collect::<Vec<_>>(),
             ["discard-file"]
         );
+    }
+
+    /// Each way the table fails to read is its own refusal, named by
+    /// path; none is an empty table.
+    #[test]
+    fn a_table_that_cannot_be_read_is_refused_by_path_and_cause() {
+        let root = crate::verify::claim_dir(&std::env::temp_dir().join("pgg-tiers"), "load")
+            .expect("a root of this test's own");
+        let path = root.join(super::FILE);
+        std::fs::create_dir_all(path.parent().expect("crates/xtask")).expect("xtask dir");
+        let said = super::FILE;
+
+        let gone = Tiers::load(&root).err().expect("no table");
+        assert!(gone.contains(said) && gone.contains("os error 2"), "{gone}");
+
+        std::fs::write(&path, b"linux\tstash --preset basic\t-\t\xff\n").expect("bytes");
+        let not_text = Tiers::load(&root).err().expect("not text");
+        assert!(
+            not_text.contains(said) && not_text.contains("UTF-8"),
+            "{not_text}"
+        );
+
+        std::fs::remove_file(&path).expect("rm");
+        std::fs::create_dir(&path).expect("a directory in its place");
+        let unreadable = Tiers::load(&root).err().expect("a directory");
+        assert!(unreadable.contains(said), "{unreadable}");
+        assert!(unreadable != gone && unreadable != not_text, "{unreadable}");
+
+        std::fs::remove_dir(&path).expect("rmdir");
+        std::fs::write(&path, TABLE).expect("table");
+        let read = Tiers::load(&root).expect("the table");
+        assert_eq!(read.counts(), (1, 1, 1));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

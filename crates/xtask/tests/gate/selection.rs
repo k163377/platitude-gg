@@ -795,3 +795,53 @@ fn a_full_line_that_alone_shows_a_reached_component_is_owed_before_the_merge() {
     );
     assert!(!text.contains("verify-linux perf"), "{text}");
 }
+
+/// An unreadable tier table is no empty table: empty, the selected lines
+/// would all be the host's and none the container's. The gate stops
+/// before its first step, and says which file.
+#[test]
+fn a_tier_table_that_cannot_be_read_stops_the_gate_before_anything_runs() {
+    let sb = Sandbox::new("tiers-unread");
+    let table = sb.seat.join("crates/xtask/verb-tiers.txt");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/ui/StashPane.qml",
+        "Item {\n    width: 6\n    property var model: StashModel\n}\n",
+    );
+    std::fs::write(&table, b"linux\tstash --preset basic\t-\t\xff\n").expect("bytes");
+    sb.commit_all(&sb.seat, "chore: a table that is not text", &[]);
+    let (ok, text) = sb.gate(&sb.seat, &[], &[]);
+    assert!(
+        !ok && text.contains("verb-tiers.txt") && text.contains("UTF-8"),
+        "{text}"
+    );
+    assert!(
+        sb.ran().is_empty(),
+        "a plan that could not be made ran something"
+    );
+
+    sb.git_ok(&sb.seat, &["rm", "-q", "crates/xtask/verb-tiers.txt"]);
+    sb.commit_all(&sb.seat, "chore: no table", &[]);
+    let (ok, text) = sb.gate(&sb.seat, &[], &[]);
+    assert!(!ok && text.contains("verb-tiers.txt"), "{text}");
+    assert!(
+        sb.ran().is_empty(),
+        "a plan that could not be made ran something"
+    );
+
+    // The table back, the line goes to both sides as it says.
+    sb.write(
+        &sb.seat,
+        "crates/xtask/verb-tiers.txt",
+        "linux\tstash --preset basic\t-\tthe sandbox's line on both sides\n",
+    );
+    sb.commit_all(&sb.seat, "chore: the table back", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = sb.ran();
+    for owed in [
+        "verify stash --preset basic",
+        "verify-linux stash --preset basic",
+    ] {
+        assert!(ran.contains(owed), "{owed} not run; ran: {ran:?}");
+    }
+}

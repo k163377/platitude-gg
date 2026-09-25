@@ -275,7 +275,7 @@ fn tell_the_census(
     };
     // No gate owes a twin; recording it would bring it back for `verbs`
     // to refuse (`gate::tiers`).
-    if let Some(of) = crate::gate::Tiers::load(root).twin_of(&line) {
+    if let Some(of) = crate::gate::Tiers::load(root)?.twin_of(&line) {
         println!("census: {line} — not recorded, the tier table says it is the same run as {of}");
         return Ok(());
     }
@@ -350,6 +350,9 @@ mod tests {
         std::fs::create_dir_all(&ui).expect("ui dir");
         std::fs::create_dir_all(root.join("crates/xtask")).expect("xtask dir");
         std::fs::write(ui.join("WipPane.qml"), "Item {}\n").expect("component");
+        // A table with no rows: a tree without one is refused (`gate::tiers`).
+        std::fs::write(root.join("crates/xtask/verb-tiers.txt"), "# no rows\n")
+            .expect("the tier table");
         root
     }
 

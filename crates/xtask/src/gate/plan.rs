@@ -251,7 +251,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
     // waits(measured): the phase's cost, for the record
     let at = std::time::Instant::now();
     let census = Census::load(dir)?;
-    let tiers = Tiers::load(dir);
+    let tiers = Tiers::load(dir)?;
     let worn = census::worn_by(dir);
     spent.census = at.elapsed();
     let read = Reading {
