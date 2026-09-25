@@ -1,7 +1,7 @@
 # ローカル性能検証
 
 固定コーパスの通常計測は [perf-windows-x64.md](perf-windows-x64.md) の条件を使う。
-値はOS・renderer・画面・cache・caseを揃えたものだけ比較する。net/grossの予算規則は維持する。
+値はOS・renderer・画面・cache・caseを揃えたものだけ比較する。
 
 ## ケース
 
@@ -20,7 +20,6 @@ cargo xtask perf --repo <corpus> --select-oid <full-oid> --file <path> --complet
 ```
 
 実ウィンドウを使うため、席から実測する時は明示的な起動許可と `PGG_ALLOW_GUI=1` が必要。
-4ケース×50周で1 runあたり200操作。ケースごとのn/p50/p95/p99/max・100ms超過率を報告する。
 合否はケースごとに判断する。プロセス内反復と別プロセスのrunは別の軸。
 
 通常の変更、多数ファイル変更、小さい変更を含む大きなソース、長いdiffを固定ケースにする。
@@ -28,39 +27,36 @@ cargo xtask perf --repo <corpus> --select-oid <full-oid> --file <path> --complet
 立つ対象専用。時間切れは失敗のまま記録する。rawが測るのは画像デコード前まで。
 
 `perf_diff_frame` は対象diffの初回表示、`perf_colour_frame` は同じfingerprintの最終色付けが
-反映されたフレーム。case/operation/OID/fingerprint/rows generationを記録する。
+反映されたフレーム。
 `--diff-scroll` は各操作で可視diffを2秒スクロールし、正の移動量と終了後の可視行を要求する。
 短くoverflowのないdiffは失敗なのでスクロール用一覧は分ける。グラフの12秒計測とは別系列。
 反復と併用する時は、全操作の計測時間を含む `--watchdog-ms` を指定する。
 
 ## cacheとA/B
 
-- `--cache warm` が既定。同じ経路の捨てrunで温める。同じexe/corpus/scenarioが直近に
-  温まった既存noteがある場合だけ省略する。
+- `--cache warm` が既定。同じ経路の捨てrunで温める。
 - `--cache first --runs 1` は、このinvocationの最初のプロセス。OS cacheの状態は
-  別に確かめる。走るのは測定の1プロセスだけ。
+  別に確かめる。
 - `--cache cold --cold-prepare <executable>` は利用者指定のOS固有プログラムを各run直前に
   実行する。repositoryと測定binaryの2引数を渡し、成功終了を準備完了とする。
-  ログは `cold-prepare.log`。準備失敗・期限超過は測定失敗。走るのは準備と測定だけ。
+  準備失敗・期限超過は測定失敗。
   プログラムがどのcacheをどう冷却したかを記録に併記する。成功終了が示すのは準備が
-  走ったことだけ。repositoryのfingerprintは準備の前に取る。
+  走ったことだけ。
 
 ```
 cargo xtask perf --repo <corpus> --at <A> --compare <B> --runs 3 --cases <cases.tsv>
 ```
 
-A/Bの `--runs` はABBAブロック数。3なら各6回。両方のビルド完了後に計測し、warmでは
-各採用runの直前に同じbinaryの捨てrunを置く。`order.tsv` に順序・commitを記録する。
-画面・Hz・renderer・features・corpus・GPUの記録が変われば比較を中止する。`first` は
-一つの最初をA/B双方へ割り当てられないため比較モードでは拒否する。古いcommitが新しい
+A/Bの `--runs` はABBAブロック数。3なら各6回。
+画面・Hz・renderer・features・corpus・GPUの記録が変われば比較を中止する。古いcommitが新しい
 計測口を持たない場合、要求したケースや色付けの証跡欠落を失敗とする。
 
 ## 短いメモリ峰
 
 100msのWorkingSet最大とは別にWindowsの `PeakWorkingSet64`、Linuxの `VmHWM` を
 `memory.csv` の `os_peak_working_set_bytes` に記録する。OSが保持するプロセス寿命中の
-最大常駐量で、サンプル間の短い峰を検出する。報告はOS最大とサンプル最大との差を併記する。
-欠損は空欄。private commitの峰・割当回数・発生時刻は分からないので、
+最大常駐量で、サンプル間の短い峰を検出する。
+private commitの峰・割当回数・発生時刻は分からないので、
 差が問題になる場合は別の診断runでOSの割当トレースを採る。帰属取得の計測負荷は別runへ
 置き、OS最大は素の値で記録する。
 
@@ -78,10 +74,6 @@ A/Bの `--runs` はABBAブロック数。3なら各6回。両方のビルド完�
 
 ## OS別の証跡
 
-既定の出力先は `target/perf/<os>-<arch>/<run>/`。`measurements.tsv` は
-platform/cache/run/case/operation/metric/value/unitを持つ。`--output` 指定時もplatformを残す。
+既定の出力先は `target/perf/<os>-<arch>/<run>/`。
 Windowsの正本は既存記録、Linuxは [perf-linux-x64.md](perf-linux-x64.md)、macOS arm64は
 [perf-macos-arm64.md](perf-macos-arm64.md)。未取得は未取得のまま残す。
-
-新しい描画契約は `verify-ui perf colour|diff-scroll|sequence --preset perf-sequence` で検証する。
-offscreen値が答えるのは描画契約だけ。

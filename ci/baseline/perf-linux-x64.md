@@ -1,6 +1,6 @@
 # 性能実測記録(Linux x64)
 
-状態: 実機baseline未取得。値はLinux実機の実測だけ。
+状態: 実機baseline未取得。
 手順は [perf-local.md](perf-local.md)。取得時はcommit/exe hash、corpus token、ケース一覧、
 git/Qt/driver、renderer、GPU、画面/Hz/DPI、窓寸法、cache準備、順序、証跡パスを記録する。
 

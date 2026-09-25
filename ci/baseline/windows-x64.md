@@ -1,7 +1,6 @@
 # ネットワーク非通信 baseline 実測（Windows x64）— Phase 0
 
 実装計画 §11.2 の CI 照合の元データ。P0 スパイク（`spike/`）の windeployqt 配布物を実測したもの。
-P5 でリリース workflow の allowlist 照合スクリプトがこのデータを pin する。
 
 - 計測対象: `pgg_spike.exe`（qtbridge 0.2.0 / Qt 6.10.3 msvc2022_64 / rustc 1.97.1, release）
 - deploy コマンド: `windeployqt --release --compiler-runtime --no-translations --qmldir spike/src <exe>`
@@ -34,13 +33,7 @@ VCRUNTIME140.dll  api-ms-win-crt-{runtime,heap,math,stdio,locale}-l1-1-0.dll
 
 計画の「**Qt6Network を同梱しない**」は Qt Quick 構成では**成立しない**
 （Qt6Qml/Qt6Quick がロード時に要求するため、DLL を除くと起動不能になる）。
-主張は以下の形で立てる（実装計画 §11.2）:
-
-1. アプリ**自身**のバイナリはネットワーク系 DLL をインポートしない（§1 を baseline に pin）
-2. Qt6Network.dll は Qt6Qml/Qt6Quick のロード時依存としてのみ同梱される。
-   アプリコード・QML から QtNetwork API（`XMLHttpRequest`、`Image { source: "http://..." }` 等）を使わないことは
-   静的 grep + 動的オフラインテスト（§11.3）で担保する
-3. ネットワーク系**プラグイン**は同梱しない（下記の除外候補を P5 の deploy スクリプトで除外し、除外後の起動を検証する）
+主張の立て方は実装計画 §11.2。
 
 ## 3. 同梱 DLL / プラグイン一覧（P5 allowlist の種）
 
@@ -70,4 +63,4 @@ qml\**\*plugin.dll（QtQuick/QtQml の QML モジュール群 12個）
 
 ## 4. 補足
 
-- mac / Linux の baseline は CI 初回ビルドで取得する（初回実行は配布準備期 = 計画 §11.2）
+- mac / Linux の baseline は CI 初回ビルドで取得する

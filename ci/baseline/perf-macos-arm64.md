@@ -1,8 +1,8 @@
 # 性能実測記録(macOS arm64)
 
-状態: 実機baseline未取得。Intel Macは対象外。手順は [perf-local.md](perf-local.md)。
+状態: 実機baseline未取得。手順は [perf-local.md](perf-local.md)。
 現行xtask perfはmacOS用メモリsampler未実装のため明示的に拒否する。実測にはsamplerと
-表示条件収集の実装・実機検証が必要。成功は実値だけ。
+表示条件収集の実装・実機検証が必要。
 
 | 指標 | 実測 | 判定 |
 |---|---|---|
