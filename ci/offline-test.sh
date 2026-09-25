@@ -42,7 +42,7 @@ if [ -n "${PGG_SMOKE_BIN:-}" ]; then
     smoke_env=(env)
     while IFS= read -r name; do
         case "${name}" in
-            PGG_CONFIG_DIR | PGG_LOG | PGG_ALLOW_GUI) ;;
+            PGG_CONFIG_DIR | PGG_LOG | PGG_ALLOW_GUI | PGG_STEP) ;;
             PGG_*) smoke_env+=(-u "${name}") ;;
         esac
     done < <(compgen -e)
